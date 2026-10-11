@@ -55,9 +55,13 @@ jobs:
             .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.tap \
             .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json \
             .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json.sha256 \
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.diagnostics.json \
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.diagnostics.json.sha256 \
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.tap \
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.json \
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.json.sha256 \
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json \
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json.sha256 \
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl \
             .runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl; do
             if [ ! -f "$path" ]; then
@@ -81,9 +85,13 @@ jobs:
             .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.tap
             .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json
             .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json.sha256
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.diagnostics.json
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.diagnostics.json.sha256
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.tap
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.json
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.json.sha256
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json.sha256
             .runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl
             .runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl
           if-no-files-found: error

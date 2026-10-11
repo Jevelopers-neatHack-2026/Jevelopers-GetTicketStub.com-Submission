@@ -13,7 +13,7 @@ import { recordSyntheticMetric } from '../../decisions/jev-adapter.contract/synt
 import { createOperationsWorker } from '../../../src/worker/private/worker.js';
 
 const [databasePath, phase, markerPath, resultPath, metricsPath] = process.argv.slice(2);
-if (!['before-marker', 'after-marker-before-bytes', 'after-write', 'response-before-observation', 'observation-before-checkpoint', 'failure-after-runner-pause'].includes(phase)
+if (!['before-marker', 'after-marker-before-bytes', 'after-write', 'response-before-observation', 'observation-before-checkpoint', 'failure-after-runner-pause', 'failure-runner-marker-missing', 'failure-runner-marker-partial'].includes(phase)
     || ![databasePath, markerPath, resultPath, metricsPath].every(value => typeof value === 'string')) process.exit(2);
 
 const API_KEY_FIXTURE = 'synthetic-offline-key';
@@ -42,6 +42,17 @@ async function publishMarker(value) {
   await writeFile(temporaryPath, JSON.stringify(value), { flag: 'wx' });
   try {
     await rename(temporaryPath, markerPath);
+  } catch (error) {
+    try { await unlink(temporaryPath); } catch {}
+    throw error;
+  }
+}
+async function publishRunnerMarker() {
+  const path = `${metricsPath}.runner`;
+  const temporaryPath = `${path}.${process.pid}.tmp`;
+  await writeFile(temporaryPath, JSON.stringify({ runnerPid, fixturePid: process.pid }), { flag: 'wx' });
+  try {
+    await rename(temporaryPath, path);
   } catch (error) {
     try { await unlink(temporaryPath); } catch {}
     throw error;
@@ -128,7 +139,18 @@ t:
   if (!Number.isSafeInteger(runnerPid) || runnerPid < 2 || !process.kill(runnerPid, 'SIGSTOP')) {
     throw new Error('The JEV composition fixture could not pause its actual owned runner.');
   }
-  await writeFile(`${metricsPath}.runner`, JSON.stringify({ runnerPid }));
+  if (phase === 'failure-runner-marker-partial') {
+    await writeFile(`${metricsPath}.runner`, '{"runnerPid":');
+    await publishMarker({ phase, stage: 'runner-marker-ready' });
+    await phaseRelease;
+    throw new Error('Injected partial runner marker failure.');
+  }
+  if (phase === 'failure-runner-marker-missing') {
+    await publishMarker({ phase, stage: 'runner-marker-ready' });
+    await phaseRelease;
+    throw new Error('Injected missing runner marker failure.');
+  }
+  await publishRunnerMarker();
   if (phase === 'failure-after-runner-pause') {
     await publishMarker({ phase, stage: 'force-rename-failure-after-runner-pause' });
   }

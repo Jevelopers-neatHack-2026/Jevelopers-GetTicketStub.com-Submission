@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
+import { buildSafeFailureDiagnostics } from './failure-diagnostics.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const EXPECTED_GROUPS = Object.freeze(Array.from({ length: 13 }, (_, index) => `OPS${String(index + 1).padStart(2, '0')}_`));
@@ -36,9 +37,13 @@ const EXPECTED_UPLOAD_MEMBERS = Object.freeze([
   '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.tap',
   '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json',
   '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json.sha256',
+  '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.diagnostics.json',
+  '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.diagnostics.json.sha256',
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.tap',
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.json',
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.json.sha256',
+  '.runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json',
+  '.runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json.sha256',
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl',
   '.runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl'
 ]);
@@ -134,7 +139,7 @@ function writeArtifact(path, bytes) {
 
 function safeTap(text) {
   return `${text.split(/\r?\n/u).filter(line => line.startsWith('TAP version ')
-    || line.startsWith('1..') || line.startsWith('# Subtest: OPS')
+    || line.startsWith('1..') || /^[ \t]*# Subtest: OPS/u.test(line)
     || /^\s*(?:ok|not ok) \d+ - OPS/u.test(line) || /^ok \d+ - OPS/u.test(line) || /^not ok \d+ - OPS/u.test(line)
     || /^# (tests|pass|fail|cancelled|skipped|todo) \d+/u.test(line))
     .join('\n')}\n`;
@@ -176,6 +181,17 @@ const testResult = child(['--test', '--test-concurrency=1', '--test-reporter=tap
 const tapText = `${testResult.stdout ?? ''}${testResult.stderr ?? ''}`;
 const tapSummary = parseTAP(tapText);
 const tapArtifact = writeArtifact(join(artifactDirectory, `${stem}.tap`), Buffer.from(safeTap(tapText), 'utf8'));
+const suiteDiagnostics = buildSafeFailureDiagnostics({
+  scenario: fixture,
+  phase: 'operation-suite',
+  stage: 'node-test-runner',
+  status: testResult.status,
+  signal: testResult.signal,
+  error: testResult.error,
+  stdout: testResult.stdout,
+  stderr: testResult.stderr,
+  missingCases: tapSummary.missingLocalCases
+});
 let metrics = null;
 try {
   metrics = JSON.parse(readFileSync(metricsPath, 'utf8'));
@@ -187,8 +203,20 @@ let runbookArtifact = null;
 let runbookRecoveryArtifact = null;
 let runbookResult = null;
 let recoveryResult = null;
+let runbookDiagnostics = null;
+let recoveryDiagnostics = null;
 if (fixture === 'runbook-clean-start') {
   runbookResult = child(['tests/operations/runbook-clean-start.mjs']);
+  runbookDiagnostics = buildSafeFailureDiagnostics({
+    scenario: fixture,
+    phase: 'clean-start-runbook',
+    stage: 'runbook-child',
+    status: runbookResult.status,
+    signal: runbookResult.signal,
+    error: runbookResult.error,
+    stdout: runbookResult.stdout,
+    stderr: runbookResult.stderr
+  });
   const output = (runbookResult.stdout ?? '').trim().split(/\r?\n/u).filter(Boolean);
   let runbookRecord = null;
   try {
@@ -214,6 +242,16 @@ if (fixture === 'runbook-clean-start') {
   }
   const recoveryPath = join(artifactDirectory, 'AH-11-OPS-runbook-recovery.jsonl');
   recoveryResult = child(['tests/operations/runbook-recovery-cases.mjs', recoveryPath]);
+  recoveryDiagnostics = buildSafeFailureDiagnostics({
+    scenario: fixture,
+    phase: 'recovery-runbook',
+    stage: 'recovery-child',
+    status: recoveryResult.status,
+    signal: recoveryResult.signal,
+    error: recoveryResult.error,
+    stdout: recoveryResult.stdout,
+    stderr: recoveryResult.stderr
+  });
   const recoveryOutput = (recoveryResult.stdout ?? '').trim().split(/\r?\n/u).filter(Boolean);
   let recoverySummary = null;
   try { if (recoveryOutput.length === 1) recoverySummary = JSON.parse(recoveryOutput[0]); } catch {}
@@ -236,12 +274,35 @@ if (fixture === 'runbook-clean-start') {
 
 const resultCode = testResult.status ?? 1;
 const runbookCode = runbookResult ? (runbookResult.status ?? 1) : null;
+const diagnosticsPath = join(artifactDirectory, `${stem}.diagnostics.json`);
+const diagnosticRecords = [
+  ...suiteDiagnostics.records,
+  ...(runbookDiagnostics?.records ?? []),
+  ...(recoveryDiagnostics?.records ?? [])
+];
+const diagnosticsValue = {
+  schema: 'agent-harness.ah11-ops-fixture-diagnostics.v1',
+  fixture,
+  source: 'bounded-allowlist-parser',
+  publishedRawOutput: false,
+  suite: suiteDiagnostics,
+  runbook: runbookDiagnostics,
+  recovery: recoveryDiagnostics,
+  records: diagnosticRecords.slice(0, 32)
+};
+const diagnosticsBytes = Buffer.from(`${JSON.stringify(diagnosticsValue, null, 2)}\n`, 'utf8');
+const diagnosticsArtifact = writeArtifact(diagnosticsPath, diagnosticsBytes);
+const diagnosticsSidecarArtifact = writeArtifact(
+  `${diagnosticsPath}.sha256`,
+  Buffer.from(`${diagnosticsArtifact.sha256}  ${basename(diagnosticsPath)}\n`, 'utf8')
+);
 const allNetworkCallCountsZero = metrics !== null
   && metrics.providerCalls === 0
   && metrics.blockedExternalNetworkAttempts === 0;
 const uploadWorkflow = readFileSync(join(ROOT, '.github/workflows/runtime-foundation.yml'), 'utf8');
 const runbookJsonlMembers = [runbookArtifact, runbookRecoveryArtifact].filter(Boolean);
-const referencedArtifactMembers = [tapArtifact, ...runbookJsonlMembers];
+const diagnosticMembers = [diagnosticsArtifact, diagnosticsSidecarArtifact];
+const referencedArtifactMembers = [tapArtifact, ...runbookJsonlMembers, ...diagnosticMembers];
 const artifactMembersIntegrity = referencedArtifactMembers.every(artifact => {
   try {
     const bytes = readFileSync(artifact.path);
@@ -264,6 +325,10 @@ const uploadActionOptions = uploadWorkflow.match(/\n          if-no-files-found:
 const hiddenArtifactUploadConfigured = uploadActionOptions?.[1].trim() === 'error'
   && uploadActionOptions?.[2].trim() === 'true';
 const jsonlMembersIncludedInUpload = runbookJsonlMembers.every(artifact =>
+  artifact.path.startsWith(`${artifactDirectory}/`)
+  && EXPECTED_UPLOAD_MEMBERS.includes(`.runtime-artifacts/${basename(artifact.path)}`))
+  && uploadUsesExactAllowlist && hiddenArtifactUploadConfigured && requiredEvidenceSetComplete;
+const diagnosticsIncludedInUpload = diagnosticMembers.every(artifact =>
   artifact.path.startsWith(`${artifactDirectory}/`)
   && EXPECTED_UPLOAD_MEMBERS.includes(`.runtime-artifacts/${basename(artifact.path)}`))
   && uploadUsesExactAllowlist && hiddenArtifactUploadConfigured && requiredEvidenceSetComplete;
@@ -338,10 +403,12 @@ const manifest = {
     referencedMembers: referencedArtifactMembers,
     allReferencedMembersPresentAndDigestCorrect: artifactMembersIntegrity,
     jsonlMembersIncludedInWorkflowUpload: jsonlMembersIncludedInUpload,
+    diagnosticsMembersIncludedInWorkflowUpload: diagnosticsIncludedInUpload,
     exactUploadAllowlist: uploadUsesExactAllowlist,
     requiredOutputSetChecked: requiredEvidenceSetComplete,
     hiddenArtifactUploadConfigured
   },
+  diagnostics: diagnosticsValue,
   resourceAndNetworkEvidence: {
     ...metrics,
     verifierRssBytes: process.memoryUsage().rss,
@@ -350,10 +417,10 @@ const manifest = {
     allProviderCallsZero: allNetworkCallCountsZero,
     paidCalls: 0
   },
-  artifacts: { tap: tapArtifact },
+  artifacts: { tap: tapArtifact, diagnostics: diagnosticsArtifact, diagnosticsSidecar: diagnosticsSidecarArtifact },
   passed: resultCode === 0 && tapSummary.complete && tapSummary.skippedCount === 0
     && allNetworkCallCountsZero && resourceMetricsComplete
-    && artifactMembersIntegrity && jsonlMembersIncludedInUpload && requiredEvidenceSetComplete
+    && artifactMembersIntegrity && jsonlMembersIncludedInUpload && diagnosticsIncludedInUpload && requiredEvidenceSetComplete
     && (fixture !== 'runbook-clean-start' || (runbookCode === 0 && runbookArtifact !== null
       && recoveryResult?.status === 0 && runbookRecoveryArtifact !== null))
 };
@@ -370,7 +437,7 @@ process.stdout.write(JSON.stringify({
   localCases: tapSummary.executedLocalCases?.length ?? 0,
   skipped: tapSummary.skippedCount, providerCalls: metrics?.providerCalls ?? null,
   executedHead: startHead, executedTree: manifest.component.executedTree,
-  artifacts: [tapArtifact, manifestArtifact, sidecarArtifact,
+  artifacts: [tapArtifact, diagnosticsArtifact, diagnosticsSidecarArtifact, manifestArtifact, sidecarArtifact,
     ...(runbookArtifact ? [runbookArtifact] : []), ...(runbookRecoveryArtifact ? [runbookRecoveryArtifact] : [])]
 }) + '\n');
 if (!manifest.passed) process.exitCode = 1;

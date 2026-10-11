@@ -20,6 +20,7 @@ import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } 
 import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
 import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
+import { buildSafeFailureDiagnostics } from './failure-diagnostics.js';
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
 const PLAN = JSON.stringify({
@@ -544,6 +545,37 @@ async function runChild(script, args, { timeoutMs = 8_000, env = {} } = {}) {
   });
 }
 
+function startOwnedChild(script, args, { timeoutMs = 8_000, env = {} } = {}) {
+  METRICS.processRuns += 1;
+  const child = spawn(process.execPath, [script, ...args], {
+    cwd: ROOT,
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      TMPDIR: process.env.TMPDIR ?? '/tmp',
+      NODE_NO_WARNINGS: '1',
+      ...env
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', chunk => { stdout += chunk; });
+  child.stderr.on('data', chunk => { stderr += chunk; });
+  const closed = new Promise(resolvePromise => {
+    child.once('error', error => resolvePromise({ child, error, code: null, signal: null, stdout, stderr }));
+    child.once('close', (code, signal) => resolvePromise({ child, code, signal, stdout, stderr }));
+  });
+  const timeout = setTimeout(() => {
+    try {
+      if (child.kill('SIGKILL')) METRICS.processSigkillSignalsSent += 1;
+    } catch {}
+  }, timeoutMs);
+  void closed.then(() => clearTimeout(timeout));
+  return { child, closed };
+}
+
 async function waitForPath(path, child, timeoutMs = 6_000) {
   const end = Date.now() + timeoutMs;
   while (!existsSync(path)) {
@@ -563,6 +595,72 @@ async function waitForCloseBounded(closed, timeoutMs) {
   const closeResult = await Promise.race([closed, timeout]);
   clearTimeout(timer);
   return closeResult;
+}
+
+function ownedProcessGroupMembers(groupId) {
+  const result = spawnSync('pgrep', ['-g', String(groupId)], { encoding: 'utf8' });
+  if (result.status === 1) return [];
+  if (result.status !== 0) throw new Error('The isolated fixture process group could not be inspected.');
+  return result.stdout.trim().split(/\s+/u).filter(Boolean).map(Number);
+}
+
+async function waitForOwnedProcessGroupEmpty(groupId, timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (ownedProcessGroupMembers(groupId).length === 0) return true;
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
+  }
+  return ownedProcessGroupMembers(groupId).length === 0;
+}
+
+async function cleanupOwnedProcessGroup(child, closed) {
+  if (!Number.isSafeInteger(child.pid) || child.pid < 2) return false;
+  const groupId = child.pid;
+  try { process.kill(-groupId, 'SIGCONT'); } catch {}
+  try { process.kill(-groupId, 'SIGTERM'); } catch {}
+  await waitForCloseBounded(closed, 1_000);
+  if (await waitForOwnedProcessGroupEmpty(groupId, 1_000)) return true;
+  try { process.kill(-groupId, 'SIGCONT'); } catch {}
+  try { process.kill(-groupId, 'SIGKILL'); } catch {}
+  await waitForCloseBounded(closed, 1_000);
+  return waitForOwnedProcessGroupEmpty(groupId, 1_000);
+}
+
+function readRunnerPidFromOwnedDatabase(databasePath, idempotencyKey) {
+  try {
+    const database = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const row = database.prepare(
+        'SELECT runner_pid FROM operations_work WHERE idempotency_key=?'
+      ).get(idempotencyKey);
+      return Number.isSafeInteger(Number(row?.runner_pid)) && Number(row.runner_pid) > 1
+        ? Number(row.runner_pid) : null;
+    } finally {
+      database.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+function processGroupId(pid) {
+  const result = spawnSync('ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf8' });
+  if (result.status !== 0) return null;
+  const value = Number(result.stdout.trim());
+  return Number.isSafeInteger(value) && value > 1 ? value : null;
+}
+
+async function waitForPidExit(pid, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try { process.kill(pid, 0); } catch (error) {
+      if (error?.code === 'ESRCH') return true;
+      throw error;
+    }
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
+  }
+  try { process.kill(pid, 0); } catch (error) { return error?.code === 'ESRCH'; }
+  return false;
 }
 
 async function killOwnedChildAndReap(child, closed) {
@@ -737,9 +835,39 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
 
   const outFiles = Array.from({ length: 4 }, (_, index) => join(temporary.directory, `race-${index}.json`));
   const childScript = join(ROOT, 'tests/operations/fixtures/admission-child.mjs');
-  const races = await Promise.all(outFiles.map(path => runChild(childScript, [
-    temporary.databasePath, 'tenant-race', 'project-race', 'same-key', PLAN, path
-  ])));
+  const admissionGatePath = join(temporary.directory, 'race-release');
+  const runningAdmissions = [];
+  const readyPids = [];
+  let admissionChildrenReaped = false;
+  let races;
+  try {
+    for (let index = 0; index < outFiles.length; index += 1) {
+      const readyPath = join(temporary.directory, `race-${index}.ready.json`);
+      const running = startOwnedChild(childScript, [
+        temporary.databasePath, 'tenant-race', 'project-race', 'same-key', PLAN,
+        outFiles[index], readyPath, admissionGatePath
+      ]);
+      runningAdmissions.push(running);
+      await waitForPath(readyPath, running.child, 5_000);
+      const ready = JSON.parse(readFileSync(readyPath, 'utf8'));
+      assert.equal(ready.storeOpen, true);
+      assert.ok(Number.isSafeInteger(ready.pid) && ready.pid > 1);
+      readyPids.push(ready.pid);
+    }
+    assert.equal(new Set(readyPids).size, outFiles.length);
+    writeFileSync(admissionGatePath, 'release', { flag: 'wx', mode: 0o600 });
+    races = await Promise.all(runningAdmissions.map(running => running.closed));
+    admissionChildrenReaped = races.every(result => result.error || result.code !== null || result.signal !== null);
+  } finally {
+    if (!admissionChildrenReaped) {
+      const cleanup = await Promise.all(runningAdmissions.map(async running => {
+        if (running.child.exitCode !== null || running.child.signalCode !== null) return true;
+        return Boolean(await killOwnedChildAndReap(running.child, running.closed));
+      }));
+      admissionChildrenReaped = cleanup.every(Boolean);
+      assert.equal(admissionChildrenReaped, true, 'all staged admission children are reaped on assertion failure');
+    }
+  }
   assert.ok(races.every(result => result.code === 0), races.map(result => result.stderr).join('\n'));
   const replies = outFiles.map(path => JSON.parse(readFileSync(path, 'utf8')));
   assert.equal(replies.filter(reply => reply.result.duplicate === false).length, 1);
@@ -1536,12 +1664,13 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
       join(failureDir.directory, 'failure.sqlite'), 'failure-after-runner-pause',
       markerDirectory, resultPath, metricsPath
-    ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'] });
+    ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
     let stderr = '';
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', chunk => { stderr += chunk; });
     const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
     let runnerPid = null;
+    let ownedGroupEmpty = false;
     try {
       const runnerMarker = `${metricsPath}.runner`;
       await waitForPath(runnerMarker, child, 5_000);
@@ -1565,14 +1694,77 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       });
       assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(job.workflow_id).count), 0);
       raw.close();
+      ownedGroupEmpty = await waitForOwnedProcessGroupEmpty(child.pid);
+      assert.equal(ownedGroupEmpty, true, 'the fixture group is empty before outer cleanup');
     } finally {
-      if (runnerPid !== null) {
-        try { process.kill(runnerPid, 'SIGCONT'); } catch {}
-        try { process.kill(runnerPid, 'SIGKILL'); } catch {}
+      if (!ownedGroupEmpty) {
+        ownedGroupEmpty = await cleanupOwnedProcessGroup(child, closed);
+        assert.equal(ownedGroupEmpty, true, 'the dedicated fixture process group is reaped');
       }
-      if (child.exitCode === null && child.signalCode === null) {
-        try { child.kill('SIGKILL'); } catch {}
-        await waitForCloseBounded(closed, 1_000);
+    }
+
+    for (const markerMode of ['missing', 'partial']) {
+      const mode = `failure-runner-marker-${markerMode}`;
+      const markerDir = tempDirectory(`ah11-jev-marker-${markerMode}-`);
+      t.after(() => markerDir.cleanup());
+      const databasePath = join(markerDir.directory, 'marker-control.sqlite');
+      const markerPath = join(markerDir.directory, 'marker-control.json');
+      const resultPath = join(markerDir.directory, 'marker-result.json');
+      const metricsPath = join(markerDir.directory, 'marker-metrics.json');
+      const child = spawn(process.execPath, [
+        join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
+        databasePath, mode, markerPath, resultPath, metricsPath
+      ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+      let stderr = '';
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+      let runnerPid = null;
+      let ownedGroupEmpty = false;
+      try {
+        await waitForPath(markerPath, child, 5_000);
+        assert.deepEqual(JSON.parse(readFileSync(markerPath, 'utf8')), {
+          phase: mode, stage: 'runner-marker-ready'
+        });
+        const runnerMarker = `${metricsPath}.runner`;
+        if (markerMode === 'missing') assert.equal(existsSync(runnerMarker), false);
+        else assert.equal(readFileSync(runnerMarker, 'utf8'), '{"runnerPid":');
+        assert.throws(() => JSON.parse(readFileSync(runnerMarker, 'utf8')),
+          markerMode === 'missing' ? error => error.code === 'ENOENT' : SyntaxError);
+        assert.equal(runnerPid, null, 'marker failure occurs before runner PID assignment');
+
+        runnerPid = readRunnerPidFromOwnedDatabase(databasePath, `jev-composition-${mode}`);
+        assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+        assert.equal(processGroupId(runnerPid), child.pid, 'durable runner PID belongs to this isolated fixture group');
+        assert.equal(child.kill('SIGTERM'), true);
+        const exit = await waitForCloseBounded(closed, 3_000);
+        assert.ok(exit, `The marker-failure fixture did not close within its bound: ${stderr.slice(0, 2_048)}`);
+        assert.equal(exit.code, 1, stderr.slice(0, 2_048));
+        assert.match(stderr, /Injected (?:partial|missing) runner marker failure/u);
+        assert.equal(await waitForPidExit(runnerPid), true, 'fixture finally reaps the exact durable runner PID');
+        ownedGroupEmpty = await waitForOwnedProcessGroupEmpty(child.pid);
+        assert.equal(ownedGroupEmpty, true, 'no owned descendants remain before outer cleanup');
+
+        const reopened = new DatabaseSync(databasePath, { readOnly: true });
+        const job = reopened.prepare(
+          'SELECT job_id, workflow_id, state, runner_pid FROM operations_work WHERE idempotency_key=?'
+        ).get(`jev-composition-${mode}`);
+        assert.equal(job.state, 'queued');
+        assert.equal(job.runner_pid, null);
+        assert.deepEqual({ ...reopened.prepare(
+          'SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1'
+        ).get() }, { pending_records: 1, in_flight: 0 });
+        assert.equal(Number(reopened.prepare(
+          'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?'
+        ).get(job.workflow_id).count), 0);
+        reopened.close();
+        assert.equal(existsSync(resultPath), false);
+        assert.equal(existsSync(metricsPath), false);
+      } finally {
+        if (!ownedGroupEmpty) {
+          ownedGroupEmpty = await cleanupOwnedProcessGroup(child, closed);
+          assert.equal(ownedGroupEmpty, true, 'the dedicated marker-failure process group is reaped');
+        }
       }
     }
   });
@@ -4375,6 +4567,48 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.match(evidenceVerifier, /EXPECTED_UPLOAD_MEMBERS/u);
     assert.match(evidenceVerifier, /uploadUsesExactAllowlist/u);
     assert.match(evidenceVerifier, /requiredEvidenceSetComplete/u);
+    assert.match(evidenceVerifier, /diagnosticsIncludedInUpload/u);
+    assert.match(evidenceVerifier, /failure-diagnostics\.js/u);
+    const controls = [
+      ['assertion', 'ASSERTION_FAILURE'],
+      ['busy', 'SQLITE_BUSY'],
+      ['parse', 'JSON_PARSE'],
+      ['timeout', 'CHILD_TIMEOUT']
+    ];
+    const failureCodes = [];
+    for (const [mode, expectedCode] of controls) {
+      const result = spawnSync(process.execPath, [
+        join(ROOT, 'tests/operations/fixtures/failure-diagnostic-child.mjs'), mode
+      ], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        timeout: mode === 'timeout' ? 1_000 : 5_000,
+        maxBuffer: 64 * 1024
+      });
+      assert.ok(result.status !== 0 || result.signal !== null || result.error, `${mode} control must fail`);
+      const diagnostic = buildSafeFailureDiagnostics({
+        scenario: 'OPS13.C01',
+        phase: 'diagnostic-control',
+        stage: 'node-test-runner',
+        status: result.status,
+        signal: result.signal,
+        error: result.error,
+        stdout: result.stdout,
+        stderr: result.stderr
+      });
+      assert.equal(diagnostic.records.length, 1, mode);
+      assert.equal(diagnostic.records[0].failureCode, expectedCode, mode);
+      assert.deepEqual(diagnostic.records[0].assertionContext, mode === 'timeout'
+        ? { actualValueKind: null, expectedValueKind: null }
+        : { actualValueKind: 'string', expectedValueKind: 'string' }, mode);
+      assert.equal(diagnostic.records[0].sourceLocation,
+        mode === 'timeout' ? 'redacted' : 'tests/operations/operations.test.js:4400:9', mode);
+      const safeBytes = JSON.stringify(diagnostic);
+      assert.ok(Buffer.byteLength(safeBytes, 'utf8') <= 2_048, mode);
+      assert.doesNotMatch(safeBytes, /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d|file:\/\/|\/Users\//u, mode);
+      failureCodes.push(diagnostic.records[0].failureCode);
+    }
+    assert.equal(new Set(failureCodes).size, controls.length);
     assert.equal(METRICS.providerCalls, 0);
   });
 });
