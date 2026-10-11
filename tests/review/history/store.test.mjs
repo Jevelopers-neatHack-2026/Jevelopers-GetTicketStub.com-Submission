@@ -169,12 +169,134 @@ async function inspectDatabase(root, tenantId = 'tenant-a') {
       referenceRows: database.prepare('SELECT * FROM downstream_references ORDER BY event_key, reference_hash').all(),
       invalidations: database.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count,
       invalidationRows: database.prepare('SELECT * FROM invalidations ORDER BY event_key, reference_hash, prior_version_id, prior_content_hash').all(),
+      correctionCacheOperations: database.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations').get().count,
+      pendingCorrectionCacheOperations: database.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase != 'complete'").get().count,
       sealedBytes: database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS count FROM versions WHERE sealed IS NOT NULL").get().count
         + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS count FROM downstream_references').get().count,
     };
   } finally {
     database.close();
   }
+}
+
+function historyDatabasePath(root, tenantId = 'tenant-a') {
+  const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
+  return path.join(root, tenantHash, 'history.sqlite');
+}
+
+async function awaitWithTimeout(value, label, timeoutMs = 4_000) {
+  let timer;
+  try {
+    return await Promise.race([
+      value,
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), timeoutMs); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function createWriterAuthorizationRaceHarness(t, revokeOnFirstWriterAttempt) {
+  let resolveRetryObserved;
+  const retryObserved = new Promise((resolve) => { resolveRetryObserved = resolve; });
+  const race = {
+    request: null,
+    action: null,
+    operationHandle: null,
+    retentionCalls: 0,
+    armNextPreBeginPair: false,
+    preBeginPairRemaining: 0,
+    revokeOnFirstWriterAttempt,
+    revokeAtNextNow: false,
+    writer: null,
+    writerAcquired: false,
+    writerAcquireError: null,
+    writerReleased: false,
+    retryAuthorizationCalls: 0,
+    retryObserved,
+    retryObservedSignalled: false,
+    resolveRetryObserved,
+    root: null,
+    clock: null,
+    releaseWriter() {
+      if (!race.writer) return;
+      try { race.writer.exec('ROLLBACK'); } catch { /* It may already have rolled back. */ }
+      try { race.writer.close(); } catch { /* It may already be closed. */ }
+      race.writer = null;
+      race.writerReleased = true;
+    },
+    signalRetry() {
+      if (race.retryObservedSignalled) return;
+      race.retryObservedSignalled = true;
+      race.resolveRetryObserved();
+    },
+  };
+  const request = { principal: { tenantId: 'tenant-a', actorId: 'customer-a' }, serverContextToken: TRUSTED_SERVER_CONTEXT };
+  race.request = request;
+  const harness = await createHarness(t, {
+    lockTimeoutMs: 1_000,
+    resolveActor(value) {
+      if (value === race.request && value.principal.actorId === 'actor-revoked') race.signalRetry();
+      return value?.principal?.actorId;
+    },
+    authorize({ tenantId, actorId, action, request: value }) {
+      const matchesOperation = value === race.request && action === race.action;
+      if (matchesOperation && race.armNextPreBeginPair && race.preBeginPairRemaining === 0) {
+        race.armNextPreBeginPair = false;
+        race.preBeginPairRemaining = 2;
+        try {
+          race.writer = new DatabaseSync(historyDatabasePath(race.root));
+          race.writer.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+          race.writerAcquired = true;
+        } catch (error) {
+          race.writerAcquireError = error;
+        }
+      }
+      if (matchesOperation && race.preBeginPairRemaining > 0) {
+        race.preBeginPairRemaining -= 1;
+        if (race.preBeginPairRemaining === 0 && race.revokeOnFirstWriterAttempt) race.revokeAtNextNow = true;
+      } else if (matchesOperation && race.writerAcquired && !race.writerReleased
+        && !race.revokeOnFirstWriterAttempt) {
+        race.retryAuthorizationCalls += 1;
+        if (race.retryAuthorizationCalls === 1) {
+          race.releaseWriter();
+          race.signalRetry();
+        }
+      }
+      return value?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && value?.principal?.tenantId === tenantId
+        && value?.principal?.actorId === actorId
+        && actorId !== 'outsider' && actorId !== 'actor-revoked';
+    },
+    resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle }) {
+      if (!retentionHandle || typeof retentionHandle !== 'object') throw new Error('synthetic retention denial');
+      if (retentionHandle === race.operationHandle) {
+        race.retentionCalls += 1;
+        if (race.retentionCalls === 2) race.armNextPreBeginPair = true;
+      }
+      return {
+        expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+        policyId: 'synthetic-private-history',
+        policyVersion: '1',
+        accessPolicy: 'tenant_private',
+      };
+    },
+    now() {
+      if (race.revokeAtNextNow) {
+        race.revokeAtNextNow = false;
+        race.request.principal.actorId = 'actor-revoked';
+      }
+      return race.clock?.value ?? EPOCH;
+    },
+  });
+  race.root = harness.root;
+  race.clock = harness.clock;
+  t.after(() => {
+    race.request.principal.actorId = 'customer-a';
+    race.releaseWriter();
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request);
+  return { harness, race, request, scope };
 }
 
 test('creates targeted typed questions and keeps customer corrections beside source disagreements', async (t) => {
@@ -420,6 +542,331 @@ test('asynchronous same-process corrections across store instances serialize to 
   assert.equal(rejected.reason.code === 'REVIEW_BUSY', false);
   const history = await harness.store.listHistory(harness.scope, EVENT_ID, harness.request);
   assert.deepEqual(history.map((snapshot) => snapshot.revision), [1, 2]);
+});
+
+test('persistVersion succeeds after an actual SQLite writer conflict and reauthorizes the retry', async (t) => {
+  const { harness, race, request, scope } = await createWriterAuthorizationRaceHarness(t, false);
+  race.action = 'apply_correction';
+  const first = (await harness.store.createHistory(scope, {
+    eventId: EVENT_ID,
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'writer-retry-seed',
+    retentionHandle: harness.createPermit(),
+  }, request)).snapshot;
+  race.operationHandle = harness.createPermit();
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-20' },
+    idempotencyKey: 'writer-retry-positive-correction',
+    retentionHandle: race.operationHandle,
+  };
+
+  const result = await awaitWithTimeout(harness.store.applyCorrection(scope, input, request), 'authorized SQLite writer retry');
+  await waitForSignal(race.retryObserved, 'fresh authorization after the busy writer attempt');
+  assert.equal(race.writerAcquired, true, race.writerAcquireError?.message);
+  assert.equal(race.writerReleased, true);
+  assert.equal(race.retryAuthorizationCalls >= 1, true);
+  assert.equal(result.snapshot.revision, 2);
+  assert.equal((await harness.store.listHistory(scope, EVENT_ID, request)).length, 2);
+});
+
+test('persistVersion denies disclosure after a committed revision when authorization is revoked at the return boundary', async (t) => {
+  let root;
+  let denyCommittedDisclosure = false;
+  let committedRevisionSeenByGuard = null;
+  let disclosureDenials = 0;
+  const harness = await createHarness(t, {
+    authorize({ tenantId, actorId, action, request }) {
+      const identityValid = request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && request?.principal?.tenantId === tenantId
+        && request?.principal?.actorId === actorId
+        && actorId !== 'outsider';
+      if (!identityValid || action !== 'apply_correction' || !denyCommittedDisclosure) return identityValid;
+      const database = new DatabaseSync(historyDatabasePath(root));
+      let revision;
+      try {
+        revision = database.prepare('SELECT revision FROM heads ORDER BY event_key LIMIT 1').get()?.revision ?? null;
+      } finally {
+        database.close();
+      }
+      if (revision === 2) {
+        committedRevisionSeenByGuard = revision;
+        disclosureDenials += 1;
+        denyCommittedDisclosure = false;
+        return false;
+      }
+      return true;
+    },
+  });
+  root = harness.root;
+  const { request, scope, store } = harness;
+  const first = (await store.createHistory(scope, {
+    eventId: EVENT_ID,
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'disclosure-boundary-seed',
+    retentionHandle: harness.createPermit(),
+  }, request)).snapshot;
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-23' },
+    idempotencyKey: 'disclosure-boundary-correction',
+    retentionHandle: harness.createPermit(),
+  };
+
+  denyCommittedDisclosure = true;
+  const deniedResult = await awaitWithTimeout(
+    store.applyCorrection(scope, input, request),
+    'post-commit authorization denial',
+  ).then(() => null, (error) => error);
+  assert.equal(deniedResult?.code, 'REVIEW_DENIED');
+  assert.equal(committedRevisionSeenByGuard, 2);
+  assert.equal(disclosureDenials, 1);
+
+  const committed = await inspectDatabase(harness.root);
+  assert.equal(committed.heads.length, 1);
+  assert.equal(committed.heads[0].revision, 2);
+  assert.equal(committed.versions.length, 2);
+  assert.equal(committed.idempotencyCount, 2);
+  assert.equal(committed.correctionCacheOperations, 0);
+  assert.equal(committed.pendingCorrectionCacheOperations, 0);
+
+  const replay = await awaitWithTimeout(
+    store.applyCorrection(scope, input, request),
+    'exact replay after disclosure authorization is restored',
+  );
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.snapshot.revision, 2);
+  const afterReplay = await inspectDatabase(harness.root);
+  assert.equal(afterReplay.versions.length, 2);
+  assert.equal(afterReplay.idempotencyCount, 2);
+});
+
+test('persistVersion denies an actor revoked between a real busy writer attempt and its retry, then exact retry succeeds', async (t) => {
+  const scenarios = [
+    { operation: 'initialize', action: 'initialize_history' },
+    { operation: 'correction', action: 'apply_correction' },
+    { operation: 'source refresh', action: 'refresh_source_facts' },
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.operation, async (subtest) => {
+      const { harness, race, request, scope } = await createWriterAuthorizationRaceHarness(subtest, true);
+      let base;
+      if (scenario.operation !== 'initialize') {
+        base = (await harness.store.createHistory(scope, {
+          eventId: EVENT_ID,
+          sourceFacts: initialFacts(),
+          idempotencyKey: `writer-revoke-seed-${scenario.operation.replaceAll(' ', '-')}`,
+          retentionHandle: harness.createPermit(),
+        }, request)).snapshot;
+      }
+      race.action = scenario.action;
+      race.operationHandle = harness.createPermit();
+      const input = scenario.operation === 'initialize'
+        ? {
+          eventId: EVENT_ID,
+          sourceFacts: initialFacts(),
+          idempotencyKey: 'writer-revoke-initialize',
+          retentionHandle: race.operationHandle,
+        }
+        : scenario.operation === 'correction'
+          ? {
+            eventId: EVENT_ID,
+            baseVersionId: base.versionId,
+            baseContentHash: base.contentHash,
+            field: 'event_date',
+            value: { precision: 'date', value: '2027-06-21' },
+            idempotencyKey: 'writer-revoke-correction',
+            retentionHandle: race.operationHandle,
+          }
+          : {
+            eventId: EVENT_ID,
+            baseVersionId: base.versionId,
+            baseContentHash: base.contentHash,
+            sourceFacts: { event_date: sourceDate('2027-06-22', 'writer-revoke-refresh') },
+            idempotencyKey: 'writer-revoke-source-refresh',
+            retentionHandle: race.operationHandle,
+          };
+      const run = () => scenario.operation === 'initialize'
+        ? harness.store.createHistory(scope, input, request)
+        : scenario.operation === 'correction'
+          ? harness.store.applyCorrection(scope, input, request)
+          : harness.store.refreshSources(scope, input, request);
+      const before = scenario.operation === 'initialize' ? null : await inspectDatabase(harness.root);
+
+      const rejected = await awaitWithTimeout(run(), `revoked ${scenario.operation} writer retry`)
+        .then(() => null, (error) => error);
+      assert.equal(rejected?.code, 'REVIEW_DENIED', JSON.stringify({
+        code: rejected?.code,
+        actorId: request.principal.actorId,
+        revokeAtNextNow: race.revokeAtNextNow,
+        armNextPreBeginPair: race.armNextPreBeginPair,
+        preBeginPairRemaining: race.preBeginPairRemaining,
+        writerAcquired: race.writerAcquired,
+        writerAcquireError: race.writerAcquireError?.message,
+        writerReleased: race.writerReleased,
+        retryObservedSignalled: race.retryObservedSignalled,
+        retentionCalls: race.retentionCalls,
+      }));
+      await waitForSignal(race.retryObserved, `revoked ${scenario.operation} retry authorization`);
+      assert.equal(race.writerAcquired, true, race.writerAcquireError?.message);
+      assert.equal(race.writerReleased, false);
+      race.releaseWriter();
+      const after = await inspectDatabase(harness.root);
+      if (scenario.operation === 'initialize') {
+        assert.equal(after.heads.length, 0);
+        assert.equal(after.versions.length, 0);
+        assert.equal(after.idempotencyCount, 0);
+      } else {
+        assert.equal(after.heads[0].version_id, before.heads[0].version_id);
+        assert.equal(after.versions.length, before.versions.length);
+        assert.equal(after.idempotencyCount, before.idempotencyCount);
+        assert.equal(after.invalidations, before.invalidations);
+      }
+      assert.equal(after.correctionCacheOperations, 0);
+      assert.equal(after.pendingCorrectionCacheOperations, 0);
+
+      request.principal.actorId = 'customer-a';
+      const retried = await awaitWithTimeout(run(), `exact authorized ${scenario.operation} retry`);
+      assert.equal(retried.snapshot.revision, scenario.operation === 'initialize' ? 1 : 2);
+      assert.equal((await harness.store.listHistory(scope, EVENT_ID, request)).length, scenario.operation === 'initialize' ? 1 : 2);
+    });
+  }
+});
+
+test('persistVersion reauthorizes after its same-process tenant queue wait and before BEGIN', async (t) => {
+  let targetRequest;
+  let blockerRequest;
+  let targetHandle;
+  let blockerHandle;
+  let targetRetentionCalls = 0;
+  let blockerRetentionCalls = 0;
+  let blockerPreBeginArmed = false;
+  let blockerPreBeginHeld = false;
+  let targetPreBeginAuthorizationCalls = 0;
+  let probeWriterAcquired = false;
+  let probeWriterError;
+  let releaseTargetRetention;
+  let resolveTargetRetentionReady;
+  let resolveBlockerPreBegin;
+  let releaseBlockerPreBegin;
+  let resolveTargetPreBeginObserved;
+  const targetRetentionReady = new Promise((resolve) => { resolveTargetRetentionReady = resolve; });
+  const targetRetentionGate = new Promise((resolve) => { releaseTargetRetention = resolve; });
+  const blockerPreBeginEntered = new Promise((resolve) => { resolveBlockerPreBegin = resolve; });
+  const blockerPreBeginGate = new Promise((resolve) => { releaseBlockerPreBegin = resolve; });
+  const targetPreBeginObserved = new Promise((resolve) => { resolveTargetPreBeginObserved = resolve; });
+  const harness = await createHarness(t, {
+    lockTimeoutMs: 1_000,
+    resolveActor(value) {
+      if (value === targetRequest && value.principal.actorId === 'actor-revoked') resolveTargetPreBeginObserved();
+      return value?.principal?.actorId;
+    },
+    authorize({ tenantId, actorId, action, request }) {
+      if (request === blockerRequest && action === 'initialize_history' && blockerPreBeginArmed && !blockerPreBeginHeld) {
+        blockerPreBeginHeld = true;
+        try {
+          const probe = new DatabaseSync(historyDatabasePath(harness.root));
+          try { probe.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE; ROLLBACK'); probeWriterAcquired = true; }
+          finally { probe.close(); }
+        } catch (error) { probeWriterError = error; }
+        resolveBlockerPreBegin();
+        return blockerPreBeginGate.then(() => request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+          && request?.principal?.tenantId === tenantId
+          && request?.principal?.actorId === actorId && actorId !== 'outsider');
+      }
+      if (request === targetRequest && action === 'apply_correction' && targetRetentionCalls >= 2) {
+        targetPreBeginAuthorizationCalls += 1;
+      }
+      return request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && request?.principal?.tenantId === tenantId
+        && request?.principal?.actorId === actorId
+        && actorId !== 'outsider' && actorId !== 'actor-revoked';
+    },
+    resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle }) {
+      if (retentionHandle === targetHandle) {
+        targetRetentionCalls += 1;
+        if (targetRetentionCalls === 2) {
+          resolveTargetRetentionReady();
+          return targetRetentionGate.then(() => ({ expiresAtMs: Math.min(nowMs + 60_000,
+            sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER), policyId: 'queue-test', policyVersion: '1', accessPolicy: 'tenant_private' }));
+        }
+      }
+      if (retentionHandle === blockerHandle) {
+        blockerRetentionCalls += 1;
+        if (blockerRetentionCalls === 2) blockerPreBeginArmed = true;
+      }
+      if (!retentionHandle || typeof retentionHandle !== 'object') throw new Error('synthetic retention denial');
+      return { expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+        policyId: 'queue-test', policyVersion: '1', accessPolicy: 'tenant_private' };
+    },
+  });
+  const releaseAll = () => {
+    releaseTargetRetention();
+    releaseBlockerPreBegin();
+    if (targetRequest) targetRequest.principal.actorId = 'customer-a';
+  };
+  t.after(releaseAll);
+  targetRequest = { principal: { tenantId: 'tenant-a', actorId: 'customer-a' }, serverContextToken: TRUSTED_SERVER_CONTEXT };
+  blockerRequest = { principal: { tenantId: 'tenant-a', actorId: 'customer-b' }, serverContextToken: TRUSTED_SERVER_CONTEXT };
+  const targetScope = await harness.store.scopeForAuthenticatedRequest(targetRequest);
+  const blockerScope = await harness.store.scopeForAuthenticatedRequest(blockerRequest);
+  const first = (await harness.store.createHistory(targetScope, {
+    eventId: EVENT_ID,
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'tenant-queue-target-seed',
+    retentionHandle: harness.createPermit(),
+  }, targetRequest)).snapshot;
+  targetHandle = harness.createPermit();
+  blockerHandle = harness.createPermit();
+  const targetInput = {
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-25' },
+    idempotencyKey: 'tenant-queue-target-correction',
+    retentionHandle: targetHandle,
+  };
+  const targetOperation = harness.store.applyCorrection(targetScope, targetInput, targetRequest);
+  await waitForSignal(targetRetentionReady, 'target final retention callback before queue wait');
+
+  const blockerOperation = harness.store.createHistory(blockerScope, {
+    eventId: 'event-tenant-queue-blocker',
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'tenant-queue-blocker-initialize',
+    retentionHandle: blockerHandle,
+  }, blockerRequest);
+  await waitForSignal(blockerPreBeginEntered, 'blocker holding same-process queue before BEGIN');
+  assert.equal(probeWriterAcquired, true, probeWriterError?.message);
+
+  releaseTargetRetention();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(targetPreBeginAuthorizationCalls, 0);
+  targetRequest.principal.actorId = 'actor-revoked';
+  releaseBlockerPreBegin();
+  const results = await awaitWithTimeout(Promise.allSettled([targetOperation, blockerOperation]), 'queued revision guard results');
+  assert.equal(results[0].status, 'rejected');
+  assert.equal(results[0].reason.code, 'REVIEW_DENIED');
+  assert.equal(results[1].status, 'fulfilled');
+  await waitForSignal(targetPreBeginObserved, 'target current principal check after queue release');
+  assert.equal(targetRequest.principal.actorId, 'actor-revoked');
+
+  const afterDenied = await inspectDatabase(harness.root);
+  assert.equal(afterDenied.heads.length, 2);
+  assert.equal(afterDenied.versions.length, 2);
+  assert.equal(afterDenied.idempotencyCount, 2);
+  assert.equal(afterDenied.invalidations, 0);
+  assert.equal(afterDenied.correctionCacheOperations, 0);
+  targetRequest.principal.actorId = 'customer-a';
+  const retried = await awaitWithTimeout(harness.store.applyCorrection(targetScope, targetInput, targetRequest), 'exact retry after queue authorization denial');
+  assert.equal(retried.snapshot.revision, 2);
+  assert.deepEqual((await harness.store.listHistory(targetScope, EVENT_ID, targetRequest)).map((snapshot) => snapshot.revision), [1, 2]);
 });
 
 test('same-key duplicate requests commit once and replay across store instances', async (t) => {

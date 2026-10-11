@@ -305,6 +305,8 @@ export function createCorrectionCacheBinding(options) {
       const { scopes, historyContext, cacheContext } = await pairedContexts(scope, request, eventId,
         'read_history', 'private_profile.write', undefined, signal);
       try {
+        const preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request, profile, signal, capability);
+        if (signal.aborted) fail('REVIEW_ABORTED');
         const operationInput = Object.freeze({
           eventId: historyContext.eventId,
           identity: profile.identity,
@@ -336,7 +338,7 @@ export function createCorrectionCacheBinding(options) {
           const stored = await cachePort.putProfile(scopes.cacheScope, request,
             Object.freeze({ ...profile, facts: projection, expiresAtMs: Math.min(profile.expiresAtMs ?? historyExpiresAtMs, historyExpiresAtMs) }),
             binding, operation, (commit, time) => fence.run(operation.operationId, operation.fence,
-              ['pending_bind'], commit, time.now), signal, capability);
+              ['pending_bind'], commit, time.now), signal, capability, preflightToken);
           if (signal.aborted) fail('REVIEW_ABORTED');
           if (stored.status !== 'stored' || stored.scopeKind !== 'tenant_private'
             || stored.cacheSourceContentHash !== profile.contentHash
@@ -398,6 +400,7 @@ export function createCorrectionCacheBinding(options) {
       const { scopes, historyContext } = await pairedContexts(scope, request, raw.eventId,
         action, 'cache.invalidate', kind === 'correction' ? raw.field : undefined, signal);
       try {
+        historyPort.validateOperationInput(historyContext, kind, cleanInput);
         const operation = await historyPort.beginOperation(historyContext, {
           kind, operationKey: raw.idempotencyKey, normalizedInput,
           baseVersionId: raw.baseVersionId, baseContentHash: raw.baseContentHash,

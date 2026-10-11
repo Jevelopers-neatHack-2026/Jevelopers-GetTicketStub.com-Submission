@@ -938,6 +938,26 @@ export function createCorrectionHistoryStore(options) {
     }
   }
 
+  async function withAuthorizedRevisionTransaction(info, directory, operation, signal, beforeBegin) {
+    // Revision commits with a current authorization check must use an async zero-timeout
+    // retry loop: a synchronous SQLite busy wait could outlive the authorization decision.
+    const deadline = Date.now() + limits.lockTimeoutMs;
+    const delays = [2, 4, 8, 12, 20, 30, 40];
+    for (let attempt = 0; ; attempt += 1) {
+      throwIfAborted(signal);
+      try {
+        return await withTransaction(info, directory, operation, signal, undefined,
+          { timeoutMs: 0, sync: true, beforeBegin });
+      } catch (error) {
+        if (!(error instanceof ReviewHistoryError) || error.code !== 'REVIEW_BUSY') throw error;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw error;
+        const delay = Math.min(delays[Math.min(attempt, delays.length - 1)], remaining);
+        await abortableWait(new Promise((resolve) => setTimeout(resolve, delay)), signal);
+      }
+    }
+  }
+
   async function throwAfterExpiredCleanup(info, directory, eventKey, error, signal = undefined) {
     const publicError = mapStorageError(error);
     if (publicError.code === 'REVIEW_EXPIRED') {
@@ -952,6 +972,7 @@ export function createCorrectionHistoryStore(options) {
     let database;
     let open = false;
     let schemaReady = false;
+    let preBeginRejected = false;
     try {
       const databasePath = path.join(directory, 'history.sqlite');
       let priorStats = null;
@@ -1102,7 +1123,14 @@ export function createCorrectionHistoryStore(options) {
       await chmod(databasePath, 0o600);
       // The configured clock is host code. Sample it before BEGIN so even a synchronous
       // reentrant clock cannot run while this connection owns SQLite's writer lock.
-      if (transactionOptions.beforeBegin) await transactionOptions.beforeBegin();
+      if (transactionOptions.beforeBegin) {
+        try {
+          await transactionOptions.beforeBegin();
+        } catch (error) {
+          preBeginRejected = true;
+          throw error;
+        }
+      }
       const transactionNow = nowMs();
       database.exec('BEGIN IMMEDIATE');
       open = true;
@@ -1122,7 +1150,7 @@ export function createCorrectionHistoryStore(options) {
         try { database.exec('ROLLBACK'); } catch { /* Closing an interrupted connection also rolls back its transaction. */ }
         open = false;
       }
-      if (schemaReady && database && publicError.code !== 'REVIEW_BUSY') {
+      if (schemaReady && database && publicError.code !== 'REVIEW_BUSY' && !preBeginRejected) {
         try {
           const cleanupNow = nowMs();
           database.exec('BEGIN IMMEDIATE');
@@ -1368,8 +1396,12 @@ export function createCorrectionHistoryStore(options) {
         || finalRetention.accessPolicy !== retention.accessPolicy || finalRetention.expiresAtMs < retention.expiresAtMs) fail('REVIEW_DENIED');
       const finalExpiresAtMs = Math.min(retention.expiresAtMs, finalRetention.expiresAtMs);
       assertNotExpired(finalExpiresAtMs);
-      await reauthorizeRequest(info, request, eventId, action, actorId, field);
       throwIfAborted(signal);
+      const authorizeBeforeBegin = async () => {
+        throwIfAborted(signal);
+        await reauthorizeRequest(info, request, eventId, action, actorId, field);
+        throwIfAborted(signal);
+      };
       const transaction = (database, time) => {
         const transactionTime = time.now;
         const existingReplay = database.prepare('SELECT fingerprint, version_id FROM idempotency WHERE event_key = ? AND key_hash = ?')
@@ -1470,8 +1502,8 @@ export function createCorrectionHistoryStore(options) {
         return Object.freeze({ snapshot, replayed: false, invalidations: snapshot.invalidations });
       };
       const result = bindingOperation
-        ? await withBindingTransaction(info, directory, transaction, signal)
-        : await withTransaction(info, directory, transaction, signal, undefined, { sync: true });
+        ? await withBindingTransaction(info, directory, transaction, signal, authorizeBeforeBegin)
+        : await withAuthorizedRevisionTransaction(info, directory, transaction, signal, authorizeBeforeBegin);
       if (result.replayed) {
         const replay = await withTransaction(info, directory, (database) => {
           const row = rowForVersion(database, eventKey, result.replayVersionId);
@@ -1484,6 +1516,8 @@ export function createCorrectionHistoryStore(options) {
         assertNotExpired(Date.parse(snapshot.expiresAt));
         return Object.freeze({ snapshot, replayed: true, invalidations: snapshot.invalidations });
       }
+      await reauthorizeRequest(info, request, eventId, action, actorId, field);
+      assertNotExpired(Date.parse(result.snapshot.expiresAt));
       return result;
     } catch (error) {
       return throwAfterExpiredCleanup(info, directory, eventKey, error, signal);
@@ -2118,7 +2152,31 @@ export function createCorrectionHistoryStore(options) {
       return Object.freeze({ operationId, bindingId, fence, kind: spec.kind, phase,
         baseVersionId, baseContentHash,
         targetVersionId: null, targetContentHash: null, replayed: false });
-    }, signal);
+    }, signal, () => reauthorizeRequest(context.info, request, context.eventId,
+      spec.action, context.actorId, spec.field));
+  }
+
+  function validateBindingRevisionInput(context, kind, inputValue) {
+    if (!context || !['correction', 'source_refresh'].includes(kind)) fail('REVIEW_INVALID');
+    const allowed = kind === 'correction'
+      ? new Set(['eventId', 'baseVersionId', 'baseContentHash', 'field', 'value', 'idempotencyKey', 'retentionHandle'])
+      : new Set(['eventId', 'baseVersionId', 'baseContentHash', 'sourceFacts', 'idempotencyKey', 'retentionHandle']);
+    const input = ownDataRecord(inputValue, allowed);
+    if (!input || !Object.hasOwn(input, 'eventId') || !Object.hasOwn(input, 'baseVersionId')
+      || !Object.hasOwn(input, 'baseContentHash') || !Object.hasOwn(input, 'idempotencyKey')) fail('REVIEW_INVALID');
+    if (validateEventId(input.eventId) !== context.eventId) fail('REVIEW_INVALID');
+    validateIdentifier(input.baseVersionId);
+    if (typeof input.baseContentHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.baseContentHash)) fail('REVIEW_INVALID');
+    validateIdentifier(input.idempotencyKey, 180);
+    if (kind === 'correction') {
+      const field = fieldKey(input.field, allowedFields);
+      if (lockedFields.has(field)) fail('REVIEW_FIELD_LOCKED');
+      validateFieldValue(field, input.value);
+    } else {
+      if (!Object.hasOwn(input, 'sourceFacts')) fail('REVIEW_INVALID');
+      sourceFacts(input.sourceFacts, allowedFields);
+    }
+    return true;
   }
 
   async function bindingApplyHistoryOperation(context, operation, input, request, signal) {
@@ -2209,7 +2267,8 @@ export function createCorrectionHistoryStore(options) {
         database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?
           WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
           .run(operation.baseVersionId, operation.baseContentHash, context.eventKey, state.operation_hash, operation.operationId);
-      });
+      }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
+        'record_downstream_reference', context.actorId));
       return Object.freeze({ bindingId: operation.bindingId, profileRef: input.profileRef, replayed: false });
     } finally {
       payloadKey.key.fill(0);
@@ -2401,6 +2460,7 @@ export function createCorrectionHistoryStore(options) {
     disposeContext: disposeBindingContext,
     readHead: bindingReadHead,
     readVersion: bindingReadVersion,
+    validateOperationInput: validateBindingRevisionInput,
     beginOperation: beginBindingOperation,
     applyOperation: bindingApplyHistoryOperation,
     addCacheProfile: bindingAddCacheProfile,
