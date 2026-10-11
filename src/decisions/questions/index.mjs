@@ -15,3 +15,7 @@ export {
   prepareDependentQuestions,
   prepareIndependentQuestions
 } from './prepare.mjs';
+export {
+  SourceIdentityQuestionPreparationError,
+  prepareIdentityQuestionFromComposition
+} from './from-source-identity.mjs';

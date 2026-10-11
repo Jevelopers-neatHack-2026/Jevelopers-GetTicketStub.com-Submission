@@ -11,6 +11,7 @@ import {
   freezeQuestionValue,
   hashQuestionValue
 } from './registry.mjs';
+import { hasCredentialLikeText } from './sensitive-content.mjs';
 
 const MAX_OBSERVATIONS = 32;
 const MAX_TEXT_BYTES_PER_FIELD = 4_096;
@@ -192,14 +193,6 @@ function languageTag(value) {
 
 function isPrimaryLanguage(tag) {
   return tag.toLowerCase() === 'en' || tag.toLowerCase().startsWith('en-');
-}
-
-function hasCredentialLikeText(value) {
-  return [
-    /\b(?:authorization|proxy-authorization)\s*:\s*(?:bearer|basic)\s+[^\s,;]+/i,
-    /\bbearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}/i,
-    /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|client[_-]?secret)\s*[:=]\s*["']?[^\s"';,]{8,}/i
-  ].some((pattern) => pattern.test(value));
 }
 
 function parseRetentionTags(value) {

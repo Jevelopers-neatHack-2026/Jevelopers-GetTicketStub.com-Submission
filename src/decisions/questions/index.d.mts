@@ -350,6 +350,18 @@ export declare class QuestionPreparationError extends Error {
     | 'SENSITIVE_CONTENT';
 }
 
+export type {
+  SourceIdentityQuestionPreparationOptions,
+  SourceIdentityQuestionPreparationResult,
+  SourceIdentityQuestionPreparationErrorCode,
+  SourceIdentityBinding,
+  SourceIdentityBindingObservationGroup
+} from './from-source-identity.mjs';
+export {
+  SourceIdentityQuestionPreparationError,
+  prepareIdentityQuestionFromComposition
+} from './from-source-identity.mjs';
+
 export declare const QUESTION_IDS: readonly QuestionId[];
 export declare const INDEPENDENT_QUESTION_IDS: readonly QuestionId[];
 export declare const IDENTITY_DEPENDENT_QUESTION_IDS: readonly QuestionId[];
