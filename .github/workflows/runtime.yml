@@ -37,6 +37,13 @@ jobs:
           name: pdf-position-${{ matrix.group }}-${{ github.run_attempt }}
           path: out/pdf-linux-position/
           if-no-files-found: error
+      - name: Preserve sanitized independent child failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-private-diagnostics-${{ matrix.group }}-${{ github.run_attempt }}
+          path: out/ci-workload-private/**/independent-failure.json
+          if-no-files-found: ignore
   runtime:
     needs: workload
     if: always()

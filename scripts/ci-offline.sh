@@ -11,6 +11,7 @@ if [[ -e out/ci-workload-request.json ]]; then
     if (( code != 0 )); then status=1; fi
   }
   phase build npm run build
+  node --input-type=module -e 'import {availableParallelism} from "node:os"; console.log(JSON.stringify({availableParallelism:availableParallelism()}))'
   phase types npm run typecheck
   phase format npm run format:check
   phase workload-tests node --test --test-concurrency=1 scripts/ci-workload-*.test.mjs

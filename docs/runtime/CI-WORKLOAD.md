@@ -4,11 +4,8 @@ The `runtime` check requires three independent workload jobs and a final offline
 union/proof job. Every job retains the existing 20-minute limit. Each uses the
 unchanged checksum-verified Node 24.21.0/npm 11.19.0 installer, immutable renderer
 image, checkout action SHA and `scripts/security/run-offline.mjs` driver. No
-container, renderer, nested 60-second deadline or tolerance changes. Outer test
-files remain serial within each job. Private descendants use an explicit maximum
-of four test-file processes rather than Node's host-dependent CPU-minus-one
-default; their selected files, native counts and required artifact checks remain
-unchanged. Each child command records that fixed bound in its execution receipt.
+container, renderer, nested 60-second deadline, tolerance or concurrency setting
+changes. Test files remain serial within each job.
 
 ## Why separate runners
 
