@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { evaluatePrivateQuoteCurrent, executePrivateQuote, QuoteExecutionError } from "../dist/quotes.js";
 import {
   catalogA,
@@ -18,6 +19,29 @@ const cases = [];
 const add = (name, run) => cases.push([name, run]);
 const assertNoOrder = (harness) => assert.equal(harness.calls.order, 0, "quote path must never submit an order");
 
+function stableJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+}
+
+function refreshQuoteFingerprints(quote) {
+  const terms = {
+    providerQuoteReference: quote.providerQuoteReference,
+    currency: quote.currency,
+    currencyScale: quote.currencyScale,
+    breakdown: quote.breakdown,
+    expiry: quote.expiry,
+    leadTime: quote.leadTime,
+    warnings: quote.warnings,
+    providerNotes: quote.providerNotes
+  };
+  quote.termsFingerprint = `sha256:${createHash("sha256").update(stableJson(terms)).digest("hex")}`;
+  const { quoteId: _quoteId, ...body } = quote;
+  quote.quoteId = `quote:sha256:${createHash("sha256").update(stableJson(body)).digest("hex")}`;
+  return quote;
+}
+
 async function quoteOnce({ catalog = copyCatalog(catalogA), response = providerQuote(), policy, now, contracts, quote } = {}) {
   const request = await requestFor(catalog);
   const harness = quoteHarness({ response, policy, now, contracts, quote });
@@ -32,6 +56,16 @@ async function expectQuoteError(promise, code) {
     assert.equal(error.message, error.safeMessage);
     return true;
   });
+}
+
+function assertSafeDiagnostic(error, code, marker) {
+  assert.ok(error instanceof QuoteExecutionError);
+  assert.equal(error.code, code);
+  assert.equal(error.message, error.safeMessage);
+  assert.equal(error.safeMessage, new QuoteExecutionError(code).safeMessage);
+  assert.equal(JSON.stringify(error).includes(marker), false);
+  assert.equal(String(error.stack).includes(marker), false);
+  assert.deepEqual(Object.keys(error).sort(), ["code", "operation", "safeMessage"].sort());
 }
 
 add("valid quote binds exact catalog, selection, destination, shipping, scope, and currency terms", async () => {
@@ -77,6 +111,10 @@ add("valid quote binds exact catalog, selection, destination, shipping, scope, a
   assert.equal(harness.calls.request.personalization.fieldCount, 1);
   assert.equal(result.contractBinding.state, "development_fixture");
   assert.equal(result.sharedPayload.quote_reference, quote.quoteId);
+  assert.equal(result.sharedPayload.created_at, quote.createdAt);
+  assert.equal(result.sharedPayload.valid_until, quote.expiry.effectiveValidUntil);
+  assert.equal(result.sharedPayload.total_amount, quote.breakdown.total.value.decimal);
+  assert.equal(result.sharedPayload.total_minor_units, quote.breakdown.total.value.minorUnits);
   assertNoOrder(harness);
 
   const current = await evaluatePrivateQuoteCurrent(quote, request, harness.dependencies);
@@ -150,6 +188,42 @@ add("included unknown tax is preserved while a reconciled total remains exact", 
   assert.equal(result.quote.status, "incomplete");
   assert.equal(result.quote.breakdown.total.value.decimal, "15.75");
   assertNoOrder(harness);
+});
+
+add("known included tax may be positive or zero but cannot exceed the inclusive total", async () => {
+  for (const tax of ["0.50", "0.00"]) {
+    const { harness, result } = await quoteOnce({ response: providerQuote({
+      breakdown: {
+        production: { state: "known", decimal: "12.50" },
+        shipping: { state: "known", decimal: "3.00" },
+        tax: { state: "known", decimal: tax },
+        fee: { state: "known", decimal: "0.25" }
+      },
+      taxBasis: "included",
+      total: { state: "known", decimal: "15.75" }
+    }) });
+    assert.equal(result.quote.breakdown.taxBasis, "included");
+    assert.equal(result.quote.breakdown.tax.state, "known");
+    assert.equal(result.quote.breakdown.tax.value.decimal, tax);
+    assert.equal(result.quote.breakdown.total.value.decimal, "15.75");
+    assert.equal(result.quote.breakdown.reconciliation.state, "reconciled");
+    assert.equal(result.quote.status, "complete");
+    assertNoOrder(harness);
+  }
+
+  const impossible = quoteHarness({ response: providerQuote({
+    breakdown: {
+      production: { state: "known", decimal: "12.50" },
+      shipping: { state: "known", decimal: "3.00" },
+      tax: { state: "known", decimal: "15.76" },
+      fee: { state: "known", decimal: "0.25" }
+    },
+    taxBasis: "included",
+    total: { state: "known", decimal: "15.75" }
+  }) });
+  await expectQuoteError(executePrivateQuote(await requestFor(), impossible.dependencies), "provider_response_invalid");
+  assert.equal(impossible.calls.quote, 1);
+  assertNoOrder(impossible);
 });
 
 add("zero-decimal and three-decimal currencies reconcile without floating-point arithmetic", async () => {
@@ -321,6 +395,58 @@ add("provider errors expose only bounded safe messages", async () => {
   assertNoOrder(harness);
 });
 
+add("forged, subclassed, accessor-backed, proxy, and input errors are projected to owned diagnostics", async () => {
+  const marker = "SYNTHETIC_PRIVATE_PROVIDER_ERROR";
+  const forged = Object.assign(Object.create(QuoteExecutionError.prototype), {
+    name: "QuoteExecutionError", code: "provider_failure", message: marker, safeMessage: marker,
+    toJSON() { return { message: marker, safeMessage: marker }; }
+  });
+  const forgedHarness = quoteHarness({ quote: async () => { throw forged; } });
+  const forgedError = await executePrivateQuote(await requestFor(), forgedHarness.dependencies).catch((error) => error);
+  assert.notEqual(forgedError, forged);
+  assertSafeDiagnostic(forgedError, "provider_failure", marker);
+  assertNoOrder(forgedHarness);
+
+  class HostileQuoteError extends QuoteExecutionError {
+    toJSON() { return { message: marker, safeMessage: marker }; }
+  }
+  const subclass = new HostileQuoteError("provider_failure");
+  const subclassHarness = quoteHarness({ quote: async () => { throw subclass; } });
+  const subclassError = await executePrivateQuote(await requestFor(), subclassHarness.dependencies).catch((error) => error);
+  assert.notEqual(subclassError, subclass);
+  assertSafeDiagnostic(subclassError, "provider_failure", marker);
+  assertNoOrder(subclassHarness);
+
+  let getterCalled = false;
+  const accessorError = new Error(marker);
+  Object.defineProperty(accessorError, "status", { get() { getterCalled = true; throw new Error(marker); } });
+  const accessorHarness = quoteHarness({ quote: async () => { throw accessorError; } });
+  const accessorResult = await executePrivateQuote(await requestFor(), accessorHarness.dependencies).catch((error) => error);
+  assertSafeDiagnostic(accessorResult, "provider_failure", marker);
+  assert.equal(getterCalled, false);
+  assertNoOrder(accessorHarness);
+
+  const proxyHarness = quoteHarness({ quote: async () => { throw new Proxy(new Error(marker), {
+    getOwnPropertyDescriptor() { throw new Error(marker); }
+  }); } });
+  const proxyError = await executePrivateQuote(await requestFor(), proxyHarness.dependencies).catch((error) => error);
+  assertSafeDiagnostic(proxyError, "provider_failure", marker);
+  assertNoOrder(proxyHarness);
+
+  const inputHarness = quoteHarness();
+  const hostileInput = new Proxy({}, { ownKeys() { throw forged; } });
+  const inputError = await executePrivateQuote(hostileInput, inputHarness.dependencies).catch((error) => error);
+  assert.notEqual(inputError, forged);
+  assertSafeDiagnostic(inputError, "invalid_input", marker);
+  assert.equal(inputHarness.calls.quote, 0);
+  assertNoOrder(inputHarness);
+
+  const rateHarness = quoteHarness({ quote: async () => { throw Object.assign(new Error(marker), { status: 429 }); } });
+  const rateError = await executePrivateQuote(await requestFor(), rateHarness.dependencies).catch((error) => error);
+  assertSafeDiagnostic(rateError, "rate_limit", marker);
+  assertNoOrder(rateHarness);
+});
+
 add("provider notes and contract payloads reject sensitive data", async () => {
   const noteHarness = quoteHarness({ response: providerQuote({ providerNotes: ["Send details to person@example.test"] }) });
   await expectQuoteError(executePrivateQuote(await requestFor(), noteHarness.dependencies), "provider_response_invalid");
@@ -339,6 +465,53 @@ add("provider notes and contract payloads reject sensitive data", async () => {
   } });
   await expectQuoteError(executePrivateQuote(await requestFor(), sensitiveBoundary.dependencies), "contract_rejected");
   assertNoOrder(sensitiveBoundary);
+});
+
+add("boundary privacy accepts structurally bound timestamps and exact large money while rejecting personal and secret text", async () => {
+  const amount = "12345678901.23";
+  const response = providerQuote({
+    breakdown: {
+      production: { state: "known", decimal: amount },
+      shipping: { state: "known", decimal: "0" },
+      tax: { state: "known", decimal: "0" },
+      fee: { state: "known", decimal: "0" }
+    },
+    total: { state: "known", decimal: amount }
+  });
+  const contracts = contractValidator({ validateOutbound: async (request) => ({
+    ok: true,
+    value: {
+      quote_reference: request.value.quoteId,
+      created_at: request.value.createdAt,
+      valid_until: request.value.expiry.effectiveValidUntil,
+      amount: request.value.breakdown.total.value.decimal
+    },
+    receipts: [{ shape: "fulfillment_quote", schemaVersion: "0.1.0", ...request.trustedScope }]
+  }) });
+  const accepted = await quoteOnce({ response, contracts });
+  assert.equal(accepted.result.sharedPayload.created_at, accepted.result.quote.createdAt);
+  assert.equal(accepted.result.sharedPayload.valid_until, accepted.result.quote.expiry.effectiveValidUntil);
+  assert.equal(accepted.result.sharedPayload.amount, amount);
+  assertNoOrder(accepted.harness);
+
+  for (const sensitive of [
+    "2026-10-10T10:30:00.000Z",
+    "Call 415-555-0199",
+    "Ship to 123 Main Street, Springfield",
+    "person@example.test",
+    "https://example.test/path?X-Amz-Signature=SYNTHETIC",
+    "Bearer SYNTHETIC_PRIVATE_TOKEN_12345",
+    "sk-123456789012345678901234"
+  ]) {
+    const unsafeContracts = contractValidator({ validateOutbound: async (request) => ({
+      ok: true,
+      value: { review_note: sensitive },
+      receipts: [{ shape: "fulfillment_quote", schemaVersion: "0.1.0", ...request.trustedScope }]
+    }) });
+    const harness = quoteHarness({ contracts: unsafeContracts });
+    await expectQuoteError(executePrivateQuote(await requestFor(), harness.dependencies), "contract_rejected");
+    assertNoOrder(harness);
+  }
 });
 
 add("getter-backed input and provider responses are rejected without invoking accessors", async () => {
@@ -377,6 +550,45 @@ add("missing or malformed quote schema pins fail closed before the quote port", 
   await expectQuoteError(executePrivateQuote(await requestFor(), wrongReceipt.dependencies), "scope_mismatch");
   assert.equal(wrongReceipt.calls.quote, 1);
   assertNoOrder(wrongReceipt);
+});
+
+add("contract pin metadata rejects private or unbounded text before quote execution and accepts opaque pins", async () => {
+  for (const fixtureDigest of [
+    "https://contracts.example.test/quote?token=SYNTHETIC",
+    "maintainer@example.test",
+    "Bearer SYNTHETIC_PRIVATE_TOKEN_12345",
+    "api_key=SYNTHETIC_PRIVATE_TOKEN_12345",
+    "123 Main Street",
+    "a".repeat(257)
+  ]) {
+    const contracts = contractValidator({ binding: { fixtureDigest } });
+    const harness = quoteHarness({ contracts });
+    await expectQuoteError(executePrivateQuote(await requestFor(), harness.dependencies), "contract_missing");
+    assert.equal(harness.calls.quote, 0);
+    assertNoOrder(harness);
+  }
+
+  const digest = `sha256:${"b".repeat(64)}`;
+  const sourceRevision = "0123456789abcdef0123456789abcdef01234567";
+  const contracts = contractValidator({
+    binding: { state: "accepted", schemaVersion: "1.2.3", fixtureDigest: digest, sourceRevision },
+    validateOutbound: async (request) => ({
+      ok: true,
+      value: { quote_reference: request.value.quoteId },
+      receipts: [{
+        shape: "fulfillment_quote",
+        schemaVersion: "1.2.3",
+        tenantId: request.trustedScope.tenantId,
+        projectId: request.trustedScope.projectId
+      }]
+    })
+  });
+  const accepted = await quoteOnce({ contracts });
+  assert.equal(accepted.result.contractBinding.state, "accepted");
+  assert.equal(accepted.result.contractBinding.fixtureDigest, digest);
+  assert.equal(accepted.result.contractBinding.sourceRevision, sourceRevision);
+  assert.equal(accepted.harness.calls.quote, 1);
+  assertNoOrder(accepted.harness);
 });
 
 add("changed catalog, selection, destination, shipping, or quantity requires re-quote and renewed external authorization", async () => {
@@ -421,6 +633,50 @@ add("expired quotes require a fresh quote and renewed external authorization", a
   assert.equal(evaluation.status, "stale");
   assert.deepEqual(evaluation.reasons, ["quote_expired"]);
   assert.deepEqual(evaluation.requiredActions, ["requote", "renew_external_authorization"]);
+  assertNoOrder(harness);
+});
+
+add("current-quote evaluation rejects inconsistent serialized money, terms, expiry, and future creation", async () => {
+  const { request, harness, result } = await quoteOnce();
+
+  const alteredMoney = structuredClone(result.quote);
+  alteredMoney.breakdown.total.value.decimal = "0.01";
+  alteredMoney.breakdown.total.value.minorUnits = "1";
+  refreshQuoteFingerprints(alteredMoney);
+  const moneyEvaluation = await evaluatePrivateQuoteCurrent(alteredMoney, request, harness.dependencies);
+  assert.equal(moneyEvaluation.status, "invalid");
+  assert.deepEqual(moneyEvaluation.reasons, ["quote_integrity_invalid"]);
+
+  const staleTerms = structuredClone(result.quote);
+  staleTerms.leadTime.maximumDays += 1;
+  const { quoteId: _oldId, ...staleTermsBody } = staleTerms;
+  staleTerms.quoteId = `quote:sha256:${createHash("sha256").update(stableJson(staleTermsBody)).digest("hex")}`;
+  const termsEvaluation = await evaluatePrivateQuoteCurrent(staleTerms, request, harness.dependencies);
+  assert.equal(termsEvaluation.status, "invalid");
+
+  const invalidMoneyShape = structuredClone(result.quote);
+  invalidMoneyShape.breakdown.total.value.currency = "EUR";
+  refreshQuoteFingerprints(invalidMoneyShape);
+  assert.equal((await evaluatePrivateQuoteCurrent(invalidMoneyShape, request, harness.dependencies)).status, "invalid");
+
+  const beyondCutoff = structuredClone(result.quote);
+  beyondCutoff.expiry.effectiveValidUntil = "2026-10-10T10:36:00.000Z";
+  refreshQuoteFingerprints(beyondCutoff);
+  assert.equal((await evaluatePrivateQuoteCurrent(beyondCutoff, request, harness.dependencies)).status, "invalid");
+
+  const extraShape = structuredClone(result.quote);
+  extraShape.unreviewed = true;
+  refreshQuoteFingerprints(extraShape);
+  assert.equal((await evaluatePrivateQuoteCurrent(extraShape, request, harness.dependencies)).status, "invalid");
+
+  harness.setNow("2026-10-10T10:29:00.000Z");
+  const futureCreated = structuredClone(result.quote);
+  futureCreated.createdAt = "2026-10-10T10:31:00.000Z";
+  futureCreated.expiry.localPolicy.validUntil = "2026-10-10T10:35:00.000Z";
+  refreshQuoteFingerprints(futureCreated);
+  const futureEvaluation = await evaluatePrivateQuoteCurrent(futureCreated, request, harness.dependencies);
+  assert.equal(futureEvaluation.status, "invalid");
+  assert.deepEqual(futureEvaluation.reasons, ["quote_integrity_invalid"]);
   assertNoOrder(harness);
 });
 

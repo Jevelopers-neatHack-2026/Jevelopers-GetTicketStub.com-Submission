@@ -59,9 +59,19 @@ export function contractValidator(overrides = {}) {
     async validateOutbound(request) {
       receipts.push(request);
       if (overrides.validateOutbound) return overrides.validateOutbound(request);
+      const total = request.value.breakdown.total;
       return {
         ok: true,
-        value: { quote_reference: request.value.quoteId, test_boundary: "fixture-only" },
+        value: {
+          quote_reference: request.value.quoteId,
+          provider_reference: request.value.providerQuoteReference,
+          created_at: request.value.createdAt,
+          valid_until: request.value.expiry.effectiveValidUntil,
+          currency: request.value.currency,
+          total_amount: total.state === "known" ? total.value.decimal : null,
+          total_minor_units: total.state === "known" ? total.value.minorUnits : null,
+          test_boundary: "fixture-only"
+        },
         receipts: [{
           shape: "fulfillment_quote",
           schemaVersion: "0.1.0",

@@ -37,19 +37,43 @@ const SAFE_MESSAGES: Readonly<Record<QuoteErrorCode, string>> = {
   unsupported_schema_major: "The quote contract schema major version is unsupported."
 };
 
+const QUOTE_ERROR_CODES = new Set<QuoteErrorCode>(Object.keys(SAFE_MESSAGES) as QuoteErrorCode[]);
+const INTERNAL_QUOTE_ERRORS = new WeakSet<object>();
+
 export class QuoteExecutionError extends Error {
   readonly operation = "quote" as const;
+  readonly code: QuoteErrorCode;
   readonly safeMessage: string;
 
-  constructor(readonly code: QuoteErrorCode) {
-    super(SAFE_MESSAGES[code]);
-    this.name = "QuoteExecutionError";
-    this.safeMessage = SAFE_MESSAGES[code];
+  constructor(code: QuoteErrorCode) {
+    const safeCode = QUOTE_ERROR_CODES.has(code) ? code : "invalid_input";
+    super(SAFE_MESSAGES[safeCode]);
+    this.code = safeCode;
+    Object.defineProperty(this, "name", { value: "QuoteExecutionError", enumerable: false, configurable: false, writable: false });
+    this.safeMessage = SAFE_MESSAGES[safeCode];
     Object.freeze(this);
   }
 
   toJSON(): { operation: "quote"; code: QuoteErrorCode; safeMessage: string } {
     return { operation: this.operation, code: this.code, safeMessage: this.safeMessage };
+  }
+}
+
+function internalQuoteError(code: QuoteErrorCode): QuoteExecutionError {
+  const error = new QuoteExecutionError(code);
+  INTERNAL_QUOTE_ERRORS.add(error);
+  return error;
+}
+
+function internalQuoteErrorCode(value: unknown): QuoteErrorCode | undefined {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null || !INTERNAL_QUOTE_ERRORS.has(value as object)) return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, "code");
+    return descriptor !== undefined && "value" in descriptor && QUOTE_ERROR_CODES.has(descriptor.value as QuoteErrorCode)
+      ? descriptor.value as QuoteErrorCode
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -242,16 +266,25 @@ const UNKNOWN_REASONS = new Set<QuoteUnknownReason>([
   "not_disclosed", "not_provided", "not_supported", "provider_unspecified", "outside_scope"
 ]);
 const OPAQUE_REFERENCE = /^[A-Za-z][A-Za-z0-9._+-]{0,31}:[A-Za-z0-9][A-Za-z0-9._:/#-]{0,223}$/u;
+const PIN_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/#@+-]{0,255}$/u;
+const PIN_HASH = /^(?:sha256:)?[a-f0-9]{40,64}$/u;
+const PIN_SECRET_LABEL = /\b(?:token|secret|password|credential|api[_ -]?key)\b\s*[:=]/iu;
 const SCHEMA_VERSION = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/u;
 const FORBIDDEN_KEY = /(?:address|email|phone|street|recipient|customer|contact|postal.?code|zip.?code|password|secret|token|credential|api.?key|signed.?url)/iu;
 const EMAIL_OR_URL = /(?:https?:\/\/|\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b)/iu;
 const PHONE_LIKE = /(?:^|\D)\+?\d[\d\s().-]{8,}\d(?:\D|$)/u;
 const OPAQUE_QUOTE_ID = /^quote:sha256:[a-f0-9]{64}$/u;
+const OPAQUE_DIGEST = /^sha256:[a-f0-9]{64}$/u;
+const EXACT_MONEY = /^(?:0|[1-9]\d{0,13})(?:\.\d{1,6})?$/u;
+const EXACT_MINOR_UNITS = /^(?:0|[1-9]\d{0,19})$/u;
+const FINANCIAL_FIELD = /(?:amount|decimal|minorunits?|money|price|cost|total|subtotal|production|shipping|tax|fee)/u;
+const CANONICAL_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const QUOTE_TIMESTAMP_FIELDS = new Set(["createdat", "validuntil", "effectivevaliduntil", "localvaliduntil", "issuedat", "expiresat"]);
 const ADDRESS_LIKE = /\b\d{1,6}\s+[A-Za-z0-9.' -]{2,64}\s(?:street|st|road|rd|avenue|ave|boulevard|blvd|lane|ln|drive|dr)\b/iu;
 const SECRET_LIKE = /(?:\bbearer\s+[A-Za-z0-9._~-]{8,}|\bsk-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]+PRIVATE KEY-----)/iu;
 
 function invalid(code: QuoteErrorCode = "invalid_input"): never {
-  throw new QuoteExecutionError(code);
+  throw internalQuoteError(code);
 }
 
 function safeTree(value: unknown, depth = 0, seen = new WeakSet<object>(), budget = { nodes: 0, bytes: 0 }): unknown {
@@ -405,6 +438,14 @@ function safeReference(value: unknown): string {
   const result = safeText(value, 256);
   if (!OPAQUE_REFERENCE.test(result)) return invalid("provider_response_invalid");
   return result;
+}
+
+function safePinMetadata(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 256 || value.trim() !== value ||
+      /[\u0000-\u001F\u007F]/u.test(value) || !PIN_IDENTIFIER.test(value)) return invalid("contract_missing");
+  if (!PIN_HASH.test(value) && (EMAIL_OR_URL.test(value) || PHONE_LIKE.test(value) || ADDRESS_LIKE.test(value) ||
+      SECRET_LIKE.test(value) || PIN_SECRET_LABEL.test(value))) return invalid("contract_missing");
+  return value;
 }
 
 function safeDigest(value: unknown): string {
@@ -611,6 +652,9 @@ async function normalizeProviderQuote(value: unknown, createdAt: string, policy:
   const shippingMinor = knownMinor(shipping);
   const feeMinor = knownMinor(fee);
   const taxMinor = knownMinor(tax);
+  if (taxBasis === "included" && totalMinor !== undefined && taxMinor !== undefined && taxMinor > totalMinor) {
+    return invalid("provider_response_invalid");
+  }
   const missing: string[] = [];
   if (totalMinor === undefined) missing.push("total");
   if (productionMinor === undefined) missing.push("production");
@@ -675,36 +719,36 @@ function contractBinding(validator: unknown, scope: TrustedScope): {
   readonly fixtureDigest: string;
   readonly validateOutbound: (...args: unknown[]) => unknown;
 } {
-  const bindingMethod = captureMethod(validator, "binding");
-  const validateOutbound = captureMethod(validator, "validateOutbound");
-  let rawBinding: unknown;
   try {
-    rawBinding = Reflect.apply(bindingMethod, validator, ["fulfillment_quote"]);
+    const bindingMethod = captureMethod(validator, "binding");
+    const validateOutbound = captureMethod(validator, "validateOutbound");
+    const rawBinding = Reflect.apply(bindingMethod, validator, ["fulfillment_quote"]);
+    const binding = record(safeTree(rawBinding));
+    const allowedKeys = ["shape", "ownerRepository", "upstreamIssue", "state", "schemaVersion", "sourceRevision", "fixtureDigest"];
+    if (Object.keys(binding).some((key) => !allowedKeys.includes(key))) return invalid("contract_missing");
+    if (binding.shape !== "fulfillment_quote" || binding.ownerRepository !== "shared-contracts" || binding.upstreamIssue !== "#25" ||
+        (binding.state !== "development_fixture" && binding.state !== "accepted") ||
+        typeof binding.schemaVersion !== "string" || SCHEMA_VERSION.exec(binding.schemaVersion) === null) return invalid("contract_missing");
+    const fixtureDigest = safePinMetadata(binding.fixtureDigest);
+    let sourceRevision: string | undefined;
+    if (binding.state === "accepted") {
+      sourceRevision = safePinMetadata(binding.sourceRevision);
+    } else if (binding.sourceRevision !== undefined) {
+      return invalid("contract_missing");
+    }
+    return Object.freeze({
+      state: binding.state,
+      schemaVersion: binding.schemaVersion,
+      ...(sourceRevision === undefined ? {} : { sourceRevision }),
+      fixtureDigest,
+      validateOutbound
+    });
   } catch {
     return invalid("contract_missing");
   }
-  const binding = record(safeTree(rawBinding));
-  const allowedKeys = ["shape", "ownerRepository", "upstreamIssue", "state", "schemaVersion", "sourceRevision", "fixtureDigest"];
-  if (Object.keys(binding).some((key) => !allowedKeys.includes(key))) return invalid("contract_missing");
-  if (binding.shape !== "fulfillment_quote" || binding.ownerRepository !== "shared-contracts" || binding.upstreamIssue !== "#25" ||
-      (binding.state !== "development_fixture" && binding.state !== "accepted") ||
-      typeof binding.schemaVersion !== "string" || SCHEMA_VERSION.exec(binding.schemaVersion) === null ||
-      typeof binding.fixtureDigest !== "string" || binding.fixtureDigest.trim() === "") return invalid("contract_missing");
-  if (binding.state === "accepted") {
-    if (typeof binding.sourceRevision !== "string" || binding.sourceRevision.trim() === "") return invalid("contract_missing");
-  } else if (binding.sourceRevision !== undefined) {
-    return invalid("contract_missing");
-  }
-  return Object.freeze({
-    state: binding.state,
-    schemaVersion: binding.schemaVersion,
-    ...(typeof binding.sourceRevision === "string" ? { sourceRevision: binding.sourceRevision } : {}),
-    fixtureDigest: binding.fixtureDigest,
-    validateOutbound
-  });
 }
 
-function validateBoundaryReceipt(value: unknown, binding: ReturnType<typeof contractBinding>, scope: TrustedScope): unknown {
+function validateBoundaryReceipt(value: unknown, binding: ReturnType<typeof contractBinding>, scope: TrustedScope, quote: PrivateQuoteSnapshot): unknown {
   const result = record(safeTree(value));
   if (result.ok !== true) {
     if (result.ok === false) {
@@ -727,26 +771,66 @@ function validateBoundaryReceipt(value: unknown, binding: ReturnType<typeof cont
   if (receiptVersion[1] !== bindingVersion[1]) return invalid("unsupported_schema_major");
   if (receipt.schemaVersion !== binding.schemaVersion && binding.state === "accepted") return invalid("contract_rejected");
   const payload = safeTree(result.value);
-  ensurePrivacySafe(payload);
+  ensurePrivacySafe(payload, quoteMoneyScalars(quote));
   if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return invalid("contract_rejected");
   return payload;
 }
 
-function ensurePrivacySafe(value: unknown, depth = 0): void {
+function quoteMoneyScalars(quote: PrivateQuoteSnapshot): ReadonlySet<string> {
+  const values = new Set<string>();
+  const include = (amount: QuotedAmount): void => {
+    if (amount.state === "known") {
+      values.add(amount.value.decimal);
+      values.add(amount.value.minorUnits);
+    }
+  };
+  include(quote.breakdown.production);
+  include(quote.breakdown.shipping);
+  include(quote.breakdown.tax);
+  include(quote.breakdown.fee);
+  include(quote.breakdown.total);
+  if (quote.breakdown.reconciliation.state === "reconciled") {
+    values.add(quote.breakdown.reconciliation.expectedTotal.decimal);
+    values.add(quote.breakdown.reconciliation.expectedTotal.minorUnits);
+  }
+  return values;
+}
+
+function isCanonicalTimestampValue(value: string): boolean {
+  if (!CANONICAL_TIMESTAMP.test(value)) return false;
+  try {
+    const epoch = Date.parse(value);
+    return Number.isSafeInteger(epoch) && new Date(epoch).toISOString() === value;
+  } catch {
+    return false;
+  }
+}
+
+function isFinancialField(value: string): boolean {
+  return FINANCIAL_FIELD.test(value.replace(/[^A-Za-z0-9]/gu, "").toLowerCase());
+}
+
+function ensurePrivacySafe(value: unknown, moneyScalars: ReadonlySet<string>, depth = 0, field = "", parentField = ""): void {
   if (depth > SAFE_TREE_MAX_DEPTH) return invalid("contract_rejected");
   if (typeof value === "string") {
-    if (OPAQUE_QUOTE_ID.test(value)) return;
+    if (OPAQUE_QUOTE_ID.test(value) || OPAQUE_DIGEST.test(value)) return;
+    const fieldName = field.replace(/[^A-Za-z0-9]/gu, "").toLowerCase();
+    const parentName = parentField.replace(/[^A-Za-z0-9]/gu, "").toLowerCase();
+    if (QUOTE_TIMESTAMP_FIELDS.has(fieldName) && isCanonicalTimestampValue(value)) return;
+    const financialScalar = isFinancialField(field) || (fieldName === "value" && isFinancialField(parentField));
+    const exactMoney = EXACT_MONEY.test(value) || ((fieldName.includes("minorunit") || parentName.includes("minorunit")) && EXACT_MINOR_UNITS.test(value));
+    if (financialScalar && exactMoney && moneyScalars.has(value)) return;
     if (EMAIL_OR_URL.test(value) || PHONE_LIKE.test(value) || ADDRESS_LIKE.test(value) || SECRET_LIKE.test(value)) return invalid("contract_rejected");
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) ensurePrivacySafe(item, depth + 1);
+    for (const item of value) ensurePrivacySafe(item, moneyScalars, depth + 1, field, parentField);
     return;
   }
   if (value !== null && typeof value === "object") {
     for (const [key, child] of Object.entries(value)) {
       if (FORBIDDEN_KEY.test(key)) return invalid("contract_rejected");
-      ensurePrivacySafe(child, depth + 1);
+      ensurePrivacySafe(child, moneyScalars, depth + 1, key, field);
     }
   }
 }
@@ -763,8 +847,7 @@ async function prepareBoundInput(input: unknown, scopeValue: unknown, now: strin
   let snapshot: CatalogSnapshot;
   try {
     snapshot = await normalizeCatalogSnapshot(request.catalogSource);
-  } catch (error) {
-    if (error instanceof QuoteExecutionError) throw error;
+  } catch {
     return invalid("invalid_input");
   }
   const rawSelection = record(safeTree(request.selection));
@@ -874,10 +957,11 @@ export async function executePrivateQuote(input: unknown, dependencies: QuoteDep
     const providerInput: QuoteProviderRequest = Object.freeze({ ...requestWithoutDigest, requestDigest: prepared.binding.requestDigest });
     const controller = new AbortController();
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeoutMarker = Object.freeze({ timeout: true });
     const timeout = new Promise<never>((_resolve, reject) => {
       timeoutHandle = setTimeout(() => {
         controller.abort();
-        reject(new QuoteExecutionError("timeout"));
+        reject(timeoutMarker);
       }, policy.timeoutMs);
     });
     let rawProviderResult: unknown;
@@ -887,8 +971,8 @@ export async function executePrivateQuote(input: unknown, dependencies: QuoteDep
         timeout
       ]);
     } catch (error) {
-      if (error instanceof QuoteExecutionError) throw error;
-      throw new QuoteExecutionError(classifyProviderFailure(error));
+      if (error === timeoutMarker) throw internalQuoteError("timeout");
+      throw internalQuoteError(classifyProviderFailure(error));
     } finally {
       if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     }
@@ -897,8 +981,9 @@ export async function executePrivateQuote(input: unknown, dependencies: QuoteDep
     try {
       normalized = await normalizeProviderQuote(rawProviderResult, createdAt, policy);
     } catch (error) {
-      if (error instanceof QuoteExecutionError && (error.code === "invalid_input" || error.code === "missing_input")) {
-        throw new QuoteExecutionError("provider_response_invalid");
+      const code = internalQuoteErrorCode(error);
+      if (code === "invalid_input" || code === "missing_input") {
+        throw internalQuoteError("provider_response_invalid");
       }
       throw error;
     }
@@ -945,7 +1030,13 @@ export async function executePrivateQuote(input: unknown, dependencies: QuoteDep
     } catch {
       return invalid("contract_rejected");
     }
-    const sharedPayload = validateBoundaryReceipt(boundaryResult, validatorBinding, scope);
+    let sharedPayload: unknown;
+    try {
+      sharedPayload = validateBoundaryReceipt(boundaryResult, validatorBinding, scope, quote);
+    } catch (error) {
+      const code = internalQuoteErrorCode(error);
+      return invalid(code === "scope_mismatch" || code === "unsupported_schema_major" ? code : "contract_rejected");
+    }
     return deepFreeze({
       quote,
       sharedPayload,
@@ -957,8 +1048,7 @@ export async function executePrivateQuote(input: unknown, dependencies: QuoteDep
       }
     });
   } catch (error) {
-    if (error instanceof QuoteExecutionError) throw error;
-    throw new QuoteExecutionError("invalid_input");
+    throw internalQuoteError(internalQuoteErrorCode(error) ?? "invalid_input");
   }
 }
 
@@ -968,6 +1058,132 @@ function quoteBody(snapshot: Record<string, unknown>): Record<string, unknown> {
   const body: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const [key, value] of Object.entries(snapshot)) if (key !== "quoteId") Object.defineProperty(body, key, { value, enumerable: true });
   return body;
+}
+
+const PRIVATE_QUOTE_KEYS = [
+  "localFormat", "quoteId", "termsFingerprint", "status", "binding", "catalogEvidenceMode", "providerQuoteReference",
+  "createdAt", "expiry", "currency", "currencyScale", "breakdown", "leadTime", "warnings", "providerNotes", "financialEffect"
+] as const;
+const PRIVATE_BINDING_KEYS = [
+  "tenantId", "projectId", "providerId", "apiVersion", "catalogVersion", "catalogSnapshotIdentity", "catalogContentIdentity",
+  "sku", "variantId", "specIdentity", "selectionDigest", "quantity", "options", "materials", "destination", "shippingMethod", "requestDigest"
+] as const;
+const PRIVATE_CODE = /^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$/u;
+const CATALOG_EVIDENCE_MODES = new Set(["synthetic_fixture", "documentation_reference", "account_observation", "unverified_import"]);
+
+function snapshotCode(value: unknown): string {
+  if (typeof value !== "string" || !PRIVATE_CODE.test(value)) return invalid();
+  return value;
+}
+
+function snapshotAmountForProvider(value: unknown): ProviderAmountInput {
+  const amount = record(value);
+  if (amount.state === "unknown") {
+    exactKeys(amount, ["state", "reasonCode"]);
+    return { state: "unknown", reasonCode: safeUnknownReason(amount.reasonCode) };
+  }
+  if (amount.state !== "known") return invalid();
+  exactKeys(amount, ["state", "value"]);
+  const money = record(amount.value);
+  exactKeys(money, ["currency", "scale", "decimal", "minorUnits"]);
+  return { state: "known", decimal: money.decimal as string };
+}
+
+function snapshotLeadTimeForProvider(value: unknown): unknown {
+  const leadTime = record(value);
+  if (leadTime.state === "unknown") {
+    exactKeys(leadTime, ["state", "reasonCode"]);
+    return { state: "unknown", reasonCode: leadTime.reasonCode };
+  }
+  if (leadTime.state !== "known") return invalid();
+  exactKeys(leadTime, ["state", "minimumDays", "maximumDays", "confidence"]);
+  if (leadTime.confidence !== "estimate") return invalid();
+  return { state: "known", minimumDays: leadTime.minimumDays, maximumDays: leadTime.maximumDays };
+}
+
+async function validatePrivateQuoteSnapshot(value: unknown): Promise<PrivateQuoteSnapshot> {
+  const quote = record(safeTree(value));
+  exactKeys(quote, PRIVATE_QUOTE_KEYS);
+  if (quote.localFormat !== PRIVATE_QUOTE_FORMAT || quote.financialEffect !== "quote_only" ||
+      (quote.status !== "complete" && quote.status !== "incomplete") || !CATALOG_EVIDENCE_MODES.has(quote.catalogEvidenceMode as string)) return invalid();
+  const createdAt = canonicalTimestamp(quote.createdAt);
+  const quoteId = quote.quoteId;
+  const termsFingerprint = safeDigest(quote.termsFingerprint);
+  const providerQuoteReference = safeReference(quote.providerQuoteReference);
+  const currency = quote.currency;
+  const currencyScale = quote.currencyScale;
+  if (typeof currency !== "string" || !/^[A-Z]{3}$/u.test(currency) || !Number.isSafeInteger(currencyScale) ||
+      (currencyScale as number) < 0 || (currencyScale as number) > MAX_AMOUNT_SCALE) return invalid();
+
+  const binding = record(quote.binding);
+  exactKeys(binding, PRIVATE_BINDING_KEYS);
+  for (const key of ["tenantId", "projectId", "providerId", "apiVersion", "catalogVersion", "sku", "variantId", "shippingMethod"] as const) {
+    snapshotCode(binding[key]);
+  }
+  for (const key of ["catalogSnapshotIdentity", "catalogContentIdentity", "specIdentity", "selectionDigest", "requestDigest"] as const) {
+    safeDigest(binding[key]);
+  }
+  if (!Number.isSafeInteger(binding.quantity) || (binding.quantity as number) < 1 || (binding.quantity as number) > MAX_QUANTITY) return invalid();
+  for (const key of ["options", "materials"] as const) {
+    if (!Array.isArray(binding[key])) return invalid();
+    for (const entry of binding[key] as readonly unknown[]) snapshotCode(entry);
+  }
+  const destination = record(binding.destination);
+  const destinationKeys = Object.hasOwn(destination, "regionCode")
+    ? ["reference", "digest", "countryCode", "regionCode"]
+    : ["reference", "digest", "countryCode"];
+  exactKeys(destination, destinationKeys);
+  safeDestinationReference(destination.reference);
+  safeDigest(destination.digest);
+  if (typeof destination.countryCode !== "string" || !/^[A-Z]{2}$/u.test(destination.countryCode)) return invalid();
+  if (destination.regionCode !== undefined && (typeof destination.regionCode !== "string" || !/^[A-Z0-9-]{1,16}$/u.test(destination.regionCode))) return invalid();
+  const bindingCore: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(binding)) if (key !== "requestDigest") Object.defineProperty(bindingCore, key, { value: entry, enumerable: true });
+  if (await digest(bindingCore) !== binding.requestDigest) return invalid();
+
+  const expiry = record(quote.expiry);
+  exactKeys(expiry, ["provider", "localPolicy", "effectiveValidUntil", "effectiveSource"]);
+  const localPolicy = record(expiry.localPolicy);
+  exactKeys(localPolicy, ["version", "validUntil"]);
+  if (localPolicy.version !== "quote-local-policy/1") return invalid();
+  const localValidUntil = canonicalTimestamp(localPolicy.validUntil);
+  const localMaximumValidityMs = localValidUntil.epochMs - createdAt.epochMs;
+  if (!Number.isSafeInteger(localMaximumValidityMs)) return invalid();
+  const policy = quotePolicy({ localMaximumValidityMs });
+
+  const breakdown = record(quote.breakdown);
+  exactKeys(breakdown, ["production", "shipping", "tax", "fee", "total", "taxBasis", "reconciliation"]);
+  const providerBreakdown = {
+    production: snapshotAmountForProvider(breakdown.production),
+    shipping: snapshotAmountForProvider(breakdown.shipping),
+    tax: snapshotAmountForProvider(breakdown.tax),
+    fee: snapshotAmountForProvider(breakdown.fee)
+  };
+  const providerExpiry = record(expiry.provider);
+  if (providerExpiry.state === "known") exactKeys(providerExpiry, ["state", "validUntil"]);
+  else if (providerExpiry.state === "unknown") exactKeys(providerExpiry, ["state", "reasonCode"]);
+  else return invalid();
+  const response = {
+    providerQuoteReference,
+    currency,
+    currencyScale,
+    breakdown: providerBreakdown,
+    taxBasis: breakdown.taxBasis,
+    total: snapshotAmountForProvider(breakdown.total),
+    providerExpiry,
+    leadTime: snapshotLeadTimeForProvider(quote.leadTime),
+    warnings: quote.warnings,
+    providerNotes: quote.providerNotes
+  };
+  const normalized = await normalizeProviderQuote(response, createdAt.text, policy);
+  if (stableJson(normalized.expiry) !== stableJson(expiry) || stableJson(normalized.breakdown) !== stableJson(breakdown) ||
+      stableJson(normalized.leadTime) !== stableJson(quote.leadTime) || stableJson(normalized.warnings) !== stableJson(quote.warnings) ||
+      stableJson(normalized.providerNotes) !== stableJson(quote.providerNotes) || normalized.providerQuoteReference !== providerQuoteReference ||
+      normalized.currency !== currency || normalized.currencyScale !== currencyScale || normalized.termsFingerprint !== termsFingerprint ||
+      normalized.status !== quote.status) return invalid();
+  if (typeof quoteId !== "string" || `quote:${await digest(quoteBody(quote))}` !== quoteId) return invalid();
+  ensurePrivacySafe(quote, quoteMoneyScalars(quote as unknown as PrivateQuoteSnapshot));
+  return quote as unknown as PrivateQuoteSnapshot;
 }
 
 function baseCurrentEvaluation(status: QuoteCurrentEvaluation["status"], reasons: readonly QuoteCurrentReason[], requiredActions: readonly QuoteRequiredAction[]): QuoteCurrentEvaluation {
@@ -986,14 +1202,18 @@ export async function evaluatePrivateQuoteCurrent(
   dependencies: Pick<QuoteDependencies, "clock" | "trustedScope">
 ): Promise<QuoteCurrentEvaluation> {
   try {
-    const quote = record(safeTree(quoteValue));
-    const body = quoteBody(quote);
-    const integrityDigest = `quote:${await digest(body)}`;
-    if (quote.localFormat !== PRIVATE_QUOTE_FORMAT || integrityDigest !== quote.quoteId) {
-      return baseCurrentEvaluation("invalid", ["quote_integrity_invalid"], ["requote", "renew_external_authorization"]);
-    }
     const scope = snapshotScope(dependencyValue(dependencies, "trustedScope"));
     const now = readNow(dependencyValue(dependencies, "clock"));
+    let quote: PrivateQuoteSnapshot;
+    try {
+      quote = await validatePrivateQuoteSnapshot(quoteValue);
+    } catch {
+      return baseCurrentEvaluation("invalid", ["quote_integrity_invalid"], ["requote", "renew_external_authorization"]);
+    }
+    const createdAt = canonicalTimestamp(quote.createdAt);
+    if (now.epochMs < createdAt.epochMs) {
+      return baseCurrentEvaluation("invalid", ["quote_integrity_invalid"], ["requote", "renew_external_authorization"]);
+    }
     const expiry = record(quote.expiry);
     const effectiveValidUntil = canonicalTimestamp(expiry.effectiveValidUntil);
     if (effectiveValidUntil.epochMs <= now.epochMs) {
@@ -1010,10 +1230,11 @@ export async function evaluatePrivateQuoteCurrent(
     try {
       prepared = await prepareBoundInput(currentInput, scope, now.text);
     } catch (error) {
-      if (error instanceof QuoteExecutionError && error.code === "stale_quote") {
+      const code = internalQuoteErrorCode(error);
+      if (code === "stale_quote") {
         return baseCurrentEvaluation("stale", ["catalog_stale"], ["refresh_catalog", "revalidate_selection", "requote", "renew_external_authorization"]);
       }
-      if (error instanceof QuoteExecutionError && error.code === "unsupported") {
+      if (code === "unsupported") {
         return baseCurrentEvaluation("stale", ["selection_ineligible"], ["revalidate_selection", "requote", "renew_external_authorization"]);
       }
       return baseCurrentEvaluation("invalid", ["selection_ineligible"], ["revalidate_selection", "requote", "renew_external_authorization"]);
