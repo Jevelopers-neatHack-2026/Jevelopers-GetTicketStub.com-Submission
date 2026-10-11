@@ -35,7 +35,7 @@ const requiredTests = [
   ["CE04-native-two-refs", "parentless concept edit preflights and posts exactly two authorized image references"],
   ["CE04-v10-migration", "reconstructed v9 private attribution tables migrate through v13 with populated rows, CHECKs, triggers, and foreign keys"],
   ["COMP-reconstructed-v10-migration", "reconstructed schema-10 composition-only reset preserves CE11 queues while rebuilding v11-v13 composition tables"],
-  ["COMP-pinned-v10-migration", "pinned schema-10 producer database preserves the complete populated history through v13 and replays its recovered intent"],
+  ["COMP-pinned-v10-migration", "pinned schema-10 producer plus a synthetic OpenRouter extension preserves history through v13 and replays its recovered intent"],
   ["COMP-pinned-v12-migration", "immutable schema-12 producer migrates its populated composition action and exact replay through v13"],
   ["COMP-contract-roundtrip", "composition revision, validator, and production envelope round-trip without a digest cycle"],
   ["COMP-state-commitment", "the state commitment is stable before proof completion and preview binds the final exact bytes"],

@@ -92,7 +92,10 @@
     "src/inspection",
     "src/models/index.mjs",
     "src/models/index.d.mts",
+    "src/models/image-adapter-core.mjs",
+    "src/models/image-routes.mjs",
     "src/models/openai-images.mjs",
+    "src/models/openrouter-images.mjs",
     "src/models/codec-runtime/index.mjs",
     "src/models/codec-runtime/package.json",
     "src/models/codec-runtime/package-lock.json",
@@ -101,9 +104,6 @@
     "src/runtime",
     "src/storage",
     "src/telemetry",
-    "src/versions",
-    "src/models/image-adapter-core.mjs",
-    "src/models/image-routes.mjs",
-    "src/models/openrouter-images.mjs"
+    "src/versions"
   ]
 }
