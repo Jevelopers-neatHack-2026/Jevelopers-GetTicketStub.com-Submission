@@ -428,6 +428,132 @@ test("keeps XHTML image and icon attributes mapped to exact entity-decoded sourc
   assertExactRanges(result, input.bytes);
 });
 
+test("binds XHTML case-distinct attributes to one decoded value and original source range", async () => {
+  const forms = [
+    { form: "html-img-src", attribute: "src", render: (attributes) => `<img ${attributes} />`, place: "body" },
+    { form: "html-icon-link", attribute: "href", render: (attributes) => `<link rel="icon" ${attributes} />`, place: "head" },
+    { form: "open-graph-image", attribute: "content", render: (attributes) => `<meta property="og:image" ${attributes} />`, place: "head" },
+  ];
+
+  for (const form of forms) {
+    for (const order of ["lowercase-first", "uppercase-first"]) {
+      const real = `/${form.form}-real.png`;
+      const noise = `/${form.form}-noise.png`;
+      const lower = `${form.attribute}="${real}"`;
+      const upper = `${form.attribute.toUpperCase()}="${noise}"`;
+      const attributes = order === "lowercase-first" ? `${lower} ${upper}` : `${upper} ${lower}`;
+      const markup = form.render(attributes);
+      const source = `<html xmlns="http://www.w3.org/1999/xhtml"><head>${form.place === "head" ? `🧭${markup}` : ""}</head>`
+        + `<body>${form.place === "body" ? `🧭${markup}` : ""}</body></html>`;
+      const bytes = Buffer.from(source, "utf8");
+      const result = await extractDeterministically(document(bytes, "application/xhtml+xml; charset=utf-8"));
+      const selected = result.assetSources.find((candidate) => candidate.sourceForm === form.form)?.candidate;
+      const label = `${form.form} ${order}`;
+      assert.ok(selected, `${label}: the source form is retained`);
+      assert.equal(selected.rawValue, real, `${label}: exact lowercase XML name wins regardless of order`);
+      assert.equal(selected.normalizedValue, real, `${label}: normalized value comes from that exact attribute`);
+      const startByte = Buffer.byteLength(source.slice(0, source.indexOf(real)), "utf8");
+      const endByte = startByte + Buffer.byteLength(real, "utf8");
+      assert.deepEqual(selected.source.locator, { kind: "text-range", startByte, endByte }, `${label}: locator uses the same attribute`);
+      assert.equal(bytes.subarray(startByte, endByte).toString("utf8"), real, label);
+      assert.equal(JSON.stringify(result).includes(noise), false, `${label}: shadow value is not promoted`);
+      assertExactRanges(result, bytes);
+    }
+
+    const uppercaseOnly = `/${form.form}-uppercase-only.png`;
+    const markup = form.render(`${form.attribute.toUpperCase()}="${uppercaseOnly}"`);
+    const source = `<html xmlns="http://www.w3.org/1999/xhtml"><head>${form.place === "head" ? markup : ""}</head>`
+      + `<body>${form.place === "body" ? markup : ""}</body></html>`;
+    const bytes = Buffer.from(source, "utf8");
+    const result = await extractDeterministically(document(bytes, "application/xhtml+xml; charset=utf-8"));
+    const selected = result.assetSources.find((candidate) => candidate.sourceForm === form.form)?.candidate;
+    assert.ok(selected, `${form.form}: uppercase-only compatibility alias remains supported`);
+    assert.equal(selected.rawValue, uppercaseOnly, `${form.form}: decoded value is from the alias`);
+    const startByte = Buffer.byteLength(source.slice(0, source.indexOf(uppercaseOnly)), "utf8");
+    assert.deepEqual(selected.source.locator, {
+      kind: "text-range", startByte, endByte: startByte + Buffer.byteLength(uppercaseOnly, "utf8"),
+    }, `${form.form}: uppercase-only alias keeps its exact range`);
+    assertExactRanges(result, bytes);
+  }
+
+  for (const order of ["lowercase-first", "uppercase-first"]) {
+    const lowerFirst = order === "lowercase-first";
+    const pair = (lowerName, lowerValue, upperName, upperValue) => lowerFirst
+      ? `${lowerName}="${lowerValue}" ${upperName}="${upperValue}"`
+      : `${upperName}="${upperValue}" ${lowerName}="${lowerValue}"`;
+    const conflictingMetadata = document(Buffer.from(
+      '<html xmlns="http://www.w3.org/1999/xhtml"><head>🧭'
+        + `<link ${pair("rel", "canonical", "REL", "icon")} ${pair("href", "/canonical-real", "HREF", "/canonical-shadow")} />`
+        + `<meta ${pair("property", "og:description", "PROPERTY", "og:image")} ${pair("content", "real description", "CONTENT", "shadow description")} />`
+        + `<script ${pair("type", "text/plain", "TYPE", "application/ld+json")}>{"@type":"Event","name":"shadow"}</script>`
+        + '</head><body></body></html>',
+    ), "application/xhtml+xml; charset=utf-8");
+    const metadataResult = await extractDeterministically(conflictingMetadata);
+    assert.equal(metadataResult.canonicalSuggestions.length, 1, order);
+    assert.equal(metadataResult.canonicalSuggestions[0].rawValue, "/canonical-real", order);
+    assert.equal(metadataResult.assetSources.some((asset) => asset.sourceForm === "html-icon-link"), false,
+      `${order}: exact lowercase rel controls the canonical/icon distinction`);
+    assert.equal(metadataResult.pageMetadata.find((item) => item.field === "openGraph.description")?.rawValue, "real description", order);
+    assert.equal(metadataResult.assetSources.some((asset) => asset.sourceForm === "open-graph-image"), false,
+      `${order}: exact lowercase property controls the Open Graph field`);
+    assert.equal(metadataResult.events.length, 0, `${order}: exact lowercase type controls JSON-LD script recognition`);
+    assertExactRanges(metadataResult, conflictingMetadata.bytes);
+  }
+
+  const uppercaseOnlyMetadata = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+      + '<link REL="canonical" HREF="/uppercase-canonical" />'
+      + '<meta PROPERTY="og:description" CONTENT="uppercase description" />'
+      + '<script TYPE="application/ld+json">{"@type":"Event","name":"uppercase event"}</script>'
+      + '</head><body></body></html>',
+  ), "application/xhtml+xml; charset=utf-8");
+  const uppercaseMetadataResult = await extractDeterministically(uppercaseOnlyMetadata);
+  assert.equal(uppercaseMetadataResult.canonicalSuggestions[0]?.rawValue, "/uppercase-canonical");
+  assert.equal(uppercaseMetadataResult.pageMetadata.find((item) => item.field === "openGraph.description")?.rawValue,
+    "uppercase description");
+  assert.equal(uppercaseMetadataResult.events.length, 1, "uppercase-only TYPE remains a supported compatibility alias");
+  assertExactRanges(uppercaseMetadataResult, uppercaseOnlyMetadata.bytes);
+
+  for (const order of ["fallback-first", "fallback-reversed"]) {
+    const firstAlias = order === "fallback-first";
+    const pair = (firstName, firstValue, secondName, secondValue) => firstAlias
+      ? `${firstName}="${firstValue}" ${secondName}="${secondValue}"`
+      : `${secondName}="${secondValue}" ${firstName}="${firstValue}"`;
+    const fallbackCollision = document(Buffer.from(
+      '<html xmlns="http://www.w3.org/1999/xhtml"><head>🧭'
+        + `<link ${pair("REL", "icon", "Rel", "canonical")} ${pair("HREF", "/alias-first.png", "Href", "/alias-second.png")} />`
+        + `<meta ${pair("PROPERTY", "og:description", "Property", "og:image")} ${pair("CONTENT", "alias description", "Content", "alias shadow")} />`
+        + `<script ${pair("TYPE", "text/plain", "Type", "application/ld+json")}>{"@type":"Event","name":"fallback event"}</script>`
+        + '</head><body></body></html>',
+    ), "application/xhtml+xml; charset=utf-8");
+    const fallbackResult = await extractDeterministically(fallbackCollision);
+    if (firstAlias) {
+      assert.equal(fallbackResult.canonicalSuggestions.length, 0, `${order}: first REL alias controls icon classification`);
+      assert.equal(fallbackResult.assetSources.find((asset) => asset.sourceForm === "html-icon-link")?.candidate.rawValue,
+        "/alias-first.png", `${order}: first HREF alias binds the icon range`);
+      assert.equal(fallbackResult.pageMetadata.find((item) => item.field === "openGraph.description")?.rawValue,
+        "alias description", `${order}: first CONTENT alias is retained`);
+      assert.equal(fallbackResult.assetSources.some((asset) => asset.sourceForm === "open-graph-image"), false);
+      assert.equal(fallbackResult.events.length, 0, `${order}: first TYPE alias keeps this script unrecognized`);
+    } else {
+      assert.equal(fallbackResult.canonicalSuggestions[0]?.rawValue, "/alias-second.png",
+        `${order}: reversed REL/HREF aliases bind the canonical suggestion`);
+      assert.equal(fallbackResult.assetSources.some((asset) => asset.sourceForm === "html-icon-link"), false);
+      assert.equal(fallbackResult.pageMetadata.some((item) => item.field === "openGraph.description"), false);
+      assert.equal(fallbackResult.assetSources.find((asset) => asset.sourceForm === "open-graph-image")?.candidate.rawValue,
+        "alias shadow", `${order}: reversed PROPERTY/CONTENT aliases bind the image range`);
+      assert.equal(fallbackResult.events.length, 1, `${order}: first TYPE alias enables JSON-LD recognition`);
+    }
+    assertExactRanges(fallbackResult, fallbackCollision.bytes);
+  }
+
+  const htmlDuplicate = document(Buffer.from('<!doctype html><html><body><img src="/first.png" SRC="/second.png"></body></html>'));
+  const htmlResult = await extractDeterministically(htmlDuplicate);
+  assert.equal(htmlResult.assetSources.find((asset) => asset.sourceForm === "html-img-src")?.candidate.rawValue, "/first.png",
+    "HTML keeps parse5's existing first duplicate behavior");
+  assertExactRanges(htmlResult, htmlDuplicate.bytes);
+});
+
 test("a typed nested organizer logo is associated with its Organization only once", async () => {
   const input = document(Buffer.from(`<script type="application/ld+json">${JSON.stringify({
     "@context": "https://schema.org",

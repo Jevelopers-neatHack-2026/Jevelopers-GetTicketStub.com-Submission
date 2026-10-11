@@ -66,8 +66,8 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
     const attrs = [];
     for (const attribute of Object.values(tag.attributes ?? {})) {
       if (attribute.uri === XMLNS_NS || attribute.name === "xmlns" || attribute.prefix === "xmlns") continue;
-      const name = String(attribute.name ?? attribute.local ?? "").toLowerCase();
-      attrs.push({ name, value: String(attribute.value ?? "") });
+      const sourceName = String(attribute.name ?? attribute.local ?? "");
+      attrs.push({ name: sourceName.toLowerCase(), sourceName, value: String(attribute.value ?? "") });
     }
 
     const node = {
@@ -408,7 +408,9 @@ function xmlAttributeRanges(text, startOffset, endOffset) {
     const nameStart = cursor;
     while (cursor < endOffset && !/[\t\n\r =/>]/.test(text[cursor])) cursor += 1;
     if (cursor === nameStart) break;
-    const name = text.slice(nameStart, cursor).toLowerCase();
+    // XML attribute names are case-sensitive. Keeping their source spelling
+    // prevents distinct names such as `src` and `SRC` from sharing a range.
+    const name = text.slice(nameStart, cursor);
     while (XML_SYNTAX_WHITESPACE.test(text[cursor] ?? "")) cursor += 1;
     if (text[cursor] !== "=") {
       ranges[name] = { startOffset: nameStart, endOffset: cursor };

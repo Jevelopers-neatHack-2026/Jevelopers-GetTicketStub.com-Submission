@@ -236,8 +236,9 @@ export async function collectHtmlEvidence({
     if (tagName === "link" && !insideTemplate) {
       const rel = attributeValue(node, "rel");
       if (rel && rel.toLowerCase().split(/\s+/).includes("canonical")) {
-        const href = attributeValue(node, "href");
-        const range = attributeValueRange(text, location, "href", href);
+        const hrefAttribute = attributeRecord(node, "href");
+        const href = hrefAttribute?.value;
+        const range = attributeValueRange(text, location, "href", href, attributeSourceName(hrefAttribute));
         if (href !== undefined && range) {
           const candidate = makeHtmlAttributeCandidate({
             field: "canonical.url",
@@ -268,8 +269,9 @@ export async function collectHtmlEvidence({
     } else if (tagName === "meta" && !insideTemplate) {
       const property = (attributeValue(node, "property") ?? attributeValue(node, "name") ?? "").trim().toLowerCase();
       const field = OPEN_GRAPH_FIELDS.get(property);
-      const content = attributeValue(node, "content");
-      const range = attributeValueRange(text, location, "content", content);
+      const contentAttribute = attributeRecord(node, "content");
+      const content = contentAttribute?.value;
+      const range = attributeValueRange(text, location, "content", content, attributeSourceName(contentAttribute));
       if (field && content !== undefined && range) {
         const candidate = makeHtmlAttributeCandidate({
           field: "openGraph." + field,
@@ -335,8 +337,9 @@ export async function collectHtmlEvidence({
     }
 
     if (tagName === "img" && !insideTemplate) {
-      const src = attributeValue(node, "src");
-      const range = attributeValueRange(text, location, "src", src);
+      const srcAttribute = attributeRecord(node, "src");
+      const src = srcAttribute?.value;
+      const range = attributeValueRange(text, location, "src", src, attributeSourceName(srcAttribute));
       if (src !== undefined && range) {
         const candidate = makeHtmlAttributeCandidate({
           field: "img.src",
@@ -373,8 +376,9 @@ export async function collectHtmlEvidence({
       const relTokens = (attributeValue(node, "rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
       const iconRelation = ["icon", "apple-touch-icon", "mask-icon"].find((value) => relTokens.includes(value));
       const isShortcutIcon = relTokens.includes("shortcut") && relTokens.includes("icon");
-      const href = attributeValue(node, "href");
-      const range = attributeValueRange(text, location, "href", href);
+      const hrefAttribute = attributeRecord(node, "href");
+      const href = hrefAttribute?.value;
+      const range = attributeValueRange(text, location, "href", href, attributeSourceName(hrefAttribute));
       if ((iconRelation || isShortcutIcon) && href !== undefined && range) {
         const relation = iconRelation ?? "shortcut-icon";
         const candidate = makeHtmlAttributeCandidate({
@@ -554,12 +558,26 @@ function makeHtmlTextCandidate({
   });
 }
 
-function attributeValue(node, name) {
-  return node.attrs?.find((attribute) => attribute.name.toLowerCase() === name)?.value;
+function attributeRecord(node, name) {
+  const attributes = node?.attrs ?? [];
+  // XHTML keeps the original case-sensitive XML name in `sourceName`. Prefer
+  // the standardized lowercase name when both it and a case variant exist;
+  // if only a case variant exists, keep the historical compatibility alias.
+  // HTML parser attributes have no sourceName and retain parse5's first match.
+  return attributes.find((attribute) => attribute.sourceName === name)
+    ?? attributes.find((attribute) => attribute.name.toLowerCase() === name);
 }
 
-function attributeValueRange(text, elementLocation, attributeName, decodedValue) {
-  const location = elementLocation?.attrs?.[attributeName];
+function attributeValue(node, name) {
+  return attributeRecord(node, name)?.value;
+}
+
+function attributeSourceName(attribute) {
+  return attribute?.sourceName ?? attribute?.name;
+}
+
+function attributeValueRange(text, elementLocation, attributeName, decodedValue, sourceAttributeName = attributeName) {
+  const location = elementLocation?.attrs?.[sourceAttributeName];
   if (!location || !Number.isInteger(location.startOffset) || !Number.isInteger(location.endOffset)) return null;
   const startOffset = location.startOffset;
   const raw = text.slice(startOffset, location.endOffset);
