@@ -1,0 +1,83 @@
+# Runtime setup and verification
+
+This runbook collects the local setup and offline verification commands for the experimental internal runtime. Every command below is defined in the [`Makefile`](../../Makefile), [`package.json`](../../package.json) or the CI workflows under [`.github/workflows/`](../../.github/workflows). All of it runs in mock/offline mode; none of it reaches a provider, Neatlogs, Entire or a live service. For what the runtime does and does not implement, see the [runtime foundation decision](../decisions/runtime-foundation.md).
+
+## Toolchain
+
+| Item | Pin | Source |
+| --- | --- | --- |
+| Node.js | `22.23.3` | [`.node-version`](../../.node-version), used by CI through `node-version-file` |
+| Accepted Node range | `>=22.23.3 <23` | `engines` in [`package.json`](../../package.json) |
+| npm | `10.9.9` (the version local tests used) | [runtime foundation decision](../decisions/runtime-foundation.md#runtime-and-package) |
+| `neatlogs` | `1.1.28` (exact) | `dependencies` in [`package.json`](../../package.json) |
+| TypeScript | `5.9.3` (development-only, for the `.d.ts` consumer check) | `devDependencies` in [`package.json`](../../package.json) |
+| Python | 3.9 in CI, standard library only (provider readiness check) | [`provider-readiness.yml`](../../.github/workflows/provider-readiness.yml) |
+
+The runtime uses Node's built-in `node:sqlite` module, which is still experimental in Node 22. It needs a file-backed database on storage that supports SQLite WAL locking; there is no in-memory fallback. `make runtime` fails with "Node 22.23.3 or a later Node 22 patch is required." on Node versions outside 22.23.3–22.x, and every other Make target runs it first.
+
+Local tests on Node 22.23.3 are not evidence of the deployment server's Node patch, SQLite build or filesystem limits. Server compatibility remains pending.
+
+## Install and build
+
+Offline bootstrap, which works when the locked packages are already in the npm cache:
+
+```sh
+make bootstrap
+```
+
+This runs `npm ci --ignore-scripts --offline --no-audit --no-fund` followed by `npm run build`.
+
+With network access, install the way CI does, then build:
+
+```sh
+npm ci --ignore-scripts --no-audit --no-fund
+make check
+```
+
+`make check` (an alias for `npm run build`) runs `node --check` on each source module, imports the package entrypoint `@jevelopers/agent-harness-runtime`, imports the pinned `neatlogs` SDK in a cleared environment, and runs `npm run typecheck`, which is the strict TypeScript check of the consumer fixtures under `tests/`.
+
+## Tests
+
+| Command | What it runs |
+| --- | --- |
+| `make test` / `npm test` | Every offline suite, serially: runtime, planning, recovery, observability, Neatlogs SDK and JEV adapter contract tests |
+| `make neatlogs-sdk-test` / `npm run test:neatlogs-sdk` | The Neatlogs SDK local-capture tests only |
+| `npm run typecheck` | The strict `.d.ts` consumer check only |
+
+## Named verification cases
+
+`make verify` takes `CASE`, `FIXTURE` and `MODE`. Only `MODE=mock` is supported. Each case prints its own scope note, and unsupported cases exit `2`. Passing a case is internal prerequisite evidence only, not acceptance.
+
+| Command | Runs | Still pending |
+| --- | --- | --- |
+| `make verify CASE=AH-01 MODE=mock FIXTURE=internal-boundary` | `tests/runtime/foundation.test.js` | Canonical compatibility |
+| `make verify CASE=AH-03 MODE=mock FIXTURE=state-crash-matrix` | `tests/runtime/durability.test.js` | Global AH-03 acceptance |
+| `make verify CASE=AH-03 MODE=mock FIXTURE=lease-migration` | `tests/runtime/durability.test.js` | Global AH-03 acceptance |
+| `make verify CASE=AH-10 MODE=mock FIXTURE=internal-redaction-outage` | `tests/observability/verify-fixture.js` | Neatlogs, Entire and cross-repository acceptance |
+| `make verify CASE=AH-10 MODE=mock FIXTURE=neatlogs-sdk-local` | `npm run test:neatlogs-sdk` | Live Neatlogs, Entire and cross-repository acceptance |
+| `make verify CASE=LOCAL-BOUNDED MODE=mock FIXTURE=private-local-controller` | Local controller, planning and recovery tests | Full AH-04/AH-08, canonical, Finance, tenant, planner and live acceptance |
+| `make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline` | `tests/decisions/jev-adapter.contract/verify-offline.js` | Canonical DecisionPort, Finance, tenant authority, provider access, live conformance, evaluation and release gates |
+
+The AH-10 and ACV1-AH05 fixtures, and the Neatlogs SDK tests, write TAP traces and JSON manifests under `.runtime-artifacts/`, which Git ignores. See [AH-10 internal telemetry evidence](../evidence-and-provenance.md), [JEV provider wire conformance](../decisions/provider-conformance.md) and [Neatlogs local SDK mapping conformance](../decisions/neatlogs-sdk-conformance.md) for what each manifest records.
+
+## Provider readiness profile
+
+The stdlib-only profile check runs without installing anything:
+
+```sh
+python3 -B -m unittest discover -s tests/config/provider-profile -p 'test_*.py' -v
+python3 tools/verify_provider_readiness.py --profile fixtures/provider-profile.json --mode offline
+```
+
+The committed fixture is intentionally incomplete, so the second command exits `2` (pending). That is the expected result. Exit codes and credential handling are in the [provider access readiness runbook](provider-access.md).
+
+## Configuration
+
+[`.env.example`](../../.env.example) lists `TYPESAFE_API_KEY` (left blank) and two GPT Image access-preference variables. The runtime does not read `.env` files, live access is not implemented, and the image variables do not configure an adapter. Runtime configuration must state mode, model, deadline, attempt, elapsed-time and cost bounds explicitly, and `mode: "live"` is rejected.
+
+## What CI runs
+
+| Workflow | Steps |
+| --- | --- |
+| [Runtime foundation](../../.github/workflows/runtime-foundation.yml) | Node from `.node-version`; `npm ci --ignore-scripts --no-audit --no-fund`; `make check`; `npm test`; `npm run test:neatlogs-sdk`; `make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline`; uploads the sanitized `.runtime-artifacts/` evidence |
+| [Provider profile readiness](../../.github/workflows/provider-readiness.yml) | Python 3.9; the offline adversarial unittest suite; confirms the sample profile exits `2` and stays `pending` with no network access; uploads the sanitized report |
