@@ -20,10 +20,19 @@ test('live access gate emits explicit blocked cells and exits before dispatch', 
   assert.equal(gate.paid_provider_calls, 0);
   assert.equal(gate.provider_credentials_read, false);
   assert.deepEqual(gate.cells.map((cell) => cell.status), Array(8).fill('blocked'));
-  assert.ok(gate.missing_owner_evidence.includes('openai_generation_account_permission_and_quota'));
-  assert.ok(gate.missing_owner_evidence.includes('openai_edit_account_permission_and_quota'));
-  assert.ok(gate.missing_owner_evidence.includes('openrouter_generation_account_permission_and_quota'));
-  assert.ok(gate.missing_owner_evidence.includes('openrouter_edit_account_permission_and_quota'));
+  // Either provider target satisfies an image cell, so the two are one group per cell, not two separate requirements.
+  const generationGroup = 'one_of:openai_generation_account_permission_and_quota|openrouter_generation_account_permission_and_quota';
+  const editGroup = 'one_of:openai_edit_account_permission_and_quota|openrouter_edit_account_permission_and_quota';
+  assert.ok(gate.missing_owner_evidence.includes(generationGroup));
+  assert.ok(gate.missing_owner_evidence.includes(editGroup));
+  assert.ok(!gate.missing_owner_evidence.some((item) => /^(openai|openrouter)_/.test(item)), 'no provider is demanded on its own');
+  assert.equal(gate.evidence_alternatives_rule, 'any_one_member_satisfies_the_group');
+  assert.deepEqual(gate.evidence_alternatives[generationGroup],
+    ['openai_generation_account_permission_and_quota', 'openrouter_generation_account_permission_and_quota']);
+  assert.deepEqual(gate.evidence_alternatives[editGroup],
+    ['openai_edit_account_permission_and_quota', 'openrouter_edit_account_permission_and_quota']);
+  assert.deepEqual(gate.cells.find((cell) => cell.cell_id === 'image_generation').missing_evidence,
+    [generationGroup, 'external_grant_and_finance_reservation']);
   assert.ok(gate.missing_owner_evidence.includes('external_grant_and_finance_reservation'));
   assert.ok(gate.missing_owner_evidence.includes('accepted_neatlogs_readback_protocol_and_receipt'));
   assert.doesNotMatch(result.stdout, /Bearer\s|sk-[A-Za-z0-9_-]{8,}|@[A-Za-z0-9.-]+\.[A-Z]{2,}/i);
@@ -58,6 +67,17 @@ test('mock runtime evidence preserves the matrix and identifies synthetic dispat
     { provider: 'openrouter', cell_id: 'image_generation', status: 'simulated' },
     { provider: 'openrouter', cell_id: 'image_edit', status: 'simulated' },
   ]);
+  assert.equal(evidence.test_fixture_only.intercepted_openrouter_adapter_requests, 4, 'two intercepted reads for each of the two OpenRouter scenarios');
+  for (const cellId of ['image_generation', 'image_edit']) {
+    for (const provider of ['openai', 'openrouter']) {
+      const row = evidence.test_fixture_only.image_cell_targets[cellId][provider];
+      assert.equal(row.status, 'simulated', `${provider} ${cellId}`);
+      assert.equal(row.verified, false);
+      assert.match(row.configuration_sha256, /^sha256:[a-f0-9]{64}$/);
+    }
+    const { openai, openrouter } = evidence.test_fixture_only.image_cell_targets[cellId];
+    assert.notEqual(openai.configuration_sha256, openrouter.configuration_sha256);
+  }
   assert.ok(evidence.input_sha256['src/preflight/openrouter-images.mjs']);
   assert.doesNotMatch(serialized, /Bearer\s|sk-[A-Za-z0-9_-]{8,}|@[A-Za-z0-9.-]+\.[A-Z]{2,}|signature=/i);
 });
