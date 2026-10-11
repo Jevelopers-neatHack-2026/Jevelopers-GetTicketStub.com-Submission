@@ -358,13 +358,14 @@ function boundCompletionSuggestions(suggestions, maximum) {
   return { suggestions: ordered.slice(0, maximum), omittedSuggestions: ordered.slice(maximum) };
 }
 
-function completionObservations(snapshot, candidateId, outcome) {
+function completionObservations(snapshot, candidateId) {
   return snapshot.observations.filter((observation) => observation.kind === 'link'
-    && observation.parentCandidateId === candidateId && observation.outcome === outcome);
+    && observation.parentCandidateId === candidateId);
 }
 
-function observationsMatchSuggestions(observations, suggestions) {
-  if (observations.length !== suggestions.length) return false;
+function observationsMatchSuggestions(observations, suggestions, outcome) {
+  if (observations.length !== suggestions.length
+    || observations.some((observation) => observation.outcome !== outcome)) return false;
   const counts = new Map();
   for (const suggestion of suggestions) {
     const key = suggestionSortKey(suggestion);
@@ -396,8 +397,8 @@ function completionPayloadHashFromObservations(observations, outcome, truncatedC
 
 function completionPayloadMatches(receipt, snapshot, candidateId, completion, truncatedCount) {
   if (!completion || typeof completion.payloadHash !== 'string') return false;
-  const observations = completionObservations(snapshot, candidateId, receipt.outcome);
-  return observationsMatchSuggestions(observations, receipt.suggestions)
+  const observations = completionObservations(snapshot, candidateId);
+  return observationsMatchSuggestions(observations, receipt.suggestions, receipt.outcome)
     && completionPayloadHashFromObservations(observations, receipt.outcome, truncatedCount) === completion.payloadHash;
 }
 
@@ -474,7 +475,8 @@ function aggregateIdentity(candidateResults) {
 }
 
 function projection(identity, selectedEvidence, selectedFacts, progress, limitations, omittedLinkCandidates,
-  truncatedSuggestionCount, sourceLinkCandidateOmittedCount) {
+  truncatedSuggestionCount, sourceLinkCandidateOmittedCount, sourceLinkCandidateOmittedCountLowerBound,
+  sourceLinkCandidateOmittedCountComplete) {
   const facts = selectedFacts;
   const evidenceById = new Map(selectedEvidence.map((item) => [item.metadata.evidenceId, item]));
   const sources = [...evidenceById.values()].map((item) => Object.freeze({
@@ -575,6 +577,8 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
       transportAttemptAdmissions: progress.counters.transportAttemptAdmissions,
       truncatedSuggestionCount,
       sourceLinkCandidateOmittedCount,
+      sourceLinkCandidateOmittedCountLowerBound,
+      sourceLinkCandidateOmittedCountComplete,
     }),
   });
 }
@@ -594,7 +598,8 @@ export async function runPrivateRetrieval(value) {
   const evidenceIds = new Set();
   const omittedLinkCandidates = [];
   let truncatedSuggestionCount = 0;
-  let sourceLinkCandidateOmittedCount = 0;
+  let sourceLinkCandidateOmittedCountLowerBound = 0;
+  let sourceLinkCandidateOmittedCountComplete = true;
   const activeHops = new Map();
   const controller = new AbortController();
   const runStartedAt = performance.now();
@@ -731,7 +736,13 @@ export async function runPrivateRetrieval(value) {
       for (const fact of receipt.facts) outputFacts.set(fact.factId, fact);
       omittedLinkCandidates.push(...(receipt.omittedSuggestions ?? []));
       truncatedSuggestionCount += receipt.truncatedCount ?? receipt.omittedSuggestions?.length ?? 0;
-      sourceLinkCandidateOmittedCount += receipt.sourceLinkCandidatesOmittedCount ?? 0;
+      if (receipt.omissionMetadataVersion === 1) {
+        sourceLinkCandidateOmittedCountLowerBound += receipt.sourceLinkCandidatesOmittedCount;
+      } else if (receipt.limitations.includes('some_link_candidates_omitted_by_policy_or_parser_limit')) {
+        // Historical v1 bodies retained that at least one link was omitted, but not the count.
+        sourceLinkCandidateOmittedCountLowerBound += 1;
+        sourceLinkCandidateOmittedCountComplete = false;
+      }
       for (const limitation of receipt.limitations) limitations.add(limitation);
       const identity = receipt.identity;
       if (identity.entityCandidates.length > 0 || identity.occurrenceCandidates.length > 0
@@ -821,10 +832,8 @@ export async function runPrivateRetrieval(value) {
         let replayReceipt = receipt;
         if (candidate.state === 'completed') {
           if (receipt.omissionMetadataVersion === 1) {
-            const completionObservationsForReceipt = completionObservations(
-              snapshot, candidate.candidateId, receipt.outcome,
-            );
-            if (!observationsMatchSuggestions(completionObservationsForReceipt, receipt.suggestions)) {
+            const completionObservationsForReceipt = completionObservations(snapshot, candidate.candidateId);
+            if (!observationsMatchSuggestions(completionObservationsForReceipt, receipt.suggestions, receipt.outcome)) {
               limitations.add('private_receipt_mismatch');
               runFailure = 'private_receipt_unavailable';
               return;
@@ -1321,7 +1330,7 @@ export async function runPrivateRetrieval(value) {
       for (const fact of candidateFacts) outputFacts.set(fact.factId, fact);
       omittedLinkCandidates.push(...omittedSuggestions);
       truncatedSuggestionCount += truncatedCount;
-      sourceLinkCandidateOmittedCount += candidateSourceLinkCandidatesOmittedCount;
+      sourceLinkCandidateOmittedCountLowerBound += candidateSourceLinkCandidatesOmittedCount;
       if (selectedResult?.sources[0]?.evidence?.evidenceId) candidateResults.push(candidateIdentity);
       await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
         leaseToken: claim.leaseToken,
@@ -1455,8 +1464,11 @@ export async function runPrivateRetrieval(value) {
       limitations.add('final_selected_snapshot_mismatch');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
+    const sourceLinkCandidateOmittedCount = sourceLinkCandidateOmittedCountComplete
+      ? sourceLinkCandidateOmittedCountLowerBound : null;
     const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations,
-      omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount);
+      omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
+      sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete);
     return draft;
   } catch (error) {
     const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);

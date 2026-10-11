@@ -19,3 +19,18 @@ Observed output was `{"state":"complete","payloadHash":"23efbd0e5b4125f0f2f90bf3
 `private-run-receipt-v1-overcap/` contains a separate baseline private-retrieval capture. The generator is `generate-private-run-receipt-v1-overcap.mjs` (SHA-256 `4e2f4de9cde660ad1228b466a60c50c3b161c37c6a0824a8ca8e78aa16cec6fb`) and verifies the three baseline source hashes recorded in `fixture.json`. Its synthetic local HTML has two eligible canonical links under a persisted run cap of one. Baseline execution made one request through the in-process fixture server, returned `incomplete`, left the frontier candidate `leased`, and sealed the old receipt with both links and no omission metadata. This fixture demonstrates that bounded synthetic state; it does not establish the cause of any historical public run.
 
 The committed descriptor SHA-256 is `2981e94690d5c041b364ac91f8ebc24d5d0bc0742d48c46c9574e951aaa35cae`; the evidence and frontier database hashes are also recorded in that descriptor and verified before tests copy either database. The capture command returned exit code 0 with `{"status":"incomplete","requestCount":1,"state":"leased",...}`. The test creates a temporary copy and refreshes only that copy's bounded deadline before replay; committed fixture bytes stay unchanged.
+
+`private-run-receipt-v1-policy-omission/` captures a baseline `runPrivateRetrieval` receipt for a canonical URL rejected because it contains a credential-like query. The generator `generate-private-run-receipt-v1-policy-omission.mjs` (SHA-256 `71a49302ffcd5b0b5b88471bc7b2357d4084e0011d60b0fecad28025d150a98a`) verifies baseline commit `c887d88afb9665ea92129b89d685b2a75ae482ea` and the same three source hashes as the overcap capture. It uses an in-process local HTTP server and the pinned `SafeFetcher` test seam; after the first real baseline completion it injects an interruption before the second queued seed, leaving an active run with one completed old-format receipt and one queued seed. The old receipt carries `some_link_candidates_omitted_by_policy_or_parser_limit` but no exact count and retains no rejected URL. No public retrieval or paid service is used.
+
+The committed descriptor SHA-256 is `f57113de37a9d8d65eb4c86191364d14ac052d41b279666dc9933b55fafe2b3f`; its evidence and frontier database hashes are `0c8728d0b14e8db0c901915a4c89b22003c7d6359dddb6d25881e0915167e976` and `edce65bb2859096e235d98e5d026826f614b6aa372468c8b9917c579e4677250`. The exact Node 22.23.3 capture command was:
+
+```sh
+set -o pipefail
+env EI_BASELINE_CHECKOUT=/private/tmp/ei-fanout-legacy-receipt-fixture-base-r1 \
+EI_FIXTURE_OUTPUT_DIR=/private/tmp/ei-v1-policy-omission-fixture-r2 \
+/Users/completetech/.cache/acv1-toolchains/node-v22.23.3-darwin-arm64/bin/node \
+tests/evidence/fixtures/generate-private-run-receipt-v1-policy-omission.mjs \
+| tee /private/tmp/ei-v1-policy-omission-fixture-r2.log
+```
+
+The completed command returned exit code 0 and output `{"status":"incomplete","requestCount":1,"completedSeed":"cbab74ce0a8e8f9f16f30487223a4c7fe0911ed64c56125a23816924a11276c0","queuedSeeds":["32d67e6627c73e68ddd01bac7c377852e24fab696966fdfcc1d63f7b61cc86af"],"outputDirectory":"/private/tmp/ei-v1-policy-omission-fixture-r2"}`. The raw stdout capture SHA-256 is `fec148253d9e3a9e7ef61576134cabc102f8b0984b0513d033d11ca0441dbe44`.

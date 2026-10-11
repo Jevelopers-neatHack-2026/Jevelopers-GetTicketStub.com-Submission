@@ -1,0 +1,41 @@
+{
+  "baselineCommit": "c887d88afb9665ea92129b89d685b2a75ae482ea",
+  "baselineSourceHashes": {
+    "src/research/private-retrieval.mjs": "fed7dc96f069b5e626f34a8d7e708c85708adf66edfcd422df11df3fe27dc79e",
+    "src/evidence/store.mjs": "0d910b9dedd97f6130202a300ba171cbe6e4870fc898445ea6d7900454db9070",
+    "src/discovery/planner/frontier.mjs": "d09902b2756dd57433b71143cbc12845d3422937f17f08bc0cd26973b4526bc3"
+  },
+  "tenantId": "legacy-policy-omission-fixture-tenant",
+  "tenantHash": "409bbfb4e38419901a98d3cbec21da56cdf88e746a02ff65e3bf8c3614350eff",
+  "runId": "private-receipt-v1-policy-omission-fixture",
+  "configHash": "0460869015aad24a0b567d829b49b27a4cf9ac17ec5146c1d01995de71dd7f20",
+  "seeds": [
+    {
+      "url": "http://fixture.example.org:80/legacy-policy-omission"
+    },
+    {
+      "url": "http://fixture.example.org:80/new-policy-omission"
+    }
+  ],
+  "limits": {
+    "maxDepth": 1,
+    "maxTransportAttemptAdmissions": 2,
+    "maxInFlightLeases": 4,
+    "durationMs": 30000,
+    "maxSuggestionsPerCompletion": 1
+  },
+  "requestCount": 1,
+  "retentionWindowMs": 3153600000000,
+  "expectedStatus": "incomplete",
+  "expectedCompletedCandidateId": "cbab74ce0a8e8f9f16f30487223a4c7fe0911ed64c56125a23816924a11276c0",
+  "expectedQueuedCandidateIds": [
+    "32d67e6627c73e68ddd01bac7c377852e24fab696966fdfcc1d63f7b61cc86af"
+  ],
+  "expectedOutcome": "no_links",
+  "legacyLimitation": "some_link_candidates_omitted_by_policy_or_parser_limit",
+  "unsafeUrlRetainedInReceipt": false,
+  "keyIdPattern": "`${purpose}-legacy-fixture-v1`",
+  "keyRecipe": "SHA-256 of `${tenantId}:${purpose}:legacy-receipt-v1`",
+  "evidenceDatabaseSha256": "0c8728d0b14e8db0c901915a4c89b22003c7d6359dddb6d25881e0915167e976",
+  "frontierDatabaseSha256": "edce65bb2859096e235d98e5d026826f614b6aa372468c8b9917c579e4677250"
+}
