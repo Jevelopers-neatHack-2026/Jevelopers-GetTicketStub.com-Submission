@@ -7,102 +7,17 @@ import {
 	VerificationFailure,
 } from "../../src/runtime/errors.js";
 
-export const suiteNames = [
-	"runtime",
-	"api-contracts",
-	"templates",
-	"composition",
-	"typography",
-	"approved-assets",
-	"artifact-storage",
-	"preflight",
-	"bounded-repair",
-	"personalization",
-	"csv-personalization",
-	"exporters",
-	"manifests",
-	"restart-recovery",
-	"metering-traces",
-	"integration-production",
-	"release",
-] as const;
-export type SuiteName = (typeof suiteNames)[number];
-export const suiteRegistry = {
-	runtime: { state: "implemented", dependency: "PP-01A local calibration" },
-	"api-contracts": {
-		state: "unimplemented",
-		dependency:
-			"PP-01B canonical shared-contracts package and immutable commit pin",
-	},
-	templates: {
-		state: "unimplemented",
-		dependency:
-			"Accepted supplier specification and versioned template implementation",
-	},
-	composition: {
-		state: "unimplemented",
-		dependency: "Production composition implementation",
-	},
-	typography: {
-		state: "unimplemented",
-		dependency: "Production typography profiles; calibration is corpus-limited",
-	},
-	"approved-assets": {
-		state: "unimplemented",
-		dependency: "External approval contract and immutable asset implementation",
-	},
-	"artifact-storage": {
-		state: "unimplemented",
-		dependency: "Production artifact storage implementation",
-	},
-	preflight: {
-		state: "unimplemented",
-		dependency: "Supplier-bound production preflight implementation",
-	},
-	"bounded-repair": {
-		state: "unimplemented",
-		dependency: "Production bounded repair implementation",
-	},
-	personalization: {
-		state: "unimplemented",
-		dependency: "Canonical personalization contract and implementation",
-	},
-	"csv-personalization": {
-		state: "unimplemented",
-		dependency: "CSV batch personalization implementation",
-	},
-	exporters: {
-		state: "unimplemented",
-		dependency: "Supplier-bound production exporters; calibration is synthetic",
-	},
-	manifests: {
-		state: "unimplemented",
-		dependency: "Production manifests implementation",
-	},
-	"restart-recovery": {
-		state: "unimplemented",
-		dependency: "Durable job recovery implementation",
-	},
-	"metering-traces": {
-		state: "unimplemented",
-		dependency: "Production metering and trace implementation",
-	},
-	"integration-production": {
-		state: "unimplemented",
-		dependency:
-			"Canonical consumer/supplier/finance pins and real integration implementation",
-	},
-	release: {
-		state: "aggregate",
-		dependency: "Every registered leaf and verified immutable external pins",
-	},
-} as const satisfies Record<
-	SuiteName,
-	{
-		readonly state: "implemented" | "unimplemented" | "aggregate";
-		readonly dependency: string;
-	}
->;
+export {
+	suiteNames,
+	suiteRegistry,
+} from "../../src/exporters/private-suite.js";
+import {
+	suiteNames,
+	suiteRegistry,
+	runPrivateSuite,
+} from "../../src/exporters/private-suite.js";
+import type { SuiteName } from "../../src/exporters/private-suite.js";
+export type { SuiteName } from "../../src/exporters/private-suite.js";
 
 const argumentsSchema = z
 	.object({
@@ -149,6 +64,13 @@ async function runLeaf(
 	suite: Exclude<SuiteName, "release">,
 	evidenceDir: string,
 ) {
+	if (suiteRegistry[suite].state === "external-blocked") {
+		await runPrivateSuite(suite, evidenceDir);
+		throw new VerificationFailure(
+			"SUITE_UNIMPLEMENTED",
+			suiteRegistry[suite].dependency,
+		);
+	}
 	if (suite !== "runtime")
 		throw new VerificationFailure(
 			"SUITE_UNIMPLEMENTED",
@@ -177,11 +99,14 @@ export async function dispatchVerification(
 					results.push({
 						suite: leaf,
 						status: "failed",
+						externalState:
+							suiteRegistry[leaf].state === "external-blocked"
+								? "external-blocked"
+								: null,
 						failure: failureReceipt(error),
 					});
 				}
 			}
-			// External contract/supplier/consumer pins do not exist yet. No fabricated integration receipt.
 			evidence = {
 				schemaVersion: 1,
 				suite: args.suite,
@@ -216,6 +141,10 @@ export async function dispatchVerification(
 			suite: args.suite,
 			mode: args.mode,
 			status: "failed",
+			externalState:
+				suiteRegistry[args.suite].state === "external-blocked"
+					? "external-blocked"
+					: null,
 			failure: failureReceipt(error),
 		};
 		exitCode = 1;

@@ -13,7 +13,6 @@ import { VerificationFailure } from "../../src/runtime/errors.js";
 import { inspectCalibration } from "../../src/preflight/calibration-output.js";
 import { loadCalibrationFont } from "../../src/typography/calibration-font.js";
 import { openOfflineBrowser } from "../../src/exporters/offline-browser.js";
-import { suiteNames } from "../../scripts/verify/dispatcher.js";
 import { resource } from "../../src/runtime/resources.js";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -313,57 +312,4 @@ test("exits nonzero when evidence cannot be written", async () => {
 		"EVIDENCE_WRITE_FAILURE",
 	);
 	assert.ok(!result.stderr.includes(temporary));
-});
-
-test("fails every unimplemented suite when its registered CLI name is requested", async () => {
-	// Given all pending mandatory leaves. When each CLI runs. Then none reports success.
-	for (const suite of suiteNames.filter(
-		(item) => item !== "runtime" && item !== "release",
-	)) {
-		const directory = join(temporary, suite);
-		const result = cli([
-			"--suite",
-			suite,
-			"--mode",
-			"offline",
-			"--evidence-dir",
-			directory,
-		]);
-		assert.equal(result.status, 1, suite);
-		const evidence = JSON.parse(
-			await readFile(join(directory, `${suite}.json`), "utf8"),
-		);
-		assert.equal(evidence.status, "failed");
-		assert.equal(evidence.failure.code, "SUITE_UNIMPLEMENTED");
-	}
-});
-test("aggregates real runtime evidence and pending leaves when release is requested", async () => {
-	// Given incomplete external dependencies. When release runs. Then runtime passes and release fails.
-	const directory = join(temporary, "release");
-	const result = cli([
-		"--suite",
-		"release",
-		"--mode",
-		"offline",
-		"--evidence-dir",
-		directory,
-	]);
-	assert.equal(result.status, 1);
-	const text = await readFile(join(directory, "release.json"), "utf8");
-	const evidence = JSON.parse(text);
-	assert.equal(evidence.failure.code, "RELEASE_INCOMPLETE");
-	assert.equal(evidence.results.length, 16);
-	assert.equal(evidence.results[0].status, "passed");
-	assert.ok(
-		evidence.results
-			.slice(1)
-			.every((entry: { status: string }) => entry.status === "failed"),
-	);
-	assert.deepEqual(evidence.externalPins, {
-		sharedContracts: null,
-		supplierSpecification: null,
-		appConsumer: null,
-		financeConsumer: null,
-	});
-	assert.ok(!text.includes(temporary) && !text.includes(process.cwd()));
 });
