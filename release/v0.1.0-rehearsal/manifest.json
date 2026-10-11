@@ -3,7 +3,7 @@
   "packageVersion": "v0.1.0-rehearsal",
   "releaseClass": "draft_rehearsal_only",
   "lifecycleState": "draft_rehearsal_only",
-  "candidateSourceCommitAtGeneration": "0a73bb753dfda9590c2460ac5d4c653d9056d54e",
+  "candidateSourceCommitAtGeneration": "f06817c6321e0983bccb6a193f62524efda8c54c",
   "manifestGenerationTime": "Not self-certified; if needed, record the execution time in the separate release review record after this manifest is committed.",
   "contentAddresses": {
     "algorithm": "SHA-256",
@@ -1151,9 +1151,9 @@
           "source": {
             "repo": "Jevelopers-neatHack-2026/getticketstub.com",
             "path": "README.md",
-            "revision": "7f59d33922a0585205547d490b288b49eed32419",
+            "revision": "eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073",
             "revisionKind": null,
-            "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/7f59d33922a0585205547d490b288b49eed32419/README.md"
+            "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073/README.md"
           }
         },
         {
@@ -1203,10 +1203,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -1941,10 +1941,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -2549,10 +2549,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -2831,10 +2831,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -3106,10 +3106,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -3372,10 +3372,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -3627,10 +3627,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -3875,10 +3875,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -4415,10 +4415,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -4653,10 +4653,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -4893,10 +4893,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -5126,10 +5126,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -5397,9 +5397,9 @@
           "source": {
             "repo": "Jevelopers-neatHack-2026/getticketstub.com",
             "path": "README.md",
-            "revision": "7f59d33922a0585205547d490b288b49eed32419",
+            "revision": "eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073",
             "revisionKind": null,
-            "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/7f59d33922a0585205547d490b288b49eed32419/README.md"
+            "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073/README.md"
           }
         },
         {
@@ -5537,10 +5537,10 @@
           "localFile": {
             "path": "messaging/claims.json",
             "exists": true,
-            "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-            "sizeBytes": 262475,
-            "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
-            "blobObjectId": "a3689ca43e8b76e6ce1a835ea60017ed3ce6fd46",
+            "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+            "sizeBytes": 264143,
+            "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
+            "blobObjectId": "d2fcc208dd1c802553dd66c1fc27914aeef7b7ef",
             "tracked": true,
             "workingTreeClean": true,
             "sourcePinStatus": "pinned",
@@ -7610,7 +7610,7 @@
     {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "73e1ae303d8e56cb42bc32ba6179fd442b8d64222f7e04e0f2b602f3ef3c335c",
+      "sha256": "2a062af4560e467530afc2bb382c60ff2ceb8e5ca9b2099b33faad367886d38b",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7631,8 +7631,8 @@
     {
       "path": "messaging/claims.json",
       "exists": true,
-      "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-      "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
+      "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+      "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "json",
@@ -7644,7 +7644,7 @@
     {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "9847a5c22795cfb440da5122b5ee1eea48069cdecf7f629a3984a89fd112eb72",
+      "sha256": "affa940e053618d55db343d12c353ba292675b5b70fe04f91d6a25929c3e03c6",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7826,7 +7826,7 @@
     "docs/collateral-inventory.json": {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "73e1ae303d8e56cb42bc32ba6179fd442b8d64222f7e04e0f2b602f3ef3c335c",
+      "sha256": "2a062af4560e467530afc2bb382c60ff2ceb8e5ca9b2099b33faad367886d38b",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7847,8 +7847,8 @@
     "messaging/claims.json": {
       "path": "messaging/claims.json",
       "exists": true,
-      "sha256": "30bb6d7540a5550c577c8da36e523a081e039950eca50f77c32ba904e1e14bad",
-      "sourceCommitId": "a8b49bacd6c73022653988d951729d91e3f14ca5",
+      "sha256": "111374c77fb22c498f0ae5a2762dd5eeb0301557451a59c5c675c2f29989619e",
+      "sourceCommitId": "d86b78c46693115ab763e879968826784edc21bd",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "json",
@@ -7860,7 +7860,7 @@
     "review/provenance.json": {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "9847a5c22795cfb440da5122b5ee1eea48069cdecf7f629a3984a89fd112eb72",
+      "sha256": "affa940e053618d55db343d12c353ba292675b5b70fe04f91d6a25929c3e03c6",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
