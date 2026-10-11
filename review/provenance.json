@@ -6369,7 +6369,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-handoff.md",
-        "revision": "sha256:1693783a03d162d2cbfeebd97165b00036e7ed6d995309ee559a093dd3f757c0",
+        "revision": "sha256:b9e40fc8b1b9ac11f1ef1fd9388e1f421babf47a226a11d9234de191ce114ee6",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6427,7 +6427,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "1693783a03d162d2cbfeebd97165b00036e7ed6d995309ee559a093dd3f757c0",
+        "value": "b9e40fc8b1b9ac11f1ef1fd9388e1f421babf47a226a11d9234de191ce114ee6",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6445,7 +6445,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:ed37eb2976f2d1080d7a290d74e5d08a7356ef8e84e8088a4f77a4683ed2e91b",
+        "revision": "sha256:0ff19890313e41c0870f660f19fdc28bdc0045fd089641c5a806c78b15a89127",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6503,7 +6503,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "ed37eb2976f2d1080d7a290d74e5d08a7356ef8e84e8088a4f77a4683ed2e91b",
+        "value": "0ff19890313e41c0870f660f19fdc28bdc0045fd089641c5a806c78b15a89127",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -8629,9 +8629,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/package-spec.json",
-        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/package-spec.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1d91f35e849097e04c3dba5d809322eec9c5dd9b/release/v0.1.0-rehearsal/package-spec.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -8687,7 +8687,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "cb580597da5317ddd95e411f6e09ba31f8a3a6c4cdc2f42f056738e3cdd04e75",
+        "value": "37cabd5d8b2ad223c8e6b3486333fb1210ae45dc9a21794609532e590a17b1fd",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -15085,9 +15085,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_package_collateral.py",
-        "revision": "7901279d2214eb3073c8cf4c73cf71c2c7bb988a",
+        "revision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7901279d2214eb3073c8cf4c73cf71c2c7bb988a/tests/test_package_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1d91f35e849097e04c3dba5d809322eec9c5dd9b/tests/test_package_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -15143,7 +15143,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "5f2a85206d1cd04b78f1136cddf65969ee5c9b7f14c7cbce11c95f95565e5857",
+        "value": "ac9c7d94e3865432d8f577c300141aef02e86f5ea5d192df2dad9f2ff1f77ca5",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -15313,9 +15313,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tools/package_collateral.py",
-        "revision": "7901279d2214eb3073c8cf4c73cf71c2c7bb988a",
+        "revision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7901279d2214eb3073c8cf4c73cf71c2c7bb988a/tools/package_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1d91f35e849097e04c3dba5d809322eec9c5dd9b/tools/package_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -15371,7 +15371,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6cf57d5070121a97320adb25cc1986ea09daa327d26e9ab64ac1159733800e3b",
+        "value": "1e3879abaa2382b12878513c2b41cf09e529afa5938936780bb3597235db4dea",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",

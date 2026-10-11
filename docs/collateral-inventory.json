@@ -3373,8 +3373,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "4bc0c641dae80bc4e5d99fede91c179644e07ba2",
-      "sha256": "1693783a03d162d2cbfeebd97165b00036e7ed6d995309ee559a093dd3f757c0",
+      "trackedAtRevision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
+      "sha256": "b9e40fc8b1b9ac11f1ef1fd9388e1f421babf47a226a11d9234de191ce114ee6",
       "provenanceRecordId": "HANDOFF-GUIDE-001"
     },
     {
@@ -3673,8 +3673,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
-      "sha256": "cb580597da5317ddd95e411f6e09ba31f8a3a6c4cdc2f42f056738e3cdd04e75",
+      "trackedAtRevision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
+      "sha256": "37cabd5d8b2ad223c8e6b3486333fb1210ae45dc9a21794609532e590a17b1fd",
       "provenanceRecordId": "PROV-FILE-C8093907B9B9"
     },
     {
@@ -4585,8 +4585,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "7901279d2214eb3073c8cf4c73cf71c2c7bb988a",
-      "sha256": "5f2a85206d1cd04b78f1136cddf65969ee5c9b7f14c7cbce11c95f95565e5857",
+      "trackedAtRevision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
+      "sha256": "ac9c7d94e3865432d8f577c300141aef02e86f5ea5d192df2dad9f2ff1f77ca5",
       "provenanceRecordId": "PROV-FILE-2A535BD0A4EB"
     },
     {
@@ -4621,8 +4621,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "7901279d2214eb3073c8cf4c73cf71c2c7bb988a",
-      "sha256": "6cf57d5070121a97320adb25cc1986ea09daa327d26e9ab64ac1159733800e3b",
+      "trackedAtRevision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
+      "sha256": "1e3879abaa2382b12878513c2b41cf09e529afa5938936780bb3597235db4dea",
       "provenanceRecordId": "PROV-FILE-E9F11F71B634"
     },
     {
