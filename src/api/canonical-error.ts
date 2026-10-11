@@ -70,8 +70,8 @@ export function productionFailure(
 				content_hash: record.content_hash,
 			},
 		};
-	} catch (error) {
-		if (!(error instanceof Error)) throw error;
+	} catch {
+		// Diagnostic persistence is a public containment boundary; retain unavailable.
 	}
 	return checked(
 		createProductionError(input.code, {
@@ -82,7 +82,7 @@ export function productionFailure(
 	);
 }
 
-export function classify(error: Error): CandidateFailure {
+export function classify(error: unknown): CandidateFailure {
 	if (error instanceof CandidateFailure) return error;
 	if (error instanceof DurabilityError) {
 		switch (error.code) {

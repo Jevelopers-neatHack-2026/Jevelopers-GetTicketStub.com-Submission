@@ -7,6 +7,12 @@ import type { OutputFile } from "./local-store.js";
 import { hash, idSchema, scopeKey, check } from "../internal/durability.js";
 import type { DurabilityDatabase, Scope, Id } from "../internal/durability.js";
 import {
+	initializeCompletions,
+	completeInTransaction,
+} from "./canonical-completion.js";
+import { reconcileAvailable } from "./canonical-execution.js";
+import { eventCapacity } from "../telemetry/observations.js";
+import {
 	CandidateFailure,
 	requireCandidate,
 	reference,
@@ -21,9 +27,27 @@ export class CanonicalState {
 		readonly scope: Scope,
 	) {
 		this.store = new LocalArtifactStore(db);
+		initializeCompletions(db);
 		db.sql.exec(
 			"CREATE TABLE IF NOT EXISTS canonical_records(scope TEXT NOT NULL,key TEXT NOT NULL,bytes TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(scope,key)); CREATE TRIGGER IF NOT EXISTS canonical_record_update BEFORE UPDATE ON canonical_records BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER IF NOT EXISTS canonical_record_delete BEFORE DELETE ON canonical_records BEGIN SELECT RAISE(ABORT,'immutable'); END;",
 		);
+		db.sql.exec(
+			"CREATE TABLE IF NOT EXISTS canonical_exports(sequence INTEGER PRIMARY KEY AUTOINCREMENT,scope TEXT NOT NULL,artifact TEXT NOT NULL,operation TEXT UNIQUE NOT NULL REFERENCES operations(id)); CREATE TRIGGER IF NOT EXISTS canonical_export_update BEFORE UPDATE ON canonical_exports BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER IF NOT EXISTS canonical_export_delete BEFORE DELETE ON canonical_exports BEGIN SELECT RAISE(ABORT,'immutable'); END;",
+		);
+	}
+	reconcile(operation?: Id): void {
+		reconcileAvailable(this.db, operation);
+	}
+	currentExport(artifact: string): unknown {
+		const row = this.db.sql
+			.prepare(
+				"SELECT operation FROM canonical_exports WHERE scope=? AND artifact=? ORDER BY sequence DESC LIMIT 1",
+			)
+			.get(scopeKey(this.scope), artifact);
+		if (!row) return this.get(`bundle:${artifact}`);
+		const operation = idSchema.parse(row["operation"]);
+		this.reconcile(operation);
+		return this.get(`export:${operation}`);
 	}
 	put(key: string, value: unknown): void {
 		const bytes = canonicalJson(value),
@@ -81,10 +105,12 @@ export class CanonicalState {
 		publicationMetadata: {
 			readonly records?: readonly (readonly [string, unknown])[];
 			readonly attempt?: Id;
+			readonly artifact?: string;
 		} = {},
 	): Id {
 		const stage = this.store.stage(this.scope, operation);
 		return this.db.transaction(() => {
+			check(eventCapacity(this.db) > 0, "STORAGE");
 			if (publicationMetadata.attempt) {
 				const active = this.db.sql
 					.prepare(
@@ -106,6 +132,27 @@ export class CanonicalState {
 			).id;
 			for (const [key, value] of publicationMetadata.records ?? [])
 				this.put(key, { publication, value });
+			if (publicationMetadata.artifact !== undefined) {
+				this.db.sql
+					.prepare(
+						"INSERT INTO canonical_exports(scope,artifact,operation) VALUES(?,?,?)",
+					)
+					.run(scopeKey(this.scope), publicationMetadata.artifact, operation);
+				const first = `bundle:${publicationMetadata.artifact}`;
+				if (this.get(first) === null) {
+					const exported = this.get(`export:${operation}`);
+					check(exported !== null, "INTEGRITY");
+					this.put(first, exported);
+				}
+			}
+			if (publicationMetadata.attempt !== undefined)
+				completeInTransaction(this.db, {
+					operation,
+					attempt: publicationMetadata.attempt,
+					outcome: "succeeded",
+					code: null,
+					publication,
+				});
 			return publication;
 		});
 	}

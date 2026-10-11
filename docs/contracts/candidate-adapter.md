@@ -60,7 +60,52 @@ local observations/outbox entries. Provider and billable IDs, prices, finance
 receipts and canonical `UsageEvent` references are absent. These observations
 remain staged; no accepted finance intake or synthetic acknowledgement is
 claimed. Replays reuse durable publication and do not add execution attempts.
-Read-only status does not create new observations or evidence records.
+Completed status does not create new observations or evidence records once
+terminal intents are staged; missing terminal usage may be reconciled on replay.
+
+PR30 review corrections refresh private asset and composition permission backends
+on cached compose/export and artifact/job observation. Restored row models carry
+their actual values and use the export action; clocks are read again for each
+check. Revocation leaves immutable bytes and prior attempts intact.
+
+Canonical publication commits its attempt outcome and terminal observation intent
+in the same SQLite transaction. If the outbox is full or terminal telemetry is
+unavailable, `canonical_completions` retains that intent. A bounded reconciliation
+page runs on authorized entry/replay; the internal `reconcileCompletions` adapter
+also permits a host to drain pending intents after delivery frees capacity. It
+creates each terminal observation once, without increasing the outbox limit,
+deleting observations, or rendering committed output again. The atomic attempt
+outcome remains authoritative while an intent has no event. Full capacity before
+publication yields a retryable unpublished attempt. Legacy published NULL
+attempts are joined through their published observation and reconciled on replay.
+
+Each export key retains its own immutable `export:<operation>` record and bundle.
+The append-only `canonical_exports` index selects the latest committed export for
+artifact status, using its SQLite commit sequence. The old `bundle:<artifact>`
+record remains an immutable first-export compatibility lookup. Semantic batch
+redelivery reuses the original persisted request and plan; new delivery IDs and an
+explicit default atomic policy do not replace job identity or create row attempts.
+
+Every supported compose/restoration resolves and verifies the exact scoped
+`ProductionRuntime` record. The `canonical-private-runtime/v1` mapping hashes the
+actual compiled product JavaScript, installed runtime dependency bytes, security
+launcher sources, verified runtime
+pins/environment, Chromium binary and selected output configuration into distinct
+renderer and parser commitments. The record source revision must match the
+authenticated producer build revision. Its canonical content hash remains separate
+from those commitments and from the existing private renderer-pins digest. Both
+the canonical record and measured mapping are durable; fresh checks reject a
+retained pin after source/configuration changes. Offline fixture records use the
+current checkout revision and real measurements; they supply synthetic authority,
+not external approval. A deployment must provide the matching immutable record
+and required measured resources. Packed distribution remains unverified.
+
+Unknown callback rejection values are converted at the public/attempt boundary
+to fixed typed failures without reading their text or serializing raw objects.
+Failure classification is durable even if terminal telemetry must be deferred;
+failed diagnostic persistence yields the canonical unavailable reference.
+Base and row lineage and batch evidence read version/source/digest/unaccepted
+status from the actual consumer pin, verified against installed version/archive.
 
 ## Concrete contract gaps and remaining acceptance
 
@@ -90,6 +135,11 @@ CSV activation or automatic repair scheduling. Existing private mechanical repai
 and permission behavior remains available in the private pipeline; a canonical
 repair publication needs an independently supplied policy and an explicit
 derived-composition/approval mapping. No repair approval is inferred.
+An authenticated registered repair-policy reference is an equality-checked pin,
+not a transform request. An ordinary no-repair composition may carry it through
+compose/replay/export. Mismatched pins fail, and a composition needing an actual
+repair remains blocked at export; no automatic shrink, derivative or approval
+claim is introduced.
 
 Production mode is blocked before source callbacks while this pin is unaccepted.
 Accepted shared-contracts/domain and consumer pins, genuine launch SKU/spec,
@@ -134,3 +184,7 @@ Exact commands, outcomes, commits and output digests are recorded in the ignored
 `out/canonical-refresh-report.json`; preceding 44 focused and 602 broad passes are
 historical receipts, not a full-suite claim for the refreshed HEAD. Independent
 parent and fresh owner review are still required.
+The review-fix receipt is `out/canonical-fix-report.json`; it preserves baseline
+failures, permanent regression results, separate-process interruption evidence and
+the exact fixed commit/tree. It supplies implementation evidence for a fresh
+independent review and does not self-approve the candidate or accept owner 0.9.4.

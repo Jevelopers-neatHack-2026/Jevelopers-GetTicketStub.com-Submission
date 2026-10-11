@@ -26,6 +26,7 @@ import {
 	sha,
 	version,
 	requireCandidate,
+	same,
 } from "../api/canonical-values.js";
 import { canonicalFile, payloadBudget } from "./canonical-files.js";
 import type { Id } from "../internal/durability.js";
@@ -42,6 +43,18 @@ export function assembleCanonicalBundle(
 	},
 ) {
 	const { exported, inputs, artifact } = input;
+	requireCandidate(
+		inputs.runtimeBinding.measurement.private_renderer_digest ===
+			sha(`sha256:${exported.rendererDigest}`) &&
+			inputs.runtimeBinding.measurement.browser_digest ===
+				sha(`sha256:${exported.browser.binarySha256}`) &&
+			same(
+				inputs.runtimeBinding.measurement.configuration.policy,
+				exported.policy,
+			),
+		"HASH_MISMATCH",
+		"integrity",
+	);
 	const visuals = exported.files.map((file) => {
 		const descriptor = exported.descriptors.find((d) => d.name === file.name);
 		requireCandidate(
@@ -66,9 +79,10 @@ export function assembleCanonicalBundle(
 	const lineageFile = outputFile(
 		"lineage.json",
 		jsonBytes({
-			contract_candidate: "0.9.3",
-			accepted: false,
-			live_integration: false,
+			contract_candidate: inputs.contractPin.version,
+			consumer_pin: inputs.contractPin,
+			accepted: inputs.contractPin.accepted,
+			live_integration: inputs.contractPin.live_integration,
 			source_assets: inputs.composition.asset_uses,
 			source_artwork_hashes: artifact.source_artwork_hashes,
 			composition_ref: artifact.composition_ref,
@@ -79,6 +93,8 @@ export function assembleCanonicalBundle(
 			input_binding_hash: inputs.composition.input_binding_hash,
 			resolved_layout_commitment: inputs.composition.resolved_layout_commitment,
 			runtime: runtime.context.runtime,
+			runtime_record: inputs.runtimeBinding.record,
+			runtime_mapping: inputs.runtimeBinding.measurement,
 			private_renderer_hash: `sha256:${exported.rendererDigest}`,
 			browser: exported.browser,
 			environment: exported.environment,

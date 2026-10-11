@@ -170,7 +170,7 @@ function requireImageScale(
 	);
 }
 export async function recheckPermissions(
-	artifact: PrivateArtifact,
+	artifact: Pick<PrivateArtifact, "model" | "assets" | "compositionHash">,
 	ports: CompositionPorts,
 	stage: PermissionStage,
 	now: number,

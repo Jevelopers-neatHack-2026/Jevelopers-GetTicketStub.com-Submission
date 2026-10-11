@@ -54,6 +54,7 @@ const identityKeys = {
 	Partial<Record<ContractName, readonly [string, string, string]>>
 >;
 export class CandidateRuntime {
+	private readonly inFlight = new Set<string>();
 	readonly context: ProductionContext;
 	readonly state: CanonicalState;
 	readonly profiles: readonly CanonicalProfile[];
@@ -90,6 +91,7 @@ export class CandidateRuntime {
 	): Promise<ProductionResult<T>> {
 		const { context: ctx, operation, request } = invocation;
 		let entered = false;
+		let activeKey: string | undefined;
 		try {
 			requireCandidate(ctx === this.context, "FORBIDDEN", "access");
 			this.now();
@@ -123,9 +125,19 @@ export class CandidateRuntime {
 				operation === "composeArtifact" ||
 				operation === "personalizeArtifactBatch" ||
 				operation === "exportArtifactBundle";
+			this.state.reconcile();
+			if ("idempotency_key" in parsed) {
+				const key = `${operation}:${parsed.idempotency_key}`;
+				requireCandidate(
+					!this.inFlight.has(key),
+					"IDEMPOTENCY_CONFLICT",
+					"conflict",
+				);
+				this.inFlight.add(key);
+				activeKey = key;
+			}
 			return { ok: true, value: await work(parsed) };
 		} catch (error) {
-			if (!(error instanceof Error)) throw error;
 			const failure = classify(error);
 			const correlation = validatePrimitive(
 				"CorrelationId",
@@ -145,6 +157,8 @@ export class CandidateRuntime {
 					usage_state: entered ? "incomplete" : "complete",
 				}),
 			};
+		} finally {
+			if (activeKey !== undefined) this.inFlight.delete(activeKey);
 		}
 	}
 	profile(ref: ProductionReferenceValue): CanonicalProfile {

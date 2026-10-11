@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
 	composeArtifact as composePrivate,
 	verifyArtifactIdentity,
+	recheckPermissions,
 } from "../composition/private-model.js";
 import type { PrivateArtifact } from "../composition/private-model.js";
 import { fingerprint, digestSchema } from "../composition/primitives.js";
 import { parseAsset } from "../assets/private-assets.js";
+import type { PermissionStage } from "../assets/private-assets.js";
 import { layoutText } from "../typography/private-text.js";
 import { outputFile } from "../exporters/private-policy.js";
 import { idSchema } from "../internal/durability.js";
@@ -45,6 +47,7 @@ export async function compose(
 		operation.id,
 	);
 	if (published) {
+		runtime.state.reconcile(operation.id);
 		const stored = runtime.state
 			.read(published.id)
 			.find((f) => f.name === "canonical-state.json");
@@ -53,42 +56,53 @@ export async function compose(
 			JSON.parse(Buffer.from(stored.bytes).toString()),
 		);
 		const result = contract("ArtifactRef", snapshot.result);
-		restore(inputs, result, snapshot.svg);
+		const artifact = restore(inputs, result, snapshot.svg);
+		await recheckPermissions(
+			artifact,
+			inputs.ports,
+			"compose",
+			Date.parse(runtime.now()),
+		);
 		runtime.registerValue(result);
 		return result;
 	}
-	return executeCanonical(runtime.host.db, operation.id, async (attempt) => {
-		const artifact = await composePrivate(
-			inputs.input,
-			inputs.layout,
-			inputs.profile.fonts.map((f) => f.font),
-			inputs.ports,
-			Date.parse(runtime.now()),
-		);
-		const result = artifactReference(
-			artifact,
-			request.binding.composition_ref,
-			operation.id,
-		);
-		runtime.state.publish(
-			operation.id,
-			[
-				outputFile("output.svg", Buffer.from(artifact.svg)),
-				outputFile(
-					"canonical-state.json",
-					jsonBytes({
-						request,
-						result,
-						svg: artifact.svg,
-						execution_attempt: attempt,
-					}),
-				),
-			],
-			{ attempt },
-		);
-		runtime.registerValue(result);
-		return result;
-	});
+	return executeCanonical(
+		runtime.host.db,
+		operation.id,
+		async (attempt) => {
+			const artifact = await composePrivate(
+				inputs.input,
+				inputs.layout,
+				inputs.profile.fonts.map((f) => f.font),
+				inputs.ports,
+				Date.parse(runtime.now()),
+			);
+			const result = artifactReference(
+				artifact,
+				request.binding.composition_ref,
+				operation.id,
+			);
+			runtime.registerValue(result);
+			runtime.state.publish(
+				operation.id,
+				[
+					outputFile("output.svg", Buffer.from(artifact.svg)),
+					outputFile(
+						"canonical-state.json",
+						jsonBytes({
+							request,
+							result,
+							svg: artifact.svg,
+							execution_attempt: attempt,
+						}),
+					),
+				],
+				{ attempt },
+			);
+			return result;
+		},
+		() => compose(runtime, request),
+	);
 }
 export function artifactReference(
 	artifact: PrivateArtifact,
@@ -117,12 +131,14 @@ export function artifactReference(
 export async function readArtifact(
 	runtime: CandidateRuntime,
 	ref: ArtifactRef,
+	stage: PermissionStage = "inspect",
 ) {
 	const publication = runtime.state.store.publication(
 		runtime.host.private_scope,
 		idSchema.parse(ref.artifact_ref.id),
 	);
 	requireCandidate(publication !== null, "NOT_FOUND", "access");
+	runtime.state.reconcile(publication.operation);
 	const files = runtime.state.read(publication.id);
 	const stored = files.find((file) => file.name === "canonical-state.json");
 	requireCandidate(stored !== undefined, "INTEGRITY_FAILURE", "integrity");
@@ -134,44 +150,20 @@ export async function readArtifact(
 	const request = contract("ComposeArtifactRequest", snapshot.request);
 	const inputs = await resolveInputs(runtime, request.binding);
 	const artifact = restore(inputs, result, snapshot.svg);
+	await recheckPermissions(
+		artifact,
+		inputs.ports,
+		stage,
+		Date.parse(runtime.now()),
+	);
 	return { artifact, inputs, request, result };
 }
-function restore(
+export function restore(
 	inputs: CanonicalInputs,
 	result: ArtifactRef,
 	svg: string,
 ): PrivateArtifact {
-	const fonts = inputs.profile.fonts
-		.map((f) => f.font)
-		.sort((a, b) =>
-			a.descriptor.ref < b.descriptor.ref
-				? -1
-				: a.descriptor.ref > b.descriptor.ref
-					? 1
-					: 0,
-		);
-	const model = {
-		input: inputs.input,
-		layout: inputs.layout,
-		fonts: fonts.map((f) => f.descriptor),
-	};
-	const bindings = inputs.input.nodes.flatMap((node) =>
-		node.kind === "artwork" || node.kind === "overlay" ? [node.asset] : [],
-	);
-	const assets = bindings
-		.filter(
-			(binding, index) => bindings.findIndex((b) => same(b, binding)) === index,
-		)
-		.map((binding) => {
-			const mapping = inputs.profile.asset_refs.find(
-				(a) =>
-					a.private_ref === binding.ref &&
-					a.private_revision === binding.version,
-			);
-			const bytes = mapping ? inputs.bytes[mapping.reference.id] : undefined;
-			requireCandidate(bytes !== undefined, "ASSET_MISSING", "asset");
-			return parseAsset(binding, bytes);
-		});
+	const { fonts, model, assets } = permissionModel(inputs);
 	const artifact: PrivateArtifact = {
 		model,
 		compositionHash: fingerprint(model),
@@ -210,4 +202,38 @@ function restore(
 		"HASH_MISMATCH",
 	);
 	return artifact;
+}
+export function permissionModel(inputs: CanonicalInputs) {
+	const fonts = inputs.profile.fonts
+		.map((f) => f.font)
+		.sort((a, b) =>
+			a.descriptor.ref < b.descriptor.ref
+				? -1
+				: a.descriptor.ref > b.descriptor.ref
+					? 1
+					: 0,
+		);
+	const model = {
+		input: inputs.input,
+		layout: inputs.layout,
+		fonts: fonts.map((f) => f.descriptor),
+	};
+	const bindings = inputs.input.nodes.flatMap((node) =>
+		node.kind === "artwork" || node.kind === "overlay" ? [node.asset] : [],
+	);
+	const assets = bindings
+		.filter(
+			(binding, index) => bindings.findIndex((b) => same(b, binding)) === index,
+		)
+		.map((binding) => {
+			const mapping = inputs.profile.asset_refs.find(
+				(a) =>
+					a.private_ref === binding.ref &&
+					a.private_revision === binding.version,
+			);
+			const bytes = mapping ? inputs.bytes[mapping.reference.id] : undefined;
+			requireCandidate(bytes !== undefined, "ASSET_MISSING", "asset");
+			return parseAsset(binding, bytes);
+		});
+	return { model, assets, compositionHash: fingerprint(model), fonts };
 }

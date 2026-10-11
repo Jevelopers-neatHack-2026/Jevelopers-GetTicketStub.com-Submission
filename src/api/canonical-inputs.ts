@@ -24,6 +24,9 @@ import { checkPrintSpecBinding } from "@jevelopers/shared-contracts/capability";
 import { requireSpecMapping } from "./canonical-constraints.js";
 import type { CandidateRuntime } from "./canonical-runtime.js";
 import type { CanonicalProfile } from "./canonical-host.js";
+import { resolveRuntimeRecord } from "./canonical-runtime-record.js";
+import { candidateOutputPolicy } from "./canonical-output-policy.js";
+import { consumerPin } from "./canonical-consumer-pin.js";
 
 export async function currentApproval(
 	runtime: CandidateRuntime,
@@ -61,11 +64,6 @@ export async function resolveInputs(
 	runtime: CandidateRuntime,
 	binding: ComposeArtifactRequest["binding"],
 ) {
-	requireCandidate(
-		binding.repair_policy_ref === null,
-		"CAPABILITY_DISABLED",
-		"capability",
-	);
 	for (const [given, expected] of [
 		[binding.template_ref, runtime.context.runtime.template_ref],
 		[binding.spec_ref, runtime.context.runtime.spec_ref],
@@ -74,6 +72,11 @@ export async function resolveInputs(
 	] as const)
 		requireCandidate(same(given, expected), "HASH_MISMATCH");
 	const profile = runtime.profile(binding.template_ref);
+	const contractPin = await consumerPin();
+	const runtimeBinding = await resolveRuntimeRecord(
+		runtime,
+		candidateOutputPolicy(profile.output_policy),
+	);
 	await runtime.resolve(binding.design_ref);
 	await runtime.resolve(binding.handoff_ref);
 	const templateResult = await runtime.context.templates.resolve(
@@ -215,6 +218,8 @@ export async function resolveInputs(
 		},
 	};
 	return {
+		contractPin,
+		runtimeBinding,
 		profile,
 		template,
 		composition,

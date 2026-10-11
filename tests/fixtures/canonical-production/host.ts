@@ -53,8 +53,13 @@ export type FixtureHost = {
 	>;
 	readonly [Symbol.asyncDispose]: () => Promise<void>;
 };
-export async function fixtureHost(): Promise<FixtureHost> {
-	const root = await mkdtemp(join(tmpdir(), "pp-canonical-production-"));
+export async function fixtureHost(options?: {
+	readonly root: string;
+	readonly preserve: boolean;
+}): Promise<FixtureHost> {
+	const root =
+		options?.root ??
+		(await mkdtemp(join(tmpdir(), "pp-canonical-production-")));
 	const state = {
 		revoked: false,
 		stale: false,
@@ -204,12 +209,7 @@ export async function fixtureHost(): Promise<FixtureHost> {
 		profiles: [records.profile],
 		producer: {
 			module: "print-production",
-			source_revision: checked(
-				validatePrimitive(
-					"SourceRevision",
-					"705f9e1e91aa96bb05dbf4806c34d8f9d570dbf8",
-				),
-			),
+			source_revision: records.runtimeRecord.source_revision,
 			build_revision: "synthetic-host-only",
 		},
 		external_references: records.references,
@@ -235,7 +235,7 @@ export async function fixtureHost(): Promise<FixtureHost> {
 		},
 		async [Symbol.asyncDispose]() {
 			db.close();
-			await rm(root, { recursive: true, force: true });
+			if (!options?.preserve) await rm(root, { recursive: true, force: true });
 		},
 	};
 }

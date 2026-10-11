@@ -14,6 +14,12 @@ import { commerceContentHash } from "@jevelopers/shared-contracts/commerce-evide
 import { researchContentHash } from "@jevelopers/shared-contracts/research-creative";
 import { sha } from "../../../src/api/canonical-values.js";
 import type { CanonicalProfile } from "../../../src/api/canonical-host.js";
+import { measureCanonicalRuntime } from "../../../src/api/canonical-runtime-record.js";
+import { candidateOutputPolicy } from "../../../src/api/canonical-output-policy.js";
+import { validatePrimitive } from "@jevelopers/shared-contracts";
+import { checked } from "../../../src/api/canonical-values.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 export { ownerFixture } from "./owner.js";
 export function revisionRef(value: {
@@ -43,6 +49,7 @@ export type SyntheticRecords = {
 	readonly profile: CanonicalProfile;
 	readonly request: ContractMap["ComposeArtifactRequest"];
 	readonly runtime: ContractMap["ProductionExecutionPins"];
+	readonly runtimeRecord: ContractMap["ProductionRuntime"];
 	readonly records: Map<string, unknown>;
 	readonly references: readonly ProductionReferenceValue[];
 };
@@ -77,6 +84,31 @@ export async function syntheticRecords(base: {
 	const scope = {
 		tenant_id: rawComposition.tenant_id,
 		project_id: rawComposition.project_id,
+	};
+	const rawRuntime = await ownerFixture("ProductionRuntime");
+	const measurement = await measureCanonicalRuntime(
+		candidateOutputPolicy(base.profile.output_policy),
+	);
+	const revision = await promisify(execFile)("git", ["rev-parse", "HEAD"]);
+	const runtimeDraft = {
+		...rawRuntime,
+		...scope,
+		source_revision: checked(
+			validatePrimitive("SourceRevision", revision.stdout.trim()),
+		),
+		renderer_commitment: measurement.renderer_commitment,
+		parser_commitment: measurement.parser_commitment,
+	};
+	const runtimeRecord = {
+		...runtimeDraft,
+		content_hash: productionContentHash(runtimeDraft),
+	};
+	const runtimeRef = {
+		contract: "ProductionRuntime" as const,
+		schema_version: "1.0.0" as const,
+		id: runtimeRecord.id,
+		revision: runtimeRecord.revision,
+		content_hash: runtimeRecord.content_hash,
 	};
 	const [rawDesign, rawHandoff] = await Promise.all([
 		ownerFixture("DesignVersion"),
@@ -182,6 +214,7 @@ export async function syntheticRecords(base: {
 	} = syntheticComposition({
 		rawComposition: {
 			...rawComposition,
+			runtime_ref: runtimeRef,
 			design_ref: designRef,
 			handoff_ref: handoffRef,
 		},
@@ -207,6 +240,7 @@ export async function syntheticRecords(base: {
 	});
 	const runtime = {
 		...pins,
+		runtime_ref: runtimeRef,
 		template_ref: templateRef,
 		spec_ref: specRef,
 		capability_ref: capabilityRef,
@@ -214,6 +248,7 @@ export async function syntheticRecords(base: {
 		font_refs: [fontRef],
 	};
 	const records = new Map<string, unknown>([
+		[runtimeRecord.id, runtimeRecord],
 		[design.design_version_id, design],
 		[handoff.handoff_id, handoff],
 		[template.template_id, template],
@@ -240,6 +275,7 @@ export async function syntheticRecords(base: {
 		profile,
 		request: composeRequest,
 		runtime,
+		runtimeRecord,
 		records,
 		references,
 	};

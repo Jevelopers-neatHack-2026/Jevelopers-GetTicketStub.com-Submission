@@ -5,6 +5,7 @@ import { scopeSchema, idSchema } from "../internal/durability.js";
 import type { CandidateRuntime } from "../api/canonical-runtime.js";
 import { blocked, resourceRef } from "../api/canonical-preflight.js";
 import { resolveInputs } from "../api/canonical-inputs.js";
+import { refreshBatchPermissions } from "./canonical-permissions.js";
 import {
 	contentHash,
 	contract,
@@ -27,7 +28,7 @@ export async function jobStatus(
 	requireCandidate(raw !== null, "NOT_FOUND", "access");
 	const record = jobRecordSchema.parse(raw);
 	const original = contract("PersonalizeBatchRequest", record.plan.request);
-	await resolveInputs(runtime, original.binding);
+	const inputs = await resolveInputs(runtime, original.binding);
 	const jobRef = contract("JobRef", record.result);
 	requireCandidate(same(jobRef, request.target.job_ref), "HASH_MISMATCH");
 	const engine = new DurableBatchEngine(runtime.host.db);
@@ -36,6 +37,13 @@ export async function jobStatus(
 		idSchema.parse(jobRef.job_ref.id),
 	);
 	const progress = engine.progress(record.plan.private_scope, job.id);
+	await refreshBatchPermissions(
+		runtime,
+		inputs,
+		engine,
+		record.plan.private_scope,
+		job.id,
+	);
 	const status =
 		job.status === "succeeded"
 			? "completed"

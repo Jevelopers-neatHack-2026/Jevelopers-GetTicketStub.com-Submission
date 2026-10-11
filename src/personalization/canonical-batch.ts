@@ -1,5 +1,6 @@
 import { canonicalBatchRenderer } from "./canonical-renderer.js";
 import { evidence } from "../api/canonical-preflight.js";
+import { refreshBatchPermissions } from "./canonical-permissions.js";
 export { jobStatus } from "./canonical-status.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -55,6 +56,7 @@ export async function personalize(
 				}
 			: planSchema.parse(prior);
 	if (prior === null) runtime.state.put(`batch-plan:${operation.id}`, plan);
+	const original = contract("PersonalizeBatchRequest", plan.request);
 	const privateScope = scopeSchema.parse(plan.private_scope);
 	const engine = new DurableBatchEngine(runtime.host.db);
 	const requestBytes = jsonBytes({
@@ -95,10 +97,18 @@ export async function personalize(
 		batch_input_hash: contentHash(request.input),
 	});
 	runtime.state.put(`job:${job.id}`, {
-		plan: { private_scope: privateScope, request },
+		plan: { private_scope: privateScope, request: original },
 		result,
 	});
 	runtime.registerValue(result);
+	if (prior !== null)
+		await refreshBatchPermissions(
+			runtime,
+			inputs,
+			engine,
+			privateScope,
+			job.id,
+		);
 	const signal = runtime.host.batch_signal;
 	if (signal.aborted) engine.cancel(privateScope, job.id);
 	while (
@@ -108,7 +118,7 @@ export async function personalize(
 				reference: result,
 				id: job.id,
 				pins,
-				request,
+				request: original,
 				rows: planned.rows,
 			}),
 			signal,
@@ -121,12 +131,13 @@ export async function personalize(
 		runtime.state.put(
 			evidenceKey,
 			evidence(runtime, {
+				consumer_pin: inputs.contractPin,
+				contract_candidate: inputs.contractPin.version,
 				job: finished,
 				progress,
 				canonical_publication: "blocked",
-				reason:
-					"visible RowResult requires eligibility=eligible in candidate 0.9.3",
-				original_request_hash: contentHash(request),
+				reason: "visible RowResult requires eligibility=eligible",
+				original_request_hash: contentHash(original),
 			}),
 		);
 	return result;

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type {
 	ArtifactRef,
 	ExportBundleRequest,
+	ProductionBundleRef,
 } from "@jevelopers/shared-contracts";
 import { verifyProductionBundleFiles } from "@jevelopers/shared-contracts/production-operations";
 import { exportPrivateFiles } from "../exporters/private-output.js";
@@ -33,8 +34,9 @@ const publicationSchema = z
 export async function exportBundle(
 	runtime: CandidateRuntime,
 	request: ExportBundleRequest,
-) {
-	const stored = await readArtifact(runtime, request.artifact_ref);
+): Promise<ProductionBundleRef> {
+	const stored = await readArtifact(runtime, request.artifact_ref, "export");
+	const operation = runtime.bind("exportArtifactBundle", request);
 	for (const [given, expected] of [
 		[request.approval_ref, stored.inputs.approval_ref],
 		[request.spec_ref, stored.inputs.composition.spec_ref],
@@ -47,42 +49,47 @@ export async function exportBundle(
 		"OUTPUT_UNSUPPORTED",
 		"output",
 	);
-	const operation = runtime.bind("exportArtifactBundle", request);
 	const prior = runtime.state.get(`export:${operation.id}`);
-	if (prior !== null) return readBundleRecord(runtime, prior).commitment;
-	return executeCanonical(runtime.host.db, operation.id, async (attempt) => {
-		const exported = await exportPrivateFiles({
-			artifact: stored.artifact,
-			constraints: stored.inputs.profile.constraints,
-			ports: stored.inputs.ports,
-			now: Date.parse(runtime.now()),
-			policy: candidateOutputPolicy(stored.inputs.profile.output_policy),
-		});
-		const result = assembleCanonicalBundle(runtime, {
-			exported,
-			inputs: stored.inputs,
-			artifact: request.artifact_ref,
-			correlation_id: request.correlation_id,
-			attempt,
-		});
-		const record = {
-			commitment: result.commitment,
-			report: result.report,
-			evidence: exported.evidence,
-		};
-		runtime.state.publish(operation.id, result.files, {
-			attempt,
-			records: [
-				[`export:${operation.id}`, record],
-				[`bundle:${request.artifact_ref.artifact_ref.id}`, record],
-			],
-		});
-		runtime.registerValue(result.commitment);
-		return result.commitment;
-	});
+	if (prior !== null) {
+		runtime.state.reconcile(operation.id);
+		return readBundleRecord(runtime, prior).commitment;
+	}
+	return executeCanonical(
+		runtime.host.db,
+		operation.id,
+		async (attempt) => {
+			const exported = await exportPrivateFiles({
+				artifact: stored.artifact,
+				constraints: stored.inputs.profile.constraints,
+				ports: stored.inputs.ports,
+				now: Date.parse(runtime.now()),
+				policy: candidateOutputPolicy(stored.inputs.profile.output_policy),
+			});
+			const result = assembleCanonicalBundle(runtime, {
+				exported,
+				inputs: stored.inputs,
+				artifact: request.artifact_ref,
+				correlation_id: request.correlation_id,
+				attempt,
+			});
+			const record = {
+				commitment: result.commitment,
+				report: result.report,
+				evidence: exported.evidence,
+			};
+			runtime.registerValue(result.commitment);
+			runtime.state.publish(operation.id, result.files, {
+				attempt,
+				records: [[`export:${operation.id}`, record]],
+				artifact: request.artifact_ref.artifact_ref.id,
+			});
+			return result.commitment;
+		},
+		() => exportBundle(runtime, request),
+	);
 }
 export function readBundle(runtime: CandidateRuntime, artifact: ArtifactRef) {
-	const raw = runtime.state.get(`bundle:${artifact.artifact_ref.id}`);
+	const raw = runtime.state.currentExport(artifact.artifact_ref.id);
 	if (raw === null) return null;
 	return readBundleRecord(runtime, raw);
 }
