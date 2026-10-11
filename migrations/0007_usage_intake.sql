@@ -21,6 +21,7 @@ CREATE TABLE cost_intelligence.usage_intake_inbox (
   idempotency_sha256 text NOT NULL CHECK (idempotency_sha256 ~ '^sha256:[a-f0-9]{64}$'),
   provenance_sha256 text NOT NULL CHECK (provenance_sha256 ~ '^sha256:[a-f0-9]{64}$'),
   event_facts jsonb NOT NULL CHECK (jsonb_typeof(event_facts) = 'object'),
+  attempt_revision_accepted boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, project_id, environment, billing_mode, source_observation_id),
   UNIQUE (tenant_id, project_id, environment, billing_mode, idempotency_key)
@@ -93,6 +94,20 @@ CREATE TABLE cost_intelligence.usage_intake_quarantine (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, project_id, environment, billing_mode, reason_code, payload_sha256)
 );
+
+ALTER TABLE cost_intelligence.financial_projection_quantities
+  ADD COLUMN included_in text;
+ALTER TABLE cost_intelligence.financial_projection_quantities
+  DROP CONSTRAINT financial_projection_quantities_key;
+ALTER TABLE cost_intelligence.financial_projection_quantities
+  ADD CONSTRAINT financial_projection_quantities_key UNIQUE NULLS NOT DISTINCT
+    (snapshot_id, event_type, classification, currency, unit_name, relation, included_in);
+
+ALTER TABLE cost_intelligence.financial_projection_snapshots
+  ADD COLUMN unknown_economic_exposure_count integer NOT NULL DEFAULT 0 CHECK (unknown_economic_exposure_count >= 0),
+  ADD COLUMN quarantined_observation_count integer NOT NULL DEFAULT 0 CHECK (quarantined_observation_count >= 0),
+  ADD COLUMN awaiting_evidence_attempt_count integer NOT NULL DEFAULT 0 CHECK (awaiting_evidence_attempt_count >= 0),
+  ADD COLUMN unposted_attempt_count integer NOT NULL DEFAULT 0 CHECK (unposted_attempt_count >= 0);
 
 CREATE FUNCTION cost_intelligence.reject_usage_intake_audit_mutation()
 RETURNS trigger

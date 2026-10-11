@@ -695,7 +695,9 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     }
 
     const fixtureBytes = await readFile(fixturePath);
-    const evidencePath = join(root, 'artifacts/evidence/ci02-ledger-acceptance.json');
+    const evidenceDirectory = process.env.CI04A_EVIDENCE_DIR ?? join(root, 'artifacts/evidence');
+    const evidenceName = `ci04a-fix1-ledger-acceptance-${Date.now()}-${process.pid}.json`;
+    const evidencePath = join(evidenceDirectory, evidenceName);
     await mkdir(dirname(evidencePath), { recursive: true });
     await writeFile(evidencePath, `${JSON.stringify({
       evidence_version: '1.0.0',
@@ -1318,6 +1320,10 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
     await append(makeRequest(usageScope, {
       amount: '0.10', usage: { completeness: 'complete', missingFields: [], units: [
         { name: 'tokens', quantity: '10', scale: 0, relation: 'standalone' },
+        { name: 'input_tokens', quantity: '6', scale: 0, relation: 'standalone' },
+        { name: 'cached_tokens', quantity: '3', scale: 0, relation: 'included_subset', includedIn: 'input_tokens' },
+        { name: 'output_tokens', quantity: '4', scale: 0, relation: 'standalone' },
+        { name: 'reasoning_tokens', quantity: '2', scale: 0, relation: 'included_subset', includedIn: 'output_tokens' },
       ] },
     }), usagePorts);
     const partialUsage = await project(usageScope, usagePorts, '2026-10-11T03:02:00.000Z');
@@ -1329,11 +1335,20 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
     assert.equal(tokenQuantity.knownSubtotal, '160');
     assert.equal(tokenQuantity.totalQuantity, null);
     assert.equal(tokenQuantity.completeness, 'incomplete');
-    const cachedTokens = partialUsage.quantities.find(row => row.eventType === 'expense' && row.unitName === 'cached_tokens');
-    assert.equal(cachedTokens.knownQuantityCount, 0);
-    assert.equal(cachedTokens.unknownQuantityCount, 1);
-    assert.equal(cachedTokens.totalQuantity, null);
-    assert.equal(cachedTokens.completeness, 'incomplete');
+    const cachedForTokens = partialUsage.quantities.find(row => row.eventType === 'expense'
+      && row.unitName === 'cached_tokens' && row.includedIn === 'tokens');
+    assert.equal(cachedForTokens.knownQuantityCount, 0);
+    assert.equal(cachedForTokens.unknownQuantityCount, 1);
+    assert.equal(cachedForTokens.totalQuantity, null);
+    assert.equal(cachedForTokens.completeness, 'incomplete');
+    const cachedForInput = partialUsage.quantities.find(row => row.eventType === 'expense'
+      && row.unitName === 'cached_tokens' && row.includedIn === 'input_tokens');
+    assert.equal(cachedForInput.knownSubtotal, '3');
+    const reasoningForOutput = partialUsage.quantities.find(row => row.eventType === 'expense'
+      && row.unitName === 'reasoning_tokens' && row.includedIn === 'output_tokens');
+    assert.equal(reasoningForOutput.knownSubtotal, '2');
+    assert.equal(amountRow(partialUsage, 'expense', 'direct_cost', 'USD').totalAmount, '0.3',
+      'cache and reasoning subsets remain quantity lineage and do not add to monetary charge totals');
 
     const mappingScope = makeScope('review-source-line-mapping');
     const mappingPorts = makePorts(pool, mappingScope, clock);

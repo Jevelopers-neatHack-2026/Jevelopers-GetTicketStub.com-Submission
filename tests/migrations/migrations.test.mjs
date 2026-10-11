@@ -12,7 +12,7 @@ import { assertDisposableMarker, databaseConfigFromEnvironment, migratorDatabase
 const { Client, Pool } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
-function hasDestructiveMigrationStatement(sql) {
+function hasDestructiveMigrationStatement(sql, allowedConstraintReplacements = []) {
   const tokens = [];
   let index = 0;
   let statement = 0;
@@ -95,7 +95,17 @@ function hasDestructiveMigrationStatement(sql) {
 
   return tokens.some(token => {
     if (token.kind !== 'word') return false;
-    if (token.value === 'DROP') return true;
+    if (token.value === 'DROP') {
+      const statementTokens = tokens.filter(item => item.statement === token.statement);
+      const codeWords = statementTokens.filter(item => item.kind === 'word' && !item.quoted && !item.inDollar);
+      const position = codeWords.indexOf(token);
+      const prefix = codeWords.slice(0, position).map(item => item.value);
+      const suffix = codeWords.slice(position + 1).map(item => item.value);
+      const safeReplacement = allowedConstraintReplacements.some(({ schema, table, constraint }) =>
+        prefix.join(' ') === `ALTER TABLE ${schema.toUpperCase()} ${table.toUpperCase()}`
+          && suffix.join(' ') === `CONSTRAINT ${constraint.toUpperCase()}`);
+      return !safeReplacement;
+    }
     if (token.value !== 'TRUNCATE') return false;
 
     // Only the SQL event name in a CREATE TRIGGER ... BEFORE TRUNCATE ON
@@ -507,6 +517,14 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     'dollar-quoted dynamic TRUNCATE text remains rejected conservatively');
   assert.equal(hasDestructiveMigrationStatement('CREATE TRIGGER guard BEFORE TRUNCATE ON schema.table FOR EACH STATEMENT EXECUTE FUNCTION guard_fn(); TRUNCATE TABLE schema.table;'), true,
     'a safe trigger declaration cannot exempt a later destructive statement');
+  assert.equal(hasDestructiveMigrationStatement(
+    'ALTER TABLE cost_intelligence.financial_projection_quantities DROP CONSTRAINT financial_projection_quantities_key;',
+    [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }],
+  ), false, '0007 may replace only the projection identity constraint to retain included-parent fidelity');
+  assert.equal(hasDestructiveMigrationStatement(
+    'ALTER TABLE cost_intelligence.financial_projection_snapshots DROP CONSTRAINT financial_projection_quantities_key;',
+    [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }],
+  ), true, 'the safe replacement exception is limited to the exact projection table and key');
   assert.throws(() => assertDisposableMarker([]), /not marked as a disposable/);
   assert.throws(() => assertDisposableMarker([{ marker: 'unrelated' }]), /not marked as a disposable/);
   assert.equal(assertDisposableMarker([{ marker: DISPOSABLE_MARKER }]), true);
@@ -545,7 +563,10 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       assert.equal(records.rowCount, names.length);
       for (let index = 0; index < names.length; index++) {
         const sql = await readFile(join(root, 'migrations', names[index]), 'utf8');
-        assert.equal(hasDestructiveMigrationStatement(sql), false,
+        const safeConstraintReplacements = names[index] === '0007_usage_intake.sql'
+          ? [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }]
+          : [];
+        assert.equal(hasDestructiveMigrationStatement(sql, safeConstraintReplacements), false,
           'incremental migrations must not start destructive DROP or TRUNCATE statements');
         assert.equal(records.rows[index].version, names[index].replace(/\.sql$/, ''));
         assert.equal(records.rows[index].checksum_sha256.trim(), createHash('sha256').update(sql).digest('hex'));
@@ -2099,6 +2120,30 @@ test('separate migration login applies 0007 to an existing 0006 database without
       'SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health',
     );
     assert.deepEqual(health.rows[0], { migrations_ready: true, required_migrations_present: 7 });
+    const intakeProjectionColumns = await migrator.query(
+      `SELECT table_name, column_name FROM information_schema.columns
+       WHERE table_schema='cost_intelligence' AND (
+         (table_name='usage_intake_inbox' AND column_name='attempt_revision_accepted')
+         OR (table_name='financial_projection_quantities' AND column_name='included_in')
+         OR (table_name='financial_projection_snapshots' AND column_name IN (
+           'unknown_economic_exposure_count', 'quarantined_observation_count',
+           'awaiting_evidence_attempt_count', 'unposted_attempt_count'))
+       ) ORDER BY table_name, column_name`,
+    );
+    assert.deepEqual(intakeProjectionColumns.rows.map(row => `${row.table_name}.${row.column_name}`), [
+      'financial_projection_quantities.included_in',
+      'financial_projection_snapshots.awaiting_evidence_attempt_count',
+      'financial_projection_snapshots.quarantined_observation_count',
+      'financial_projection_snapshots.unknown_economic_exposure_count',
+      'financial_projection_snapshots.unposted_attempt_count',
+      'usage_intake_inbox.attempt_revision_accepted',
+    ], 'additive 0007 migration exposes durable unresolved exposure and parent lineage fields');
+    const quantityKey = await migrator.query(
+      `SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+       WHERE conrelid='cost_intelligence.financial_projection_quantities'::regclass
+         AND conname='financial_projection_quantities_key'`,
+    );
+    assert.match(quantityKey.rows[0].definition, /UNIQUE NULLS NOT DISTINCT .*included_in/);
     const privileges = await migrator.query(
       `SELECT has_schema_privilege('ci_finance_runtime', 'cost_intelligence', 'CREATE') AS runtime_schema_ddl,
               has_database_privilege('ci_finance_runtime', current_database(), 'CREATE') AS runtime_database_ddl,

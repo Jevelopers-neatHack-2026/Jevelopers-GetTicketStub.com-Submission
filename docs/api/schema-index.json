@@ -271,7 +271,7 @@
       "export_name": "LedgerProjectionSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionSchema.json",
       "completeness": "complete",
-      "sha256": "2e1a1003c24c2108f3344df77b8210e0778f1cc30b6da30dedd122cb64629ee8"
+      "sha256": "85b92fe49a0376e1a47061da618128993b69057c70c11bfbbb2417aa14ba19a4"
     },
     {
       "module": "reporting",

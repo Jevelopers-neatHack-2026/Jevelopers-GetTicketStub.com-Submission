@@ -11,6 +11,7 @@ import {
   UsageOutboxReplayRequestSchema,
   UsageOutboxReplayReceiptSchema,
   validateUsageObservationBoundary,
+  replayUsageOutbox,
 } from '../../dist/index.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -78,6 +79,17 @@ test('bounded outbox replay command and unknown identity receipt reject extra fi
   assert.equal(Value.Check(UsageOutboxReplayRequestSchema, replay), true);
   assert.equal(Value.Check(UsageOutboxReplayRequestSchema, { ...replay, limit: 101 }), false);
   assert.equal(Value.Check(UsageOutboxReplayRequestSchema, { ...replay, other: true }), false);
+  let authorityCalls = 0;
+  let connectionAttempts = 0;
+  const oversizedReplay = await replayUsageOutbox({ ...replay, limit: 101 }, {
+    clock: { now: () => new Date('2026-10-11T12:00:00.000Z') },
+    financeAuthority: { authorizeCurrent: async () => { authorityCalls++; throw new Error('invalid replay limit must stop before authorization'); } },
+    database: { connect: async () => { connectionAttempts++; throw new Error('invalid replay limit must stop before persistence'); } },
+  });
+  assert.equal(oversizedReplay.ok, false);
+  if (!oversizedReplay.ok) assert.equal(oversizedReplay.error.code, 'VALIDATION_ERROR');
+  assert.equal(authorityCalls, 0);
+  assert.equal(connectionAttempts, 0);
   assert.equal(Value.Check(UsageOutboxReplayReceiptSchema, {
     schemaVersion: '1.0.0', requestId: 'drain-1', asOf: '2026-10-11T12:00:00Z',
     scanned: 0, posted: 0, retried: 0, deadLettered: 0, durableCommit: true,
@@ -85,6 +97,28 @@ test('bounded outbox replay command and unknown identity receipt reject extra fi
 });
 
 test('oversized source payload is rejected before authority or persistence and is omitted from diagnostics', async () => {
+  const exactLimit = 'x'.repeat(65_534);
+  const overLimit = 'x'.repeat(65_535);
+  assert.equal(new TextEncoder().encode(JSON.stringify(exactLimit)).byteLength, 65_536);
+  assert.equal(new TextEncoder().encode(JSON.stringify(overLimit)).byteLength, 65_537);
+  let boundaryAuthorityCalls = 0;
+  let boundaryConnectionAttempts = 0;
+  const boundaryPorts = {
+    clock: { now: () => new Date('2026-10-11T12:00:00.000Z') },
+    financeAuthority: { authorizeCurrent: async () => { boundaryAuthorityCalls++; throw new Error('byte guard precedes authority'); } },
+    database: { connect: async () => { boundaryConnectionAttempts++; throw new Error('byte guard precedes persistence'); } },
+  };
+  const atLimit = await ingestUsage(exactLimit, boundaryPorts);
+  assert.equal(atLimit.ok, false);
+  if (!atLimit.ok) assert.equal(atLimit.error.code, 'VALIDATION_ERROR');
+  if (!atLimit.ok) assert.doesNotMatch(atLimit.error.safe_message, /64 KiB/,
+    'exactly 64 KiB passes the byte guard and reaches wrapper validation');
+  const oneByteOver = await ingestUsage(overLimit, boundaryPorts);
+  assert.equal(oneByteOver.ok, false);
+  if (!oneByteOver.ok) assert.match(oneByteOver.error.safe_message, /64 KiB/);
+  assert.equal(boundaryAuthorityCalls, 0);
+  assert.equal(boundaryConnectionAttempts, 0);
+
   const request = await loadFixture();
   const canary = 'CI04A_OVERSIZED_PRIVATE_CANARY';
   request.usageEvent.model = `${canary}${'x'.repeat(66 * 1024)}`;

@@ -232,6 +232,7 @@ const ProjectionQuantitySchema = Type.Object({
   currency: CurrencySchema,
   unitName: Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]),
   relation: Type.Union([Type.Literal('standalone'), Type.Literal('included_subset'), Type.Literal('unknown_relation'), Type.Null()]),
+  includedIn: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
   observationCount: Type.Integer({ minimum: 1 }),
   knownQuantityCount: Type.Integer({ minimum: 0 }),
   unknownQuantityCount: Type.Integer({ minimum: 0 }),
@@ -239,6 +240,12 @@ const ProjectionQuantitySchema = Type.Object({
   knownSubtotal: Type.Union([NonNegativeDecimalAmountSchema, Type.Null()]),
   totalQuantity: Type.Union([NonNegativeDecimalAmountSchema, Type.Null()]),
   completeness: Type.Union([Type.Literal('unknown'), Type.Literal('incomplete'), Type.Literal('complete')]),
+}, { additionalProperties: false });
+const ProjectionUnresolvedIntakeSchema = Type.Object({
+  unknownEconomicExposureCount: Type.Integer({ minimum: 0 }),
+  quarantinedObservationCount: Type.Integer({ minimum: 0 }),
+  awaitingEvidenceAttemptCount: Type.Integer({ minimum: 0 }),
+  unpostedAttemptCount: Type.Integer({ minimum: 0 }),
 }, { additionalProperties: false });
 
 export const LedgerProjectionSchema = Type.Object({
@@ -250,6 +257,7 @@ export const LedgerProjectionSchema = Type.Object({
   eventCount: Type.Integer({ minimum: 0 }),
   amounts: Type.Array(ProjectionAmountSchema),
   quantities: Type.Array(ProjectionQuantitySchema),
+  unresolvedIntake: Type.Optional(ProjectionUnresolvedIntakeSchema),
 }, { additionalProperties: false });
 export type LedgerProjection = Static<typeof LedgerProjectionSchema>;
 
@@ -1222,6 +1230,7 @@ type QuantityAccumulator = {
   currency: string;
   unitName: string | null;
   relation: 'standalone' | 'included_subset' | 'unknown_relation' | null;
+  includedIn: string | null;
   observationCount: number;
   knownQuantityCount: number;
   unknownQuantityCount: number;
@@ -1233,7 +1242,7 @@ function keyFor(...parts: (string | null)[]): string {
   return JSON.stringify(parts);
 }
 
-function computeProjectionRows(rows: readonly Record<string, unknown>[]): {
+function computeProjectionRows(rows: readonly Record<string, unknown>[], preserveIncludedIn: boolean): {
   amounts: Static<typeof ProjectionAmountSchema>[];
   quantities: Static<typeof ProjectionQuantitySchema>[];
 } {
@@ -1260,11 +1269,13 @@ function computeProjectionRows(rows: readonly Record<string, unknown>[]): {
     const completeness = asString(row.quantity_completeness) as 'unknown' | 'incomplete' | 'complete';
     const rawUnits = row.quantity_units;
     const units = typeof rawUnits === 'string' ? JSON.parse(rawUnits) as Array<Record<string, unknown>> : rawUnits as Array<Record<string, unknown>>;
-    const addQuantity = (unitName: string | null, relation: QuantityAccumulator['relation'], quantity: string | null, incomplete: boolean): void => {
-      const quantityKey = keyFor(eventType, classification, currency, unitName, relation);
+    const addQuantity = (unitName: string | null, relation: QuantityAccumulator['relation'], includedIn: string | null,
+      quantity: string | null, incomplete: boolean): void => {
+      const quantityKey = keyFor(eventType, classification, currency, unitName, relation, includedIn);
       let accumulator = quantities.get(quantityKey);
       if (!accumulator) {
-        accumulator = { eventType, classification, currency, unitName, relation, observationCount: 0, knownQuantityCount: 0, unknownQuantityCount: 0, incompleteObservationCount: 0, knownQuantity: 0n };
+        accumulator = { eventType, classification, currency, unitName, relation, includedIn,
+          observationCount: 0, knownQuantityCount: 0, unknownQuantityCount: 0, incompleteObservationCount: 0, knownQuantity: 0n };
         quantities.set(quantityKey, accumulator);
       }
       accumulator.observationCount++;
@@ -1276,13 +1287,14 @@ function computeProjectionRows(rows: readonly Record<string, unknown>[]): {
       }
     };
     if (units.length === 0) {
-      if (completeness !== 'complete') addQuantity(null, null, null, completeness === 'incomplete');
+      if (completeness !== 'complete') addQuantity(null, null, null, null, completeness === 'incomplete');
     } else {
       for (const unit of units) {
         const unitName = typeof unit.name === 'string' ? unit.name : null;
         const relation = typeof unit.relation === 'string' ? unit.relation as QuantityAccumulator['relation'] : null;
+        const includedIn = preserveIncludedIn && typeof unit.includedIn === 'string' ? unit.includedIn : null;
         const quantity = unit.quantity === null || unit.quantity === undefined ? null : asString(unit.quantity);
-        addQuantity(unitName, relation, quantity, completeness !== 'complete');
+        addQuantity(unitName, relation, includedIn, quantity, completeness !== 'complete');
       }
     }
   }
@@ -1301,16 +1313,77 @@ function computeProjectionRows(rows: readonly Record<string, unknown>[]): {
       ? 'complete' : item.knownQuantityCount === 0 && item.incompleteObservationCount === 0 ? 'unknown' : 'incomplete';
     return {
       eventType: item.eventType, classification: item.classification, currency: item.currency,
-      unitName: item.unitName, relation: item.relation, observationCount: item.observationCount,
+      unitName: item.unitName, relation: item.relation, ...(item.includedIn !== null ? { includedIn: item.includedIn } : {}),
+      observationCount: item.observationCount,
       knownQuantityCount: item.knownQuantityCount, unknownQuantityCount: item.unknownQuantityCount,
       incompleteObservationCount: item.incompleteObservationCount,
       knownSubtotal: item.knownQuantityCount === 0 ? null : formatScaledDecimal(item.knownQuantity),
       totalQuantity: completeness === 'complete' ? formatScaledDecimal(item.knownQuantity) : null,
       completeness,
     };
-  }).sort((left, right) => keyFor(left.eventType, left.classification, left.currency, left.unitName, left.relation)
-    .localeCompare(keyFor(right.eventType, right.classification, right.currency, right.unitName, right.relation)));
+  }).sort((left, right) => keyFor(left.eventType, left.classification, left.currency, left.unitName, left.relation, left.includedIn ?? null)
+    .localeCompare(keyFor(right.eventType, right.classification, right.currency, right.unitName, right.relation, right.includedIn ?? null)));
   return { amounts: amountRows, quantities: quantityRows };
+}
+
+async function computeUnresolvedIntakeProjection(
+  client: LedgerTransactionPort,
+  scope: LedgerProjectionRequest['scope'],
+  asOf: string,
+  intakeSchemaPresent: boolean,
+): Promise<Static<typeof ProjectionUnresolvedIntakeSchema>> {
+  if (!intakeSchemaPresent) {
+    return {
+      unknownEconomicExposureCount: 0,
+      quarantinedObservationCount: 0,
+      awaitingEvidenceAttemptCount: 0,
+      unpostedAttemptCount: 0,
+    };
+  }
+  const values = [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, asOf];
+  const quarantined = await client.query(
+    `SELECT count(*)::integer AS count
+     FROM cost_intelligence.usage_intake_quarantine
+     WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND created_at <= $5`,
+    values,
+  );
+  const heads = await client.query(
+    `SELECT observation.billable_attempt_id, observation.source_observation_id,
+            observation.event_id, observation.completeness, observation.valuation_basis
+     FROM cost_intelligence.usage_intake_inbox observation
+     WHERE observation.tenant_id=$1 AND observation.project_id=$2 AND observation.environment=$3
+       AND observation.billing_mode=$4 AND observation.created_at <= $5
+       AND observation.attempt_revision_accepted
+       AND NOT EXISTS (
+         SELECT 1 FROM cost_intelligence.usage_intake_inbox successor
+         WHERE successor.tenant_id=observation.tenant_id AND successor.project_id=observation.project_id
+           AND successor.environment=observation.environment AND successor.billing_mode=observation.billing_mode
+           AND successor.billable_attempt_id=observation.billable_attempt_id
+           AND successor.attempt_revision_accepted
+           AND successor.event_facts->>'supersedes_observation_id'=observation.source_observation_id
+           AND successor.created_at <= $5
+       )
+     ORDER BY observation.billable_attempt_id, observation.source_observation_id`,
+    values,
+  );
+  const postedEvents = await client.query(
+    `SELECT event_id FROM cost_intelligence.financial_ledger_events
+     WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND ingested_at <= $5`,
+    values,
+  );
+  const quarantinedObservationCount = Number(quarantined.rows[0]?.count ?? 0);
+  const postedEventIds = new Set(postedEvents.rows.map(row => asString(row.event_id)));
+  const unposted = heads.rows.filter(row => !postedEventIds.has(asString(row.event_id)));
+  const awaitingEvidence = heads.rows.filter(row => asString(row.valuation_basis) === 'unknown'
+    || asString(row.completeness) !== 'complete');
+  const unknownEconomicExposureCount = quarantinedObservationCount + unposted.filter(row =>
+    asString(row.valuation_basis) === 'unknown' || asString(row.completeness) !== 'complete').length;
+  return {
+    unknownEconomicExposureCount,
+    quarantinedObservationCount,
+    awaitingEvidenceAttemptCount: awaitingEvidence.length,
+    unpostedAttemptCount: unposted.length,
+  };
 }
 
 /** Rebuild and persist an immutable as-of snapshot using exact integer decimal arithmetic. */
@@ -1346,6 +1419,22 @@ export async function rebuildLedgerProjection(
       inTransaction = false;
       return failure(legacyHistoryError);
     }
+    const schemaCapabilities = await client.query(
+      `SELECT
+         to_regclass('cost_intelligence.usage_intake_inbox') IS NOT NULL
+           AND to_regclass('cost_intelligence.usage_intake_quarantine') IS NOT NULL AS intake_schema_present,
+         EXISTS (SELECT 1 FROM information_schema.columns
+           WHERE table_schema='cost_intelligence' AND table_name='financial_projection_quantities'
+             AND column_name='included_in') AS has_included_in,
+         (SELECT count(*) = 4 FROM information_schema.columns
+           WHERE table_schema='cost_intelligence' AND table_name='financial_projection_snapshots'
+             AND column_name IN ('unknown_economic_exposure_count', 'quarantined_observation_count',
+               'awaiting_evidence_attempt_count', 'unposted_attempt_count')) AS has_unresolved_counts`,
+    );
+    const capabilities = schemaCapabilities.rows[0];
+    const intakeSchemaPresent = capabilities?.intake_schema_present === true;
+    const hasIncludedIn = capabilities?.has_included_in === true;
+    const hasUnresolvedCounts = capabilities?.has_unresolved_counts === true;
     const events = await client.query(
       `SELECT e.event_id, e.event_hash, e.event_type, e.classification, e.currency, e.amount::text AS amount,
               e.quantity_completeness, e.quantity_units
@@ -1359,26 +1448,40 @@ export async function rebuildLedgerProjection(
        ORDER BY e.event_id`,
       [request.scope.tenantId, request.scope.projectId, request.scope.environment, request.scope.billingMode, request.asOf],
     );
-    const computed = computeProjectionRows(events.rows);
+    const computed = computeProjectionRows(events.rows, hasIncludedIn);
+    const unresolvedIntake = await computeUnresolvedIntakeProjection(client, request.scope, request.asOf, intakeSchemaPresent);
     const eventEvidence = events.rows.map(row => ({ eventId: asString(row.event_id), eventHash: asString(row.event_hash) }));
     const content = {
       schemaVersion: '1.0.0', scope: request.scope, asOf: request.asOf,
-      eventEvidence, eventCount: events.rows.length, amounts: computed.amounts, quantities: computed.quantities,
+      eventEvidence, eventCount: events.rows.length, amounts: computed.amounts, quantities: computed.quantities, unresolvedIntake,
     };
     const projectionHash = await hashValue(content);
     const snapshot: LedgerProjection = {
       schemaVersion: '1.0.0', snapshotId: projectionHash, projectionHash,
       scope: request.scope, asOf: request.asOf, eventCount: events.rows.length,
-      amounts: computed.amounts, quantities: computed.quantities,
+      amounts: computed.amounts, quantities: computed.quantities, unresolvedIntake,
     };
-    const inserted = await client.query(
-      `INSERT INTO cost_intelligence.financial_projection_snapshots
-        (snapshot_id, tenant_id, project_id, environment, billing_mode, as_of, event_count, projection_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (snapshot_id) DO NOTHING`,
-      [projectionHash, request.scope.tenantId, request.scope.projectId, request.scope.environment, request.scope.billingMode,
-        request.asOf, events.rows.length, projectionHash],
-    );
+    const inserted = hasUnresolvedCounts
+      ? await client.query(
+        `INSERT INTO cost_intelligence.financial_projection_snapshots
+          (snapshot_id, tenant_id, project_id, environment, billing_mode, as_of, event_count,
+           unknown_economic_exposure_count, quarantined_observation_count,
+           awaiting_evidence_attempt_count, unposted_attempt_count, projection_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (snapshot_id) DO NOTHING`,
+        [projectionHash, request.scope.tenantId, request.scope.projectId, request.scope.environment, request.scope.billingMode,
+          request.asOf, events.rows.length, unresolvedIntake.unknownEconomicExposureCount,
+          unresolvedIntake.quarantinedObservationCount, unresolvedIntake.awaitingEvidenceAttemptCount,
+          unresolvedIntake.unpostedAttemptCount, projectionHash],
+      )
+      : await client.query(
+        `INSERT INTO cost_intelligence.financial_projection_snapshots
+          (snapshot_id, tenant_id, project_id, environment, billing_mode, as_of, event_count, projection_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (snapshot_id) DO NOTHING`,
+        [projectionHash, request.scope.tenantId, request.scope.projectId, request.scope.environment, request.scope.billingMode,
+          request.asOf, events.rows.length, projectionHash],
+      );
     if (inserted.rowCount !== 0) {
       for (const item of computed.amounts) {
         await client.query(
@@ -1391,22 +1494,40 @@ export async function rebuildLedgerProjection(
         );
       }
       for (const item of computed.quantities) {
-        await client.query(
-          `INSERT INTO cost_intelligence.financial_projection_quantities
-            (snapshot_id, event_type, classification, currency, unit_name, relation, observation_count,
-             known_quantity_count, unknown_quantity_count, incomplete_observation_count, known_subtotal,
-             total_quantity, quantity_completeness)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-          [projectionHash, item.eventType, item.classification, item.currency, item.unitName, item.relation,
-            item.observationCount, item.knownQuantityCount, item.unknownQuantityCount, item.incompleteObservationCount,
-            item.knownSubtotal, item.totalQuantity, item.completeness],
-        );
+        if (hasIncludedIn) {
+          await client.query(
+            `INSERT INTO cost_intelligence.financial_projection_quantities
+              (snapshot_id, event_type, classification, currency, unit_name, relation, included_in, observation_count,
+               known_quantity_count, unknown_quantity_count, incomplete_observation_count, known_subtotal,
+               total_quantity, quantity_completeness)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            [projectionHash, item.eventType, item.classification, item.currency, item.unitName, item.relation,
+              item.includedIn ?? null, item.observationCount, item.knownQuantityCount, item.unknownQuantityCount,
+              item.incompleteObservationCount, item.knownSubtotal, item.totalQuantity, item.completeness],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO cost_intelligence.financial_projection_quantities
+              (snapshot_id, event_type, classification, currency, unit_name, relation, observation_count,
+               known_quantity_count, unknown_quantity_count, incomplete_observation_count, known_subtotal,
+               total_quantity, quantity_completeness)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [projectionHash, item.eventType, item.classification, item.currency, item.unitName, item.relation,
+              item.observationCount, item.knownQuantityCount, item.unknownQuantityCount,
+              item.incompleteObservationCount, item.knownSubtotal, item.totalQuantity, item.completeness],
+          );
+        }
       }
     }
+    const unresolvedHeaderColumns = hasUnresolvedCounts
+      ? `unknown_economic_exposure_count, quarantined_observation_count,
+         awaiting_evidence_attempt_count, unposted_attempt_count`
+      : `0::integer AS unknown_economic_exposure_count, 0::integer AS quarantined_observation_count,
+         0::integer AS awaiting_evidence_attempt_count, 0::integer AS unposted_attempt_count`;
     const persistedHeader = await client.query(
       `SELECT tenant_id, project_id, environment, billing_mode,
               to_char(as_of AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS as_of_utc,
-              event_count, projection_hash
+              event_count, ${unresolvedHeaderColumns}, projection_hash
        FROM cost_intelligence.financial_projection_snapshots WHERE snapshot_id = $1`,
       [projectionHash],
     );
@@ -1417,6 +1538,10 @@ export async function rebuildLedgerProjection(
       || fromRow(header, 'billing_mode') !== request.scope.billingMode
       || canonicalProjectionInstant(asString(header.as_of_utc)) !== request.asOf
       || Number(header.event_count) !== events.rows.length
+      || Number(header.unknown_economic_exposure_count) !== unresolvedIntake.unknownEconomicExposureCount
+      || Number(header.quarantined_observation_count) !== unresolvedIntake.quarantinedObservationCount
+      || Number(header.awaiting_evidence_attempt_count) !== unresolvedIntake.awaitingEvidenceAttemptCount
+      || Number(header.unposted_attempt_count) !== unresolvedIntake.unpostedAttemptCount
       || fromRow(header, 'projection_hash') !== projectionHash) {
       throw new Error('Persisted snapshot header does not match its content address.');
     }
@@ -1441,11 +1566,12 @@ export async function rebuildLedgerProjection(
       throw new Error('Persisted projection amounts do not match their content address.');
     }
     const persistedQuantities = await client.query(
-      `SELECT event_type, classification, currency, unit_name, relation, observation_count,
+      `SELECT event_type, classification, currency, unit_name, relation,
+              ${hasIncludedIn ? 'included_in' : 'NULL::text AS included_in'}, observation_count,
               known_quantity_count, unknown_quantity_count, incomplete_observation_count,
               known_subtotal::text AS known_subtotal, total_quantity::text AS total_quantity, quantity_completeness
        FROM cost_intelligence.financial_projection_quantities WHERE snapshot_id = $1
-       ORDER BY event_type, classification, currency, unit_name NULLS FIRST, relation NULLS FIRST`,
+       ORDER BY event_type, classification, currency, unit_name NULLS FIRST, relation NULLS FIRST, included_in NULLS FIRST`,
       [projectionHash],
     );
     const normalizedQuantities = persistedQuantities.rows.map(row => ({
@@ -1454,13 +1580,14 @@ export async function rebuildLedgerProjection(
       currency: asString(row.currency).trim(),
       unitName: fromRow(row, 'unit_name'),
       relation: fromRow(row, 'relation') as QuantityAccumulator['relation'],
+      ...(fromRow(row, 'included_in') !== null ? { includedIn: fromRow(row, 'included_in')! } : {}),
       observationCount: Number(row.observation_count), knownQuantityCount: Number(row.known_quantity_count),
       unknownQuantityCount: Number(row.unknown_quantity_count), incompleteObservationCount: Number(row.incomplete_observation_count),
       knownSubtotal: fromRow(row, 'known_subtotal') === null ? null : formatScaledDecimal(parseScaledDecimal(asString(row.known_subtotal))),
       totalQuantity: fromRow(row, 'total_quantity') === null ? null : formatScaledDecimal(parseScaledDecimal(asString(row.total_quantity))),
       completeness: asString(row.quantity_completeness) as Static<typeof ProjectionQuantitySchema>['completeness'],
-    })).sort((left, right) => keyFor(left.eventType, left.classification, left.currency, left.unitName, left.relation)
-      .localeCompare(keyFor(right.eventType, right.classification, right.currency, right.unitName, right.relation)));
+    })).sort((left, right) => keyFor(left.eventType, left.classification, left.currency, left.unitName, left.relation, left.includedIn ?? null)
+      .localeCompare(keyFor(right.eventType, right.classification, right.currency, right.unitName, right.relation, right.includedIn ?? null)));
     if (JSON.stringify(normalizedQuantities) !== JSON.stringify(computed.quantities)) {
       throw new Error('Persisted projection quantities do not match their content address.');
     }

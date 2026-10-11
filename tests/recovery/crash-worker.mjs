@@ -1,11 +1,13 @@
 import pg from 'pg';
-import { ingestUsage } from '../../dist/index.js';
+import { ingestUsage, replayUsageOutbox } from '../../dist/index.js';
 import { runtimeDatabaseConfigFromEnvironment } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Pool } = pg;
 const mode = process.argv[2];
 const observation = JSON.parse(process.env.CI04A_CRASH_PAYLOAD ?? 'null');
-if (!observation || !['before_commit', 'after_commit'].includes(mode)) process.exit(2);
+const replayScope = JSON.parse(process.env.CI04A_REPLAY_SCOPE ?? 'null');
+if ((!observation || !['before_commit', 'after_commit'].includes(mode))
+    && !(mode === 'replay_during' && replayScope)) process.exit(2);
 const pool = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max: 1 });
 const clock = { now: () => new Date() };
 const ports = {
@@ -18,6 +20,10 @@ const ports = {
           await new Promise(() => {});
         }
         const result = await client.query(text, values);
+        if (mode === 'replay_during' && /^INSERT INTO cost_intelligence\.financial_ledger_events/i.test(text)) {
+          process.send?.({ state: 'during_replay' });
+          await new Promise(() => {});
+        }
         if (text === 'COMMIT' && mode === 'after_commit') {
           process.send?.({ state: 'after_commit' });
           await new Promise(() => {});
@@ -36,6 +42,8 @@ const ports = {
     verifiedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
   }) },
 };
-const result = await ingestUsage(observation, ports);
+const result = mode === 'replay_during'
+  ? await replayUsageOutbox({ schemaVersion: '1.0.0', requestId: 'ci04a-crash-replay', scope: replayScope, limit: 100 }, ports)
+  : await ingestUsage(observation, ports);
 process.send?.({ state: 'returned', ok: result.ok });
 await pool.end();

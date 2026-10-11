@@ -734,6 +734,7 @@ export async function ingestUsage(
     const currentSupersedesIncoming = priorFacts !== null && priorFacts.supersedes_observation_id === event.source_observation_id;
     const linkedRevision = prior === null || incomingSupersedesCurrent;
     const lateSuperseded = currentSupersedesIncoming;
+    const attemptRevisionAccepted = prior === null || (linkedRevision && !lateSuperseded);
     const currentLedgerEventId = prior ? asString(prior, 'current_ledger_event_id') : null;
     let previousLedgerEvent: IntakeRow | null = null;
     if (currentLedgerEventId) {
@@ -749,13 +750,13 @@ export async function ingestUsage(
         tenant_id, project_id, environment, billing_mode, source_observation_id, idempotency_key, request_id,
         event_id, logical_operation_id, provider_attempt_id, billable_attempt_id, transport_attempt_id,
         provider_request_id, source_name, occurred_at, observed_at, completeness, valuation_basis,
-        payload_sha256, idempotency_sha256, provenance_sha256, event_facts
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb)`,
+        payload_sha256, idempotency_sha256, provenance_sha256, event_facts, attempt_revision_accepted
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23)`,
       [request.scope.tenantId, request.scope.projectId, request.scope.environment, request.scope.billingMode,
         event.source_observation_id, request.idempotencyKey, request.requestId, event.event_id,
         event.logical_operation_id, event.provider_attempt_id, event.billable_attempt_id, event.transport_attempt_id,
         event.provider_request_id, event.source, event.occurred_at, event.observed_at, event.completeness,
-        event.valuation.basis, payloadHash, idempotencyHash, provenanceHash, JSON.stringify(facts)],
+        event.valuation.basis, payloadHash, idempotencyHash, provenanceHash, JSON.stringify(facts), attemptRevisionAccepted],
     );
     if (!prior) {
       await client.query(
