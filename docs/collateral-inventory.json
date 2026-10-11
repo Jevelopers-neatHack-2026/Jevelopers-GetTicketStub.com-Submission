@@ -2604,8 +2604,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "357590df76ad51b0253686f7e9c80070a905d4d0",
-      "sha256": "fde1aa2a14b32c9dd281582fdef0eb29fafecaec7536b2c2058148eb929707f3",
+      "trackedAtRevision": "952eb57e2026bebdad7809c1dcd7109cf2851944",
+      "sha256": "162e80f789d19d381509fd051798b9c50b9c1aae8fe61066d6b733d3ce45d370",
       "provenanceRecordId": "MSG-POSITIONING-001"
     },
     {
@@ -2616,9 +2616,9 @@
       "lifecycleState": "draft",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "357590df76ad51b0253686f7e9c80070a905d4d0",
-      "checksumStatus": "Self-referential registry; exact source/content digest is stored in the external provenance register without recursive self-hashing.",
-      "sha256": "bc3018403b47d89c22a53718bdde0c0459b9ea7f1b111f0ede63c16de31fbcbc",
+      "trackedAtRevision": "952eb57e2026bebdad7809c1dcd7109cf2851944",
+      "checksumStatus": "Exact SHA-256 content digest of the current claims ledger bytes, pinned in this row and in the external provenance register; the ledger does not contain its own digest, and the pin is not an approval.",
+      "sha256": "e4d35d66b2d9e18cfd828c5496b57f9d5dc9ba5aa1f94c569dc341ed3b057454",
       "provenanceRecordId": "MSG-CLAIMS-001"
     },
     {
@@ -3686,7 +3686,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
-      "sha256": "3cbbf0c9473c333fe92f397112b1d5dedae664f7e5ce2031cd2ec462ca643c54",
+      "sha256": "7ce1fb5d42ec45e60bb261a0bfc384f06ee380eda44aca38a5c8fc7c1fae3db8",
       "provenanceRecordId": "HANDOFF-MANIFEST-001"
     },
     {
@@ -5392,6 +5392,18 @@
       "trackedAtRevision": "f9e09d916f314302912d8d81d3034da79fed930b",
       "sha256": "dde7450a9dc6e28404d5ef019612af9211c83926cd63f7046682b813ae6658a6",
       "provenanceRecordId": "PROV-FILE-CF1CC963AD8B"
+    },
+    {
+      "fileId": "FILE-096B3B1B3065",
+      "path": "release/v0.1.0-rehearsal/history/manifest-3cbbf0c9473c333f.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "c130fcbaa21914943dac2e700ce3aced3079c953",
+      "sha256": "3cbbf0c9473c333fe92f397112b1d5dedae664f7e5ce2031cd2ec462ca643c54",
+      "provenanceRecordId": "PROV-FILE-096B3B1B3065"
     }
   ],
   "submissionScope": {
