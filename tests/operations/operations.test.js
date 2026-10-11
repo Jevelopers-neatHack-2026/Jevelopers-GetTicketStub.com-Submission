@@ -834,19 +834,122 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
   afterCrashRaw.close();
   afterCrash.close();
 
-  const outFiles = Array.from({ length: 4 }, (_, index) => join(temporary.directory, `race-${index}.json`));
   const childScript = join(ROOT, 'tests/operations/fixtures/admission-child.mjs');
+  const unlockedRace = tempDirectory('ah11-admission-unlocked-race-');
+  t.after(() => unlockedRace.cleanup());
+  const unlockedStore = openStore(unlockedRace.databasePath);
+  unlockedStore.close();
+  const unlockedOutFiles = Array.from({ length: 4 }, (_, index) => join(unlockedRace.directory, `race-${index}.json`));
+  const unlockedProgressFiles = unlockedOutFiles.map(path => `${path}.progress.json`);
+  const unlockedGatePath = join(unlockedRace.directory, 'race-release');
+  const unlockedRetryGatePath = join(unlockedRace.directory, 'race-retry-release');
+  const unlockedAdmissions = [];
+  const unlockedReadyPids = [];
+  let unlockedChildrenReaped = false;
+  let unlockedRaces;
+  try {
+    for (let index = 0; index < unlockedOutFiles.length; index += 1) {
+      const readyPath = join(unlockedRace.directory, `race-${index}.ready.json`);
+      const running = startOwnedChild(childScript, [
+        unlockedRace.databasePath, 'tenant-unlocked', 'project-unlocked', 'same-key', PLAN,
+        unlockedOutFiles[index], readyPath, unlockedGatePath,
+        unlockedProgressFiles[index], unlockedRetryGatePath
+      ]);
+      unlockedAdmissions.push(running);
+      await waitForPath(readyPath, running.child, 5_000);
+      const ready = JSON.parse(readFileSync(readyPath, 'utf8'));
+      assert.equal(ready.storeOpen, true);
+      assert.ok(Number.isSafeInteger(ready.pid) && ready.pid > 1);
+      unlockedReadyPids.push(ready.pid);
+    }
+    assert.equal(new Set(unlockedReadyPids).size, unlockedOutFiles.length);
+    writeFileSync(unlockedGatePath, 'release', { flag: 'wx', mode: 0o600 });
+    writeFileSync(unlockedRetryGatePath, 'release', { flag: 'wx', mode: 0o600 });
+    unlockedRaces = await Promise.all(unlockedAdmissions.map(running => running.closed));
+    unlockedChildrenReaped = unlockedRaces.every(result => result.error || result.code !== null || result.signal !== null);
+  } finally {
+    if (!unlockedChildrenReaped) {
+      const cleanup = await Promise.all(unlockedAdmissions.map(async running => {
+        if (running.child.exitCode !== null || running.child.signalCode !== null) return true;
+        return Boolean(await killOwnedChildAndReap(running.child, running.closed));
+      }));
+      unlockedChildrenReaped = cleanup.every(Boolean);
+      assert.equal(unlockedChildrenReaped, true, 'all ordinary-race children are reaped on assertion failure');
+    }
+  }
+  const unlockedReplies = unlockedOutFiles.map(path => {
+    if (!existsSync(path)) return null;
+    try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+  });
+  const unlockedSafeSummary = unlockedReplies.map((reply, index) => ({
+    childStatus: unlockedRaces[index]?.code === 0 ? 'EXIT_0'
+      : unlockedRaces[index]?.signal ? 'SIGNAL' : 'NONZERO',
+    stopped: reply?.stopped === true,
+    attempts: Array.isArray(reply?.attempts) ? reply.attempts.map(attempt => ({
+      accepted: attempt?.accepted === true,
+      duplicate: attempt?.duplicate === true ? true : attempt?.duplicate === false ? false : null,
+      code: ['OPS_BACKPRESSURE', 'OPS_UNAVAILABLE'].includes(attempt?.code) ? attempt.code : null,
+      reasonCode: ['STORE_BUSY', 'STORE_UNAVAILABLE', 'WORKER_NOT_ACCEPTING', 'SCOPE_CAPACITY',
+        'GLOBAL_QUEUE_FULL', 'TENANT_QUEUE_FULL', 'PROJECT_QUEUE_FULL', 'RESOURCE_PROBE_UNAVAILABLE',
+        'WAL_HEADROOM_LOW', 'STORE_CAPACITY', 'DISK_HEADROOM_LOW', 'TELEMETRY_BACKLOG_HIGH']
+        .includes(attempt?.reasonCode) ? attempt.reasonCode : null,
+      retryAfterMs: Number.isSafeInteger(attempt?.retryAfterMs) ? attempt.retryAfterMs : null
+    })) : []
+  }));
+  const unlockedRetryChainsAreCoherent = unlockedReplies.every(reply => {
+    const attempts = reply?.attempts;
+    if (!Array.isArray(attempts) || attempts.length < 1 || attempts.length > 5) return false;
+    return attempts.every((attempt, index) => attempt.accepted === true
+      ? index === attempts.length - 1
+      : index < attempts.length - 1 && attempt.code === 'OPS_BACKPRESSURE'
+        && attempt.reasonCode === 'STORE_BUSY'
+        && Number.isSafeInteger(attempt.retryAfterMs) && attempt.retryAfterMs >= 25 && attempt.retryAfterMs <= 5_000);
+  });
+  const unlockedFreshCount = unlockedReplies.filter(reply => reply?.result?.accepted === true
+    && reply.result.duplicate === false).length;
+  const unlockedDuplicateCount = unlockedReplies.filter(reply => reply?.result?.accepted === true
+    && reply.result.duplicate === true).length;
+  const unlockedRaw = new DatabaseSync(unlockedRace.databasePath, { readOnly: true });
+  const unlockedRows = unlockedRaw.prepare(`SELECT job_id, workflow_id FROM operations_work
+    WHERE tenant_id=? AND project_id=? AND idempotency_key=?`)
+    .all('tenant-unlocked', 'project-unlocked', 'same-key');
+  unlockedRaw.close();
+  const unlockedOneIdentity = unlockedRows.length === 1 && unlockedReplies.every(reply =>
+    reply?.result?.jobId === unlockedRows[0].job_id && reply.result.workflowId === unlockedRows[0].workflow_id);
+  t.diagnostic(`OPS02 ordinary unlocked admission race ${JSON.stringify({
+    children: unlockedSafeSummary,
+    retryChainsAreCoherent: unlockedRetryChainsAreCoherent,
+    freshReplies: unlockedFreshCount,
+    duplicateReplies: unlockedDuplicateCount,
+    durableMatchingRows: unlockedRows.length,
+    oneStableIdentity: unlockedOneIdentity
+  })}`);
+  assert.ok(unlockedReplies.every(reply => reply !== null && reply.stopped === true
+    && reply.outcome === 'accepted_and_stopped'), JSON.stringify(unlockedSafeSummary));
+  assert.ok(unlockedRaces.every(result => result.code === 0), JSON.stringify(unlockedSafeSummary));
+  assert.equal(unlockedRetryChainsAreCoherent, true, JSON.stringify(unlockedSafeSummary));
+  assert.equal(unlockedFreshCount, 1, JSON.stringify(unlockedSafeSummary));
+  assert.equal(unlockedDuplicateCount, 3, JSON.stringify(unlockedSafeSummary));
+  assert.equal(unlockedRows.length, 1, JSON.stringify(unlockedSafeSummary));
+  assert.equal(unlockedOneIdentity, true, JSON.stringify(unlockedSafeSummary));
+
+  const outFiles = Array.from({ length: 4 }, (_, index) => join(temporary.directory, `race-${index}.json`));
+  const progressFiles = outFiles.map(path => `${path}.progress.json`);
   const admissionGatePath = join(temporary.directory, 'race-release');
+  const admissionRetryGatePath = join(temporary.directory, 'race-retry-release');
   const runningAdmissions = [];
   const readyPids = [];
   let admissionChildrenReaped = false;
+  let admissionLock = null;
+  let admissionLockHeld = false;
+  let initialBusyRepliesObserved = false;
   let races;
   try {
     for (let index = 0; index < outFiles.length; index += 1) {
       const readyPath = join(temporary.directory, `race-${index}.ready.json`);
       const running = startOwnedChild(childScript, [
         temporary.databasePath, 'tenant-race', 'project-race', 'same-key', PLAN,
-        outFiles[index], readyPath, admissionGatePath
+        outFiles[index], readyPath, admissionGatePath, progressFiles[index], admissionRetryGatePath
       ]);
       runningAdmissions.push(running);
       await waitForPath(readyPath, running.child, 5_000);
@@ -856,10 +959,37 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       readyPids.push(ready.pid);
     }
     assert.equal(new Set(readyPids).size, outFiles.length);
+    admissionLock = new DatabaseSync(temporary.databasePath, { timeout: 0 });
+    admissionLock.exec('BEGIN IMMEDIATE');
+    admissionLockHeld = true;
     writeFileSync(admissionGatePath, 'release', { flag: 'wx', mode: 0o600 });
+    const firstBusy = attempt => attempt?.accepted === false
+      && attempt.code === 'OPS_BACKPRESSURE' && attempt.reasonCode === 'STORE_BUSY'
+      && Number.isSafeInteger(attempt.retryAfterMs) && attempt.retryAfterMs >= 25 && attempt.retryAfterMs <= 5_000;
+    const initialDeadline = Date.now() + 5_000;
+    while (Date.now() < initialDeadline) {
+      const progress = progressFiles.map(path => {
+        if (!existsSync(path)) return null;
+        try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+      });
+      if (progress.every(item => firstBusy(item?.attempts?.[0]))) {
+        initialBusyRepliesObserved = true;
+        break;
+      }
+      await new Promise(resolveWait => setTimeout(resolveWait, 2));
+    }
+    admissionLock.exec('ROLLBACK');
+    admissionLockHeld = false;
+    admissionLock.close();
+    admissionLock = null;
+    writeFileSync(admissionRetryGatePath, 'release', { flag: 'wx', mode: 0o600 });
     races = await Promise.all(runningAdmissions.map(running => running.closed));
     admissionChildrenReaped = races.every(result => result.error || result.code !== null || result.signal !== null);
   } finally {
+    if (admissionLockHeld) {
+      try { admissionLock.exec('ROLLBACK'); } catch {}
+    }
+    try { admissionLock?.close(); } catch {}
     if (!admissionChildrenReaped) {
       const cleanup = await Promise.all(runningAdmissions.map(async running => {
         if (running.child.exitCode !== null || running.child.signalCode !== null) return true;
@@ -869,15 +999,159 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       assert.equal(admissionChildrenReaped, true, 'all staged admission children are reaped on assertion failure');
     }
   }
-  assert.ok(races.every(result => result.code === 0), races.map(result => result.stderr).join('\n'));
-  const replies = outFiles.map(path => JSON.parse(readFileSync(path, 'utf8')));
-  assert.equal(replies.filter(reply => reply.result.duplicate === false).length, 1);
-  assert.equal(replies.filter(reply => reply.result.duplicate === true).length, 3);
-  assert.ok(replies.every(reply => reply.result.jobId === replies[0].result.jobId));
-  const raw = new DatabaseSync(temporary.databasePath, { readOnly: true });
-  assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work WHERE idempotency_key = ?').get('same-key').count), 1);
-  assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton = 1').get().pending_records) <= 2, true);
-  raw.close();
+  const replies = outFiles.map(path => {
+    if (!existsSync(path)) return null;
+    try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+  });
+  const safeReplySummary = replies.map((reply, index) => ({
+    childStatus: races[index]?.code === 0 ? 'EXIT_0'
+      : races[index]?.signal ? 'SIGNAL' : 'NONZERO',
+    stopped: reply?.stopped === true,
+    outcome: ['accepted_and_stopped', 'not_accepted_or_stop_incomplete', 'child_error'].includes(reply?.outcome)
+      ? reply.outcome : 'MISSING_OR_INVALID',
+    attempts: Array.isArray(reply?.attempts) ? reply.attempts.map(attempt => ({
+      accepted: attempt?.accepted === true,
+      duplicate: attempt?.duplicate === true ? true : attempt?.duplicate === false ? false : null,
+      code: ['OPS_BACKPRESSURE', 'OPS_UNAVAILABLE'].includes(attempt?.code) ? attempt.code : null,
+      reasonCode: typeof attempt?.reasonCode === 'string'
+        && ['STORE_BUSY', 'STORE_UNAVAILABLE', 'WORKER_NOT_ACCEPTING', 'SCOPE_CAPACITY',
+          'GLOBAL_QUEUE_FULL', 'TENANT_QUEUE_FULL', 'PROJECT_QUEUE_FULL',
+          'RESOURCE_PROBE_UNAVAILABLE', 'WAL_HEADROOM_LOW', 'STORE_CAPACITY',
+          'DISK_HEADROOM_LOW', 'TELEMETRY_BACKLOG_HIGH', 'OTHER_REASON'].includes(attempt.reasonCode)
+        ? attempt.reasonCode : null,
+      retryAfterMs: Number.isSafeInteger(attempt?.retryAfterMs)
+        && attempt.retryAfterMs >= 0 && attempt.retryAfterMs <= 5_000 ? attempt.retryAfterMs : null
+    })) : [],
+    finalAccepted: reply?.result?.accepted === true,
+    finalDuplicate: reply?.result?.duplicate === true ? true
+      : reply?.result?.duplicate === false ? false : null
+  }));
+  const initialOutcomesAreContractual = replies.every(reply => {
+    const initial = reply?.attempts?.[0];
+    return initial?.accepted === true
+      || (initial?.accepted === false && initial.code === 'OPS_BACKPRESSURE'
+        && initial.reasonCode === 'STORE_BUSY'
+        && Number.isSafeInteger(initial.retryAfterMs) && initial.retryAfterMs >= 25 && initial.retryAfterMs <= 5_000);
+  });
+  const retryChainsAreBounded = replies.every(reply => {
+    const attempts = reply?.attempts;
+    if (!Array.isArray(attempts) || attempts.length < 1 || attempts.length > 5) return false;
+    return attempts.every((attempt, index) => attempt.accepted === true
+      ? index === attempts.length - 1
+      : index < attempts.length - 1 && attempt.code === 'OPS_BACKPRESSURE'
+        && attempt.reasonCode === 'STORE_BUSY'
+        && Number.isSafeInteger(attempt.retryAfterMs) && attempt.retryAfterMs >= 25 && attempt.retryAfterMs <= 5_000);
+  });
+  const allChildrenRetriedAfterLockRelease = replies.every(reply => {
+    const attempts = reply?.attempts;
+    return Array.isArray(attempts) && attempts.length >= 2
+      && attempts[0].accepted === false && attempts[0].code === 'OPS_BACKPRESSURE'
+      && attempts[0].reasonCode === 'STORE_BUSY'
+      && attempts.at(-1).accepted === true;
+  });
+  const durableSnapshot = () => {
+    const raw = new DatabaseSync(temporary.databasePath, { readOnly: true });
+    try {
+      const rows = raw.prepare(`SELECT job_id, workflow_id, state, generation, fence_token
+        FROM operations_work WHERE tenant_id=? AND project_id=? AND idempotency_key=?`)
+        .all('tenant-race', 'project-race', 'same-key');
+      const meta = raw.prepare(`SELECT pending_records, pending_bytes, in_flight,
+        reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1`).get();
+      const tenant = raw.prepare(`SELECT pending_records, pending_bytes, in_flight
+        FROM operations_tenants WHERE tenant_id=?`).get('tenant-race');
+      const project = raw.prepare(`SELECT pending_records, pending_bytes, in_flight
+        FROM operations_projects WHERE tenant_id=? AND project_id=?`).get('tenant-race', 'project-race');
+      const eventCount = rows.length === 1
+        ? Number(raw.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(rows[0].workflow_id).count)
+        : null;
+      return {
+        rows: rows.map(row => ({ ...row,
+          generation: Number(row.generation), fence_token: Number(row.fence_token) })),
+        meta: Object.fromEntries(Object.entries(meta).map(([key, value]) => [key, Number(value)])),
+        tenant: tenant ? Object.fromEntries(Object.entries(tenant).map(([key, value]) => [key, Number(value)])) : null,
+        project: project ? Object.fromEntries(Object.entries(project).map(([key, value]) => [key, Number(value)])) : null,
+        eventCount
+      };
+    } finally {
+      raw.close();
+    }
+  };
+  const beforeReplay = durableSnapshot();
+  const oneFreshReply = replies.filter(reply => reply?.result?.accepted === true
+    && reply.result.duplicate === false).length === 1;
+  const threeDuplicateReplies = replies.filter(reply => reply?.result?.accepted === true
+    && reply.result.duplicate === true).length === 3;
+  const oneStableIdentity = beforeReplay.rows.length === 1 && replies.every(reply =>
+    reply?.result?.jobId === beforeReplay.rows[0]?.job_id
+      && reply.result.workflowId === beforeReplay.rows[0]?.workflow_id);
+  const controlledBusyReplyCount = replies.filter(reply =>
+    reply?.attempts?.[0]?.accepted === false
+      && reply.attempts[0].code === 'OPS_BACKPRESSURE'
+      && reply.attempts[0].reasonCode === 'STORE_BUSY').length;
+  const durableSummary = {
+    matchingRows: beforeReplay.rows.length,
+    pendingRecords: beforeReplay.meta.pending_records,
+    pendingBytes: beforeReplay.meta.pending_bytes,
+    inFlight: beforeReplay.meta.in_flight,
+    tenantPendingRecords: beforeReplay.tenant?.pending_records ?? null,
+    projectPendingRecords: beforeReplay.project?.pending_records ?? null,
+    workflowEvents: beforeReplay.eventCount
+  };
+  t.diagnostic(`OPS02 admission race ${JSON.stringify({
+    children: safeReplySummary,
+    initialBusyRepliesObserved,
+    initialOutcomesAreContractual,
+    retryChainsAreBounded,
+    allChildrenRetriedAfterLockRelease,
+    controlledBusyReplyCount,
+    oneFreshReply,
+    threeDuplicateReplies,
+    oneStableIdentity,
+    durable: durableSummary
+  })}`);
+  assert.ok(replies.every(reply => reply !== null), 'every staged child writes a bounded outcome record');
+  assert.ok(races.every(result => result.code === 0), JSON.stringify(safeReplySummary));
+  assert.ok(replies.every(reply => reply.stopped === true && reply.outcome === 'accepted_and_stopped'), JSON.stringify(safeReplySummary));
+  assert.equal(initialBusyRepliesObserved, true, JSON.stringify(safeReplySummary));
+  assert.equal(initialOutcomesAreContractual, true, JSON.stringify(safeReplySummary));
+  assert.equal(retryChainsAreBounded, true, JSON.stringify(safeReplySummary));
+  assert.equal(controlledBusyReplyCount, outFiles.length, JSON.stringify(safeReplySummary));
+  assert.equal(allChildrenRetriedAfterLockRelease, true, JSON.stringify(safeReplySummary));
+  assert.equal(oneFreshReply, true, JSON.stringify(safeReplySummary));
+  assert.equal(threeDuplicateReplies, true, JSON.stringify(safeReplySummary));
+  assert.equal(oneStableIdentity, true, JSON.stringify(safeReplySummary));
+  assert.equal(beforeReplay.rows.length, 1, JSON.stringify(safeReplySummary));
+  assert.ok(beforeReplay.meta.pending_records <= 2, JSON.stringify(safeReplySummary));
+
+  const reopenedStore = openStore(temporary.databasePath);
+  const replay = admit(reopenedStore, 'tenant-race', 'project-race', 'same-key');
+  reopenedStore.close();
+  const afterReplay = durableSnapshot();
+  const reopenStable = replay.accepted === true && replay.duplicate === true
+    && replay.jobId === beforeReplay.rows[0].job_id
+    && replay.workflowId === beforeReplay.rows[0].workflow_id
+    && replay.state === beforeReplay.rows[0].state
+    && JSON.stringify(afterReplay) === JSON.stringify(beforeReplay);
+  t.diagnostic(`OPS02 admission reopen ${JSON.stringify({
+    replayAccepted: replay.accepted === true,
+    replayDuplicate: replay.duplicate === true,
+    sameJob: replay.jobId === beforeReplay.rows[0].job_id,
+    sameWorkflow: replay.workflowId === beforeReplay.rows[0].workflow_id,
+    sameState: replay.state === beforeReplay.rows[0].state,
+    countersStable: JSON.stringify(afterReplay.meta) === JSON.stringify(beforeReplay.meta),
+    tenantCountersStable: JSON.stringify(afterReplay.tenant) === JSON.stringify(beforeReplay.tenant),
+    projectCountersStable: JSON.stringify(afterReplay.project) === JSON.stringify(beforeReplay.project),
+    workflowEventsStable: afterReplay.eventCount === beforeReplay.eventCount,
+    matchingRowsBefore: beforeReplay.rows.length,
+    matchingRowsAfter: afterReplay.rows.length
+  })}`);
+  assert.equal(reopenStable, true, JSON.stringify({
+    ...durableSummary,
+    replayAccepted: replay.accepted === true,
+    replayDuplicate: replay.duplicate === true,
+    countersStable: JSON.stringify(afterReplay.meta) === JSON.stringify(beforeReplay.meta),
+    eventsStable: afterReplay.eventCount === beforeReplay.eventCount
+  }));
 
   await t.test('OPS02.C01 applies exact UTF-8 scope caps to first and existing rows', () => {
     const quota = {
@@ -4624,6 +4898,77 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       errorCode: 'STORE_BUSY', sqlitePrimaryCode: null
     });
     assert.equal(diagnosticsByMode.get('wrapped-runtime-busy').failureCode, 'ASSERTION_FAILURE');
+
+    const ordinaryChild = spawnSync(process.execPath, [
+      '--test', '--test-reporter=tap',
+      join(ROOT, 'tests/operations/fixtures/ordinary-diagnostic-child.mjs')
+    ], { cwd: ROOT, env: baseEnvironment(), encoding: 'utf8', timeout: 5_000, maxBuffer: 64 * 1024 });
+    assert.equal(ordinaryChild.status, 1);
+    assert.equal(ordinaryChild.signal, null);
+    const ordinaryDiagnostics = buildSafeFailureDiagnostics({
+      scenario: 'OPS13.C01', phase: 'diagnostic-control', stage: 'node-test-runner',
+      status: ordinaryChild.status, signal: ordinaryChild.signal, error: ordinaryChild.error,
+      stdout: ordinaryChild.stdout, stderr: ordinaryChild.stderr
+    });
+    assert.equal(ordinaryDiagnostics.records.length, 3);
+    assert.ok(ordinaryDiagnostics.records.every(record => record.failureCode === 'ASSERTION_FAILURE'));
+    assert.ok(ordinaryDiagnostics.records.every(record => record.errorClass === 'AssertionError'));
+    assert.ok(ordinaryDiagnostics.records.every(record => record.errorCode === 'ERR_ASSERTION'));
+    assert.ok(ordinaryDiagnostics.records.every(record => record.nestedStorageCause === null));
+    assert.ok(Buffer.byteLength(JSON.stringify(ordinaryDiagnostics), 'utf8') <= 2_048);
+
+    const structuralControls = [
+      {
+        id: 'cause-map-runtime-busy',
+        body: '  cause:\n    name: RuntimeError\n    code: STORE_BUSY',
+        expected: { failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError', errorCode: 'STORE_BUSY', sqlitePrimaryCode: null }
+      },
+      {
+        id: 'error-marker-runtime-busy',
+        body: "  error:\n    RuntimeError:\n      name: 'RuntimeError'\n      code: 'STORE_BUSY',",
+        expected: { failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError', errorCode: 'STORE_BUSY', sqlitePrimaryCode: null }
+      },
+      {
+        id: 'cause-map-node-extended-262',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode: 262,',
+        expected: { failureCode: 'SQLITE_BUSY', errorClass: 'Error', errorCode: 'ERR_SQLITE_ERROR', sqlitePrimaryCode: 6 }
+      },
+      {
+        id: 'scalar-block-error',
+        body: '  error: |-\n    RuntimeError:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'split-fields-across-siblings',
+        body: '  cause:\n    first:\n      name: RuntimeError\n    second:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'split-native-fields-across-siblings',
+        body: '  cause:\n    first:\n      name: Error\n      code: ERR_SQLITE_ERROR\n    second:\n      errcode: 5',
+        expected: null
+      },
+      {
+        id: 'native-fields-under-unrelated-detail',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    details:\n      errcode: 5',
+        expected: null
+      },
+      {
+        id: 'unsupported-native-primary',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode: 1',
+        expected: null
+      }
+    ];
+    for (const control of structuralControls) {
+      const diagnostic = buildSafeFailureDiagnostics({
+        scenario: 'OPS13.C01', phase: 'diagnostic-control', stage: 'node-test-runner',
+        status: 1,
+        stdout: `not ok 1 - ${control.id}\n  ---\n  name: AssertionError\n  code: ERR_ASSERTION\n${control.body}\n  ...\n`
+      });
+      assert.equal(diagnostic.records.length, 1, control.id);
+      assert.equal(diagnostic.records[0].failureCode, 'ASSERTION_FAILURE', control.id);
+      assert.deepEqual(diagnostic.records[0].nestedStorageCause, control.expected, control.id);
+    }
 
     const typedBusy = runtimeError({
       module: 'state', operation: 'write', code: 'STORE_BUSY', retryable: true,

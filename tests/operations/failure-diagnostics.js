@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const MAX_RECORDS = 32;
+const MAX_NESTED_ERROR_ROOTS = 32;
 const MAX_INPUT_BYTES = 1_000_000;
 const SAFE_ERROR_NAMES = new Set([
   'AssertionError', 'Error', 'RangeError', 'RuntimeError', 'SyntaxError', 'TimeoutError', 'TypeError'
@@ -91,19 +92,54 @@ function sqlitePrimaryCode(value) {
   return primary === 5 || primary === 6 ? primary : null;
 }
 
-function descendantScalar(lines, field, minimumIndentation) {
+function safeNestedScalar(value) {
+  const normalized = value?.trim();
+  const quoted = normalized?.match(/^'([A-Za-z0-9_.:-]{1,160})',?$/u);
+  if (quoted) return quoted[1];
+  const plain = normalized?.match(/^([A-Za-z0-9_.:-]{1,160}),?$/u);
+  return plain?.[1] ?? null;
+}
+
+function directErrorFields(lines, indentation) {
+  const fields = new Map();
   for (const line of lines) {
-    const match = line.match(/^([ \t]*)([A-Za-z][A-Za-z0-9_-]*):\s*['"]?([A-Za-z0-9_./:-]{1,160})['"]?,?\s*$/u);
-    if (match?.[2] === field && match[1].length > minimumIndentation) return match[3];
+    const match = line.match(/^([ \t]*)([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]+(.*?))?[ \t]*$/u);
+    if (!match || match[1].length !== indentation) continue;
+    if (!['name', 'code', 'errcode'].includes(match[2]) || match[3] === undefined) continue;
+    if (fields.has(match[2])) return null;
+    fields.set(match[2], safeNestedScalar(match[3]));
+  }
+  return fields;
+}
+
+function storageCauseFromFields(fields) {
+  if (!fields) return null;
+  const name = fields.get('name');
+  const code = fields.get('code');
+  if (name === 'RuntimeError' && code === 'STORE_BUSY') {
+    return Object.freeze({
+      failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError',
+      errorCode: 'STORE_BUSY', sqlitePrimaryCode: null
+    });
+  }
+  const primary = sqlitePrimaryCode(fields.get('errcode'));
+  if ((name === 'Error' || name === 'SQLiteError') && code === 'ERR_SQLITE_ERROR' && primary !== null) {
+    return Object.freeze({
+      failureCode: 'SQLITE_BUSY', errorClass: 'Error',
+      errorCode: 'ERR_SQLITE_ERROR', sqlitePrimaryCode: primary
+    });
   }
   return null;
 }
 
 function nestedStorageFailure(block, parentIndentation) {
   const lines = block.split(/\r?\n/u);
+  let inspectedRoots = 0;
   for (let index = 0; index < lines.length; index += 1) {
-    const root = lines[index].match(/^([ \t]*)(error|actual|cause):(?:\s*(.*))?$/u);
-    if (!root || root[1].length !== parentIndentation) continue;
+    const root = lines[index].match(/^([ \t]*)(error|cause):(?:[ \t]*(.*))?$/u);
+    if (!root || root[1].length !== parentIndentation || (root[3] ?? '') !== '') continue;
+    inspectedRoots += 1;
+    if (inspectedRoots > MAX_NESTED_ERROR_ROOTS) break;
 
     const descendants = [];
     for (let next = index + 1; next < lines.length; next += 1) {
@@ -112,52 +148,22 @@ function nestedStorageFailure(block, parentIndentation) {
       descendants.push(lines[next]);
     }
 
-    for (let nestedIndex = 0; nestedIndex < descendants.length; nestedIndex += 1) {
-      const line = descendants[nestedIndex];
-      const indentation = line.match(/^[ \t]*/u)?.[0].length ?? 0;
-      const marker = line.match(/^[ \t]*(RuntimeError|Error|SQLiteError):(?:\s*.*)?$/u);
-      if (marker) {
-        const nestedLines = [];
-        for (let child = nestedIndex + 1; child < descendants.length; child += 1) {
-          const childIndentation = descendants[child].match(/^[ \t]*/u)?.[0].length ?? 0;
-          if (descendants[child].trim() && childIndentation <= indentation) break;
-          nestedLines.push(descendants[child]);
-        }
-        const code = descendantScalar(nestedLines, 'code', indentation);
-        const primary = sqlitePrimaryCode(descendantScalar(nestedLines, 'errcode', indentation));
-        if (marker[1] === 'RuntimeError' && code === 'STORE_BUSY') {
-          return Object.freeze({
-            failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError',
-            errorCode: 'STORE_BUSY', sqlitePrimaryCode: null
-          });
-        }
-        if ((marker[1] === 'Error' || marker[1] === 'SQLiteError')
-            && code === 'ERR_SQLITE_ERROR' && primary !== null) {
-          return Object.freeze({
-            failureCode: 'SQLITE_BUSY', errorClass: 'Error',
-            errorCode: 'ERR_SQLITE_ERROR', sqlitePrimaryCode: primary
-          });
-        }
-      }
-    }
+    const firstIndentation = descendants
+      .map(line => ({ line, indentation: line.match(/^[ \t]*/u)?.[0].length ?? 0 }))
+      .find(item => item.line.trim())?.indentation;
+    if (firstIndentation === undefined || firstIndentation <= parentIndentation) continue;
 
-    const indentations = [...new Set(descendants.map(line => line.match(/^[ \t]*/u)?.[0].length ?? 0))];
-    for (const indentation of indentations) {
-      const name = scalar(descendants.join('\n'), 'name', indentation);
-      const code = scalar(descendants.join('\n'), 'code', indentation);
-      const primary = sqlitePrimaryCode(scalar(descendants.join('\n'), 'errcode', indentation));
-      if (name === 'RuntimeError' && code === 'STORE_BUSY') {
-        return Object.freeze({
-          failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError',
-          errorCode: 'STORE_BUSY', sqlitePrimaryCode: null
-        });
-      }
-      if (name === 'Error' && code === 'ERR_SQLITE_ERROR' && primary !== null) {
-        return Object.freeze({
-          failureCode: 'SQLITE_BUSY', errorClass: 'Error',
-          errorCode: 'ERR_SQLITE_ERROR', sqlitePrimaryCode: primary
-        });
-      }
+    const directCause = storageCauseFromFields(directErrorFields(descendants, firstIndentation));
+    if (directCause) return directCause;
+
+    for (const line of descendants) {
+      const marker = line.match(/^([ \t]*)(RuntimeError|Error|SQLiteError):[ \t]*$/u);
+      if (!marker || marker[1].length !== firstIndentation) continue;
+      const markerIndentation = marker[1].length;
+      const fields = directErrorFields(descendants, markerIndentation + 2);
+      if (fields?.get('name') !== marker[2]) continue;
+      const markedCause = storageCauseFromFields(fields);
+      if (markedCause) return markedCause;
     }
   }
   return null;
