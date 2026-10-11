@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { ConnectorError } from "../dist/index.js";
 import {
+  SIMULATOR_FIXTURE_VERSION,
+  SIMULATOR_PROVIDER_ID,
   createDeterministicSimulator,
   simulatorFixtureDigest
 } from "../dist/simulator.js";
@@ -11,6 +13,7 @@ import {
   MOCK_SCOPE,
   MOCK_SPECIFICATION,
   MOCK_START_AT,
+  cleanupMockMeteringArtifacts,
   createMockHarness,
   envelope,
   hashFixture,
@@ -101,13 +104,115 @@ test("all seven runtime operations use deterministic simulated capabilities and 
   });
   assert.equal(store.simulatedReservations.length, 1);
   assert.equal(store.simulatedReservations[0].mode, "simulated");
-  assert.equal(store.usageEvents.length, 14);
-  assert.ok(store.usageEvents.every((event) => event.mode === "simulated"));
+  assert.equal(store.usageEvents.length, 20);
+  assert.ok(store.usageEvents.every((event) => JSON.stringify(event).includes("simulated")));
+  const recorder = await harness.dependencies.metering(MOCK_SCOPE);
+  const meteringSnapshot = await recorder.snapshot();
+  assert.equal(meteringSnapshot.outbox.length, store.usageEvents.length);
+  assert.ok(meteringSnapshot.outbox.every((event) => event.deliveryState === "delivered"));
   assert.equal(simulator.snapshot().billingEvidence.length, 1);
   assert.equal(simulator.snapshot().billingEvidence[0].charged, false);
   assert.equal(simulator.snapshot().billingEvidence[0].billingMode, "simulated");
   assert.equal(runtime.audit().contractReadiness.ready, false);
   assert.equal(runtime.audit().liveModeSupported, false);
+});
+
+test("runtime meter reopens its durable outbox and recovers a post-dispatch observation without resubmitting", async () => {
+  let rejectAcceptedObservation = false;
+  const rejectedPayloads = [];
+  const deliveredPayloads = [];
+  const usageSink = {
+    async record(payload) {
+      if (rejectAcceptedObservation && JSON.stringify(payload).includes("provider_accepted")) {
+        rejectedPayloads.push(payload);
+        throw new Error("development fixture sink unavailable");
+      }
+      deliveredPayloads.push(payload);
+    }
+  };
+  const first = createMockHarness({ usageSink });
+  const { command } = await prepareSubmit(first);
+  rejectAcceptedObservation = true;
+
+  const submitted = await first.runtime.submit(envelope(command), MOCK_SCOPE);
+  assert.equal(submitted.value.providerRequestId.startsWith("sim-order-"), true);
+  assert.equal(first.simulator.dispatchCounters().submit, 1);
+  assert.equal(first.simulator.orders().length, 1);
+  assert.equal(first.simulator.snapshot().billingEvidence[0].charged, false);
+  assert.equal(rejectedPayloads.length, 1);
+  assert.ok(JSON.stringify(rejectedPayloads[0]).includes("provider_accepted"));
+
+  const beforeRestart = await (await first.dependencies.metering(MOCK_SCOPE)).snapshot();
+  const pendingBeforeRestart = beforeRestart.outbox.filter((event) => event.deliveryState === "pending");
+  assert.equal(pendingBeforeRestart.length, 1);
+
+  rejectAcceptedObservation = false;
+  const restarted = createMockHarness({
+    simulatorSnapshot: first.simulator.snapshot(),
+    runtimeStore: first.store,
+    meteringDirectory: first.meteringDirectory,
+    usageSink
+  });
+  const recoveredRecorder = await restarted.dependencies.metering(MOCK_SCOPE);
+  const replay = await recoveredRecorder.replayPending();
+  assert.equal(replay.pending, 0);
+  assert.deepEqual(replay.failures, []);
+  const afterRestart = await recoveredRecorder.snapshot();
+  assert.deepEqual(
+    afterRestart.outbox.map(({ eventId, eventType, sequence }) => ({ eventId, eventType, sequence })),
+    beforeRestart.outbox.map(({ eventId, eventType, sequence }) => ({ eventId, eventType, sequence }))
+  );
+  assert.ok(afterRestart.outbox.every((event) => event.deliveryState === "delivered"));
+  assert.equal(deliveredPayloads.some((payload) => JSON.stringify(payload).includes("provider_accepted")), true);
+
+  await assert.rejects(restarted.runtime.submit(envelope(command), MOCK_SCOPE), (error) => error instanceof ConnectorError);
+  assert.equal(restarted.simulator.dispatchCounters().submit, 1);
+  assert.equal(restarted.simulator.orders().length, 1);
+});
+
+test("durable runtime metering blocks submit before dispatch when required outbox delivery fails", async () => {
+  let failDelivery = false;
+  const acceptedPayloads = [];
+  const usageSink = {
+    async record(payload) {
+      if (failDelivery) throw new Error("development fixture sink unavailable");
+      acceptedPayloads.push(payload);
+    }
+  };
+  const harness = createMockHarness({ usageSink });
+  const { command } = await prepareSubmit(harness);
+  failDelivery = true;
+
+  await expectConnectorError(
+    harness.runtime.submit(envelope(command), MOCK_SCOPE),
+    "usage_sink_unavailable",
+    "not_dispatched"
+  );
+  assert.equal(harness.simulator.dispatchCounters().submit, 0);
+  assert.equal(harness.simulator.orders().length, 0);
+  const recorder = await harness.dependencies.metering(MOCK_SCOPE);
+  const pendingSnapshot = await recorder.snapshot();
+  assert.ok(pendingSnapshot.outbox.some((event) => event.deliveryState === "pending"));
+
+  failDelivery = false;
+  const replay = await recorder.replayPending();
+  assert.equal(replay.pending, 0);
+  assert.deepEqual(replay.failures, []);
+  assert.equal(harness.simulator.dispatchCounters().submit, 0);
+  assert.equal(harness.simulator.orders().length, 0);
+  assert.ok(acceptedPayloads.length > 0);
+});
+
+test("billable runtime calls stay fail-closed when no scoped metering resolver is configured", async () => {
+  const harness = createMockHarness({ disableMetering: true });
+  const { command } = await prepareSubmit(harness);
+  await expectConnectorError(
+    harness.runtime.submit(envelope(command), MOCK_SCOPE),
+    "usage_sink_unavailable",
+    "not_dispatched"
+  );
+  assert.equal(harness.simulator.dispatchCounters().submit, 0);
+  assert.equal(harness.simulator.orders().length, 0);
 });
 
 test("pre-dispatch refusal has zero provider dispatch and keeps simulated reservation evidence", async () => {
@@ -1109,6 +1214,11 @@ export async function runMockSuite() {
   } finally {
     if (savedFetch === undefined) delete globalThis.fetch;
     else globalThis.fetch = savedFetch;
+    try {
+      await cleanupMockMeteringArtifacts();
+    } catch {
+      results.push({ id: "temporary-metering-state-cleanup", status: "failed", message: "temporary fixture cleanup failed" });
+    }
   }
   return results;
 }
@@ -1118,5 +1228,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const failed = result.filter((entry) => entry.status !== "passed");
   for (const entry of result) process.stdout.write(`${entry.status.toUpperCase()} ${entry.id}${entry.message ? `: ${entry.message}` : ""}\n`);
   process.stdout.write(`Mock fixture suite: ${result.length - failed.length}/${result.length} passed\n`);
+  process.stdout.write(`${JSON.stringify({
+    schemaVersion: "fulfillment-mock-suite-result/1",
+    suite: "mock",
+    mode: "simulated",
+    billing_mode: "simulated",
+    fixtureVersion: SIMULATOR_FIXTURE_VERSION,
+    providerId: SIMULATOR_PROVIDER_ID,
+    status: failed.length === 0 ? "passed" : "failed",
+    passed: result.length - failed.length,
+    failed: failed.length,
+    externalProviderCalls: 0,
+    results: result
+  })}\n`);
   if (failed.length > 0) process.exitCode = 1;
 }

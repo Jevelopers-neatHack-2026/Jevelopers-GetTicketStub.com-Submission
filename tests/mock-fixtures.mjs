@@ -1,8 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ALL_SHARED_SHAPES,
   CONTRACT_OWNERSHIP,
-  FulfillmentConnectorRuntime
+  FulfillmentConnectorRuntime,
+  createRuntimeMeteringResolver
 } from "../dist/index.js";
 import {
   createDeterministicSimulator,
@@ -16,6 +20,13 @@ export const MOCK_BUNDLE = Object.freeze({ fixture: "development-only-production
 export const MOCK_SPECIFICATION = Object.freeze({ fixture: "development-only-print-specification" });
 export const MOCK_AUTHORIZATION = Object.freeze({ fixture: "development-only-authorization-envelope", mode: "simulated" });
 export const MOCK_BINDING_LABEL = "development_fixture; local synthetic data; never an accepted upstream pin";
+
+const mockMeteringRoot = join(tmpdir(), `fc-mock-metering-${process.pid}-${randomUUID()}`);
+let nextHarnessDirectory = 0;
+
+export async function cleanupMockMeteringArtifacts() {
+  await rm(mockMeteringRoot, { recursive: true, force: true });
+}
 
 export function cloneFixture(value) {
   return JSON.parse(JSON.stringify(value));
@@ -167,11 +178,26 @@ export function createMockHarness(options = {}) {
     }
   };
 
-  const usageSink = {
+  const usageSink = options.usageSink ?? {
     async record(contractPayload) {
       store.usageEvents.push(cloneFixture(contractPayload));
     }
   };
+
+  const meteringDirectory = options.meteringDirectory ?? join(mockMeteringRoot, `harness-${++nextHarnessDirectory}`);
+  const metering = options.disableMetering === true
+    ? undefined
+    : options.meteringResolver ?? createRuntimeMeteringResolver({
+        directory: meteringDirectory,
+        providerId: simulator.adapter.descriptor.providerId,
+        mode: "simulated",
+        billingMode: "simulated",
+        evidenceMode: "private_fixture",
+        contracts,
+        usageSink,
+        budgetClient,
+        clock: simulator.clock
+      });
 
   const dependencies = {
     contracts,
@@ -180,7 +206,8 @@ export function createMockHarness(options = {}) {
     persistence,
     authorizationVerifier,
     budgetClient,
-    usageSink
+    usageSink,
+    ...(metering === undefined ? {} : { metering })
   };
   const runtime = new FulfillmentConnectorRuntime(simulator.adapter, dependencies, options.runtimeOptions);
   return {
@@ -189,6 +216,7 @@ export function createMockHarness(options = {}) {
     store,
     dependencies,
     contracts,
+    meteringDirectory,
     snapshot() {
       return { simulator: simulator.snapshot(), runtimeStore: cloneFixture(store) };
     }

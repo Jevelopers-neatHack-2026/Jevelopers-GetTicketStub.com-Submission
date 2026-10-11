@@ -10,17 +10,21 @@ With the pinned Node 24.15.0 and npm 11.12.1 toolchain and locked dependencies i
 
 ```sh
 npm run build
-node tests/mock-suite.mjs
+npm run verify:mock
 ```
 
-The suite uses the existing runtime with synthetic development-only contract, authorization, budget, persistence, and usage ports. It does not change the canonical schema catalog or claim those private ports are accepted production integrations. The fixture state and provider state are JSON serializable; the restart cases copy them through JSON before creating a new runtime and simulator instance.
+`npm run verify:mock` writes machine-readable local evidence under `evidence/FC-02-MOCK`. The suite uses the real `FulfillmentConnectorRuntime` and `createRuntimeMeteringResolver`; the resolver opens the repository's `FulfillmentMetering` against an isolated temporary `DurableJsonStore` and reopens it to test pending outbox replay after a simulated restart. A pre-dispatch sink failure leaves the simulator untouched, and a post-dispatch sink failure can be recovered without submitting a second order.
+
+The contract validator, authorization verifier, `AttemptPersistence`, budget client, and usage sink remain synthetic development fixtures. Only the local metering implementation and JSON outbox are exercised; runtime attempt persistence and finance/authorization authority are not replaced by that store. Nothing changes the canonical schema catalog or represents these private ports as accepted production integrations. Simulator/provider fixture state and the runtime test store are JSON serializable; restart cases copy those fixtures through JSON before creating another runtime and simulator instance.
+
+The simulator's local provider facts use `billing_mode: simulated`; no charge is recorded and the test does not authorize or reserve real funds. Test values and IDs are synthetic, and generated metering IDs are not used as provider or finance receipts.
 
 The suite guards `globalThis.fetch`, checks the simulator source for HTTP, DNS, socket, TLS, `fetch`, and environment access, and verifies that no fetch call occurs. It was also run on macOS under `sandbox-exec` with the `network*` rule denied, which denies network operations for that process tree:
 
 ```sh
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
   /usr/bin/env -i PATH=/opt/homebrew/bin:/usr/bin:/bin \
-  /opt/homebrew/bin/node tests/mock-suite.mjs
+  /opt/homebrew/bin/npm run verify:mock
 ```
 
 The executable paths may need adjustment on another host. `env -i` explicitly supplies only `PATH`; macOS may add its native `__CF_USER_TEXT_ENCODING` variable when launching Node. No credentials are supplied or read, and the simulator accepts only a synthetic seed and fixed start time. This is process-scoped sandbox evidence, not a machine-wide packet-capture claim.
@@ -52,7 +56,7 @@ Retained cancellation outcomes are checked against the order's acceptance time a
 
 Version 1 snapshots are rejected with a recreate instruction. That private development format did not retain expired submit generations or effective cancellation facts, so an automatic migration could guess at missing history. Recreate old test fixtures from the deterministic seed and clock rather than resetting or rewriting their history. This is not a customer-data migration and `fc-mock-development/2` is not an accepted shared persistence schema. Invalid or inconsistent JSON state fails closed before the provider transport can be used; JSON round trips of valid v2 snapshots are supported.
 
-Accepted simulator orders append an evidence record with `billingMode: "simulated"` and `charged: false`. Runtime budget and usage ports in `tests/mock-fixtures.mjs` are also synthetic and stay in serialized test state. A reserved or uncertain test record does not authorize, reserve, or charge real funds.
+Accepted simulator orders append an evidence record with `billingMode: "simulated"` and `charged: false`. Runtime budget and usage ports in `tests/mock-fixtures.mjs` are synthetic. Runtime observations are written through the actual private metering outbox to a temporary local JSON store; its fixture `UsageSink` is not a finance intake or ledger. A reserved or uncertain test record does not authorize, reserve, or charge real funds.
 
 ## Operations and fault controls
 

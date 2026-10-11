@@ -14,6 +14,8 @@ The [FC-02 provider and environment matrix](docs/provider-matrix.md) records off
 
 The private FC-03 catalog normalizer is exported from the package root and covered by `npm test` / `npm run test:catalog`. Its simulated evidence command is `npm run verify:catalog`; it reports local fixture results while keeping canonical schema pins, print-production review, sandbox readiness, and release readiness separate. See [catalog field semantics and evidence limits](docs/catalog.md).
 
+The deterministic FC-02 mock adapter is compiled for local runtime tests and covered by `npm test` / `npm run verify:mock`. It exercises simulated provider behavior, restart snapshots, and runtime observations through the local durable metering outbox; its synthetic authorization, budget, and contract fixtures do not establish provider sandbox, finance, or release readiness. See [simulator behavior and evidence limits](docs/simulator.md).
+
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
