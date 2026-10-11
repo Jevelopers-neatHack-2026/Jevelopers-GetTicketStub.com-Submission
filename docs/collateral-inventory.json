@@ -2604,8 +2604,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "420f6995377d8fef7c5f9789ba7e695c98d17a2b",
-      "sha256": "c92b73e166685573fdee85a91bb81a4ba7acdc2b5c3dbc274916bb51a7ae353a",
+      "trackedAtRevision": "357590df76ad51b0253686f7e9c80070a905d4d0",
+      "sha256": "fde1aa2a14b32c9dd281582fdef0eb29fafecaec7536b2c2058148eb929707f3",
       "provenanceRecordId": "MSG-POSITIONING-001"
     },
     {
@@ -2616,9 +2616,9 @@
       "lifecycleState": "draft",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "420f6995377d8fef7c5f9789ba7e695c98d17a2b",
+      "trackedAtRevision": "357590df76ad51b0253686f7e9c80070a905d4d0",
       "checksumStatus": "Self-referential registry; exact source/content digest is stored in the external provenance register without recursive self-hashing.",
-      "sha256": "13d3c32fa6ff3fdff13df479f2a6b45335a2ccd88b98312a1e3d1d97d31c8e46",
+      "sha256": "bc3018403b47d89c22a53718bdde0c0459b9ea7f1b111f0ede63c16de31fbcbc",
       "provenanceRecordId": "MSG-CLAIMS-001"
     },
     {
@@ -5380,6 +5380,18 @@
       "trackedAtRevision": "aad2ace9c6787bc19b24e17654d9dccc63ff671e",
       "sha256": "ba7bc8d1a8e33fbe6a9f54ce7b699bed0dae5357cf7a592eedde77f660d15a8f",
       "provenanceRecordId": "PROV-FILE-AE9B7AF59ABC"
+    },
+    {
+      "fileId": "FILE-CF1CC963AD8B",
+      "path": "release/v0.1.0-rehearsal/history/manifest-dde7450a9dc6e284.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f9e09d916f314302912d8d81d3034da79fed930b",
+      "sha256": "dde7450a9dc6e28404d5ef019612af9211c83926cd63f7046682b813ae6658a6",
+      "provenanceRecordId": "PROV-FILE-CF1CC963AD8B"
     }
   ],
   "submissionScope": {
