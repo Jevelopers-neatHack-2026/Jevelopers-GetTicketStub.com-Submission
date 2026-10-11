@@ -44,6 +44,7 @@ export async function discoverAssetCandidates({ store, scope, document, retentio
       association: candidate.association,
       locator: candidate.locator,
       excerptHash: candidate.excerptHash,
+      ...(candidate.excerptKind !== undefined ? { excerptKind: candidate.excerptKind } : {}),
       normalizedSuggestion: candidate.normalizedSuggestion,
       fetchSuggestion: candidate.fetchSuggestion,
       quarantineReason: candidate.quarantineReason,

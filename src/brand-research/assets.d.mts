@@ -22,6 +22,8 @@ export interface AssetCandidateDescriptor {
   readonly locator: StoredEvidenceLocator;
   /** Digest of the private source excerpt, never a digest of unfetched asset bytes. */
   readonly excerptHash: string;
+  /** Present on selector-3 readbacks; marks whether the excerpt is a URL value or an explicit empty HTML attribute token. */
+  readonly excerptKind?: 'url-value' | 'html-empty-attribute-token';
   readonly normalizedSuggestion: string | null;
   readonly fetchSuggestion: string | null;
   readonly quarantineReason: AssetSourceQuarantineReason | null;

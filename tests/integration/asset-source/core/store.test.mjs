@@ -30,6 +30,15 @@ const PINNED_SELECTOR_ONE_FILES = Object.freeze({
   'src/extraction/xhtml.mjs': 'b54f16a21d5228f7d0825e495e6bd5b327a89f8cc4c582e90b15372aa0f43588',
   'src/extraction/source.mjs': '4a0942a8222c8785a8b2ad9f8b7c2daab387ef96a1fe75e6c7a1ab8ea7e8b40d',
 });
+const PINNED_SELECTOR_TWO_COMMIT = 'e7061137e903ea198387db7b247de637a3e35891';
+const PINNED_SELECTOR_TWO_FILES = Object.freeze({
+  'src/evidence/store.mjs': 'a74fd17d53073d56ef20e68e8a3adf0d0b76363a94cd26d5c2aef33f84ffddc9',
+  'src/extraction/index.mjs': '80ac799d0447d9240ec6ca74d7417fb0b0af60ab2dd353d45a79de88a7285881',
+  'src/extraction/html.mjs': 'c3565f4b678ea2eef5bdb26e39bfd7a687e6138bd81835adb2e552f369897b25',
+  'src/extraction/jsonld.mjs': '67a14953fab7c29e4abdeb48005de71b2b22d907520aa5110cefa9bccb5a7e29',
+  'src/extraction/xhtml.mjs': 'b54f16a21d5228f7d0825e495e6bd5b327a89f8cc4c582e90b15372aa0f43588',
+  'src/extraction/source.mjs': '4a0942a8222c8785a8b2ad9f8b7c2daab387ef96a1fe75e6c7a1ab8ea7e8b40d',
+});
 
 function documentFrom(html, overrides = {}) {
   return {
@@ -142,11 +151,42 @@ function replaceSealed(directory, evidenceId, sealed) {
   }
 }
 
+function replaceManifest(directory, manifest) {
+  const database = new DatabaseSync(path.join(directory, tenantHash(), 'evidence.sqlite'));
+  try {
+    database.prepare('UPDATE evidence_manifest SET document = ? WHERE tenant_hash = ?')
+      .run(JSON.stringify(manifest), tenantHash());
+  } finally {
+    database.close();
+  }
+}
+
+function assetDerivationDigest(bundle) {
+  const assetSource = bundle.assetSource;
+  const material = {
+    bindingVersion: assetSource.bindingVersion,
+    representation: 'asset-source-excerpt',
+    sourceContentHash: bundle.source.contentHash,
+    sourceUrl: assetSource.sourceUrl,
+    sourceKind: assetSource.sourceKind,
+    extractorVersion: assetSource.extractorVersion,
+    selectorVersion: assetSource.selectorVersion,
+    completeness: assetSource.completeness,
+    limitations: assetSource.limitations,
+    candidates: assetSource.candidates.map((candidate, index) => ({
+      ...candidate,
+      locator: bundle.positions[index].locator,
+      excerptHash: bundle.positions[index].contentHash,
+    })),
+  };
+  return digest(Buffer.from(JSON.stringify(material), 'utf8'));
+}
+
 function sourceInput(doc, permit) {
   return { document: doc, retentionHandle: permit };
 }
 
-function createPinnedSelectorOneOptions(directory) {
+function createPinnedLegacyOptions(directory) {
   const permits = new WeakMap();
   const keys = { payload: 'payload-v1', fact: 'fact-v1', 'source-index': 'source-index-v1' };
   const createPermit = (tenantId = TENANT, durationMs = 60_000) => {
@@ -166,17 +206,17 @@ function createPinnedSelectorOneOptions(directory) {
       resolveRetention({ tenantId, kind, nowMs, sourceExpiresAtMs, retentionHandle }) {
         if (kind === 'evidence') {
           const permit = permits.get(retentionHandle);
-          if (!permit || permit.tenantId !== tenantId) throw new Error('synthetic invalid selector-one retention permit');
+          if (!permit || permit.tenantId !== tenantId) throw new Error('synthetic invalid historical retention permit');
           return {
             expiresAtMs: Math.min(permit.expiresAtMs, nowMs + 60_000, sourceExpiresAtMs ?? Number.POSITIVE_INFINITY),
-            policyId: 'synthetic-selector-one-retention',
+            policyId: 'synthetic-historical-retention',
             policyVersion: '1',
             accessPolicy: 'tenant_private',
           };
         }
         return {
           expiresAtMs: sourceExpiresAtMs ?? nowMs + 30_000,
-          policyId: 'synthetic-selector-one-retention',
+          policyId: 'synthetic-historical-retention',
           policyVersion: '1',
           accessPolicy: 'tenant_private',
         };
@@ -233,6 +273,36 @@ async function loadPinnedSelectorOneStore(t) {
   return import(pathToFileURL(modulePath).href);
 }
 
+async function loadPinnedSelectorTwoStore(t) {
+  const parserDirectory = await mkdtemp(path.join(ROOT, 'src/extraction/.legacy-selector-two-'));
+  t.after(() => rm(parserDirectory, { recursive: true, force: true }));
+  for (const sourcePath of Object.keys(PINNED_SELECTOR_TWO_FILES).filter((file) => file.startsWith('src/extraction/'))) {
+    const relativePath = sourcePath.slice('src/extraction/'.length);
+    const extracted = spawnSync('git', ['show', `${PINNED_SELECTOR_TWO_COMMIT}:${sourcePath}`], {
+      cwd: ROOT,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    assert.equal(extracted.status, 0, `pinned selector-two parser source exists: ${sourcePath}`);
+    assert.equal(digest(extracted.stdout), PINNED_SELECTOR_TWO_FILES[sourcePath], `pinned selector-two parser bytes match: ${sourcePath}`);
+    await writeFile(path.join(parserDirectory, relativePath), extracted.stdout, { flag: 'wx', mode: 0o600 });
+  }
+
+  const oldStore = spawnSync('git', ['show', `${PINNED_SELECTOR_TWO_COMMIT}:src/evidence/store.mjs`], {
+    cwd: ROOT,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(oldStore.status, 0, 'pinned selector-two store source exists');
+  assert.equal(digest(oldStore.stdout), PINNED_SELECTOR_TWO_FILES['src/evidence/store.mjs'], 'pinned selector-two store bytes match');
+  const importSpecifier = "from '../extraction/index.mjs';";
+  const oldStoreSource = oldStore.stdout.toString('utf8');
+  assert.ok(oldStoreSource.includes(importSpecifier));
+  const parserImport = `from '../extraction/${path.basename(parserDirectory)}/index.mjs';`;
+  const modulePath = path.join(ROOT, 'src/evidence', `.legacy-selector-two-store-${process.pid}-${Date.now()}.mjs`);
+  await writeFile(modulePath, oldStoreSource.replace(importSpecifier, parserImport), { flag: 'wx', mode: 0o600 });
+  t.after(() => rm(modulePath, { force: true }));
+  return import(pathToFileURL(modulePath).href);
+}
+
 function waitFor(promise, timeoutMs, label) {
   let timeout;
   return Promise.race([
@@ -281,6 +351,7 @@ test('real HTML asset candidates persist as encrypted source excerpts and reopen
   assert.equal(discovered.sourceHash, digest(original));
   assert.equal(discovered.metadata.contentHash, digest(original));
   assert.equal(discovered.metadata.representation, 'asset-source-excerpt');
+  assert.equal(discovered.candidates[0].excerptKind, 'url-value');
   assert.ok(discovered.candidates.length >= 9);
   assert.ok(discovered.candidates.every((candidate) => candidate.role === 'unknown'
     && candidate.permission === 'unknown' && candidate.inspection === 'pending'));
@@ -359,6 +430,7 @@ test('production HTML, XHTML, and standalone JSON-LD asset forms persist exact l
     assert.equal(discovered.sourceHash, digest(bytes), item.name);
     assert.equal(discovered.metadata.contentHash, digest(bytes), item.name);
     assert.deepEqual(discovered.candidates.map((candidate) => candidate.sourceForm).sort(), [...item.expectedForms].sort(), item.name);
+    assert.ok(discovered.candidates.every((candidate) => candidate.excerptKind === 'url-value'), item.name);
     assert.ok(discovered.candidates.every((candidate) => candidate.role === 'unknown'
       && candidate.permission === 'unknown' && candidate.inspection === 'pending'), item.name);
     records.push({ ...item, bytes, discovered });
@@ -400,6 +472,191 @@ test('production HTML, XHTML, and standalone JSON-LD asset forms persist exact l
       assert.equal(organizationLogo.entityId, 'organization:script-0:/@graph/1');
       assert.ok(associations.every((association) => association.kind === 'entity-source-claim'));
     }
+  }
+});
+
+test('empty and missing HTML/XHTML asset attributes remain quarantined beside valid posters after authorized reopen', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request(TENANT));
+  const htmlCase = (name, form, token, valueState, element) => ({
+    name,
+    contentType: 'text/html; charset=utf-8',
+    source: `<!doctype html><html><head>${form === 'open-graph-image' ? element : ''}</head><body>🧭${form === 'open-graph-image' ? '' : element}<img src="/poster.png"></body></html>`,
+    tokens: [{ form, token, valueState }],
+  });
+  const cases = [
+    htmlCase('HTML img quoted empty with spacing and uppercase name', 'html-img-src', 'SRC = ""', 'empty', '<img SRC = ""/>'),
+    htmlCase('HTML img missing value', 'html-img-src', 'src', 'missing', '<img src>'),
+    {
+      name: 'HTML equals with no value for img, icon, and Open Graph attributes',
+      contentType: 'text/html; charset=utf-8',
+      source: '<html><head>🧭<link rel=icon href=><meta property=og:image content=></head>'
+        + '<body><img src=><img src="/poster.png"></body></html>',
+      expectedCandidateCount: 4,
+      tokens: [
+        { form: 'html-img-src', token: 'src=', valueState: 'empty' },
+        { form: 'html-icon-link', token: 'href=', valueState: 'empty' },
+        { form: 'open-graph-image', token: 'content=', valueState: 'empty' },
+      ],
+    },
+    {
+      name: 'HTML equals followed by separator whitespace stays an empty value',
+      contentType: 'text/html; charset=utf-8',
+      source: '<html><head><link rel=icon href= >'
+        + '<meta property=og:image content=\n></head><body><img src= ><img src="/poster.png"></body></html>',
+      expectedCandidateCount: 4,
+      tokens: [
+        { form: 'html-img-src', token: 'src=', valueState: 'empty' },
+        { form: 'html-icon-link', token: 'href=', valueState: 'empty' },
+        { form: 'open-graph-image', token: 'content=', valueState: 'empty' },
+      ],
+    },
+    htmlCase('HTML icon single-quoted empty with spacing', 'html-icon-link', "href = ''", 'empty', '<link rel="icon" href = \'\'/>'),
+    htmlCase('HTML icon missing value', 'html-icon-link', 'href', 'missing', '<link rel=icon href>'),
+    htmlCase('HTML Open Graph empty with spacing', 'open-graph-image', 'content = ""', 'empty', '<meta property="og:image" content = ""/>'),
+    htmlCase('HTML Open Graph missing value', 'open-graph-image', 'content', 'missing', '<meta property=og:image content>'),
+    {
+      name: 'XHTML empty img, icon, and Open Graph values',
+      contentType: 'application/xhtml+xml; charset=utf-8',
+      source: '<html xmlns="http://www.w3.org/1999/xhtml"><head>🧭<link rel="icon" href="" />'
+        + '<meta property="og:image" content="" /></head><body><img SRC="" /><img src="/poster.png" /></body></html>',
+      tokens: [
+        { form: 'html-img-src', token: 'SRC=""', valueState: 'empty' },
+        { form: 'html-icon-link', token: 'href=""', valueState: 'empty' },
+        { form: 'open-graph-image', token: 'content=""', valueState: 'empty' },
+      ],
+    },
+    {
+      name: 'HTML whitespace remains a URL-value excerpt',
+      contentType: 'text/html; charset=utf-8',
+      source: '<html><body>🧭<img src=" "><img src="/poster.png"></body></html>',
+      tokens: [{ form: 'html-img-src', token: ' ', valueState: 'value' }],
+      expectedQuarantine: 'invalid_or_empty',
+    },
+    {
+      name: 'HTML unquoted self-closing slash remains a nonempty URL value',
+      contentType: 'text/html; charset=utf-8',
+      source: '<html><body>🧭<img src=/><img src="/poster.png"></body></html>',
+      tokens: [{ form: 'html-img-src', token: '/', valueState: 'value' }],
+      expectedQuarantine: null,
+    },
+    {
+      name: 'JSON-LD empty scalar and poster retain JSON value spans',
+      contentType: 'application/ld+json',
+      source: JSON.stringify({ '@context': 'https://schema.org', '@type': 'Event', name: 'Poster control', image: ['', '/poster.png'] }),
+      tokens: [{ form: 'jsonld-image', token: '""', valueState: 'value' }],
+      expectedQuarantine: 'invalid_or_empty',
+    },
+  ];
+  const records = [];
+  for (const [index, item] of cases.entries()) {
+    const bytes = Buffer.from(item.source, 'utf8');
+    const doc = documentFrom(bytes, {
+      contentType: item.contentType,
+      url: `https://events.example.com/empty-asset-fixtures/${index}.html`,
+    });
+    const extraction = await extractDeterministically(doc);
+    assert.equal(extraction.assetSources.length,
+      item.expectedCandidateCount ?? (item.name.startsWith('XHTML') ? 4 : 2), item.name);
+    for (const expected of item.tokens) {
+      const parsed = extraction.assetSources.find((asset) => asset.sourceForm === expected.form
+        && (expected.valueState === 'value'
+          ? asset.candidate.rawValue === expected.token
+          : asset.candidate.rawValue === ''));
+      assert.ok(parsed, `${item.name} has the actual production parser candidate`);
+      if (expected.valueState === 'value') {
+        assert.ok(parsed.candidate.source.locator.endByte > parsed.candidate.source.locator.startByte,
+          `${item.name} retains a positive-length original value locator`);
+        assert.equal(Object.hasOwn(parsed, 'emptyAttributeToken'), false, `${item.name} does not mark nonempty values as empty tokens`);
+      } else {
+        assert.equal(parsed.candidate.source.locator.startByte, parsed.candidate.source.locator.endByte,
+          `${item.name} preserves the original zero-length URL-value locator`);
+        const token = parsed.emptyAttributeToken;
+        assert.ok(token, `${item.name} carries parser-derived empty attribute token metadata`);
+        assert.equal(token.attributeName, expected.form === 'html-img-src' ? 'src'
+          : expected.form === 'html-icon-link' ? 'href' : 'content', item.name);
+        assert.equal(token.valueState, expected.valueState, item.name);
+        assert.equal(Object.getOwnPropertyDescriptor(parsed, 'emptyAttributeToken').enumerable, false, item.name);
+        assert.equal(JSON.stringify(parsed).includes('emptyAttributeToken'), false, item.name);
+        assert.equal(bytes.subarray(token.locator.startByte, token.locator.endByte).toString('utf8'), expected.token, item.name);
+        if (expected.token.endsWith('=')) {
+          assert.equal(parsed.candidate.source.locator.startByte, token.locator.endByte,
+            `${item.name} places the empty value immediately after its equals sign`);
+        }
+      }
+    }
+
+    const discovered = await discoverAssetCandidates({
+      store: harness.store,
+      scope,
+      document: doc,
+      retentionHandle: harness.createPermit(TENANT),
+      request: request(TENANT),
+    });
+    assert.equal(discovered.outcome, 'stored', item.name);
+    assert.equal(discovered.sourceHash, digest(bytes), item.name);
+    const selected = discovered.candidates;
+    const invalid = item.tokens.map((expected) => selected.find((candidate) => candidate.sourceForm === expected.form
+      && (expected.valueState === 'value'
+        ? candidate.excerptKind === 'url-value' && candidate.locator.endByte - candidate.locator.startByte === Buffer.byteLength(expected.token)
+        : candidate.excerptKind === 'html-empty-attribute-token')));
+    assert.ok(invalid.every(Boolean), `${item.name} stores all targeted candidates with declared excerpt semantics`);
+    for (const [tokenIndex, expected] of item.tokens.entries()) {
+      const candidate = invalid[tokenIndex];
+      const expectedQuarantine = Object.hasOwn(item, 'expectedQuarantine')
+        ? item.expectedQuarantine
+        : 'invalid_or_empty';
+      assert.equal(candidate.quarantineReason, expectedQuarantine, item.name);
+      if (expected.valueState !== 'value' || expectedQuarantine !== null) {
+        assert.equal(candidate.normalizedSuggestion, null, item.name);
+        assert.equal(candidate.fetchSuggestion, null, item.name);
+      }
+    }
+    const posterForm = item.contentType === 'application/ld+json' ? 'jsonld-image' : 'html-img-src';
+    const poster = selected.find((candidate) => candidate.sourceForm === posterForm
+      && candidate.fetchSuggestion === 'https://events.example.com/poster.png');
+    assert.ok(poster, `${item.name} retains its valid poster candidate`);
+    records.push({ ...item, bytes, doc, evidenceId: discovered.metadata.evidenceId, sourceHash: discovered.sourceHash });
+  }
+
+  const emptyPageBefore = readDatabase(harness.directory);
+  const emptyPage = documentFrom('<html><body>Valid source with no asset fields</body></html>', {
+    url: 'https://events.example.com/empty-asset-fixtures/no-candidates.html',
+  });
+  const emptyResult = await harness.store.ingestAssetSourceEvidence(
+    scope, sourceInput(emptyPage, harness.createPermit(TENANT)), request(TENANT),
+  );
+  assert.deepEqual(emptyResult, { outcome: 'no-candidates', code: 'NO_STATIC_ASSET_CANDIDATES' });
+  assert.deepEqual(readDatabase(harness.directory), emptyPageBefore, 'a true empty page writes no evidence or partial bundle');
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request(TENANT));
+  for (const item of records) {
+    const evidence = await reopened.lookupEvidence(reopenedScope, item.evidenceId);
+    const selected = await reopened.materializeSelected(reopenedScope, { evidence: [evidence], facts: [] }, request(TENANT));
+    const view = selected.evidence[0];
+    assert.equal(view.source.contentHash, item.sourceHash, item.name);
+    const posterForm = item.contentType === 'application/ld+json' ? 'jsonld-image' : 'html-img-src';
+    assert.ok(view.source.assetSource.candidates.some((candidate) => candidate.sourceForm === posterForm
+      && candidate.fetchSuggestion === 'https://events.example.com/poster.png'), item.name);
+    const tokenCandidates = view.source.assetSource.candidates.filter((candidate) => candidate.excerptKind === 'html-empty-attribute-token');
+    assert.equal(tokenCandidates.length, item.tokens.filter((token) => token.valueState !== 'value').length, item.name);
+    const privateRead = await reopened.withPrivatePayload(reopenedScope, evidence, request(TENANT));
+    assert.equal(privateRead.sourceHash, digest(item.bytes), item.name);
+    for (const expected of item.tokens) {
+      const stored = view.source.assetSource.candidates.find((candidate) => candidate.sourceForm === expected.form
+        && (expected.valueState === 'value' ? candidate.excerptKind === 'url-value'
+          : candidate.excerptKind === 'html-empty-attribute-token'));
+      assert.ok(stored, item.name);
+      const position = privateRead.positions.find((entry) => entry.locator.startByte === stored.locator.startByte
+        && entry.locator.endByte === stored.locator.endByte);
+      assert.ok(position, item.name);
+      assert.equal(item.bytes.subarray(position.locator.startByte, position.locator.endByte).toString('utf8'), position.text, item.name);
+      assert.equal(position.text, expected.token, item.name);
+      assert.equal(position.contentHash, stored.excerptHash, item.name);
+    }
+    assert.equal(view.source.assetSource.candidates.every((candidate) => candidate.role === 'unknown'
+      && candidate.permission === 'unknown' && candidate.inspection === 'pending'), true, item.name);
   }
 });
 
@@ -576,14 +833,14 @@ test('asset URL quarantine checks original policy syntax across HTML, XHTML, JSO
   }
 });
 
-test('selector 2 keeps selector 1 encrypted asset records readable without rewriting them', async (t) => {
+test('selector 3 keeps selector 1 encrypted asset records readable without rewriting them', async (t) => {
   const harness = await createHarness(t);
   const requestValue = request(TENANT);
   const doc = documentFrom('<html><body><img src="http://0x08080808/logo.png"></body></html>', {
     url: 'https://events.example.com/selector-profile/history.html',
   });
   const legacyModule = await loadPinnedSelectorOneStore(t);
-  const legacyHarness = createPinnedSelectorOneOptions(harness.directory);
+  const legacyHarness = createPinnedLegacyOptions(harness.directory);
   const legacyStore = legacyModule.createEvidenceStore(legacyHarness.options);
   const legacyScope = await legacyStore.scopeForAuthenticatedRequest(requestValue);
   const legacyWritten = await legacyStore.ingestAssetSourceEvidence(
@@ -606,6 +863,7 @@ test('selector 2 keeps selector 1 encrypted asset records readable without rewri
   const legacyCandidate = legacyView.evidence[0].source.assetSource.candidates[0];
   assert.equal(legacyView.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/1');
   assert.equal(legacyCandidate.fetchSuggestion, 'http://8.8.8.8/logo.png');
+  assert.equal(Object.hasOwn(legacyCandidate, 'excerptKind'), false, 'historical selector 1 keeps its original metadata shape');
 
   const currentWritten = await currentBeforeWrite.ingestAssetSourceEvidence(
     currentScopeBeforeWrite, sourceInput(doc, harness.createPermit(TENANT)), requestValue,
@@ -628,10 +886,63 @@ test('selector 2 keeps selector 1 encrypted asset records readable without rewri
   );
   assert.equal(oldReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/1');
   assert.equal(oldReadback.evidence[0].source.assetSource.candidates[0].fetchSuggestion, 'http://8.8.8.8/logo.png');
-  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/2');
+  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].excerptKind, 'url-value');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].normalizedSuggestion, null);
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].fetchSuggestion, null);
+  assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed);
+});
+
+test('selector 3 keeps actual selector 2 producer records readable without rewriting them', async (t) => {
+  const harness = await createHarness(t);
+  const requestValue = request(TENANT);
+  const doc = documentFrom('<html><body><img src="http://0x08080808/logo.png"></body></html>', {
+    url: 'https://events.example.com/selector-profile/selector-two.html',
+  });
+  const legacyModule = await loadPinnedSelectorTwoStore(t);
+  const legacyHarness = createPinnedLegacyOptions(harness.directory);
+  const legacyStore = legacyModule.createEvidenceStore(legacyHarness.options);
+  const legacyScope = await legacyStore.scopeForAuthenticatedRequest(requestValue);
+  const legacyWritten = await legacyStore.ingestAssetSourceEvidence(
+    legacyScope, sourceInput(doc, legacyHarness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(legacyWritten.outcome, 'stored');
+  assert.equal(legacyWritten.created, true);
+  const legacyId = legacyWritten.metadata.evidenceId;
+  const legacySealed = readEvidenceBytes(harness.directory, legacyId);
+
+  const current = harness.openStore();
+  const currentScope = await current.scopeForAuthenticatedRequest(requestValue);
+  const oldHandle = await current.lookupEvidence(currentScope, legacyId);
+  const oldBeforeWrite = await current.materializeSelected(currentScope, { evidence: [oldHandle], facts: [] }, requestValue);
+  const oldCandidate = oldBeforeWrite.evidence[0].source.assetSource.candidates[0];
+  assert.equal(oldBeforeWrite.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/2');
+  assert.equal(oldCandidate.quarantineReason, 'url_policy_denied');
+  assert.equal(oldCandidate.normalizedSuggestion, null);
+  assert.equal(oldCandidate.fetchSuggestion, null);
+  assert.equal(Object.hasOwn(oldCandidate, 'excerptKind'), false, 'historical selector 2 keeps its original metadata shape');
+
+  const currentWritten = await current.ingestAssetSourceEvidence(
+    currentScope, sourceInput(doc, harness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(currentWritten.outcome, 'stored');
+  assert.equal(currentWritten.created, true);
+  assert.equal(currentWritten.metadata.version, 2);
+  assert.notEqual(currentWritten.metadata.evidenceId, legacyId);
+  assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed, 'selector-two ciphertext remains byte-identical');
+
+  const restarted = harness.openStore();
+  const restartedScope = await restarted.scopeForAuthenticatedRequest(requestValue);
+  const oldAfterRestart = await restarted.lookupEvidence(restartedScope, legacyId);
+  const newAfterRestart = await restarted.lookupEvidence(restartedScope, currentWritten.metadata.evidenceId);
+  const oldReadback = await restarted.materializeSelected(restartedScope, { evidence: [oldAfterRestart], facts: [] }, requestValue);
+  const newReadback = await restarted.materializeSelected(restartedScope, { evidence: [newAfterRestart], facts: [] }, requestValue);
+  assert.equal(oldReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/2');
+  assert.equal(oldReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
+  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].excerptKind, 'url-value');
+  assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
   assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed);
 });
 
@@ -1203,6 +1514,7 @@ test('stored candidate order, metadata, locator, selector, and ciphertext tamper
   const corruptors = [
     (bundle) => { [bundle.assetSource.candidates[0], bundle.assetSource.candidates[1]] = [bundle.assetSource.candidates[1], bundle.assetSource.candidates[0]]; },
     (bundle) => { bundle.assetSource.candidates[0].field = 'forged.claim'; },
+    (bundle) => { bundle.assetSource.candidates[0].excerptKind = 'future-kind'; },
     (bundle) => { bundle.assetSource.candidates[0].locator.startByte += 1; },
     (bundle) => { bundle.assetSource.selectorVersion = 'ei-asset-source-selector/future'; },
     (bundle) => { bundle.assetSource.extractorVersion = 'ei-deterministic-extraction/1.4.0'; },
@@ -1255,6 +1567,60 @@ test('stored candidate order, metadata, locator, selector, and ciphertext tamper
   }
   await assert.rejects(futureManifest.store.lookupEvidence(futureScope, futureAsset.metadata.evidenceId),
     (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INTEGRITY');
+});
+
+test('selector 3 rejects an otherwise digest-consistent nonempty attribute token before private release', async (t) => {
+  let consumerCalls = 0;
+  const harness = await createHarness(t, {
+    storeOptions: {
+      consumePrivatePayload() {
+        consumerCalls += 1;
+        return { released: true };
+      },
+    },
+  });
+  const requestValue = request(TENANT);
+  const scope = await harness.store.scopeForAuthenticatedRequest(requestValue);
+  const doc = documentFrom('<html><body><img src=""><img src="/poster.png"></body></html>');
+  const written = await harness.store.ingestAssetSourceEvidence(
+    scope, sourceInput(doc, harness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(written.outcome, 'stored');
+  assert.equal((await harness.store.withPrivatePayload(scope, written.evidence, requestValue)).released, true);
+  assert.equal(consumerCalls, 1, 'the otherwise-valid fixture reaches the private consumer before tampering');
+
+  const evidenceId = written.metadata.evidenceId;
+  const sealed = readEvidenceBytes(harness.directory, evidenceId);
+  const bundle = openBundle(sealed, evidenceId);
+  const candidateIndex = bundle.assetSource.candidates.findIndex((candidate) => candidate.excerptKind === 'html-empty-attribute-token');
+  assert.ok(candidateIndex >= 0);
+  assert.equal(assetDerivationDigest(bundle), bundle.assetSource.derivationDigest, 'test digest matches the actual selector-3 derivation');
+  const candidate = bundle.assetSource.candidates[candidateIndex];
+  const position = bundle.positions[candidate.positionIndex];
+  assert.equal(Buffer.from(position.content, 'base64').toString('utf8'), 'src=""');
+  const invalidNonemptyToken = Buffer.from('src= /', 'utf8');
+  assert.equal(invalidNonemptyToken.byteLength, Buffer.from(position.content, 'base64').byteLength);
+  const changedHash = digest(invalidNonemptyToken);
+  position.content = invalidNonemptyToken.toString('base64');
+  position.contentHash = changedHash;
+  candidate.excerptHash = changedHash;
+  const changedDerivation = assetDerivationDigest(bundle);
+  bundle.assetSource.derivationDigest = changedDerivation;
+  bundle.derivationDigest = changedDerivation;
+
+  const database = readDatabase(harness.directory);
+  database.manifest.records[evidenceId].derivationDigest = changedDerivation;
+  database.manifest.records[evidenceId].positionHashes[position.id] = changedHash;
+  replaceManifest(harness.directory, database.manifest);
+  replaceSealed(harness.directory, evidenceId, resealBundle(bundle, sealed, evidenceId));
+  assert.equal(consumerCalls, 1);
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(requestValue);
+  const handle = await reopened.lookupEvidence(reopenedScope, evidenceId);
+  await assert.rejects(reopened.withPrivatePayload(reopenedScope, handle, requestValue),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INTEGRITY');
+  assert.equal(consumerCalls, 1, 'invalid token excerpt is rejected before the private consumer receives payload');
 });
 
 test('a missing historical payload key denies authorized asset readback', async (t) => {

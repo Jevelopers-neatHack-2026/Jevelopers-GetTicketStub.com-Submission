@@ -73,7 +73,7 @@ const PDF_DERIVED_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const ASSET_SOURCE_EXCERPT_REPRESENTATION = 'asset-source-excerpt';
 const ASSET_SOURCE_BUNDLE_VERSION = 3;
 const ASSET_SOURCE_BINDING_VERSION = 1;
-const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/2';
+const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/3';
 const ASSET_SOURCE_MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const ASSET_SOURCE_MAX_POSITIONS = 64;
 const ASSET_SOURCE_MAX_EXCERPT_BYTES = 8 * 1024;
@@ -102,6 +102,12 @@ const ASSET_SOURCE_READ_PROFILES = new Map([
   })],
   ['ei-asset-source-selector/2\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
     selectorVersion: 'ei-asset-source-selector/2',
+    extractorVersion: 'ei-deterministic-extraction/1.3.0',
+    completeness: 'static-selected-forms-only',
+    limitations: ASSET_SOURCE_LIMITATIONS,
+  })],
+  ['ei-asset-source-selector/3\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
+    selectorVersion: 'ei-asset-source-selector/3',
     extractorVersion: 'ei-deterministic-extraction/1.3.0',
     completeness: 'static-selected-forms-only',
     limitations: ASSET_SOURCE_LIMITATIONS,
@@ -770,6 +776,30 @@ function assetUrlObservation(value, responseUrl) {
   }
 }
 
+function emptyAttributeNameForAssetForm(sourceForm) {
+  if (sourceForm === 'html-img-src') return 'src';
+  if (sourceForm === 'html-icon-link') return 'href';
+  if (sourceForm === 'open-graph-image') return 'content';
+  return null;
+}
+
+function emptyHtmlAttributeTokenState(bytes, expectedName) {
+  if (!(bytes instanceof Uint8Array) || typeof expectedName !== 'string') return null;
+  const token = Buffer.from(bytes).toString('utf8');
+  if (!Buffer.from(token, 'utf8').equals(Buffer.from(bytes)) || !isWellFormed(token)) return null;
+  let cursor = 0;
+  while (cursor < token.length && !/[\s=/>]/.test(token[cursor])) cursor += 1;
+  if (cursor === 0 || token.slice(0, cursor).toLowerCase() !== expectedName) return null;
+  while (cursor < token.length && /[\t\n\f\r ]/.test(token[cursor])) cursor += 1;
+  if (cursor === token.length) return 'missing';
+  if (token[cursor] !== '=') return null;
+  cursor += 1;
+  while (cursor < token.length && /[\t\n\f\r ]/.test(token[cursor])) cursor += 1;
+  if (cursor === token.length) return 'empty';
+  const quote = token[cursor];
+  return (quote === '"' || quote === "'") && token.slice(cursor) === `${quote}${quote}` ? 'empty' : null;
+}
+
 function hasSensitiveAssetQuery(value) {
   let parsed;
   try { parsed = value instanceof URL ? value : new URL(value); } catch { return true; }
@@ -881,12 +911,13 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
   const candidates = safeArray(stored.candidates, ASSET_SOURCE_MAX_POSITIONS);
   if (!candidates || candidates.length !== record.positionIds.length || candidates.length === 0) fail('EVIDENCE_INTEGRITY');
   const validated = [];
+  const emptyAttributeTokenChecks = [];
   let previousStart = -1;
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = ownDataRecord(candidates[index], new Set([
       'candidateId', 'positionIndex', 'sourceForm', 'field', 'relationHint', 'association',
       'locator', 'excerptHash', 'normalizedSuggestion', 'fetchSuggestion', 'quarantineReason',
-      'role', 'permission', 'inspection',
+      'role', 'permission', 'inspection', 'excerptKind',
     ]));
     const positionId = record.positionIds[index];
     const position = positionsById.get(positionId);
@@ -905,6 +936,20 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
       || (candidate.quarantineReason !== null && !ASSET_QUARANTINE_REASONS.has(candidate.quarantineReason))
       || (candidate.quarantineReason === null) !== (candidate.fetchSuggestion !== null)
       || (candidate.role !== 'unknown' || candidate.permission !== 'unknown' || candidate.inspection !== 'pending')) {
+      fail('EVIDENCE_INTEGRITY');
+    }
+    if (profile.selectorVersion === 'ei-asset-source-selector/3') {
+      if (!Object.hasOwn(candidate, 'excerptKind')
+        || !['url-value', 'html-empty-attribute-token'].includes(candidate.excerptKind)) fail('EVIDENCE_INTEGRITY');
+      if (candidate.excerptKind === 'html-empty-attribute-token') {
+        const attributeName = emptyAttributeNameForAssetForm(candidate.sourceForm);
+        const encodedContent = position.contentBase64;
+        if (!attributeName || typeof encodedContent !== 'string'
+          || candidate.quarantineReason !== 'invalid_or_empty'
+          || candidate.normalizedSuggestion !== null || candidate.fetchSuggestion !== null) fail('EVIDENCE_INTEGRITY');
+        emptyAttributeTokenChecks.push({ position, attributeName });
+      }
+    } else if (Object.hasOwn(candidate, 'excerptKind')) {
       fail('EVIDENCE_INTEGRITY');
     }
     if (candidate.fetchSuggestion !== null) {
@@ -936,6 +981,7 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
       association: cloneJsonValue(candidate.association),
       locator,
       excerptHash: candidate.excerptHash,
+      ...(profile.selectorVersion === 'ei-asset-source-selector/3' ? { excerptKind: candidate.excerptKind } : {}),
       normalizedSuggestion: candidate.normalizedSuggestion,
       fetchSuggestion: candidate.fetchSuggestion,
       quarantineReason: candidate.quarantineReason,
@@ -966,6 +1012,17 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
     contentHash: positionsById.get(id).contentHash,
   })))), 'utf8'));
   if (expectedDigest !== record.derivationDigest) fail('EVIDENCE_INTEGRITY');
+  for (const { position, attributeName } of emptyAttributeTokenChecks) {
+    let excerpt;
+    try {
+      excerpt = Buffer.from(position.contentBase64, 'base64');
+      if (excerpt.byteLength !== position.byteLength || emptyHtmlAttributeTokenState(excerpt, attributeName) === null) {
+        fail('EVIDENCE_INTEGRITY');
+      }
+    } finally {
+      excerpt?.fill(0);
+    }
+  }
   return deepFreeze(assetSource);
 }
 
@@ -1692,7 +1749,12 @@ export function createEvidenceStore(options) {
       } finally {
         bytes.fill(0);
       }
-      positionById.set(stored.id, { locator, contentHash: stored.contentHash, byteLength: positionBytes });
+      positionById.set(stored.id, {
+        locator,
+        contentHash: stored.contentHash,
+        byteLength: positionBytes,
+        ...(representation === ASSET_SOURCE_EXCERPT_REPRESENTATION ? { contentBase64: stored.content } : {}),
+      });
     }
     if (record.positionIds.some((id) => !positionById.has(id))) fail('EVIDENCE_INTEGRITY');
     if (representation === PDF_DERIVED_REPRESENTATION) {
@@ -2239,23 +2301,56 @@ export function createEvidenceStore(options) {
       if (!currentProfile || currentProfile.extractorVersion !== DETERMINISTIC_EXTRACTION_VERSION) fail('EVIDENCE_INTEGRITY');
 
       const ordered = assetInputs.map((item) => {
-        const asset = ownDataRecord(item, new Set(['candidate', 'sourceForm', 'association', 'urlPolicyValue']));
+        const asset = ownDataRecord(item, new Set([
+          'candidate', 'sourceForm', 'association', 'urlPolicyValue', 'emptyAttributeToken',
+        ]));
         const candidate = ownDataRecord(asset?.candidate, new Set([
           'field', 'rawValue', 'normalizedValue', 'source', 'suggestionOnly', 'urlSuggestion', 'property',
         ]));
         const candidateSource = ownDataRecord(candidate?.source, new Set(['kind', 'locator', 'jsonPointer', 'property']));
+        const hasEmptyAttributeToken = Boolean(asset && Object.hasOwn(asset, 'emptyAttributeToken'));
+        const emptyAttributeToken = hasEmptyAttributeToken
+          ? ownDataRecord(asset.emptyAttributeToken, new Set(['attributeName', 'valueState', 'locator']))
+          : null;
         if (!asset || !candidate || !candidateSource || typeof asset.urlPolicyValue !== 'string'
+          || (hasEmptyAttributeToken && !emptyAttributeToken)
           || !ASSET_SOURCE_FORMS.has(asset.sourceForm)
           || typeof candidate.field !== 'string' || candidate.field.length < 1 || candidate.field.length > 160
           || !validAssetAssociation(asset.association, asset.sourceForm)
           || !['asset-source', 'open-graph', 'jsonld'].includes(candidateSource.kind)) fail('EVIDENCE_INTEGRITY');
-        const locator = copyLocator(candidateSource.locator);
-        if (locator.kind !== 'text-range' || locator.endByte > sourceBytes.length) fail('EVIDENCE_INTEGRITY');
+
+        let locator;
+        let excerptKind = 'url-value';
+        if (emptyAttributeToken) {
+          const attributeName = emptyAttributeNameForAssetForm(asset.sourceForm);
+          const sourceValueLocator = ownDataRecord(candidateSource.locator, new Set(['kind', 'startByte', 'endByte']));
+          if (!attributeName || candidateSource.kind !== (asset.sourceForm === 'open-graph-image' ? 'open-graph' : 'asset-source')
+            || emptyAttributeToken.attributeName !== attributeName
+            || !['missing', 'empty'].includes(emptyAttributeToken.valueState)
+            || typeof candidate.rawValue !== 'string' || candidate.rawValue !== ''
+            || candidate.normalizedValue !== '' || asset.urlPolicyValue !== ''
+            || !sourceValueLocator || sourceValueLocator.kind !== 'text-range'
+            || !Number.isSafeInteger(sourceValueLocator.startByte) || sourceValueLocator.startByte < 0
+            || sourceValueLocator.startByte !== sourceValueLocator.endByte
+            || sourceValueLocator.endByte > sourceBytes.length) fail('EVIDENCE_INTEGRITY');
+          locator = copyLocator(emptyAttributeToken.locator);
+          if (locator.kind !== 'text-range' || locator.endByte > sourceBytes.length
+            || locator.startByte > sourceValueLocator.startByte || locator.endByte < sourceValueLocator.startByte) fail('EVIDENCE_INTEGRITY');
+          excerptKind = 'html-empty-attribute-token';
+        } else {
+          locator = copyLocator(candidateSource.locator);
+          if (locator.kind !== 'text-range' || locator.endByte > sourceBytes.length) fail('EVIDENCE_INTEGRITY');
+        }
         const excerptLength = locator.endByte - locator.startByte;
         if (excerptLength < 1 || excerptLength > assetPositionBytesLimit) fail('EVIDENCE_INVALID');
         const excerpt = Buffer.from(sourceBytes.subarray(locator.startByte, locator.endByte));
         candidateBuffers.push(excerpt);
-        if (excerpt.toString('utf8') !== candidate.rawValue || !isWellFormed(candidate.rawValue)) {
+        if (emptyAttributeToken) {
+          if (emptyHtmlAttributeTokenState(excerpt, emptyAttributeNameForAssetForm(asset.sourceForm)) !== emptyAttributeToken.valueState) {
+            excerpt.fill(0);
+            fail('EVIDENCE_INTEGRITY');
+          }
+        } else if (excerpt.toString('utf8') !== candidate.rawValue || !isWellFormed(candidate.rawValue)) {
           excerpt.fill(0);
           fail('EVIDENCE_INTEGRITY');
         }
@@ -2270,6 +2365,7 @@ export function createEvidenceStore(options) {
           relationHint,
           association: cloneJsonValue(asset.association),
           locator,
+          excerptKind,
           excerpt,
           contentHash: digest(excerpt),
           ...observation,
@@ -2301,6 +2397,7 @@ export function createEvidenceStore(options) {
         association: candidate.association,
         locator: candidate.locator,
         excerptHash: candidate.contentHash,
+        excerptKind: candidate.excerptKind,
         normalizedSuggestion: candidate.normalizedSuggestion,
         fetchSuggestion: candidate.fetchSuggestion,
         quarantineReason: candidate.quarantineReason,

@@ -236,7 +236,7 @@ export async function collectHtmlEvidence({
       const rel = attributeValue(node, "rel");
       if (rel && rel.toLowerCase().split(/\s+/).includes("canonical")) {
         const href = attributeValue(node, "href");
-        const range = attributeValueRange(text, location, "href");
+        const range = attributeValueRange(text, location, "href", href);
         if (href !== undefined && range) {
           const candidate = makeHtmlAttributeCandidate({
             field: "canonical.url",
@@ -268,7 +268,7 @@ export async function collectHtmlEvidence({
       const property = (attributeValue(node, "property") ?? attributeValue(node, "name") ?? "").trim().toLowerCase();
       const field = OPEN_GRAPH_FIELDS.get(property);
       const content = attributeValue(node, "content");
-      const range = attributeValueRange(text, location, "content");
+      const range = attributeValueRange(text, location, "content", content);
       if (field && content !== undefined && range) {
         const candidate = makeHtmlAttributeCandidate({
           field: "openGraph." + field,
@@ -297,6 +297,9 @@ export async function collectHtmlEvidence({
                 "open-graph-image",
                 content,
                 Object.freeze({ kind: "unassigned-page" }),
+                htmlEmptyAttributeToken({
+                  text, sourceBytes, byteOffsetMap, range, attributeName: "content", decodedValue: content,
+                }),
               ));
             } else if (!assetSourcesTruncated) {
               addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
@@ -332,7 +335,7 @@ export async function collectHtmlEvidence({
 
     if (tagName === "img" && !insideTemplate) {
       const src = attributeValue(node, "src");
-      const range = attributeValueRange(text, location, "src");
+      const range = attributeValueRange(text, location, "src", src);
       if (src !== undefined && range) {
         const candidate = makeHtmlAttributeCandidate({
           field: "img.src",
@@ -351,6 +354,9 @@ export async function collectHtmlEvidence({
             "html-img-src",
             src,
             Object.freeze({ kind: "unassigned-page" }),
+            htmlEmptyAttributeToken({
+              text, sourceBytes, byteOffsetMap, range, attributeName: "src", decodedValue: src,
+            }),
           ));
         } else if (candidate && !assetSourcesTruncated) {
           addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
@@ -367,7 +373,7 @@ export async function collectHtmlEvidence({
       const iconRelation = ["icon", "apple-touch-icon", "mask-icon"].find((value) => relTokens.includes(value));
       const isShortcutIcon = relTokens.includes("shortcut") && relTokens.includes("icon");
       const href = attributeValue(node, "href");
-      const range = attributeValueRange(text, location, "href");
+      const range = attributeValueRange(text, location, "href", href);
       if ((iconRelation || isShortcutIcon) && href !== undefined && range) {
         const relation = iconRelation ?? "shortcut-icon";
         const candidate = makeHtmlAttributeCandidate({
@@ -387,6 +393,9 @@ export async function collectHtmlEvidence({
             "html-icon-link",
             href,
             Object.freeze({ kind: "unassigned-page" }),
+            htmlEmptyAttributeToken({
+              text, sourceBytes, byteOffsetMap, range, attributeName: "href", decodedValue: href,
+            }),
           ));
         } else if (candidate && !assetSourcesTruncated) {
           addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
@@ -514,9 +523,12 @@ function makeHtmlAttributeCandidate({
   });
 }
 
-function makeHtmlAssetSource(candidate, sourceForm, urlPolicyValue, association) {
+function makeHtmlAssetSource(candidate, sourceForm, urlPolicyValue, association, emptyAttributeToken = null) {
   const source = { candidate, sourceForm, association };
   Object.defineProperty(source, "urlPolicyValue", { value: urlPolicyValue, enumerable: false });
+  if (emptyAttributeToken) {
+    Object.defineProperty(source, "emptyAttributeToken", { value: emptyAttributeToken, enumerable: false });
+  }
   return Object.freeze(source);
 }
 
@@ -545,7 +557,7 @@ function attributeValue(node, name) {
   return node.attrs?.find((attribute) => attribute.name.toLowerCase() === name)?.value;
 }
 
-function attributeValueRange(text, elementLocation, attributeName) {
+function attributeValueRange(text, elementLocation, attributeName, decodedValue) {
   const location = elementLocation?.attrs?.[attributeName];
   if (!location || !Number.isInteger(location.startOffset) || !Number.isInteger(location.endOffset)) return null;
   const startOffset = location.startOffset;
@@ -554,7 +566,32 @@ function attributeValueRange(text, elementLocation, attributeName) {
   while (cursor < raw.length && !/[\s=/>]/.test(raw[cursor])) cursor += 1;
   if (raw.slice(0, cursor).toLowerCase() !== attributeName.toLowerCase()) return null;
   while (/\s/.test(raw[cursor] ?? "")) cursor += 1;
-  if (raw[cursor] !== "=") return { startOffset: location.endOffset, endOffset: location.endOffset };
+  if (raw[cursor] !== "=") {
+    // parse5 may end the attribute source location at its name for an
+    // unquoted empty value (`src=`). Inspect only the adjacent attribute
+    // syntax so the empty value point follows `=` and the token includes it.
+    let equalsOffset = location.endOffset;
+    while (/[\t\n\f\r ]/.test(text[equalsOffset] ?? "")) equalsOffset += 1;
+    if (decodedValue === "" && text[equalsOffset] === "="
+      && Number.isInteger(elementLocation.endOffset) && equalsOffset < elementLocation.endOffset) {
+      const valueOffset = equalsOffset + 1;
+      return {
+        startOffset: valueOffset,
+        endOffset: valueOffset,
+        tokenStartOffset: location.startOffset,
+        tokenEndOffset: equalsOffset + 1,
+        valueState: "empty",
+      };
+    }
+    return {
+      startOffset: location.endOffset,
+      endOffset: location.endOffset,
+      tokenStartOffset: location.startOffset,
+      tokenEndOffset: location.endOffset,
+      valueState: "missing",
+    };
+  }
+  const equalsOffset = startOffset + cursor;
   cursor += 1;
   while (/\s/.test(raw[cursor] ?? "")) cursor += 1;
   const quote = raw[cursor] === '"' || raw[cursor] === "'" ? raw[cursor] : null;
@@ -563,11 +600,44 @@ function attributeValueRange(text, elementLocation, attributeName) {
     const valueStart = cursor;
     while (cursor < raw.length && raw[cursor] !== quote) cursor += 1;
     if (cursor >= raw.length) return null;
-    return { startOffset: startOffset + valueStart, endOffset: startOffset + cursor };
+    return {
+      startOffset: startOffset + valueStart,
+      endOffset: startOffset + cursor,
+      tokenStartOffset: location.startOffset,
+      tokenEndOffset: location.endOffset,
+      valueState: valueStart === cursor ? "empty" : "value",
+    };
   }
   const valueStart = cursor;
   while (cursor < raw.length && !/[\s>]/.test(raw[cursor])) cursor += 1;
-  return { startOffset: startOffset + valueStart, endOffset: startOffset + cursor };
+  if (valueStart === cursor) {
+    return {
+      startOffset: equalsOffset + 1,
+      endOffset: equalsOffset + 1,
+      tokenStartOffset: location.startOffset,
+      tokenEndOffset: equalsOffset + 1,
+      valueState: "empty",
+    };
+  }
+  return {
+    startOffset: startOffset + valueStart,
+    endOffset: startOffset + cursor,
+    tokenStartOffset: location.startOffset,
+    tokenEndOffset: location.endOffset,
+    valueState: valueStart === cursor ? "empty" : "value",
+  };
+}
+
+function htmlEmptyAttributeToken({ text, sourceBytes, byteOffsetMap, range, attributeName, decodedValue }) {
+  if (!range || decodedValue !== "" || range.startOffset !== range.endOffset
+    || !["missing", "empty"].includes(range.valueState)) return null;
+  const token = exactRange(text, sourceBytes, byteOffsetMap, range.tokenStartOffset, range.tokenEndOffset);
+  if (!token) return null;
+  return Object.freeze({
+    attributeName,
+    valueState: range.valueState,
+    locator: token.locator,
+  });
 }
 
 function scriptContentSpan(location) {
