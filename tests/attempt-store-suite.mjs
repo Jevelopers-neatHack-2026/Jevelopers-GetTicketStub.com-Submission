@@ -3,6 +3,7 @@ import { chmod, lstat, mkdir, readFile, readdir, rm, symlink, unlink, writeFile 
 import { createConnection, createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DurableJsonStore } from "../dist/metering-store.js";
 import { AttemptStoreError, createLocalAttemptPersistence } from "../dist/attempt-store.js";
 import { ConnectorError } from "../dist/index.js";
 import {
@@ -138,11 +139,139 @@ test("a scoped claim and its state history survive reopening the real JSON store
   });
 });
 
+test("committed empty or missing snapshots cannot be reclaimed by reads, claims, or saves", async () => {
+  await withRoot(async (root) => {
+    const directory = join(root, "empty-committed");
+    const store = await openAttemptStore(directory);
+    const record = makeAttemptRecord();
+    await store.claimSubmitAttempt(record);
+    const statePath = join(directory, ".attempt-store-v1", "metering-state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.entries = [];
+    await writeFile(statePath, JSON.stringify(state), { mode: 0o600 });
+    const corruptBytes = await readFile(statePath, "utf8");
+    const replacement = { ...record, claimId: "replacement-owner" };
+    await expectStoreError(
+      store.getSubmitAttempt(record.providerId, ATTEMPT_SCOPE, record.idempotencyKey),
+      "corrupt_state"
+    );
+    await expectStoreError(store.claimSubmitAttempt(replacement), "corrupt_state");
+    await expectStoreError(
+      store.saveSubmitAttempt({ ...record, updatedAt: record.updatedAt + 1 }),
+      "corrupt_state"
+    );
+    await expectStoreError(openAttemptStore(directory), "corrupt_state");
+    assert.equal(await readFile(statePath, "utf8"), corruptBytes);
+  });
+});
+
+test("a committed snapshot removed after lock acquisition blocks a second owner without rewriting evidence", async () => {
+  await withRoot(async (root) => {
+    const directory = join(root, "missing-committed");
+    const statePath = join(directory, ".attempt-store-v1", "metering-state.json");
+    let removeOnNextLock = false;
+    const store = await openAttemptStore(directory, {
+      faultHooks: {
+        afterLock: async () => {
+          if (!removeOnNextLock) return;
+          removeOnNextLock = false;
+          await unlink(statePath);
+        }
+      }
+    });
+    const record = makeAttemptRecord();
+    await store.claimSubmitAttempt(record);
+    const markerPath = join(directory, ".attempt-store-committed.json");
+    const markerBytes = await readFile(markerPath, "utf8");
+    removeOnNextLock = true;
+    await expectStoreError(
+      store.claimSubmitAttempt({ ...record, claimId: "owner-after-state-loss" }),
+      "corrupt_state"
+    );
+    await assert.rejects(readFile(statePath), (error) => error?.code === "ENOENT");
+    assert.equal(await readFile(markerPath, "utf8"), markerBytes);
+    await expectStoreError(openAttemptStore(directory), "corrupt_state");
+    assert.equal(await readFile(markerPath, "utf8"), markerBytes);
+  });
+});
+
+test("a first claim between snapshot read and marker validation is re-read without false corruption", async () => {
+  await withRoot(async (root) => {
+    const directory = join(root, "read-first-claim-race");
+    const reader = await openAttemptStore(directory);
+    const writer = await openAttemptStore(directory);
+    const record = makeAttemptRecord();
+    const originalRead = DurableJsonStore.prototype.read;
+    let pauseNextRead = true;
+    let announceRead;
+    const readPaused = new Promise((resolvePause) => { announceRead = resolvePause; });
+    let resumeRead;
+    const readResume = new Promise((resolveResume) => { resumeRead = resolveResume; });
+    DurableJsonStore.prototype.read = async function () {
+      const snapshot = await originalRead.call(this);
+      if (pauseNextRead) {
+        pauseNextRead = false;
+        announceRead();
+        await readResume;
+      }
+      return snapshot;
+    };
+    try {
+      const pendingRead = reader.getSubmitAttempt(record.providerId, ATTEMPT_SCOPE, record.idempotencyKey);
+      await readPaused;
+      assert.deepEqual(await writer.claimSubmitAttempt(record), { claimed: true });
+      resumeRead();
+      assert.deepEqual(await pendingRead, record);
+      assert.deepEqual(
+        await reader.getSubmitAttempt(record.providerId, ATTEMPT_SCOPE, record.idempotencyKey),
+        record
+      );
+    } finally {
+      DurableJsonStore.prototype.read = originalRead;
+      resumeRead();
+    }
+  });
+});
+
 test("authorization and logical-action claims remain unique across changed keys and renewed authorizations", async () => {
   await withRoot(async (root) => {
     const store = await openAttemptStore(join(root, "attempts"));
-    const first = makeAttemptRecord();
+    const first = makeAttemptRecord({
+      sideEffectState: "confirmed",
+      providerRequestId: "private-provider-request",
+      budgetReservationState: "reserved",
+      budgetReservationReference: "private-reservation"
+    });
     assert.deepEqual(await store.claimSubmitAttempt(first), { claimed: true });
+    const sameScopeAuthorization = makeAttemptRecord({
+      idempotencyKey: "same-scope-authorization-key",
+      claimId: "claim-same-scope-authorization",
+      authorizationId: first.authorizationId,
+      actionId: "action-same-scope-authorization",
+      requestFingerprint: "sha256:same-scope-authorization"
+    });
+    const sameScopeAuthorizationResult = await store.claimSubmitAttempt(sameScopeAuthorization);
+    assert.equal(sameScopeAuthorizationResult.claimed, false);
+    assert.deepEqual(sameScopeAuthorizationResult.existing, first);
+    const assertForeignConflictIsPrivate = (conflict) => {
+      assert.equal(conflict.claimed, false);
+      assert.equal(Object.hasOwn(conflict, "existing"), false);
+      const serialized = JSON.stringify(conflict);
+      for (const privateField of [
+        first.tenantId,
+        first.projectId,
+        first.idempotencyKey,
+        first.claimId,
+        first.authorizationId,
+        first.actionId,
+        first.authorizationClaimReference,
+        first.requestFingerprint,
+        first.budgetReservationReference,
+        first.providerRequestId
+      ]) {
+        assert.equal(serialized.includes(privateField), false);
+      }
+    };
     const renewedAuthorization = makeAttemptRecord({
       idempotencyKey: "new-delivery-key",
       claimId: "claim-renewed",
@@ -163,8 +292,17 @@ test("authorization and logical-action claims remain unique across changed keys 
       actionId: "action-other-scope"
     });
     const authReuse = await store.claimSubmitAttempt(authorizationInOtherScope);
-    assert.equal(authReuse.claimed, false);
-    assert.equal(authReuse.existing?.claimId, first.claimId);
+    assertForeignConflictIsPrivate(authReuse);
+    const sameTenantDifferentProject = makeAttemptRecord({
+      tenantId: ATTEMPT_SCOPE.tenantId,
+      projectId: "project-other",
+      idempotencyKey: "other-project-key",
+      claimId: "claim-other-project",
+      authorizationId: first.authorizationId,
+      actionId: "action-other-project"
+    });
+    const projectReuse = await store.claimSubmitAttempt(sameTenantDifferentProject);
+    assertForeignConflictIsPrivate(projectReuse);
     const separateScope = makeAttemptRecord({
       tenantId: "tenant-other",
       projectId: "project-other",
@@ -278,6 +416,48 @@ test("twenty distinct delivery keys cannot race the same authorization or action
     assert.equal(outcomes.filter((result) => !result.claimed).length, 19);
     const store = await openAttemptStore(directory);
     assert.equal((await store.listAttempts(ATTEMPT_SCOPE)).length, 1);
+  });
+});
+
+test("twenty independent processes enforce action and authorization fences separately", async () => {
+  await withRoot(async (root) => {
+    const dimensions = [
+      {
+        name: "same-action-distinct-authorizations",
+        recordAt(index, base) {
+          return {
+            ...base,
+            idempotencyKey: "action-key-" + index,
+            claimId: "action-claim-" + index,
+            authorizationId: "action-authorization-" + index
+          };
+        }
+      },
+      {
+        name: "same-authorization-distinct-actions",
+        recordAt(index, base) {
+          return {
+            ...base,
+            idempotencyKey: "authorization-key-" + index,
+            claimId: "authorization-claim-" + index,
+            actionId: "authorization-action-" + index
+          };
+        }
+      }
+    ];
+    for (const dimension of dimensions) {
+      const directory = join(root, dimension.name);
+      const base = makeAttemptRecord();
+      const results = await Promise.all(Array.from({ length: 20 }, (_, index) =>
+        runAttemptChild({ directory, record: dimension.recordAt(index, base) })
+      ));
+      assert.ok(results.every((result) => result.code === 0), JSON.stringify(results.map((row) => row.stderr)));
+      const outcomes = results.map((result) => JSON.parse(result.stdout.trim()));
+      assert.equal(outcomes.filter((result) => result.claimed).length, 1, dimension.name);
+      assert.equal(outcomes.filter((result) => !result.claimed).length, 19, dimension.name);
+      const reopened = await openAttemptStore(directory);
+      assert.equal((await reopened.listAttempts(ATTEMPT_SCOPE)).length, 1, dimension.name);
+    }
   });
 });
 
@@ -429,6 +609,74 @@ test("corrupt and unsupported snapshots fail closed without rewriting retained b
     await writeFile(unsupportedPath, unsupported, { mode: 0o600 });
     await expectStoreError(openAttemptStore(unsupportedRoot), "unsupported_version");
     assert.equal(await readFile(unsupportedPath, "utf8"), unsupported);
+  });
+});
+
+test("initial, intermediate, and final history rows enforce all state-reference biconditionals", async () => {
+  await withRoot(async (root) => {
+    const violations = [
+      {
+        name: "confirmed_without_provider_request_id",
+        mutate(row) {
+          row.sideEffectState = "confirmed";
+          row.hasProviderRequestId = false;
+        }
+      },
+      {
+        name: "provider_request_id_without_confirmed",
+        mutate(row) {
+          row.sideEffectState = "possible";
+          row.hasProviderRequestId = true;
+        }
+      },
+      {
+        name: "reserved_without_reservation_reference",
+        mutate(row) {
+          row.budgetReservationState = "reserved";
+          row.hasBudgetReservationReference = false;
+        }
+      },
+      {
+        name: "reservation_reference_without_reserved",
+        mutate(row) {
+          row.budgetReservationState = "pending";
+          row.hasBudgetReservationReference = true;
+        }
+      }
+    ];
+    let caseNumber = 0;
+    for (const position of [0, 1, 2]) {
+      for (const violation of violations) {
+        const directory = join(root, "history-case-" + caseNumber);
+        caseNumber += 1;
+        const store = await openAttemptStore(directory);
+        const record = makeAttemptRecord();
+        await store.claimSubmitAttempt(record);
+        const pending = {
+          ...record,
+          sideEffectState: "possible",
+          budgetReservationState: "pending",
+          updatedAt: record.updatedAt + 1
+        };
+        await store.saveSubmitAttempt(pending);
+        await store.saveSubmitAttempt({
+          ...pending,
+          sideEffectState: "confirmed",
+          providerRequestId: "history-provider-request",
+          budgetReservationState: "reserved",
+          budgetReservationReference: "history-reservation-reference",
+          updatedAt: record.updatedAt + 2
+        });
+        const statePath = join(directory, ".attempt-store-v1", "metering-state.json");
+        const state = JSON.parse(await readFile(statePath, "utf8"));
+        violation.mutate(state.entries[0].history[position]);
+        const corruptBytes = JSON.stringify(state);
+        await writeFile(statePath, corruptBytes, { mode: 0o600 });
+        await expectStoreError(openAttemptStore(directory), "corrupt_state");
+        assert.equal(await readFile(statePath, "utf8"), corruptBytes);
+      }
+    }
+    assert.equal(caseNumber, 12);
   });
 });
 

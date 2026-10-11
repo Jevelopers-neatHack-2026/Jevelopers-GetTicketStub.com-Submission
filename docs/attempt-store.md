@@ -31,16 +31,26 @@ using the existing store's process-liveness check, not by expiring claims.
 Malformed locks, corruption, missing committed state, unsupported formats,
 and storage/access failures stop the operation.
 
+Each mutation validates the marker and the exact snapshot read while holding
+the writer lock. A present marker paired with a missing or empty snapshot is
+corruption; the mutation leaves those bytes untouched and cannot create a new
+claim. Reads that observe the brief first-claim transition between snapshot
+rename and marker publication re-read before deciding that committed data is
+missing, so valid concurrent initialization does not appear corrupt. Every
+history row must also match the provider-request and reservation-reference
+requirements of its own state; cross-row monotonicity is checked separately.
+
 Claims are permanent in this implementation. The store does not delete old
 attempts or reclaim a key, action, or authorization because time elapsed,
 provider idempotency expired, a reservation is uncertain, or a process
 restarted. A claim is unique by provider, tenant/project scope, and
 idempotency key; by provider, tenant/project scope, and action ID; and by
-provider and authorization ID. It binds the initial payload fingerprint,
-claim owner, and authorization reference. Updates must preserve that binding,
-advance the timestamp and effect/budget states monotonically, and retain any
-reservation reference or provider request ID already recorded. Reads and
-history are limited to the requested trusted scope.
+provider and authorization ID. A cross-scope authorization collision remains
+fenced but returns no foreign attempt record. It binds the initial payload
+fingerprint, claim owner, and authorization reference. Updates must preserve
+that binding, advance the timestamp and effect/budget states monotonically,
+and retain any reservation reference or provider request ID already recorded.
+Reads and history are limited to the requested trusted scope.
 
 The private snapshot format is versioned. Unknown versions, malformed history,
 duplicate identities, and corrupt data fail closed without rewriting the
@@ -89,7 +99,10 @@ Build the project, then run the standalone suite:
 The suite exercises process restarts, simultaneous child-process claims,
 crash barriers before and after commit, lock recovery, changed fingerprints,
 retained ambiguity and reservation holds, expiry without claim release,
-corruption/version handling, permissions, and symlink rejection. Its runtime
-scenario uses the deterministic simulator and fixture authorization, budget,
-and usage ports. It makes no provider or external finance calls and does not
-represent production authorization or billing evidence.
+committed-empty and missing-snapshot mutation refusal, a deterministic
+first-claim read race, malformed state/reference combinations in initial,
+intermediate, and final history rows, cross-scope privacy, corruption/version
+handling, permissions, and symlink rejection. Its runtime scenario uses the
+deterministic simulator and fixture authorization, budget, and usage ports. It
+makes no provider or external finance calls and does not represent production
+authorization or billing evidence.

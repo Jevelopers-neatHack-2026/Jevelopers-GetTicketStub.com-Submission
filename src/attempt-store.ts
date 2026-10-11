@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
 import { link, lstat, mkdir, open, readFile, realpath, unlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, parse, resolve, sep } from "node:path";
 import { DurableJsonStore, DurableStoreError, type DurableJson, type DurableStoreFaultHooks } from "./metering-store.js";
@@ -208,15 +209,22 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function hasCommitMarker(path: string, expected: StoreBinding): Promise<boolean> {
-  await assertManagedFile(path, expected.ownerUid);
-  let text: string;
+function managedFileExistsSync(path: string, expectedUid: number | null): boolean {
   try {
-    text = await readFile(path, "utf8");
+    const metadata = lstatSync(path);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) throw new AttemptStoreError("invalid_path");
+    if (expectedUid !== null && metadata.uid !== expectedUid) throw new AttemptStoreError("access_denied");
+    if (process.platform !== "win32" && (metadata.mode & 0o077) !== 0) {
+      throw new AttemptStoreError("access_denied");
+    }
+    return true;
   } catch (error) {
     if (errorCode(error) === "ENOENT") return false;
     throw mapStorageError(error);
   }
+}
+
+function validateCommitMarker(text: string, expected: StoreBinding): void {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -233,6 +241,31 @@ async function hasCommitMarker(path: string, expected: StoreBinding): Promise<bo
     parsed.committed !== true) throw new AttemptStoreError("corrupt_state");
   if (parsed.providerId !== expected.providerId || parsed.mode !== expected.mode ||
     parsed.ownerUid !== expected.ownerUid) throw new AttemptStoreError("binding_mismatch");
+}
+
+async function hasCommitMarker(path: string, expected: StoreBinding): Promise<boolean> {
+  await assertManagedFile(path, expected.ownerUid);
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return false;
+    throw mapStorageError(error);
+  }
+  validateCommitMarker(text, expected);
+  return true;
+}
+
+function hasCommitMarkerSync(path: string, expected: StoreBinding): boolean {
+  if (!managedFileExistsSync(path, expected.ownerUid)) return false;
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return false;
+    throw mapStorageError(error);
+  }
+  validateCommitMarker(text, expected);
   return true;
 }
 
@@ -415,7 +448,7 @@ function parseHistoryRow(value: unknown): AttemptHistoryRow {
     !["not_requested", "pending", "reserved", "denied", "unknown"].includes(String(value.budgetReservationState)) ||
     typeof value.hasBudgetReservationReference !== "boolean" ||
     typeof value.hasProviderRequestId !== "boolean") throw new AttemptStoreError("corrupt_state");
-  return {
+  const row: AttemptHistoryRow = {
     revision: value.revision as number,
     recordedAt: value.recordedAt as number,
     event: value.event,
@@ -424,6 +457,11 @@ function parseHistoryRow(value: unknown): AttemptHistoryRow {
     hasBudgetReservationReference: value.hasBudgetReservationReference,
     hasProviderRequestId: value.hasProviderRequestId
   };
+  if ((row.sideEffectState === "confirmed") !== row.hasProviderRequestId ||
+    (row.budgetReservationState === "reserved") !== row.hasBudgetReservationReference) {
+    throw new AttemptStoreError("corrupt_state");
+  }
+  return row;
 }
 
 function parseStoredAttempt(value: unknown): StoredAttempt {
@@ -448,9 +486,7 @@ function parseStoredAttempt(value: unknown): StoredAttempt {
         effectRank(row.sideEffectState) < effectRank(previous.sideEffectState) ||
         !canAdvanceBudget(previous.budgetReservationState, row.budgetReservationState) ||
         (previous.hasBudgetReservationReference && !row.hasBudgetReservationReference) ||
-        (previous.hasProviderRequestId && !row.hasProviderRequestId) ||
-        (row.hasProviderRequestId && row.sideEffectState !== "confirmed") ||
-        (row.hasBudgetReservationReference && row.budgetReservationState !== "reserved")) {
+        (previous.hasProviderRequestId && !row.hasProviderRequestId)) {
         throw new AttemptStoreError("corrupt_state");
       }
     }
@@ -598,7 +634,10 @@ export class LocalAttemptPersistence implements AttemptPersistence {
       if (existing !== undefined) {
         return {
           state,
-          result: { claimed: false, existing: normalizeRecord(existing.record) }
+          result: {
+            claimed: false,
+            ...(sameScope(existing.record, record) ? { existing: normalizeRecord(existing.record) } : {})
+          }
         };
       }
       const initialHistory = [historyRow(record, 0, "claimed")];
@@ -613,7 +652,6 @@ export class LocalAttemptPersistence implements AttemptPersistence {
         result: { claimed: true }
       };
     });
-    if (result.claimed) await writeCommitMarker(this.commitMarkerPath, this.directory, this.binding);
     return result;
   }
 
@@ -692,24 +730,29 @@ export class LocalAttemptPersistence implements AttemptPersistence {
     await assertManagedFile(this.commitMarkerPath, this.binding.ownerUid);
     await assertManagedFile(this.writerLockPath, this.binding.ownerUid);
     await assertManagedFile(this.recoveryLockPath, this.binding.ownerUid);
-    if (await hasCommitMarker(this.commitMarkerPath, this.binding) && !(await pathExists(this.statePath))) {
-      throw new AttemptStoreError("corrupt_state");
-    }
   }
 
   private async readState(): Promise<AttemptStoreState> {
     try {
-      await this.assertManagedPathsSafe();
-      const state = parseState(await this.store.read(), this.binding);
-      const statePathExists = await pathExists(this.statePath);
-      const markerPresent = await hasCommitMarker(this.commitMarkerPath, this.binding);
-      if (markerPresent && (!statePathExists || state.entries.length === 0)) {
-        throw new AttemptStoreError("corrupt_state");
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await this.assertManagedPathsSafe();
+        const state = parseState(await this.store.read(), this.binding);
+        const statePathExists = await pathExists(this.statePath);
+        const markerPresent = await hasCommitMarker(this.commitMarkerPath, this.binding);
+        if ((!statePathExists && state.entries.length > 0) ||
+          (markerPresent && (!statePathExists || state.entries.length === 0))) {
+          // A first-claim rename and its marker can complete between the
+          // snapshot read and these path checks. Re-read before diagnosing
+          // persistent loss or an empty committed snapshot as corruption.
+          if (attempt < 2) continue;
+          throw new AttemptStoreError("corrupt_state");
+        }
+        if (!markerPresent && state.entries.length > 0) {
+          await writeCommitMarker(this.commitMarkerPath, this.directory, this.binding);
+        }
+        return state;
       }
-      if (!markerPresent && state.entries.length > 0) {
-        await writeCommitMarker(this.commitMarkerPath, this.directory, this.binding);
-      }
-      return state;
+      throw new AttemptStoreError("corrupt_state");
     } catch (error) {
       throw mapStorageError(error);
     }
@@ -719,11 +762,17 @@ export class LocalAttemptPersistence implements AttemptPersistence {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       try {
         await this.assertManagedPathsSafe();
-        return await this.store.update((value) => {
+        const committed = await this.store.update((value) => {
           const current = parseState(value, this.binding);
+          this.assertMutationSnapshot(current);
           const changed = mutate(current);
-          return { state: changed.state as unknown as DurableJson, result: changed.result };
+          return {
+            state: changed.state as unknown as DurableJson,
+            result: { mutationResult: changed.result, hasEntries: changed.state.entries.length > 0 }
+          };
         });
+        if (committed.hasEntries) await writeCommitMarker(this.commitMarkerPath, this.directory, this.binding);
+        return committed.mutationResult;
       } catch (error) {
         const mapped = mapStorageError(error);
         if (mapped.code !== "storage_busy" || attempt === 99) throw mapped;
@@ -731,6 +780,15 @@ export class LocalAttemptPersistence implements AttemptPersistence {
       }
     }
     throw new AttemptStoreError("storage_busy");
+  }
+
+  private assertMutationSnapshot(state: AttemptStoreState): void {
+    const snapshotPresent = managedFileExistsSync(this.statePath, this.binding.ownerUid);
+    const markerPresent = hasCommitMarkerSync(this.commitMarkerPath, this.binding);
+    if ((!snapshotPresent && state.entries.length > 0) ||
+      (markerPresent && (!snapshotPresent || state.entries.length === 0))) {
+      throw new AttemptStoreError("corrupt_state");
+    }
   }
 }
 
