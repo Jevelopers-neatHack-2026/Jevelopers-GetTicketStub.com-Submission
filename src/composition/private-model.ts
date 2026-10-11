@@ -141,6 +141,24 @@ const compositionDecisionSchema = z
 	})
 	.strict()
 	.readonly();
+export function requirePhysicalTextSize(
+	node: Extract<LayoutNode, { kind: "text" }>,
+	minMm: number,
+	maxMm: number,
+): number {
+	requireCore(
+		node.transform.scaleX === node.transform.scaleY,
+		"INVALID_INPUT",
+		`nodes.${node.id}.textScale`,
+	);
+	const physicalMm = node.field.sizeMm * node.transform.scaleY;
+	requireCore(
+		physicalMm >= minMm && physicalMm <= maxMm,
+		"INVALID_INPUT",
+		`nodes.${node.id}.physicalTextSize`,
+	);
+	return physicalMm;
+}
 export async function recheckPermissions(
 	artifact: PrivateArtifact,
 	ports: CompositionPorts,
@@ -212,7 +230,8 @@ export function parseComposition(
 			"INVALID_INPUT",
 			`nodes.${node.id}.slot`,
 		);
-		if (node.kind === "text")
+		if (node.kind === "text") {
+			requirePhysicalTextSize(node, slot.minFontMm, slot.maxFontMm);
 			requireCore(
 				node.field.sizeMm >= slot.minFontMm &&
 					node.field.sizeMm <= slot.maxFontMm &&
@@ -222,6 +241,7 @@ export function parseComposition(
 				"INVALID_INPUT",
 				`nodes.${node.id}.textPolicy`,
 			);
+		}
 		if (node.kind === "artwork" || node.kind === "overlay")
 			requireCore(
 				node.asset.purpose === node.kind &&

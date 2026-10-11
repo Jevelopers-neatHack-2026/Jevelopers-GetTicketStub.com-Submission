@@ -4,6 +4,7 @@ import {
 	imagePlacement,
 	recheckPermissions,
 	renderSvgWithFonts,
+	requirePhysicalTextSize,
 } from "../composition/private-model.js";
 import type {
 	CompositionPorts,
@@ -321,6 +322,19 @@ export function inspectModel(
 				break;
 			}
 			case "text": {
+				try {
+					requirePhysicalTextSize(node, slot.minFontMm, slot.maxFontMm);
+				} catch (error) {
+					if (error instanceof CompositionError)
+						add(
+							"TEXT_SIZE_POLICY",
+							error.path,
+							node.field.sizeMm * node.transform.scaleY,
+							`uniform physical size ${slot.minFontMm}..${slot.maxFontMm}`,
+							"mm",
+						);
+					else throw error;
+				}
 				const text = artifact.texts.find(
 					(t) =>
 						t.field.fieldRef === node.field.fieldRef &&

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
 	composeArtifact,
 	recheckPermissions,
+	requirePhysicalTextSize,
 } from "../composition/private-model.js";
 import type {
 	CompositionPorts,
@@ -136,6 +137,21 @@ export function planRepair(
 		bounds = policy.fields.find((f) => f.node === request.node);
 	if (policy.permission !== "mechanical" || !before || !bounds)
 		return review(artifact, "REPAIR_PERMISSION_MISSING");
+	const slot = artifact.model.layout.slots.find((s) => s.id === before.slot);
+	if (!slot) return review(artifact, "REPAIR_SLOT_UNKNOWN");
+	if (before.kind === "text") {
+		try {
+			requirePhysicalTextSize(
+				before,
+				Math.max(slot.minFontMm, bounds.minSize),
+				Math.min(slot.maxFontMm, bounds.maxSize),
+			);
+		} catch (error) {
+			if (error instanceof CompositionError)
+				return review(artifact, "SIZE_POLICY_BOUNDS");
+			throw error;
+		}
+	}
 	let after: LayoutNode = before,
 		attempts = 1;
 	const findings = inspectModel(artifact, null).findings.filter(
@@ -161,6 +177,11 @@ export function planRepair(
 			) {
 				const size = precise(before.field.sizeMm - bounds.step * attempts);
 				if (size < bounds.minSize) break;
+				if (
+					size * before.transform.scaleY <
+					Math.max(slot.minFontMm, bounds.minSize)
+				)
+					break;
 				const field = { ...before.field, sizeMm: size },
 					text = layoutText(field, artifact.fontBytes);
 				if (text.state === "measured" && !text.overflow) {
