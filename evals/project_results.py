@@ -653,6 +653,42 @@ def _parse_observation(
     }
 
 
+def _truth_consistency_conflicts(
+    config: dict[str, Any],
+    observations: list[dict[str, Any]],
+) -> dict[tuple[str, str], dict[str, int]]:
+    """Count conflicting truth claims by split/question without exposing IDs."""
+    claims: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in observations:
+        case = config["cases"].get(row["case_id"])
+        if (
+            case is None
+            or case["split"] != row["split"]
+            or case["family_id"] != row["family_id"]
+            or row["arm"] not in config["arms"]
+            or row["seed"] not in config["seeds"]
+            or row["question_id"] not in REQUIRED_QUESTION_IDS
+        ):
+            continue
+        identity = (row["case_id"], row["family_id"], row["split"], row["question_id"])
+        claims[identity].append(row)
+
+    conflicts: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
+    for (_, _, split, question_id), rows in claims.items():
+        statuses = {row["truth"]["status"] for row in rows}
+        adjudicated_tokens = {
+            row["truth"]["token"]
+            for row in rows
+            if row["truth"]["status"] == "adjudicated" and row["truth"]["token"] is not None
+        }
+        scope = (split, question_id)
+        if len(statuses) > 1:
+            conflicts[scope]["truth_status_inconsistency"] += 1
+        if len(adjudicated_tokens) > 1:
+            conflicts[scope]["adjudicated_truth_conflict"] += 1
+    return {scope: dict(counts) for scope, counts in conflicts.items()}
+
+
 def _nearest_rank(values: list[Decimal], percentile: int) -> Decimal | None:
     if not values:
         return None
@@ -674,6 +710,7 @@ def _project_groups(
     config: dict[str, Any],
     observations: list[dict[str, Any]],
     diagnostics: list[dict[str, Any]],
+    truth_conflicts: dict[tuple[str, str], dict[str, int]],
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, int, str], list[dict[str, Any]]] = defaultdict(list)
     for row in observations:
@@ -700,6 +737,10 @@ def _project_groups(
     for index, (split, arm, seed, question_id) in enumerate(group_keys, start=1):
         key = _group_key(split, arm, seed, question_id)
         key_to_index[key] = index
+        truth_scope_conflicts = truth_conflicts.get((split, question_id), {})
+        for code in ("adjudicated_truth_conflict", "truth_status_inconsistency"):
+            if count := truth_scope_conflicts.get(code, 0):
+                _add_diagnostic(diagnostics, code, group_index=index, count=count)
         expected_case_ids = {
             case_id for case_id, case in config["cases"].items() if case["split"] == split
         }
@@ -758,6 +799,10 @@ def _project_groups(
                     "numerator": exact_match_count,
                     "denominator": declared["n"],
                 }
+
+        if truth_scope_conflicts:
+            denominator_result["exact_token_agreement"] = None
+            denominator_result["reason"] = "truth_consistency_conflict"
 
         raw_pairs = []
         for (truth_status, truth_token, prediction_status, prediction_token), count in sorted(pair_counts.items()):
@@ -1107,7 +1152,8 @@ def project_bytes(data: bytes) -> dict[str, Any]:
         seen_observations.add(duplicate_key)
         observations.append(observation)
 
-    group_reports = _project_groups(config, observations, diagnostics)
+    truth_conflicts = _truth_consistency_conflicts(config, observations)
+    group_reports = _project_groups(config, observations, diagnostics, truth_conflicts)
     cost_reports = _cost_projection(config, observations, diagnostics)
 
     expected_count = len(config["cases"]) * len(config["arms"]) * len(config["seeds"]) * len(REQUIRED_QUESTION_IDS)
@@ -1138,6 +1184,7 @@ def project_bytes(data: bytes) -> dict[str, Any]:
         "attributed_usage_without_attempt", "usage_coverage_unknown", "no_billable_usage_claim_unverified",
         "expected_observation_missing", "denominator_missing", "denominator_method_unsupported",
         "denominator_mismatch", "zero_denominator", "arm_cohort_mismatch",
+        "adjudicated_truth_conflict", "truth_status_inconsistency",
         "denominator_for_unexpected_group", "unexpected_sample", "sample_identity_mismatch",
         "unexpected_arm", "unexpected_seed", "unsupported_question_id", "retry_parent_missing",
         "currency_precision_mismatch", "cost_aggregate_out_of_bounds", "cost_total_blocked",

@@ -33,7 +33,7 @@ jobs:
           python3 - <<'PY'
           import unittest
 
-          expected = 22
+          expected = 26
           suite = unittest.defaultTestLoader.discover(
               start_dir="tests/evals",
               pattern="test_project_results.py",

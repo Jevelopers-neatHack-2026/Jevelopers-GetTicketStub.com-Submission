@@ -117,11 +117,9 @@ class ProjectResultsTests(unittest.TestCase):
 
     def test_unknown_truth_token_is_visible_but_excluded_from_agreement(self) -> None:
         header, rows = load_fixture()
-        row = next(
-            row for row in rows
-            if row["case_id"] == "cal_case_1" and row["arm"] == "arm_a" and row["question_id"] == "Q-EI-SOURCE-TYPE:v1"
-        )
-        row["truth"] = {"status": "unknown", "token": "synthetic-label-a"}
+        for row in rows:
+            if row["case_id"] == "cal_case_1" and row["question_id"] == "Q-EI-SOURCE-TYPE:v1":
+                row["truth"] = {"status": "unknown", "token": "synthetic-label-a"}
         set_declared_denominators(header, rows)
         report = project_results.project_bytes(serialize(header, rows))
         group = expected_group(report, "calibration", "arm_a", "Q-EI-SOURCE-TYPE:v1")
@@ -130,6 +128,118 @@ class ProjectResultsTests(unittest.TestCase):
         self.assertEqual(group["denominator"]["declared_n"], 3)
         self.assertEqual(group["denominator"]["exact_token_agreement"], {"numerator": 3, "denominator": 3})
         self.assertTrue(any(pair["truth_status"] == "unknown" and pair["truth_token"] == "synthetic-label-a" for pair in group["raw_label_pair_counts"]))
+
+    def test_conflicting_adjudicated_truth_across_arms_blocks_comparability(self) -> None:
+        header, rows = load_fixture()
+        changed = next(
+            row for row in rows
+            if row["case_id"] == "cal_case_1" and row["arm"] == "arm_b" and row["question_id"] == "Q-EI-SOURCE-TYPE:v1"
+        )
+        changed["truth"]["token"] = "synthetic-conflicting-truth"
+        report = project_results.project_bytes(serialize(header, rows))
+        affected_groups = [
+            group for group in report["groups"]
+            if group["split"] == "calibration" and group["question_id"] == "Q-EI-SOURCE-TYPE:v1"
+        ]
+        conflict_diagnostics = [
+            item for item in report["diagnostics"] if item["code"] == "adjudicated_truth_conflict"
+        ]
+
+        self.assertEqual(report["data_integrity_status"], "blocked")
+        self.assertGreater(report["data_integrity_blocker_count"], 0)
+        self.assertEqual(len(affected_groups), 2)
+        self.assertEqual({item["group_index"] for item in conflict_diagnostics}, {group["group_index"] for group in affected_groups})
+        self.assertTrue(all(group["denominator"]["exact_token_agreement"] is None for group in affected_groups))
+        self.assertTrue(all(group["denominator"]["reason"] == "truth_consistency_conflict" for group in affected_groups))
+        self.assertNotIn("cal_case_1", json.dumps(conflict_diagnostics))
+
+    def test_conflicting_adjudicated_truth_across_seeds_blocks_comparability(self) -> None:
+        header, rows = load_fixture()
+        seed_rows = json.loads(json.dumps(rows))
+        attempt_ids = {
+            attempt["attempt_id"]
+            for row in seed_rows
+            for attempt in row["usage_attempts"]
+        }
+        attempt_id_map = {attempt_id: f"{attempt_id}-seed2" for attempt_id in attempt_ids}
+        for row in seed_rows:
+            row["seed"] = 2
+            for attempt in row["usage_attempts"]:
+                attempt["attempt_id"] = attempt_id_map[attempt["attempt_id"]]
+                attempt["batch_id"] = f"{attempt['batch_id']}-seed2"
+                if attempt["retry_of"] is not None:
+                    attempt["retry_of"] = attempt_id_map[attempt["retry_of"]]
+        changed = next(
+            row for row in seed_rows
+            if row["case_id"] == "cal_case_1" and row["arm"] == "arm_a" and row["question_id"] == "Q-EI-SOURCE-TYPE:v1"
+        )
+        changed["truth"]["token"] = "synthetic-seed-conflict"
+        header["expected_seeds"] = [1, 2]
+        header["denominators"].extend(dict(item, seed=2) for item in list(header["denominators"]))
+        rows.extend(seed_rows)
+        set_declared_denominators(header, rows)
+
+        report = project_results.project_bytes(serialize(header, rows))
+        affected_groups = [
+            group for group in report["groups"]
+            if group["split"] == "calibration" and group["question_id"] == "Q-EI-SOURCE-TYPE:v1"
+        ]
+        conflict_diagnostics = [
+            item for item in report["diagnostics"] if item["code"] == "adjudicated_truth_conflict"
+        ]
+
+        self.assertEqual(report["data_integrity_status"], "blocked")
+        self.assertEqual(len(affected_groups), 4)
+        self.assertEqual({item["group_index"] for item in conflict_diagnostics}, {group["group_index"] for group in affected_groups})
+        self.assertTrue(all(group["missing_observations"] == 0 for group in affected_groups))
+        self.assertTrue(all(group["denominator"]["exact_token_agreement"] is None for group in affected_groups))
+        self.assertTrue(all(group["denominator"]["reason"] == "truth_consistency_conflict" for group in affected_groups))
+
+    def test_truth_status_inconsistency_across_arms_is_visible_and_blocks_comparability(self) -> None:
+        header, rows = load_fixture()
+        changed = next(
+            row for row in rows
+            if row["case_id"] == "cal_case_1" and row["arm"] == "arm_b" and row["question_id"] == "Q-EI-SOURCE-TYPE:v1"
+        )
+        changed["truth"] = {"status": "unknown", "token": None}
+        set_declared_denominators(header, rows)
+
+        report = project_results.project_bytes(serialize(header, rows))
+        arm_b = expected_group(report, "calibration", "arm_b", "Q-EI-SOURCE-TYPE:v1")
+        status_diagnostics = [
+            item for item in report["diagnostics"] if item["code"] == "truth_status_inconsistency"
+        ]
+
+        self.assertEqual(report["data_integrity_status"], "blocked")
+        self.assertEqual(len(status_diagnostics), 2)
+        self.assertEqual(arm_b["truth_status_counts"], {"adjudicated": 3, "unknown": 1})
+        self.assertTrue(any(pair["truth_status"] == "unknown" for pair in arm_b["raw_label_pair_counts"]))
+        self.assertIsNone(arm_b["denominator"]["exact_token_agreement"])
+        self.assertEqual(arm_b["denominator"]["reason"], "truth_consistency_conflict")
+
+    def test_predictions_may_differ_when_repeated_truth_is_consistent(self) -> None:
+        header, rows = load_fixture()
+        changed = next(
+            row for row in rows
+            if row["case_id"] == "cal_case_1" and row["arm"] == "arm_b" and row["question_id"] == "Q-EI-SOURCE-TYPE:v1"
+        )
+        changed["prediction"]["token"] = "synthetic-different-prediction"
+
+        report = project_results.project_bytes(serialize(header, rows))
+        arm_a = expected_group(report, "calibration", "arm_a", "Q-EI-SOURCE-TYPE:v1")
+        arm_b = expected_group(report, "calibration", "arm_b", "Q-EI-SOURCE-TYPE:v1")
+
+        self.assertEqual(report["data_integrity_status"], "clear")
+        self.assertFalse(any(
+            item["code"] in {"adjudicated_truth_conflict", "truth_status_inconsistency"}
+            for item in report["diagnostics"]
+        ))
+        self.assertEqual(arm_a["denominator"]["exact_token_agreement"], {"numerator": 4, "denominator": 4})
+        self.assertEqual(arm_b["denominator"]["exact_token_agreement"], {"numerator": 3, "denominator": 4})
+        self.assertTrue(any(
+            pair["prediction_token"] == "synthetic-different-prediction"
+            for pair in arm_b["raw_label_pair_counts"]
+        ))
 
     def test_prediction_outage_is_retained_and_not_counted_as_agreement(self) -> None:
         header, rows = load_fixture()
