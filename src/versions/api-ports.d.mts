@@ -10,6 +10,7 @@ import type {
   PrivateProviderAttributionPending,
   PrivateProviderAttributionPendingResult,
   CreativePublicationTransaction,
+  CreativeSynchronousBeforeCommit,
   CreativeRuntimePorts,
   CreativeVersionCreationEvidence,
   DesignSelection,
@@ -81,7 +82,8 @@ export interface CreativeVersionRuntimeJobs extends BaseJobs {
       { status: "cancelled" | "lease_lost" | "stale_context" }>;
   completeIfActive(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
     action_id: string; operation: CreativeOperation; result: unknown; publication_fence: CreativeContextFence },
-    publish: (transaction?: CreativePublicationTransaction) => Promise<unknown> | unknown):
+    publish: (transaction?: CreativePublicationTransaction) => Promise<unknown> | unknown,
+    beforeCommit?: CreativeSynchronousBeforeCommit):
     Promise<{ status: "completed"; job: NonNullable<Awaited<ReturnType<BaseJobs["get"]>>>; result?: unknown } |
       { status: "cancelled" | "stale_context"; job?: NonNullable<Awaited<ReturnType<BaseJobs["get"]>>> }>;
 }

@@ -133,6 +133,13 @@ if (!generateRequest || !jobStatusRequest) throw new Error("Legacy request fixtu
 const response: Promise<CreativeApiResponse> = api.invoke(trustedActor, generateRequest);
 const aliasResponse: Promise<CreativeApiResponse> = apiAlias.invoke(trustedActor, jobStatusRequest);
 const conceptsInvocation: Promise<CreativeApiResponse> = api.invoke(trustedActor, conceptsRequest);
+type CompleteIfActive = NonNullable<CreativeRuntimePorts["jobs"]>["completeIfActive"];
+type SynchronousBeforeCommit = NonNullable<Parameters<CompleteIfActive>[2]>;
+const validFinalFence: SynchronousBeforeCommit = () => true;
+// @ts-expect-error Final publication authority must be rechecked synchronously before COMMIT.
+const asyncFinalFence: SynchronousBeforeCommit = async () => true;
+void validFinalFence;
+void asyncFinalFence;
 declare const conceptResult: CreativeConceptBatchResult;
 const conceptStatus: CreativeConceptBatchResult["status"] = conceptResult.status;
 // @ts-expect-error The v1.1 concepts arm is not assignable to the strict legacy v1.0 union.

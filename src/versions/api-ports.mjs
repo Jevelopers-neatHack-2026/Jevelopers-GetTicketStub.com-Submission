@@ -1,11 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalHash, canonicalSerialize } from "../contracts/index.mjs";
-import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent } from "./store.mjs";
+import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent, creativeCompositionFenceCurrent } from "./store.mjs";
 import { applyResearchInvalidation } from "../planning/index.mjs";
 import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 
-const OPERATIONS = new Set(["generate", "edit", "concepts.create", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
+const OPERATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.get",
+  "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
 const HASH = /^sha256:[a-f0-9]{64}$/;
 
 function record(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
@@ -99,7 +100,7 @@ function briefScope(scope, briefId) {
 function contextFenceMatches(store, scope, fence, { requireRecordedRepair = false, afterPublication = false } = {}) {
   if (!record(fence) || Object.keys(fence).some((key) => ![
     "brief_id", "brief_hash", "design_version_id", "design_hash",
-    "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights",
+    "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights", "composition",
   ].includes(key))) return false;
   try {
     const checkedScope = briefScope(scope, fence.brief_id);
@@ -131,6 +132,8 @@ function contextFenceMatches(store, scope, fence, { requireRecordedRepair = fals
     }
     if (Object.hasOwn(fence, "inspection_rights") &&
       !creativeAssetRightsFenceCurrent(store.db, store.now, checkedScope, fence.inspection_rights)) return false;
+    if (Object.hasOwn(fence, "composition") &&
+      !creativeCompositionFenceCurrent(store, checkedScope, fence.composition, { afterPublication })) return false;
     return true;
   } catch {
     return false;
@@ -212,6 +215,22 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     prepareConceptArtifactObjects(input) { return serial(() => store.prepareConceptArtifactObjects(input)); },
     publishConceptBatch(input, transaction) { return serial(() => store.publishConceptBatch(input, transaction)); },
     getConceptVersions(input) { return serial(() => store.getConceptVersions(input)); },
+    beginCompositionAction(input) { return serial(() => store.beginCompositionAction(input)); },
+    getCompositionAction(input) { return serial(() => store.getCompositionAction(input)); },
+    stageCompositionRevision(input) { return serial(() => store.stageCompositionRevision(input)); },
+    finishCompositionAction(input) { return serial(() => store.finishCompositionAction(input)); },
+    recoverCompositionAction(input) { return serial(() => store.recoverCompositionAction(input)); },
+    getCurrentComposition(input) { return serial(() => store.getCurrentComposition(input)); },
+    assertCurrentComposition(input) { return store.assertCurrentComposition(input); },
+    getCompositionRevision(input) { return serial(() => store.getCompositionRevision(input)); },
+    listCompositionRevisions(input) { return serial(() => store.listCompositionRevisions(input)); },
+    commitCompositionRevision(input, transaction) {
+      // Publication calls this from completeIfActive while that adapter owns
+      // the same connection's BEGIN IMMEDIATE transaction. Preserve a truly
+      // synchronous final-owner-fence→CAS ordering inside that transaction.
+      if (transactionContext.getStore() === store) return store.commitCompositionRevision(input, transaction);
+      return serial(() => store.commitCompositionRevision(input, transaction));
+    },
     inspectionRepair,
     beginInspectionSession(input) {
       return serial(() => {
@@ -581,6 +600,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     begin(input) {
       return serial(() => {
         store.assertOpen();
+        store.assertNoBorrowedTransaction("job.begin.transaction");
         if (!record(input) || !record(input.scope)) throw new VersionStoreError("invalid_request", "job");
         const tenant_id = safeReference(input.scope.tenant_id, "scope.tenant_id");
         const project_id = safeReference(input.scope.project_id, "scope.project_id");
@@ -633,7 +653,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, job_id);
           if (!row || row.actor_id !== actor_id || row.action_id !== action_id || row.request_hash !== request_hash ||
-            !["inspect", "concepts.create"].includes(row.operation)) {
+            !["inspect", "concepts.create", "composition.create", "composition.update"].includes(row.operation)) {
             store.db.exec("ROLLBACK");
             return Object.freeze({ kind: "conflict" });
           }
@@ -835,9 +855,15 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     reconcilePrivateProviderAttributions(input) {
       return serial(() => store.reconcilePrivateProviderAttributions(input));
     },
-    async completeIfActive(input, publish) {
+    async completeIfActive(input, publish, beforeCommit) {
       return serial(async () => {
-        if (typeof publish !== "function") throw new VersionStoreError("invalid_request", "publish");
+        // This adapter owns the publication transaction from BEGIN through
+        // COMMIT. A caller BEGIN or SAVEPOINT must never be rolled back by the
+        // catch path below, and cannot authorize external publication.
+        store.assertNoBorrowedTransaction("job_publication.transaction");
+        if (typeof publish !== "function" || (beforeCommit !== undefined && typeof beforeCommit !== "function")) {
+          throw new VersionStoreError("invalid_request", "publish");
+        }
         if (input?.operation === "handoff") {
           throw new VersionStoreError("unavailable", "handoff.durable_result_staging", true);
         }
@@ -895,6 +921,23 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
             .run(result_json, updated_at, scope.tenant_id, scope.project_id, input.job_id,
               input.actor_id, input.action_id, input.operation, row.request_hash, tokenHash(input.lease_token), updated_at).changes;
           if (completedChanges !== 1) throw new VersionStoreError("cancelled", "job.lease_token");
+          if (beforeCommit) {
+            let fenceResult;
+            try { fenceResult = beforeCommit(transaction); }
+            catch (error) {
+              if (error instanceof VersionStoreError) throw error;
+              if (["stale_version", "scope_denied", "conflict"].includes(error?.code)) {
+                throw new VersionStoreError(error.code, "job_publication.final_fence");
+              }
+              throw new VersionStoreError("unavailable", "job_publication.final_fence", true);
+            }
+            if (fenceResult !== null && typeof fenceResult === "object" && typeof fenceResult.then === "function") {
+              throw new VersionStoreError("invalid_request", "job_publication.final_fence_async");
+            }
+            if (fenceResult !== true) {
+              throw new VersionStoreError("invalid_request", "job_publication.final_fence_result");
+            }
+          }
           store.db.exec("COMMIT");
           faultInjector?.("after_job_commit");
           const completed = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -918,6 +961,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     },
     failIfActive(input) {
       return serial(() => {
+        store.assertNoBorrowedTransaction("job.failure.transaction");
         const scope = briefScope(input.scope, input.scope.brief_id ?? "job-scope");
         store.db.exec("BEGIN IMMEDIATE");
         try {
@@ -954,6 +998,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     },
     cancel(input) {
       return serial(() => {
+        store.assertNoBorrowedTransaction("job.cancel.transaction");
         const tenant_id = safeReference(input.scope?.tenant_id, "scope.tenant_id");
         const project_id = safeReference(input.scope?.project_id, "scope.project_id");
         const actor_id = safeReference(input.actor_id, "actor_id");

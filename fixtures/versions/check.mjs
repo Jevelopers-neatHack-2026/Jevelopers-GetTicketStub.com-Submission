@@ -19,12 +19,13 @@ if (version.error || version.status !== 0) throw version.error ?? new Error("Typ
 process.stdout.write(version.stdout.trim().replace(/^Version\s+/, "") + "\n");
 
 const test = spawnSync(process.execPath, ["--test", "tests/versions/api-integration.test.mjs", "tests/versions/store.test.mjs",
-  "tests/api/creative-api.test.mjs"], { stdio: "inherit", env: process.env });
+  "tests/versions/composition-authority.test.mjs", "tests/api/creative-api.test.mjs"], { stdio: "inherit", env: process.env });
 if (test.error) throw test.error;
 if (test.status !== 0) process.exit(test.status ?? 2);
 
 const types = spawnSync(process.execPath, [tsc, "--noEmit", "--strict", "--skipLibCheck", "false", "--module", "NodeNext",
-  "--moduleResolution", "NodeNext", "--target", "ES2022", "tests/versions/public-consumer.mts"],
+  "--moduleResolution", "NodeNext", "--target", "ES2022", "tests/versions/public-consumer.mts",
+  "tests/api/composition-public-consumer.mts"],
 { stdio: "inherit", env: process.env });
 if (types.error) throw types.error;
 process.exit(types.status ?? 2);
