@@ -1,15 +1,21 @@
 """Structured validation failures safe to publish without source payloads."""
 
-from dataclasses import dataclass
 from typing import Never, override
 
 
-@dataclass(frozen=True, slots=True)
 class InvalidArtifactError(Exception):
-    """An artifact violates the declared evaluation boundary."""
+    """An artifact violates the declared evaluation boundary.
 
-    code: str
-    reference: str
+    BaseException metadata must remain mutable for traceback, chaining and notes.
+    """
+
+    __slots__: tuple[str, str] = ("code", "reference")
+
+    def __init__(self, code: str, reference: str) -> None:
+        """Initialize the diagnostic fields and standard exception arguments."""
+        super().__init__(code, reference)
+        self.code: str = code
+        self.reference: str = reference
 
     @override
     def __str__(self) -> str:
