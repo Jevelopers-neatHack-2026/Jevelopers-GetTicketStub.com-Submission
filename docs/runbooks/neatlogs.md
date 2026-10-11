@@ -62,10 +62,10 @@ Send results never set `deliveryConfirmed`:
 | `partially_rejected` | 2xx with `partialSuccess.rejectedSpans > 0` |
 | `rejected` | 401/403 (credential) or other 4xx with no earlier ambiguous attempt. Not retried. |
 | `not_accepted` | Retries exhausted on 429 |
-| `outcome_unknown` | Timeout, connection loss, 5xx, oversized or unparseable 2xx. Spans may or may not be stored. |
-| `not_configured` / `aborted` | No request completed |
+| `outcome_unknown` | Timeout, connection loss, 5xx, oversized or unparseable 2xx, or cancellation after a request starts. Spans may or may not be stored. |
+| `not_configured` / `aborted` | Not configured, or cancellation before the next POST attempt starts. A pre-aborted first call sends zero requests. |
 
-Retries (at most 5, default 3) resend identical bytes with the same deterministic IDs. `Retry-After` is a minimum: numeric seconds and HTTP dates are honored for 429/503 responses. If the minimum is longer than the local 10-second wait bound, the operation stops instead of retrying early.
+Retries (at most 5, default 3) resend identical bytes with the same deterministic IDs. `Retry-After` is a minimum: numeric seconds and all three HTTP-date forms are honored for 429/503 responses. If the minimum is longer than the local 10-second wait bound, including an arbitrarily large valid numeric delay, the operation stops instead of retrying early. Cancellation after a POST starts is `outcome_unknown`; cancellation during a wait after a completed 429 stops before the next POST.
 
 A terminal refusal after an earlier timeout/5xx does not settle that earlier request; the result stays `outcome_unknown` and includes only static status/reason fields for the last response.
 

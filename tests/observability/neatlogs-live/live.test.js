@@ -326,6 +326,33 @@ describe('export encoding', () => {
       error => error.code === 'UNEXPECTED_RESPONSE_TYPE');
   });
 
+  test('rejects fixed-width wire types for every known protobuf response field', () => {
+    for (const malformed of [
+      '090000000000000000', // ExportResponse.partial_success as fixed64
+      '0d00000000', // ExportResponse.partial_success as fixed32
+      '0a09090000000000000000', // PartialSuccess.rejected_spans as fixed64
+      '0a050d00000000', // PartialSuccess.rejected_spans as fixed32
+      '0a09110000000000000000', // PartialSuccess.error_message as fixed64
+      '0a051500000000' // PartialSuccess.error_message as fixed32
+    ]) {
+      assert.throws(
+        () => decodeNeatlogsExportResponse(Buffer.from(malformed, 'hex'), 'application/x-protobuf'),
+        error => error.code === 'MALFORMED_RESPONSE'
+      );
+    }
+
+    assert.equal(
+      decodeNeatlogsExportResponse(Buffer.from('110000000000000000', 'hex'), 'application/x-protobuf').rejectedSpans,
+      0,
+      'unknown fixed64 fields remain forward-compatible'
+    );
+    assert.equal(
+      decodeNeatlogsExportResponse(Buffer.from('1d00000000', 'hex'), 'application/x-protobuf').rejectedSpans,
+      0,
+      'unknown fixed32 fields remain forward-compatible'
+    );
+  });
+
   test('delivery generations keep generation 0 stable and give new IDs after a loss', () => {
     const trace = plan.traces[0];
     assert.deepEqual(deterministicNeatlogsIds(trace.eventToken, 0), deterministicNeatlogsIds(trace.eventToken));
@@ -473,6 +500,18 @@ describe('send', () => {
     assert.equal(result.rejectedSpans, 1);
   });
 
+  test('a malformed 2xx protobuf response remains an unknown outcome', async () => {
+    const malformed = Buffer.from('090000000000000000', 'hex');
+    const { fetchImpl, calls } = recordingFetch(() => response(200, malformed, {
+      'content-type': 'application/x-protobuf'
+    }));
+    const result = await sendNeatlogsPlan(configured(), plan, { fetch: fetchImpl, maxAttempts: 1 });
+    assert.equal(result.status, 'outcome_unknown');
+    assert.equal(result.reasonCode, 'MALFORMED_RESPONSE');
+    assert.equal(result.deliveryConfirmed, false);
+    assert.equal(calls.length, 1);
+  });
+
   test('credential rejection stops immediately', async () => {
     const { fetchImpl, calls } = recordingFetch(() => response(401, 'unauthorized'));
     const result = await sendNeatlogsPlan(configured(), plan, { fetch: fetchImpl, retryDelayMs: 0 });
@@ -548,6 +587,36 @@ describe('send', () => {
     assert.equal(bodyCancelled, true);
   });
 
+  test('cancellation after a POST starts leaves the receiver outcome unknown', async () => {
+    for (const phase of ['awaiting-response', 'streaming-response']) {
+      const controller = new AbortController();
+      let calls = 0;
+      let bodyCancelled = false;
+      const fetchImpl = async () => {
+        calls += 1;
+        if (phase === 'awaiting-response') {
+          queueMicrotask(() => controller.abort());
+          return new Promise(() => {});
+        }
+        return new Response(new ReadableStream({
+          start() {
+            setTimeout(() => controller.abort(), 0);
+          },
+          cancel() { bodyCancelled = true; }
+        }), { status: 200 });
+      };
+      const result = await sendNeatlogsPlan(configured(), plan, {
+        fetch: fetchImpl, signal: controller.signal, timeoutMs: 1_000, maxAttempts: 1
+      });
+      assert.equal(result.status, 'outcome_unknown', phase);
+      assert.equal(result.reasonCode, 'ABORTED', phase);
+      assert.equal(result.attempts, 1, phase);
+      assert.equal(result.deliveryConfirmed, false, phase);
+      assert.equal(calls, 1, phase);
+      if (phase === 'streaming-response') assert.equal(bodyCancelled, true);
+    }
+  });
+
   test('honors bounded Retry-After on 429 and reports not_accepted', async () => {
     const delays = [];
     const { fetchImpl, calls } = recordingFetch(() => response(429, '', { 'retry-after': '1' }));
@@ -580,6 +649,66 @@ describe('send', () => {
       });
       assert.equal(result.status, status === 429 ? 'not_accepted' : 'outcome_unknown');
       assert.equal(result.reasonCode, 'RETRY_AFTER_EXCEEDS_BOUND');
+      assert.equal(calls.length, 1);
+    }
+  });
+
+  test('honors all HTTP-date forms and stops on arbitrarily large valid delay-seconds', async () => {
+    const now = Date.parse('2026-01-01T00:00:00Z');
+    const dates = [
+      'Thu, 01 Jan 2026 00:00:02 GMT',
+      'Thursday, 01-Jan-26 00:00:02 GMT',
+      'Thu Jan  1 00:00:02 2026'
+    ];
+    for (const retryAfter of dates) {
+      const delays = [];
+      const { fetchImpl, calls } = recordingFetch((url, init, count) => (
+        count === 1 ? response(503, '', { 'retry-after': retryAfter }) : response(200, null)
+      ));
+      const result = await sendNeatlogsPlan(configured(), plan, {
+        fetch: fetchImpl, now: () => now, maxAttempts: 2,
+        sleep: async delay => { delays.push(delay); return true; }
+      });
+      assert.equal(result.status, 'receiver_accepted', retryAfter);
+      assert.deepEqual(delays, [2_000], retryAfter);
+      assert.equal(calls.length, 2, retryAfter);
+    }
+
+    for (const retryAfter of [
+      'Thu, 01 Jan 2026 00:00:60 GMT', // syntactically valid leap second
+      'Wednesday, 01-Jan-76 00:00:00 GMT' // exactly 50 years ahead is still future
+    ]) {
+      const { fetchImpl, calls } = recordingFetch(() => response(429, '', { 'retry-after': retryAfter }));
+      const result = await sendNeatlogsPlan(configured(), plan, {
+        fetch: fetchImpl, now: () => now, maxAttempts: 2,
+        sleep: async () => { throw new Error('a minimum above the local bound must not sleep'); }
+      });
+      assert.equal(result.status, 'not_accepted', retryAfter);
+      assert.equal(result.reasonCode, 'RETRY_AFTER_EXCEEDS_BOUND', retryAfter);
+      assert.equal(calls.length, 1, retryAfter);
+    }
+
+    const pastDateDelays = [];
+    const pastDate = recordingFetch((url, init, count) => (
+      count === 1 ? response(429, '', { 'retry-after': 'Saturday, 01-Jan-77 00:00:02 GMT' }) : response(200, null)
+    ));
+    const pastDateResult = await sendNeatlogsPlan(configured(), plan, {
+      fetch: pastDate.fetchImpl, now: () => now, maxAttempts: 2,
+      sleep: async delay => { pastDateDelays.push(delay); return true; }
+    });
+    assert.equal(pastDateResult.status, 'receiver_accepted');
+    assert.deepEqual(pastDateDelays, [0], 'a date more than 50 years ahead is interpreted in the most recent past century');
+    assert.equal(pastDate.calls.length, 2);
+
+    const hugeDelay = '9'.repeat(309);
+    for (const status of [429, 503]) {
+      const { fetchImpl, calls } = recordingFetch(() => response(status, '', { 'retry-after': hugeDelay }));
+      const result = await sendNeatlogsPlan(configured(), plan, {
+        fetch: fetchImpl, maxAttempts: 3,
+        sleep: async () => { throw new Error('an unbounded valid minimum must not sleep or retry early'); }
+      });
+      assert.equal(result.reasonCode, 'RETRY_AFTER_EXCEEDS_BOUND');
+      assert.equal(result.status, status === 429 ? 'not_accepted' : 'outcome_unknown');
       assert.equal(calls.length, 1);
     }
   });
@@ -939,6 +1068,64 @@ describe('readback', () => {
     });
     assert.equal(dated.status, 'missing');
     assert.deepEqual(dateDelays, [3_000]);
+
+    for (const retryAfter of [
+      'Thu, 01 Jan 2026 00:00:02 GMT',
+      'Thursday, 01-Jan-26 00:00:02 GMT',
+      'Thu Jan  1 00:00:02 2026'
+    ]) {
+      let dateAttempt = 0;
+      const delaysForDate = [];
+      const dateFetchForFormat = async url => {
+        const path = new URL(url).pathname;
+        if (path.endsWith('/project')) {
+          return response(200, JSON.stringify({ success: true, data: { id: PROJECT_ID } }));
+        }
+        dateAttempt += 1;
+        return dateAttempt === 1
+          ? response(503, '', { 'retry-after': retryAfter })
+          : response(404, '{}');
+      };
+      const dateResultForFormat = await readbackNeatlogsPlan(configured(), plan, {
+        fetch: dateFetchForFormat, now: () => now, pollIntervalMs: 0, maxPolls: 1,
+        sleep: async delay => { delaysForDate.push(delay); return true; }
+      });
+      assert.equal(dateResultForFormat.status, 'missing', retryAfter);
+      assert.deepEqual(delaysForDate, [2_000], retryAfter);
+      assert.equal(dateAttempt, plan.traces.length + 1, retryAfter);
+    }
+
+    let boundaryAttempt = 0;
+    const boundaryFetch = async url => {
+      if (new URL(url).pathname.endsWith('/project')) {
+        return response(200, JSON.stringify({ success: true, data: { id: PROJECT_ID } }));
+      }
+      boundaryAttempt += 1;
+      return response(503, '', { 'retry-after': 'Thu, 01 Jan 2026 00:00:60 GMT' });
+    };
+    const leapSecondRead = await readbackNeatlogsPlan(configured(), plan, {
+      fetch: boundaryFetch, now: () => now, pollIntervalMs: 0,
+      sleep: async () => { throw new Error('a leap-second minimum must not sleep or retry early'); }
+    });
+    assert.equal(leapSecondRead.status, 'readback_failed');
+    assert.equal(leapSecondRead.reasonCode, 'READBACK_RETRY_AFTER_EXCEEDS_BOUND');
+    assert.equal(boundaryAttempt, 1);
+
+    let hugeReadAttempts = 0;
+    const hugeReadFetch = async url => {
+      if (new URL(url).pathname.endsWith('/project')) {
+        return response(200, JSON.stringify({ success: true, data: { id: PROJECT_ID } }));
+      }
+      hugeReadAttempts += 1;
+      return response(429, '', { 'retry-after': '9'.repeat(309) });
+    };
+    const hugeRead = await readbackNeatlogsPlan(configured(), plan, {
+      fetch: hugeReadFetch, pollIntervalMs: 0,
+      sleep: async () => { throw new Error('an unbounded valid minimum must not sleep or retry early'); }
+    });
+    assert.equal(hugeRead.status, 'readback_failed');
+    assert.equal(hugeRead.reasonCode, 'READBACK_RETRY_AFTER_EXCEEDS_BOUND');
+    assert.equal(hugeReadAttempts, 1);
 
     const fallbackDelays = [];
     let fallbackCalls = 0;

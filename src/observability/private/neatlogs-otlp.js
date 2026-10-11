@@ -399,6 +399,7 @@ function readFields(buffer, visit) {
     else if (wireType === 1 || wireType === 5) {
       const size = wireType === 1 ? 8 : 4;
       if (state.offset + size > buffer.length) throw new NeatlogsOtlpError('MALFORMED_RESPONSE');
+      visit(field, wireType, buffer.subarray(state.offset, state.offset + size));
       state.offset += size;
     } else if (wireType === 2) {
       const rawLength = readVarint(buffer, state);

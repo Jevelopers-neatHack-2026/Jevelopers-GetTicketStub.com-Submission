@@ -21,6 +21,13 @@ const READBACK_BOUNDS = Object.freeze({
 const MAX_RETRY_AFTER_MS = 10_000;
 const MAX_READ_BYTES = 256 * 1024;
 const MAX_TRACES = 32;
+const SHORT_WEEKDAYS = Object.freeze(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+const LONG_WEEKDAYS = Object.freeze([
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+]);
+const SHORT_MONTHS = Object.freeze([
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+]);
 
 function bounded(options, defaults, bounds) {
   const result = { ...defaults };
@@ -53,6 +60,74 @@ function sleep(milliseconds, signal) {
   });
 }
 
+function httpDateMilliseconds(value, nowMs) {
+  let match;
+  let weekday;
+  let day;
+  let month;
+  let year;
+  let hour;
+  let minute;
+  let second;
+  let weekdayNames;
+  let hasTwoDigitYear = false;
+
+  match = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/.exec(value);
+  if (match) {
+    [, weekday, day, month, year, hour, minute, second] = match;
+    weekdayNames = SHORT_WEEKDAYS;
+    month = SHORT_MONTHS.indexOf(month);
+  } else {
+    match = /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), (\d{2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2}) (\d{2}):(\d{2}):(\d{2}) GMT$/.exec(value);
+    if (match) {
+      [, weekday, day, month, year, hour, minute, second] = match;
+      weekdayNames = LONG_WEEKDAYS;
+      month = SHORT_MONTHS.indexOf(month);
+      hasTwoDigitYear = true;
+      const currentYear = new Date(nowMs).getUTCFullYear();
+      year = Math.floor(currentYear / 100) * 100 + Number(year);
+    } else {
+      match = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) {1,2}(\d{1,2}) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/.exec(value);
+      if (!match) return null;
+      [, weekday, month, day, hour, minute, second, year] = match;
+      weekdayNames = SHORT_WEEKDAYS;
+      month = SHORT_MONTHS.indexOf(month);
+    }
+  }
+
+  day = Number(day);
+  year = Number(year);
+  hour = Number(hour);
+  minute = Number(minute);
+  second = Number(second);
+  if (month < 0 || hour > 23 || minute > 59 || second > 60) return null;
+
+  const makeDate = candidateYear => {
+    const date = new Date(0);
+    date.setUTCFullYear(candidateYear, month, day);
+    date.setUTCHours(hour, minute, Math.min(second, 59), 0);
+    if (date.getUTCFullYear() !== candidateYear || date.getUTCMonth() !== month || date.getUTCDate() !== day ||
+        date.getUTCHours() !== hour || date.getUTCMinutes() !== minute ||
+        date.getUTCSeconds() !== Math.min(second, 59)) return null;
+    return date.getTime() + (second === 60 ? 1_000 : 0);
+  };
+
+  let dateMs = makeDate(year);
+  if (dateMs === null) return null;
+  if (hasTwoDigitYear) {
+    const cutoff = new Date(nowMs);
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() + 50);
+    if (dateMs > cutoff.getTime()) {
+      year -= 100;
+      dateMs = makeDate(year);
+      if (dateMs === null) return null;
+    }
+  }
+  const weekdayDate = new Date(dateMs - (second === 60 ? 1_000 : 0));
+  if (weekdayNames[weekdayDate.getUTCDay()] !== weekday) return null;
+  return dateMs;
+}
+
 function retryDelay(response, fallback, nowMs = Date.now()) {
   const header = response.headers?.get?.('retry-after');
   if (typeof header !== 'string' || header.trim() === '') {
@@ -61,14 +136,32 @@ function retryDelay(response, fallback, nowMs = Date.now()) {
   const trimmed = header.trim();
   let milliseconds = null;
   if (/^\d+$/.test(trimmed)) {
-    const seconds = Number(trimmed);
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      milliseconds = seconds > Number.MAX_SAFE_INTEGER / 1000
-        ? Number.MAX_SAFE_INTEGER : Math.ceil(seconds * 1000);
+    let firstNonzero = 0;
+    while (firstNonzero < trimmed.length - 1 && trimmed.charCodeAt(firstNonzero) === 48) firstNonzero += 1;
+    const maxSeconds = String(Math.floor(MAX_RETRY_AFTER_MS / 1_000));
+    const significantLength = trimmed.length - firstNonzero;
+    let exceedsBound = significantLength > maxSeconds.length;
+    if (significantLength === maxSeconds.length) {
+      for (let index = 0; index < significantLength; index += 1) {
+        const digit = trimmed.charCodeAt(firstNonzero + index);
+        const maximumDigit = maxSeconds.charCodeAt(index);
+        if (digit === maximumDigit) continue;
+        exceedsBound = digit > maximumDigit;
+        break;
+      }
     }
-  } else if (/^(?:[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT|[A-Z][a-z]+, \d{2}-[A-Z][a-z]{3}-\d{2} \d{2}:\d{2}:\d{2} GMT|[A-Z][a-z]{2} [A-Z][a-z]{2} {1,2}\d{1,2} \d{2}:\d{2}:\d{2} \d{4})$/.test(trimmed)) {
-    const dateMs = Date.parse(trimmed);
-    if (Number.isFinite(dateMs)) milliseconds = Math.max(0, dateMs - nowMs);
+    if (exceedsBound) {
+      milliseconds = Number.MAX_SAFE_INTEGER;
+    } else {
+      let seconds = 0;
+      for (let index = firstNonzero; index < trimmed.length; index += 1) {
+        seconds = seconds * 10 + trimmed.charCodeAt(index) - 48;
+      }
+      milliseconds = Math.ceil(seconds * 1_000);
+    }
+  } else {
+    const dateMs = httpDateMilliseconds(trimmed, nowMs);
+    if (dateMs !== null) milliseconds = Math.max(0, dateMs - nowMs);
   }
   if (milliseconds === null) {
     return { milliseconds: Math.min(fallback, MAX_RETRY_AFTER_MS), serverMinimum: false };
@@ -126,7 +219,7 @@ async function readBounded(response, signal) {
   }
 }
 
-async function boundedFetch(fetchImpl, url, init, timeoutMs, signal) {
+async function boundedFetch(fetchImpl, url, init, timeoutMs, signal, onRequestStarted = () => {}) {
   if (signal?.aborted) throw codedError('REQUEST_ABORTED');
   const controller = new AbortController();
   const onAbort = () => controller.abort();
@@ -134,6 +227,8 @@ async function boundedFetch(fetchImpl, url, init, timeoutMs, signal) {
   let timer;
   let onExternalAbort;
   const operation = (async () => {
+    if (signal?.aborted) throw codedError('REQUEST_ABORTED');
+    onRequestStarted();
     const response = await fetchImpl(url, { ...init, redirect: 'error', signal: controller.signal });
     const body = await readBounded(response, controller.signal);
     return { response, body };
@@ -175,9 +270,11 @@ function sendResult(status, fields) {
  * Results:
  * - receiver_accepted: HTTP 2xx and zero rejected spans (still unconfirmed);
  * - partially_rejected / rejected: the receiver refused some or all spans;
- * - outcome_unknown: timeout, network failure, 5xx or an unparseable 2xx, so
+ * - outcome_unknown: timeout, network failure, 5xx, an unparseable 2xx, or
+ *   cancellation after a request starts, so
  *   the spans may or may not have been stored;
- * - not_configured / aborted: no request was completed.
+ * - not_configured: the send was not configured; aborted: cancellation stopped
+ *   before the next attempt started.
  * Retries reuse the identical body and deterministic IDs.
  */
 export async function sendNeatlogsPlan(config, plan, options = {}) {
@@ -217,6 +314,7 @@ export async function sendNeatlogsPlan(config, plan, options = {}) {
       });
     }
     attempts += 1;
+    let requestStarted = false;
     let delay = limits.retryDelayMs * 2 ** (attempts - 1);
     try {
       const { response, body: responseBody } = await boundedFetch(fetchImpl, url, {
@@ -226,7 +324,7 @@ export async function sendNeatlogsPlan(config, plan, options = {}) {
           'x-api-key': config.ingestKey()
         },
         body
-      }, limits.timeoutMs, signal);
+      }, limits.timeoutMs, signal, () => { requestStarted = true; });
       const httpStatus = response.status;
       if (httpStatus >= 200 && httpStatus < 300) {
         let parsed;
@@ -295,8 +393,9 @@ export async function sendNeatlogsPlan(config, plan, options = {}) {
       }
     } catch (error) {
       if (signal?.aborted || error?.code === 'REQUEST_ABORTED') {
-        return sendResult(anyAmbiguous ? 'outcome_unknown' : 'aborted', {
-          reasonCode: 'ABORTED', attempts, expectedSpans, httpStatus: last.httpStatus
+        return sendResult(anyAmbiguous || requestStarted ? 'outcome_unknown' : 'aborted', {
+          reasonCode: 'ABORTED', attempts, expectedSpans,
+          httpStatus: requestStarted ? null : last.httpStatus
         });
       }
       if (error?.code === 'RESPONSE_TOO_LARGE') {
