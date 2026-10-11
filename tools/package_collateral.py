@@ -499,6 +499,11 @@ def _load_context(root: Path, version: str) -> Dict[str, Any]:
         if isinstance(row, dict)
     }
     documents["inventoryById"] = _inventory_by_id(documents.get("inventory") or {})
+    documents["trackedFileByPath"] = {
+        row.get("path"): row
+        for row in (documents.get("inventory") or {}).get("trackedFiles", [])
+        if isinstance(row, dict) and isinstance(row.get("path"), str)
+    }
     documents["sceneById"] = {
         row.get("sceneId"): row
         for row in (documents.get("sceneMap") or {}).get("scenes", [])
@@ -535,6 +540,68 @@ def _inventory_by_id(inventory: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         for asset_id in family.get("plannedAssetIds", []):
             result.setdefault(asset_id, {"assetId": asset_id, "family": family})
     return result
+
+
+def _package_copy_provenance_snapshot(
+    root: Path,
+    context: Dict[str, Any],
+    relative: Optional[str],
+    expected_sha256: Optional[str],
+) -> Dict[str, Any]:
+    """Expose the exact inventory/provenance join for one materialized package copy."""
+    if not relative:
+        return {"status": "not_selected", "path": None, "recordId": None}
+    inventory_row = context.get("trackedFileByPath", {}).get(relative)
+    if not inventory_row:
+        return {"status": "missing_inventory_join", "path": relative, "recordId": None}
+    record_id = inventory_row.get("provenanceRecordId")
+    provenance = context.get("provenanceByAsset", {}).get(record_id) if record_id else None
+    if not provenance:
+        return {
+            "status": "missing_provenance_record",
+            "path": relative,
+            "inventoryFileId": inventory_row.get("fileId"),
+            "recordId": record_id,
+        }
+    source = provenance.get("source", {})
+    checksum = provenance.get("checksum", {})
+    fact = _file_fact(root, relative)
+    exact = (
+        fact.get("exists") is True
+        and fact.get("sha256") == expected_sha256
+        and inventory_row.get("exists") is True
+        and inventory_row.get("sha256") == fact.get("sha256")
+        and source.get("path") == relative
+        and checksum.get("algorithm") == "SHA-256"
+        and checksum.get("value") == fact.get("sha256")
+    )
+    permission = provenance.get("permission", {})
+    return {
+        "status": "joined_exact_bytes" if exact else "stale_or_mismatched_join",
+        "path": relative,
+        "inventoryFileId": inventory_row.get("fileId"),
+        "recordId": record_id,
+        "kind": provenance.get("kind"),
+        "source": {
+            "path": source.get("path"),
+            "revision": source.get("revision"),
+            "revisionKind": source.get("revisionKind"),
+            "url": source.get("url"),
+            "sha256": checksum.get("value"),
+        },
+        "permission": {
+            "status": permission.get("status"),
+            "approvedDestinations": permission.get("approvedDestinations", []),
+            "externalPublication": permission.get("externalPublication"),
+            "allowedDestinations": provenance.get("allowedDestinations", []),
+            "expiry": provenance.get("expiry"),
+            "reviewer": provenance.get("reviewer"),
+            "reviewDate": provenance.get("reviewDate"),
+            "reviewStatus": provenance.get("reviewStatus"),
+            "publishability": provenance.get("publishability"),
+            "blockers": provenance.get("blockers", []),
+        },
+    }
 
 
 def _scene_refs_for_path(context: Dict[str, Any], paths: Iterable[str]) -> List[str]:
@@ -825,6 +892,9 @@ def _asset_record(root: Path, row: Dict[str, Any], spec: Dict[str, Any], context
                     "sourceCommitId": dependency_copy.get("sourceCommitId"),
                     "expectedSha256": dependency_source.get("sha256"),
                     "byteIdenticalToSource": bool(dependency_copy.get("exists") and dependency_copy.get("sha256") == dependency_source.get("sha256")),
+                    "provenance": _package_copy_provenance_snapshot(
+                        root, context, dependency_package_path, dependency_source.get("sha256")
+                    ),
                 },
                 "role": dependency.get("role"),
             }
@@ -871,6 +941,9 @@ def _asset_record(root: Path, row: Dict[str, Any], spec: Dict[str, Any], context
             "expectedSha256": fact.get("sha256"),
             "status": "present" if package_fact.get("exists") else ("not_selected" if not package_path else "not_materialized"),
             "byteIdenticalToSource": bool(package_fact.get("exists") and fact.get("sha256") == package_fact.get("sha256")),
+            "provenance": _package_copy_provenance_snapshot(
+                root, context, package_path, fact.get("sha256")
+            ),
         },
         "compositionDependencies": composition_dependencies,
         "compositionReferenceErrors": composition_reference_errors,
@@ -1142,6 +1215,9 @@ def _dynamic_video_records(root: Path, spec: Dict[str, Any], context: Dict[str, 
                         "sha256": cap_copy.get("sha256"),
                         "expectedSha256": caption_fact.get("sha256"),
                         "byteIdenticalToSource": bool(cap_copy.get("exists") and cap_copy.get("sha256") == caption_fact.get("sha256")),
+                        "provenance": _package_copy_provenance_snapshot(
+                            root, context, cap_package, caption_fact.get("sha256")
+                        ),
                     },
                     "sceneIds": all_scene_ids,
                     "mediaClass": "accessible-alternative",
@@ -1194,6 +1270,9 @@ def _dynamic_video_records(root: Path, spec: Dict[str, Any], context: Dict[str, 
                     "sha256": copy_fact.get("sha256"),
                     "expectedSha256": fact.get("sha256"),
                     "byteIdenticalToSource": bool(copy_fact.get("exists") and copy_fact.get("sha256") == fact.get("sha256")),
+                    "provenance": _package_copy_provenance_snapshot(
+                        root, context, video_package, fact.get("sha256")
+                    ),
                 },
                 "dimensions": dimensions,
                 "sceneIds": all_scene_ids,
@@ -1876,6 +1955,39 @@ def copy_package_files(root: Path, version: str) -> None:
 
 def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
     errors: List[str] = package_path_collisions(manifest)
+    release_context: Optional[Dict[str, Any]] = None
+    requires_copy_provenance = (
+        manifest.get("packageVersion") == DEFAULT_VERSION
+        and manifest.get("releaseClass") == "draft_rehearsal_only"
+    )
+    if requires_copy_provenance:
+        try:
+            release_context = _load_context(root, DEFAULT_VERSION)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"package-copy provenance context failed closed ({exc})")
+
+    def verify_package_copy_join(package: Dict[str, Any], expected_sha256: Optional[str], label: str) -> None:
+        relative = package.get("path")
+        if not relative or not requires_copy_provenance:
+            return
+        if release_context is None:
+            return
+        declared = package.get("provenance")
+        expected = _package_copy_provenance_snapshot(root, release_context, relative, expected_sha256)
+        if not isinstance(declared, dict):
+            errors.append(f"{label} {relative}: exact inventory/provenance copy reference is missing")
+        elif declared != expected:
+            errors.append(f"{label} {relative}: inventory/provenance copy reference is stale or altered")
+        if expected.get("status") != "joined_exact_bytes":
+            errors.append(f"{label} {relative}: exact package-copy inventory/provenance join is {expected.get('status')}")
+        internal_destination = manifest.get("destinations", {}).get("internalReview")
+        permission = expected.get("permission", {})
+        if (
+            not isinstance(internal_destination, str)
+            or internal_destination not in permission.get("allowedDestinations", [])
+            or internal_destination not in permission.get("approvedDestinations", [])
+        ):
+            errors.append(f"{label} {relative}: provenance does not authorize the manifest's exact internal-review destination")
 
     def verify_source(relative: Optional[str], expected_sha: Optional[str], expected_commit: Optional[str], label: str) -> None:
         if not relative:
@@ -1940,6 +2052,7 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
                 errors.append(f"{path_value}: packaged file is missing")
             elif sha256_file(path) != package.get("expectedSha256"):
                 errors.append(f"{path_value}: packaged SHA-256 does not match manifest")
+            verify_package_copy_join(package, package.get("expectedSha256"), "package copy")
         file_row = record.get("file", {})
         source_path = file_row.get("path")
         if file_row.get("exists"):
@@ -1969,6 +2082,7 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
             copy_sha = sha256_file(copy_path)
             if copy_sha != dependency_copy.get("expectedSha256") or copy_sha != dependency_copy.get("sha256"):
                 errors.append(f"{label}: packaged contextual dependency checksum mismatch")
+            verify_package_copy_join(dependency_copy, dependency_copy.get("expectedSha256"), label + " package copy")
             verify_source(
                 dependency_copy.get("path"),
                 dependency_copy.get("sha256"),
@@ -2026,6 +2140,7 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
                     continue
                 if not package_path.is_file() or sha256_file(package_path) != package.get("expectedSha256"):
                     errors.append(f"{package['path']}: packaged caption checksum mismatch or missing")
+                verify_package_copy_join(package, package.get("expectedSha256"), "caption package copy")
     required = manifest.get("requiredSubmissionArtifact", {})
     if required.get("exists"):
         verify_source(required.get("path"), required.get("sha256"), required.get("sourceCommitId"), "required submission artifact")
@@ -2060,6 +2175,153 @@ def readiness_cache_errors(cached_manifest: Dict[str, Any], current_manifest: Di
     return errors
 
 
+def manifest_snapshot_errors(cached_manifest: Dict[str, Any], current_manifest: Dict[str, Any]) -> List[str]:
+    """Reject omitted, duplicated, or altered records against the current spec and source snapshot.
+
+    The saved manifest is produced immediately before its own commit, while validation
+    necessarily runs after that commit. Those two Git heads differ by design. Build
+    materialization is likewise an execution-mode detail. Everything else, including
+    record identities, path/checksum bindings, scene/evidence/support lists, and gates,
+    must match the authoritative reconstruction.
+    """
+    if not isinstance(cached_manifest, dict) or not isinstance(current_manifest, dict):
+        return ["manifest snapshot is missing or invalid; authoritative package comparison failed closed"]
+
+    cached = json.loads(json.dumps(cached_manifest))
+    current = json.loads(json.dumps(current_manifest))
+    cached.pop("candidateSourceCommitAtGeneration", None)
+    current.pop("candidateSourceCommitAtGeneration", None)
+    cached_diagnostics = cached.get("buildDiagnostics")
+    current_diagnostics = current.get("buildDiagnostics")
+    if isinstance(cached_diagnostics, dict):
+        cached_diagnostics.pop("materializedPackageCopies", None)
+    if isinstance(current_diagnostics, dict):
+        current_diagnostics.pop("materializedPackageCopies", None)
+    for field in ("collateralPackageReadiness", "externalSubmissionReadiness"):
+        cached_gate = cached.get(field)
+        current_gate = current.get(field)
+        if not isinstance(cached_gate, dict) or not isinstance(current_gate, dict):
+            continue
+        for gate in (cached_gate, current_gate):
+            decision = gate.get("decision")
+            ready_at = gate.get("readyAtUtc")
+            if decision == "BLOCKED":
+                if ready_at is not None:
+                    return [f"{field}.readyAtUtc must be null while the current decision is BLOCKED"]
+            elif decision == "PASS":
+                if not isinstance(ready_at, str):
+                    return [f"{field}.readyAtUtc must be a valid UTC timestamp when the current decision is PASS"]
+                try:
+                    parsed = datetime.fromisoformat(ready_at.replace("Z", "+00:00"))
+                except ValueError:
+                    return [f"{field}.readyAtUtc must be a valid UTC timestamp when the current decision is PASS"]
+                if parsed.tzinfo is None or parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+                    return [f"{field}.readyAtUtc must be a valid UTC timestamp when the current decision is PASS"]
+            else:
+                return [f"{field}.decision is missing or invalid in the authoritative package snapshot"]
+            gate.pop("readyAtUtc", None)
+
+    if cached == current:
+        return []
+
+    changed_top_level = sorted(
+        key for key in set(cached) | set(current)
+        if cached.get(key) != current.get(key) or (key in cached) != (key in current)
+    )
+    if not changed_top_level:
+        changed_top_level = ["unknown fields"]
+    return [
+        "manifest differs from the authoritative current package snapshot in: "
+        + ", ".join(changed_top_level)
+        + "; omitted, duplicated, or altered package records are rejected"
+    ]
+
+
+def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_manifest: Dict[str, Any]) -> List[str]:
+    """Prove the recorded generation commit contains the inputs bound by the manifest."""
+    if cached_manifest.get("packageVersion") != DEFAULT_VERSION:
+        return []
+    candidate = cached_manifest.get("candidateSourceCommitAtGeneration")
+    if not isinstance(candidate, str) or not HEX40.fullmatch(candidate):
+        return ["candidateSourceCommitAtGeneration is missing or malformed"]
+    resolved = git(root, "rev-parse", f"{candidate}^{{commit}}")
+    if resolved != candidate:
+        return ["candidateSourceCommitAtGeneration does not identify an existing commit"]
+    head = repo_head(root)
+    if not head:
+        return ["candidateSourceCommitAtGeneration cannot be checked against a repository HEAD"]
+    try:
+        ancestry = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", candidate, head],
+            check=False,
+            capture_output=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ["candidateSourceCommitAtGeneration ancestry check failed closed"]
+    if ancestry.returncode != 0:
+        return ["candidateSourceCommitAtGeneration is not an ancestor of the current source snapshot"]
+
+    bound_paths: Dict[str, Tuple[Optional[str], Optional[Dict[str, Any]]]] = {}
+
+    def add(path: Any, digest: Any, binding: Any = None) -> None:
+        if isinstance(path, str) and path and isinstance(digest, str) and SHA256.fullmatch(digest):
+            bound_paths[path] = (digest, binding if isinstance(binding, dict) else None)
+
+    for asset in current_manifest.get("assets", []):
+        file_row = asset.get("file", {})
+        if file_row.get("exists"):
+            add(file_row.get("path"), file_row.get("sha256"))
+        source_row = asset.get("source", {})
+        add(source_row.get("path"), source_row.get("sha256"))
+        package_row = asset.get("packageCopy", {})
+        add(package_row.get("path"), package_row.get("expectedSha256"))
+        alternative = asset.get("accessibleAlternative", {})
+        if alternative.get("exists"):
+            add(alternative.get("path"), alternative.get("sha256"))
+        render = asset.get("renderReceipt", {})
+        add(render.get("path"), render.get("sha256"))
+        for dependency in asset.get("compositionDependencies", []):
+            dep_source = dependency.get("source", {})
+            dep_copy = dependency.get("packageCopy", {})
+            add(dep_source.get("path"), dep_source.get("sha256"))
+            add(dep_copy.get("path"), dep_copy.get("expectedSha256"))
+    for caption in current_manifest.get("captionSidecars", []):
+        add(caption.get("path"), caption.get("sha256"))
+        copy = caption.get("packageCopy", {})
+        add(copy.get("path"), copy.get("expectedSha256"))
+    for support in current_manifest.get("supportFiles", []):
+        add(support.get("path"), support.get("sha256"), support.get("binding"))
+    for evidence in current_manifest.get("rehearsalEvidenceFiles", []):
+        add(evidence.get("path"), evidence.get("sha256"))
+    required = current_manifest.get("requiredSubmissionArtifact", {})
+    if required.get("exists"):
+        add(required.get("path"), required.get("sha256"))
+    for scene in current_manifest.get("scenes", {}).get("scenes", []):
+        add(scene.get("assetPath"), scene.get("assetSha256"))
+    for relative, (expected_digest, binding) in sorted(bound_paths.items()):
+        try:
+            safe_path(root, relative)
+        except ValueError:
+            return [f"candidate source input path is unsafe: {relative}"]
+        source_bytes = git_bytes(root, "show", f"{candidate}:{relative}")
+        if source_bytes is None:
+            return [f"candidate source snapshot is missing bound input {relative}"]
+        if binding is not None:
+            if binding != POLICY_JSON_BINDINGS.get(relative):
+                return [f"candidate source input {relative} has an unsupported semantic binding"]
+            try:
+                candidate_document = json.loads(source_bytes.decode("utf-8"))
+                candidate_digest = projected_policy_digest(relative, candidate_document)
+            except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+                return [f"candidate source input {relative} projection failed closed ({exc})"]
+        else:
+            candidate_digest = sha256_bytes(source_bytes)
+        if candidate_digest != expected_digest:
+            return [f"candidate source snapshot input differs from manifest binding: {relative}"]
+    return []
+
+
 def recompute_manifest_readiness(root: Path, manifest: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
     version = manifest.get("packageVersion")
     if not isinstance(version, str) or not version:
@@ -2068,7 +2330,11 @@ def recompute_manifest_readiness(root: Path, manifest: Dict[str, Any]) -> Tuple[
         current = build_manifest(root, version=version, materialized=False)
     except Exception as exc:
         return {}, [f"current readiness recomputation failed closed: {exc}"]
-    return current, readiness_cache_errors(manifest, current)
+    return current, (
+        manifest_snapshot_errors(manifest, current)
+        + source_snapshot_errors(root, manifest, current)
+        + readiness_cache_errors(manifest, current)
+    )
 
 
 def package_path_collisions(manifest: Dict[str, Any]) -> List[str]:

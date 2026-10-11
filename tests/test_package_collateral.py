@@ -47,6 +47,38 @@ class PackagePolicyTests(unittest.TestCase):
             self.assertEqual(support["binding"], policy_input["binding"])
             self.assertEqual(support["sha256"], policy_input["sha256"])
 
+    def test_package_copy_provenance_references_are_exact_and_destination_scoped(self) -> None:
+        manifest = self.current_manifest
+        package_copies = [
+            record["packageCopy"]
+            for record in [*manifest["assets"], *manifest["captionSidecars"]]
+            if record.get("packageCopy", {}).get("path")
+        ]
+        package_copies.extend(
+            dependency["packageCopy"]
+            for record in manifest["assets"]
+            for dependency in record.get("compositionDependencies", [])
+        )
+        self.assertTrue(package_copies)
+        for copy in package_copies:
+            self.assertEqual("joined_exact_bytes", copy["provenance"]["status"], copy["path"])
+            self.assertEqual(copy["path"], copy["provenance"]["source"]["path"])
+            self.assertEqual(copy["expectedSha256"], copy["provenance"]["source"]["sha256"])
+            self.assertEqual(
+                manifest["destinations"]["internalReview"],
+                copy["provenance"]["permission"]["approvedDestinations"][0],
+            )
+
+        tampered = package.json.loads(package.json.dumps(manifest))
+        selected_copy = next(item["packageCopy"] for item in tampered["assets"] if item.get("packageCopy", {}).get("path"))
+        selected_copy["provenance"]["recordId"] = "PROV-FILE-UNKNOWN"
+        errors = package.validate_manifest_files(ROOT, tampered)
+        self.assertTrue(any("inventory/provenance copy reference is stale or altered" in item for item in errors), errors)
+
+        selected_copy["provenance"] = None
+        errors = package.validate_manifest_files(ROOT, tampered)
+        self.assertTrue(any("exact inventory/provenance copy reference is missing" in item for item in errors), errors)
+
     def test_forged_manifest_pass_is_rejected_against_current_gate_recomputation(self) -> None:
         cached = package.json.loads(package.json.dumps(self.current_manifest))
         for field in ("collateralPackageReadiness", "externalSubmissionReadiness"):
@@ -56,6 +88,93 @@ class PackagePolicyTests(unittest.TestCase):
         self.assertIn("cached collateral package readiness decision differs from current source and policy evaluation", errors)
         self.assertIn("cached collateral package readiness blockers differs from current source and policy evaluation", errors)
         self.assertIn("cached external submission readiness decision differs from current source and policy evaluation", errors)
+
+    def test_manifest_snapshot_rejects_omitted_duplicate_and_rebound_records(self) -> None:
+        current = self.current_manifest
+        mutations = {
+            "assets": lambda value: value.update(assets=[]),
+            "caption sidecars": lambda value: value.update(captionSidecars=[]),
+            "rehearsal evidence": lambda value: value.update(rehearsalEvidenceFiles=[]),
+            "support files": lambda value: value.update(supportFiles=[]),
+            "policy input hashes": lambda value: value.update(policyInputHashes={}),
+            "scene records": lambda value: value.update(scenes={**value["scenes"], "scenes": []}),
+            "duplicate asset": lambda value: value["assets"].append(package.json.loads(package.json.dumps(value["assets"][0]))),
+            "changed source binding": lambda value: value["assets"][0]["file"].update(sha256="0" * 64),
+            "changed package path": lambda value: value["assets"][0]["packageCopy"].update(path="release/elsewhere/renamed.bin"),
+            "changed support binding": lambda value: value["supportFiles"][0].update(sha256="0" * 64),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(record=label):
+                changed = package.json.loads(package.json.dumps(current))
+                mutate(changed)
+                errors = package.manifest_snapshot_errors(changed, current)
+                self.assertTrue(any("authoritative current package snapshot" in error for error in errors), errors)
+
+    def test_manifest_snapshot_allows_valid_ready_timestamps_to_vary(self) -> None:
+        cached = package.json.loads(package.json.dumps(self.current_manifest))
+        current = package.json.loads(package.json.dumps(self.current_manifest))
+        for field in ("collateralPackageReadiness", "externalSubmissionReadiness"):
+            for manifest, timestamp in ((cached, "2026-10-10T12:00:00+00:00"), (current, "2026-10-10T12:00:01Z")):
+                manifest[field]["decision"] = "PASS"
+                manifest[field]["blockers"] = []
+                manifest[field]["readyAtUtc"] = timestamp
+        self.assertEqual([], package.manifest_snapshot_errors(cached, current))
+
+        cached["collateralPackageReadiness"]["readyAtUtc"] = "2026-10-10T12:00:00-04:00"
+        errors = package.manifest_snapshot_errors(cached, current)
+        self.assertIn("collateralPackageReadiness.readyAtUtc must be a valid UTC timestamp when the current decision is PASS", errors)
+
+    def test_source_snapshot_must_exist_be_ancestor_and_contain_bound_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "input.txt").write_text("snapshot bytes\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "input.txt"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "input snapshot"], check=True)
+            candidate = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            digest = package.sha256_file(root / "input.txt")
+            cached = {"packageVersion": package.DEFAULT_VERSION, "candidateSourceCommitAtGeneration": candidate}
+            current = {"assets": [{"file": {"exists": True, "path": "input.txt", "sha256": digest}}]}
+            self.assertEqual([], package.source_snapshot_errors(root, cached, current))
+
+            wrong_binding = {"assets": [{"file": {"exists": True, "path": "input.txt", "sha256": "0" * 64}}]}
+            self.assertIn(
+                "candidate source snapshot input differs from manifest binding: input.txt",
+                package.source_snapshot_errors(root, cached, wrong_binding),
+            )
+            missing_commit = {**cached, "candidateSourceCommitAtGeneration": "f" * 40}
+            self.assertIn(
+                "candidateSourceCommitAtGeneration does not identify an existing commit",
+                package.source_snapshot_errors(root, missing_commit, current),
+            )
+
+            subprocess.run(["git", "-C", str(root), "checkout", "--orphan", "independent"], check=True, capture_output=True)
+            (root / "independent.txt").write_text("other history\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "independent history"], check=True)
+            self.assertIn(
+                "candidateSourceCommitAtGeneration is not an ancestor of the current source snapshot",
+                package.source_snapshot_errors(root, cached, current),
+            )
+
+    def test_validate_cli_rejects_manifest_that_omits_required_records(self) -> None:
+        omitted = package.json.loads(package.json.dumps(self.current_manifest))
+        omitted["supportFiles"] = []
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest_path = Path(temporary) / "omitted-manifest.json"
+            manifest_path.write_text(package.json.dumps(omitted), encoding="utf-8")
+            stderr = io.StringIO()
+            argv = ["package_collateral.py", "validate", str(manifest_path), "--root", str(ROOT)]
+            with patch.object(sys, "argv", argv), \
+                 patch.object(package, "validate_manifest_files", return_value=[]), \
+                 patch.object(package, "verify_caption_receipt_records", return_value=[]), \
+                 contextlib.redirect_stderr(stderr):
+                self.assertEqual(1, package._cli())
+            self.assertIn("manifest differs from the authoritative current package snapshot", stderr.getvalue())
 
     def test_validate_cli_uses_recomputed_gates_for_forged_and_required_pass(self) -> None:
         current = self.current_manifest
