@@ -4984,6 +4984,138 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
         expected: null
       }
     ];
+    structuralControls.push(
+      {
+        id: 'direct-duplicate-name-empty-last',
+        body: '  cause:\n    name: RuntimeError\n    name:\n    code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'direct-duplicate-name-empty-first',
+        body: '  cause:\n    name:\n    name: RuntimeError\n    code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'direct-duplicate-code-empty-last',
+        body: '  cause:\n    name: RuntimeError\n    code: STORE_BUSY\n    code:',
+        expected: null
+      },
+      {
+        id: 'direct-duplicate-code-empty-first',
+        body: '  cause:\n    name: RuntimeError\n    code:\n    code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'direct-duplicate-errcode-empty-last',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode: 5\n    errcode:',
+        expected: null
+      },
+      {
+        id: 'direct-duplicate-errcode-empty-first',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode:\n    errcode: 5',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-name-empty-last',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError\n      name:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-name-empty-first',
+        body: '  cause:\n    RuntimeError:\n      name:\n      name: RuntimeError\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-code-empty-last',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError\n      code: STORE_BUSY\n      code:',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-code-empty-first',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError\n      code:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-errcode-empty-last',
+        body: '  cause:\n    Error:\n      name: Error\n      code: ERR_SQLITE_ERROR\n      errcode: 5\n      errcode:',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-errcode-empty-first',
+        body: '  cause:\n    Error:\n      name: Error\n      code: ERR_SQLITE_ERROR\n      errcode:\n      errcode: 5',
+        expected: null
+      },
+      {
+        id: 'direct-runtime-missing-code',
+        body: '  cause:\n    name: RuntimeError',
+        expected: null
+      },
+      {
+        id: 'direct-runtime-missing-name',
+        body: '  cause:\n    code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'direct-native-missing-errcode',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR',
+        expected: null
+      },
+      {
+        id: 'direct-native-missing-code',
+        body: '  cause:\n    name: Error\n    errcode: 5',
+        expected: null
+      },
+      {
+        id: 'marker-runtime-missing-code',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError',
+        expected: null
+      },
+      {
+        id: 'marker-runtime-missing-name',
+        body: '  cause:\n    RuntimeError:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-native-missing-errcode',
+        body: '  cause:\n    Error:\n      name: Error\n      code: ERR_SQLITE_ERROR',
+        expected: null
+      },
+      {
+        id: 'marker-native-missing-code',
+        body: '  cause:\n    Error:\n      name: Error\n      errcode: 5',
+        expected: null
+      },
+      {
+        id: 'direct-single-empty-name',
+        body: '  cause:\n    name:\n    code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'direct-single-empty-code',
+        body: '  cause:\n    name: RuntimeError\n    code:',
+        expected: null
+      },
+      {
+        id: 'direct-single-empty-errcode',
+        body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode:',
+        expected: null
+      },
+      {
+        id: 'marker-single-empty-name',
+        body: '  cause:\n    RuntimeError:\n      name:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-single-empty-code',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError\n      code:',
+        expected: null
+      },
+      {
+        id: 'marker-single-empty-errcode',
+        body: '  cause:\n    Error:\n      name: Error\n      code: ERR_SQLITE_ERROR\n      errcode:',
+        expected: null
+      }
+    );
     for (const control of structuralControls) {
       const diagnostic = buildSafeFailureDiagnostics({
         scenario: 'OPS13.C01', phase: 'diagnostic-control', stage: 'node-test-runner',

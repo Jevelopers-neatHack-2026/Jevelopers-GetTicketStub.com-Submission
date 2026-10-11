@@ -105,9 +105,11 @@ function directErrorFields(lines, indentation) {
   for (const line of lines) {
     const match = line.match(/^([ \t]*)([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]+(.*?))?[ \t]*$/u);
     if (!match || match[1].length !== indentation) continue;
-    if (!['name', 'code', 'errcode'].includes(match[2]) || match[3] === undefined) continue;
+    if (!['name', 'code', 'errcode'].includes(match[2])) continue;
     if (fields.has(match[2])) return null;
-    fields.set(match[2], safeNestedScalar(match[3]));
+    const value = match[3] === undefined ? null : safeNestedScalar(match[3]);
+    if (value === null) return null;
+    fields.set(match[2], value);
   }
   return fields;
 }
