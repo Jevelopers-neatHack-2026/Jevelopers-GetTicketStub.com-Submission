@@ -240,8 +240,9 @@ destination is GA4 for all of them.
 | `photo_add` | memories | custom | `via`: memories\|agent\|memory_page\|organizer_claim; `result`: success\|error; `photo_count`: int 0–1000 | — | `app/organizer/claim/OrganizerClaimClient.tsx`, `app/s/[token]/MemoryPage.tsx`, `customer/studio/agent/AgentChat.tsx`, `customer/studio/editor/Memories.tsx` | Photo add outcome and resulting count (never the photo) |
 | `note_edit` | memories | custom | `has_note`: bool | — | `customer/studio/editor/Memories.tsx` | Memory note saved (whether a note exists; never its text) |
 | `agent_open` | agent | custom | `via`: button\|note\|seed | — | `customer/studio/editor/Editor.tsx` | Agent chat opened |
-| `agent_message` | agent | custom | `intent`: weather\|photo\|question\|remix; `result`: live\|rules\|pending\|error; `error_code`: enum(42) | — | `customer/studio/agent/AgentChat.tsx` | Agent reply outcome: live, rules, pending or error (intent enum; never the message) |
+| `agent_message` | agent | custom | `intent`: weather\|photo\|question\|remix\|action; `result`: live\|rules\|pending\|error; `error_code`: enum(42) | — | `customer/studio/agent/AgentChat.tsx` | Agent reply outcome: live, rules, pending or error (intent enum; never the message) |
 | `agent_suggestion` | agent | custom | `suggestion`: moodier\|weather\|photo | — | `customer/studio/agent/AgentChat.tsx` | A suggested agent action was applied |
+| `agent_action` | agent | custom | `action`: set_fact\|set_style\|set_material\|set_finish\|set_text\|remix_art\|show_back; `result`: applied\|failed\|rejected; `error_code`: enum(42); `duration_ms`: 0-600000 | — | `customer/studio/agent/AgentChat.tsx` | One proposed agent action the owner applied, and how it ended (never the value or the message) |
 | `tear_start` | tear | custom | — | — | `customer/studio/editor/Editor.tsx` | Tear gesture/flow began |
 | `tear_cancel` | tear | custom | — | — | `customer/studio/editor/Editor.tsx` | Tear abandoned |
 | `tear_complete` | tear | custom | `method`: drag\|keyboard\|auto; `storage`: ok\|failed | — | `customer/studio/editor/TearFlow.tsx` | Tear finished (drag, keyboard or auto) and the result persisted |

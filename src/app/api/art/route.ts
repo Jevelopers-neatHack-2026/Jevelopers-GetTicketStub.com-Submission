@@ -29,6 +29,8 @@ interface ArtRequest {
   edition?: Edition;
   /** Optional: true for the very first version of a stub (no remix yet). */
   first?: boolean;
+  /** Demo and fixture runtimes only: answer as a failed art provider, so the agent's recovery path can be shown and tested. */
+  simulate?: "failure";
 }
 
 function freshSeed(): number {
@@ -68,6 +70,12 @@ export const POST = observeRoute("art", async (req: Request) => {
   const headers: Record<string, string> = device.cookie ? { "set-cookie": device.cookie } : {};
   const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { ...headers, "x-request-id": requestIdOf(req.headers) } });
   await recordEvent(req, "art_requested", { first: !!body.first }, { ctx: rc });
+
+  if (body.simulate === "failure" && process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
+    annotate({ code: "provider_unavailable", dependency: "provider" });
+    await recordEvent(req, "art_failed", { code: "provider_unavailable" }, { ctx: rc });
+    return reply({ error: { code: "provider_unavailable", message: "The selected AI service could not complete this request." } }, 502);
+  }
 
   const quotas: ArtQuota[] = [
     { key: `dev:${hashToken(device.id)}`, max: PER_DEVICE },
