@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.9.1 (unreleased development candidate)
+
+SC-CHK-015 follows the corrected review at 92516d2: supplied parent descriptors must match the package ID and preceding version, and initial packages cannot have a parent. Historical null parents remain the explicit existing producer allowance. Facts, intrinsic integrity, composition and eligibility share the repaired boundary. Missing composition context returns a typed rejection. Canonical encoding and duplicate-member parsing now reject more than 64 nested containers with RESOURCE_LIMIT, which is included in the generated validation-code union; supported canonical bytes and wire schemas are unchanged. The consumer runner validates successful probe status and complete unique record coverage, distinguishes output-buffer failure, and uses fixed observer processing codes. Fresh exact-candidate independent review, Finance receipt and owner/consumer acceptance remain required.
+
 ## 0.9.0 (unreleased development candidate)
 
 - Add the separate production namespace, six service interfaces, closed requests/results/errors, templates/compositions, row/batch values and conditional disabled CSV boundaries.

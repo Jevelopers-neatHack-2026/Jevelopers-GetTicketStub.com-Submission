@@ -1,0 +1,26 @@
+{
+  "reviewed_checkpoint": "92516d2cbb2522e098f9d00384fd12e930d7b9f5",
+  "original_review": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6112361548",
+  "correction": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6112365160",
+  "historical_verdict": "REQUEST_CHANGES",
+  "candidate_package_version": "0.9.1",
+  "fresh_independent_review": "pending_exact_candidate",
+  "findings": [
+    {
+      "id": "SC-CHK-015",
+      "status": "locally_repaired_review_pending",
+      "decision": "Preserve explicit null-parent historical allowance; enforce supplied parent tuple consistency and initial-version null parent.",
+      "negative_cases": ["initial-with-parent", "foreign-parent-id", "wrong-parent-revision", "version-nine-arbitrary-parent"],
+      "routes": ["facts", "integrity", "composition", "eligibility"],
+      "prior_lookup_required": false
+    }
+  ],
+  "lower_severity_observations": {
+    "deep_nesting": "64-container boundary returns typed RESOURCE_LIMIT before recursive processing.",
+    "missing_composition_context": "Typed INVALID_TRUST_CONTEXT.",
+    "trusted_probe_result": "Passed status and complete unique positive case-count coverage required.",
+    "probe_output_buffer": "ENOBUFS is TRUSTED_PROBE_OUTPUT_LIMIT.",
+    "observer_exception_codes": "Unexpected processing errors use a fixed safe code."
+  },
+  "acceptance": "Independent review, scoped Finance receipt, named owner acceptance, nine real consumer pins/acknowledgements and stale-status producer decision remain external gates."
+}

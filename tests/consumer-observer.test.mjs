@@ -19,6 +19,14 @@ async function rejectsAndCleans(peer, code, input = options) {
   if (peer.socket) assert.equal(peer.socket.readyState, 3);
 }
 
+test('unexpected inspector processing error uses a fixed code', { timeout: 1000 }, async () => {
+  const peer = inspectorPeer({ command(request, socket) {
+    socket.reply(request);
+    if (request.method === 'Runtime.runIfWaitingForDebugger') socket.message({ method: 'Debugger.paused', params: { callFrames: [null] } });
+  } });
+  await rejectsAndCleans(peer, 'INSPECTOR_PROCESSING_FAILED');
+});
+
 for (const phase of ['endpoint', 'connection', 'startup', 'queued command']) {
   test('observation deadline settles ' + phase + ' and cleans resources', { timeout: 1000 }, async () => {
     // Given a peer that never completes this phase.

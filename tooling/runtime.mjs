@@ -18,7 +18,7 @@ export class ContractError extends Error {
 /** Reject values that JSON would silently discard or rewrite. No data is included in errors. */
 export function canonicalJson(value) {
   const ancestors = new Set();
-  function encode(input, path) {
+  function encode(input, path, depth) {
     if (input === null) return 'null';
     if (typeof input === 'boolean') return String(input);
     if (typeof input === 'number') {
@@ -30,6 +30,7 @@ export function canonicalJson(value) {
       return JSON.stringify(input);
     }
     if (typeof input !== 'object') throw new ContractError('NON_JSON_VALUE', path);
+    if (depth >= 64) throw new ContractError('RESOURCE_LIMIT', path);
     if (ancestors.has(input)) throw new ContractError('CYCLIC_VALUE', path);
     const prototype = Object.getPrototypeOf(input);
     if (!Array.isArray(input) && prototype !== Object.prototype && prototype !== null) throw new ContractError('NON_JSON_VALUE', path);
@@ -44,17 +45,17 @@ export function canonicalJson(value) {
     let result;
     if (Array.isArray(input)) {
       if (keys.length !== input.length || keys.some((key, index) => key !== String(index))) throw new ContractError('NON_JSON_VALUE', path);
-      result = '[' + input.map((item, index) => encode(item, path + '/' + index)).join(',') + ']';
+      result = '[' + input.map((item, index) => encode(item, path + '/' + index, depth + 1)).join(',') + ']';
     } else {
       result = '{' + keys.sort().map(key => {
         if (!key.isWellFormed()) throw new ContractError('INVALID_UNICODE', path);
-        return JSON.stringify(key) + ':' + encode(descriptors[key].value, path + '/' + pointer(key));
+        return JSON.stringify(key) + ':' + encode(descriptors[key].value, path + '/' + pointer(key), depth + 1);
       }).join(',') + '}';
     }
     ancestors.delete(input);
     return result;
   }
-  return encode(value, '');
+  return encode(value, '', 0);
 }
 
 export function hashBytes(bytes) {
@@ -106,8 +107,9 @@ export function parseContract(contract, json, expectedVersion) {
   // JSON.parse accepts duplicate members by discarding earlier values. Reject that loss.
   const tokens = json.match(/"(?:[^"\\]|\\.)*"|[{}\[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g);
   let cursor = 0;
-  function uniqueMembers() {
+  function uniqueMembers(depth = 0) {
     const token = tokens[cursor++];
+    if ((token === '{' || token === '[') && depth >= 64) throw new ContractError('RESOURCE_LIMIT');
     if (token === '{') {
       const keys = new Set();
       while (tokens[cursor] !== '}') {
@@ -115,14 +117,14 @@ export function parseContract(contract, json, expectedVersion) {
         if (keys.has(key)) throw new ContractError('MALFORMED_JSON');
         keys.add(key);
         cursor++;
-        uniqueMembers();
+        uniqueMembers(depth + 1);
         if (tokens[cursor] !== ',') break;
         cursor++;
       }
       cursor++;
     } else if (token === '[') {
       while (tokens[cursor] !== ']') {
-        uniqueMembers();
+        uniqueMembers(depth + 1);
         if (tokens[cursor] !== ',') break;
         cursor++;
       }
@@ -130,7 +132,7 @@ export function parseContract(contract, json, expectedVersion) {
     }
   }
   try { uniqueMembers(); } catch (error) {
-    if (error instanceof ContractError) return failure('MALFORMED_JSON', '');
+    if (error instanceof ContractError) return failure(error.code === 'RESOURCE_LIMIT' ? 'RESOURCE_LIMIT' : 'MALFORMED_JSON', '');
     throw error;
   }
   return expectedVersion === undefined ? validateContract(contract, value) : validateContractVersion(contract, expectedVersion, value);

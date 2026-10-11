@@ -348,3 +348,28 @@ console.log(JSON.stringify(await consumerChecks(manifest)));`;
   assert.equal(result.records.length, 0);
   assert.ok(!child.stdout.includes(directory));
 });
+
+for (const [probe, code] of [
+  [{ status: 0, stdout: '{}' }, 'TRUSTED_PROBE_INVALID_RESULT'],
+  [{ status: 0, stdout: JSON.stringify({ status: 'failed', records: [] }) }, 'TRUSTED_PROBE_INVALID_RESULT'],
+  [{ status: 0, stdout: JSON.stringify({ status: 'passed', records: [] }) }, 'TRUSTED_PROBE_INVALID_RESULT'],
+  [{ status: 0, stdout: '{' }, 'TRUSTED_PROBE_INVALID_RESULT'],
+  [{ status: null, stdout: '', error: { code: 'ENOBUFS' }, signal: 'SIGTERM' }, 'TRUSTED_PROBE_OUTPUT_LIMIT']
+]) test('trusted probe result rejects ' + code + ' / ' + probe.stdout, async () => {
+  const manifestPath = join(directory, 'invalid-trusted-probe.json');
+  await writeFile(manifestPath, JSON.stringify(await manifestFor()));
+  const program = `import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+import { readFile } from 'node:fs/promises';
+const original = childProcess.spawnSync;
+childProcess.spawnSync = (command, args, options) => args[0]?.endsWith('consumer-trusted-probe.mjs') ? ${JSON.stringify(probe)} : original(command, args, options);
+syncBuiltinESMExports();
+const { consumerChecks } = await import(${JSON.stringify(root + 'scripts/consumer-checks.mjs')});
+console.log(JSON.stringify(await consumerChecks(JSON.parse(await readFile(process.argv[1], 'utf8')))));`;
+  const child = spawnSync(process.execPath, ['--input-type=module', '--eval', program, manifestPath], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 60000 });
+  assert.equal(child.status, 0, child.stderr);
+  const result = JSON.parse(child.stdout);
+  assert.equal(failureFor(result), code);
+  assert.equal(result.records.length, 0);
+  assert.ok(!child.stdout.includes(directory));
+});

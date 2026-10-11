@@ -33,7 +33,7 @@ export async function observeConsumerDriver({ script, checkout, snapshot, env, h
   }
   function fail(error) {
     if (failure) return;
-    failure = error instanceof ConsumerObservationError ? error : new ConsumerObservationError(error.message, error);
+    failure = error instanceof ConsumerObservationError ? error : new ConsumerObservationError('INSPECTOR_PROCESSING_FAILED', error);
     endpointReject(failure);
     readyReject?.(failure);
     for (const item of pending.values()) item.reject(failure);
@@ -76,16 +76,16 @@ export async function observeConsumerDriver({ script, checkout, snapshot, env, h
       if (!record.isModule) return;
       if (!record.url.startsWith(pathToFileURL(snapshot + '/').href)) return;
       const path = fileURLToPath(record.url).slice(snapshot.length + 1);
-      if (!expectedFiles[path]) throw new Error('UNEXPECTED_PACKAGE_SCRIPT');
+      if (!expectedFiles[path]) throw new ConsumerObservationError('UNEXPECTED_PACKAGE_SCRIPT');
       const code = await post('Debugger.getScriptSource', { scriptId: record.scriptId });
-      if (hashBytes(new TextEncoder().encode(code.scriptSource)) !== expectedFiles[path]) throw new Error('IMPORTED_SOURCE_MISMATCH');
+      if (hashBytes(new TextEncoder().encode(code.scriptSource)) !== expectedFiles[path]) throw new ConsumerObservationError('IMPORTED_SOURCE_MISMATCH');
       verified.add(record.scriptId); imports.push({ path, sha256: expectedFiles[path] });
     }
     if (event.method === 'Debugger.paused') {
       const frame = event.params.callFrames[0];
       if (verified.has(frame.location.scriptId) && scripts.get(frame.location.scriptId) === target && frame.functionName === 'runCanonicalFixtures') {
         const observed = await post('Debugger.evaluateOnCallFrame', { callFrameId: frame.callFrameId, expression: '({ contract, manifest, failures, records })', returnByValue: true, silent: true });
-        if (observed.exceptionDetails || !observed.result?.value) throw new Error('INVALID_EXECUTION_OBSERVATION');
+        if (observed.exceptionDetails || !observed.result?.value) throw new ConsumerObservationError('INVALID_EXECUTION_OBSERVATION');
         const value = observed.result.value;
         const expected = fixtures.get(value.contract + '@' + value.manifest?.schema_version);
         const bound = expected !== undefined && hashManifest(value.manifest) === hashManifest(expected);

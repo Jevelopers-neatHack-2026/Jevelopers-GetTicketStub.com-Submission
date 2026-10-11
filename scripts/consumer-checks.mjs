@@ -152,9 +152,17 @@ export async function consumerChecks(manifest, paths = {}) {
       const binding = { repository, consumer_sha: entry.source_sha, shared_source_revision: entry.shared_source_revision, package_integrity: entry.package_integrity ?? null, package_content_digest: expectedPackage.digest, fixture_digest: fixtureManifest.digest, nonce };
       await writeFile(config, JSON.stringify({ snapshot, binding, required: requiredNames, required_fixtures: requiredFixtures, files: expectedPackage.files }));
       const verification = spawnSync(process.execPath, [join(root, 'scripts/consumer-trusted-probe.mjs'), config], { cwd: checkout, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024, env: { PATH: process.env.PATH } });
-      if (verification.error || verification.status === null) throw new RunnerEnvironmentError('TRUSTED_PROBE_UNAVAILABLE', { error: errno(verification.error?.code), signal: typeof verification.signal === 'string' ? verification.signal : null });
+      if (verification.error || verification.status === null) throw new RunnerEnvironmentError(
+        verification.error?.code === 'ENOBUFS' ? 'TRUSTED_PROBE_OUTPUT_LIMIT' : 'TRUSTED_PROBE_UNAVAILABLE',
+        { error: errno(verification.error?.code), signal: typeof verification.signal === 'string' ? verification.signal : null });
       if (verification.status !== 0) throw new Error('TRUSTED_PACKAGE_FIXTURE_FAILED');
-      const trustedRecords = JSON.parse(verification.stdout).records;
+      let trusted;
+      try { trusted = JSON.parse(verification.stdout); }
+      catch (error) { if (!(error instanceof SyntaxError)) throw error; throw new RunnerEnvironmentError('TRUSTED_PROBE_INVALID_RESULT', { error: null, type: 'SyntaxError' }); }
+      if (trusted?.status !== 'passed' || !Array.isArray(trusted.records) || trusted.records.length !== requiredFixtures.length ||
+          trusted.records.some(row => !row || !Number.isSafeInteger(row.cases) || row.cases <= 0 || !requiredFixtures.some(item => item.contract === row.contract && item.version === row.version)) ||
+          new Set(trusted.records.map(row => row.contract + '@' + row.version)).size !== requiredFixtures.length) throw new RunnerEnvironmentError('TRUSTED_PROBE_INVALID_RESULT', { error: null, type: 'InvalidResult' });
+      const trustedRecords = trusted.records;
       const result = await observeConsumerDriver({ script, checkout, snapshot, hook: join(root, 'scripts/consumer-import-hook.mjs'), requiredFixtures, expectedFiles: expectedPackage.files, env: { PATH: process.env.PATH, SHARED_CONTRACTS_ROOT: snapshot, SHARED_CONTRACTS_OFFLINE: '1', SHARED_CONTRACTS_BINDING_CONFIG: config } });
       if (result.status !== 0) { block('CONSUMER_CHECK_FAILED'); continue; }
       let receipt;

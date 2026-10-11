@@ -156,7 +156,7 @@ export type PrimitiveMap = { ${Object.keys(primitiveValidators).map(name => `rea
 export type ContractMap = { ${names.map(name => `readonly ${name}: ${name}`).join('; ')} };
 export type ContractName = keyof ContractMap;
 export type ContractVersionMap = { ${names.map(name => `readonly ${name}: { ${Object.entries(versions[name]).map(([version, exportName]) => `readonly '${version}': ${exportName}`).join('; ')} }`).join('; ')} };
-export type ValidationCode = 'UNKNOWN_CONTRACT' | 'INVALID_PAYLOAD' | 'UNSUPPORTED_VERSION' | 'MALFORMED_JSON' | 'INVALID_TRUST_CONTEXT' | 'SCOPE_MISMATCH' | 'NON_CANONICAL_NUMBER' | 'INVALID_UNICODE' | 'NON_JSON_VALUE' | 'CYCLIC_VALUE' | 'INVALID_BYTES';
+export type ValidationCode = 'UNKNOWN_CONTRACT' | 'INVALID_PAYLOAD' | 'UNSUPPORTED_VERSION' | 'MALFORMED_JSON' | 'INVALID_TRUST_CONTEXT' | 'SCOPE_MISMATCH' | 'NON_CANONICAL_NUMBER' | 'INVALID_UNICODE' | 'NON_JSON_VALUE' | 'CYCLIC_VALUE' | 'INVALID_BYTES' | 'RESOURCE_LIMIT';
 export type Issue = { readonly code: ValidationCode; readonly path: string; readonly keyword?: string };
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly errors: readonly Issue[] };
 export type TrustedContext = Pick<CommonEnvelope, 'tenant_id' | 'project_id'> & Partial<Pick<CommonEnvelope, 'design_id' | 'design_version_id' | 'artifact_id' | 'order_id'>>;

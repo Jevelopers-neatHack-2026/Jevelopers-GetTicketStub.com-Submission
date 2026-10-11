@@ -44,6 +44,8 @@ export function checkProductionFacts(input, scope) {
   for (const [path, reference, kind] of factsReferences(input)) {
     if (!validateVersionedReference(reference).ok || (kind && reference.contract !== kind)) return productionIssue('FACTS_UNSUPPORTED', path);
   }
+  if (input.parent_ref !== null && (input.package_version === 1 || input.parent_ref.id !== input.package_id ||
+      input.parent_ref.revision !== input.package_version - 1)) return productionIssue('FACTS_UNSUPPORTED', '/parent_ref');
   if (input.package_hash !== researchContentHash(input, 'package_hash')) return productionIssue('HASH_MISMATCH', '/package_hash');
   for (const [index, source] of input.sources.entries()) if (!validFactsURL(source.url)) return productionIssue('FACTS_UNSUPPORTED', '/sources/' + index + '/url');
   if (!unique(input.sources.map(source => source.source_id)) || !unique(input.facts.map(fact => fact.fact_id)) || !unique(input.facts.map(fact => fact.key)) || !unique(input.asset_candidates.map(asset => asset.asset_id)) || !unique(input.approved_assets.map(asset => asset.asset_id))) return productionIssue('FACTS_UNSUPPORTED');
@@ -155,6 +157,7 @@ export function checkPersonalizationSchema(input, template) {
 
 /** Supported facts and resolved input commitments must be independently supplied. */
 export function checkComposition(input, context) {
+  if (context === null || typeof context !== 'object' || Array.isArray(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const parsed = checkProductionValueIntegrity('Composition', input, context.scope);
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(input, context.scope).ok) return productionIssue('NOT_FOUND');

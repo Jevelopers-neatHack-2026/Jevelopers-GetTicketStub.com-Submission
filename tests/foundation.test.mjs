@@ -200,6 +200,24 @@ test('canonical JSON rejects cycles', () => {
   assert.throws(() => canonicalJson(input), error => error instanceof ContractError && error.code === 'CYCLIC_VALUE');
 });
 
+for (const kind of ['object', 'array']) test('canonical JSON bounds deeply nested ' + kind + ' with a typed error', () => {
+  let input = null;
+  for (let i = 0; i < 3000; i++) input = kind === 'object' ? { next: input } : [input];
+  assert.throws(() => canonicalJson(input), error => error instanceof ContractError && error.code === 'RESOURCE_LIMIT');
+});
+test('contract parsing and object validation bound nesting before recursive checks', () => {
+  const input = JSON.parse('{"contract":"CommonEnvelope","schema_version":"1.0.0","extra":' + '['.repeat(3000) + 'null' + ']'.repeat(3000) + '}');
+  const text = '{"contract":"CommonEnvelope","schema_version":"1.0.0","extra":' + '['.repeat(3000) + 'null' + ']'.repeat(3000) + '}';
+  assert.equal(validateContract('CommonEnvelope', input).errors[0].code, 'RESOURCE_LIMIT');
+  assert.equal(parseContract('CommonEnvelope', text).errors[0].code, 'RESOURCE_LIMIT');
+});
+test('canonical JSON retains the exact 64-container supported boundary', () => {
+  let input = null;
+  for (let i = 0; i < 64; i++) input = [input];
+  assert.equal(canonicalJson(input), '['.repeat(64) + 'null' + ']'.repeat(64));
+  assert.throws(() => canonicalJson([input]), error => error instanceof ContractError && error.code === 'RESOURCE_LIMIT');
+});
+
 test('byte hashing rejects non-byte input with its declared typed error', () => {
   // Given a string rather than the exact bytes required by the public API.
   // When hashed, then the public ContractError reports INVALID_BYTES at the root.

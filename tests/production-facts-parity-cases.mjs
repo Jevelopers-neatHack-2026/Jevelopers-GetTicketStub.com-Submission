@@ -66,6 +66,11 @@ export async function productionFactsParityCases(root = fileURLToPath(new URL('.
     rows.push({ id: 'facts-parity/' + id, input, input_hash: api.hashManifest(input), expected: { research: options.research ?? expected, facts: expected, integrity: expected, composition: options.composition ?? expected }, path: options.path ?? '' });
   }
   add('complete-canonical', () => {});
+  add('lineage/initial-with-parent', pkg => { pkg.package_version = 1; }, false, { path: '/parent_ref' });
+  add('lineage/foreign-parent-id', pkg => { pkg.parent_ref.id = uuid(899); }, false, { path: '/parent_ref' });
+  add('lineage/wrong-parent-revision', pkg => { pkg.parent_ref.revision = 9; }, false, { path: '/parent_ref' });
+  add('lineage/version-nine-arbitrary-parent', pkg => { pkg.package_version = 9; }, false, { path: '/parent_ref' });
+  add('lineage/historical-consistent-without-prior', (pkg, context) => { pkg.package_version = 9; pkg.parent_ref.revision = 8; delete context.prior_package; }, true, { research: false });
   const paths = testReferences(base);
   for (const [path] of paths) {
     const slot = factsReferenceSlots.find(([pattern]) => pattern === path.replace(/\/\d+(?=\/|$)/g, '/*'));
