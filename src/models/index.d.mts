@@ -268,12 +268,16 @@ export type OpenRouterImageEnumDescriptor<T extends string = string> = Readonly<
 export type OpenRouterImageRangeDescriptor = Readonly<{ type: "range"; min: number; max: number }>;
 
 export interface OpenRouterImageSupportedParameters {
-  readonly aspect_ratio?: OpenRouterImageEnumDescriptor<`${number}:${number}`>;
+  /** Catalog descriptors list "auto"; it is accepted here but can never be the pinned configuration. */
+  readonly aspect_ratio?: OpenRouterImageEnumDescriptor<`${number}:${number}` | "auto">;
   readonly quality?: OpenRouterImageEnumDescriptor;
   readonly background?: OpenRouterImageEnumDescriptor<"auto" | "opaque" | "transparent">;
   readonly output_format?: OpenRouterImageEnumDescriptor<OpenRouterImageOutputFormat>;
   readonly resolution?: OpenRouterImageEnumDescriptor<"512" | "768" | "1K" | "1.5K" | "2K" | "4K">;
   readonly output_compression?: OpenRouterImageRangeDescriptor;
+  /** Catalog-only ranges (n 0..32, input_references 0..32). They are bound into the profile but never pinnable. */
+  readonly n?: OpenRouterImageRangeDescriptor;
+  readonly input_references?: OpenRouterImageRangeDescriptor;
 }
 
 /** The pinned subset sent to the provider. Every key must be declared by `supported_parameters`. */
@@ -299,8 +303,26 @@ export interface OpenRouterImageCostObservation {
   readonly provenance: "provider_reported_unsettled";
 }
 
+/** Documented OpenRouter prompt token details, normalized as `input_tokens_details`. */
+export interface OpenRouterImageInputTokenDetails extends OpenAIImageTokenDetails {
+  readonly audio_tokens?: number;
+  readonly cache_write_tokens?: number;
+  readonly cached_tokens?: number;
+  readonly file_tokens?: number;
+  readonly video_tokens?: number;
+}
+
+/** Documented OpenRouter completion token details, normalized as `output_tokens_details`. */
+export interface OpenRouterImageOutputTokenDetails extends OpenAIImageTokenDetails {
+  readonly audio_tokens?: number;
+  readonly image_tokens?: number;
+  readonly reasoning_tokens?: number;
+}
+
 /** Raw allowlisted counters. A missing usage or cost is listed in `missing_fields`, never zero. */
 export interface OpenRouterImageUsage extends OpenAIImageUsage {
+  readonly input_tokens_details?: OpenRouterImageInputTokenDetails;
+  readonly output_tokens_details?: OpenRouterImageOutputTokenDetails;
   readonly cost?: OpenRouterImageCostObservation;
   readonly cost_details?: Readonly<{
     upstream_inference_cost?: string;

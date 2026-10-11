@@ -19,18 +19,45 @@ const MAX_REFERENCE_CEILING = 32;
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PROVIDER_TAG = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/;
 const CONFIGURATION_KEYS = Object.freeze(["aspect_ratio", "quality", "background", "output_format", "resolution", "output_compression"]);
+// Catalog descriptors list "auto" for aspect_ratio, so a host can pass them verbatim. "auto" is only accepted as a
+// listed value: pinning it as the configuration is refused (see validateConfiguration) because the provider then
+// chooses the dimensions and they would no longer be predictable.
 const ENUM_VALUES = Object.freeze({
-  aspect_ratio: /^[1-9]\d{0,2}:[1-9]\d{0,2}$/,
+  aspect_ratio: /^(?:auto|[1-9]\d{0,2}:[1-9]\d{0,2})$/,
   quality: /^[a-z][a-z0-9_-]{0,31}$/,
   background: /^(?:auto|transparent|opaque)$/,
   output_format: /^(?:png|jpeg|webp)$/,
   resolution: /^(?:512|768|1K|1\.5K|2K|4K)$/,
 });
+// Catalog range descriptors that are not pinnable configuration keys. They are validated and bound into the profile
+// hash, but a configuration may never set them (the request always sends n:1 and derives input_references itself).
+const DESCRIPTOR_ONLY_RANGES = Object.freeze({ n: { min: 0, max: 32 }, input_references: { min: 0, max: MAX_REFERENCE_CEILING } });
+const DESCRIPTOR_KEYS = Object.freeze([...CONFIGURATION_KEYS, ...Object.keys(DESCRIPTOR_ONLY_RANGES)]);
 /** Maximum relative error between the decoded and the pinned aspect ratio. */
 const ASPECT_RATIO_TOLERANCE = 0.03;
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
 const COST_DETAIL_KEYS = Object.freeze(["upstream_inference_cost", "upstream_inference_prompt_cost", "upstream_inference_completions_cost"]);
-const USAGE_ROOT_KEYS = Object.freeze(["prompt_tokens", "completion_tokens", "total_tokens", "cost", "cost_details", "is_byok"]);
+const USAGE_DETAIL_FIELDS = Object.freeze({
+  prompt_tokens_details: Object.freeze({ target: "input_tokens_details",
+    keys: Object.freeze(["audio_tokens", "cache_write_tokens", "cached_tokens", "file_tokens", "video_tokens"]) }),
+  completion_tokens_details: Object.freeze({ target: "output_tokens_details",
+    keys: Object.freeze(["audio_tokens", "image_tokens", "reasoning_tokens"]) }),
+});
+const USAGE_ROOT_KEYS = Object.freeze(["prompt_tokens", "completion_tokens", "total_tokens", "cost", "cost_details", "is_byok",
+  ...Object.keys(USAGE_DETAIL_FIELDS)]);
+// Documented ImageGenerationUsage keys that are deliberately not mapped. Only these fixed names may appear in a
+// finding; any other provider key is reported anonymously and its name is never echoed.
+const DOCUMENTED_UNMAPPED_USAGE_KEYS = Object.freeze(["server_tool_use", "service_tier", "speed", "cache_creation", "iterations"]);
+
+/** Fixed-vocabulary findings for root usage keys outside the allowlist. */
+function unmappedRootFindings(keys) {
+  const findings = new Set();
+  for (const key of keys) {
+    if (USAGE_ROOT_KEYS.includes(key)) continue;
+    findings.add(DOCUMENTED_UNMAPPED_USAGE_KEYS.includes(key) ? `usage.unmapped.${key}` : "usage.unmapped_fields");
+  }
+  return [...findings];
+}
 
 export class OpenRouterImagesProviderError extends OpenAIImagesProviderError {
   constructor(code, message, options) {
@@ -97,13 +124,14 @@ function validateSupportedParameters(value) {
   const reject = () => fail("unsupported_model_profile", "Supported parameter descriptors must be bounded enum or range descriptors.", {
     outcome: "failed", field: "supported_parameters",
   });
-  if (!isRecord(value) || !onlyKeys(value, CONFIGURATION_KEYS)) reject();
+  if (!isRecord(value) || !onlyKeys(value, DESCRIPTOR_KEYS)) reject();
   const result = {};
   for (const [key, descriptor] of Object.entries(value)) {
-    if (key === "output_compression") {
+    if (key === "output_compression" || Object.hasOwn(DESCRIPTOR_ONLY_RANGES, key)) {
+      const bounds = key === "output_compression" ? { min: 0, max: 100 } : DESCRIPTOR_ONLY_RANGES[key];
       if (!isRecord(descriptor) || !onlyKeys(descriptor, ["type", "min", "max"]) || descriptor.type !== "range" ||
           !Number.isSafeInteger(descriptor.min) || !Number.isSafeInteger(descriptor.max) ||
-          descriptor.min < 0 || descriptor.max > 100 || descriptor.min > descriptor.max) reject();
+          descriptor.min < bounds.min || descriptor.max > bounds.max || descriptor.min > descriptor.max) reject();
       result[key] = { type: "range", min: descriptor.min, max: descriptor.max };
       continue;
     }
@@ -134,6 +162,8 @@ function validateConfiguration(configuration, supported) {
     } else if (typeof configured !== "string" || !descriptor.values.includes(configured)) reject();
     result[key] = configured;
   }
+  // A listed "auto" is catalog-only: the provider would choose the shape, so the pinned ratio must be explicit.
+  if (result.aspect_ratio === "auto") reject();
   if (result.background === "transparent" && !["png", "webp"].includes(result.output_format)) reject();
   if (Object.hasOwn(result, "output_compression") && !["jpeg", "webp"].includes(result.output_format)) reject();
   return deepFreeze(result);
@@ -206,11 +236,25 @@ export function normalizeOpenRouterImageUsage(raw, identities = {}) {
         result.cost_details = Object.freeze(safeDetails);
       }
     }
+    for (const [source, { target, keys }] of Object.entries(USAGE_DETAIL_FIELDS)) {
+      if (!Object.hasOwn(rawData, source) || rawData[source] === null || rawData[source] === undefined) continue;
+      const details = snapshotUsageData(rawData[source], `usage.${source}`, new Set(keys));
+      if (!details) { missing.add(`usage.${source}`); continue; }
+      const safeDetails = {};
+      for (const key of keys) {
+        if (!Object.hasOwn(details, key)) continue;
+        const quantity = exactUsage(details[key]);
+        if (quantity === undefined) missing.add(`usage.${source}.${key}`);
+        else safeDetails[key] = Number(quantity);
+      }
+      if (Object.keys(details).some((key) => !keys.includes(key))) missing.add(`usage.${source}.unmapped_fields`);
+      result[target] = Object.freeze(safeDetails);
+    }
     if (Object.hasOwn(rawData, "is_byok")) {
       if (typeof rawData.is_byok === "boolean") result.is_byok = rawData.is_byok;
       else missing.add("usage.is_byok");
     }
-    if (Object.keys(rawData).some((key) => !USAGE_ROOT_KEYS.includes(key))) missing.add("usage.unmapped_fields");
+    for (const finding of unmappedRootFindings(Object.keys(rawData))) missing.add(finding);
     result.missing_fields = Object.freeze([...missing]);
     return freezeUsageObservation(result);
   });
@@ -232,14 +276,14 @@ function usageFromPayload(payload, transportAttemptId, _rawProviderRequestId, ta
   let projected = rawUsage;
   if (isRecord(rawUsage)) {
     let count = 0;
-    let unmapped = false;
+    const rootKeys = [];
     for (const key in rawUsage) {
       if (!Object.hasOwn(rawUsage, key)) continue;
       count += 1;
-      if (!USAGE_ROOT_KEYS.includes(key)) unmapped = true;
+      rootKeys.push(key);
       if (count > 32) { findings.push("usage.too_many_fields"); break; }
     }
-    if (unmapped) findings.push("usage.unmapped_fields");
+    findings.push(...unmappedRootFindings(rootKeys));
     projected = Object.create(null);
     for (const key of USAGE_ROOT_KEYS) if (Object.hasOwn(rawUsage, key)) projected[key] = rawUsage[key];
     if (isRecord(projected.cost_details)) {
@@ -264,11 +308,30 @@ function usageFromPayload(payload, transportAttemptId, _rawProviderRequestId, ta
       }
       projected.cost_details = boundedDetails;
     }
+    for (const [source, { keys }] of Object.entries(USAGE_DETAIL_FIELDS)) {
+      if (!isRecord(projected[source])) continue;
+      const rawDetails = projected[source];
+      let detailCount = 0;
+      let detailUnmapped = false;
+      for (const key in rawDetails) {
+        if (!Object.hasOwn(rawDetails, key)) continue;
+        detailCount += 1;
+        if (!keys.includes(key)) detailUnmapped = true;
+        if (detailCount > 32) {
+          findings.push(`usage.${source}.too_many_fields`);
+          break;
+        }
+      }
+      if (detailUnmapped) findings.push(`usage.${source}.unmapped_fields`);
+      const boundedDetails = Object.create(null);
+      for (const key of keys) if (Object.hasOwn(rawDetails, key)) boundedDetails[key] = rawDetails[key];
+      projected[source] = boundedDetails;
+    }
   }
   let usage = attach(normalizeOpenRouterImageUsage(projected, { transport_attempt_id: transportAttemptId }));
   for (const finding of findings) usage = attach(usageWithMissingField(usage, finding, undefined, targetBindingSha256));
   return Object.freeze({ usage, present: true, unsupported_shape: findings.some((finding) =>
-    finding === "usage.too_many_fields" || finding === "usage.cost_details.too_many_fields") });
+    finding === "usage.too_many_fields" || /^usage\.[a-z_]+\.too_many_fields$/.test(finding)) });
 }
 
 function classifyError(payload, status) {
