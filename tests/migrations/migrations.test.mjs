@@ -844,6 +844,7 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
   const runtimeLogin = runtimeDatabaseConfigFromEnvironment().user;
   const runtimeRole = quoteIdentifier(runtimeLogin);
   let financeRowsBefore;
+  let replicationFixture;
   try {
     await installDisposableMarker(admin);
     await applyMigrationsThrough0005(admin, names);
@@ -860,6 +861,23 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
       await appendLegacyEvent(preservationPool, legacyRequest(preservationScope, { amount: '0.37' }));
       const preservedProjection = await projectLegacyScope(preservationPool, preservationScope);
       assert.equal(preservedProjection.ok, true, 'pre-0006 conservation fixture must have a complete snapshot');
+
+      // Seed all five guarded identity classes. The preserved parameter-ACL
+      // counterexample below proves the old origin-mode trigger rejects the
+      // ordinary update, while replica mode lets only the disposable fixture
+      // be nulled and then restored by the setup administrator.
+      const replicationScope = legacyScope('replication-setting-counterexample');
+      const replicationEvent = legacyRequest(replicationScope, { amount: '0.19' });
+      replicationEvent.postingMapping = {
+        schemaVersion: '1.0.0',
+        sourceLineId: replicationEvent.sourceIdentity.revisionSubjectId,
+        transportAttemptId: { status: 'known', id: `ci09-transport-${replicationEvent.eventId}` },
+        providerAttemptId: { status: 'known', id: `ci09-provider-${replicationEvent.eventId}` },
+        providerRequestId: { status: 'unknown' },
+        billableAttemptId: { status: 'known', id: `ci09-billable-${replicationEvent.eventId}` },
+      };
+      await appendLegacyEvent(preservationPool, replicationEvent);
+      replicationFixture = { scope: replicationScope, event: replicationEvent };
     } finally {
       await preservationPool.end();
       await admin.query('DROP TABLE cost_intelligence.financial_privacy_quarantine');
@@ -1081,6 +1099,328 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     }
   };
 
+  const parameterName = 'session_replication_role';
+  const replicationScope = replicationFixture.scope;
+  const replicationEventId = replicationFixture.event.eventId;
+  const replicationKinds = [
+    'billable_attempt', 'logical_operation', 'provider_attempt', 'source_observation', 'transport_attempt',
+  ];
+  const replicationRows = async () => (await admin.query(
+    `SELECT identity_kind, identity_value, first_event_id
+     FROM cost_intelligence.financial_ledger_identity_bindings
+     WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4
+     ORDER BY identity_kind`,
+    [replicationScope.tenantId, replicationScope.projectId, replicationScope.environment, replicationScope.billingMode],
+  )).rows;
+  const replicationWhere = `tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4`;
+  const replicationParameters = [
+    replicationScope.tenantId, replicationScope.projectId, replicationScope.environment, replicationScope.billingMode,
+  ];
+  const restoredReplicationRows = async () => {
+    await admin.query(
+      `UPDATE cost_intelligence.financial_ledger_identity_bindings
+       SET first_event_id = $5 WHERE ${replicationWhere} AND first_event_id IS NULL`,
+      [...replicationParameters, replicationEventId],
+    );
+    const rows = await replicationRows();
+    assert.deepEqual(rows.map(row => row.identity_kind), replicationKinds,
+      'the isolated replication fixture contains exactly the five guarded identity kinds');
+    assert.ok(rows.every(row => row.first_event_id === replicationEventId),
+      'the administrator restores all first-event bindings before the next preflight');
+  };
+
+  // Retain the exact harmless trigger-bypass counterexample in this disposable
+  // database. The host SET grant remains active after rejection; the test
+  // restores the five synthetic rows before explicitly repairing the host ACL.
+  scenarios.push({
+    label: 'direct SET parameter ACL for session_replication_role',
+    prepare: async () => {
+      await admin.query(`GRANT SET ON PARAMETER ${parameterName} TO ${runtimeRole}`);
+      await admin.query(`GRANT USAGE ON SCHEMA cost_intelligence TO ${runtimeRole}`);
+      await admin.query(`GRANT SELECT ON cost_intelligence.financial_ledger_identity_bindings TO ${runtimeRole}`);
+      await admin.query(`GRANT UPDATE (first_event_id) ON cost_intelligence.financial_ledger_identity_bindings TO ${runtimeRole}`);
+    },
+    verifyRejected: async () => {
+      try {
+        await withRuntimeLogin(async login => {
+          await login.query('BEGIN');
+          await bindRawFinanceScope(login, replicationScope);
+          const grants = await login.query(
+            `SELECT has_parameter_privilege(current_user, $1, 'SET') AS can_set,
+                    has_column_privilege(current_user, 'cost_intelligence.financial_ledger_identity_bindings', 'first_event_id', 'UPDATE') AS can_bind`,
+            [parameterName],
+          );
+          assert.deepEqual(grants.rows, [{ can_set: true, can_bind: true }],
+            'rejected provisioning leaves the pre-existing parameter and narrow column grants active');
+          await login.query('SAVEPOINT before_trigger_probe');
+          const guarded = await login.query(
+            `UPDATE cost_intelligence.financial_ledger_identity_bindings SET first_event_id = NULL
+             WHERE ${replicationWhere}`,
+            replicationParameters,
+          ).then(
+            () => assert.fail('the unchanged origin-mode identity guard must reject the update'),
+            error => error,
+          );
+          assert.equal(guarded.code, '55000', 'ordinary identity update remains blocked by the trigger');
+          await login.query('ROLLBACK TO SAVEPOINT before_trigger_probe');
+          await login.query(`SET ${parameterName} = 'replica'`);
+          assert.equal((await login.query(`SELECT current_setting('${parameterName}') AS mode`)).rows[0].mode, 'replica');
+          const changed = await login.query(
+            `UPDATE cost_intelligence.financial_ledger_identity_bindings SET first_event_id = NULL
+             WHERE ${replicationWhere} AND first_event_id IS NOT NULL RETURNING identity_kind`,
+            replicationParameters,
+          );
+          assert.equal(changed.rowCount, 5, 'replica mode bypasses the five synthetic identity-binding triggers');
+          assert.deepEqual(changed.rows.map(row => row.identity_kind).sort(), replicationKinds,
+            'the exact historical counterexample affects the five original identity kinds');
+          await login.query(`RESET ${parameterName}`);
+          await login.query('COMMIT');
+        });
+      } finally {
+        await restoredReplicationRows();
+      }
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE SET ON PARAMETER ${parameterName} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE USAGE ON SCHEMA cost_intelligence FROM ${runtimeRole}`);
+      await admin.query(`REVOKE UPDATE (first_event_id) ON cost_intelligence.financial_ledger_identity_bindings FROM ${runtimeRole}`);
+      await admin.query(`REVOKE SELECT ON cost_intelligence.financial_ledger_identity_bindings FROM ${runtimeRole}`);
+    },
+  });
+
+  const addParameterGrantScenario = (privilege, path) => {
+    const suffix = randomUUID().replaceAll('-', '');
+    const targetRole = `ci09_parameter_target_${suffix}`;
+    const bridgeRole = `ci09_parameter_bridge_${suffix}`;
+    const grantTo = roleName => admin.query(`GRANT ${privilege} ON PARAMETER ${parameterName} TO ${roleName}`);
+    const revokeFrom = roleName => admin.query(`REVOKE ${privilege} ON PARAMETER ${parameterName} FROM ${roleName}`);
+    const roleToAssume = path === 'transitive SET-only' ? targetRole : null;
+    scenarios.push({
+      label: `${path} ${privilege} parameter ACL`,
+      prepare: async () => {
+        if (path === 'direct') {
+          await grantTo(runtimeRole);
+        } else if (path === 'PUBLIC') {
+          await grantTo('PUBLIC');
+        } else if (path === 'inherited') {
+          await admin.query(`CREATE ROLE ${quoteIdentifier(targetRole)} NOLOGIN`);
+          await grantTo(quoteIdentifier(targetRole));
+          await admin.query(`GRANT ${quoteIdentifier(targetRole)} TO ${runtimeRole} WITH INHERIT TRUE, SET FALSE`);
+        } else {
+          await admin.query(`CREATE ROLE ${quoteIdentifier(targetRole)} NOLOGIN`);
+          await admin.query(`CREATE ROLE ${quoteIdentifier(bridgeRole)} NOLOGIN`);
+          await grantTo(quoteIdentifier(targetRole));
+          await admin.query(`GRANT ${quoteIdentifier(targetRole)} TO ${quoteIdentifier(bridgeRole)} WITH INHERIT FALSE, SET TRUE`);
+          await admin.query(`GRANT ${quoteIdentifier(bridgeRole)} TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`);
+        }
+      },
+      verifyRejected: () => withRuntimeLogin(async login => {
+        if (path === 'transitive SET-only') {
+          await login.query(`SET ROLE ${quoteIdentifier(bridgeRole)}`);
+          await login.query(`SET ROLE ${quoteIdentifier(targetRole)}`);
+        }
+        const effective = await login.query(
+          'SELECT has_parameter_privilege(current_user, $1, $2) AS effective',
+          [parameterName, privilege],
+        );
+        assert.equal(effective.rows[0].effective, true,
+          `the ${path} grant remains effective on the real runtime login after migration rejection`);
+        if (privilege === 'SET') {
+          await login.query(`SET ${parameterName} = 'replica'`);
+          assert.equal((await login.query(`SELECT current_setting('${parameterName}') AS mode`)).rows[0].mode, 'replica');
+          await login.query(`RESET ${parameterName}`);
+        }
+        if (roleToAssume) await login.query('RESET ROLE');
+      }),
+      cleanup: async () => {
+        if (path === 'direct') {
+          await revokeFrom(runtimeRole);
+        } else if (path === 'PUBLIC') {
+          await revokeFrom('PUBLIC');
+        } else if (path === 'inherited') {
+          await admin.query(`REVOKE ${quoteIdentifier(targetRole)} FROM ${runtimeRole}`);
+          await revokeFrom(quoteIdentifier(targetRole));
+          await admin.query(`DROP ROLE ${quoteIdentifier(targetRole)}`);
+        } else {
+          await admin.query(`REVOKE ${quoteIdentifier(bridgeRole)} FROM ${runtimeRole}`);
+          await admin.query(`REVOKE ${quoteIdentifier(targetRole)} FROM ${quoteIdentifier(bridgeRole)}`);
+          await revokeFrom(quoteIdentifier(targetRole));
+          await admin.query(`DROP ROLE ${quoteIdentifier(bridgeRole)}`);
+          await admin.query(`DROP ROLE ${quoteIdentifier(targetRole)}`);
+        }
+      },
+    });
+  };
+
+  for (const path of ['inherited', 'transitive SET-only', 'PUBLIC']) addParameterGrantScenario('SET', path);
+  for (const path of ['direct', 'inherited', 'transitive SET-only', 'PUBLIC']) {
+    addParameterGrantScenario('ALTER SYSTEM', path);
+  }
+
+  const extensionSchema = 'ci09_extension';
+  let pgReadFileIdentity;
+  let dblinkConnectIdentity;
+  let invokerReaderIdentity;
+  try {
+    const dblinkAvailable = await admin.query(
+      "SELECT 1 FROM pg_available_extensions WHERE name = 'dblink'",
+    );
+    assert.equal(dblinkAvailable.rows.length, 1, 'the pinned PostgreSQL 16 test image includes the dblink extension');
+    await admin.query(`CREATE SCHEMA ${quoteIdentifier(extensionSchema)}`);
+    await admin.query(`CREATE EXTENSION dblink WITH SCHEMA ${quoteIdentifier(extensionSchema)}`);
+    // Make the extension's default PUBLIC ACLs an explicit provisioning input;
+    // the later success path is reached only after this host cleanup and a new
+    // preflight. No dblink connection is attempted by these regressions.
+    await admin.query(`REVOKE EXECUTE ON ALL ROUTINES IN SCHEMA ${quoteIdentifier(extensionSchema)} FROM PUBLIC`);
+    await admin.query(`GRANT USAGE ON SCHEMA ${quoteIdentifier(extensionSchema)} TO ci_finance_runtime`);
+
+    pgReadFileIdentity = 'pg_catalog.pg_read_file(text,bigint,bigint)';
+    dblinkConnectIdentity = `${extensionSchema}.dblink_connect(text)`;
+    const pgReadFileBaseline = await admin.query(
+      `SELECT has_function_privilege($1, $2::regprocedure, 'EXECUTE') AS effective`,
+      [runtimeLogin, pgReadFileIdentity],
+    );
+    assert.deepEqual(pgReadFileBaseline.rows, [{ effective: false }],
+      'the disposable cluster starts without a host pg_read_file EXECUTE path');
+    const extensionDependency = await admin.query(
+      `SELECT extension_obj.extname
+       FROM pg_depend dependency
+       JOIN pg_extension extension_obj ON extension_obj.oid = dependency.refobjid
+       WHERE dependency.classid = 'pg_proc'::regclass
+         AND dependency.objid = $1::regprocedure
+         AND dependency.refclassid = 'pg_extension'::regclass
+         AND dependency.deptype = 'e'`,
+      [dblinkConnectIdentity],
+    );
+    assert.deepEqual(extensionDependency.rows, [{ extname: 'dblink' }],
+      'the invoker routine probe is an actual extension member, not only an extension-named schema');
+
+    const invokerReader = `ci09_invoker_reader_${randomUUID().replaceAll('-', '')}`;
+    invokerReaderIdentity = `public.${quoteIdentifier(invokerReader)}()`;
+    await admin.query(
+      `CREATE FUNCTION ${invokerReaderIdentity}
+       RETURNS text LANGUAGE sql SECURITY INVOKER
+       BEGIN ATOMIC
+         SELECT pg_catalog.pg_read_file('PG_VERSION', 0::bigint, 16::bigint);
+       END`,
+    );
+    await admin.query(`REVOKE ALL ON FUNCTION ${invokerReaderIdentity} FROM PUBLIC`);
+    const invokerDependency = await admin.query(
+      `SELECT routine.prosqlbody IS NOT NULL
+           AND routine.prosqlbody::text ~ format(':funcid[[:space:]]+%s([^0-9]|$)', target.oid) AS parsed_call,
+         EXISTS (
+           SELECT 1 FROM pg_depend dependency
+           WHERE dependency.classid = 'pg_proc'::regclass
+             AND dependency.objid = routine.oid
+             AND dependency.refclassid = 'pg_proc'::regclass
+             AND dependency.refobjid = target.oid
+         ) AS catalog_dependency
+       FROM pg_proc routine
+       CROSS JOIN pg_proc target
+       WHERE routine.oid = $1::regprocedure
+         AND target.oid = $2::regprocedure`,
+      [invokerReaderIdentity, pgReadFileIdentity],
+    );
+    assert.deepEqual(invokerDependency.rows, [{ parsed_call: true, catalog_dependency: false }],
+      'the SQL-standard invoker wrapper stores the pinned catalog routine OID even though pg_depend omits it');
+  } catch (error) {
+    await admin.end().catch(() => {});
+    await dropTestDatabase(name, base).catch(() => {});
+    throw error;
+  }
+
+  const addRoutineGrantScenario = (routineIdentity, label, { invoke = false, alsoGrantReadFile = false } = {}) => {
+    const suffix = randomUUID().replaceAll('-', '');
+    const targetRole = `ci09_routine_target_${suffix}`;
+    const bridgeRole = `ci09_routine_bridge_${suffix}`;
+    const grantTo = roleName => admin.query(`GRANT EXECUTE ON FUNCTION ${routineIdentity} TO ${roleName}`);
+    const revokeFrom = roleName => admin.query(`REVOKE EXECUTE ON FUNCTION ${routineIdentity} FROM ${roleName}`);
+    const grantReadFile = roleName => admin.query(`GRANT EXECUTE ON FUNCTION ${pgReadFileIdentity} TO ${roleName}`);
+    const revokeReadFile = roleName => admin.query(`REVOKE EXECUTE ON FUNCTION ${pgReadFileIdentity} FROM ${roleName}`);
+    scenarios.push({
+      label,
+      prepare: async () => {
+        if (label.includes('inherited')) {
+          await admin.query(`CREATE ROLE ${quoteIdentifier(targetRole)} NOLOGIN`);
+          await grantTo(quoteIdentifier(targetRole));
+          if (alsoGrantReadFile) await grantReadFile(quoteIdentifier(targetRole));
+          await admin.query(`GRANT ${quoteIdentifier(targetRole)} TO ${runtimeRole} WITH INHERIT TRUE, SET FALSE`);
+        } else if (label.includes('SET-only')) {
+          await admin.query(`CREATE ROLE ${quoteIdentifier(targetRole)} NOLOGIN`);
+          await admin.query(`CREATE ROLE ${quoteIdentifier(bridgeRole)} NOLOGIN`);
+          if (routineIdentity.startsWith(`${extensionSchema}.`)) {
+            await admin.query(`GRANT USAGE ON SCHEMA ${quoteIdentifier(extensionSchema)} TO ${quoteIdentifier(targetRole)}`);
+          }
+          await grantTo(quoteIdentifier(targetRole));
+          if (alsoGrantReadFile) await grantReadFile(quoteIdentifier(targetRole));
+          await admin.query(`GRANT ${quoteIdentifier(targetRole)} TO ${quoteIdentifier(bridgeRole)} WITH INHERIT FALSE, SET TRUE`);
+          await admin.query(`GRANT ${quoteIdentifier(bridgeRole)} TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`);
+        } else if (label.includes('PUBLIC')) {
+          await grantTo('PUBLIC');
+          if (alsoGrantReadFile) await grantReadFile('PUBLIC');
+        } else {
+          await grantTo(runtimeRole);
+          if (alsoGrantReadFile) await grantReadFile(runtimeRole);
+        }
+      },
+      verifyRejected: () => withRuntimeLogin(async login => {
+        if (label.includes('SET-only')) {
+          await login.query(`SET ROLE ${quoteIdentifier(bridgeRole)}`);
+          await login.query(`SET ROLE ${quoteIdentifier(targetRole)}`);
+        }
+        const effective = await login.query(
+          `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS routine_exec,
+                  has_schema_privilege(current_user, $2, 'USAGE') AS schema_usage`,
+          [routineIdentity, routineIdentity.split('.')[0]],
+        );
+        assert.equal(effective.rows[0].routine_exec, true,
+          `${label}: the real runtime login retains the effective EXECUTE path after rejection`);
+        assert.equal(effective.rows[0].schema_usage, true,
+          `${label}: the real runtime login has schema USAGE for the protected routine`);
+        if (alsoGrantReadFile) {
+          assert.match((await login.query(`SELECT ${routineIdentity} AS content`)).rows[0].content, /^16/,
+            `${label}: the invoker routine reads only the harmless in-cluster PG_VERSION file`);
+        } else if (invoke) {
+          assert.match((await login.query("SELECT pg_catalog.pg_read_file('PG_VERSION', 0, 16) AS content")).rows[0].content, /^16/,
+            `${label}: the real runtime reads only the harmless in-cluster PG_VERSION file`);
+        }
+        if (label.includes('SET-only')) await login.query('RESET ROLE');
+      }),
+      cleanup: async () => {
+        if (label.includes('inherited')) {
+          await admin.query(`REVOKE ${quoteIdentifier(targetRole)} FROM ${runtimeRole}`);
+          await revokeFrom(quoteIdentifier(targetRole));
+          if (alsoGrantReadFile) await revokeReadFile(quoteIdentifier(targetRole));
+          await admin.query(`DROP ROLE ${quoteIdentifier(targetRole)}`);
+        } else if (label.includes('SET-only')) {
+          await admin.query(`REVOKE ${quoteIdentifier(bridgeRole)} FROM ${runtimeRole}`);
+          await admin.query(`REVOKE ${quoteIdentifier(targetRole)} FROM ${quoteIdentifier(bridgeRole)}`);
+          await revokeFrom(quoteIdentifier(targetRole));
+          if (routineIdentity.startsWith(`${extensionSchema}.`)) {
+            await admin.query(`REVOKE USAGE ON SCHEMA ${quoteIdentifier(extensionSchema)} FROM ${quoteIdentifier(targetRole)}`);
+          }
+          if (alsoGrantReadFile) await revokeReadFile(quoteIdentifier(targetRole));
+          await admin.query(`DROP ROLE ${quoteIdentifier(bridgeRole)}`);
+          await admin.query(`DROP ROLE ${quoteIdentifier(targetRole)}`);
+        } else if (label.includes('PUBLIC')) {
+          await revokeFrom('PUBLIC');
+          if (alsoGrantReadFile) await revokeReadFile('PUBLIC');
+        } else {
+          await revokeFrom(runtimeRole);
+          if (alsoGrantReadFile) await revokeReadFile(runtimeRole);
+        }
+      },
+    });
+  };
+
+  for (const path of ['direct', 'inherited', 'SET-only', 'PUBLIC']) {
+    addRoutineGrantScenario(pgReadFileIdentity, `host login ${path} pg_catalog.pg_read_file EXECUTE grant`, { invoke: true });
+    addRoutineGrantScenario(invokerReaderIdentity,
+      `host login ${path} user-schema SECURITY INVOKER wrapper over pg_read_file`, { alsoGrantReadFile: true });
+    addRoutineGrantScenario(dblinkConnectIdentity,
+      `host login ${path} dblink extension invoker EXECUTE grant`);
+  }
+
   // Preserve the original SET-only host-login reproduction. Rejecting 0006
   // must not be described as removing this already active server capability.
   scenarios.push({
@@ -1232,8 +1572,7 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
   scenarios.push({
     label: 'host login direct SECURITY DEFINER EXECUTE in a non-public extension namespace',
     prepare: async () => {
-      await admin.query('CREATE SCHEMA ci09_extension');
-      await admin.query(`GRANT USAGE ON SCHEMA ci09_extension TO ${runtimeRole}`);
+      await admin.query('GRANT USAGE ON SCHEMA ci09_extension TO ci_finance_runtime');
       await createExternalGateway('ci09_extension', extensionGateway);
       await admin.query(`REVOKE ALL ON FUNCTION ci09_extension.${quoteIdentifier(extensionGateway)}() FROM PUBLIC`);
       await admin.query(`GRANT EXECUTE ON FUNCTION ci09_extension.${quoteIdentifier(extensionGateway)}() TO ${runtimeRole}`);
@@ -1260,6 +1599,11 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     await apply0006ToLegacyDatabase(admin, migrationName);
     assert.deepEqual(await captureLegacyFinancialRows(admin), financeRowsBefore,
       'a successful re-audit after explicit host repair preserves pre-existing immutable financial rows');
+    const retainedIdentityBindings = await replicationRows();
+    assert.deepEqual(retainedIdentityBindings.map(row => row.identity_kind), replicationKinds,
+      'the fresh parameter preflight retains each of the five guarded identity kinds');
+    assert.ok(retainedIdentityBindings.every(row => row.first_event_id === replicationEventId),
+      'all five first_event_id bindings remain assigned after explicit host cleanup and a fresh preflight');
     const runtimeConfig = { ...runtimeDatabaseConfigFromEnvironment(), database: name };
     const restricted = new Client(runtimeConfig);
     await restricted.connect();
@@ -1290,6 +1634,51 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
         await assert.rejects(restricted.query(`SET ROLE ${role}`), error => error.code === '42501',
           `the real runtime login cannot assume repaired predefined role ${role}`);
       }
+      const parameterPrivileges = await restricted.query(
+        `SELECT has_parameter_privilege(current_user, $1, 'SET') AS can_set,
+                has_parameter_privilege(current_user, $1, 'ALTER SYSTEM') AS can_alter_system`,
+        [parameterName],
+      );
+      assert.deepEqual(parameterPrivileges.rows, [{ can_set: false, can_alter_system: false }],
+        'the actual runtime login has no SET or ALTER SYSTEM parameter ACL after explicit host cleanup');
+      await assert.rejects(restricted.query(`SET ${parameterName} = 'replica'`), error => error.code === '42501',
+        'the real runtime login cannot change session_replication_role after the fresh preflight');
+      await assert.rejects(restricted.query(`ALTER SYSTEM SET ${parameterName} = 'replica'`), error => error.code === '42501',
+        'the real runtime login cannot alter the persistent server parameter after the fresh preflight');
+      const catalogFilePrivilege = await restricted.query(
+        `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS can_execute`,
+        [pgReadFileIdentity],
+      );
+      assert.equal(catalogFilePrivilege.rows[0].can_execute, false,
+        'the actual runtime login has no pg_catalog.pg_read_file EXECUTE path after host cleanup');
+      await assert.rejects(
+        restricted.query("SELECT pg_catalog.pg_read_file('PG_VERSION', 0, 16)"),
+        error => error.code === '42501',
+        'the real runtime login cannot read even the harmless in-cluster PG_VERSION file after the fresh preflight',
+      );
+      const invokerPrivilege = await restricted.query(
+        `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS can_execute`,
+        [invokerReaderIdentity],
+      );
+      assert.equal(invokerPrivilege.rows[0].can_execute, false,
+        'the actual runtime login has no user-schema invoker-wrapper EXECUTE path after host cleanup');
+      await assert.rejects(
+        restricted.query(`SELECT ${invokerReaderIdentity}`),
+        error => error.code === '42501',
+        'the real runtime login cannot call the user-schema invoker wrapper after the fresh preflight',
+      );
+      const extensionPrivilege = await restricted.query(
+        `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS can_execute`,
+        [dblinkConnectIdentity],
+      );
+      assert.equal(extensionPrivilege.rows[0].can_execute, false,
+        'the actual runtime login has no dblink extension routine EXECUTE path after host cleanup');
+      await assert.rejects(
+        restricted.query(`SELECT ${dblinkConnectIdentity.replace('(text)', "('')")}`),
+        error => error.code === '42501',
+        'the real runtime login is denied before any dblink connection attempt');
+      assert.match((await restricted.query('SELECT pg_catalog.version() AS version')).rows[0].version, /^PostgreSQL 16/,
+        'ordinary PostgreSQL built-ins remain available to the real runtime login');
       await assert.rejects(
         restricted.query("COPY (SELECT 'CI09_HARMLESS_EXECUTION_PROBE') TO PROGRAM 'cat >/dev/null'"),
         error => error.code === '42501',

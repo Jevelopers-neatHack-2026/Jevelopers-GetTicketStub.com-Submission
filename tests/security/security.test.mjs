@@ -627,6 +627,19 @@ test('PostgreSQL ledger reads and writes recheck current grants and preserve ten
       canSelectEvents: runtimeGrants.rows[0].can_select_events,
       canInsertEvents: runtimeGrants.rows[0].can_insert_events,
     }, { isRuntimeMember: true, canSelectEvents: true, canInsertEvents: true }, JSON.stringify(runtimeGrants.rows));
+    const runtimeCapabilities = await pool.query(
+      `SELECT has_parameter_privilege(current_user, 'session_replication_role', 'SET') AS can_set_replication,
+              has_parameter_privilege(current_user, 'session_replication_role', 'ALTER SYSTEM') AS can_alter_system,
+              has_function_privilege(current_user, 'pg_catalog.pg_read_file(text,bigint,bigint)', 'EXECUTE') AS can_read_cluster_file`,
+    );
+    assert.deepEqual(runtimeCapabilities.rows, [{
+      can_set_replication: false, can_alter_system: false, can_read_cluster_file: false,
+    }], 'the real restricted runtime has no unsafe parameter or catalog-file routine capabilities');
+    await assert.rejects(pool.query("SET session_replication_role = 'replica'"), error => error.code === '42501');
+    await assert.rejects(pool.query("ALTER SYSTEM SET session_replication_role = 'replica'"), error => error.code === '42501');
+    await assert.rejects(pool.query("SELECT pg_catalog.pg_read_file('PG_VERSION', 0, 16)"), error => error.code === '42501');
+    assert.match((await pool.query('SELECT pg_catalog.version() AS version')).rows[0].version, /^PostgreSQL 16/,
+      'ordinary built-in functions remain available to the restricted runtime');
     const event = ledgerRequest(tenantA, `security-${randomUUID()}`);
     const append = await appendLedgerEvent(event, portsA);
     assert.equal(append.ok, true, append.ok ? '' : append.error.code);

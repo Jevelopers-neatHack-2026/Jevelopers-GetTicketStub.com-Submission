@@ -36,6 +36,7 @@ DECLARE
   principal record;
   relation record;
   column_privilege record;
+  reviewed_privileged_routines text[] := ARRAY[]::text[];
   allowed_select text[] := ARRAY[
     'foundation_health',
     'financial_ledger_events', 'financial_ledger_identity_bindings', 'financial_source_revision_heads',
@@ -213,29 +214,154 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
 
-    -- A callable SECURITY DEFINER routine can run with its owner's authority,
-    -- so audit every user/extension namespace, not only the finance schema.
-    -- ACL defaults include PUBLIC EXECUTE; role grants can be effective by
-    -- inheritance or by SET ROLE, including through transitive memberships.
+    -- pg_parameter_acl is cluster-wide. Inspect only explicitly granted
+    -- parameter capabilities, then ask PostgreSQL whether SET or ALTER SYSTEM
+    -- is effective for each role reachable by the runtime principal. The
+    -- recursive SET closure is needed because a role can assume a grant-only
+    -- role without inheriting its privileges. PUBLIC and INHERIT paths are
+    -- included by has_parameter_privilege. The runtime has no reviewed need
+    -- for either parameter capability; in particular, session_replication_role
+    -- can disable the identity-binding triggers.
     IF EXISTS (
-      SELECT 1 FROM pg_proc function_obj
+      WITH RECURSIVE settable_roles(role_oid) AS (
+        SELECT principal.oid
+        UNION
+        SELECT membership.roleid
+        FROM pg_auth_members membership
+        JOIN settable_roles reachable ON membership.member = reachable.role_oid
+        WHERE membership.set_option
+      )
+      SELECT 1
+      FROM settable_roles reachable
+      CROSS JOIN pg_parameter_acl parameter_acl
+      CROSS JOIN (VALUES ('SET'), ('ALTER SYSTEM')) requested(privilege_type)
+      WHERE parameter_acl.paracl IS NOT NULL
+        AND has_parameter_privilege(reachable.role_oid, parameter_acl.parname, requested.privilege_type)
+    ) THEN
+      RAISE EXCEPTION 'CI finance runtime principal has an unreviewed parameter capability'
+        USING ERRCODE = '42501';
+    END IF;
+
+    -- Review privileged routines by capability instead of banning ordinary
+    -- pg_catalog functions. This covers server-file access, large-object
+    -- file import/export, and the database/file extensions that expose those
+    -- capabilities. SQL-standard
+    -- function bodies record dependencies, so an invoker wrapper around a
+    -- protected routine inherits the same preflight. The exact-signature
+    -- exception list is intentionally empty until a privileged routine has a
+    -- specific reviewed need. Ordinary built-ins such as version/current_setting
+    -- and finance_scope_matches are outside this capability set.
+    IF EXISTS (
+      WITH RECURSIVE settable_roles(role_oid) AS (
+        SELECT principal.oid
+        UNION
+        SELECT membership.roleid
+        FROM pg_auth_members membership
+        JOIN settable_roles reachable ON membership.member = reachable.role_oid
+        WHERE membership.set_option
+      ), protected_routines(routine_oid) AS (
+        SELECT function_obj.oid
+        FROM pg_proc function_obj
+        JOIN pg_namespace function_schema ON function_schema.oid = function_obj.pronamespace
+        WHERE function_schema.nspname = 'pg_catalog'
+          AND function_obj.proname = ANY(ARRAY[
+            'pg_read_file', 'pg_read_binary_file', 'pg_ls_dir', 'pg_stat_file',
+            'pg_ls_logdir', 'pg_ls_waldir', 'pg_ls_archive_statusdir', 'pg_ls_tmpdir',
+            'pg_ls_logicalmapdir', 'pg_ls_logicalsnapdir', 'pg_ls_replslotdir',
+            'lo_import', 'lo_export'
+          ]::text[])
+        UNION
+        SELECT function_obj.oid
+        FROM pg_proc function_obj
+        JOIN pg_depend extension_dependency
+          ON extension_dependency.classid = 'pg_proc'::regclass
+          AND extension_dependency.objid = function_obj.oid
+          AND extension_dependency.refclassid = 'pg_extension'::regclass
+          AND extension_dependency.deptype = 'e'
+        JOIN pg_extension extension_obj ON extension_obj.oid = extension_dependency.refobjid
+        WHERE extension_obj.extname = ANY(ARRAY['adminpack', 'dblink', 'file_fdw', 'postgres_fdw']::text[])
+      ), routine_dependencies(root_oid, dependency_oid) AS (
+        SELECT dependency.objid, dependency.refobjid
+        FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_proc'::regclass
+          AND dependency.refclassid = 'pg_proc'::regclass
+        UNION
+        -- Dependencies on pinned pg_catalog routines are intentionally absent
+        -- from pg_depend. SQL-standard function bodies retain their parsed
+        -- FuncExpr OIDs in prosqlbody, so include those calls explicitly.
+        SELECT function_obj.oid, protected.routine_oid
+        FROM pg_proc function_obj
+        CROSS JOIN protected_routines protected
+        WHERE function_obj.prosqlbody IS NOT NULL
+          AND function_obj.prosqlbody::text ~ format(
+            ':funcid[[:space:]]+%s([^0-9]|$)', protected.routine_oid
+          )
+        UNION
+        SELECT dependency_closure.root_oid, dependency.refobjid
+        FROM routine_dependencies dependency_closure
+        JOIN pg_depend dependency
+          ON dependency.classid = 'pg_proc'::regclass
+          AND dependency.objid = dependency_closure.dependency_oid
+          AND dependency.refclassid = 'pg_proc'::regclass
+      ), callable_capabilities(routine_oid) AS (
+        SELECT protected.routine_oid
+        FROM protected_routines protected
+        UNION
+        SELECT dependency_closure.root_oid
+        FROM routine_dependencies dependency_closure
+        JOIN protected_routines protected ON protected.routine_oid = dependency_closure.dependency_oid
+        UNION
+        SELECT function_obj.oid
+        FROM pg_proc function_obj
+        JOIN pg_namespace function_schema ON function_schema.oid = function_obj.pronamespace
+        WHERE function_obj.prosecdef
+          AND function_schema.nspname <> 'information_schema'
+          AND left(function_schema.nspname, 3) <> 'pg_'
+          AND format('%I.%I(%s)', function_schema.nspname, function_obj.proname,
+            pg_get_function_identity_arguments(function_obj.oid)) <> ALL(reviewed_privileged_routines)
+      )
+      SELECT 1
+      FROM pg_proc function_obj
       JOIN pg_namespace function_schema ON function_schema.oid = function_obj.pronamespace
-      CROSS JOIN LATERAL aclexplode(COALESCE(function_obj.proacl, acldefault('f', function_obj.proowner))) privilege
-      WHERE function_obj.prosecdef
-        AND function_schema.nspname <> 'information_schema'
-        AND left(function_schema.nspname, 3) <> 'pg_'
-        AND (has_schema_privilege(principal.oid, function_schema.oid, 'USAGE')
+      JOIN pg_roles routine_owner ON routine_owner.oid = function_obj.proowner
+      JOIN callable_capabilities capability ON capability.routine_oid = function_obj.oid
+      WHERE EXISTS (
+        SELECT 1
+        FROM settable_roles reachable
+        WHERE has_schema_privilege(reachable.role_oid, function_schema.oid, 'USAGE')
+          AND has_function_privilege(reachable.role_oid, function_obj.oid, 'EXECUTE')
+      )
+        AND (
+          function_obj.prosecdef
+          OR function_schema.nspname = 'pg_catalog'
           OR EXISTS (
-            SELECT 1 FROM aclexplode(COALESCE(function_schema.nspacl,
-              acldefault('n', function_schema.nspowner))) schema_privilege
-            WHERE schema_privilege.privilege_type = 'USAGE'
-              AND (schema_privilege.grantee = principal.oid
-                OR pg_has_role(principal.oid, schema_privilege.grantee, 'SET'))
-          ))
-        AND privilege.privilege_type = 'EXECUTE'
-        AND (privilege.grantee = 0 OR privilege.grantee = principal.oid
-          OR pg_has_role(principal.oid, privilege.grantee, 'USAGE')
-          OR pg_has_role(principal.oid, privilege.grantee, 'SET'))
+            SELECT 1
+            FROM pg_depend extension_dependency
+            JOIN pg_extension extension_obj ON extension_obj.oid = extension_dependency.refobjid
+            WHERE extension_dependency.classid = 'pg_proc'::regclass
+              AND extension_dependency.objid = function_obj.oid
+              AND extension_dependency.refclassid = 'pg_extension'::regclass
+              AND extension_dependency.deptype = 'e'
+              AND extension_obj.extname = ANY(ARRAY['adminpack', 'dblink']::text[])
+          )
+          OR routine_owner.rolsuper
+          OR routine_owner.rolcreatedb
+          OR routine_owner.rolcreaterole
+          OR routine_owner.rolreplication
+          OR routine_owner.rolbypassrls
+          OR EXISTS (
+            SELECT 1 FROM pg_roles privileged_role
+            WHERE left(privileged_role.rolname, 3) = 'pg_'
+              AND pg_has_role(routine_owner.oid, privileged_role.oid, 'MEMBER')
+          )
+          OR EXISTS (
+            SELECT 1 FROM pg_roles privileged_role
+            WHERE (privileged_role.rolsuper OR privileged_role.rolcreatedb
+              OR privileged_role.rolcreaterole OR privileged_role.rolreplication
+              OR privileged_role.rolbypassrls)
+              AND pg_has_role(routine_owner.oid, privileged_role.oid, 'MEMBER')
+          )
+        )
     ) THEN
       RAISE EXCEPTION 'CI finance runtime principal can execute an unreviewed privileged routine'
         USING ERRCODE = '42501';
