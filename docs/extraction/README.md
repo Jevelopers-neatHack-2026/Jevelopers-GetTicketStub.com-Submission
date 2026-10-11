@@ -22,7 +22,7 @@ The pinned XHTML SAX parser has a separate 64 Ki code-unit threshold for token b
 
 This is an internal partial extraction component for controlled retrieval. It does not define or implement the accepted canonical event schema, full research API, external release, or persistence behavior.
 
-Run focused checks with Node 22.23.3:
+Run focused checks with Node 22.23.3, after `npm ci` and `node tools/install-typescript-host.mjs` (the locked TypeScript 7.0.2 host compiler that `tsc` needs). CI's [`extraction.yml`](../../.github/workflows/extraction.yml) runs `make verify CASE=deterministic-extraction MODE=mock`, which also covers `tests/extraction/pdf`, and `npm run typecheck`, which includes this consumer fixture.
 
 ```sh
 node --test tests/extraction/*.test.mjs
