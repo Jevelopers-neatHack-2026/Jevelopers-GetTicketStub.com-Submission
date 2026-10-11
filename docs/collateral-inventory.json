@@ -3397,8 +3397,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "657656edb51c6c1568db4ac9ea87ba2505900d2e",
-      "sha256": "de636be65895c6f2a63c4238b45ed49212ed389ef317049dce58de8a1f48b74b",
+      "trackedAtRevision": "1c90dcaf8fcd43cf8736dcc0fd6df0eb4d963608",
+      "sha256": "b0b4cfcc8784124d023635e7ec944d44b5257ea672430df3c809325537d69894",
       "provenanceRecordId": "HANDOFF-GUIDE-001"
     },
     {
@@ -3745,8 +3745,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "8aae5e7b964a18377f1787269ee350f69332a7d3",
-      "sha256": "ec35ec65ce8796355c10d7020ab9bded5a5782f696dc5a90c9df2209607e63f0",
+      "trackedAtRevision": "1c90dcaf8fcd43cf8736dcc0fd6df0eb4d963608",
+      "sha256": "fc0c2294895d7bf954a89bd9412bb1e3a724eb74b466d541defbe628be2037e7",
       "provenanceRecordId": "RELEASE-RECORD-001"
     },
     {
@@ -5344,6 +5344,18 @@
       "trackedAtRevision": "682242f5ec842e25b6ef347a289bacf02a3f3da1",
       "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
       "provenanceRecordId": "PROV-FILE-F0C165179525"
+    },
+    {
+      "fileId": "FILE-1788ECB86941",
+      "path": "release/v0.1.0-rehearsal/history/manifest-b403c91eb250b734.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "ae405064b5377f9d468e0e6ed7376293f1eb1a4a",
+      "sha256": "b403c91eb250b734a7f62f9dae28354770e14c7c7a3b15b6c7759570d53c5add",
+      "provenanceRecordId": "PROV-FILE-1788ECB86941"
     }
   ],
   "submissionScope": {
