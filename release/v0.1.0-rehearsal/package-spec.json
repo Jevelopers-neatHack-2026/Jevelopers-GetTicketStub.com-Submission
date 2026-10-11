@@ -194,6 +194,21 @@
       "path": "demo/deck/concept-overview.html",
       "role": "responsive-rehearsal-support-page",
       "variant": "concept-responsive-html",
+      "packageDirectory": "view/demo/deck",
+      "packageDependencies": [
+        {
+          "sourcePath": "demo/diagrams/demo-workflow.svg",
+          "packagePath": "view/demo/diagrams/demo-workflow.svg",
+          "relativeReference": "../diagrams/demo-workflow.svg",
+          "role": "HTML image dependency"
+        },
+        {
+          "sourcePath": "demo/diagrams/demo-workflow-alt-text.md",
+          "packagePath": "view/demo/diagrams/demo-workflow-alt-text.md",
+          "relativeReference": "../diagrams/demo-workflow-alt-text.md",
+          "role": "HTML accessible equivalent"
+        }
+      ],
       "package": true,
       "requiredForV1": false,
       "mediaClass": "visual-with-text-equivalent",
@@ -287,7 +302,7 @@
     "acceptedVideoExtensions": [".mp4"],
     "captionExtensions": [".srt", ".vtt"],
     "receiptMustPinVideoPathAndSha256": true,
-    "reviewerRole": "Product and frontend — receiving reviewer; individual not supplied"
+    "reviewerRole": "User-assigned accountable root supervisor (AI session); independent Astra model receiver dry-run pending"
   },
   "requiredSubmissionArtifact": {
     "assetId": "DEMO-SUBMISSION-VIDEO-001",

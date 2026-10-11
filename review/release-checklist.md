@@ -1,6 +1,6 @@
 # Collateral and submission release checklist
 
-Use this checklist against the exact manifest and bytes that would be handed off. A model review or package checksum is not owner, rights, brand, or human approval. Mark each line only from recorded evidence; unresolved items stay blocked.
+Use this checklist against the exact manifest and bytes that would be handed off. A model review or package checksum is not source-owner, rights, brand, product, or submitter approval. Mark each line only from recorded evidence; unresolved items stay blocked.
 
 ## Collateral package decision
 
@@ -15,9 +15,9 @@ Use this checklist against the exact manifest and bytes that would be handed off
 - [ ] Confirm the brand owner has named the approved subset and destination-specific review is complete for each exact asset.
 - [ ] Confirm no asset is missing, modified, pending, draft-only, superseded, revoked, expired, or merely planned; package copies are byte-identical and collision-free.
 - [ ] Reproduce from the committed inputs without a paid call; record renderer and environment versions and preserve previous package bytes.
-- [ ] Record a named human receiver, role, review date, and exact decision. A synthetic fixture test, author inspection, or Astra model review does not satisfy this item.
+- [ ] Record the assigned accountable receiver, role, review date, and exact scoped decision. For this internal handoff, the user-assigned root supervisor is an AI session; record it accurately and do not imply human, rights, brand, product, or submission approval. The separate Astra model receiver dry-run remains pending and does not replace owner approval.
 
-Until every applicable line passes, `collateralPackageReadiness.decision` remains `BLOCKED`. Current source and inventory/provenance joins do not themselves establish readiness: asset-specific rights, exact wording/CTA review, brand/source-owner approval, accessibility and independent receiver review remain pending, and the rehearsal remains draft-only.
+Until every applicable line passes, `collateralPackageReadiness.decision` remains `BLOCKED`. Current source and inventory/provenance joins do not themselves establish readiness: asset-specific rights, exact wording/CTA review, brand/source-owner approval, accessibility and the independent model receiver dry-run remain pending, and the rehearsal remains draft-only.
 
 ## External submission decision
 

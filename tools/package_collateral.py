@@ -15,6 +15,7 @@ import json
 import math
 import mimetypes
 import os
+import posixpath
 import platform
 import re
 import shutil
@@ -22,8 +23,10 @@ import subprocess
 import sys
 import tempfile
 from datetime import date, datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 
 
@@ -36,7 +39,7 @@ TIMESTAMP = re.compile(
     r"(?P<end>(?:\d{2}:)?\d{2}:\d{2}[,.]\d{3})"
 )
 TEXT_FORMATS = {".md", ".txt", ".json", ".html", ".srt", ".vtt"}
-POLICY_HASH_ALGORITHM = "sha256-canonical-json-manifest-self-reference-v1"
+POLICY_HASH_ALGORITHM = "sha256-canonical-json-self-reference-projection-v2"
 POLICY_JSON_BINDINGS = {
     "docs/collateral-inventory.json": {
         "kind": "canonical_json_semantic_field_binding",
@@ -53,6 +56,8 @@ POLICY_JSON_BINDINGS = {
             "records[assetId=HANDOFF-MANIFEST-001].source.revision",
             "records[assetId=HANDOFF-MANIFEST-001].source.url",
             "records[assetId=HANDOFF-MANIFEST-001].checksum.value",
+            "records[assetId=PROV-FILE-E018FDB8D981].source.revision",
+            "records[assetId=PROV-FILE-E018FDB8D981].checksum.value",
         ],
     },
 }
@@ -347,6 +352,103 @@ def package_filename(row: Dict[str, Any], source: Path, dimensions: Dict[str, An
     return "-".join(
         [family, asset_id, revision, destination, dimension_token, locale, _token(row["variant"])]
     ) + source.suffix.lower()
+
+
+def _safe_package_relative(relative: str) -> str:
+    path = PurePosixPath(relative)
+    if path.is_absolute() or not path.parts or ".." in path.parts or "\\" in relative or path.as_posix() != relative:
+        raise ValueError("package-relative path must be normalized and remain inside its version directory")
+    return path.as_posix()
+
+
+def _package_asset_path(row: Dict[str, Any], output_name: str, version: str) -> str:
+    directory = _safe_package_relative(row.get("packageDirectory", "assets"))
+    return f"release/{version}/{directory}/{output_name}"
+
+
+def _package_dependency_path(relative: str, version: str) -> str:
+    normalized = _safe_package_relative(relative)
+    return f"release/{version}/{normalized}"
+
+
+def resolve_package_reference(entrypoint_path: str, reference: str, version: str) -> Optional[str]:
+    """Resolve a local HTML reference within one versioned package directory."""
+    package_root = PurePosixPath("release") / version
+    entrypoint = PurePosixPath(entrypoint_path)
+    try:
+        entry_relative = entrypoint.relative_to(package_root)
+    except ValueError as exc:
+        raise ValueError("package entrypoint is outside the selected release directory") from exc
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc:
+        return None
+    if not parsed.path:
+        return None
+    if parsed.path.startswith("/") or "\\" in parsed.path:
+        raise ValueError("absolute or backslash package references are not allowed")
+    decoded = unquote(parsed.path)
+    if "\\" in decoded:
+        raise ValueError("backslash package references are not allowed")
+    target = posixpath.normpath(posixpath.join(entry_relative.parent.as_posix(), decoded))
+    if target in {".", ".."} or target.startswith("../"):
+        raise ValueError("package reference escapes its version directory")
+    return (package_root / PurePosixPath(target)).as_posix()
+
+
+class _HTMLLocalReferenceParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.references: List[str] = []
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
+        for name, value in attrs:
+            if name.lower() in {"src", "href"} and value:
+                self.references.append(value)
+
+    def handle_startendtag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+
+def html_local_references(path: Path) -> List[str]:
+    parser = _HTMLLocalReferenceParser()
+    parser.feed(path.read_text(encoding="utf-8"))
+    parser.close()
+    return _unique(parser.references)
+
+
+def package_composition_reference_errors(
+    entrypoint_path: str,
+    references: Sequence[str],
+    dependencies: Sequence[Dict[str, Any]],
+    version: str,
+) -> List[str]:
+    errors: List[str] = []
+    dependency_by_reference: Dict[str, List[Dict[str, Any]]] = {}
+    for dependency in dependencies:
+        reference = dependency.get("relativeReference")
+        if not isinstance(reference, str) or not reference:
+            errors.append("composition dependency is missing its exact relativeReference")
+            continue
+        dependency_by_reference.setdefault(reference, []).append(dependency)
+    for reference in references:
+        try:
+            resolved = resolve_package_reference(entrypoint_path, reference, version)
+        except ValueError as exc:
+            errors.append(f"HTML reference {reference!r} is unsafe: {exc}")
+            continue
+        if resolved is None:
+            continue
+        matches = dependency_by_reference.get(reference, [])
+        if len(matches) != 1:
+            errors.append(f"HTML reference {reference!r} requires exactly one declared contextual dependency")
+            continue
+        declared = matches[0].get("packageCopy", {}).get("path")
+        if declared != resolved or matches[0].get("resolvedPackagePath") != resolved or matches[0].get("resolutionStatus") != "matches_declared_package_path":
+            errors.append(f"HTML reference {reference!r} does not resolve to its exact declared package dependency")
+    for reference in dependency_by_reference:
+        if reference not in references:
+            errors.append(f"declared contextual dependency {reference!r} is not referenced by the HTML entrypoint")
+    return errors
 
 
 def _load_context(root: Path, version: str) -> Dict[str, Any]:
@@ -691,8 +793,50 @@ def _asset_record(root: Path, row: Dict[str, Any], spec: Dict[str, Any], context
         }
     inventory_join = _inventory_join(context, row["assetId"], relative, fact["exists"])
     output_name = package_filename(row, path_obj, fact.get("dimensions", {"status": "not_applicable"}), spec)
-    package_path = f"release/{spec['packageVersion']}/assets/{output_name}" if row.get("package", True) else None
+    package_path = _package_asset_path(row, output_name, spec["packageVersion"]) if row.get("package", True) else None
     package_fact = _file_fact(root, package_path) if package_path else {"exists": False, "sha256": None, "sourceCommitId": None}
+    composition_dependencies = []
+    for dependency in row.get("packageDependencies", []):
+        dependency_source_path = dependency.get("sourcePath")
+        dependency_package_path = _package_dependency_path(dependency.get("packagePath", ""), spec["packageVersion"])
+        dependency_source = _file_fact(root, dependency_source_path)
+        dependency_copy = _file_fact(root, dependency_package_path)
+        try:
+            resolved = resolve_package_reference(package_path or "", dependency.get("relativeReference", ""), spec["packageVersion"])
+            resolution_status = "matches_declared_package_path" if resolved == dependency_package_path else "does_not_match_declared_package_path"
+        except ValueError:
+            resolved = None
+            resolution_status = "unsafe_or_invalid_reference"
+        composition_dependencies.append(
+            {
+                "relativeReference": dependency.get("relativeReference"),
+                "resolutionStatus": resolution_status,
+                "resolvedPackagePath": resolved,
+                "source": {
+                    "path": dependency_source_path,
+                    "sha256": dependency_source.get("sha256"),
+                    "sourceCommitId": dependency_source.get("sourceCommitId"),
+                    "sourcePinStatus": dependency_source.get("sourcePinStatus"),
+                },
+                "packageCopy": {
+                    "path": dependency_package_path,
+                    "exists": dependency_copy.get("exists", False),
+                    "sha256": dependency_copy.get("sha256"),
+                    "sourceCommitId": dependency_copy.get("sourceCommitId"),
+                    "expectedSha256": dependency_source.get("sha256"),
+                    "byteIdenticalToSource": bool(dependency_copy.get("exists") and dependency_copy.get("sha256") == dependency_source.get("sha256")),
+                },
+                "role": dependency.get("role"),
+            }
+        )
+    composition_reference_errors = []
+    if path_obj.suffix.lower() == ".html" and fact["exists"] and package_path:
+        composition_reference_errors = package_composition_reference_errors(
+            package_path,
+            html_local_references(path_obj),
+            composition_dependencies,
+            spec["packageVersion"],
+        )
     render_receipt = _render_receipt(root, row.get("renderReceiptPath"), relative, fact.get("sha256"), context) if fact["exists"] else {"path": row.get("renderReceiptPath"), "status": "not_checked_missing_export"}
     destinations = {
         "candidateInternalUse": spec.get("internalDestination"),
@@ -728,6 +872,8 @@ def _asset_record(root: Path, row: Dict[str, Any], spec: Dict[str, Any], context
             "status": "present" if package_fact.get("exists") else ("not_selected" if not package_path else "not_materialized"),
             "byteIdenticalToSource": bool(package_fact.get("exists") and fact.get("sha256") == package_fact.get("sha256")),
         },
+        "compositionDependencies": composition_dependencies,
+        "compositionReferenceErrors": composition_reference_errors,
         "renderReceipt": render_receipt,
         "accessibleAlternative": _alt_snapshot(root, row.get("altTextPath")),
         "sceneIds": scene_ids,
@@ -1142,6 +1288,17 @@ def project_policy_document(relative: str, document: Dict[str, Any]) -> Dict[str
         source.pop("revision", None)
         source.pop("url", None)
         checksum.pop("value", None)
+        inventory_rows = [row for row in projected.get("records", []) if row.get("assetId") == "PROV-FILE-E018FDB8D981"]
+        if len(inventory_rows) != 1:
+            raise ValueError("provenance projection requires exactly one PROV-FILE-E018FDB8D981 inventory digest record")
+        inventory_source = inventory_rows[0].get("source")
+        inventory_checksum = inventory_rows[0].get("checksum")
+        if not isinstance(inventory_source, dict) or not isinstance(inventory_checksum, dict):
+            raise ValueError("provenance inventory digest projection fields are missing")
+        if "revision" not in inventory_source or "value" not in inventory_checksum or "url" not in inventory_source:
+            raise ValueError("provenance inventory digest projection fields are missing")
+        inventory_source.pop("revision", None)
+        inventory_checksum.pop("value", None)
     return projected
 
 
@@ -1463,6 +1620,18 @@ def asset_release_blockers(
         blockers.append(f"{record_id}: versioned package copy is missing")
     if package_copy.get("path") and not package_copy.get("byteIdenticalToSource"):
         blockers.append(f"{record_id}: packaged bytes differ from the pinned source/export")
+    for error in record.get("compositionReferenceErrors", []):
+        blockers.append(f"{record_id}: {error}")
+    for dependency in record.get("compositionDependencies", []):
+        dependency_id = dependency.get("packageCopy", {}).get("path") or dependency.get("relativeReference", "contextual dependency")
+        source = dependency.get("source", {})
+        packaged = dependency.get("packageCopy", {})
+        if dependency.get("resolutionStatus") != "matches_declared_package_path":
+            blockers.append(f"{record_id}: {dependency_id}: relative reference does not resolve safely to the declared package path")
+        if not SHA256.fullmatch(str(source.get("sha256", ""))) or not HEX40.fullmatch(str(source.get("sourceCommitId", ""))) or source.get("sourcePinStatus") != "pinned":
+            blockers.append(f"{record_id}: {dependency_id}: contextual source is missing or unpinned")
+        if not packaged.get("exists") or not packaged.get("byteIdenticalToSource") or packaged.get("sha256") != packaged.get("expectedSha256"):
+            blockers.append(f"{record_id}: {dependency_id}: contextual package dependency is missing or differs from its source")
     if record.get("releaseStatus") != "approved":
         blockers.append(f"{record_id}: asset lifecycle status {record.get('releaseStatus', 'missing')} is not approved for this package")
     if record.get("inventoryJoin", {}).get("status") != "current":
@@ -1641,7 +1810,7 @@ def copy_package_files(root: Path, version: str) -> None:
             continue
         fact = _file_fact(root, row["path"])
         name = package_filename(row, source, fact.get("dimensions", {"status": "not_applicable"}), spec)
-        relative_target = f"release/{version}/assets/{name}"
+        relative_target = _package_asset_path(row, name, version)
         if relative_target in planned_targets:
             raise FileExistsError(f"Two package rows resolve to {relative_target}; change an asset variant or revision.")
         planned_targets.add(relative_target)
@@ -1654,6 +1823,34 @@ def copy_package_files(root: Path, version: str) -> None:
             continue
         with target.open("xb") as handle:
             handle.write(content)
+    for row in spec.get("assets", []):
+        if not row.get("package", True) or not row.get("packageDependencies"):
+            continue
+        source_path = safe_path(root, row["path"])
+        name = package_filename(row, source_path, _file_fact(root, row["path"]).get("dimensions", {"status": "not_applicable"}), spec)
+        entrypoint = _package_asset_path(row, name, version)
+        for dependency in row.get("packageDependencies", []):
+            source_relative = dependency.get("sourcePath")
+            package_relative = _package_dependency_path(dependency.get("packagePath", ""), version)
+            reference = dependency.get("relativeReference", "")
+            resolved = resolve_package_reference(entrypoint, reference, version)
+            if resolved != package_relative:
+                raise ValueError(f"HTML dependency {reference!r} does not resolve to declared package path {package_relative}")
+            if package_relative in planned_targets:
+                raise FileExistsError(f"Package output collision for contextual dependency {package_relative}")
+            planned_targets.add(package_relative)
+            source = safe_path(root, source_relative)
+            if not source.is_file():
+                raise FileNotFoundError(f"Contextual dependency source is missing: {source_relative}")
+            target = safe_path(root, package_relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            content = source.read_bytes()
+            if target.exists():
+                if sha256_file(target) != sha256_bytes(content):
+                    raise FileExistsError(f"Refusing to overwrite changed contextual dependency {package_relative}; increment revision/version.")
+                continue
+            with target.open("xb") as handle:
+                handle.write(content)
     videos, captions, _ = _dynamic_video_records(root, spec, context)
     for row in [*videos, *captions]:
         source_relative = row.get("file", {}).get("path") or row.get("path")
@@ -1750,6 +1947,56 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
         source = record.get("source", {})
         if source.get("path") and source.get("sha256"):
             verify_source(source.get("path"), source.get("sha256"), source.get("sourceCommitId"), "editable/source lineage")
+        dependencies = record.get("compositionDependencies", [])
+        for dependency in dependencies:
+            label = f"contextual dependency {dependency.get('relativeReference', '<missing-reference>')}"
+            dependency_source = dependency.get("source", {})
+            dependency_copy = dependency.get("packageCopy", {})
+            verify_source(
+                dependency_source.get("path"),
+                dependency_source.get("sha256"),
+                dependency_source.get("sourceCommitId"),
+                f"{label} source",
+            )
+            try:
+                copy_path = safe_path(root, dependency_copy.get("path", ""))
+            except ValueError as exc:
+                errors.append(f"{label} package path: {exc}")
+                continue
+            if not dependency_copy.get("exists") or not copy_path.is_file():
+                errors.append(f"{label}: packaged contextual dependency is missing")
+                continue
+            copy_sha = sha256_file(copy_path)
+            if copy_sha != dependency_copy.get("expectedSha256") or copy_sha != dependency_copy.get("sha256"):
+                errors.append(f"{label}: packaged contextual dependency checksum mismatch")
+            verify_source(
+                dependency_copy.get("path"),
+                dependency_copy.get("sha256"),
+                dependency_copy.get("sourceCommitId"),
+                f"{label} package copy",
+            )
+            source_path_value = dependency_source.get("path")
+            if source_path_value:
+                try:
+                    dependency_source_path = safe_path(root, source_path_value)
+                except ValueError:
+                    dependency_source_path = None
+                if dependency_source_path and dependency_source_path.is_file() and copy_sha != sha256_file(dependency_source_path):
+                    errors.append(f"{label}: packaged contextual dependency differs from its source bytes")
+        source_ext = Path(str(file_row.get("path", ""))).suffix.lower()
+        if source_ext == ".html" and file_row.get("exists"):
+            try:
+                html_path = safe_path(root, str(file_row.get("path", "")))
+                if html_path.is_file():
+                    composition_errors = package_composition_reference_errors(
+                        str(package.get("path", "")),
+                        html_local_references(html_path),
+                        dependencies,
+                        str(manifest.get("packageVersion", "")),
+                    )
+                    errors.extend(f"{record.get('recordId', record.get('assetId', 'asset'))}: {item}" for item in composition_errors)
+            except (OSError, UnicodeError, ValueError) as exc:
+                errors.append(f"{record.get('recordId', record.get('assetId', 'asset'))}: HTML composition validation failed closed ({exc})")
         alternative = record.get("accessibleAlternative", {})
         if alternative.get("exists"):
             verify_source(alternative.get("path"), alternative.get("sha256"), alternative.get("sourceCommitId"), "accessible alternative")
@@ -1795,6 +2042,35 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def readiness_cache_errors(cached_manifest: Dict[str, Any], current_manifest: Dict[str, Any]) -> List[str]:
+    """Reject readiness decisions that differ from a fresh package/policy evaluation."""
+    errors: List[str] = []
+    for field, label in (
+        ("collateralPackageReadiness", "collateral package"),
+        ("externalSubmissionReadiness", "external submission"),
+    ):
+        cached = cached_manifest.get(field)
+        current = current_manifest.get(field)
+        if not isinstance(cached, dict) or not isinstance(current, dict):
+            errors.append(f"cached {label} readiness is missing or invalid; current readiness cannot be trusted")
+            continue
+        for key in ("decision", "scope", "blockers"):
+            if cached.get(key) != current.get(key):
+                errors.append(f"cached {label} readiness {key} differs from current source and policy evaluation")
+    return errors
+
+
+def recompute_manifest_readiness(root: Path, manifest: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    version = manifest.get("packageVersion")
+    if not isinstance(version, str) or not version:
+        return {}, ["manifest packageVersion is missing; current readiness cannot be recomputed"]
+    try:
+        current = build_manifest(root, version=version, materialized=False)
+    except Exception as exc:
+        return {}, [f"current readiness recomputation failed closed: {exc}"]
+    return current, readiness_cache_errors(manifest, current)
+
+
 def package_path_collisions(manifest: Dict[str, Any]) -> List[str]:
     seen: set = set()
     duplicates: List[str] = []
@@ -1806,6 +2082,13 @@ def package_path_collisions(manifest: Dict[str, Any]) -> List[str]:
         if package_path in seen:
             duplicates.append(f"duplicate package output path: {package_path}")
         seen.add(package_path)
+        for dependency in record.get("compositionDependencies", []):
+            dependency_path = dependency.get("packageCopy", {}).get("path")
+            if not dependency_path:
+                continue
+            if dependency_path in seen:
+                duplicates.append(f"duplicate package output path: {dependency_path}")
+            seen.add(dependency_path)
     return _unique(duplicates)
 
 
@@ -1910,6 +2193,69 @@ def persist_draft_manifest(root: Path, manifest_path: Path, manifest: Dict[str, 
     return history_relative
 
 
+def bind_draft_manifest_self_reference(root: Path, version: str) -> str:
+    """Bind the generated draft digest into only its documented self-reference fields.
+
+    Run after `build` in a clean isolated checkout. The narrow canonical JSON
+    projection keeps these three checksum/revision fields outside the input
+    digest while every other policy field remains covered.
+    """
+    if version != DEFAULT_VERSION:
+        raise ValueError("manifest self-reference binding is defined only for the v0.1.0-rehearsal policy projection")
+    manifest_relative = f"release/{version}/manifest.json"
+    manifest_path = safe_path(root, manifest_relative)
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"generated draft manifest is missing: {manifest_relative}")
+    manifest = read_json(manifest_path)
+    if manifest.get("releaseClass") != "draft_rehearsal_only" or manifest.get("lifecycleState") != "draft_rehearsal_only":
+        raise ValueError("refusing to bind a non-draft or approved manifest")
+    digest = sha256_file(manifest_path)
+
+    inventory_relative = "docs/collateral-inventory.json"
+    provenance_relative = "review/provenance.json"
+    inventory_path = safe_path(root, inventory_relative)
+    provenance_path = safe_path(root, provenance_relative)
+    inventory = read_json(inventory_path)
+    provenance = read_json(provenance_path)
+    inventory_before = projected_policy_digest(inventory_relative, inventory)
+    provenance_before = projected_policy_digest(provenance_relative, provenance)
+
+    inventory_rows = [row for row in inventory.get("trackedFiles", []) if row.get("path") == manifest_relative]
+    provenance_rows = [row for row in provenance.get("records", []) if row.get("assetId") == "HANDOFF-MANIFEST-001"]
+    if len(inventory_rows) != 1 or len(provenance_rows) != 1:
+        raise ValueError("manifest self-reference requires exactly one inventory path and one HANDOFF-MANIFEST-001 provenance record")
+    inventory_row = inventory_rows[0]
+    provenance_row = provenance_rows[0]
+    source = provenance_row.get("source")
+    checksum = provenance_row.get("checksum")
+    if not isinstance(source, dict) or source.get("path") != manifest_relative or source.get("repo") != "Jevelopers-neatHack-2026/marketing-material":
+        raise ValueError("manifest provenance source must identify the exact local generated manifest")
+    if not isinstance(checksum, dict) or checksum.get("algorithm") != "SHA-256":
+        raise ValueError("manifest provenance must declare the SHA-256 checksum algorithm")
+
+    inventory_row["sha256"] = digest
+    source["revision"] = f"sha256:{digest}"
+    source["url"] = None
+    checksum["value"] = digest
+
+    if projected_policy_digest(inventory_relative, inventory) != inventory_before or projected_policy_digest(provenance_relative, provenance) != provenance_before:
+        raise ValueError("self-reference binding unexpectedly changed a nonexcluded canonical policy field")
+    for target, document in ((inventory_path, inventory), (provenance_path, provenance)):
+        encoded = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        temporary_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix=".self-reference-", suffix=".tmp", dir=target.parent, delete=False) as handle:
+                temporary_path = Path(handle.name)
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, target)
+        finally:
+            if temporary_path and temporary_path.exists():
+                temporary_path.unlink()
+    return digest
+
+
 def _cli() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1921,8 +2267,23 @@ def _cli() -> int:
     validate.add_argument("manifest", type=Path)
     validate.add_argument("--root", type=Path, default=ROOT)
     validate.add_argument("--require-release-ready", action="store_true", help="Return exit 2 unless the collateral package decision is PASS")
+    bind_self_reference = subparsers.add_parser(
+        "bind-self-reference",
+        help="Bind a draft manifest SHA-256 into its exact projected inventory/provenance self-reference fields",
+    )
+    bind_self_reference.add_argument("--root", type=Path, default=ROOT)
+    bind_self_reference.add_argument("--version", default=DEFAULT_VERSION)
     args = parser.parse_args()
     root = args.root.resolve()
+    if args.command == "bind-self-reference":
+        try:
+            digest = bind_draft_manifest_self_reference(root, args.version)
+            print(f"Bound {args.version} draft manifest self-reference SHA-256: {digest}")
+            print("Only the documented manifest hash/revision self-reference fields were refreshed; draft gates remain unchanged.")
+            return 0
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
     if args.command == "build":
         try:
             manifest = build_current_cli(root, args.version, materialize=not args.dry_run)
@@ -1949,12 +2310,14 @@ def _cli() -> int:
         manifest = read_json(manifest_path)
         errors = validate_manifest_files(root, manifest)
         errors.extend(verify_caption_receipt_records(manifest, root))
+        current_manifest, readiness_errors = recompute_manifest_readiness(root, manifest)
+        errors.extend(readiness_errors)
         if errors:
             for error in errors:
                 print(f"ERROR: {error}", file=sys.stderr)
             return 1
-        collateral = manifest.get("collateralPackageReadiness", {})
-        external = manifest.get("externalSubmissionReadiness", {})
+        collateral = current_manifest.get("collateralPackageReadiness", {})
+        external = current_manifest.get("externalSubmissionReadiness", {})
         print(f"Integrity: PASS ({len(manifest.get('assets', []))} manifest asset records; all present source/package checksums match)")
         print(f"Collateral package readiness: {collateral.get('decision', 'missing')} ({len(collateral.get('blockers', []))} recorded blockers)")
         print(f"External submission readiness: {external.get('decision', 'missing')} ({len(external.get('blockers', []))} recorded blockers)")

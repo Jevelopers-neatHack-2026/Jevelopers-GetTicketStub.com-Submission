@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 import types
 import unittest
+import contextlib
+import io
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -44,6 +46,62 @@ class PackagePolicyTests(unittest.TestCase):
             policy_input = manifest["policyInputHashes"][relative]
             self.assertEqual(support["binding"], policy_input["binding"])
             self.assertEqual(support["sha256"], policy_input["sha256"])
+
+    def test_forged_manifest_pass_is_rejected_against_current_gate_recomputation(self) -> None:
+        cached = package.json.loads(package.json.dumps(self.current_manifest))
+        for field in ("collateralPackageReadiness", "externalSubmissionReadiness"):
+            cached[field]["decision"] = "PASS"
+            cached[field]["blockers"] = []
+        errors = package.readiness_cache_errors(cached, self.current_manifest)
+        self.assertIn("cached collateral package readiness decision differs from current source and policy evaluation", errors)
+        self.assertIn("cached collateral package readiness blockers differs from current source and policy evaluation", errors)
+        self.assertIn("cached external submission readiness decision differs from current source and policy evaluation", errors)
+
+    def test_validate_cli_uses_recomputed_gates_for_forged_and_required_pass(self) -> None:
+        current = self.current_manifest
+        forged = package.json.loads(package.json.dumps(current))
+        for field in ("collateralPackageReadiness", "externalSubmissionReadiness"):
+            forged[field]["decision"] = "PASS"
+            forged[field]["blockers"] = []
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(package.json.dumps(forged), encoding="utf-8")
+            with patch.object(sys, "argv", ["package_collateral.py", "validate", str(manifest_path), "--root", str(root)]), \
+                 patch.object(package, "validate_manifest_files", return_value=[]), \
+                 patch.object(package, "verify_caption_receipt_records", return_value=[]), \
+                 patch.object(package, "recompute_manifest_readiness", return_value=(current, package.readiness_cache_errors(forged, current))), \
+                 contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(1, package._cli(), "forged cached PASS must be rejected")
+
+            manifest_path.write_text(package.json.dumps(current), encoding="utf-8")
+            with patch.object(sys, "argv", ["package_collateral.py", "validate", str(manifest_path), "--root", str(root), "--require-release-ready"]), \
+                 patch.object(package, "validate_manifest_files", return_value=[]), \
+                 patch.object(package, "verify_caption_receipt_records", return_value=[]), \
+                 patch.object(package, "recompute_manifest_readiness", return_value=(current, [])), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(2, package._cli(), "--require-release-ready must use current recomputed BLOCKED status")
+
+    def test_current_claim_approval_change_invalidates_exact_policy_input_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "messaging/claims.json"
+            claim_path = root / relative
+            claim_path.parent.mkdir(parents=True)
+            claim_path.write_text(package.json.dumps({"claims": [{"id": "CLAIM-TEST", "reviewStatus": "pending"}]}), encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", relative], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "pending claim"], check=True)
+            commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+            support = package._support_file(root, relative)
+            manifest = {"assets": [], "captionSidecars": [], "supportFiles": [], "policyInputHashes": {relative: support}, "requiredSubmissionArtifact": {"exists": False}}
+            self.assertEqual([], package.validate_manifest_files(root, manifest))
+            claim_path.write_text(package.json.dumps({"claims": [{"id": "CLAIM-TEST", "reviewStatus": "approved"}]}), encoding="utf-8")
+            errors = package.validate_manifest_files(root, manifest)
+            self.assertTrue(any("policy input messaging/claims.json: source SHA-256 differs from manifest" in error for error in errors))
+            self.assertTrue(any("source commit is missing, stale, or does not contain the exact bytes" in error for error in errors))
 
     def test_controlled_approved_fixture_can_pass_both_gates(self) -> None:
         # Synthetic policy fixture only: this proves the gate logic, not actual
@@ -202,9 +260,17 @@ class PackagePolicyTests(unittest.TestCase):
             ),
             (
                 "review/provenance.json",
-                {"records": [{"assetId": "HANDOFF-MANIFEST-001", "source": {"revision": "a" * 40, "url": "old"}, "checksum": {"value": "1" * 64}, "reviewStatus": "pending"}]},
-                lambda doc: (doc["records"][0]["source"].update(revision="b" * 40, url="new"), doc["records"][0]["checksum"].update(value="2" * 64)),
-                lambda doc: doc["records"][0].update(reviewStatus="approved"),
+                {"records": [
+                    {"assetId": "HANDOFF-MANIFEST-001", "source": {"revision": "a" * 40, "url": "old"}, "checksum": {"value": "1" * 64}, "reviewStatus": "pending"},
+                    {"assetId": "PROV-FILE-E018FDB8D981", "source": {"revision": "a" * 64, "url": None}, "checksum": {"value": "3" * 64}, "reviewStatus": "pending"},
+                ]},
+                lambda doc: (
+                    doc["records"][0]["source"].update(revision="b" * 40, url="new"),
+                    doc["records"][0]["checksum"].update(value="2" * 64),
+                    doc["records"][1]["source"].update(revision="b" * 64),
+                    doc["records"][1]["checksum"].update(value="4" * 64),
+                ),
+                lambda doc: doc["records"][1]["source"].update(url="https://changed.example.invalid/source"),
             ),
         )
         for relative, original, excluded_mutation, included_mutation in cases:
@@ -236,6 +302,93 @@ class PackagePolicyTests(unittest.TestCase):
             support.pop("binding")
             errors = package.validate_manifest_files(root, manifest)
             self.assertTrue(any("required canonical JSON projection binding is missing" in error for error in errors))
+
+    def test_canonical_provenance_validation_catches_excluded_inventory_digest_tampering(self) -> None:
+        import validate_collateral as canonical  # noqa: PLC0415
+
+        original_read_json = package.read_json
+
+        def tampered_read_json(path: Path) -> dict:
+            document = original_read_json(path)
+            if path.as_posix().endswith("review/provenance.json"):
+                row = next(item for item in document["records"] if item["assetId"] == "PROV-FILE-E018FDB8D981")
+                row["source"]["revision"] = "sha256:" + "0" * 64
+                row["checksum"]["value"] = "0" * 64
+            return document
+
+        with patch.object(package, "read_json", side_effect=tampered_read_json):
+            result = package.canonical_readiness_blockers(ROOT, sorted(package.EXPECTED_POLICY_SELECTABLE_ASSET_IDS))
+        self.assertEqual("global_validation_failed", result["status"])
+        errors = " ".join(result["selected"])
+        self.assertIn("PROV-FILE-E018FDB8D981: content-digest source pin does not match exact source file", errors)
+        self.assertIn("PROV-FILE-E018FDB8D981: SHA-256 checksum does not match exact source file docs/collateral-inventory.json", errors)
+        self.assertNotEqual([], canonical.validate_provenance(tampered_read_json(ROOT / "review/provenance.json")))
+
+    def test_manifest_self_reference_binder_changes_only_documented_exclusions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest_relative = "release/v0.1.0-rehearsal/manifest.json"
+            manifest_path = root / manifest_relative
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text(
+                package.json.dumps({"releaseClass": "draft_rehearsal_only", "lifecycleState": "draft_rehearsal_only"}),
+                encoding="utf-8",
+            )
+            manifest_digest = package.sha256_file(manifest_path)
+            inventory = {
+                "trackedFiles": [{
+                    "path": manifest_relative,
+                    "sha256": "0" * 64,
+                    "trackedAtRevision": "a" * 40,
+                    "exists": True,
+                    "provenanceRecordId": "HANDOFF-MANIFEST-001",
+                }]
+            }
+            provenance = {
+                "records": [{
+                    "assetId": "HANDOFF-MANIFEST-001",
+                    "source": {
+                        "repo": "Jevelopers-neatHack-2026/marketing-material",
+                        "path": manifest_relative,
+                        "revision": "a" * 40,
+                        "revisionKind": "sha256_content_digest",
+                        "url": "old-content-url",
+                    },
+                    "checksum": {"algorithm": "SHA-256", "value": "0" * 64, "status": "pending"},
+                    "permission": {"status": "authorized_internal_candidate_review_only"},
+                }, {
+                    "assetId": "PROV-FILE-E018FDB8D981",
+                    "source": {
+                        "repo": "Jevelopers-neatHack-2026/marketing-material",
+                        "path": "docs/collateral-inventory.json",
+                        "revision": "d" * 64,
+                        "revisionKind": "sha256_content_digest",
+                        "url": None,
+                    },
+                    "checksum": {"algorithm": "SHA-256", "value": "d" * 64, "status": "pending"},
+                }]
+            }
+            inventory_path = root / "docs/collateral-inventory.json"
+            provenance_path = root / "review/provenance.json"
+            inventory_path.parent.mkdir(parents=True)
+            provenance_path.parent.mkdir(parents=True)
+            inventory_path.write_text(package.json.dumps(inventory), encoding="utf-8")
+            provenance_path.write_text(package.json.dumps(provenance), encoding="utf-8")
+            inventory_projection = package.projected_policy_digest("docs/collateral-inventory.json", inventory)
+            provenance_projection = package.projected_policy_digest("review/provenance.json", provenance)
+
+            self.assertEqual(manifest_digest, package.bind_draft_manifest_self_reference(root, "v0.1.0-rehearsal"))
+            updated_inventory = package.read_json(inventory_path)
+            updated_provenance = package.read_json(provenance_path)
+            updated_record = updated_provenance["records"][0]
+            self.assertEqual(manifest_digest, updated_inventory["trackedFiles"][0]["sha256"])
+            self.assertEqual("a" * 40, updated_inventory["trackedFiles"][0]["trackedAtRevision"])
+            self.assertEqual("sha256:" + manifest_digest, updated_record["source"]["revision"])
+            self.assertEqual("sha256_content_digest", updated_record["source"]["revisionKind"])
+            self.assertIsNone(updated_record["source"]["url"])
+            self.assertEqual(manifest_digest, updated_record["checksum"]["value"])
+            self.assertEqual(inventory_projection, package.projected_policy_digest("docs/collateral-inventory.json", updated_inventory))
+            self.assertEqual(provenance_projection, package.projected_policy_digest("review/provenance.json", updated_provenance))
 
     def test_pending_and_superseded_samples_are_rejected(self) -> None:
         for field, value in (("releaseStatus", "pending"), ("status", "superseded")):
@@ -352,6 +505,102 @@ class PackagePolicyTests(unittest.TestCase):
             errors = package.validate_manifest_files(root, manifest)
             self.assertTrue(any("packaged SHA-256 does not match" in item for item in errors))
             self.assertTrue(any("source SHA-256 differs from manifest" in item for item in errors))
+
+    def test_html_contextual_dependencies_are_pinned_and_path_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            html_source = "demo/deck/concept.html"
+            svg_source = "demo/diagrams/flow.svg"
+            alt_source = "demo/diagrams/flow-alt.md"
+            html_copy = "release/v0.1.0-rehearsal/view/demo/deck/concept.html"
+            svg_copy = "release/v0.1.0-rehearsal/view/demo/diagrams/flow.svg"
+            alt_copy = "release/v0.1.0-rehearsal/view/demo/diagrams/flow-alt.md"
+            contents = {
+                html_source: b'<img src="../diagrams/flow.svg"><a href="../diagrams/flow-alt.md">Text</a>',
+                svg_source: b'<svg></svg>\n',
+                alt_source: b"Flow description.\n",
+                html_copy: b'<img src="../diagrams/flow.svg"><a href="../diagrams/flow-alt.md">Text</a>',
+                svg_copy: b'<svg></svg>\n',
+                alt_copy: b"Flow description.\n",
+            }
+            for relative, content in contents.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "composition fixture"], check=True)
+            commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+            def pinned(relative: str) -> dict:
+                return {
+                    "path": relative,
+                    "sha256": package.sha256_file(root / relative),
+                    "sourceCommitId": commit,
+                    "sourcePinStatus": "pinned",
+                }
+
+            dependencies = []
+            for source_path, package_path, reference, role in (
+                (svg_source, svg_copy, "../diagrams/flow.svg", "image"),
+                (alt_source, alt_copy, "../diagrams/flow-alt.md", "accessible equivalent"),
+            ):
+                source = pinned(source_path)
+                copy = pinned(package_path)
+                dependencies.append(
+                    {
+                        "relativeReference": reference,
+                        "resolutionStatus": "matches_declared_package_path",
+                        "resolvedPackagePath": package_path,
+                        "source": source,
+                        "packageCopy": {
+                            **copy,
+                            "exists": True,
+                            "expectedSha256": source["sha256"],
+                            "byteIdenticalToSource": copy["sha256"] == source["sha256"],
+                        },
+                        "role": role,
+                    }
+                )
+            html_hash = package.sha256_file(root / html_source)
+            manifest = {
+                "packageVersion": "v0.1.0-rehearsal",
+                "assets": [
+                    {
+                        "recordId": "fixture-html",
+                        "file": {**pinned(html_source), "exists": True},
+                        "packageCopy": {"path": html_copy, "expectedSha256": html_hash},
+                        "source": pinned(html_source),
+                        "compositionDependencies": dependencies,
+                        "renderReceipt": {},
+                    }
+                ],
+                "captionSidecars": [],
+                "requiredSubmissionArtifact": {"exists": False},
+            }
+            self.assertEqual([], package.validate_manifest_files(root, manifest))
+
+            (root / svg_copy).write_bytes(b"<svg>tampered</svg>\n")
+            errors = package.validate_manifest_files(root, manifest)
+            self.assertTrue(any("packaged contextual dependency checksum mismatch" in item for item in errors), errors)
+
+            (root / svg_copy).unlink()
+            errors = package.validate_manifest_files(root, manifest)
+            self.assertTrue(any("packaged contextual dependency is missing" in item for item in errors), errors)
+
+            with self.assertRaises(ValueError):
+                package.resolve_package_reference(html_copy, "%2e%2e/%2e%2e/%2e%2e/%2e%2e/outside.svg", "v0.1.0-rehearsal")
+            unsafe = package.package_composition_reference_errors(
+                html_copy,
+                ["../../../../outside.svg"],
+                [],
+                "v0.1.0-rehearsal",
+            )
+            self.assertTrue(any("is unsafe" in item for item in unsafe), unsafe)
 
     def test_render_receipt_detects_changed_source_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
