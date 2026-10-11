@@ -13,7 +13,15 @@ import type {
   CreativeApiRequestV1_1Envelope,
   CreativeApiResponse,
   CreativeConceptBatchResult,
+  CreativeConceptNativePlan,
+  CreativeConceptProviderInput,
+  CreativeConceptReferenceInspection,
+  CreativeConceptReferenceManifest,
+  CreativeConceptReferencePreflight,
+  CreativeConceptStoragePort,
   CreativeContextFence,
+  CreativeProviderRouteInput,
+  CreativeRuntimePorts,
   DecisionDispatchInput,
   DispatchAuthorizationInput,
   DispatchAuthorizationResult,
@@ -23,6 +31,7 @@ import type {
   TrustedCreativeActor,
   UsageRecord,
 } from "creative-engine/api/v1";
+import type { CreativeVersionRuntimeStorage, CreativeVersionStore } from "creative-engine/versions";
 import type { EditPlan } from "creative-engine/contracts/creative/v1";
 import type { MeteredDispatchContext } from "creative-engine/contracts/metering";
 
@@ -173,6 +182,39 @@ declare const providerDispatch: ProviderInput;
 const providerReservationReference: string = providerDispatch.reservation_ref;
 // @ts-expect-error reservation_ref is a read-only authority value.
 providerDispatch.reservation_ref = "caller-forged-reservation";
+const legacyProviderPlan: EditPlan = providerDispatch.plan;
+const nativeConceptPlan: CreativeConceptNativePlan = {
+  operation: "concept.generate",
+  brief_id: "brief-fixture",
+  source_refs: ["source-one", "source-two"],
+  steps: [{ action: "concept.generate", source_refs: ["source-one", "source-two"],
+    parameters: { variant_count: 1 } }],
+};
+// @ts-expect-error The native plan does not fabricate the full EditPlan envelope or parent base.
+const nativePlanAsLegacyEditPlan: EditPlan = nativeConceptPlan;
+declare const conceptProviderDispatch: CreativeConceptProviderInput;
+const nativePlanBrief: string = conceptProviderDispatch.plan.brief_id;
+// @ts-expect-error Parentless native plan has no selected parent base.
+const fabricatedParentHash: string = conceptProviderDispatch.plan.base.brief_hash;
+const conceptRouteInput: CreativeProviderRouteInput = { scope: providerDispatch.scope,
+  actor_id: providerDispatch.actor_id, operation: "edit", plan: nativeConceptPlan };
+const legacyRouteInput: CreativeProviderRouteInput = { scope: providerDispatch.scope,
+  actor_id: providerDispatch.actor_id, operation: "edit", plan: providerDispatch.plan };
+type ProviderResolveRoute = NonNullable<CreativeRuntimePorts["provider"]>["resolveRoute"];
+const routePlanReader: ProviderResolveRoute = (input) => {
+  if (input.operation === "generate") {
+    const fullPlan: EditPlan = input.plan;
+    const briefHash: string = fullPlan.base.brief_hash;
+    void briefHash;
+  } else if ("contract" in input.plan) {
+    const selectedDesignHash: string = input.plan.base.design_hash;
+    void selectedDesignHash;
+  } else {
+    const sourceReferenceCount: number = input.plan.source_refs.length;
+    void sourceReferenceCount;
+  }
+  return { retry_mapping_ref: "retry:fixture", provider: providerDispatch.attempt.provider };
+};
 const rawProviderUsage: ProviderUsageRecord = {
   input_tokens: 12,
   output_tokens: 24,
@@ -189,8 +231,83 @@ const publicationFence: CreativeContextFence = { brief_id: "brief-fixture", brie
   design_version_id: "design-fixture", design_hash: `sha256:${"b".repeat(64)}`,
   expected_current_design_version_id: "design-fixture", expected_current_design_hash: `sha256:${"b".repeat(64)}` };
 
+declare const preflightReference: CreativeConceptReferencePreflight;
+// @ts-expect-error Dimensions are created by native decoding and are unavailable at preflight entry.
+const predecodePixelCount: number = preflightReference.width * preflightReference.height;
+declare const inspectedReference: CreativeConceptReferenceInspection;
+const decodedPixelCount: number = inspectedReference.width * inspectedReference.height;
+declare const finalReferenceManifest: CreativeConceptReferenceManifest;
+const finalManifestWidth: number = finalReferenceManifest.references[0].width;
+
+declare const conceptBatch: Parameters<CreativeConceptStoragePort["beginConceptBatch"]>[0]["batch"];
+declare const conceptBatchResult: CreativeConceptBatchResult;
+const conceptStorageImplementer: CreativeConceptStoragePort = {
+  beginConceptBatch(input) { return { status: "created", batch: input.batch, batch_status: "running" }; },
+  appendConceptEvent() { return { status: "recorded", batch: conceptBatch, batch_status: "running" }; },
+  recordConceptDispatchBinding(input) { return { status: "recorded", transport_attempt_id: input.transport_attempt_id,
+    target_binding_sha256: input.target_binding_sha256 }; },
+  stageConceptResponse(input) { return { status: "staged", stage_ref: "stage-fixture", content_hash: input.content_hash }; },
+  getConceptBatch() { return null; },
+  getConceptResponseStage() { return null; },
+  prepareConceptArtifactObjects(input) { return { action_id: input.action_id, artifacts: input.concept_ids.map((concept_id) => ({
+    concept_id, content_hash: `sha256:${"c".repeat(64)}`, byte_length: 1, status: "object_durable" })) }; },
+  publishConceptBatch() { return conceptBatchResult; },
+  getConceptVersions() { return []; },
+};
+declare const runtimePorts: CreativeRuntimePorts;
+const optionalConceptBegin: CreativeConceptStoragePort["beginConceptBatch"] | undefined =
+  runtimePorts.storage?.beginConceptBatch;
+declare const versionStore: CreativeVersionStore;
+declare const versionStorage: CreativeVersionRuntimeStorage;
+declare const beginConceptInput: Parameters<CreativeConceptStoragePort["beginConceptBatch"]>[0];
+declare const appendConceptInput: Parameters<CreativeConceptStoragePort["appendConceptEvent"]>[0];
+declare const dispatchBindingInput: Parameters<CreativeConceptStoragePort["recordConceptDispatchBinding"]>[0];
+declare const stagedResponseInput: Parameters<CreativeConceptStoragePort["stageConceptResponse"]>[0];
+declare const conceptReadInput: Parameters<CreativeConceptStoragePort["getConceptBatch"]>[0];
+declare const responseStageReadInput: Parameters<CreativeConceptStoragePort["getConceptResponseStage"]>[0];
+declare const artifactPreparationInput: Parameters<CreativeConceptStoragePort["prepareConceptArtifactObjects"]>[0];
+declare const conceptPublishInput: Parameters<CreativeConceptStoragePort["publishConceptBatch"]>[0];
+declare const conceptTransaction: Parameters<CreativeConceptStoragePort["publishConceptBatch"]>[1];
+declare const conceptVersionsReadInput: Parameters<CreativeConceptStoragePort["getConceptVersions"]>[0];
+const storedBegin: ReturnType<CreativeVersionStore["beginConceptBatch"]> = versionStore.beginConceptBatch(beginConceptInput);
+const storedAppend: ReturnType<CreativeVersionStore["appendConceptEvent"]> = versionStore.appendConceptEvent(appendConceptInput);
+const storedBinding: ReturnType<CreativeVersionStore["recordConceptDispatchBinding"]> = versionStore.recordConceptDispatchBinding(dispatchBindingInput);
+const storedStage: ReturnType<CreativeVersionStore["stageConceptResponse"]> = versionStore.stageConceptResponse(stagedResponseInput);
+const storedBatch: ReturnType<CreativeVersionStore["getConceptBatch"]> = versionStore.getConceptBatch(conceptReadInput);
+const storedResponseStage: ReturnType<CreativeVersionStore["getConceptResponseStage"]> = versionStore.getConceptResponseStage(responseStageReadInput);
+const storedObjects: ReturnType<CreativeVersionStore["prepareConceptArtifactObjects"]> = versionStore.prepareConceptArtifactObjects(artifactPreparationInput);
+const publishedBatch: ReturnType<CreativeVersionStore["publishConceptBatch"]> = versionStore.publishConceptBatch(conceptPublishInput, conceptTransaction);
+const storedVersions: ReturnType<CreativeVersionStore["getConceptVersions"]> = versionStore.getConceptVersions(conceptVersionsReadInput);
+const runtimeConceptBatch: ReturnType<CreativeVersionRuntimeStorage["getConceptBatch"]> = versionStorage.getConceptBatch(conceptReadInput);
+const runtimeBegin: Promise<Awaited<ReturnType<CreativeVersionStore["beginConceptBatch"]>>> = versionStorage.beginConceptBatch(beginConceptInput);
+const runtimeAppend: Promise<Awaited<ReturnType<CreativeVersionStore["appendConceptEvent"]>>> = versionStorage.appendConceptEvent(appendConceptInput);
+const runtimeBinding: Promise<Awaited<ReturnType<CreativeVersionStore["recordConceptDispatchBinding"]>>> =
+  versionStorage.recordConceptDispatchBinding(dispatchBindingInput);
+const runtimeStage: Promise<Awaited<ReturnType<CreativeVersionStore["stageConceptResponse"]>>> = versionStorage.stageConceptResponse(stagedResponseInput);
+const runtimeBatch: Promise<Awaited<ReturnType<CreativeVersionStore["getConceptBatch"]>>> = versionStorage.getConceptBatch(conceptReadInput);
+const runtimeResponseStage: Promise<Awaited<ReturnType<CreativeVersionStore["getConceptResponseStage"]>>> =
+  versionStorage.getConceptResponseStage(responseStageReadInput);
+const runtimeObjects: Promise<Awaited<ReturnType<CreativeVersionStore["prepareConceptArtifactObjects"]>>> =
+  versionStorage.prepareConceptArtifactObjects(artifactPreparationInput);
+const runtimePublication: Promise<Awaited<ReturnType<CreativeVersionStore["publishConceptBatch"]>>> =
+  versionStorage.publishConceptBatch(conceptPublishInput, conceptTransaction);
+const runtimeVersions: Promise<Awaited<ReturnType<CreativeVersionStore["getConceptVersions"]>>> =
+  versionStorage.getConceptVersions(conceptVersionsReadInput);
+declare const nativeProvider: ReturnType<typeof import("creative-engine/models").createOpenAIImagesProvider>;
+declare const nativePreflightInput: Parameters<typeof nativeProvider.inspectConceptReferences>[0];
+const nativePreflightOutput: Promise<readonly CreativeConceptReferenceInspection[]> =
+  nativeProvider.inspectConceptReferences(nativePreflightInput);
+const nativeConceptEditOutput = nativeProvider.edit(conceptProviderDispatch);
+
 void [CREATIVE_API_OPERATIONS, requests, conceptsInvocation, conceptStatus, conceptsAsLegacy,
   v1_1Generate, forgedConceptSettlement, response, aliasResponse, publicError, authorizationInput,
   authorizationResult, immutableReservationReference, initialDecisionTransportId, decisionRetryIntent,
   initialInspectionTransportId, inspectionTransportIntent, inspectionReservationReference, providerReservationReference,
-  rawProviderUsage, privacyFilteredUsage, publicationFence];
+  rawProviderUsage, privacyFilteredUsage, publicationFence, predecodePixelCount, decodedPixelCount,
+  finalManifestWidth, conceptStorageImplementer, conceptBatch, optionalConceptBegin, storedBegin,
+  storedAppend, storedBinding, storedStage, storedBatch, storedResponseStage, storedObjects,
+  publishedBatch, storedVersions, runtimeConceptBatch, nativePreflightOutput, nativeConceptEditOutput,
+  runtimeBegin, runtimeAppend, runtimeBinding, runtimeStage, runtimeBatch, runtimeResponseStage,
+  runtimeObjects, runtimePublication, runtimeVersions,
+  legacyProviderPlan, nativeConceptPlan, nativePlanAsLegacyEditPlan, nativePlanBrief,
+  fabricatedParentHash, conceptRouteInput, legacyRouteInput, routePlanReader];

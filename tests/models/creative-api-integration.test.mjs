@@ -385,7 +385,28 @@ test("actual Creative API v1.1 concepts.create edits two authorized references a
           output_tokens_details: { image_tokens: 9, text_tokens: 1 } } }),
       { status: 200, headers: { "content-type": "application/json", "x-request-id": `req-concept-${outputIndex}` } });
     } });
-  installConceptAuthority(context, provider);
+  const preflightCalls = [];
+  const nativeRoutePlans = [];
+  const nativeManifestReferences = [];
+  const nativeEditPlans = [];
+  const providerWithPreflightProbe = Object.freeze({
+    ...provider,
+    resolveRoute(input) {
+      nativeRoutePlans.push({ operation: input.operation, plan: input.plan });
+      return provider.resolveRoute(input);
+    },
+    async inspectConceptReferences(input) {
+      const inspected = await provider.inspectConceptReferences(input);
+      preflightCalls.push({ input, inspected });
+      return inspected;
+    },
+    async edit(input) {
+      nativeEditPlans.push(input.plan);
+      nativeManifestReferences.push(input.concept_reference_manifest.references.map((reference) => ({ ...reference })));
+      return provider.edit(input);
+    },
+  });
+  installConceptAuthority(context, providerWithPreflightProbe);
 
   const badV10 = conceptRequest("concept-v10-negative", "1.0");
   const rejected = await context.api.invoke(authorizedActor(), badV10);
@@ -409,6 +430,33 @@ test("actual Creative API v1.1 concepts.create edits two authorized references a
   assert.equal(context.counters.settlements - countersBeforeConcepts.settlements, 2);
   assert.deepEqual(observedInputs, [[hash(context.referenceAssetBytes.get("asset-1")), hash(context.referenceAssetBytes.get("asset-2"))],
     [hash(context.referenceAssetBytes.get("asset-1")), hash(context.referenceAssetBytes.get("asset-2"))]]);
+  assert.ok(preflightCalls.length > 0, "the real provider reference decoder must run before dispatch");
+  const firstPreflight = preflightCalls[0];
+  assert.deepEqual(Object.keys(firstPreflight.input.references[0]).sort(),
+    ["asset_id", "content_hash", "media_type", "role_ref", "source_ref"],
+    "pre-decode callback references must not claim dimensions that are not known yet");
+  assert.deepEqual(firstPreflight.inspected.map(({ width, height }) => [width, height]), [[17, 16], [16, 16]],
+    "the provider returns dimensions only after it has read and decoded the authorized bytes");
+  assert.ok(nativeManifestReferences.length >= 1);
+  for (const references of nativeManifestReferences) {
+    assert.deepEqual(references.map(({ width, height }) => [width, height]), [[17, 16], [16, 16]],
+      "the final native edit manifest retains validated decoded dimensions");
+  }
+  assert.ok(nativeRoutePlans.length >= 1, "the public concept route must pass the native plan through the typed route port");
+  assert.ok(nativeEditPlans.length >= 1, "the public concept edit must pass the same native plan to the provider");
+  const firstNativePlan = nativeRoutePlans[0].plan;
+  assert.equal(nativeRoutePlans[0].operation, "edit");
+  assert.deepEqual(Object.keys(firstNativePlan).sort(), ["brief_id", "operation", "source_refs", "steps"],
+    "route receives the runtime's minimal native plan, not fabricated EditPlan metadata");
+  assert.equal(firstNativePlan.operation, "concept.generate");
+  assert.equal(firstNativePlan.source_refs.length, 2);
+  assert.equal(firstNativePlan.steps.length, 1);
+  assert.deepEqual(firstNativePlan.steps[0].source_refs, firstNativePlan.source_refs);
+  assert.deepEqual(Object.keys(firstNativePlan.steps[0]).sort(), ["action", "parameters", "source_refs"]);
+  assert.deepEqual(firstNativePlan.steps[0].parameters, { variant_count: 1 });
+  for (const routePlan of nativeRoutePlans) assert.deepEqual(routePlan.plan, firstNativePlan);
+  for (const editPlan of nativeEditPlans) assert.deepEqual(editPlan, firstNativePlan,
+    "native provider.edit receives the same minimal plan shape that resolved its route");
   const [first, second] = result.result.candidates;
   assert.notEqual(first.design_version.design_version_id, second.design_version.design_version_id);
   assert.notEqual(first.design_version.artifact.content_hash, second.design_version.artifact.content_hash);

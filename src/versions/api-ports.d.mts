@@ -1,5 +1,6 @@
 import type {
   CreativeContextFence,
+  CreativeConceptStoragePort,
   CreativeInvalidationResult,
   CreativeOperation,
   PrivateProviderRequestAttribution,
@@ -18,11 +19,17 @@ import type {
 import type { TrustedScope } from "../contracts/creative/v1.mjs";
 import type { CreativeVersionStore, VersionScope } from "./store.mjs";
 
-type BaseStorage = NonNullable<CreativeRuntimePorts["storage"]>;
+type BaseStorage = Omit<NonNullable<CreativeRuntimePorts["storage"]>, keyof CreativeConceptStoragePort>;
+type PromiseMethod<T> = T extends (...args: infer Args) => infer Result
+  ? (...args: Args) => Promise<Awaited<Result>>
+  : never;
+export type CreativeVersionRuntimeConceptStorage = {
+  [Method in keyof CreativeConceptStoragePort]: PromiseMethod<CreativeConceptStoragePort[Method]>;
+};
 type BaseJobs = NonNullable<CreativeRuntimePorts["jobs"]>;
 type BasePlanning = NonNullable<CreativeRuntimePorts["planning"]>;
 
-export interface CreativeVersionRuntimeStorage extends BaseStorage {
+export interface CreativeVersionRuntimeStorage extends BaseStorage, CreativeVersionRuntimeConceptStorage {
   getBriefVersionByHash(input: { scope: TrustedScope; brief_id: string; brief_hash: string }):
     Promise<import("../contracts/creative/v1.mjs").CreativeBrief | null> |
     import("../contracts/creative/v1.mjs").CreativeBrief | null;

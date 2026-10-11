@@ -5,6 +5,7 @@ import type {
   EditPlan,
   TrustedScope,
 } from "../contracts/creative/v1.mjs";
+import type { CreativeConceptBatchEvent, CreativeConceptBatchProposal } from "../generation/concepts.mjs";
 import type {
   DecisionPortRequest,
   DecisionPortResult,
@@ -114,6 +115,240 @@ export interface CreativeConceptReferenceManifest {
     height: number;
     role_ref: string;
   }>[];
+}
+
+/** Authorized concept identity before the provider has decoded its bytes. Dimensions are deliberately absent. */
+export type CreativeConceptReferencePreflight = Readonly<Pick<
+  CreativeConceptReferenceManifest["references"][number],
+  "source_ref" | "asset_id" | "content_hash" | "media_type" | "role_ref"
+>>;
+
+/** Result of bounded native decoding; only this post-decode value carries raster dimensions. */
+export interface CreativeConceptReferenceInspection extends CreativeConceptReferencePreflight {
+  readonly width: number;
+  readonly height: number;
+  readonly byte_length: number;
+}
+
+export type CreativeConceptStorageScope = TrustedScope & { readonly brief_id: string };
+export type CreativeConceptStoredBatchStatus = CreativeConceptBatchResult["status"];
+
+export interface CreativeConceptBeginBatchInput {
+  readonly scope: CreativeConceptStorageScope;
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly action_id: string;
+  readonly request_hash: string;
+  readonly lease_token: string;
+  readonly batch: CreativeConceptBatchProposal;
+}
+
+export interface CreativeConceptBeginBatchResult {
+  readonly status: "created" | "existing";
+  readonly batch: CreativeConceptBatchProposal;
+  readonly batch_status: CreativeConceptStoredBatchStatus;
+}
+
+export interface CreativeConceptAppendEventInput {
+  readonly scope: CreativeConceptStorageScope;
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly action_id: string;
+  readonly request_hash: string;
+  readonly lease_token: string;
+  readonly event: CreativeConceptBatchEvent;
+}
+
+export interface CreativeConceptAppendEventResult {
+  readonly status: "recorded" | "replayed";
+  readonly batch: CreativeConceptBatchProposal;
+  readonly batch_status: CreativeConceptStoredBatchStatus;
+}
+
+export interface CreativeConceptDispatchTargetBinding {
+  readonly service: "openai";
+  readonly endpoint: "https://api.openai.com/v1/images/edits";
+  readonly model: string;
+  readonly sdk_name: "native-fetch";
+  readonly sdk_version: string;
+  readonly configuration_sha256: `sha256:${string}`;
+  readonly operation: "edit";
+  readonly operation_kind: "image_edit";
+  readonly input_sha256: `sha256:${string}`;
+  readonly prompt_sha256: `sha256:${string}`;
+  readonly plan_sha256: `sha256:${string}`;
+  readonly image_reference_manifest_sha256: `sha256:${string}`;
+  readonly deadline_at: string;
+  readonly transport_policy: Readonly<{
+    maximum_transport_attempts: 1;
+    automatic_retry: false;
+    stop_on: readonly string[];
+  }>;
+  readonly tenant_id: string;
+  readonly project_id: string;
+  readonly budget_scope_id: string;
+  readonly billable_attempt_id: string;
+}
+
+export interface CreativeConceptDispatchBindingInput {
+  readonly scope: CreativeConceptStorageScope;
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly action_id: string;
+  readonly request_hash: string;
+  readonly lease_token: string;
+  readonly concept_batch_id: string;
+  readonly concept_id: string;
+  readonly billable_attempt_id: string;
+  readonly transport_attempt_id: string;
+  readonly reservation_ref: string;
+  readonly dispatch_intent_ref: string;
+  readonly target_binding: CreativeConceptDispatchTargetBinding;
+  readonly target_binding_sha256: `sha256:${string}`;
+  readonly rendered_prompt_sha256: `sha256:${string}`;
+}
+
+export interface CreativeConceptDispatchBindingResult {
+  readonly status: "recorded" | "replayed";
+  readonly transport_attempt_id: string;
+  readonly target_binding_sha256: `sha256:${string}`;
+}
+
+export interface CreativeConceptStageResponseInput {
+  readonly scope: CreativeConceptStorageScope;
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly action_id: string;
+  readonly request_hash: string;
+  readonly lease_token: string;
+  readonly concept_batch_id: string;
+  readonly concept_id: string;
+  readonly billable_attempt_id: string;
+  readonly transport_attempt_id: string;
+  readonly reservation_ref: string;
+  readonly dispatch_intent_ref: string;
+  readonly bytes: Uint8Array;
+  readonly content_hash: `sha256:${string}`;
+  readonly media_type: "image/png" | "image/jpeg" | "image/webp";
+  readonly width: number;
+  readonly height: number;
+  readonly target_binding_sha256: `sha256:${string}`;
+}
+
+export interface CreativeConceptStageResponseResult {
+  readonly status: "staged" | "replayed";
+  readonly stage_ref: string;
+  readonly content_hash: `sha256:${string}`;
+}
+
+export interface CreativeConceptStoredBatch {
+  readonly batch: CreativeConceptBatchProposal;
+  readonly status: CreativeConceptStoredBatchStatus;
+  readonly job_id: string;
+  readonly request_hash: string;
+  readonly actor_id: string;
+  readonly updated_at: string;
+}
+
+export interface CreativeConceptResponseStage {
+  readonly concept_id: string;
+  readonly billable_attempt_id: string;
+  readonly transport_attempt_id: string;
+  readonly reservation_ref: string;
+  readonly dispatch_intent_ref: string;
+  readonly target_binding_sha256: `sha256:${string}`;
+  readonly content_hash: `sha256:${string}`;
+  readonly media_type: "image/png" | "image/jpeg" | "image/webp";
+  readonly width: number;
+  readonly height: number;
+  readonly byte_length: number;
+  readonly response_bytes: Uint8Array;
+  readonly stage_ref: string;
+  readonly status: "response_received" | "published";
+}
+
+export interface CreativeConceptArtifactObjectPreparationInput {
+  readonly scope: CreativeConceptStorageScope;
+  readonly action_id: string;
+  readonly concept_ids: readonly string[];
+}
+
+export interface CreativeConceptArtifactObjectPreparationResult {
+  readonly action_id: string;
+  readonly artifacts: readonly Readonly<{
+    concept_id: string;
+    content_hash: `sha256:${string}`;
+    byte_length: number;
+    status: "object_durable";
+  }>[];
+}
+
+export interface CreativeConceptPublication {
+  readonly concept_id: string;
+  readonly ordinal: number;
+  readonly design_version: DesignVersion;
+  readonly creation: CreativeVersionCreationEvidence;
+  readonly storage_commit_ref: string;
+  readonly lineage_evidence_ref: string;
+  readonly creative_concept_lineage: CreativeConceptLineage;
+  readonly event_id: string;
+}
+
+export interface CreativeConceptPublishBatchInput {
+  readonly scope: CreativeConceptStorageScope;
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly action_id: string;
+  readonly request_hash: string;
+  readonly expected_result: Readonly<{ candidate_batch: CreativeConceptBatchResult }>;
+  readonly publications: readonly CreativeConceptPublication[];
+}
+
+export interface CreativeConceptPublishedVersion {
+  readonly concept_id: string;
+  readonly ordinal: number;
+  readonly design_version: DesignVersion;
+  readonly creative_concept_lineage: CreativeConceptLineage;
+  readonly storage_commit_ref: string;
+  readonly lineage_evidence_ref: string;
+}
+
+/** Nine hooks for adapters that support the local concepts.create operation. */
+export interface CreativeConceptStoragePort {
+  beginConceptBatch(input: CreativeConceptBeginBatchInput): CreativeConceptBeginBatchResult |
+    Promise<CreativeConceptBeginBatchResult>;
+  appendConceptEvent(input: CreativeConceptAppendEventInput): CreativeConceptAppendEventResult |
+    Promise<CreativeConceptAppendEventResult>;
+  recordConceptDispatchBinding(input: CreativeConceptDispatchBindingInput): CreativeConceptDispatchBindingResult |
+    Promise<CreativeConceptDispatchBindingResult>;
+  stageConceptResponse(input: CreativeConceptStageResponseInput): CreativeConceptStageResponseResult |
+    Promise<CreativeConceptStageResponseResult>;
+  getConceptBatch(input: Readonly<{ scope: CreativeConceptStorageScope; action_id: string }>):
+    CreativeConceptStoredBatch | null | Promise<CreativeConceptStoredBatch | null>;
+  getConceptResponseStage(input: Readonly<{ scope: CreativeConceptStorageScope; action_id: string; concept_id: string }>):
+    CreativeConceptResponseStage | null | Promise<CreativeConceptResponseStage | null>;
+  prepareConceptArtifactObjects(input: CreativeConceptArtifactObjectPreparationInput):
+    CreativeConceptArtifactObjectPreparationResult | Promise<CreativeConceptArtifactObjectPreparationResult>;
+  publishConceptBatch(input: CreativeConceptPublishBatchInput, transaction: CreativePublicationTransaction):
+    CreativeConceptBatchResult | Promise<CreativeConceptBatchResult>;
+  getConceptVersions(input: Readonly<{ scope: CreativeConceptStorageScope; action_id: string }>):
+    readonly CreativeConceptPublishedVersion[] | Promise<readonly CreativeConceptPublishedVersion[]>;
+}
+
+/** Exact synchronous/asynchronous behavior of the corresponding CreativeVersionStore methods. */
+export interface CreativeConceptVersionStoreMethods {
+  beginConceptBatch(input: CreativeConceptBeginBatchInput): CreativeConceptBeginBatchResult;
+  appendConceptEvent(input: CreativeConceptAppendEventInput): CreativeConceptAppendEventResult;
+  recordConceptDispatchBinding(input: CreativeConceptDispatchBindingInput): CreativeConceptDispatchBindingResult;
+  stageConceptResponse(input: CreativeConceptStageResponseInput): Promise<CreativeConceptStageResponseResult>;
+  getConceptBatch(input: Readonly<{ scope: CreativeConceptStorageScope; action_id: string }>): CreativeConceptStoredBatch | null;
+  getConceptResponseStage(input: Readonly<{ scope: CreativeConceptStorageScope; action_id: string; concept_id: string }>):
+    CreativeConceptResponseStage | null;
+  prepareConceptArtifactObjects(input: CreativeConceptArtifactObjectPreparationInput):
+    Promise<CreativeConceptArtifactObjectPreparationResult>;
+  publishConceptBatch(input: CreativeConceptPublishBatchInput, transaction: CreativePublicationTransaction): CreativeConceptBatchResult;
+  getConceptVersions(input: Readonly<{ scope: CreativeConceptStorageScope; action_id: string }>):
+    readonly CreativeConceptPublishedVersion[];
 }
 
 /** Private backend-only attribution. The raw provider ID must never be copied to public API records. */
@@ -489,7 +724,7 @@ export interface CreativeRuntimePorts {
       transaction?: CreativePublicationTransaction): Promise<{ status: "completed" | "replayed"; result_hash: string }> |
       { status: "completed" | "replayed"; result_hash: string };
     inspectionRepair?: InspectionRepairPort;
-  };
+  } & Partial<CreativeConceptStoragePort>;
   jobs?: {
     /** Fail closed before job creation or any operation-specific external port calls. */
     assertOperationAvailable?(input: { operation: CreativeOperation }):
@@ -529,20 +764,18 @@ export interface CreativeRuntimePorts {
       Promise<Readonly<{ reconciled: number; remaining: number }>> | Readonly<{ reconciled: number; remaining: number }>;
   };
   provider?: {
-    resolveRoute(input: { scope: TrustedScope; actor_id: string; operation: "generate" | "edit"; plan: EditPlan }):
+    resolveRoute(input: CreativeProviderRouteInput):
       Promise<CreativeProviderRoute> | CreativeProviderRoute;
     generate(input: ProviderInput): Promise<ProviderOutput>;
-    edit(input: ProviderInput): Promise<ProviderOutput>;
+    edit(input: ProviderInput | CreativeConceptProviderInput): Promise<ProviderOutput>;
     getConceptConfiguration?(): Readonly<{ model_id: string; configuration: Readonly<{
       quality: string; size: string; output_format: string; background: string; moderation: string;
     }> }>;
     /** Decode and hash the exact two authorized inputs before C03; the native edit rereads and verifies them. */
     inspectConceptReferences?(input: { scope: TrustedScope;
-      references: CreativeConceptReferenceManifest["references"];
+      references: readonly CreativeConceptReferencePreflight[];
       maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number }):
-      Promise<readonly Readonly<{ source_ref: string; asset_id: string; content_hash: `sha256:${string}`;
-        media_type: "image/png" | "image/jpeg" | "image/webp"; width: number; height: number;
-        byte_length: number; role_ref: string }>[]>;
+      Promise<readonly CreativeConceptReferenceInspection[]>;
   };
   /** Owner supplied policy and versioned offline native-edit adapter snapshots. */
   concepts?: {
@@ -719,6 +952,37 @@ export interface ProviderInput {
   signal: AbortSignal;
   deadline_at: string;
 }
+
+/** Minimal internal plan passed to native Images edit for a parentless concept candidate. */
+export interface CreativeConceptNativePlan {
+  readonly operation: "concept.generate";
+  readonly brief_id: string;
+  readonly source_refs: readonly [string, string];
+  readonly steps: readonly [Readonly<{
+    action: "concept.generate";
+    source_refs: readonly [string, string];
+    parameters: Readonly<{ variant_count: 1 }>;
+  }>];
+}
+
+/** The route resolver receives either a legacy full plan or the exact parentless concept plan. */
+export type CreativeProviderRouteInput =
+  | Readonly<{ scope: TrustedScope; actor_id: string; operation: "generate"; plan: EditPlan }>
+  | Readonly<{ scope: TrustedScope; actor_id: string; operation: "edit"; plan: EditPlan | CreativeConceptNativePlan }>;
+
+/** Native edit dispatch for concepts carries its own minimal plan and durable staging callbacks. */
+export type CreativeConceptProviderInput = Omit<ProviderInput,
+  "plan" | "image_reference_manifest" | "concept_reference_manifest" | "concept_batch_id" | "concept_id" |
+  "assertDispatchCurrent" | "stageConceptResponse" | "recordConceptDispatchBinding"> & Readonly<{
+    plan: CreativeConceptNativePlan;
+    image_reference_manifest?: never;
+    concept_reference_manifest: CreativeConceptReferenceManifest;
+    concept_batch_id: string;
+    concept_id: string;
+    assertDispatchCurrent(): string;
+    stageConceptResponse: NonNullable<ProviderInput["stageConceptResponse"]>;
+    recordConceptDispatchBinding: NonNullable<ProviderInput["recordConceptDispatchBinding"]>;
+  }>;
 
 export interface CreativeProviderRoute {
   retry_mapping_ref: string;
