@@ -127,8 +127,11 @@ const trustedActor: TrustedCreativeActor = {
 };
 const api = createCreativeApi();
 const apiAlias = createCreativeRuntime();
-const response: Promise<CreativeApiResponse> = api.invoke(trustedActor, requests[0]);
-const aliasResponse: Promise<CreativeApiResponse> = apiAlias.invoke(trustedActor, requests[8]);
+const generateRequest = requests.find((request) => request.operation === "generate");
+const jobStatusRequest = requests.find((request) => request.operation === "job.status");
+if (!generateRequest || !jobStatusRequest) throw new Error("Legacy request fixtures must include generate and job.status.");
+const response: Promise<CreativeApiResponse> = api.invoke(trustedActor, generateRequest);
+const aliasResponse: Promise<CreativeApiResponse> = apiAlias.invoke(trustedActor, jobStatusRequest);
 const conceptsInvocation: Promise<CreativeApiResponse> = api.invoke(trustedActor, conceptsRequest);
 declare const conceptResult: CreativeConceptBatchResult;
 const conceptStatus: CreativeConceptBatchResult["status"] = conceptResult.status;
@@ -190,8 +193,27 @@ const nativeConceptPlan: CreativeConceptNativePlan = {
   steps: [{ action: "concept.generate", source_refs: ["source-one", "source-two"],
     parameters: { variant_count: 1 } }],
 };
+declare const possiblySingleSourcePlan: CreativeConceptNativePlan;
+// @ts-expect-error Distinct source pages may be one or two, so index 1 is not guaranteed.
+const unguardedSecondSourcePage: string = possiblySingleSourcePlan.source_refs[1];
+// @ts-expect-error The native plan step has the same one-or-two source-page cardinality.
+const unguardedSecondStepSourcePage: string = possiblySingleSourcePlan.steps[0].source_refs[1];
 // @ts-expect-error The native plan does not fabricate the full EditPlan envelope or parent base.
 const nativePlanAsLegacyEditPlan: EditPlan = nativeConceptPlan;
+const oneSourceNativeConceptPlan: CreativeConceptNativePlan = {
+  ...nativeConceptPlan,
+  source_refs: ["source-one"],
+  steps: [{ action: "concept.generate", source_refs: ["source-one"], parameters: { variant_count: 1 } }],
+};
+function sourcePages(reference: CreativeConceptNativePlan["source_refs"]): string[] {
+  const first: string = reference[0];
+  if (reference.length === 2) return [first, reference[1]];
+  return [first];
+}
+const twoPlanPages = sourcePages(nativeConceptPlan.source_refs);
+const twoStepPages = sourcePages(nativeConceptPlan.steps[0].source_refs);
+const onePlanPage = sourcePages(oneSourceNativeConceptPlan.source_refs);
+const oneStepPage = sourcePages(oneSourceNativeConceptPlan.steps[0].source_refs);
 declare const conceptProviderDispatch: CreativeConceptProviderInput;
 const nativePlanBrief: string = conceptProviderDispatch.plan.brief_id;
 // @ts-expect-error Parentless native plan has no selected parent base.
@@ -210,10 +232,26 @@ const routePlanReader: ProviderResolveRoute = (input) => {
     const selectedDesignHash: string = input.plan.base.design_hash;
     void selectedDesignHash;
   } else {
-    const sourceReferenceCount: number = input.plan.source_refs.length;
-    void sourceReferenceCount;
+    const nativeSourcePages = sourcePages(input.plan.source_refs);
+    const nativeStepPages = sourcePages(input.plan.steps[0].source_refs);
+    void [nativeSourcePages, nativeStepPages];
   }
   return { retry_mapping_ref: "retry:fixture", provider: providerDispatch.attempt.provider };
+};
+type ProviderEdit = NonNullable<CreativeRuntimePorts["provider"]>["edit"];
+declare const providerOutput: Awaited<ReturnType<NonNullable<CreativeRuntimePorts["provider"]>["generate"]>>;
+const providerEditReader: ProviderEdit = async (input) => {
+  if (!("contract" in input.plan)) {
+    const nativePlan: CreativeConceptNativePlan = input.plan;
+    const nativeSourcePages = sourcePages(nativePlan.source_refs);
+    const nativeStepPages = sourcePages(nativePlan.steps[0].source_refs);
+    void [nativeSourcePages, nativeStepPages];
+  } else {
+    const legacyPlan: EditPlan = input.plan;
+    const selectedDesignHash: string = legacyPlan.base.design_hash;
+    void selectedDesignHash;
+  }
+  return providerOutput;
 };
 const rawProviderUsage: ProviderUsageRecord = {
   input_tokens: 12,
@@ -237,7 +275,9 @@ const predecodePixelCount: number = preflightReference.width * preflightReferenc
 declare const inspectedReference: CreativeConceptReferenceInspection;
 const decodedPixelCount: number = inspectedReference.width * inspectedReference.height;
 declare const finalReferenceManifest: CreativeConceptReferenceManifest;
-const finalManifestWidth: number = finalReferenceManifest.references[0].width;
+const firstManifestReference = finalReferenceManifest.references[0];
+if (!firstManifestReference) throw new Error("A validated concept manifest contains two authorized references.");
+const finalManifestWidth: number = firstManifestReference.width;
 
 declare const conceptBatch: Parameters<CreativeConceptStoragePort["beginConceptBatch"]>[0]["batch"];
 declare const conceptBatchResult: CreativeConceptBatchResult;
@@ -308,6 +348,7 @@ void [CREATIVE_API_OPERATIONS, requests, conceptsInvocation, conceptStatus, conc
   storedAppend, storedBinding, storedStage, storedBatch, storedResponseStage, storedObjects,
   publishedBatch, storedVersions, runtimeConceptBatch, nativePreflightOutput, nativeConceptEditOutput,
   runtimeBegin, runtimeAppend, runtimeBinding, runtimeStage, runtimeBatch, runtimeResponseStage,
-  runtimeObjects, runtimePublication, runtimeVersions,
+  runtimeObjects, runtimePublication, runtimeVersions, unguardedSecondSourcePage, unguardedSecondStepSourcePage,
+  twoPlanPages, twoStepPages, onePlanPage, oneStepPage, providerEditReader,
   legacyProviderPlan, nativeConceptPlan, nativePlanAsLegacyEditPlan, nativePlanBrief,
   fabricatedParentHash, conceptRouteInput, legacyRouteInput, routePlanReader];

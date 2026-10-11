@@ -889,7 +889,7 @@ export interface ProviderInput {
   plan: EditPlan;
   /** Versioned edit-only list of immutable, already permission-checked research image references. */
   readonly image_reference_manifest?: CreativeImageReferenceManifest;
-  /** Exactly two source references for a parentless initial concept native edit. */
+  /** Exactly two authorized input asset references for a parentless initial concept native edit. */
   readonly concept_reference_manifest?: CreativeConceptReferenceManifest;
   /** Stable identities are created before dispatch and reused during exact response recovery. */
   readonly concept_batch_id?: string;
@@ -957,10 +957,11 @@ export interface ProviderInput {
 export interface CreativeConceptNativePlan {
   readonly operation: "concept.generate";
   readonly brief_id: string;
-  readonly source_refs: readonly [string, string];
+  /** Distinct source-page IDs derived from the two authorized input assets; the pages may be shared. */
+  readonly source_refs: readonly [string] | readonly [string, string];
   readonly steps: readonly [Readonly<{
     action: "concept.generate";
-    source_refs: readonly [string, string];
+    source_refs: readonly [string] | readonly [string, string];
     parameters: Readonly<{ variant_count: 1 }>;
   }>];
 }

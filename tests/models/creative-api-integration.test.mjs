@@ -110,7 +110,7 @@ function authorityPorts() {
   };
 }
 
-async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api" } = {}) {
+async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api", sameSourcePage = false } = {}) {
   const root = suppliedRoot ?? await mkdtemp(join(tmpdir(), "creative-image-api-integration-"));
   if (suppliedRoot === undefined) t.after(async () => rm(root, { recursive: true, force: true }));
   const databasePath = join(root, "versions.sqlite");
@@ -125,17 +125,19 @@ async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api"
   researchInput.tenant_id = SCOPE.tenant_id;
   researchInput.project_id = SCOPE.project_id;
   researchInput.package_id = "research-image-api-1";
-  researchInput.source_refs.push("source:page-2", "asset:asset-2");
+  const asset2SourcePage = sameSourcePage ? "page-1" : "page-2";
+  researchInput.source_refs.push("asset:asset-2");
+  if (!sameSourcePage) researchInput.source_refs.push("source:page-2");
   researchInput.source_identity[0].content_hash = hash(firstReferenceBytes);
   researchInput.assets.items[0].content_hash = hash(firstReferenceBytes);
-  researchInput.source_identity.push({ source_id: "page-2", uri: "https://example.test/reference-2.png",
+  if (!sameSourcePage) researchInput.source_identity.push({ source_id: "page-2", uri: "https://example.test/reference-2.png",
     retrieved_at: "2026-10-10T12:00:00Z", content_hash: hash(referenceBytes) });
-  researchInput.assets.items.push({ asset_id: "asset-2", source_id: "page-2",
+  researchInput.assets.items.push({ asset_id: "asset-2", source_id: asset2SourcePage,
     content_hash: hash(referenceBytes), media_type: "image/png" });
   researchInput.permissions.items.push({ asset_id: "asset-2", action: "modify", status: "granted",
-    evidence_refs: ["page-2"] });
+    evidence_refs: [asset2SourcePage] });
   researchInput.permissions.items.push({ asset_id: "asset-2", action: "reproduce", status: "granted",
-    evidence_refs: ["page-2"] });
+    evidence_refs: [asset2SourcePage] });
   const research = normalizeResearchPackage(researchInput, { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id });
 
   const brief = await jsonFixture("brief");
@@ -148,8 +150,8 @@ async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api"
   }));
   brief.permissions.items = [
     { asset_id: "asset-1", action: "reproduce", status: "granted", evidence_refs: ["page-1"] },
-    { asset_id: "asset-2", action: "modify", status: "granted", evidence_refs: ["page-2"] },
-    { asset_id: "asset-2", action: "reproduce", status: "granted", evidence_refs: ["page-2"] },
+    { asset_id: "asset-2", action: "modify", status: "granted", evidence_refs: [asset2SourcePage] },
+    { asset_id: "asset-2", action: "reproduce", status: "granted", evidence_refs: [asset2SourcePage] },
   ];
   const trustedBrief = validateCreativeBrief(brief, { trustedScope: SCOPE });
   store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: trustedBrief });
@@ -565,6 +567,72 @@ test("actual Creative API v1.1 concepts.create edits two authorized references a
   assert.deepEqual(replayed.result, result.result);
   assert.equal(context.counters.provider_posts - countersBeforeConcepts.provider_posts, 2,
     "completed replay returns durable siblings without a second dispatch");
+});
+
+test("actual concepts.create keeps both authorized assets when their shared source page appears once in native plans", async (t) => {
+  const context = await setup(t, { sameSourcePage: true });
+  const outputBytes = makePng({ width: 16, height: 16 });
+  let postedReferenceHashes = [];
+  const provider = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+    promptPort: syntheticNativePromptPort(),
+    fetchImpl: async (url, init) => {
+      context.counters.provider_posts += 1;
+      assert.equal(String(url), "https://api.openai.com/v1/images/edits");
+      assert.equal(init.method, "POST");
+      assert.equal(init.body.has("mask"), false, "same-page initial concept edits still omit a fabricated mask");
+      const files = init.body.getAll("image[]");
+      assert.equal(files.length, 2, "both distinct authorized assets are sent even though they share one source page");
+      postedReferenceHashes = await Promise.all(files.map(async (file) => hash(Buffer.from(await file.arrayBuffer()))));
+      return new Response(JSON.stringify({ data: [{ b64_json: outputBytes.toString("base64") }],
+        usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+          input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+          output_tokens_details: { image_tokens: 9, text_tokens: 1 } } }),
+      { status: 200, headers: { "content-type": "application/json", "x-request-id": "req-same-source-page" } });
+    } });
+  const routeCalls = [];
+  const editPlans = [];
+  const editReferences = [];
+  const providerWithPlanProbe = Object.freeze({
+    ...provider,
+    resolveRoute(input) {
+      routeCalls.push(input);
+      return provider.resolveRoute(input);
+    },
+    async edit(input) {
+      editPlans.push(input.plan);
+      editReferences.push(input.concept_reference_manifest.references.map(({ asset_id, source_ref }) => ({ asset_id, source_ref })));
+      return provider.edit(input);
+    },
+  });
+  installConceptAuthority(context, providerWithPlanProbe);
+
+  const request = conceptRequest("concept-api-same-source-page", "1.1", 1);
+  request.source_refs = ["page-1"];
+  const result = await context.api.invoke(authorizedActor(), request);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.result.status, "completed");
+  assert.equal(result.result.candidates.length, 1);
+  assert.equal(context.counters.provider_posts, 1);
+  assert.equal(context.counters.reserves, 1);
+  assert.equal(context.counters.settlements, 1);
+  assert.deepEqual(postedReferenceHashes, [
+    hash(context.referenceAssetBytes.get("asset-1")), hash(context.referenceAssetBytes.get("asset-2")),
+  ]);
+  assert.notEqual(postedReferenceHashes[0], postedReferenceHashes[1], "the two authorized asset bytes remain distinct");
+  assert.deepEqual(editReferences, [[
+    { asset_id: "asset-1", source_ref: "page-1" }, { asset_id: "asset-2", source_ref: "page-1" },
+  ]]);
+  assert.equal(routeCalls.length, 1);
+  assert.equal(routeCalls[0].operation, "edit");
+  assert.equal(editPlans.length, 1);
+  const routePlan = routeCalls[0].plan;
+  const editPlan = editPlans[0];
+  assert.deepEqual(editPlan, routePlan, "the route and native edit callback observe the same plan");
+  assert.deepEqual(routePlan.source_refs, ["page-1"], "the shared source page is represented once");
+  assert.deepEqual(routePlan.steps[0].source_refs, ["page-1"]);
+  assert.equal(result.result.candidates[0].design_version.parent_version_id, null);
+  assert.equal(result.result.candidates[0].creative_concept_lineage.source_assets.length, 2);
+  assert.deepEqual(result.result.candidates[0].design_version.source_refs, ["page-1"]);
 });
 
 test("concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST", async (t) => {
