@@ -46,7 +46,10 @@ const EXPECTED_UPLOAD_MEMBERS = Object.freeze([
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json',
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.diagnostics.json.sha256',
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl',
-  '.runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl'
+  '.runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl',
+  '.runtime-artifacts/ops-ci1-runtime-foundation.json',
+  '.runtime-artifacts/ops-ci1-quota-shutdown-restart.json',
+  '.runtime-artifacts/ops-ci1-runbook-clean-start.json'
 ]);
 const OPS07_INVALID_REASONS = new Set(['invalid_input', 'missing', 'duplicate', 'malformed', 'oversize', 'invalid_shape']);
 const OPS_CI1_OWNED_GROUP_REGISTRY = 'OPS_CI1_OWNED_GROUP_REGISTRY';
