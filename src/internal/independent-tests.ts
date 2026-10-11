@@ -153,7 +153,7 @@ export async function runIndependentTests(options: {
 					[directoryVariable]: evidenceDir,
 					[nonceVariable]: executionNonce,
 				},
-				timeout: 60000,
+				timeout: 300000,
 				maxBuffer: 4 * 1024 * 1024,
 			},
 		);
