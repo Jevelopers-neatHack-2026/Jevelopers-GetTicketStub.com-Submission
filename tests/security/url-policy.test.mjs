@@ -14,13 +14,26 @@ test("accepts only canonical public HTTP(S) URL authorities", () => {
 });
 
 test("rejects sensitive query and fragment names through the shared bounded decoder", () => {
-  let overBoundKey = "token";
-  for (let index = 0; index < 6; index += 1) overBoundKey = encodeURIComponent(overBoundKey);
+  const nestedPercentEncoding = (value, layers) => {
+    let encoded = value;
+    for (let index = 0; index < layers; index += 1) encoded = encodeURIComponent(encoded);
+    return encoded;
+  };
+  const overBoundSensitiveKey = nestedPercentEncoding("%74oken", 6);
+  const overBoundUnknownKey = nestedPercentEncoding("%68eadline", 6);
+  assert.notEqual(overBoundSensitiveKey, "%74oken");
+  assert.ok(overBoundSensitiveKey.includes("%25"));
+  const overBoundUnknownUrl = new URL(`https://example.org/?${overBoundUnknownKey}=value`);
+  let decodedUnknownKey = overBoundUnknownUrl.searchParams.keys().next().value;
+  for (let index = 0; index < 4; index += 1) decodedUnknownKey = decodeURIComponent(decodedUnknownKey);
+  assert.notEqual(decodeURIComponent(decodedUnknownKey), decodedUnknownKey,
+    "the unknown query name remains encoded after the policy decoder's four rounds");
   for (const value of [
     "https://example.org/?access_token=canary",
     "https://example.org/?%61ccess_%74oken=canary",
     "https://example.org/#%74oken=canary",
-    `https://example.org/?${overBoundKey}=canary`,
+    `https://example.org/?${overBoundSensitiveKey}=canary`,
+    `https://example.org/?${overBoundUnknownKey}=value`,
   ]) {
     assert.equal(hasSensitiveUrlMaterial(new URL(value)), true, value);
   }

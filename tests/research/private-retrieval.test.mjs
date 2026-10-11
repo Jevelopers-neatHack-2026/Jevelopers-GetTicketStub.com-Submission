@@ -994,7 +994,13 @@ test('a pending receipt that appears before begin returns its existing marker an
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('private_receipt_pending'), JSON.stringify(result));
   assert.ok(result.limitations.includes('cancelled_before_dispatch'), JSON.stringify(result));
-  assert.ok(!result.limitations.includes('TRANSPORT_FAILURE'), JSON.stringify(result));
+  const pendingMarkerLimitations = result.limitations.filter((limitation) => [
+    'private_receipt_pending', 'private_receipt_already_exists', 'cancelled_before_dispatch',
+    'dispatch_state_unknown', 'source_unavailable',
+  ].includes(limitation)).sort();
+  assert.deepEqual(pendingMarkerLimitations, ['cancelled_before_dispatch', 'private_receipt_pending'],
+    'the existing marker is handled directly without a generic source failure or changed uncertainty');
+  assert.ok(!result.limitations.includes('source_unavailable'), JSON.stringify(result));
   assert.equal(requestCount, 0, 'an existing pending marker never authorizes another fetch');
   assert.ok(receiptBinding);
   const receipt = await h.evidenceStore.readPrivateRunReceipt(h.evidenceScope, {
