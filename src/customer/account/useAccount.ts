@@ -2,6 +2,7 @@
 // The signed-in account, read once from /api/auth/me and shared by every screen that asks.
 import { useCallback, useSyncExternalStore } from "react";
 import { api, type Account } from "./api";
+import { useSavingOff } from "./saving";
 
 /** "loading" until the first answer, so screens never flash a signed-out prompt at a signed-in person. */
 export type AccountState = { status: "loading" } | { status: "out" } | { status: "in"; account: Account };
@@ -53,7 +54,8 @@ const LOADING: AccountState = { status: "loading" };
 export function useAccount() {
   const s = useSyncExternalStore(subscribe, () => state, () => LOADING);
   const refresh = useCallback(() => refreshAccount(), []);
-  return { status: s.status, account: s.status === "in" ? s.account : null, refresh, signOut };
+  const savingOff = useSavingOff();
+  return { status: s.status, savingOff, account: s.status === "in" ? s.account : null, refresh, signOut };
 }
 
 export const getAccountState = () => state;

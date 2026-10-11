@@ -1,10 +1,11 @@
 import { getRequestContext, requireCapability } from "@/server/context";
 import { HttpError, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 
 // "Stop sharing": deletes the stub's share snapshot, so its link answers 404 from now on. Sharing again
 // mints a new link. Only the owner (a stub on their wall, or one their device or account shared) can do it.
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   limit(`revoke:ip:${clientIp(req)}`, 60, 15 * 60_000);
   const body = await readJson(req, 1024);

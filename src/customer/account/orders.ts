@@ -3,6 +3,7 @@
 // is told so it can keep the order and email the receipt. A failed request never undoes the order.
 import { addOrder, type Order } from "@/customer/pages/commerce";
 import { api } from "./api";
+import { isSavingOff } from "./saving";
 
 export interface Placed {
   order: Order;
@@ -12,7 +13,8 @@ export interface Placed {
 
 export async function placeOrder(draft: Omit<Order, "id" | "mode" | "createdAt">): Promise<Placed> {
   const local = addOrder(draft);
-  // Signed out with no email there is nobody to send a receipt to: the order stays on this device.
+  // Signed out with no email there is nobody to send a receipt to, and with saving off nobody to keep it: the order stays on this device.
+  if (isSavingOff()) return { order: local, receipt: false };
   try {
     const { order } = await api.order(draft);
     return { order, receipt: !!draft.email };

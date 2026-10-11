@@ -1,7 +1,7 @@
 import { LINK_TTL_MS, sandboxMail } from "@/server/auth";
 import { hashToken, newToken } from "@/server/crypto";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
 import { magicLinkMail, stubImageUrl } from "@/server/templates";
 import { parseAccountEmail, safeReturnTo } from "@/server/validate";
@@ -10,6 +10,7 @@ const WINDOW = 15 * 60_000;
 const REASONS = ["save", "checkout", "claim"] as const;
 
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   limit(`link:ip:${clientIp(req)}`, 20, WINDOW);
   const body = await readJson(req, 4 * 1024);

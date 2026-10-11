@@ -8,6 +8,7 @@ import d from "@/customer/desk/Desk.module.css";
 import { LeavesMark } from "@/customer/pages/ui";
 import { play } from "@/customer/studio/feedback";
 import { ApiError, EMAIL_RE, api, type LinkReason } from "./api";
+import { SAVING_OFF_LINE, useSavingOff } from "./saving";
 import { closeSignIn, updateSignIn, type SignInRequest } from "./signin";
 import s from "./account.module.css";
 
@@ -18,14 +19,33 @@ const COPY: Record<LinkReason, { title: string; lede: string }> = {
 };
 
 export function SignInSheet({ request }: { request: SignInRequest | null }) {
+  const off = useSavingOff();
   return (
-    <PaperSheet open={!!request} onClose={closeSignIn} title={request ? (request.sent ? "Check your email" : (request.title ?? COPY[request.reason].title)) : ""}>
+    <PaperSheet open={!!request} onClose={closeSignIn} title={request ? (off ? "Saving is off" : request.sent ? "Check your email" : (request.title ?? COPY[request.reason].title)) : ""}>
       {request ? <Body key={`${request.reason}-${request.returnTo ?? ""}`} request={request} /> : null}
     </PaperSheet>
   );
 }
 
 function Body({ request }: { request: SignInRequest }) {
+  const off = useSavingOff();
+  if (off) {
+    // No writable storage on this preview: say so calmly, offer nothing to fill in.
+    return (
+      <div className={s.body}>
+        <p className={s.lede} role="status">
+          {SAVING_OFF_LINE}
+        </p>
+        <TearLink type="button" onClick={closeSignIn}>
+          Close
+        </TearLink>
+      </div>
+    );
+  }
+  return <Form request={request} />;
+}
+
+function Form({ request }: { request: SignInRequest }) {
   const copy = { ...COPY[request.reason], ...(request.lede ? { lede: request.lede } : {}) };
   const [email, setEmail] = useState(request.email ?? "");
   const [busy, setBusy] = useState(false);

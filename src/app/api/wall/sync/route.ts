@@ -1,12 +1,13 @@
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { readStub } from "@/server/validate";
 
 const MAX_BODY = 32 * 1024 * 1024; // stubs can still carry generated art as data URLs (moved to files on arrival); photos are dropped
 const MAX_ITEMS = 1000;
 
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "wall.sync");

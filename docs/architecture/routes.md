@@ -58,7 +58,7 @@ Mutating routes check `Origin` (`checkOrigin`); the access column is what the se
 
 | Route | Methods | Access | Demo vs live |
 |---|---|---|---|
-| `/api/health` | GET | public | `mode` is `demo` or `live`; no secrets, uncached |
+| `/api/health` | GET | public | `mode` is `demo` or `live`; `storage` is `ok` or `unavailable`; `persistence` is `configured` or `default-path`; no secrets, uncached |
 | `/api/context` | GET | public (answers for the caller) | the caller's own context plus a signed 5-minute token; `?project=` is a question, not an input |
 | `/api/context/verify` | POST | server consumers | token verification for downstream consumers |
 | `/api/auth/link` | POST | public, rate limited | sandbox mail returns `devLink` |

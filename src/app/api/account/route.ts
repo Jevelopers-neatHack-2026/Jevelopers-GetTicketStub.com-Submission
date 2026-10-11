@@ -3,10 +3,11 @@ import { accountOf, getRequestContext, requireCapability } from "@/server/contex
 import { safeEqual } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
 import { removeStoredFiles } from "@/server/files";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 
 // Deleting is permanent, so the caller must type the account's own email back.
 export const DELETE = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "account.delete");

@@ -1,13 +1,14 @@
 import { getRequestContext, ensureDevice, requireCapability } from "@/server/context";
 import { hashToken, newToken } from "@/server/crypto";
 import { HttpError, checkOrigin, clientIp, isObject, json, limit, notFound, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { cleanGiftText, GIFT_MESSAGE_MAX, GIFT_TO_MAX } from "@/server/validate";
 
 // A gift is a message that travels with its own link. The sender must own the stub (a stub on their
 // account's wall, or one their account or guest device shared); the stub id in the body only names it.
 // The message is stored here, hashed-token keyed, and never joins a share snapshot.
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   limit(`gift:ip:${clientIp(req)}`, 60, 15 * 60_000);
   const body = await readJson(req, 4096);

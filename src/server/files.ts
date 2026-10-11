@@ -14,7 +14,7 @@ export const CONTENT_TYPE: Record<string, string> = { png: "image/png", jpg: "im
 
 const DATA_URL = /^data:image\/(png|jpe?g|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 
-const dir = () => resolve(/*turbopackIgnore: true*/ process.env.TICKETSTUB_FILES ?? "./data/files");
+export const filesDir = () => resolve(/*turbopackIgnore: true*/ process.env.TICKETSTUB_FILES?.trim() || "./data/files");
 
 /** What the bytes really are, by magic number. The declared type is never trusted. */
 function sniff(b: Buffer): "png" | "jpg" | "webp" | null {
@@ -38,9 +38,9 @@ export function storeDataUrl(dataUrl: string): string {
   const declared = m[1] === "jpeg" ? "jpg" : m[1];
   if (!kind || kind !== declared) throw refuse("An image isn't a PNG, JPEG or WebP.");
   const name = `${createHash("sha256").update(bytes).digest("hex")}.${kind}`;
-  const target = join(dir(), name);
+  const target = join(filesDir(), name);
   if (!existsSync(target)) {
-    mkdirSync(dir(), { recursive: true });
+    mkdirSync(filesDir(), { recursive: true });
     const tmp = `${target}.${process.pid}.tmp`;
     writeFileSync(tmp, bytes);
     renameSync(tmp, target); // atomic, so a reader never sees half a file
@@ -72,12 +72,12 @@ export function readStoredFile(name: string): { bytes: Buffer; type: string } | 
   const m = FILE_NAME.exec(name);
   if (!m) return null;
   try {
-    return { bytes: readFileSync(/*turbopackIgnore: true*/ join(dir(), name)), type: CONTENT_TYPE[m[1]] };
+    return { bytes: readFileSync(/*turbopackIgnore: true*/ join(filesDir(), name)), type: CONTENT_TYPE[m[1]] };
   } catch {
     return null;
   }
 }
 
 export function removeStoredFiles(names: string[]): void {
-  for (const n of names) if (FILE_NAME.test(n)) rmSync(/*turbopackIgnore: true*/ join(dir(), n), { force: true });
+  for (const n of names) if (FILE_NAME.test(n)) rmSync(/*turbopackIgnore: true*/ join(filesDir(), n), { force: true });
 }

@@ -1,7 +1,7 @@
 import { getRequestContext, requireCapability } from "@/server/context";
 import { hashToken } from "@/server/crypto";
 import { checkOrigin, clientIp, json, limit, notFound, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { publicStub } from "@/server/project";
 import { parseToken } from "@/server/validate";
 
@@ -9,6 +9,7 @@ type Ctx = { params: Promise<{ token: string }> };
 
 // The gift token is the claim link: whoever holds it reads the message. Nothing else does.
 export const GET = route(async (req: Request, ctx: Ctx) => {
+  requireStorage();
   limit(`gift:read:${clientIp(req)}`, 120, 15 * 60_000);
   const rc = await getRequestContext(req);
   const tokenHash = hashToken(parseToken((await ctx.params).token));
@@ -25,6 +26,7 @@ export const GET = route(async (req: Request, ctx: Ctx) => {
 
 // The sender takes the gift back: the row and its message are deleted, and the link answers 404.
 export const DELETE = route(async (req: Request, ctx: Ctx) => {
+  requireStorage();
   checkOrigin(req);
   limit(`gift:revoke:${clientIp(req)}`, 60, 15 * 60_000);
   const tokenHash = hashToken(parseToken((await ctx.params).token));

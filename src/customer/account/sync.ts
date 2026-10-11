@@ -5,6 +5,7 @@
 import { WALL_CHANGED, loadDeleted, loadWall, saveDeleted, writeWall } from "@/customer/studio/store";
 import type { Stub } from "@/customer/studio/types";
 import { api } from "./api";
+import { isSavingOff } from "./saving";
 
 export const WALL_SYNCED = "ticketstub:wall-synced";
 const DEBOUNCE_MS = 1500;
@@ -46,6 +47,7 @@ let again = false;
 
 /** One merge round trip. Calls overlapping a running one are folded into a single follow-up. */
 export function syncNow(): Promise<SyncResult> {
+  if (isSavingOff()) return Promise.resolve({ ok: true, count: loadWall().length }); // nothing to sync to
   if (running) {
     again = true;
     return running;

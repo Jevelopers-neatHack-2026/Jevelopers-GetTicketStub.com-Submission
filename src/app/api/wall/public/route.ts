@@ -1,11 +1,12 @@
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { newToken } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 
 // { isPublic } switches the public wall on or off and keeps its token. { rotate: true } issues a new token so the
 // old link dies; with { isPublic: false } as well it is "Stop sharing" (private, and a re-share gets a new link).
 export const PUT = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "wall.publish");
@@ -23,6 +24,7 @@ export const PUT = route(async (req: Request) => {
 });
 
 export const GET = route(async (req: Request) => {
+  requireStorage();
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "wall.publish");
   return json(await getStorage().getWallPublic((await accountOf(ctx)).id));

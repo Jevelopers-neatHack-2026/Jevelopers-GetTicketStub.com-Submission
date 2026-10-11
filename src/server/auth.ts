@@ -1,7 +1,7 @@
 import "server-only";
 import { HttpError } from "./http";
 import { hashToken, newToken } from "./crypto";
-import { getStorage } from "./index";
+import { getStorage, storageAvailable } from "./index";
 import type { Account } from "./storage";
 
 export const COOKIE = "ts_session";
@@ -30,7 +30,7 @@ export async function startSession(accountId: string): Promise<string> {
 
 export async function getSession(req: Request): Promise<Account | null> {
   const token = readCookie(req, COOKIE);
-  if (!token || token.length > 200) return null;
+  if (!token || token.length > 200 || !storageAvailable()) return null;
   return getStorage().getSessionAccount(hashToken(token), Date.now());
 }
 
@@ -42,7 +42,7 @@ export async function requireSession(req: Request): Promise<Account> {
 
 export async function endSession(req: Request): Promise<void> {
   const token = readCookie(req, COOKIE);
-  if (token && token.length <= 200) await getStorage().deleteSession(hashToken(token));
+  if (token && token.length <= 200 && storageAvailable()) await getStorage().deleteSession(hashToken(token));
 }
 
 /** devLink goes back to the UI only outside production, or when the sandbox flag is on. */

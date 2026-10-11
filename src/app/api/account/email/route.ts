@@ -2,7 +2,7 @@ import { LINK_TTL_MS, sandboxMail } from "@/server/auth";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken, newToken } from "@/server/crypto";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
 import { emailChangeMail, stubImageUrl } from "@/server/templates";
 import { parseAccountEmail } from "@/server/validate";
@@ -11,6 +11,7 @@ const WINDOW = 15 * 60_000;
 
 // Sends a confirm link to the NEW address. Nothing changes until it is opened.
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "account.email.change");

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken, newToken } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import type { NewClaim } from "@/server/storage";
 import { MAX_STUB_BODY, readStub, parseText } from "@/server/validate";
 
@@ -10,6 +10,7 @@ const MAX_GUESTS = 500;
 const bad = (m: string) => new HttpError(400, "bad_request", m);
 
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "event.create");

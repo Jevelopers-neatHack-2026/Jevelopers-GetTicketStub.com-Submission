@@ -1,7 +1,7 @@
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken } from "@/server/crypto";
 import { HttpError, checkOrigin, json, notFound, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { publicStub } from "@/server/project";
 import type { ClaimView } from "@/server/storage";
 import { parseToken } from "@/server/validate";
@@ -16,6 +16,7 @@ function guestStub(view: ClaimView): Stub {
 }
 
 export const GET = route(async (req: Request, ctx: Ctx) => {
+  requireStorage();
   requireCapability(await getRequestContext(req), "claim.view");
   const view = await getStorage().getClaim(hashToken(parseToken((await ctx.params).token)));
   if (!view) throw notFound();
@@ -29,6 +30,7 @@ export const GET = route(async (req: Request, ctx: Ctx) => {
 });
 
 export const POST = route(async (req: Request, ctx: Ctx) => {
+  requireStorage();
   checkOrigin(req);
   const rc = await getRequestContext(req);
   requireCapability(rc, "claim.redeem");

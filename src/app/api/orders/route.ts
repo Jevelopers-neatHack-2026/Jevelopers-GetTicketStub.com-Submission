@@ -3,7 +3,7 @@ import type { Order } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
 import { newToken } from "@/server/crypto";
 import { receiptMail, stubImageUrl } from "@/server/templates";
@@ -58,6 +58,7 @@ function parseOrder(v: unknown): Omit<Order, "id" | "mode" | "createdAt"> {
 }
 
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   limit(`orders:ip:${clientIp(req)}`, 30, 15 * 60_000);
   const body = await readJson(req, 64 * 1024);
@@ -91,6 +92,7 @@ export const POST = route(async (req: Request) => {
 });
 
 export const GET = route(async (req: Request) => {
+  requireStorage();
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "order.read");
   const account = await accountOf(ctx);

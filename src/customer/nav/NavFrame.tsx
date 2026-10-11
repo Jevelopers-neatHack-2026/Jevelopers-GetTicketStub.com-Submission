@@ -104,8 +104,8 @@ export function NavFrame({ children, notice }: { children: ReactNode; notice?: R
     document.documentElement.style.setProperty("--corner-reserve", show ? "calc(72px + 12px + 12px + env(safe-area-inset-right, 0px))" : "0px");
   }, [show]);
 
-  const { status: accountStatus } = useAccount();
-  const unsaved = accountStatus === "out" && stubs.length > 0;
+  const { status: accountStatus, savingOff } = useAccount();
+  const unsaved = accountStatus === "out" && !savingOff && stubs.length > 0;
   const staff = useStaff();
   const tree = useMemo(() => buildTree({ keys, stubs, cartCount: 0, path, unsaved, staff }), [keys, stubs, path, unsaved, staff]);
   const chain = useMemo(() => chainOf(tree, keys), [tree, keys]);

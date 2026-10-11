@@ -21,7 +21,7 @@ const materialLabel = (id: string) => MATERIALS.find((m) => m.id === id)?.label 
 export default function AccountClient() {
   const router = useRouter();
   const mounted = useMounted();
-  const { status, account, signOut } = useAccount();
+  const { status, account, signOut, savingOff } = useAccount();
   const [orders, setOrders] = useState<Order[] | null | "error">(null);
   const [sheet, setSheet] = useState<"email" | "delete" | null>(null);
   // /account?email=changed|taken is where the emailed confirmation link lands
@@ -44,6 +44,17 @@ export default function AccountClient() {
   }, [note]);
 
   if (!mounted || status === "loading") return <PageShell title="Your account">{null}</PageShell>;
+
+  if (!account && savingOff) {
+    return (
+      <PageShell title="Your account">
+        <div className={s.wrap}>
+          <h1 className={s.title}>Saving is off.</h1>
+          <p className={s.lede}>Saving is off on this preview. Your stubs stay on this device.</p>
+        </div>
+      </PageShell>
+    );
+  }
 
   if (!account) {
     return (

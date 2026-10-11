@@ -1,7 +1,7 @@
 import { getRequestContext, ensureDevice, guestTenant, requireCapability } from "@/server/context";
 import { newToken } from "@/server/crypto";
 import { HttpError, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { publicStub } from "@/server/project";
 import { MAX_STUB_BODY, readStub } from "@/server/validate";
 
@@ -9,6 +9,7 @@ import { MAX_STUB_BODY, readStub } from "@/server/validate";
 // (a server-issued cookie), never anything in the body. The token is the same each time until it is
 // revoked. The stored snapshot is the public projection: no friends, note or photos.
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   limit(`share:ip:${clientIp(req)}`, 60, 15 * 60_000);
   const body = await readJson(req, MAX_STUB_BODY + 1024);

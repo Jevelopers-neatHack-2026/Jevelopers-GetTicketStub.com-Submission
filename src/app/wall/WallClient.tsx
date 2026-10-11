@@ -492,7 +492,7 @@ function PublicLink({ path, capped, onStop }: { path: string; capped: boolean; o
 function NextSteps({ stub }: { stub: Stub }) {
   const router = useRouter();
   const [status, setStatus] = useState("");
-  const { status: acct } = useAccount();
+  const { status: acct, savingOff } = useAccount();
   const [notNow, setNotNow] = useState(savePromptDismissed);
   const digital = stub.material === "digital";
   const price = formatMoney(printPrice(stub));
@@ -505,7 +505,7 @@ function NextSteps({ stub }: { stub: Stub }) {
         It&apos;s on your wall.
       </h2>
       <p className={s.noteBody}>Send it to a friend, print it, or keep it on your phone.</p>
-      {acct === "out" && !notNow ? (
+      {acct === "out" && !savingOff && !notNow ? (
         <div className={s.save}>
           <p className={s.saveText}>Save to your wall. We&apos;ll email you a link, so your stubs follow you to any phone or laptop.</p>
           <div className={s.saveRow}>

@@ -153,7 +153,7 @@ export default function OrganizerClient() {
   const [material, setMaterial] = useState<Material>("print");
   const [finish, setFinish] = useState<Finish>("foil");
   const [sizePick, setSizePick] = useState<PrintSize | null>(null);
-  const { status: acct, account } = useAccount();
+  const { status: acct, account, savingOff } = useAccount();
   const [events, setEvents] = useState<OrganizerEventReply | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState("");
@@ -631,8 +631,8 @@ export default function OrganizerClient() {
                     </div>
                   ) : (
                     <>
-                      <Stamp block disabled={publishing || n === 0} onClick={() => void publishClaims()}>
-                        {publishing ? "Publishing" : acct === "in" ? `Publish ${n} guest ${n === 1 ? "link" : "links"}` : "Sign in to publish"}
+                      <Stamp block disabled={publishing || n === 0 || savingOff} onClick={() => void publishClaims()}>
+                        {publishing ? "Publishing" : savingOff ? "Saving is off on this preview" : acct === "in" ? `Publish ${n} guest ${n === 1 ? "link" : "links"}` : "Sign in to publish"}
                       </Stamp>
                       {publishError ? (
                         <p className={ui.err} role="alert">

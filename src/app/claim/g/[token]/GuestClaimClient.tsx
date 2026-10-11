@@ -20,7 +20,7 @@ type Load = { state: "loading" } | { state: "ready"; info: ClaimInfo } | { state
 export default function GuestClaimClient({ token }: { token: string }) {
   const router = useRouter();
   const mounted = useMounted();
-  const { status, account } = useAccount();
+  const { status, account, savingOff } = useAccount();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -113,7 +113,9 @@ export default function GuestClaimClient({ token }: { token: string }) {
               <Stamped>Claimed</Stamped>
               <span>It&apos;s on your wall.</span>
             </div>
-          ) : status === "loading" ? null : account ? (
+          ) : status === "loading" ? null : savingOff ? (
+            <p className={ui.muted}>Saving is off on this preview. Your stubs stay on this device.</p>
+          ) : account ? (
             <div className={s.form}>
               <p className={ui.muted}>
                 Signed in as <strong>{account.email}</strong>. Claiming puts this stub on your wall, on every device you sign in on.

@@ -3,7 +3,7 @@ import { guestTenant, readDevice } from "@/server/context";
 import { lookupLink } from "@/server/confirm";
 import { hashToken } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, requireStorage } from "@/server/index";
 import { withSignedIn } from "@/server/validate";
 
 // The two halves of a confirm page. GET looks the link up and never consumes it. POST is the tap that does:
@@ -12,6 +12,7 @@ const redirect = (to: string, cookie?: string) =>
   new Response(null, { status: 303, headers: { location: to, "cache-control": "no-store", ...(cookie ? { "set-cookie": cookie } : {}) } });
 
 export const GET = route(async (req: Request) => {
+  requireStorage();
   const found = await lookupLink(new URL(req.url).searchParams.get("token") ?? "");
   if (!found.valid) return json({ valid: false });
   return json({ valid: true, kind: found.kind, reason: found.reason, maskedEmail: found.maskedEmail, shareToken: found.shareToken });
@@ -30,6 +31,7 @@ async function readToken(req: Request): Promise<string> {
 }
 
 export const POST = route(async (req: Request) => {
+  requireStorage();
   checkOrigin(req);
   const token = await readToken(req);
   const found = await lookupLink(token);

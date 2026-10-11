@@ -12,15 +12,16 @@ import s from "./account.module.css";
 
 /** The address the receipt goes to: the account's when signed in, else what was typed (may be empty). */
 export function useReceiptEmail() {
-  const { status, account } = useAccount();
+  const { status, account, savingOff } = useAccount();
   const [typed, setTyped] = useState("");
   const email = account ? account.email : typed.trim();
   const problem = !account && email !== "" && !EMAIL_RE.test(email) ? "That email doesn't look right. Check it, or leave it empty." : "";
-  return { status, signedIn: !!account, email, typed, setTyped, problem };
+  return { status, savingOff, signedIn: !!account, email, typed, setTyped, problem };
 }
 
 export function ReceiptField({ id, r, onChange }: { id: string; r: ReturnType<typeof useReceiptEmail>; onChange?: () => void }) {
   if (r.status === "loading") return null;
+  if (r.savingOff) return null; // no receipt email on a preview that saves nothing
   if (r.signedIn) {
     return (
       <p className={s.lede}>

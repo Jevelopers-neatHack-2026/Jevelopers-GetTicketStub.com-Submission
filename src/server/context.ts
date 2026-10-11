@@ -15,7 +15,7 @@ import {
 } from "./context-token";
 import { hashToken, newToken } from "./crypto";
 import { HttpError } from "./http";
-import { getStorage } from "./index";
+import { getStorage, storageAvailable } from "./index";
 
 // Who is asking, and what they may do. The context is derived here, on the server, from the session
 // cookie (or the guest device cookie) and the storage records. A body field, a query string, a URL token
@@ -76,9 +76,10 @@ const sessionRefs = new WeakMap<RequestContext, string>();
 
 async function derive(cookieHeader: string | null, project?: Project): Promise<RequestContext> {
   const now = Date.now();
-  const storage = getStorage();
-  const sessionCookie = readCookie(cookieHeader, COOKIE);
-  const sess = sessionCookie && sessionCookie.length <= 200 ? await storage.getSessionState(hashToken(sessionCookie), now) : null;
+  // With storage off there are no sessions to look up: every caller is a guest or anonymous, and no project is theirs.
+  const storage = storageAvailable() ? getStorage() : null;
+  const sessionCookie = storage ? readCookie(cookieHeader, COOKIE) : null;
+  const sess = storage && sessionCookie && sessionCookie.length <= 200 ? await storage.getSessionState(hashToken(sessionCookie), now) : null;
   const device = readCookie(cookieHeader, DEVICE_COOKIE);
   const validProject = project && PROJECT_ID.test(project.id) && (project.kind === "stub" || project.kind === "event") ? project : undefined;
 
@@ -91,21 +92,21 @@ async function derive(cookieHeader: string | null, project?: Project): Promise<R
     tenant = sess.account.id;
     staff = isStaffEmail(sess.account.email);
     // Gaining or losing the staff list is a membership change: tokens issued before it go stale.
-    revision = staff === sess.account.isStaff ? sess.account.membershipRevision : await storage.syncStaff(sess.account.id, staff);
+    revision = staff === sess.account.isStaff ? sess.account.membershipRevision : await storage!.syncStaff(sess.account.id, staff);
   } else if (device && DEVICE_RE.test(device)) {
     tenant = guestTenant(device);
     actor = { kind: "guest", id: tenant.slice("guest:".length) };
   }
 
   let role: Role = "none";
-  if (validProject) {
+  if (validProject && storage) {
     // A project the caller can't prove is theirs is role "none", exactly as if it did not exist.
     const found =
       validProject.kind === "stub"
         ? actor.kind !== "anonymous" && (await storage.ownsStub(tenant, validProject.id))
         : actor.kind === "account" && (await storage.getEventCaptain(validProject.id)) === tenant;
     if (found) role = validProject.kind === "stub" ? "owner" : "captain";
-  } else if (actor.kind === "account") {
+  } else if (!validProject && actor.kind === "account") {
     role = staff ? "staff" : "owner"; // owner of their own tenant
   }
 
@@ -209,6 +210,7 @@ export function verifyContextToken(token: string, now = Date.now(), state?: Toke
 export async function verifyContextTokenLive(token: string, now = Date.now()): Promise<VerifyResult> {
   const first = verifyContextToken(token, now);
   if (!first.ok || first.ctx.actor.kind !== "account") return first;
+  if (!storageAvailable()) return { ok: false, reason: "revoked" }; // no records to check against, so nothing account-bound can be honoured
   const storage = getStorage();
   const sid = tokenSessionRef(token);
   const acct = await storage.getAccountState(first.ctx.actor.id);

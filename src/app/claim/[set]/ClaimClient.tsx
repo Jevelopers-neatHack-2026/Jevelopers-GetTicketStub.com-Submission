@@ -24,7 +24,7 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
   }, [mounted, from]);
   const event = set === "neathack" ? NEATHACK : source?.event;
 
-  const { status: acct, account } = useAccount();
+  const { status: acct, account, savingOff } = useAccount();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [claiming, setClaiming] = useState(false);
@@ -126,7 +126,7 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
             />
 
             <div className={s.signIn}>
-              {acct === "loading" ? null : account ? (
+              {acct === "loading" || savingOff ? null : account ? (
                 <>
                   <p className="desk-label">Your wall</p>
                   <p className={s.signed} role="status">

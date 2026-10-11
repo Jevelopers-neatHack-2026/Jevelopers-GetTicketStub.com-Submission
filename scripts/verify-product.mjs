@@ -1,5 +1,5 @@
 // One entry point for the product checks, with evidence.
-//   npm run verify:product -- --suite <foundation|access|research|creative|production> --mode fixture --evidence-dir <dir>
+//   npm run verify:product -- --suite <foundation|access|research|creative|production|degraded> --mode fixture --evidence-dir <dir>
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
 // any skipped check exit nonzero. Each run writes <evidence-dir>/<suite>-<timestamp>.json.
@@ -26,6 +26,8 @@ const SUITES = {
   creative: { server: false, needs: ["scripts/check-creative-adapter.mjs", "src/customer/studio/creative/fixtures"], run: () => script("scripts/check-creative-adapter.mjs") },
   capabilities: { server: false, needs: ["scripts/check-capabilities.mjs", "src/customer/pages/capabilities.ts"], run: () => script("scripts/check-capabilities.mjs") },
   production: { server: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: (ctx) => script("scripts/smoke-production.mjs", [], { SMOKE_BASE_URL: ctx.base }) },
+  // Storage that cannot be written: the server starts with TICKETSTUB_DB under a file, so every OS refuses it.
+  degraded: { server: true, unwritableStorage: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: degraded },
 };
 
 function parseArgs(argv) {
@@ -132,9 +134,9 @@ function freePort() {
   });
 }
 
-async function startServer() {
+async function startServer(extraEnv = {}) {
   const port = await freePort();
-  const env = childEnv({ PORT: String(port), NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1" });
+  const env = childEnv({ PORT: String(port), NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", ...extraEnv });
   const next = join(root, "node_modules/next/dist/bin/next");
   const child = spawn(process.execPath, [next, "start", "--hostname", "127.0.0.1", "--port", String(port)], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
@@ -144,7 +146,7 @@ async function startServer() {
   for (let i = 0; i < 60; i++) {
     if (child.exitCode !== null) throw new Error(`server exited early:\n${log}`);
     try {
-      if ((await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2000) })).ok) return { base, child };
+      if ((await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2000) })).ok) return { base, child, log: () => log };
     } catch {
       /* not up yet */
     }
@@ -227,7 +229,7 @@ async function foundation({ base }) {
     /* asserted below */
   }
   record("health is 200 with ok, version, mode and time", health.status === 200 && body.ok === true && typeof body.version === "string" && body.mode === "demo" && !Number.isNaN(Date.parse(body.time)), health.text.slice(0, 120));
-  record("health is uncached and carries nothing else", health.headers.get("cache-control") === "no-store" && Object.keys(body).sort().join() === "mode,ok,time,version", Object.keys(body).join());
+  record("health is uncached and carries nothing else", health.headers.get("cache-control") === "no-store" && Object.keys(body).sort().join() === "mode,ok,persistence,storage,time,version" && body.storage === "ok" && body.persistence === "configured", Object.keys(body).join());
 
   // admin: anonymous and non-staff never learn it exists; staff get reload and deep links
   const member = client(base);
@@ -262,6 +264,91 @@ async function foundation({ base }) {
   record("the error boundary (desk copy) ships in the chunks that page loads", wired, `${chunks.length} chunk(s) checked`);
 }
 
+// ---- degraded ----
+const UNAVAILABLE = { error: { code: "storage_unavailable", message: "Saving is off on this preview." } };
+
+async function degraded(ctx) {
+  const { base } = ctx;
+  const anon = client(base);
+  const json = (r) => {
+    try {
+      return JSON.parse(r.text);
+    } catch {
+      return null;
+    }
+  };
+
+  // health says so, and says where the paths came from
+  const health = await anon.get("/api/health");
+  const h = json(health) ?? {};
+  record("health is 200 and reports storage unavailable", health.status === 200 && h.ok === true && h.storage === "unavailable", health.text.slice(0, 160));
+  record("health reports persistence configured (both paths set)", h.persistence === "configured", String(h.persistence));
+
+  // every storage route answers the same calm 503
+  const calls = [
+    ["POST", "/api/auth/link", { email: "someone@example.com", reason: "save" }],
+    ["POST", "/api/auth/confirm", { token: "x" }],
+    ["GET", "/api/auth/confirm?token=x"],
+    ["POST", "/api/wall/sync", { stubs: [], deleted: [] }],
+    ["GET", "/api/wall/public"],
+    ["PUT", "/api/wall/public", { isPublic: true }],
+    ["GET", "/api/u/abcdefghijkl"],
+    ["POST", "/api/share", { stub: {} }],
+    ["GET", "/api/share/abcdefghijkl"],
+    ["POST", "/api/share/revoke", { stubId: "s1" }],
+    ["POST", "/api/orders", { order: {} }],
+    ["GET", "/api/orders"],
+    ["POST", "/api/organizer/events", { title: "x" }],
+    ["GET", "/api/claim/abcdefghijkl"],
+    ["POST", "/api/claim/abcdefghijkl", {}],
+    ["POST", "/api/gift", { stub: "s1", to: "A", message: "hi" }],
+    ["GET", "/api/gift/abcdefghijkl"],
+    ["DELETE", "/api/gift/abcdefghijkl", {}],
+    ["POST", "/api/account/email", { email: "someone@example.com" }],
+    ["DELETE", "/api/account", { confirm: "x" }],
+  ];
+  for (const [method, path, body] of calls) {
+    const r = await anon.send(method, path, body);
+    const j = json(r);
+    record(`${method} ${path} -> 503 storage_unavailable`, r.status === 503 && j?.error?.code === UNAVAILABLE.error.code && j.error.message === UNAVAILABLE.error.message && r.headers.get("cache-control") === "no-store", `got ${r.status} ${r.text.slice(0, 120)}`);
+  }
+
+  // the things that must keep working
+  const context = await anon.get("/api/context");
+  const c = json(context);
+  record("/api/context still answers an anonymous caller", context.status === 200 && c?.context?.actor?.kind === "anonymous" && c.context.revoked === false && typeof c.token === "string", `got ${context.status}`);
+  const me = await anon.get("/api/auth/me");
+  record("/api/auth/me answers 200, signed out, storage unavailable", me.status === 200 && json(me)?.account === null && json(me)?.storage === "unavailable", `got ${me.status}`);
+  const stale = await anon.send("GET", "/api/context", undefined);
+  record("a stale session cookie changes nothing", stale.status === 200);
+  const art = await anon.send("POST", "/api/art", { event: { title: "Probe" }, vibe: "calm" });
+  const a = json(art);
+  record("/api/art fails open to procedural art with no quota", art.status === 200 && a?.kind === "procedural" && a.provenance === "simulated", `got ${art.status} ${art.text.slice(0, 100)}`);
+  const stubImage = await anon.get("/api/stub-image/brand");
+  record("/api/stub-image/brand needs no storage", stubImage.status === 200, `got ${stubImage.status}`);
+
+  // pages render, never 500
+  for (const url of ["/", "/make", "/wall", "/studio/x", "/checkout/x", "/account"]) {
+    const r = await anon.get(url);
+    record(`page ${url} -> 200`, r.status === 200, `got ${r.status}`);
+  }
+  for (const url of declaredPages()) {
+    const want = url.startsWith("/admin") ? 404 : url === "/map" ? 308 : 200;
+    const r = await anon.get(url);
+    record(`declared page ${url} -> ${want}`, r.status === want, `got ${r.status}`);
+  }
+  const confirmPage = await anon.get("/signin/confirm?token=x");
+  record("/signin/confirm renders the expired-link page", confirmPage.status === 200 && /expired/i.test(confirmPage.text), `got ${confirmPage.status}`);
+
+  // the log: one storage line, no path
+  const lines = server.log().split(/\r?\n/).filter((l) => l.includes("[storage]"));
+  record("the server logged exactly one storage line, saying unavailable", lines.length === 1 && /unavailable/.test(lines[0]), lines.join(" | "));
+  record("the log line leaks no path", lines.every((l) => !l.includes(tmp) && !/[\\/]/.test(l)), lines.join(" | "));
+
+  // the production smoke still passes in this state
+  await script("scripts/smoke-production.mjs", [], { SMOKE_BASE_URL: base });
+}
+
 // ---- run ----
 let exit = 1;
 let server = null;
@@ -276,7 +363,14 @@ try {
     record("fixture mode refuses outbound network", probe.out.trim() === "ETICKETSTUB_FIXTURE_NETWORK", probe.out.trim());
     const ctx = {};
     if (suite.server) {
-      server = await startServer();
+      let extra = {};
+      if (suite.unwritableStorage) {
+        // A path under a file is not creatable on any OS, whoever runs it.
+        const blocker = join(tmp, "not-a-directory");
+        writeFileSync(blocker, "x");
+        extra = { TICKETSTUB_DB: join(blocker, "ticketstub.sqlite"), TICKETSTUB_FILES: join(blocker, "files") };
+      }
+      server = await startServer(extra);
       ctx.base = server.base;
     }
     await suite.run(ctx);

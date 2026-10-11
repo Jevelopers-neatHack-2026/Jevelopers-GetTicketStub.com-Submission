@@ -3,6 +3,7 @@
 // becomes an ApiError the caller can ignore, so the signed-out, local-only app keeps working.
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
+import { SAVING_OFF_CODE, markSavingOff } from "./saving";
 
 export interface Account {
   id: string;
@@ -40,6 +41,7 @@ async function call<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, 
   }
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string } } | null)?.error;
+    if (err?.code === SAVING_OFF_CODE) markSavingOff();
     throw new ApiError(err?.code ?? "unavailable", err?.message ?? "Something went wrong.", res.status);
   }
   if (data === null || typeof data !== "object") throw new ApiError("unavailable", "The server sent something we didn't expect.", res.status);
@@ -70,7 +72,11 @@ export interface OrganizerEventReply {
 }
 
 export const api = {
-  me: async () => (await call<{ account: Account | null }>("GET", "/api/auth/me")).account,
+  me: async () => {
+    const res = await call<{ account: Account | null; storage?: "ok" | "unavailable" }>("GET", "/api/auth/me");
+    if (res.storage === "unavailable") markSavingOff();
+    return res.account;
+  },
   link: (email: string, reason: LinkReason, returnTo?: string) => call<{ ok: true; sandbox?: true; devLink?: string }>("POST", "/api/auth/link", { email, reason, returnTo }),
   signOut: () => call<{ ok: true }>("POST", "/api/auth/signout", {}),
   sync: (stubs: Stub[], deleted: string[]) => call<SyncReply>("POST", "/api/wall/sync", { stubs, deleted }),

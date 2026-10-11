@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { loadWall } from "@/customer/studio/store";
+import { useSavingOff } from "./saving";
 import { openSignIn } from "./signin";
 import { useAccount } from "./useAccount";
 import s from "./account.module.css";
@@ -15,8 +16,16 @@ function subscribeStorage(cb: () => void) {
 
 export function AccountLine() {
   const { status, account, signOut } = useAccount();
+  const off = useSavingOff();
   const stubCount = useSyncExternalStore(subscribeStorage, () => loadWall().length, () => 0);
-  if (status === "loading") return null;
+  if (status === "loading" && !off) return null;
+  if (off) {
+    return (
+      <div className={s.nav}>
+        <p className="desk-label">Saving off · this device only</p>
+      </div>
+    );
+  }
 
   if (account) {
     return (

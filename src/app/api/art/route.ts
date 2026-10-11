@@ -4,7 +4,7 @@ import type { ArtLayer, Edition, EventData } from "@/customer/studio/types";
 import { ensureDevice, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken } from "@/server/crypto";
 import { HttpError, clientIp, errorResponse, foreignOrigin } from "@/server/http";
-import { getStorage } from "@/server/index";
+import { getStorage, storageAvailable } from "@/server/index";
 import type { ArtQuota } from "@/server/storage";
 
 // Daily caps on OpenAI art: per account, per device (an httpOnly cookie) and per IP as a backstop.
@@ -82,7 +82,9 @@ export async function POST(req: Request) {
     { key: `ip:${hashToken(clientIp(req))}`, max: PER_IP },
     ...(rc.actor.kind === "account" ? [{ key: `acc:${rc.actor.id}`, max: PER_ACCOUNT }] : []),
   ];
-  const quota = await getStorage().useArtQuota(quotas, Date.now(), process.env.TICKETSTUB_RUNTIME_MODE === "live" && !!process.env.OPENAI_API_KEY);
+  // Storage off: no counters to spend, so fail open to procedural art and never call OpenAI.
+  const saving = storageAvailable();
+  const quota = saving ? await getStorage().useArtQuota(quotas, Date.now(), process.env.TICKETSTUB_RUNTIME_MODE === "live" && !!process.env.OPENAI_API_KEY) : { ok: true as const };
   if (!quota.ok) {
     // Over the cap: say so, and hand back procedural art so the caller never has to show a broken stub.
     const art: ArtLayer = { kind: "procedural", seed, vibe, provenance: "simulated" };
@@ -92,7 +94,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const src = await openAiImage(buildArtPrompt(body.event, vibe));
+  const src = saving ? await openAiImage(buildArtPrompt(body.event, vibe)) : undefined;
   if (src) {
     const art: ArtLayer = { kind: "image", src, seed, vibe, provenance: "live" };
     return reply(art);
