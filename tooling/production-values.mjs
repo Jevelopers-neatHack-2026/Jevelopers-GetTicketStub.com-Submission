@@ -162,6 +162,10 @@ export function checkComposition(input, context) {
   if (!parsed.ok) return parsed;
   try { canonicalJson({ policies: context.expected_policy_refs, fonts: context.expected_font_refs, runtime: context.expected_runtime_ref }); }
   catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  if (context.expected_references !== undefined) {
+    try { canonicalJson(context.expected_references); }
+    catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  }
   if (context.expected_policy_refs === null || typeof context.expected_policy_refs !== 'object' || Array.isArray(context.expected_policy_refs) ||
       Object.keys(input.policy_refs).some(key => !(key === 'repair' && context.expected_policy_refs[key] === null) && !validateProductionReference(context.expected_policy_refs[key]).ok) ||
       !Array.isArray(context.expected_font_refs) || context.expected_font_refs.some(ref => !validateProductionReference(ref).ok) ||

@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.9.4 (unreleased development candidate)
+
+The independent review of d129ea0 verified the purpose/preview safety repairs and found residual SC-CHK-018 clock coercion and SC-CHK-021 noncanonical reference/binding expectations. Eligibility validates strict UtcTime before Date.parse, after composition checks to retain facts-error precedence. Composition canonical-checks supplied reference expectations before equality; generic approval canonical-checks the expected binding before schema/comparison so standalone, host and eligibility callers return typed context failures. Missing/foreign lookup behavior and generic approval purposes remain supported. The unsupported preview bridge and all external acceptance gates remain unchanged.
+
 ## 0.9.3 (unreleased development candidate)
 
 The independent whole-PR review of d0b9bad reproduced SC-CHK-018 malformed outer eligibility contexts, SC-CHK-019 non-production approval purposes, and SC-CHK-020 preview descriptor substitutions. Eligibility and standalone preflight validate required supplied context before dereference/comparison, and production eligibility requires production intended use. Preview purpose/kind/ID/revision/hash contradictions reject. Matching Preview/1 and ArtifactFile/2 IDs and bytes cannot establish an unreviewed cross-version registry relationship: current v2 eligibility returns LEGACY_UNREPRESENTABLE until the owners supply a reviewed binding or directly compatible approval protocol. This intentionally changes the formerly eligible synthetic legacy control; its original input and expectation are retained in historical evidence, and composition/preflight/integrity remain separately supported. No approval, registry mapping or accepted integration is invented. Fresh review and external Finance/owner/consumer decisions remain required.

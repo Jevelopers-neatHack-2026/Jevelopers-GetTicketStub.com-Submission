@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { checkProductionBundleEligibility, checkComposition, productionBundleContentHash, productionContentHash, productionReferences } from '../tooling/production-operations.mjs';
+import { checkProductionBundleEligibility, checkComposition, checkProductionApproval, productionBundleContentHash, productionContentHash, productionReferences } from '../tooling/production-operations.mjs';
 import { commerceContentHash, hashManifest, researchContentHash } from '../generated/index.mjs';
 
 const seed = JSON.parse(await readFile(new URL('../fixtures/ProductionEligibilityCalibration.json', import.meta.url), 'utf8'));
@@ -20,6 +20,27 @@ function resealApproval(input) {
   bundle.bundle_hash = productionBundleContentHash(bundle);
 }
 function eligibility(input) { const { bundle, context } = hydrate(input); return checkProductionBundleEligibility(bundle, context); }
+
+test('SC-CHK-018 refuses a JSON-shaped non-clock before Date.parse', () => {
+  const input = hydrate(seed.valid);
+  input.context.now = { toString: null, valueOf: null };
+  const result = checkProductionBundleEligibility(input.bundle, input.context);
+  assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
+});
+test('SC-CHK-021 refuses cyclic independent reference expectation', () => {
+  const input = hydrate(seed.valid), expected = {};
+  expected.self = expected;
+  const path = productionReferences(input.context.composition).find(([path]) => path.endsWith('template_ref'))[0];
+  input.context.composition_context.expected_references[path] = expected;
+  const result = checkComposition(input.context.composition, input.context.composition_context);
+  assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
+});
+test('SC-CHK-021 refuses hidden approval-binding properties', () => {
+  const input = hydrate(seed.valid);
+  Object.defineProperty(input.context.expected_binding, 'hidden', { value: true });
+  const result = checkProductionApproval(input.context.current_approval, input.context);
+  assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
+});
 
 for (const purpose of ['design_preview', 'asset_display', 'asset_reproduce', 'asset_modify', 'asset_publish']) test('SC-CHK-019 refuses non-production purpose ' + purpose, () => {
   const input = copy(seed.valid);

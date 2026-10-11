@@ -1,4 +1,4 @@
-import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson } from './runtime.mjs';
+import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson, ContractError } from './runtime.mjs';
 import { commerceContentHash } from './commerce-evidence.mjs';
 import { DefinitionApprovalBinding } from '../generated/validators.mjs';
 const records = {
@@ -123,7 +123,10 @@ export function adaptProductionRevision(input) {
 
 /** Supply actual current verifier observations. No cached validity is assumed. */
 export function checkProductionApproval(input, context) {
-  if (!checkProductionAuthority(context, context?.scope).ok || !validatePrimitive('UtcTime', context?.now).ok || !DefinitionApprovalBinding(context?.expected_binding)) return productionIssue('INVALID_TRUST_CONTEXT');
+  if (!checkProductionAuthority(context, context?.scope).ok || !validatePrimitive('UtcTime', context?.now).ok) return productionIssue('INVALID_TRUST_CONTEXT');
+  try { canonicalJson(context.expected_binding); }
+  catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  if (!DefinitionApprovalBinding(context.expected_binding)) return productionIssue('INVALID_TRUST_CONTEXT');
   const receipt = validateContract('ApprovalReceipt', input?.receipt);
   if (!receipt.ok || !validatePrimitive('UtcTime', input?.checked_at).ok) return productionIssue('INVALID_INPUT');
   if (!checkTrustedContext(receipt.value, context.scope).ok) return productionIssue('NOT_FOUND');

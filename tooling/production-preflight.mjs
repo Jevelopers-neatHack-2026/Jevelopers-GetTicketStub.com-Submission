@@ -1,4 +1,4 @@
-import { validateContract, canonicalJson, hashManifest, checkTrustedContext, ContractError } from './runtime.mjs';
+import { validateContract, validatePrimitive, canonicalJson, hashManifest, checkTrustedContext, ContractError } from './runtime.mjs';
 import { productionIssue, productionOk, checkProductionApproval, validateProductionReference } from './production-errors.mjs';
 import { checkComposition, translateProductionGeometry } from './production-values.mjs';
 import { checkProductionBundleV2 } from './production-bundle.mjs';
@@ -37,6 +37,7 @@ export function checkProductionBundleEligibility(bundle, context) {
       bundle.composition_ref.content_hash !== composition.value.content_hash) return productionIssue('HASH_MISMATCH', '/composition_ref');
   if (!same(bundle.facts_ref, composition.value.facts_ref)) return productionIssue('FACTS_UNSUPPORTED', '/facts_ref');
   const facts = context.composition_context.facts?.package;
+  if (!validatePrimitive('UtcTime', context.now).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   if (!facts || facts.readiness !== 'ready' || Date.parse(facts.expires_at) <= Date.parse(context.now)) return productionIssue('FACTS_UNSUPPORTED');
   if (!validateContract('ArtifactRef', context.artifact_ref).ok || !validateContract('FulfillmentCapabilitySnapshot', context.capture).ok ||
       ![context.inspection_policy_ref, context.parser_ref].every(ref => validateProductionReference(ref).ok)) return productionIssue('INVALID_TRUST_CONTEXT');
