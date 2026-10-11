@@ -121,6 +121,241 @@ async function waitForFile(file, timeoutMs = 5_000) {
   throw new Error("child_ready_timeout");
 }
 
+async function exerciseMixedLocationCorrection(rootStatus, level) {
+  const childLocation = level === "shipment" ? "shipment-a" : "item-a";
+  const siblingLocation = level === "shipment" ? "shipment-b" : "item-b";
+  const observation = (sourceObservationId, childState,
+    covered = level === "shipment" ? ["shipment-a", "shipment-b"] : ["item-a", "item-b"]) => {
+    if (level === "shipment") {
+      return statusObservation({
+        sourceObservationId,
+        status: rootStatus,
+        shipments: covered.map((shipmentId) => shipmentFact({
+          shipmentId,
+          status: childState(shipmentId),
+          items: []
+        }))
+      });
+    }
+    const itemState = (itemId) => childState(itemId);
+    return statusObservation({
+      sourceObservationId,
+      status: rootStatus,
+      shipments: [shipmentFact({
+        shipmentId: "shipment-a",
+        status: "fixture.shipped",
+        items: covered.map((itemId) => itemFact({ itemId, status: itemState(itemId) }))
+      })]
+    });
+  };
+  const initial = observation("matrix-initial", () => "fixture.delivered");
+  const contradiction = observation("matrix-contradiction", () => "fixture.cancelled");
+  const partialLookup = observation("matrix-partial-lookup", () => "fixture.cancelled", [childLocation]);
+  const completeLookup = observation("matrix-complete-lookup", () => "fixture.cancelled");
+  const appended = statusObservation({
+    requestId: "request-b",
+    sourceObservationId: "matrix-append",
+    status: "fixture.shipped"
+  });
+
+  await withHarness(async ({ directory, clock, store, lookup, calls }) => {
+    await store.registerPollTarget({ scope: statusScope, providerRequestId: "request-a", policy: statusPollPolicy() });
+    assert.equal((await store.runOneDuePoll()).status, "observed");
+    assert.equal((await store.projection(statusScope, "request-a")).rootState,
+      rootStatus === "fixture.shipped" ? "shipped" : "delivered");
+    assert.equal(await store.requestUnverifiedCallbackHint({
+      scope: statusScope, providerRequestId: "request-a", hintId: `matrix-${rootStatus}-${level}`
+    }), "queued");
+    clock.advance(1_000);
+    assert.equal((await store.runOneDuePoll()).status, "unresolved");
+    const locationKey = (conflict) => conflict.location.level === "shipment"
+      ? `shipment:${conflict.location.shipmentId}`
+      : `${conflict.location.level}:${conflict.location.itemId}`;
+    const conflicts = await store.conflicts(statusScope, "request-a");
+    const locationState = level === "shipment" ? "shipment" : "item";
+    const expectedLocations = level === "shipment"
+      ? [`shipment:${childLocation}`, `shipment:${siblingLocation}`].sort()
+      : [`item:${childLocation}`, `item:${siblingLocation}`].sort();
+    assert.deepEqual(conflicts.map(locationKey).sort(), expectedLocations);
+    assert.ok(conflicts.every((conflict) => conflict.location.level === locationState));
+
+    clock.advance(2_000);
+    assert.equal((await store.runOneDuePoll()).status, "unresolved");
+    assert.equal(calls.at(-1).reason, "canonical_reconciliation");
+    const partial = (await store.history(statusScope, "request-a"))
+      .find((row) => row.sourceObservationId === "matrix-partial-lookup");
+    assert.ok(partial);
+    assert.equal(partial.sourceKind, "trusted_lookup");
+    const conflictA = conflicts.find((conflict) => locationKey(conflict) === `${locationState}:${childLocation}`);
+    const conflictB = conflicts.find((conflict) => locationKey(conflict) === `${locationState}:${siblingLocation}`);
+    assert.ok(conflictA);
+    assert.ok(conflictB);
+    const resolutionA = await store.resolveTerminalConflict({
+      scope: statusScope,
+      providerRequestId: "request-a",
+      conflictId: conflictA.conflictId,
+      lookupObservationId: partial.observationId,
+      policy: correctionPolicy()
+    });
+    assert.equal(resolutionA.correctedState, "cancelled");
+
+    const afterFirst = await store.projection(statusScope, "request-a");
+    assert.equal(afterFirst.rootState, rootStatus === "fixture.shipped" ? "shipped" : "delivered");
+    assert.equal(afterFirst.state, "conflict");
+    if (level === "shipment") {
+      assert.equal(afterFirst.shipments.find((row) => row.shipmentId === childLocation).state, "cancelled");
+      assert.equal(afterFirst.shipments.find((row) => row.shipmentId === siblingLocation).state, "conflict");
+    } else {
+      const shipment = afterFirst.shipments.find((row) => row.shipmentId === "shipment-a");
+      assert.equal(shipment.state, "shipped");
+      assert.equal(shipment.items.find((row) => row.itemId === childLocation).state, "cancelled");
+      assert.equal(shipment.items.find((row) => row.itemId === siblingLocation).state, "conflict");
+    }
+
+    const firstReopenCode = `${childStorePrefix()}
+const projection = await store.projection(scope, "request-a");
+const conflicts = await store.conflicts(scope, "request-a");
+process.stdout.write(JSON.stringify({rootState: projection?.rootState, state: projection?.state,
+  shipmentStates: projection?.shipments.map((row) => [row.shipmentId, row.state]),
+  itemStates: projection?.shipments.flatMap((row) => row.items.map((item) => [item.itemId, item.state])),
+  conflicts: conflicts.map((row) => [row.location.level, row.location.shipmentId ?? null, row.location.itemId ?? null, row.state])}));`;
+    const firstChild = await spawnChild(firstReopenCode, {
+      FC_STATUS_DIR: directory, FC_STATUS_NOW: String(clock.value)
+    });
+    assert.equal(firstChild.status, 0, firstChild.stderr);
+    const firstSnapshot = JSON.parse(firstChild.stdout);
+    assert.equal(firstSnapshot.rootState, rootStatus === "fixture.shipped" ? "shipped" : "delivered");
+    assert.equal(firstSnapshot.state, "conflict");
+    assert.deepEqual(firstSnapshot.conflicts.map((row) => row[3]).sort(), ["resolved", "unresolved"]);
+    if (level === "shipment") {
+      assert.deepEqual(firstSnapshot.shipmentStates.sort((left, right) => left[0].localeCompare(right[0])), [
+        ["shipment-a", "cancelled"], ["shipment-b", "conflict"]
+      ]);
+    } else {
+      assert.deepEqual(firstSnapshot.shipmentStates, [["shipment-a", "shipped"]]);
+      assert.deepEqual(firstSnapshot.itemStates.sort((left, right) => left[0].localeCompare(right[0])), [
+        ["item-a", "cancelled"], ["item-b", "conflict"]
+      ]);
+    }
+
+    const beforeMissingCoverage = await readFile(statusStatePath(directory), "utf8");
+    await expectStoreError(store.resolveTerminalConflict({
+      scope: statusScope,
+      providerRequestId: "request-a",
+      conflictId: conflictB.conflictId,
+      lookupObservationId: partial.observationId,
+      policy: correctionPolicy()
+    }), "conflict_unresolved");
+    assert.equal(await readFile(statusStatePath(directory), "utf8"), beforeMissingCoverage);
+
+    clock.advance(1_000);
+    assert.equal((await store.runOneDuePoll()).status, "unresolved");
+    assert.equal(calls.at(-1).reason, "canonical_reconciliation");
+    const complete = (await store.history(statusScope, "request-a"))
+      .find((row) => row.sourceObservationId === "matrix-complete-lookup");
+    assert.ok(complete);
+    assert.equal(complete.sourceKind, "trusted_lookup");
+    const resolutionB = await store.resolveTerminalConflict({
+      scope: statusScope,
+      providerRequestId: "request-a",
+      conflictId: conflictB.conflictId,
+      lookupObservationId: complete.observationId,
+      policy: correctionPolicy()
+    });
+    assert.equal(resolutionB.correctedState, "cancelled");
+    const corrected = await store.projection(statusScope, "request-a");
+    const expectedRoot = rootStatus === "fixture.shipped" ? "shipped" : "delivered";
+    assert.equal(corrected.state, expectedRoot);
+    assert.equal(corrected.rootState, expectedRoot);
+    assert.deepEqual((await store.conflicts(statusScope, "request-a")).map((row) => row.state), ["resolved", "resolved"]);
+    if (level === "shipment") {
+      assert.equal(corrected.shipments.find((row) => row.shipmentId === childLocation).state, "cancelled");
+      assert.equal(corrected.shipments.find((row) => row.shipmentId === siblingLocation).state, "cancelled");
+    } else {
+      const shipment = corrected.shipments.find((row) => row.shipmentId === "shipment-a");
+      assert.equal(shipment.state, "shipped");
+      assert.equal(shipment.items.find((row) => row.itemId === childLocation).state, "cancelled");
+      assert.equal(shipment.items.find((row) => row.itemId === siblingLocation).state, "cancelled");
+    }
+
+    await store.registerPollTarget({ scope: statusScope, providerRequestId: "request-b", policy: statusPollPolicy() });
+    assert.equal((await store.runOneDuePoll()).status, "observed");
+    const finalReopenCode = `${childStorePrefix()}
+const projection = await store.projection(scope, "request-a");
+const appendedHistory = await store.history(scope, "request-b");
+const conflicts = await store.conflicts(scope, "request-a");
+process.stdout.write(JSON.stringify({rootState: projection?.rootState, state: projection?.state,
+  shipmentStates: projection?.shipments.map((row) => [row.shipmentId, row.state]),
+  itemStates: projection?.shipments.flatMap((row) => row.items.map((item) => [item.itemId, item.state])),
+  appendedCount: appendedHistory.length, conflictStates: conflicts.map((row) => row.state)}));`;
+    const finalChild = await spawnChild(finalReopenCode, {
+      FC_STATUS_DIR: directory, FC_STATUS_NOW: String(clock.value)
+    });
+    assert.equal(finalChild.status, 0, finalChild.stderr);
+    const finalSnapshot = JSON.parse(finalChild.stdout);
+    assert.equal(finalSnapshot.rootState, expectedRoot);
+    assert.equal(finalSnapshot.state, expectedRoot);
+    assert.equal(finalSnapshot.appendedCount, 1);
+    assert.deepEqual(finalSnapshot.conflictStates, ["resolved", "resolved"]);
+    if (level === "shipment") {
+      assert.deepEqual(finalSnapshot.shipmentStates.sort((left, right) => left[0].localeCompare(right[0])), [
+        ["shipment-a", "cancelled"], ["shipment-b", "cancelled"]
+      ]);
+    } else {
+      assert.deepEqual(finalSnapshot.shipmentStates, [["shipment-a", "shipped"]]);
+      assert.deepEqual(finalSnapshot.itemStates.sort((left, right) => left[0].localeCompare(right[0])), [
+        ["item-a", "cancelled"], ["item-b", "cancelled"]
+      ]);
+    }
+
+    const reopened = await openStatusStore({ directory, clock, lookup, allowUnverifiedHints: true });
+    const firstLease = await reopened.claimOutbox(statusScope, "matrix-consumer", 1_000);
+    assert.ok(firstLease);
+    clock.advance(1_000);
+    const deliveryReopen = await openStatusStore({ directory, clock, lookup, allowUnverifiedHints: true });
+    const redelivered = await deliveryReopen.claimOutbox(statusScope, "matrix-consumer-restart", 1_000);
+    assert.ok(redelivered);
+    assert.equal(redelivered.event.eventId, firstLease.event.eventId);
+    assert.equal(redelivered.fence, firstLease.fence + 1);
+    assert.equal(await deliveryReopen.acknowledgeOutbox({
+      scope: statusScope,
+      eventId: redelivered.event.eventId,
+      consumerId: "matrix-consumer-restart",
+      token: redelivered.token,
+      fence: redelivered.fence
+    }), "acked");
+    const deliveredIds = new Set([redelivered.event.eventId]);
+    for (let index = 0; index < 32; index += 1) {
+      const lease = await deliveryReopen.claimOutbox(statusScope, "matrix-consumer-restart", 5_000);
+      if (lease === undefined) break;
+      assert.equal(deliveredIds.has(lease.event.eventId), false);
+      deliveredIds.add(lease.event.eventId);
+      assert.equal(await deliveryReopen.acknowledgeOutbox({
+        scope: statusScope,
+        eventId: lease.event.eventId,
+        consumerId: "matrix-consumer-restart",
+        token: lease.token,
+        fence: lease.fence
+      }), "acked");
+    }
+    assert.ok(deliveredIds.size >= 4);
+    assert.equal(await deliveryReopen.claimOutbox(statusScope, "matrix-consumer-restart", 5_000), undefined);
+
+    const persisted = JSON.parse(await readFile(statusStatePath(directory), "utf8"));
+    persisted.resolutions[0].correctedState = "delivered";
+    const wrongLocationBytes = JSON.stringify(persisted);
+    await writeFile(statusStatePath(directory), wrongLocationBytes);
+    await expectStoreError(openStatusStore({ directory, clock, lookup }), "corrupt_state");
+    assert.equal(await readFile(statusStatePath(directory), "utf8"), wrongLocationBytes);
+  }, { allowUnverifiedHints: true, responses: [
+    { status: "found", observation: initial },
+    { status: "found", observation: contradiction },
+    { status: "found", observation: partialLookup },
+    { status: "found", observation: completeLookup },
+    { status: "found", observation: appended }
+  ] });
+}
+
 add("normalization is strict, timestamp-independent for effects, and preserves unknown states", async () => {
   const mapping = fixtureStatusMapping();
   const tracking = fixtureTrackingHostPolicy();
@@ -615,6 +850,22 @@ add("partial trusted lookup coverage resolves only the covered root and keeps ne
     { status: "found", observation: statusObservation({ sourceObservationId: "root-only-lookup", status: "fixture.cancelled" }) },
     { status: "unavailable" }
   ] });
+});
+
+add("shipment correction preserves a shipped root and unresolved sibling through reopen and delivery", async () => {
+  await exerciseMixedLocationCorrection("fixture.shipped", "shipment");
+});
+
+add("item correction preserves a shipped root and unresolved sibling through reopen and delivery", async () => {
+  await exerciseMixedLocationCorrection("fixture.shipped", "item");
+});
+
+add("shipment correction preserves a different terminal root and unresolved sibling through reopen and delivery", async () => {
+  await exerciseMixedLocationCorrection("fixture.delivered", "shipment");
+});
+
+add("item correction preserves a different terminal root and unresolved sibling through reopen and delivery", async () => {
+  await exerciseMixedLocationCorrection("fixture.delivered", "item");
 });
 
 add("poll retries are bounded, respect rate limits, and stop at the explicit terminal policy", async () => {

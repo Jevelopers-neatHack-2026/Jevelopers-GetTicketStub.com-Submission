@@ -787,12 +787,15 @@ function decodeState(
       }
     }
     for (const resolution of resolutions as StatusResolution[]) {
+      if (resolution.conflictIds.length !== 1) fail("corrupt_state");
+      const conflict = conflictMap.get(resolution.conflictIds[0]!);
       const lookup = observationMap.get(resolution.lookupObservationId);
-      if (lookup === undefined || lookup.sourceKind !== "trusted_lookup" || lookup.state !== resolution.correctedState ||
-        !sameBinding(resolution, lookup) || !resolution.conflictIds.every((id) => {
-          const conflict = conflictMap.get(id);
-          return conflict !== undefined && conflict.state === "resolved" && conflict.resolutionId === resolution.resolutionId && sameBinding(resolution, conflict);
-        })) fail("corrupt_state");
+      const lookupState = lookup === undefined || conflict === undefined
+        ? undefined
+        : observationStateAtLocation(lookup, conflict.location);
+      if (conflict === undefined || conflict.state !== "resolved" || conflict.resolutionId !== resolution.resolutionId ||
+        !sameBinding(resolution, conflict) || lookup === undefined || lookup.sourceKind !== "trusted_lookup" ||
+        lookupState !== resolution.correctedState || !sameBinding(resolution, lookup)) fail("corrupt_state");
     }
     for (const event of outbox as StatusOutboxEvent[]) {
       const expectedId = `status-${stableDigest({
