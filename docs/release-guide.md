@@ -1,6 +1,6 @@
 # Package and release evidence
 
-Package 0.5.0 is private and unreleased. Schema versions are independent exact semver (currently candidate 1.0.0); generated/schema-manifest.json maps schema identities/hashes to the package version with source_revision=null until an actual release mapping is accepted. No project license, visibility change, tag, GitHub release or registry publication is implied.
+Package 0.6.0 is private and unreleased. Schema versions are independent exact semver (1.0.0 retained candidates plus nine 2.0.0 finance proposals); generated/schema-manifest.json maps schema identities/hashes to the package version with source_revision=null until an actual release mapping is accepted. No project license, visibility change, tag, GitHub release or registry publication is implied.
 
 The [package manifest](../package.json) exports the ESM/type root, operations, research-creative, commerce-evidence and fixture-harness subpaths plus exact schema/fixture/compatibility files. It includes generated bindings/standalone validators/manifests/notices, pure runtime helpers, schemas, fixtures, compatibility records, docs, nonvisual examples and README. Build tooling, tests and npm dev dependencies are not distributed. `generated/package-content-manifest.json` hashes this exact content excluding only itself; its digest binds helper code and export-map bytes as well as data schemas. Installed tests verify file bytes and the two generated archives are identical.
 

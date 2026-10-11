@@ -42,7 +42,19 @@
         "capability and print-spec metadata",
         "preflight report"
       ],
-      "status": "blocked_concrete_owner_proposal_and_agreement"
+      "status": "available_owner_input_pending_canonical_mapping_leaf_decision_and_review",
+      "concrete_input": {
+        "source": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/4#issuecomment-6104784220",
+        "merged_source_revision": "cfc03caced85256b5d19f35a80d5886bc2171950",
+        "files": [
+          "src/catalog.ts",
+          "docs/catalog.md",
+          "tests/catalog-fixtures.mjs",
+          "tests/catalog-suite.mjs"
+        ],
+        "private_generic_shapes_not_additional_public_wire_exports": true,
+        "real_prodigi_support": "not_claimed"
+      }
     },
     {
       "owner": "cost-intelligence",

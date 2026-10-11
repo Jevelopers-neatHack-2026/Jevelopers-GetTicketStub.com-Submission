@@ -6,13 +6,14 @@
     "fixtures/ApprovalVerificationRequest.json": "sha256:d9096dec5fcd2957298a69999aff1ebb6cfc1155bef0b19593f1fe84ef9faf58",
     "fixtures/ArtifactConsumptionReceipt.json": "sha256:d0695aa669d5dba731773688c0e9da6a1cdd87e372811c3c1a3a4ed2865cbfdc",
     "fixtures/ArtifactHandoffManifest.json": "sha256:9b9df6ae0950490d9d2400f01c6d2c0d8e354628353a29b6473f458422e22442",
+    "fixtures/BudgetReservation.2_0_0.json": "sha256:124afa6c759ee7cab4b48d1513d94d7b82be2eb69a2834b25db81a38f57be992",
     "fixtures/BudgetReservation.json": "sha256:67c8688aa6a452e0a17b036f31d99322f400be81b4a3c492b51c62f820908459",
     "fixtures/Cancellation.json": "sha256:e6fc45ce5810512c20a592a884fc5f528c17a4d36df65157849354fe2860f5c7",
     "fixtures/CommonEnvelope.json": "sha256:d7a213af70a993b438a49cf5f045532158d0d668cbf4663cb2ef4c176051853c",
     "fixtures/CreativeBrief.json": "sha256:e60e6eb7e961e9dfe2672e34075da2d44dc80bd5594f550791c4d1fa6786e3d0",
-    "fixtures/DecisionPortRequest.json": "sha256:945acacb67d52c090400d6f06d54b66aaf12a67c00929880cab69293bf765db9",
-    "fixtures/DecisionPortResult.json": "sha256:01fb19d61443e81df7e5056abb8d7e2d050b44afcd49ef2329dbe21b83309605",
-    "fixtures/DecisionReceipt.json": "sha256:0294f352b0637b0f5b6d76a787541bea450126681dd416c58c2a5d5d058da0be",
+    "fixtures/DecisionPortRequest.json": "sha256:3a329855d56d43c98c20d918cf426cfa4507ec5a73c4cc92b70cf8d9d2260246",
+    "fixtures/DecisionPortResult.json": "sha256:87976200ac9593fd2ce7b71f608c8c9f288954281f541fb1e6a594a20ce65f3e",
+    "fixtures/DecisionReceipt.json": "sha256:988ec53fc071d124b42b6c0c0b1af16027b6b7068a789daddbdf9fa039553fe2",
     "fixtures/DesignControlSchema.json": "sha256:ccbf3a9921d0fe7f3d4e891f2044f913c3583b8f8137b3829266cbde04ee70ba",
     "fixtures/DesignVersion.json": "sha256:3c670cb9ca80aad58c37282f5b647557004a5dcc0e09233c8fdb2c0f4d916695",
     "fixtures/ErrorEnvelope.json": "sha256:9a0eef8627ed0692a5cac2004269c32601eb01fa4c482a4bb91934afafe72899",
@@ -30,9 +31,13 @@
     "fixtures/ProductionApproval.example.json": "sha256:085bd9eb87444b3c0699cac1c840f181be239fbfa2553b2330bbcd672963cd15",
     "fixtures/ProductionBundle.json": "sha256:108048d668254fca9117c7b22a8eeb1cc62d4308a3a005d6bd8c8eea8c968237",
     "fixtures/ProjectRequest.json": "sha256:5ad1e5aa2074e2acd58d3a7eb8246e889321a6e786766d2c30e90e1f877fcc12",
+    "fixtures/QueryRequest.2_0_0.json": "sha256:69c2290ed3e18b2a577d4ae5f8e493d3b506a8a71761f59e0b32887a12a84e1f",
     "fixtures/QueryRequest.json": "sha256:02ecc8f5d62b0edb35aed2bc40ed660eee4d4e692212ae70f72d1ea0a0760672",
+    "fixtures/QueryResult.2_0_0.json": "sha256:f685d27237bd1c4e3db4f7add94a76243034646ab1a3c3b195f31a7ab36350e0",
     "fixtures/QueryResult.json": "sha256:fbdacfedb5e9edc2fdda0380ff7d27db7ecabf4c2b191ccd6faa4023b0fe5dd2",
+    "fixtures/ReleaseRequest.2_0_0.json": "sha256:053076a11f3f67d3320dd2d1d116c07a3a713fb24d68fc912d387c68453501e1",
     "fixtures/ReleaseRequest.json": "sha256:befab17bba66e2009e2d94267479d0730c3a31dd731db4390900b43da6df8798",
+    "fixtures/ReleaseResult.2_0_0.json": "sha256:4156f9e52a4317ed0633645f725dd27d8488c765b7b4ab711d60f6b26aa4089b",
     "fixtures/ReleaseResult.json": "sha256:c5026464f2067ed9c24a1d9b5adcf06fef2d04db3ab7460d0b47286f31735be3",
     "fixtures/ResearchAnswerReceipt.json": "sha256:84d4c1a8ae63e5c636102a4b5e00efbfe3e10a0d1e2625f9024e6f0a2d184591",
     "fixtures/ResearchBatchReceipt.json": "sha256:2f20eee9587736aadf0ad333e7e6628fd74e3f3406dcf59537010c74a10c619f",
@@ -41,13 +46,17 @@
     "fixtures/ResearchInvalidation.json": "sha256:6d9b251f904a74c866f4be4356fdf0b35f1c82a0d8c353050445aa17b6c2f3ed",
     "fixtures/ResearchRequest.json": "sha256:2d3d1480d3072db95218ac0d9b70ea61438e7c5eadd3654759fc3ec50378e2e5",
     "fixtures/ResearchRequestReceipt.json": "sha256:837eb121125fc5df913cb10448ebf55226d248e5362e81d8f22d1e2cf4043fd5",
+    "fixtures/ReserveRequest.2_0_0.json": "sha256:0d5f828a01cdffcf6de1715e5ac27e19a67a3d538b2673d1bc7b24b93d008cae",
     "fixtures/ReserveRequest.json": "sha256:0fe5d1788056e3556e814ab67d464137cbbef854a3110ab40b71a3b5d0f74e50",
+    "fixtures/ReserveResult.2_0_0.json": "sha256:e2419a75d531f05a369b67e36b0cd60e5f5ff4e929421a2253b5fdd113bf08ee",
     "fixtures/ReserveResult.json": "sha256:8e585628276b57b9cf835e4432c8f4c531cfc46b9a46abb2bd235dbb117966fe",
+    "fixtures/SettleRequest.2_0_0.json": "sha256:4d4052071702778c3320ed8cd432e54ab9ff52721c46966f921015899184444a",
     "fixtures/SettleRequest.json": "sha256:7ccaefabc7ecd07d4e2fdcfc79169b1ae5550c390c7c18d8d31e84f4c82dcf3f",
+    "fixtures/SettleResult.2_0_0.json": "sha256:8f8ec98f3163120cf6e32181fbae9aa6a120d82d22d811d52fd8068b87fc9408",
     "fixtures/SettleResult.json": "sha256:f1727555000cad209b3bcb54d09ec3a3ca66d7c07b6e55882762e44a27d5eeb2",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:486cca1749bf02738742227a312ee8e4df4ba950dda4c110cafc0c7fe50ff1ab",
+  "digest": "sha256:e7bcbecadee73e4f911b6c1ae60fb250e38783affec93ec00f217c0b9805e7f7",
   "status": "synthetic_candidates_only",
   "contracts": [
     {
@@ -1575,6 +1584,256 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:e0d707100173b55e0489bb6c942ede210b275511d27ba715e1c3bd3df858dbec"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "BudgetReservation",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/BudgetReservation.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:4de18ba2f436b9970379c3e8549f1dcc7158c1bacd4be27086318e4bdf59d2bf"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:148da689978bc9fd38a86bd7d4bef10ddd75303b72db1a893f00f4f083b73ac6"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:4de18ba2f436b9970379c3e8549f1dcc7158c1bacd4be27086318e4bdf59d2bf"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "authentic-overrun-snapshot",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partial-acknowledgement-exact-grant",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "revoked-partial-acknowledgement",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_MONEY",
+            "path": "/dispatch_cap"
+          }
+        },
+        {
+          "id": "acknowledgement-wrong-cap",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/dispatch_acknowledgement"
           }
         }
       ]
@@ -7411,6 +7670,238 @@
     },
     {
       "contract": "QueryRequest",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/QueryRequest.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:15f6b210fb28a9dc01dab7ec472c2b99d325dd558e3bfd86ab05571914daeb42"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:f35e2ab65d0c96be50fb25fc5c1c451644a8b99835adb3a82570594c2e489c10"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:15f6b210fb28a9dc01dab7ec472c2b99d325dd558e3bfd86ab05571914daeb42"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "prior-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "prior-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "QueryRequest",
       "version": "1.0.0",
       "policy_version": "1.0.0",
       "path": "fixtures/QueryRequest.json",
@@ -7573,6 +8064,364 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:6bece3cd375b273eec75c91ff145f1e7a0ce916ce4085d7d4ee213716e10d7be"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/QueryResult.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:732d385c858657bfa59f1bf105a0fa8b010c17f26231e850ff2fa907b37a9789"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:b9ba28e0915935741d8cbc7bb10af10df26cf8a86a72d84888ff50c260e3a7f1"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:732d385c858657bfa59f1bf105a0fa8b010c17f26231e850ff2fa907b37a9789"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "prior-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "prior-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "nested-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "failure-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "failure-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "failure-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "unknown-response-binds-prior-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "previous-result-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/previous_result"
           }
         }
       ]
@@ -7776,6 +8625,271 @@
     },
     {
       "contract": "ReleaseRequest",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ReleaseRequest.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:03fa253b56028e26774e186564952f68a6db08cf413872ab73b32895451e1e1a"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:dc8d7582d443851223eacd287253004e0fa0950e22b5a90c2b06acd6f3dfc8d7"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:03fa253b56028e26774e186564952f68a6db08cf413872ab73b32895451e1e1a"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "prior-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "prior-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "unsafe-transition-complete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/reason"
+          }
+        },
+        {
+          "id": "unsafe-transition-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/reason"
+          }
+        },
+        {
+          "id": "unsafe-transition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/reason"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
       "version": "1.0.0",
       "policy_version": "1.0.0",
       "path": "fixtures/ReleaseRequest.json",
@@ -7969,6 +9083,402 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:d180018efc5d542bc10e18c8456a9f8fcd11adf2b374251301cc2564d4a1cb06"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ReleaseResult.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:a2f2128ca750ce893e612b5061c6613471512b3e5671f2902f4fbdaa9d8ec9cf"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:7e86dc8e03d0d610381753fe33d2cd7ee9f4800d000b87d9327c0352089a7113"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:a2f2128ca750ce893e612b5061c6613471512b3e5671f2902f4fbdaa9d8ec9cf"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "prior-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "prior-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "nested-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "failure-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "failure-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "failure-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "retained-hold-complete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "retained-hold-cannot-release-complete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_RECEIPT",
+            "path": "/reservation"
+          }
+        },
+        {
+          "id": "retained-hold-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "retained-hold-cannot-release-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_RECEIPT",
+            "path": "/reservation"
+          }
+        },
+        {
+          "id": "retained-hold-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "retained-hold-cannot-release-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_RECEIPT",
+            "path": "/reservation"
           }
         }
       ]
@@ -9531,6 +11041,238 @@
     },
     {
       "contract": "ReserveRequest",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ReserveRequest.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:8f95305fd0f2fba1d6909522b3d352c90df6622f4e9434f1d01a6c2c0ea9182e"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:22987944d563fb882200708b0f111f65424fed880c4ac70301aa68ad22884880"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:8f95305fd0f2fba1d6909522b3d352c90df6622f4e9434f1d01a6c2c0ea9182e"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "pricing-cannot-auto-authorize-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNKNOWN_USAGE",
+            "path": "/pricing_basis"
+          }
+        },
+        {
+          "id": "pricing-cannot-auto-authorize-unbounded",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNKNOWN_USAGE",
+            "path": "/pricing_basis"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
       "version": "1.0.0",
       "policy_version": "1.0.0",
       "path": "fixtures/ReserveRequest.json",
@@ -9774,6 +11516,369 @@
     },
     {
       "contract": "ReserveResult",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ReserveResult.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:9cfffeed3ce8b3407edc732d08ebcbebdd25b7c14179c31091598de079c38e2d"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:6e09e5e45f66be33118784133440ac703a410a23532d8a89d020233e4d82c4f7"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:9cfffeed3ce8b3407edc732d08ebcbebdd25b7c14179c31091598de079c38e2d"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "nested-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "failure-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "result-capacity-contradiction",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/authorized_capacity"
+          }
+        },
+        {
+          "id": "even-authority-cannot-relabel-excess-as-full",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_MONEY",
+            "path": "/held"
+          }
+        },
+        {
+          "id": "silent-smaller-full-grant",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_MONEY",
+            "path": "/held"
+          }
+        },
+        {
+          "id": "explicit-partial-cap-no-dispatch-before-ack",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partial-without-opt-in",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRANSITION",
+            "path": "/decision"
+          }
+        },
+        {
+          "id": "partial-cap-cannot-imply-acknowledgement",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_MONEY",
+            "path": "/dispatch_cap"
+          }
+        },
+        {
+          "id": "pricing-typed-unknown-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "pricing-typed-unknown-unbounded",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ReserveResult",
       "version": "1.0.0",
       "policy_version": "1.0.0",
       "path": "fixtures/ReserveResult.json",
@@ -9971,6 +12076,291 @@
     },
     {
       "contract": "SettleRequest",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/SettleRequest.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:fb34a49124207311cd2e86616fd4c4ddee87e2014367c4b806535a27e8137059"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:4fe6ac0dcb0e1711ac771b7e81675909707bcf0bd8c29fc9ebe8149888c33716"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:fb34a49124207311cd2e86616fd4c4ddee87e2014367c4b806535a27e8137059"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "prior-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "prior-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "authentic-overrun-command",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "unsafe-transition-complete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/settlement_intent"
+          }
+        },
+        {
+          "id": "unsafe-transition-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/settlement_intent"
+          }
+        },
+        {
+          "id": "unsafe-transition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/settlement_intent"
+          }
+        },
+        {
+          "id": "previous-command-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/previous_command"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "SettleRequest",
       "version": "1.0.0",
       "policy_version": "1.0.0",
       "path": "fixtures/SettleRequest.json",
@@ -10155,6 +12545,564 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:619ead2a1027d20a99fb4d6232f1f01087b82372d89fe7654313dd23c58d3e00"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/SettleResult.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:23bf5d1414a6ff3e004061f10ea6fe2205ff151291de14fb3c8074dd98d6c6ff"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:ae98dccff77cfdc0b3ae8c9d0dcc275d2a6f61356812421367b926f7c4667f70"
+          }
+        },
+        {
+          "id": "missing-policy",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/policy_version"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained_encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true,
+            "canonical_sha256": "sha256:23bf5d1414a6ff3e004061f10ea6fe2205ff151291de14fb3c8074dd98d6c6ff"
+          }
+        },
+        {
+          "id": "retained-legacy-candidate-wire",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "semantic-positive-v2",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partition-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "missing-independent-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "partition-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "missing-independent-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-project",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/project_id"
+          }
+        },
+        {
+          "id": "wrong-initial-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/initial_request"
+          }
+        },
+        {
+          "id": "prior-environment",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "prior-billing_mode",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "nested-partition",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "failure-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-denied",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "failure-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "failure-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "failure-request-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "failure-prior-partition-unavailable",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/prior"
+          }
+        },
+        {
+          "id": "result-consumption-contradiction",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/consumption_observation"
+          }
+        },
+        {
+          "id": "authentic-overrun-result",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "overrun-needs-linked-exception",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/exception_refs"
+          }
+        },
+        {
+          "id": "final-consume-0_60-release-0_40",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "forged-released-remainder",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_MONEY",
+            "path": "/retained_exposure"
+          }
+        },
+        {
+          "id": "partial-consumption-retains-incomplete-exposure",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partial-known-cost-held-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "partial-known-cost-held-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "in-flight-final-forbidden",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNCERTAIN_EXECUTION",
+            "path": "/settlement_intent"
+          }
+        },
+        {
+          "id": "unknown-usage-final-forbidden",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNKNOWN_USAGE",
+            "path": "/usage_ref"
+          }
+        },
+        {
+          "id": "retained-hold-complete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "retained-hold-cannot-release-complete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_RECEIPT",
+            "path": "/reservation"
+          }
+        },
+        {
+          "id": "retained-hold-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "retained-hold-cannot-release-incomplete",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_RECEIPT",
+            "path": "/reservation"
+          }
+        },
+        {
+          "id": "retained-hold-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "retained-hold-cannot-release-unknown",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_RECEIPT",
+            "path": "/reservation"
+          }
+        },
+        {
+          "id": "late-charge-append-only-after-final",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "authorized-append-only-credit-correction",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "decrease-without-separate-correction-authority",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "correction-wrong-prior-bytes",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_TRUST_CONTEXT",
+            "path": "/request"
+          }
+        },
+        {
+          "id": "cumulative-revision-reuse",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "REVISION_CONFLICT",
+            "path": "/revision"
+          }
+        },
+        {
+          "id": "changed-amount-reuses-observation",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "IDENTITY_COLLISION",
+            "path": "/consumption_evidence_ref"
           }
         }
       ]

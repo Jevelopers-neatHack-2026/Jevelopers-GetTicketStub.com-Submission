@@ -3,7 +3,7 @@ import { resolve, relative, isAbsolute } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { root, readJson, schemaFiles, compiler, outputs } from './generate.mjs';
-import { validateContract, parseContract, checkTrustedContext, hashBytes, hashManifest, canonicalJson } from '../tooling/runtime.mjs';
+import { validateContract, validateContractVersion, parseContract, checkTrustedContext, hashBytes, hashManifest, canonicalJson } from '../tooling/runtime.mjs';
 import { checkOperation, compareUsageIdentity } from '../tooling/operations.mjs';
 import { checkResearchCreative } from '../tooling/research-creative.mjs';
 import { checkCommerceEvidence } from '../tooling/commerce-evidence.mjs';
@@ -60,16 +60,23 @@ export function classifications(schema, taxonomy, path = '', registry = new Map(
 }
 export { assertFixture } from '../tooling/fixture-harness.mjs';
 export async function runFixtures(entry) {
-  if (!await exists(entry.fixtures)) return [{ code: 'MISSING_FIXTURES', contract: entry.name }];
-  return runCanonicalFixtures(entry.name, await readJson(entry.fixtures)).failures;
+  const failures = [];
+  for (const version of contractVersions(entry)) {
+    if (!await exists(version.fixtures)) failures.push({ code: 'MISSING_FIXTURES', contract: entry.name, ...(version.schema_version ? { version: version.schema_version } : {}) });
+    else failures.push(...runCanonicalFixtures(entry.name, await readJson(version.fixtures)).failures);
+  }
+  return failures;
 }
+export function contractVersions(entry) { return entry.versions ? entry.versions.map(version => ({ ...entry, ...version, versions: undefined })) : [entry]; }
 
 export async function execute(command, options) {
   const entries = await catalog();
-  const selected = options.contract ? entries.filter(entry => entry.name === options.contract || entry.group === options.contract) : options.foundation ? entries.filter(entry => entry.state === 'foundation_candidate') : options.implemented ? entries.filter(entry => entry.schema_path) : entries;
+  const [name, versionSelection] = (options.contract ?? '').split('@');
+  const selected = options.contract ? entries.filter(entry => entry.name === name || entry.group === name).map(entry => versionSelection ? { ...entry, versions: contractVersions(entry).filter(version => version.schema_version === versionSelection) } : entry) : options.foundation ? entries.filter(entry => entry.state === 'foundation_candidate') : options.implemented ? entries.filter(entry => entry.schema_path) : entries;
   const failures = [];
   const add = (code, entry, extra = {}) => failures.push({ code, ...(entry ? { contract: entry.name } : {}), ...extra });
   if (!selected.length) add('UNKNOWN_CONTRACT');
+  for (const entry of selected) if (!contractVersions(entry).length) add('UNSUPPORTED_CONTRACT_VERSION', entry);
   const policy = await readJson('compatibility/version-policy.json');
   const privacy = await readJson('compatibility/privacy-policy.json');
   const classificationRegistry = new Map(await Promise.all((await schemaFiles()).map(async path => { const schema = await readJson(path); return [schema.$id, schema]; })));
@@ -78,7 +85,7 @@ export async function execute(command, options) {
       const ajv = compiler();
       const paths = await schemaFiles();
       for (const path of paths) ajv.addSchema(await readJson(path));
-      for (const entry of selected) {
+      for (const entry of selected.flatMap(contractVersions)) {
         if (!await exists(entry.schema_path) || !await exists(entry.generated_export)) { add('MISSING_SCHEMA_OR_EXPORT', entry); continue; }
         const schema = await readJson(entry.schema_path);
         ajv.getSchema(schema.$id);
@@ -99,22 +106,25 @@ export async function execute(command, options) {
       }
       const matrix = await readJson('compatibility/matrix.json');
       const baselines = await readJson('compatibility/baselines.json');
-      for (const entry of selected) {
+      for (const entry of selected.flatMap(contractVersions)) {
         if (!await exists(entry.schema_path)) { add('MISSING_COMPAT_SCHEMA', entry); continue; }
         const fixture = await readJson(entry.fixtures);
         const baseline = baselines.schemas.find(schema => schema.contract === entry.name && schema.version === entry.schema_version);
         if (!baseline || 'sha256:' + baseline.sha256 !== hashBytes(await readFile(root + entry.schema_path))) add('IMMUTABLE_SCHEMA_DRIFT', entry);
-        const rows = matrix.cases.filter(row => row.contract === entry.name);
+        const rows = matrix.cases.filter(row => row.contract === entry.name && row.consumer_version === entry.schema_version);
         if (!rows.length) add('MISSING_COMPAT_CASE', entry);
         for (const row of rows) {
-          const payload = { ...fixture.valid, schema_version: row.producer_version };
-          const result = validateContract(entry.name, payload);
+          const producer = contractVersions(entries.find(item => item.name === entry.name)).find(item => item.schema_version === row.producer_version);
+          const producerFixture = producer ? await readJson(producer.fixtures) : fixture;
+          const payload = { ...producerFixture.valid, schema_version: row.producer_version };
+          const supported = row.consumer_version === '2.0.0' ? ['1.0.0', '2.0.0'] : [row.consumer_version];
+          const result = validateContractVersion(entry.name, supported.includes(row.producer_version) ? row.producer_version : row.consumer_version, payload);
           const expected = row.accept ? { ok: true } : { ok: false, code: 'UNSUPPORTED_VERSION', path: '/schema_version' };
           try { assertFixture(result, expected); } catch (error) {
             if (!(error instanceof Error)) throw error;
             add('COMPAT_MISMATCH', entry);
           }
-          if (row.consumer_version !== entry.schema_version) add('MISSING_CONSUMER_VERSION_VALIDATOR', entry);
+          if (!contractVersions(entries.find(item => item.name === entry.name)).some(item => item.schema_version === row.consumer_version)) add('MISSING_CONSUMER_VERSION_VALIDATOR', entry);
         }
       }
       if (!policy.breaking_changes.length || !policy.deprecation.minimum_days || policy.deprecation.removal_conditions.length < 4) add('INVALID_VERSION_POLICY');
@@ -131,11 +141,13 @@ export async function execute(command, options) {
         if (options['require-leaf'] && (!Number.isInteger(entry.issue) || entry.issue < 4 || entry.issue > 28)) add('MISSING_LEAF', entry);
         if (options['require-version-policy'] && !await exists(entry.version_policy)) add('MISSING_VERSION_POLICY', entry);
         if (options['require-field-classification'] && !options['policy-only']) {
-          if (!await exists(entry.schema_path)) add('MISSING_CLASSIFIED_SCHEMA', entry);
-          else failures.push(...classifications(await readJson(entry.schema_path), privacy.classifications, '', classificationRegistry).map(issue => ({ ...issue, contract: entry.name })));
+          for (const version of contractVersions(entry)) {
+            if (!await exists(version.schema_path)) add('MISSING_CLASSIFIED_SCHEMA', version);
+            else failures.push(...classifications(await readJson(version.schema_path), privacy.classifications, '', classificationRegistry).map(issue => ({ ...issue, contract: entry.name, version: version.schema_version })));
+          }
         }
         if (options['require-fixtures']) failures.push(...await runFixtures(entry));
-        if (options['require-docs'] && (!await exists(entry.docs) || !await exists(entry.schema_path) || !await exists(entry.generated_export) || !await exists(entry.helper))) add('MISSING_DISCOVERABLE_ARTIFACT', entry);
+        if (options['require-docs']) for (const version of contractVersions(entry)) if (!await exists(version.docs) || !await exists(version.schema_path) || !await exists(version.generated_export) || !await exists(version.helper)) add('MISSING_DISCOVERABLE_ARTIFACT', version);
       }
       if (options['require-field-classification'] && (!privacy.classifications?.length || !privacy.public_fields?.length || !privacy.always_exclude?.length)) add('MISSING_PRIVACY_POLICY');
       if (options['policy-only'] && !options['require-field-classification']) add('INVALID_POLICY_ONLY_USAGE');
@@ -153,6 +165,8 @@ export async function execute(command, options) {
         for (const finding of findings.findings.filter(row => row.status !== 'resolved')) add('BLOCKED_PRODUCER_FINDING', null, { finding: finding.id, issue: finding.issue });
         const proposals = await readJson('compatibility/proposal-intake.json');
         for (const proposal of proposals.requests) add('BLOCKED_OWNER_PROPOSAL', null, { owner: proposal.owner, source: proposal.source });
+        const checkpoint = await readJson('compatibility/checkpoint-findings.json');
+        for (const finding of checkpoint.findings.filter(row => row.status !== 'resolved')) add('BLOCKED_CHECKPOINT_REVIEW', null, { finding: finding.id, status: finding.status });
       }
       break;
     }
@@ -165,7 +179,7 @@ export async function execute(command, options) {
       break;
     }
     case 'docs': {
-      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
+      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/finance-v2-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
         const text = await readFile(root + path, 'utf8');
         for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
           if (/^(https?:|#)/.test(match[1])) continue;
@@ -200,7 +214,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, ...args] = process.argv.slice(2);
   const flags = ['require-owner', 'require-consumer', 'require-leaf', 'require-version-policy', 'require-field-classification', 'policy-only', 'require-fixtures', 'require-docs', 'require-consumer-pins'];
   const valued = ['contract', 'paths', 'before', 'after'];
-  const allowed = { check: ['contract', 'foundation', 'implemented'], fixtures: ['contract', 'foundation', 'implemented'], compat: ['foundation', 'implemented', 'before', 'after'], inventory: [...flags, 'foundation', 'implemented'], consumers: ['paths'], docs: [] };
+  const allowed = { check: ['contract', 'foundation', 'implemented'], fixtures: ['contract', 'foundation', 'implemented'], compat: ['contract', 'foundation', 'implemented', 'before', 'after'], inventory: [...flags, 'foundation', 'implemented'], consumers: ['paths'], docs: [] };
   if (!Object.hasOwn(allowed, command)) throw new Error('Unknown command');
   if (args.length === 1 && args[0] === '--help') console.log('contracts ' + command + ' ' + allowed[command].map(flag => '--' + flag + (valued.includes(flag) ? ' VALUE' : '')).join(' '));
   else {

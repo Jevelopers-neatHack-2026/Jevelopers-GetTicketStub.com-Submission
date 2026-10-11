@@ -4,11 +4,12 @@ import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { catalog, assertFixture } from '../scripts/contracts.mjs';
+import { catalog, contractVersions, assertFixture } from '../scripts/contracts.mjs';
+import { evaluateFixture } from '../tooling/fixture-harness.mjs';
 import { readJson, root } from '../scripts/generate.mjs';
 import { validateContract, parseContract, checkTrustedContext, hashManifest, checkOperation, compareUsageIdentity, adaptScoreProfile, bindDecisionPort, validateVersionedReference } from '../generated/index.mjs';
 
-const entries = (await catalog()).filter(entry => entry.state === 'operations_candidate');
+const entries = (await catalog()).filter(entry => entry.state === 'operations_candidate').flatMap(contractVersions);
 for (const entry of entries) {
   const manifest = await readJson(entry.fixtures);
   for (const fixture of manifest.cases) test(entry.name + ' / ' + fixture.id, () => {
@@ -19,10 +20,10 @@ for (const entry of entries) {
     // When the selected structural or semantic public boundary handles the fixture.
     let result;
     switch (fixture.mode) {
-      case 'semantic': result = checkOperation(entry.name, payload, fixture.context); break;
+      case 'semantic': result = evaluateFixture(entry.name, manifest, fixture); break;
       case 'relationship': result = compareUsageIdentity(fixture.prior, payload); break;
-      case 'parse': result = parseContract(entry.name, fixture.json); break;
-      case undefined: result = validateContract(entry.name, payload); break;
+      case 'parse': result = evaluateFixture(entry.name, manifest, fixture); break;
+      case undefined: result = evaluateFixture(entry.name, manifest, fixture); break;
       default: throw new Error('Unknown fixture mode');
     }
     // Then the exact success or typed rejection matches the fixture's expectation.

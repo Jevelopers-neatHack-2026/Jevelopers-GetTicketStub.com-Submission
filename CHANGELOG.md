@@ -1,5 +1,11 @@
 # Candidate changes
 
+## 0.6.0 (unreleased)
+
+Finance protocol 2.0.0 proposals add cumulative partial/final settlement, independently bound modes and exact result economics, uncapped actual cost/overrun, conserved exposure/release, opted-in partial grants and scoped acknowledgement, replay and correction evidence. All nine 1.0.0 wire schemas/fixtures remain immutable; current operational helpers fail closed on those semantics and historical fixture records are explicitly non-authoritative. DecisionPort v1 now needs an independent validated v2 Finance record and exact full-grant projection, binding modes before callbacks and across outputs. Nine new schemas bring the catalog to 54 supported versions over 45 names.
+
+Canonical generation stays at Node 22.23.3; actual installed Node ESM/types/whole-catalog checks on Node 24.21.0 support its consumer engine range. These checks certify no renderer, real Finance ledger, owner adoption or full release. Seven unrelated checkpoint findings remain queued for the next repair scope.
+
 ## 0.5.0 (unreleased)
 
 Whole-catalog minimal/full, additive/critical-field and retained-encoding fixtures; canonical roundtrips and strict rejection assertions; complete generated version unions and readonly/brand parity; source/artifact/import binding with acknowledgement provenance; installed ESM/type validation; deterministic package-content digest and actual bundled dependency notices. ApprovalVerificationOutcome now checks the request's scope, audience, current receipt and binding via independent request references.

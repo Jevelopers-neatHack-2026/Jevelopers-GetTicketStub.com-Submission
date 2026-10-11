@@ -5,7 +5,7 @@ import usage from '@jevelopers/shared-contracts/fixtures/UsageEvent.json' with {
 import request from '@jevelopers/shared-contracts/fixtures/DecisionPortRequest.json' with { type: 'json' };
 import result from '@jevelopers/shared-contracts/fixtures/DecisionPortResult.json' with { type: 'json' };
 import receipt from '@jevelopers/shared-contracts/fixtures/DecisionReceipt.json' with { type: 'json' };
-import release from '@jevelopers/shared-contracts/fixtures/ReleaseRequest.json' with { type: 'json' };
+import release from '@jevelopers/shared-contracts/fixtures/ReleaseRequest.2_0_0.json' with { type: 'json' };
 
 // Synthetic server expectations are independent of the caller input. Production injects
 // authenticated scope, current finance state, policy and reference lookups from its adapters.
@@ -34,8 +34,8 @@ const receiptContext = structuredClone(receipt.cases.find(entry => entry.id === 
 receiptContext.scope = serverScope;
 assert.equal(checkOperation('DecisionReceipt', receipt.valid, receiptContext).ok, true);
 assert.equal(checkOperation('DecisionReceipt', { ...receipt.valid, request_hash: 'sha256:' + '1'.repeat(64) }, receiptContext).ok, false);
-const unresolved = release.cases.find(entry => entry.id === 'release-uncertain-known-accounting');
-assert.deepEqual(checkOperation('ReleaseRequest', release.valid, { ...unresolved.context, scope: serverScope }), { ok: false, errors: [{ code: 'UNCERTAIN_EXECUTION', path: '/reason' }] });
+const unresolved = release.cases.find(entry => entry.id === 'unsafe-transition-unknown');
+assert.deepEqual(checkOperation('ReleaseRequest', { ...release.valid, ...unresolved.set }, { ...unresolved.context, scope: serverScope }), { ok: false, errors: [{ code: 'UNCERTAIN_EXECUTION', path: '/reason' }] });
 
 const adapted = adaptScoreProfile(request.valid.questions.score_1, 'ei-string-v1');
 assert.equal(adapted.ok, true);

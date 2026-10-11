@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { root, readJson } from './generate.mjs';
-import { catalog, execute } from './contracts.mjs';
+import { catalog, contractVersions, execute } from './contracts.mjs';
 import { runCanonicalFixtures } from '../tooling/fixture-harness.mjs';
 
 export async function coverageEvidence() {
@@ -20,7 +20,7 @@ export async function coverageEvidence() {
   for (const command of ['check', 'fixtures', 'compat', 'docs']) checks.push(await execute(command, {}));
   checks.push(await execute('inventory', { 'require-consumer': true, 'require-leaf': true, 'require-version-policy': true, 'require-field-classification': true, 'require-fixtures': true, 'require-docs': true }));
   const contracts = [];
-  for (const entry of entries) {
+  for (const entry of entries.flatMap(contractVersions)) {
     const result = runCanonicalFixtures(entry.name, await readJson(entry.fixtures));
     contracts.push({ contract: entry.name, version: entry.schema_version, requirement: entry.requirement, issue: entry.issue, artifacts: { schema: entry.schema_path, types: entry.generated_export, helper: entry.helper, fixtures: entry.fixtures, owner_issue: entry.issue }, status: result.failures.length ? 'failed' : 'passed_local_fixture_contribution', ...result });
   }
@@ -32,7 +32,7 @@ export async function coverageEvidence() {
     const aggregate = [1, 3].includes(criterion.issue);
     return {
       id: criterion.id, issue: criterion.issue, requirement: criterion.requirement,
-      status: aggregate ? 'release_or_epic_blocked' : unresolved.length ? 'unresolved_producer_correctness' : 'pending_independent_and_owner_acceptance',
+      status: aggregate ? 'release_or_epic_blocked' : unresolved.length ? unresolved.every(row => row.status.startsWith('locally_repaired')) ? 'local_producer_repair_review_pending' : 'unresolved_producer_correctness' : 'pending_independent_and_owner_acceptance',
       contribution: { status: localPassed ? 'package_owned_checks_passed' : 'package_owned_checks_failed', contracts: related.map(row => ({ contract: row.contract, version: row.version, cases: row.records.map(record => record.case), artifacts: row.artifacts })), foundation_artifacts: related.length ? [] : ['docs/contract-catalog.md', 'compatibility/version-policy.json', 'compatibility/privacy-policy.json', 'scripts/contracts.mjs', 'scripts/consumer-checks.mjs'] },
       evidence: [29, 30].includes(criterion.issue) ? ['generated/fixture-manifest.json', 'tests/final-harness.test.mjs', 'tests/final-types.ts', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md'] : related.map(row => row.artifacts.fixtures),
       unresolved_findings: unresolved.map(row => row.id),

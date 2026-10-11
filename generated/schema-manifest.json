@@ -1,5 +1,5 @@
 {
-  "package_version": "0.5.0",
+  "package_version": "0.6.0",
   "source_revision": null,
   "status": "unreleased_candidates",
   "toolchain": {
@@ -58,6 +58,13 @@
       "schema_id": "https://schemas.jevelopers.org/BudgetReservation/1.0.0",
       "path": "schemas/BudgetReservation/1.0.0.json",
       "sha256": "f06c6910d1a537a1d357e6555400e39d4cc590e6cfcb0aa26ee19a7b80361238"
+    },
+    {
+      "contract": "BudgetReservation",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/BudgetReservation/2.0.0",
+      "path": "schemas/BudgetReservation/2.0.0.json",
+      "sha256": "e1099e84c7a94d1fbee6c73d1725265b1fd46b2ba4ae6a1a11ab0970ced89a07"
     },
     {
       "contract": "Cancellation",
@@ -221,11 +228,25 @@
       "sha256": "29d8171847ea11fb101cfe0b63c64aba65e9f6370a754ec32bd09d6b5e6bc2d6"
     },
     {
+      "contract": "QueryRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/QueryRequest/2.0.0",
+      "path": "schemas/QueryRequest/2.0.0.json",
+      "sha256": "4f1deca1ab3a0f05a8723331bc9ea9d5b353f7397aaced1744ed1b02a16ce250"
+    },
+    {
       "contract": "QueryResult",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/QueryResult/1.0.0",
       "path": "schemas/QueryResult/1.0.0.json",
       "sha256": "2df0266c6bc581b3cdf41d4cdb6de34ab6f6e4a2334dc4fe7d8025209eb4d52e"
+    },
+    {
+      "contract": "QueryResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/QueryResult/2.0.0",
+      "path": "schemas/QueryResult/2.0.0.json",
+      "sha256": "f8cdf831b26c5dede5440dd24fd1f7a68b60e761d1c0e04542f5d9f77c2ad6ce"
     },
     {
       "contract": "ReleaseRequest",
@@ -235,11 +256,25 @@
       "sha256": "f07a2ba3dada865a96890effe4913c4dabe7b8f0c566b7e1e07d7ff6eb43d403"
     },
     {
+      "contract": "ReleaseRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReleaseRequest/2.0.0",
+      "path": "schemas/ReleaseRequest/2.0.0.json",
+      "sha256": "18738a17de2b4173c520cf27c4b53a975decee54e2b569976f21202db3d6cde2"
+    },
+    {
       "contract": "ReleaseResult",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/ReleaseResult/1.0.0",
       "path": "schemas/ReleaseResult/1.0.0.json",
       "sha256": "de7b769c95dbac04b4fefc96bf9fad3c2dd9eb54864cf5e6ad4de3cc1025cbd2"
+    },
+    {
+      "contract": "ReleaseResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReleaseResult/2.0.0",
+      "path": "schemas/ReleaseResult/2.0.0.json",
+      "sha256": "ca4495cd1b53d11229334bc0f6e7f43cc640c336c19cd9b031698e9f9a2d31ff"
     },
     {
       "contract": "ResearchAnswerReceipt",
@@ -298,11 +333,25 @@
       "sha256": "ac8f553c537e01515fca14907220c35d19a69a8739a5869efeeaedf74058aa5b"
     },
     {
+      "contract": "ReserveRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReserveRequest/2.0.0",
+      "path": "schemas/ReserveRequest/2.0.0.json",
+      "sha256": "78f949c337d94e979aec56954580bae903376e8614fd4e5ebd6caf55fea046bc"
+    },
+    {
       "contract": "ReserveResult",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/ReserveResult/1.0.0",
       "path": "schemas/ReserveResult/1.0.0.json",
       "sha256": "63bd5436a66a61bdb2d692f61a1a73672a5acd0c29f023a2bf8e95a953c28334"
+    },
+    {
+      "contract": "ReserveResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReserveResult/2.0.0",
+      "path": "schemas/ReserveResult/2.0.0.json",
+      "sha256": "080861f0651815feff022192bed4c3ae2d73eaaf5eed285f33c8e89df08d491c"
     },
     {
       "contract": "SettleRequest",
@@ -312,11 +361,25 @@
       "sha256": "8ad86ebaed5e0d64807d1b4045ab0d95fea81d30ac96c706ec43bda3738191e0"
     },
     {
+      "contract": "SettleRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/SettleRequest/2.0.0",
+      "path": "schemas/SettleRequest/2.0.0.json",
+      "sha256": "ce26b313b5615a05a503c848ba9c6a3c9da42fc2429b3cb0ce10cce61f642f94"
+    },
+    {
       "contract": "SettleResult",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/SettleResult/1.0.0",
       "path": "schemas/SettleResult/1.0.0.json",
       "sha256": "2fc34154bd7459d5025ec2ff1d3be6322cfc06feb5ff4712459444ee39a3c046"
+    },
+    {
+      "contract": "SettleResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/SettleResult/2.0.0",
+      "path": "schemas/SettleResult/2.0.0.json",
+      "sha256": "31dc4ce503110a9765a242f2aee400ce274efe9e60c55b3323e2504d065221ed"
     },
     {
       "contract": "UsageEvent",

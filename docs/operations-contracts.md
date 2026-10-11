@@ -1,3 +1,7 @@
+# Current finance version notice
+
+The budget families now have a [2.0.0 proposal](finance-v2-contracts.md) with cumulative consumption, explicit partial/final intent, conserved exposure and independent modes. This guide's 1.0.0 wire decoder remains supported, but current operational finance helpers fail closed on it. The historical fixture adapter is explicitly non-authoritative. DecisionPort v1 requires an independent validated v2 Finance record plus an exact v1 full-grant projection; a legacy grant alone cannot dispatch.
+
 # Operations contracts: candidate package 0.2.0
 
 Issues #9-14 provide 20 versioned wire exports and a contract-only injected DecisionPort. Every schema is JSON Schema 2020-12, closed to unknown execution fields/enums, with explicit optional/null rules and field classifications. Types and standalone ESM validators are generated; no engine or harness runtime is imported. These are locally implemented candidates. Producer/consumer agreement, authenticated domain integration and release acceptance remain pending.

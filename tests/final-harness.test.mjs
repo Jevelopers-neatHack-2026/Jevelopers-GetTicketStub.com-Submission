@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdtemp, mkdir, rm, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { catalog, classifications } from '../scripts/contracts.mjs';
+import { catalog, contractVersions, classifications } from '../scripts/contracts.mjs';
 import { consumerChecks, readPackageArchive } from '../scripts/consumer-checks.mjs';
 import { root, readJson, versionTypeHeader } from '../scripts/generate.mjs';
 import ts from 'typescript';
@@ -13,14 +13,15 @@ import { runCanonicalFixtures, assertFixture, fixturePayload } from '../tooling/
 import { hashManifest, canonicalJson, parseContract, validateContract, projectEvidence } from '../generated/index.mjs';
 
 const entries = await catalog();
-for (const entry of entries) {
+for (const entry of entries.flatMap(contractVersions)) {
   const manifest = await readJson(entry.fixtures);
   test(entry.name + ' roundtrips all indexed canonical fixture cases', () => {
     const result = runCanonicalFixtures(entry.name, manifest);
     assert.deepEqual(result.failures, []);
     assert.equal(result.records.length, manifest.cases.length);
     const schema = entry.schema_version;
-    assert.ok(result.records.every(row => row.version === schema && row.policy_version === manifest.policy_version));
+    const supported = contractVersions(entries.find(row => row.name === entry.name)).map(row => row.schema_version);
+    assert.ok(result.records.every(row => supported.includes(row.version) && row.policy_version === manifest.policy_version));
     const minimal = fixturePayload(manifest, manifest.cases.find(row => row.category === 'minimal'));
     const full = fixturePayload(manifest, manifest.cases.find(row => row.category === 'full'));
     assert.ok(Object.keys(full).length >= Object.keys(minimal).length);
@@ -84,8 +85,8 @@ const commitFixture = path => { git(path, ['add', '.']); git(path, ['commit', '-
 const driver = `import { readFile } from 'node:fs/promises';
 import { runCanonicalFixtures } from '@jevelopers/shared-contracts/fixture-harness';
 const config = JSON.parse(await readFile(process.env.SHARED_CONTRACTS_BINDING_CONFIG, 'utf8'));
-for (const contract of config.required) {
-  const fixture = JSON.parse(await readFile(process.env.SHARED_CONTRACTS_ROOT + '/fixtures/' + contract + '.json', 'utf8'));
+for (const {contract, path} of config.required_fixtures) {
+  const fixture = JSON.parse(await readFile(process.env.SHARED_CONTRACTS_ROOT + '/' + path, 'utf8'));
   const result = runCanonicalFixtures(contract, fixture);
   if (result.failures.length) throw new Error('Fixture adapter failure');
 }
@@ -183,7 +184,7 @@ for (const [name, edit, code] of [
   ['missing receipt', text => text.slice(0, text.indexOf('console.log')), 'MISSING_CONSUMER_RECEIPT'],
   ['forged package receipt', text => text.replace('b.package_content_digest, fixture_digest', "'sha256:' + '1'.repeat(64), fixture_digest"), 'INVALID_CONSUMER_RECEIPT'],
   ['missing contract receipt', text => text.replace('contracts_tested: config.required', 'contracts_tested: []'), 'INVALID_CONSUMER_RECEIPT'],
-  ['claimed imports without actual fixture execution', text => text.replace('for (const contract of config.required)', 'for (const contract of [])'), 'MISSING_OBSERVED_PACKAGE_COVERAGE'],
+  ['claimed imports without actual fixture execution', text => text.replace('of config.required_fixtures)', 'of [])'), 'MISSING_OBSERVED_PACKAGE_COVERAGE'],
   ['altered fixtures supplied to imported adapter', text => text.replace('runCanonicalFixtures(contract, fixture)', "runCanonicalFixtures(contract, { ...fixture, status: 'forged' })"), 'MISSING_OBSERVED_PACKAGE_COVERAGE'],
   ['network-capable driver import', text => "import 'node:https';\n" + text, 'CONSUMER_CHECK_FAILED']
 ]) test('consumer runner rejects ' + name, async () => {
@@ -274,14 +275,15 @@ test('coverage preserves all 126 local criteria and scoped global IDs without gr
   assert.equal(new Set(result.local_criteria.map(row => row.id)).size, 126);
   assert.ok(result.local_criteria.every(row => row.independent_review === 'pending_exact_candidate' && row.owner_and_consumer_acceptance === 'pending'));
   assert.ok(result.local_criteria.filter(row => [1, 3].includes(row.issue)).every(row => row.status === 'release_or_epic_blocked'));
-  assert.ok(result.local_criteria.filter(row => row.issue === 12).every(row => row.status === 'unresolved_producer_correctness' && row.unresolved_findings.length === 4));
+  assert.ok(result.local_criteria.filter(row => row.issue === 12).every(row => row.status === 'local_producer_repair_review_pending' && row.unresolved_findings.length === 4));
   assert.deepEqual(result.global_criteria.map(row => row.id).sort(), requirements.global_requirements.slice().sort());
   assert.ok(result.global_criteria.every(row => row.contribution_only && row.status === 'unverified_external_master_tracker'));
   const human = humanCoverage(result);
   for (const id of expected) assert.ok(human.includes(id));
   const json = JSON.stringify(result);
   for (const privateKey of ['"context":', '"valid":', '"artifact_bytes":', '"local_path":', root]) assert.ok(!json.includes(privateKey));
-  assert.equal(result.contracts.length, 45);
+  const schemaManifest = await readJson('generated/schema-manifest.json');
+  assert.equal(result.contracts.length, schemaManifest.schemas.length);
   assert.ok(result.contracts.every(row => row.failures.length === 0));
 });
 

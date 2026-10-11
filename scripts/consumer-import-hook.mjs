@@ -47,9 +47,10 @@ import { hashManifest as __fixtureHash } from './runtime.mjs';
 export function runCanonicalFixtures(contract, manifest) {
   const result = __observedRunCanonicalFixtures(contract, manifest);
   if (${JSON.stringify(config.required)}.includes(contract)) {
-    const expected = JSON.parse(__fixtureRead(new URL('../fixtures/' + contract + '.json', import.meta.url), 'utf8'));
+    const fixture = ${JSON.stringify(config.required_fixtures)}.find(row => row.contract === contract && row.version === manifest.schema_version);
+    const expected = fixture ? JSON.parse(__fixtureRead(new URL('../' + fixture.path, import.meta.url), 'utf8')) : null;
     __fixtureAppend(${JSON.stringify(config.audit)}, JSON.stringify({
-      kind: 'fixture_run', contract, bound: __fixtureHash(manifest) === __fixtureHash(expected),
+      kind: 'fixture_run', contract, version: manifest.schema_version, bound: expected !== null && __fixtureHash(manifest) === __fixtureHash(expected),
       failures: result.failures.length, positive: result.records.filter(row => row.expected.ok).length,
       negative: result.records.filter(row => !row.expected.ok).length,
       semantic: result.records.some(row => ['semantic', 'research_creative', 'commerce_evidence'].includes(row.mode)) ? 1 : 0

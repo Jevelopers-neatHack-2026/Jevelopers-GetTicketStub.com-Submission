@@ -18,7 +18,8 @@ const records = {
     "1.0.0": "ArtifactHandoffManifest_1_0_0"
   },
   "BudgetReservation": {
-    "1.0.0": "BudgetReservation_1_0_0"
+    "1.0.0": "BudgetReservation_1_0_0",
+    "2.0.0": "BudgetReservation_2_0_0"
   },
   "Cancellation": {
     "1.0.0": "Cancellation_1_0_0"
@@ -87,16 +88,20 @@ const records = {
     "1.0.0": "ProjectRequest_1_0_0"
   },
   "QueryRequest": {
-    "1.0.0": "QueryRequest_1_0_0"
+    "1.0.0": "QueryRequest_1_0_0",
+    "2.0.0": "QueryRequest_2_0_0"
   },
   "QueryResult": {
-    "1.0.0": "QueryResult_1_0_0"
+    "1.0.0": "QueryResult_1_0_0",
+    "2.0.0": "QueryResult_2_0_0"
   },
   "ReleaseRequest": {
-    "1.0.0": "ReleaseRequest_1_0_0"
+    "1.0.0": "ReleaseRequest_1_0_0",
+    "2.0.0": "ReleaseRequest_2_0_0"
   },
   "ReleaseResult": {
-    "1.0.0": "ReleaseResult_1_0_0"
+    "1.0.0": "ReleaseResult_1_0_0",
+    "2.0.0": "ReleaseResult_2_0_0"
   },
   "ResearchAnswerReceipt": {
     "1.0.0": "ResearchAnswerReceipt_1_0_0"
@@ -120,16 +125,20 @@ const records = {
     "1.0.0": "ResearchRequestReceipt_1_0_0"
   },
   "ReserveRequest": {
-    "1.0.0": "ReserveRequest_1_0_0"
+    "1.0.0": "ReserveRequest_1_0_0",
+    "2.0.0": "ReserveRequest_2_0_0"
   },
   "ReserveResult": {
-    "1.0.0": "ReserveResult_1_0_0"
+    "1.0.0": "ReserveResult_1_0_0",
+    "2.0.0": "ReserveResult_2_0_0"
   },
   "SettleRequest": {
-    "1.0.0": "SettleRequest_1_0_0"
+    "1.0.0": "SettleRequest_1_0_0",
+    "2.0.0": "SettleRequest_2_0_0"
   },
   "SettleResult": {
-    "1.0.0": "SettleResult_1_0_0"
+    "1.0.0": "SettleResult_1_0_0",
+    "2.0.0": "SettleResult_2_0_0"
   },
   "UsageEvent": {
     "1.0.0": "UsageEvent_1_0_0"

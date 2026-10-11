@@ -1,5 +1,6 @@
-import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest, ContractError } from './runtime.mjs';
+import { validateContract, validateContractVersion, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest, ContractError } from './runtime.mjs';
 import { DefinitionVersionedReference, DefinitionDecisionQuestion } from '../generated/validators.mjs';
+import { checkFinanceReservation, checkFinanceCommand, checkFinanceResult, checkFinanceDispatch } from './finance-v2.mjs';
 export { errorRegistry } from '../generated/error-registry.mjs';
 
 const ok = value => ({ ok: true, value });
@@ -252,110 +253,17 @@ function reservationFacts(value) {
   return ok(value);
 }
 
-function reservationPrior(context) {
-  const prior = validateContract('BudgetReservation', context.prior);
-  if (!prior.ok || !reservationFacts(prior.value).ok || !checkTrustedContext(prior.value, context.scope).ok || prior.value.producer.module !== 'cost-intelligence' || !equal(prior.value.authority_ref, context.authority_ref)) return fail('INVALID_TRUST_CONTEXT', '/prior');
-  return prior;
-}
-
-function reservationContext(context) {
-  if (!validatePrimitive('Currency', context.currency).ok || !['not_dispatched', 'in_flight', 'finished', 'uncertain'].includes(context.execution_state) || !['complete', 'incomplete', 'unknown'].includes(context.usage_completeness) || !validateVersionedReference(context.authority_ref).ok || context.authority_ref.contract !== 'cost-intelligence') return fail('INVALID_TRUST_CONTEXT');
-  return ok(context);
-}
-
-function financeResolved(context, prior, reference) {
-  const resolution = context.resolution;
-  return record(resolution) && checkTrustedContext(resolution, context.scope).ok &&
-    resolution.reservation_id === prior.reservation_id && resolution.billable_attempt_id === prior.billable_attempt_id &&
-    ['finished', 'not_dispatched'].includes(resolution.execution_state) && resolution.execution_state === context.execution_state &&
-    validateVersionedReference(resolution.reference).ok && resolution.reference.contract === 'FinanceResolution' &&
-    reference !== null && reference !== undefined && equal(resolution.reference, reference);
-}
-
 export function checkReservation(input, context) {
-  const parsed = boundary('BudgetReservation', input, context); if (!parsed.ok) return parsed;
-  const trusted = reservationContext(context); if (!trusted.ok) return trusted;
-  const value = parsed.value;
-  if (value.producer.module !== 'cost-intelligence' || !equal(value.authority_ref, context.authority_ref)) return fail('SCOPE_MISMATCH', '/authority_ref');
-  const facts = reservationFacts(value); if (!facts.ok) return facts;
-  if (value.held && value.held.currency !== context.currency) return fail('CURRENCY_MISMATCH', '/held/currency');
-  if (['in_flight', 'uncertain'].includes(context.execution_state) && ['released', 'expired', 'consumed'].includes(value.lifecycle)) return fail('UNCERTAIN_EXECUTION', '/lifecycle');
-  if (value.lifecycle === 'expired' && Date.parse(context.now) < Date.parse(value.expires_at)) return fail('INVALID_TRANSITION', '/lifecycle');
-  if (context.prior) {
-    const old = reservationPrior(context); if (!old.ok) return old;
-    if (['in_flight', 'uncertain'].includes(old.value.execution_state) && !['in_flight', 'uncertain'].includes(value.execution_state) && !financeResolved(context, old.value, value.resolution_ref)) return fail('UNCERTAIN_EXECUTION', '/execution_state');
-    for (const key of ['reservation_id', 'budget_scope_id', 'logical_operation_id', 'billable_attempt_id', 'idempotency_key']) if (value[key] !== old.value[key]) return fail('IDENTITY_COLLISION', '/' + key);
-    if (value.revision < old.value.revision || value.revision > old.value.revision + 1) return fail('STALE_REVISION', '/revision');
-    if (value.revision === old.value.revision && !equal(value, old.value)) return fail('REVISION_CONFLICT', '/revision');
-    if (['released', 'expired', 'consumed'].includes(old.value.lifecycle) && value.revision !== old.value.revision) return fail('INVALID_TRANSITION', '/lifecycle');
-    if (old.value.held && value.held && (!equal(old.value.held, value.held) || (old.value.consumed && value.consumed && compareDecimal(value.consumed.amount, old.value.consumed.amount) < 0))) return fail('INVALID_MONEY', '/held');
-  }
-  return parsed;
+  if (!record(input) || input.schema_version !== '2.0.0') return fail('UNSUPPORTED_VERSION', '/schema_version');
+  return checkFinanceReservation(input, context);
 }
-
 export function checkReservationCommand(input, context) {
-  const allowed = ['ReserveRequest', 'SettleRequest', 'ReleaseRequest', 'QueryRequest'];
-  const contract = contractOf(input);
-  if (!allowed.includes(contract)) return fail('UNKNOWN_CONTRACT', '/contract');
-  const parsed = boundary(contract, input, context); if (!parsed.ok) return parsed;
-  const trusted = reservationContext(context); if (!trusted.ok) return trusted;
-  const value = parsed.value;
-  if (value.currency !== context.currency) return fail('CURRENCY_MISMATCH', '/currency');
-  if (context.previous_command) {
-    const previous = validateContract(context.previous_command.contract, context.previous_command);
-    if (!previous.ok || !allowed.includes(previous.value.contract)) return fail('INVALID_TRUST_CONTEXT', '/previous_command');
-    if (previous.value.idempotency_key === value.idempotency_key) return equal(previous.value, value) ? parsed : fail('IDENTITY_COLLISION', '/idempotency_key');
-  }
-  if (value.contract === 'ReserveRequest') {
-    if (!moneyValid(value.requested)) return fail('INVALID_MONEY', '/requested/amount');
-    if (value.requested.currency !== context.currency) return fail('CURRENCY_MISMATCH', '/requested/currency');
-    if (Date.parse(value.expires_at) <= Date.parse(context.now)) return fail('EXPIRED', '/expires_at');
-    return parsed;
-  }
-  const old = reservationPrior(context); if (!old.ok) return old;
-  for (const key of ['reservation_id', 'budget_scope_id', 'logical_operation_id', 'billable_attempt_id']) if (value[key] !== old.value[key]) return fail('IDENTITY_COLLISION', '/' + key);
-  if (old.value.held && old.value.held.currency !== value.currency) return fail('CURRENCY_MISMATCH', '/currency');
-  if (value.expected_revision !== old.value.revision) return fail('STALE_REVISION', '/expected_revision');
-  if (value.contract !== 'QueryRequest' && old.value.decision !== 'granted') return fail('INVALID_TRANSITION', '/reservation_id');
-  if (value.contract === 'ReleaseRequest') {
-    if (['in_flight', 'uncertain'].includes(context.execution_state) || (['in_flight', 'uncertain'].includes(old.value.execution_state) && !financeResolved(context, old.value, value.resolution_ref))) return fail('UNCERTAIN_EXECUTION', '/reason');
-    if (context.usage_completeness !== 'complete' && context.execution_state !== 'not_dispatched') return fail('UNKNOWN_USAGE', '/reason');
-    if (value.reason === 'expired' && Date.parse(context.now) < Date.parse(old.value.expires_at)) return fail('INVALID_TRANSITION', '/reason');
-  }
-  if (value.contract === 'SettleRequest') {
-    if (['in_flight', 'uncertain'].includes(context.execution_state)) return fail('UNCERTAIN_EXECUTION', '/usage_ref');
-    if (['in_flight', 'uncertain'].includes(old.value.execution_state) && !financeResolved(context, old.value, value.resolution_ref)) return fail('UNCERTAIN_EXECUTION', '/usage_ref');
-    if (context.usage_completeness !== 'complete') return fail('UNKNOWN_USAGE', '/usage_ref');
-    if (!moneyValid(value.consumed) || !old.value.held || compareDecimal(value.consumed.amount, old.value.held.amount) > 0) return fail('INVALID_MONEY', '/consumed');
-    if (value.consumed.currency !== context.currency) return fail('CURRENCY_MISMATCH', '/consumed/currency');
-  }
-  return parsed;
+  if (!record(input) || input.schema_version !== '2.0.0') return fail('UNSUPPORTED_VERSION', '/schema_version');
+  return checkFinanceCommand(input, context);
 }
-
 export function checkReservationResult(input, context) {
-  const allowed = ['ReserveResult', 'SettleResult', 'ReleaseResult', 'QueryResult'];
-  const contract = contractOf(input);
-  if (!allowed.includes(contract)) return fail('UNKNOWN_CONTRACT', '/contract');
-  const parsed = boundary(contract, input, context); if (!parsed.ok) return parsed;
-  const value = parsed.value;
-  const successful = !['denied', 'unknown', 'unavailable'].includes(value.disposition);
-  const request = successful ? checkReservationCommand(context.request, context) : record(context.request) && ['ReserveRequest', 'SettleRequest', 'ReleaseRequest', 'QueryRequest'].includes(context.request.contract) ? boundary(context.request.contract, context.request, context) : fail('INVALID_TRUST_CONTEXT');
-  if (!request.ok) return fail('INVALID_TRUST_CONTEXT', '/request');
-  const dispositions = { ReserveResult: ['granted', 'denied', 'unknown', 'unavailable', 'duplicate'], SettleResult: ['consumed', 'denied', 'unknown', 'unavailable', 'duplicate', 'held_for_reconciliation'], ReleaseResult: ['released', 'expired', 'denied', 'unknown', 'unavailable', 'duplicate', 'held_for_reconciliation'], QueryResult: ['granted', 'denied', 'unknown', 'unavailable', 'duplicate', 'consumed', 'released', 'expired', 'held_for_reconciliation'] };
-  if (!dispositions[value.contract].includes(value.disposition)) return fail('INVALID_TRANSITION', '/disposition');
-  if (value.contract !== request.value.contract.replace('Request', 'Result') || value.request_id !== request.value.request_id || value.idempotency_key !== request.value.idempotency_key) return fail('IDENTITY_COLLISION', '/request_id');
-  if (value.producer.module !== 'cost-intelligence') return fail('SCOPE_MISMATCH', '/producer/module');
-  if (['denied', 'unavailable'].includes(value.disposition) && !value.error) return fail('INVALID_PAYLOAD', '/error');
-  if (['granted', 'duplicate', 'consumed', 'released', 'expired', 'held_for_reconciliation'].includes(value.disposition) && !value.reservation) return fail('INVALID_PAYLOAD', '/reservation');
-  if (value.reservation) {
-    const checked = checkReservation(value.reservation, { ...context, references: Object.fromEntries(Object.entries(context.references).filter(([key]) => key.startsWith('reservation/')).map(([key, ref]) => [key.slice('reservation/'.length), ref])) });
-    if (!checked.ok) return checked;
-    for (const key of ['budget_scope_id', 'logical_operation_id', 'billable_attempt_id']) if (checked.value[key] !== request.value[key]) return fail('IDENTITY_COLLISION', '/reservation/' + key);
-    const lifecycle = { consumed: 'consumed', released: 'released', expired: 'expired', held_for_reconciliation: 'uncertain_in_flight' }[value.disposition];
-    if (lifecycle && checked.value.lifecycle !== lifecycle) return fail('INVALID_TRANSITION', '/reservation/lifecycle');
-    if (value.disposition === 'granted' && checked.value.decision !== 'granted') return fail('INVALID_TRANSITION', '/reservation/decision');
-  }
-  return parsed;
+  if (!record(input) || input.schema_version !== '2.0.0') return fail('UNSUPPORTED_VERSION', '/schema_version');
+  return checkFinanceResult(input, context);
 }
 
 export function checkFinancialSummary(input, context) {
@@ -389,8 +297,18 @@ function decisionFacts(value, context, dispatch) {
   if (value.attempt_number > value.attempt_limit) return fail('POLICY_MISMATCH', '/attempt_number');
   if (dispatch && Date.parse(value.deadline_at) <= Date.parse(context.now)) return fail('EXPIRED', '/deadline_at');
   if (value.model_ref.contract !== 'model' || value.policy_ref.contract !== 'policy' || value.budget_ref.contract !== 'BudgetReservation' || value.state_ref.contract !== 'DecisionState') return fail('REFERENCE_MISMATCH', '/model_ref');
-  const budget = validateContract('BudgetReservation', context.budget);
+  const budget = validateContractVersion('BudgetReservation', '1.0.0', context.budget);
   if (!budget.ok || !reservationFacts(budget.value).ok || !checkTrustedContext(budget.value, context.scope).ok || budget.value.producer.module !== 'cost-intelligence' || budget.value.authority_ref.contract !== 'cost-intelligence') return fail('INVALID_TRUST_CONTEXT', '/budget');
+  for (const key of ['environment', 'billing_mode']) {
+    const expected = context[key] ?? budget.value[key];
+    if (budget.value[key] !== expected) return fail('INVALID_TRUST_CONTEXT', '/budget/' + key);
+    if (value[key] !== expected) return fail('SCOPE_MISMATCH', '/' + key);
+  }
+  if (dispatch && (budget.value.decision !== 'granted' || budget.value.lifecycle !== 'held' || budget.value.execution_state !== 'not_dispatched' || Date.parse(budget.value.expires_at) <= Date.parse(context.now))) return fail('BUDGET_UNAVAILABLE', '/budget_ref');
+  if (!record(context.finance_context) || !record(context.finance_context.current_reservation)) return fail('INVALID_TRUST_CONTEXT', '/finance_context');
+  const current = dispatch ? checkFinanceDispatch(context.finance_context.current_reservation, context.finance_context) : checkFinanceReservation(context.finance_context.current_reservation, context.finance_context);
+  if (!current.ok || !checkTrustedContext(current.value, context.scope).ok || current.value.decision !== 'granted') return fail('INVALID_TRUST_CONTEXT', '/finance_context');
+  for (const key of ['reservation_id', 'revision', 'budget_scope_id', 'logical_operation_id', 'billable_attempt_id', 'environment', 'billing_mode', 'held', 'consumed', 'authority_ref', 'expires_at']) if (!equal(budget.value[key], current.value[key])) return fail('INVALID_TRUST_CONTEXT', '/budget_projection');
   for (const key of ['logical_operation_id', 'billable_attempt_id']) if (value[key] !== budget.value[key]) return fail('IDENTITY_COLLISION', '/' + key);
   if (value.budget_ref.id !== budget.value.reservation_id || value.budget_ref.revision !== budget.value.revision) return fail('REFERENCE_MISMATCH', '/budget_ref');
   if (dispatch && (budget.value.decision !== 'granted' || budget.value.lifecycle !== 'held' || budget.value.execution_state !== 'not_dispatched' || Date.parse(budget.value.expires_at) <= Date.parse(context.now))) return fail('BUDGET_UNAVAILABLE', '/budget_ref');
@@ -450,6 +368,7 @@ export function checkDecisionResult(request, input, context) {
   const requestChecked = decisionFacts(requestParsed.value, context, false); if (!requestChecked.ok) return requestChecked;
   const parsed = boundary('DecisionPortResult', input, context); if (!parsed.ok) return parsed;
   const value = parsed.value, req = requestParsed.value;
+  for (const key of ['environment', 'billing_mode']) if (value[key] !== req[key]) return fail('SCOPE_MISMATCH', '/' + key);
   for (const key of ['request_id', 'batch_id', 'logical_operation_id', 'billable_attempt_id', 'acceptance_policy']) if (value[key] !== req[key]) return fail('IDENTITY_COLLISION', '/' + key);
   for (const key of ['model_ref', 'policy_ref']) if (!equal(value[key], req[key])) return fail('REFERENCE_MISMATCH', '/' + key);
   const ids = Object.keys(req.questions);
@@ -503,6 +422,7 @@ export function checkDecisionReceipt(input, context) {
   const parsed = boundary('DecisionReceipt', input, context); if (!parsed.ok) return parsed;
   const result = checkDecisionResult(context.request, context.result, context); if (!result.ok) return fail('INVALID_TRUST_CONTEXT', '/result');
   const req = context.request, value = parsed.value;
+  for (const key of ['environment', 'billing_mode']) if (value[key] !== req[key]) return fail('SCOPE_MISMATCH', '/' + key);
   for (const key of ['request_id', 'batch_id', 'logical_operation_id', 'billable_attempt_id']) if (value[key] !== req[key]) return fail('INVALID_RECEIPT', '/' + key);
   if (!equal(value.normalized_result, context.result)) return fail('INVALID_RECEIPT', '/normalized_result');
   if (value.request_hash !== hashManifest(req)) return fail('INVALID_RECEIPT', '/request_hash');

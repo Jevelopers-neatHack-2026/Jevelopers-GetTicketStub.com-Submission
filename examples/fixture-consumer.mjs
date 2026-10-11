@@ -16,7 +16,9 @@ let cases = 0, negativeAssertions = 0;
 for (const schema of schemaManifest.schemas) {
   assert.equal(hashBytes(await readFile(new URL(schema.path, packageRoot))), 'sha256:' + schema.sha256);
   assert.ok(Object.hasOwn(versions[schema.contract], schema.version));
-  const fixture = await read('fixtures/' + schema.contract + '.json');
+  const fixtureEntry = fixtureManifest.contracts.find(row => row.contract === schema.contract && row.version === schema.version);
+  assert.ok(fixtureEntry);
+  const fixture = await read(fixtureEntry.path);
   const result = runCanonicalFixtures(schema.contract, fixture);
   assert.deepEqual(result.failures, []);
   cases += result.records.length;

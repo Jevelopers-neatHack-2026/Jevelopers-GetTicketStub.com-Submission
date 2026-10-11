@@ -401,15 +401,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/BudgetReservation/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/BudgetReservation_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/BudgetReservation.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/BudgetReservation/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/BudgetReservation_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/BudgetReservation.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/BudgetReservation/1.0.0.json",
+          "generated_export": "generated/BudgetReservation_1_0_0.d.ts",
+          "fixtures": "fixtures/BudgetReservation.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/BudgetReservation/2.0.0.json",
+          "generated_export": "generated/BudgetReservation_2_0_0.d.ts",
+          "fixtures": "fixtures/BudgetReservation.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "ReserveRequest",
@@ -438,15 +459,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/ReserveRequest/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/ReserveRequest_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/ReserveRequest.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/ReserveRequest/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/ReserveRequest_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/ReserveRequest.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/ReserveRequest/1.0.0.json",
+          "generated_export": "generated/ReserveRequest_1_0_0.d.ts",
+          "fixtures": "fixtures/ReserveRequest.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/ReserveRequest/2.0.0.json",
+          "generated_export": "generated/ReserveRequest_2_0_0.d.ts",
+          "fixtures": "fixtures/ReserveRequest.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "ReserveResult",
@@ -475,15 +517,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/ReserveResult/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/ReserveResult_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/ReserveResult.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/ReserveResult/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/ReserveResult_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/ReserveResult.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/ReserveResult/1.0.0.json",
+          "generated_export": "generated/ReserveResult_1_0_0.d.ts",
+          "fixtures": "fixtures/ReserveResult.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/ReserveResult/2.0.0.json",
+          "generated_export": "generated/ReserveResult_2_0_0.d.ts",
+          "fixtures": "fixtures/ReserveResult.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "SettleRequest",
@@ -512,15 +575,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/SettleRequest/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/SettleRequest_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/SettleRequest.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/SettleRequest/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/SettleRequest_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/SettleRequest.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/SettleRequest/1.0.0.json",
+          "generated_export": "generated/SettleRequest_1_0_0.d.ts",
+          "fixtures": "fixtures/SettleRequest.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/SettleRequest/2.0.0.json",
+          "generated_export": "generated/SettleRequest_2_0_0.d.ts",
+          "fixtures": "fixtures/SettleRequest.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "SettleResult",
@@ -549,15 +633,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/SettleResult/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/SettleResult_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/SettleResult.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/SettleResult/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/SettleResult_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/SettleResult.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/SettleResult/1.0.0.json",
+          "generated_export": "generated/SettleResult_1_0_0.d.ts",
+          "fixtures": "fixtures/SettleResult.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/SettleResult/2.0.0.json",
+          "generated_export": "generated/SettleResult_2_0_0.d.ts",
+          "fixtures": "fixtures/SettleResult.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "ReleaseRequest",
@@ -586,15 +691,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/ReleaseRequest/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/ReleaseRequest_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/ReleaseRequest.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/ReleaseRequest/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/ReleaseRequest_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/ReleaseRequest.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/ReleaseRequest/1.0.0.json",
+          "generated_export": "generated/ReleaseRequest_1_0_0.d.ts",
+          "fixtures": "fixtures/ReleaseRequest.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/ReleaseRequest/2.0.0.json",
+          "generated_export": "generated/ReleaseRequest_2_0_0.d.ts",
+          "fixtures": "fixtures/ReleaseRequest.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "ReleaseResult",
@@ -623,15 +749,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/ReleaseResult/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/ReleaseResult_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/ReleaseResult.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/ReleaseResult/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/ReleaseResult_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/ReleaseResult.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/ReleaseResult/1.0.0.json",
+          "generated_export": "generated/ReleaseResult_1_0_0.d.ts",
+          "fixtures": "fixtures/ReleaseResult.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/ReleaseResult/2.0.0.json",
+          "generated_export": "generated/ReleaseResult_2_0_0.d.ts",
+          "fixtures": "fixtures/ReleaseResult.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "QueryRequest",
@@ -660,15 +807,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/QueryRequest/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/QueryRequest_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/QueryRequest.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/QueryRequest/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/QueryRequest_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/QueryRequest.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/QueryRequest/1.0.0.json",
+          "generated_export": "generated/QueryRequest_1_0_0.d.ts",
+          "fixtures": "fixtures/QueryRequest.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/QueryRequest/2.0.0.json",
+          "generated_export": "generated/QueryRequest_2_0_0.d.ts",
+          "fixtures": "fixtures/QueryRequest.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "QueryResult",
@@ -697,15 +865,36 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
       "state": "operations_candidate",
-      "schema_path": "schemas/QueryResult/1.0.0.json",
-      "schema_version": "1.0.0",
-      "generated_export": "generated/QueryResult_1_0_0.d.ts",
-      "helper": "tooling/operations.mjs",
-      "fixtures": "fixtures/QueryResult.json",
-      "docs": "docs/operations-contracts.md",
+      "schema_path": "schemas/QueryResult/2.0.0.json",
+      "schema_version": "2.0.0",
+      "generated_export": "generated/QueryResult_2_0_0.d.ts",
+      "helper": "tooling/finance-v2.mjs",
+      "fixtures": "fixtures/QueryResult.2_0_0.json",
+      "docs": "docs/finance-v2-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/QueryResult/1.0.0.json",
+          "generated_export": "generated/QueryResult_1_0_0.d.ts",
+          "fixtures": "fixtures/QueryResult.json",
+          "helper": "tooling/operations.mjs",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "legacy_candidate_no_v2_guarantees"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/QueryResult/2.0.0.json",
+          "generated_export": "generated/QueryResult_2_0_0.d.ts",
+          "fixtures": "fixtures/QueryResult.2_0_0.json",
+          "helper": "tooling/finance-v2.mjs",
+          "docs": "docs/finance-v2-contracts.md",
+          "semantic_profile": "cumulative_v2_proposal"
+        }
+      ],
+      "protocol_status": "finance_v2_proposal_pending_owner_rereview"
     },
     {
       "name": "FinancialSummary",

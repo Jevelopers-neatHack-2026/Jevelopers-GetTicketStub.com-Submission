@@ -1,19 +1,56 @@
 {
   "name": "@jevelopers/shared-contracts",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.23.3 <23" },
-  "files": ["generated", "tooling/runtime.mjs", "tooling/operations.mjs", "tooling/research-creative.mjs", "tooling/commerce-evidence.mjs", "tooling/fixture-harness.mjs", "schemas", "fixtures", "compatibility", "docs", "examples", "README.md", "CHANGELOG.md"],
+  "engines": {
+    "node": ">=22.23.3 <23 || >=24.21.0 <25"
+  },
+  "files": [
+    "generated",
+    "tooling/runtime.mjs",
+    "tooling/operations.mjs",
+    "tooling/research-creative.mjs",
+    "tooling/commerce-evidence.mjs",
+    "tooling/fixture-harness.mjs",
+    "tooling/finance-v2.mjs",
+    "tooling/historical-finance-fixtures.mjs",
+    "schemas",
+    "fixtures",
+    "compatibility",
+    "docs",
+    "examples",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "exports": {
-    ".": { "types": "./generated/index.d.ts", "import": "./generated/index.mjs" },
-    "./operations": { "types": "./generated/operations.d.ts", "import": "./tooling/operations.mjs" },
-    "./research-creative": { "types": "./generated/research-creative.d.ts", "import": "./tooling/research-creative.mjs" },
-    "./commerce-evidence": { "types": "./generated/commerce-evidence.d.ts", "import": "./tooling/commerce-evidence.mjs" },
-    "./fixture-harness": { "types": "./generated/fixture-harness.d.ts", "import": "./tooling/fixture-harness.mjs" },
+    ".": {
+      "types": "./generated/index.d.ts",
+      "import": "./generated/index.mjs"
+    },
+    "./operations": {
+      "types": "./generated/operations.d.ts",
+      "import": "./tooling/operations.mjs"
+    },
+    "./research-creative": {
+      "types": "./generated/research-creative.d.ts",
+      "import": "./tooling/research-creative.mjs"
+    },
+    "./commerce-evidence": {
+      "types": "./generated/commerce-evidence.d.ts",
+      "import": "./tooling/commerce-evidence.mjs"
+    },
+    "./fixture-harness": {
+      "types": "./generated/fixture-harness.d.ts",
+      "import": "./tooling/fixture-harness.mjs"
+    },
     "./schemas/*": "./schemas/*",
     "./fixtures/*": "./fixtures/*",
-    "./compatibility/*": "./compatibility/*"
+    "./compatibility/*": "./compatibility/*",
+    "./finance-v2": {
+      "types": "./generated/finance-v2.d.ts",
+      "import": "./tooling/finance-v2.mjs"
+    }
   },
   "scripts": {
     "generate": "node scripts/generate.mjs",

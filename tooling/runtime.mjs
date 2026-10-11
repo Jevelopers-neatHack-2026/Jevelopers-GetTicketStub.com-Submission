@@ -85,7 +85,18 @@ export function validateContract(contract, value) {
   })) };
 }
 
-export function parseContract(contract, json) {
+export function validateContractVersion(contract, version, value) {
+  if (typeof contract !== 'string' || !Object.hasOwn(versions, contract)) return failure('UNKNOWN_CONTRACT', '/contract');
+  if (typeof version !== 'string' || !Object.hasOwn(versions[contract], version)) return failure('UNSUPPORTED_VERSION', '/schema_version');
+  if (object(value) && typeof value.schema_version === 'string' && value.schema_version !== version) return failure('UNSUPPORTED_VERSION', '/schema_version');
+  return validateContract(contract, value);
+}
+
+export function parseContractVersion(contract, version, json) {
+  return parseContract(contract, json, version);
+}
+
+export function parseContract(contract, json, expectedVersion) {
   if (typeof json !== 'string') return failure('MALFORMED_JSON', '');
   let value;
   try { value = JSON.parse(json); } catch (error) {
@@ -122,7 +133,7 @@ export function parseContract(contract, json) {
     if (error instanceof ContractError) return failure('MALFORMED_JSON', '');
     throw error;
   }
-  return validateContract(contract, value);
+  return expectedVersion === undefined ? validateContract(contract, value) : validateContractVersion(contract, expectedVersion, value);
 }
 
 export function validatePrimitive(name, value) {

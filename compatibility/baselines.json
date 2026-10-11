@@ -360,6 +360,51 @@
       "path": "schemas/UsageEvent/1.0.0.json",
       "sha256": "8556135f33fc81f85b51d11268c8b6e7d6fd464f73ef6f6b82df8a2207f6dbf6",
       "accepted": false
+    },
+    {
+      "contract": "BudgetReservation",
+      "version": "2.0.0",
+      "sha256": "e1099e84c7a94d1fbee6c73d1725265b1fd46b2ba4ae6a1a11ab0970ced89a07"
+    },
+    {
+      "contract": "ReserveRequest",
+      "version": "2.0.0",
+      "sha256": "78f949c337d94e979aec56954580bae903376e8614fd4e5ebd6caf55fea046bc"
+    },
+    {
+      "contract": "ReserveResult",
+      "version": "2.0.0",
+      "sha256": "080861f0651815feff022192bed4c3ae2d73eaaf5eed285f33c8e89df08d491c"
+    },
+    {
+      "contract": "SettleRequest",
+      "version": "2.0.0",
+      "sha256": "ce26b313b5615a05a503c848ba9c6a3c9da42fc2429b3cb0ce10cce61f642f94"
+    },
+    {
+      "contract": "SettleResult",
+      "version": "2.0.0",
+      "sha256": "31dc4ce503110a9765a242f2aee400ce274efe9e60c55b3323e2504d065221ed"
+    },
+    {
+      "contract": "ReleaseRequest",
+      "version": "2.0.0",
+      "sha256": "18738a17de2b4173c520cf27c4b53a975decee54e2b569976f21202db3d6cde2"
+    },
+    {
+      "contract": "ReleaseResult",
+      "version": "2.0.0",
+      "sha256": "ca4495cd1b53d11229334bc0f6e7f43cc640c336c19cd9b031698e9f9a2d31ff"
+    },
+    {
+      "contract": "QueryRequest",
+      "version": "2.0.0",
+      "sha256": "4f1deca1ab3a0f05a8723331bc9ea9d5b353f7397aaced1744ed1b02a16ce250"
+    },
+    {
+      "contract": "QueryResult",
+      "version": "2.0.0",
+      "sha256": "f8cdf831b26c5dede5440dd24fd1f7a68b60e761d1c0e04542f5d9f77c2ad6ce"
     }
   ]
 }

@@ -127,7 +127,8 @@ export async function consumerChecks(manifest, paths = {}) {
     if (!pinsMatch(entry, schemaManifest.schemas, fixtureManifest.digest, expectedPackage.digest) || entry.dependency_mode !== 'offline') { block('BLOCKED_MISSING_INTEGRATION_PIN'); continue; }
     const required = catalog.filter(contract => contract.producers.includes(repository) || contract.consumers.includes(repository));
     const requiredNames = required.map(contract => contract.name);
-    if (required.some(contract => !entry.schema_pins.some(pin => pin.contract === contract.name && pin.version === contract.schema_version)) || !Array.isArray(entry.roles) || required.some(contract => !entry.roles.some(role => role && role.contract === contract.name && role.producer === contract.producers.includes(repository) && role.consumer === contract.consumers.includes(repository)))) { block('BLOCKED_INCOMPLETE_CONSUMER_COVERAGE'); continue; }
+    const requiredFixtures = required.flatMap(contract => (contract.versions ?? [contract]).map(version => ({ contract: contract.name, version: version.schema_version, path: version.fixtures })));
+    if (requiredFixtures.some(contract => !entry.schema_pins.some(pin => pin.contract === contract.contract && pin.version === contract.version)) || !Array.isArray(entry.roles) || required.some(contract => !entry.roles.some(role => role && role.contract === contract.name && role.producer === contract.producers.includes(repository) && role.consumer === contract.consumers.includes(repository)))) { block('BLOCKED_INCOMPLETE_CONSUMER_COVERAGE'); continue; }
     if (!Array.isArray(entry.command) || entry.command.length !== 2 || entry.command[0] !== 'node' || typeof entry.command[1] !== 'string' || !safePackagePath(entry.command[1]) || !entry.command[1].endsWith('.mjs')) { block('BLOCKED_MISSING_CONSUMER_COMMAND'); continue; }
     let temp;
     try {
@@ -142,14 +143,14 @@ export async function consumerChecks(manifest, paths = {}) {
       await bindPackage(entry, expectedPackage, snapshot);
       const nonce = randomUUID(), audit = join(temp, 'audit.jsonl'), config = join(temp, 'binding.json');
       const binding = { repository, consumer_sha: entry.source_sha, shared_source_revision: entry.shared_source_revision, package_integrity: entry.package_integrity ?? null, package_content_digest: expectedPackage.digest, fixture_digest: fixtureManifest.digest, nonce };
-      await writeFile(config, JSON.stringify({ snapshot, audit, binding, required: requiredNames, files: expectedPackage.files }));
+      await writeFile(config, JSON.stringify({ snapshot, audit, binding, required: requiredNames, required_fixtures: requiredFixtures, files: expectedPackage.files }));
       const result = spawnSync(process.execPath, ['--import', join(root, 'scripts/consumer-import-hook.mjs'), script], { cwd: checkout, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024, env: { PATH: process.env.PATH, SHARED_CONTRACTS_ROOT: snapshot, SHARED_CONTRACTS_OFFLINE: '1', SHARED_CONTRACTS_BINDING_CONFIG: config } });
       if (result.status !== 0) { block('CONSUMER_CHECK_FAILED'); continue; }
       let receipt;
       try { receipt = JSON.parse(result.stdout); } catch (error) { if (!(error instanceof SyntaxError)) throw error; block('MISSING_CONSUMER_RECEIPT'); continue; }
       const observed = (await readFile(audit, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
       const coverage = observed.filter(row => row.kind === 'fixture_run' && row.bound && row.failures === 0);
-      if (requiredNames.some(name => !coverage.some(row => row.contract === name && row.positive > 0 && row.negative > 0 && row.semantic === (name === 'CommonEnvelope' || name === 'EvidenceProjection' ? 0 : 1)))) { block('MISSING_OBSERVED_PACKAGE_COVERAGE'); continue; }
+      if (requiredFixtures.some(item => !coverage.some(row => row.contract === item.contract && row.version === item.version && row.positive > 0 && row.negative > 0 && row.semantic === (item.contract === 'CommonEnvelope' || item.contract === 'EvidenceProjection' ? 0 : 1)))) { block('MISSING_OBSERVED_PACKAGE_COVERAGE'); continue; }
       if (receipt.status !== 'passed' || receipt.consumer_sha !== binding.consumer_sha || receipt.shared_source_revision !== binding.shared_source_revision || receipt.fixture_digest !== binding.fixture_digest || receipt.package_content_digest !== binding.package_content_digest || receipt.package_integrity !== binding.package_integrity || receipt.binding_nonce !== nonce || !Array.isArray(receipt.contracts_tested) || !same([...receipt.contracts_tested].sort(), [...requiredNames].sort())) { block('INVALID_CONSUMER_RECEIPT'); continue; }
       if (!await verifyPackageContents(snapshot, expectedPackage) || !await verifyPackageContents(root, expectedPackage)) { block('PACKAGE_CHANGED_DURING_DRIVER'); continue; }
       const changed = await checkoutCode(checkout, entry.source_sha);

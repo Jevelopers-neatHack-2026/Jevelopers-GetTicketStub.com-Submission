@@ -815,6 +815,276 @@
       "producer_version": "2.0.0",
       "consumer_version": "1.0.0",
       "accept": false
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
     }
   ],
   "profile_compatibility": {

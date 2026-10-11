@@ -1,0 +1,48 @@
+{
+  "reviewed_checkpoint": "60136d61edce96ae9f1be493796af87de1e7afbc",
+  "verdict": "REQUEST_CHANGES",
+  "fresh_review_of_repair": "pending",
+  "findings": [
+    {
+      "id": "SC-CHK-001",
+      "behavior": "driver-writable audit forgery",
+      "status": "unaddressed_separate_task"
+    },
+    {
+      "id": "SC-CHK-002",
+      "behavior": "DecisionPort budget/request/result/receipt partition",
+      "status": "locally_repaired_review_pending"
+    },
+    {
+      "id": "SC-CHK-003",
+      "behavior": "consumption approval/handoff linkage",
+      "status": "unaddressed_separate_task"
+    },
+    {
+      "id": "SC-CHK-004",
+      "behavior": "status regression through unknown states",
+      "status": "unaddressed_separate_task"
+    },
+    {
+      "id": "SC-CHK-005",
+      "behavior": "ResearchAnswerReceipt exact request reference",
+      "status": "unaddressed_separate_task"
+    },
+    {
+      "id": "SC-CHK-006",
+      "behavior": "ResearchBatchReceipt malformed-context exception",
+      "status": "unaddressed_separate_task"
+    },
+    {
+      "id": "SC-CHK-007",
+      "behavior": "private/public evidence ID projection",
+      "status": "unaddressed_separate_task"
+    },
+    {
+      "id": "SC-CHK-008",
+      "behavior": "missing authoritative dependency DAG edges",
+      "status": "unaddressed_separate_task"
+    }
+  ],
+  "note": "Checkpoint review intentionally excluded this later finance repair. Remaining seven findings keep the candidate blocked; no approval or resolution is fabricated."
+}

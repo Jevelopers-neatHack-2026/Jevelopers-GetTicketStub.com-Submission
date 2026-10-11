@@ -1,5 +1,5 @@
 {
-  "status": "blocking_producer_correctness_pending_separate_repair",
+  "status": "finance_v2_local_repairs_pending_owner_and_exact_candidate_rereview",
   "source": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12#issuecomment-6103878409",
   "reviewed_shared_source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
   "reviewed_package_version": "0.3.0",
@@ -13,28 +13,40 @@
       "severity": "high",
       "issue": 12,
       "summary": "Observed overrun is rejected as exceeding authorization; actual cost needs separate representation from dispatch capacity",
-      "status": "unresolved"
+      "status": "locally_repaired_v2_review_pending",
+      "legacy_profile": "1.0.0 limitation retained explicitly; no v2 guarantee is claimed for old helpers"
     },
     {
       "id": "FC-002",
       "severity": "high",
       "issue": 12,
       "summary": "Reservation semantics do not independently bind environment and billing partition across command/prior/result",
-      "status": "unresolved"
+      "status": "locally_repaired_v2_review_pending",
+      "legacy_profile": "1.0.0 limitation retained explicitly; no v2 guarantee is claimed for old helpers"
     },
     {
       "id": "FC-003",
       "severity": "high",
       "issue": 12,
       "summary": "Successful reserve/settle result amounts can contradict the bound command and prior economics",
-      "status": "unresolved"
+      "status": "locally_repaired_v2_review_pending",
+      "legacy_profile": "1.0.0 limitation retained explicitly; no v2 guarantee is claimed for old helpers"
     },
     {
       "id": "FC-004",
       "severity": "medium",
       "issue": 12,
       "summary": "Retained-hold acknowledgements rerun transition eligibility and reject authentic held-for-reconciliation outcomes",
-      "status": "unresolved"
+      "status": "locally_repaired_v2_review_pending",
+      "legacy_profile": "1.0.0 limitation retained explicitly; no v2 guarantee is claimed for old helpers"
     }
-  ]
+  ],
+  "repair_proposal": {
+    "package_version": "0.6.0",
+    "schema_version": "2.0.0",
+    "starting_checkpoint": "60136d61edce96ae9f1be493796af87de1e7afbc",
+    "impact": "compatibility/finance-v2-impact.json",
+    "captain_protocol": "ci-reservation-protocol-decision-1.0.0",
+    "accepted": false
+  }
 }
