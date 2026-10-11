@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Abril+Fatface&family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter+Tight:wght@400..700&display=swap">
 <style>
 /* Layout concept: a cinematic scroll. Paper-stock hero with a punched red disc holding the Blender stub,
-   five pinned full-bleed event scenes where a performer throws a real 3D stub across the screen,
+   eight pinned full-bleed event scenes where a performer throws a real 3D stub across the screen,
    then a corkboard that fills up one stub at a time and finally all at once. */
 :root{
   --ink:#17140f;          /* warm print black */
@@ -654,7 +654,7 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
   </section>
 
   <section class="scenes-intro" id="scenes" data-nav="#f4ecdd" style="position:relative;overflow:hidden"><div class="floaters" id="fl4" aria-hidden="true"></div>
-    <span class="mono" style="color:var(--foil)">Five nights · five stubs</span>
+    <span class="mono" style="color:var(--foil)">Eight nights · eight stubs</span>
     <h2>Every night <span>gets its own</span> stub.</h2>
     <p>Concerts, games, festivals, opening nights. Keep scrolling: each stub is designed around the night it remembers, with the names, the place, the date and the seat.</p>
   </section>
@@ -1165,7 +1165,7 @@ const MOTIF = {
   hockey: '<g fill="none" stroke-width="4"><rect x="40" y="60" width="1520" height="800" rx="220"/><line x1="800" y1="60" x2="800" y2="860" stroke="#e4572e" stroke-width="10"/><line x1="520" y1="60" x2="520" y2="860" stroke="#2b7bb9" stroke-width="10"/><line x1="1080" y1="60" x2="1080" y2="860" stroke="#2b7bb9" stroke-width="10"/><circle cx="800" cy="460" r="120" stroke="#2b7bb9"/><circle cx="260" cy="260" r="100" stroke="#e4572e"/><circle cx="260" cy="660" r="100" stroke="#e4572e"/><circle cx="1340" cy="260" r="100" stroke="#e4572e"/><circle cx="1340" cy="660" r="100" stroke="#e4572e"/></g>',
 };
 const list = document.getElementById('scene-list');
-const SHOWN = ['football','baseball','concert','basketball','hockey'];   // the events that get a full thrown scene
+const SHOWN = SCENES.map(s => s.key);   // the events that get a full thrown scene
 let shownN = 0;
 SCENES.forEach((s, i) => {
   if (!SHOWN.includes(s.key)) return; const num = String(++shownN).padStart(2,'0');
@@ -1191,7 +1191,7 @@ SCENES.forEach((s, i) => {
       <div class="mt"><dl class="meta"><div><dt>Sec</dt><dd>${s.sec}</dd></div><div><dt>Row</dt><dd>${s.row}</dd></div><div><dt>Seat</dt><dd>${s.seat}</dd></div></dl>
       <span class="mono" style="opacity:.75">${s.venue} · ${s.date}</span></div>
     </div>
-    <div class="counter mono"><span>Stub ${num}</span><span class="bar"><i></i></span><span>05</span></div>
+    <div class="counter mono"><span>Stub ${num}</span><span class="bar"><i></i></span><span>${String(SHOWN.length).padStart(2,'0')}</span></div>
   </div>`;
   list.appendChild(el);
 });
