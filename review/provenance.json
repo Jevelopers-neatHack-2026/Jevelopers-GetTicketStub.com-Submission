@@ -591,9 +591,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "demo/deck/concept-overview.html",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/demo/deck/concept-overview.html",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -644,15 +644,32 @@
           "PROV-PREVIEW-DECK-MOBILE-001",
           "PROV-PREVIEW-DECK-FULL-001"
         ],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-PREVIEW-DECK-DESKTOP-001",
+          "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+          "PROV-PREVIEW-DECK-FULL-001",
+          "PROV-PREVIEW-DECK-MOBILE-001",
+          "PROV-PREVIEW-DECK-RESP-1038-001",
+          "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+          "PROV-PREVIEW-DECK-RESP-1039-001",
+          "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+          "PROV-PREVIEW-DECK-RESP-1040-001",
+          "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
+          "PROV-PREVIEW-DECK-RESP-600-001",
+          "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+          "PROV-PREVIEW-DECK-RESP-601-001",
+          "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+          "PROV-PREVIEW-DECK-RESP-768-001",
+          "PROV-PREVIEW-DECK-RESP-768-FULL-001"
+        ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
         ]
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -1448,9 +1465,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/previews/deck-mobile-full.png",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/deck-mobile-full.png",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-mobile-full.png",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -1507,8 +1524,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "7a9a6cdf0f440eff58482bef4dc8b63c4944071a867694128172cb8cd4a9002c",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "52f0d462cd8cab6f42c45a715756432d5732a8789e1e6f3fe17f4686e3473b95",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -1526,9 +1543,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/previews/deck-presentation-1440.png",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/deck-presentation-1440.png",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-presentation-1440.png",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -1585,8 +1602,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "77b83b36f26b1d6fcbdaf9826f176545cfcd2f56ca6317fe32a701d39a73d5f3",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "a390204fd455ddfeea8c867672a2452d2d043d4111e9246c0b9f8faa1bcd045f",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -1914,9 +1931,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/browser-render-evidence.json",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/browser-render-evidence.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/browser-render-evidence.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -1971,8 +1988,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "95dae8d05e25fc8aa9df53d2bb16f82838495986d5a5393f30e2914ddc72d308",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2066,9 +2083,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/accessibility-results.json",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/accessibility-results.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/accessibility-results.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2123,8 +2140,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "57cd3c4fde010b5b28cde3c188f53882b21a3797e9da2362447bbde713370ef6",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "c7353156b2a0c0135a5b6fbf45e767b2f1d9d63e2a3f50b47f40f5c97e83f6d0",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2142,9 +2159,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/verification.md",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/verification.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/verification.md",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2199,8 +2216,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "4ef54ad8d5b226239be5a8ae8b6d7c63c17795ca69d5778feae963a85dbf35f8",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "f3f628a7c462b98a339c8be089d47a92421e71ca5e9a824e694fcbab371ec9e1",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2218,9 +2235,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/accessibility.md",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/accessibility.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/accessibility.md",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2275,8 +2292,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "0742cf31e7e711614a88847a254b20acb2ddfa395cf1a86dfd0932642be324f0",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "ddfc6296a810ccc6c0b3add73803b228ee3664b3e48af485b348642a6cf075e7",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2294,9 +2311,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/accessibility-checklist.md",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/accessibility-checklist.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/accessibility-checklist.md",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2351,8 +2368,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "d5c089b9d170eb0a24c2823d1e38feeea6eaab2133ee82cd77d91f4547c32df8",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "bb205339ef9d8a72d528740171c2dda9b3f4583e134923e2094daa33120af1b5",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2370,9 +2387,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tools/render_collateral.mjs",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/tools/render_collateral.mjs",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/tools/render_collateral.mjs",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2427,8 +2444,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "4741c6f71ecc064dc38c63d2c550b5524b8fea6befdb671f5bf48cfefedbe9d6",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "6cb251aa3f10167ab39aab5eb492e386a9831b64146e63a6ff3642ea54ee59a5",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2446,9 +2463,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_visual_collateral.py",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/tests/test_visual_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/tests/test_visual_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2503,8 +2520,8 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "05e5d9483fc027ac39bd8a0f256c0031afc67b3de9775d97804a23008e7e0189",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "eb4959099a72166f1cababf23bca51d8cb62dc1a1e5109943eb2c6de787d5dec",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2522,9 +2539,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_visual_accessibility.py",
-        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/tests/test_visual_accessibility.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/tests/test_visual_accessibility.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -2579,8 +2596,1035 @@
       },
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "e7bf51b4b987d0b941e5dc45cb0203ee5d1aa04e266828fd7a11ebf7f65169b5",
-        "status": "Verified against the current exact file and the pinned source commit containing it."
+        "value": "ff4c383cebeed6c9d055d961df536906da423b8105b76fe0477917644af15050",
+        "status": "Verified against exact current file bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-presentation-1440-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-presentation-1440-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "aaca5455e7ab6493761a81efe74f9d663082337285e02e5fdb44aed64463c5cf",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-600-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-600.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-600.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "50e72ef3dc41be82b9f86d822c3e108153c12a618f62ed5629ed600fca1de409",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-600-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-600-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "54ad8423920df32d03d6f1291631f7dd9b69391cd7f134d9ea0fcb32525cd3a6",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-601-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-601.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-601.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "6f898f026e3c505d03ab095bda526f54f8982a741ee080297b897b6139a1df34",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-601-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-601-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "191dbf36db0d1b2d4e881baf80421f12ec942798e120bb1a5e7ea0f44df8ff87",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-768-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-768.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-768.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-768-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-768-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "14e7af082dfe616f8db854f2599d5872c0e7ea78f36b6f8d0274ee8215c7722e",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-1038-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-1038.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-1038.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "e2e1e04cae82958d117ae139b4d2f38b0f46294fa9214ea563af81b3941e653e",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-1038-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-1038-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "ddcd908ee8e1bc4d5dbbab428edf4e5bf739b5dfa25a1c9c8afcda35f72a9aaa",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-1039-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-1039.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-1039.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b839cd9022d02b1c79b31e9d5a8eb463378a2e7c819c2c10f974fd813779503a",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-1039-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-1039-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "cd7515ba1f8cdff02bc2c05c902510b453fbcc8a00294b2ea54f83daf19eb4d2",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-1040-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-1040.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-1040.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "1599879a9d81c85e25315647cd4f789c2ef63b9f027db5a8d7406eb6a2a19639",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-responsive-1040-full.png",
+        "revision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/f8160d5b36c7cb3d07c7be39877fa22d375db915/review/visual/previews/deck-responsive-1040-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Executed Chrome viewport render of the exact responsive HTML source; author preview only, not release output.",
+          "The matching viewport and full-page receipt is recorded in browser-render-evidence.json and accessibility-results.json."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "987e04db04c0305857f33fc861b4b8f5d0d876439b194f093016e6102ccb86f6",
+        "status": "Verified against exact browser-rendered preview bytes and the pinned source commit containing them."
       },
       "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
       "reviewDate": null,
@@ -2648,7 +3692,20 @@
           "examples/synthetic/redaction-after.png",
           "review/visual/previews/deck-mobile-390.png",
           "review/visual/previews/deck-mobile-full.png",
+          "review/visual/previews/deck-presentation-1440-full.png",
           "review/visual/previews/deck-presentation-1440.png",
+          "review/visual/previews/deck-responsive-1038-full.png",
+          "review/visual/previews/deck-responsive-1038.png",
+          "review/visual/previews/deck-responsive-1039-full.png",
+          "review/visual/previews/deck-responsive-1039.png",
+          "review/visual/previews/deck-responsive-1040-full.png",
+          "review/visual/previews/deck-responsive-1040.png",
+          "review/visual/previews/deck-responsive-600-full.png",
+          "review/visual/previews/deck-responsive-600.png",
+          "review/visual/previews/deck-responsive-601-full.png",
+          "review/visual/previews/deck-responsive-601.png",
+          "review/visual/previews/deck-responsive-768-full.png",
+          "review/visual/previews/deck-responsive-768.png",
           "review/visual/previews/mockup-presentation-720.png",
           "review/visual/previews/workflow-presentation-960.png",
           "review/visual/previews/x-feed-390.png"
@@ -2702,10 +3759,10 @@
       "node": "v24.15.0",
       "python": "Python 3.9.6",
       "pillow": "11.3.0",
-      "pageViews": 10,
+      "pageViews": 16,
       "externalPageRequests": 0,
       "pageErrors": 0,
-      "scope": "Commands and versions from pinned receipts; platform/font changes may change rendered hashes."
+      "scope": "Executed browser receipts cover the exact pinned static candidate and all recorded viewport/full-page previews; platform/font changes may change rendered hashes."
     },
     "releaseDisposition": "blocked_pending_independent_review_source_owner_rights_and_exact_destination_approval"
   }

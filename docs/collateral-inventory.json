@@ -1879,7 +1879,20 @@
       "PROV-ACCESSIBILITY-CHECKLIST-001",
       "TOOL-RENDER-COLLATERAL-001",
       "TEST-VISUAL-REDACTION-001",
-      "TEST-VISUAL-ACCESSIBILITY-001"
+      "TEST-VISUAL-ACCESSIBILITY-001",
+      "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-600-001",
+      "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-601-001",
+      "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-768-001",
+      "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-1038-001",
+      "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-1039-001",
+      "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-1040-001",
+      "PROV-PREVIEW-DECK-RESP-1040-FULL-001"
     ],
     "releaseState": "draft; no publication permission or independent approval is implied",
     "visualPaths": [
@@ -1918,7 +1931,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
-      "sha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66"
+      "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770"
     },
     {
       "fileId": "PROV-DEMO-WORKFLOW-ALT-001",
@@ -2178,7 +2191,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-ACCESSIBILITY-CHECKLIST-001",
-      "sha256": "d5c089b9d170eb0a24c2823d1e38feeea6eaab2133ee82cd77d91f4547c32df8"
+      "sha256": "bb205339ef9d8a72d528740171c2dda9b3f4583e134923e2094daa33120af1b5"
     },
     {
       "fileId": "PROV-ACCESSIBILITY-GUIDE-001",
@@ -2190,7 +2203,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-ACCESSIBILITY-GUIDE-001",
-      "sha256": "0742cf31e7e711614a88847a254b20acb2ddfa395cf1a86dfd0932642be324f0"
+      "sha256": "ddfc6296a810ccc6c0b3add73803b228ee3664b3e48af485b348642a6cf075e7"
     },
     {
       "fileId": "PROV-SYNTHETIC-CANARY-001",
@@ -2248,7 +2261,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-VISUAL-ACCESSIBILITY-001",
-      "sha256": "57cd3c4fde010b5b28cde3c188f53882b21a3797e9da2362447bbde713370ef6"
+      "sha256": "c7353156b2a0c0135a5b6fbf45e767b2f1d9d63e2a3f50b47f40f5c97e83f6d0"
     },
     {
       "fileId": "PROV-VISUAL-HANDOFF-001",
@@ -2272,7 +2285,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-VISUAL-BROWSER-001",
-      "sha256": "95dae8d05e25fc8aa9df53d2bb16f82838495986d5a5393f30e2914ddc72d308"
+      "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275"
     },
     {
       "fileId": "PROV-VISUAL-CONTRAST-001",
@@ -2308,7 +2321,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-PREVIEW-DECK-FULL-001",
-      "sha256": "7a9a6cdf0f440eff58482bef4dc8b63c4944071a867694128172cb8cd4a9002c"
+      "sha256": "52f0d462cd8cab6f42c45a715756432d5732a8789e1e6f3fe17f4686e3473b95"
     },
     {
       "fileId": "PROV-PREVIEW-DECK-DESKTOP-001",
@@ -2320,7 +2333,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-PREVIEW-DECK-DESKTOP-001",
-      "sha256": "77b83b36f26b1d6fcbdaf9826f176545cfcd2f56ca6317fe32a701d39a73d5f3"
+      "sha256": "a390204fd455ddfeea8c867672a2452d2d043d4111e9246c0b9f8faa1bcd045f"
     },
     {
       "fileId": "PROV-PREVIEW-MOCKUP-001",
@@ -2368,7 +2381,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "PROV-VISUAL-VERIFICATION-001",
-      "sha256": "4ef54ad8d5b226239be5a8ae8b6d7c63c17795ca69d5778feae963a85dbf35f8"
+      "sha256": "f3f628a7c462b98a339c8be089d47a92421e71ca5e9a824e694fcbab371ec9e1"
     },
     {
       "fileId": "TEST-COLLATERAL-POLICY-001",
@@ -2391,7 +2404,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "TEST-VISUAL-ACCESSIBILITY-001",
-      "sha256": "e7bf51b4b987d0b941e5dc45cb0203ee5d1aa04e266828fd7a11ebf7f65169b5"
+      "sha256": "ff4c383cebeed6c9d055d961df536906da423b8105b76fe0477917644af15050"
     },
     {
       "fileId": "TEST-VISUAL-REDACTION-001",
@@ -2403,7 +2416,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "TEST-VISUAL-REDACTION-001",
-      "sha256": "05e5d9483fc027ac39bd8a0f256c0031afc67b3de9775d97804a23008e7e0189"
+      "sha256": "eb4959099a72166f1cababf23bca51d8cb62dc1a1e5109943eb2c6de787d5dec"
     },
     {
       "fileId": "TOOL-RENDER-COLLATERAL-001",
@@ -2415,7 +2428,7 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "provenanceRecordId": "TOOL-RENDER-COLLATERAL-001",
-      "sha256": "4741c6f71ecc064dc38c63d2c550b5524b8fea6befdb671f5bf48cfefedbe9d6"
+      "sha256": "6cb251aa3f10167ab39aab5eb492e386a9831b64146e63a6ff3642ea54ee59a5"
     },
     {
       "fileId": "TOOL-COLLATERAL-VALIDATOR-001",
@@ -2427,6 +2440,162 @@
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
       "sha256": "2508cf6e6ef5ade0ba837cfe23cf15093c260b5f180f3dd0b1dcef6f647b4f33"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "path": "review/visual/previews/deck-presentation-1440-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "sha256": "aaca5455e7ab6493761a81efe74f9d663082337285e02e5fdb44aed64463c5cf"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "path": "review/visual/previews/deck-responsive-1038-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "sha256": "ddcd908ee8e1bc4d5dbbab428edf4e5bf739b5dfa25a1c9c8afcda35f72a9aaa"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1038-001",
+      "path": "review/visual/previews/deck-responsive-1038.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1038-001",
+      "sha256": "e2e1e04cae82958d117ae139b4d2f38b0f46294fa9214ea563af81b3941e653e"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "path": "review/visual/previews/deck-responsive-1039-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "sha256": "cd7515ba1f8cdff02bc2c05c902510b453fbcc8a00294b2ea54f83daf19eb4d2"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1039-001",
+      "path": "review/visual/previews/deck-responsive-1039.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1039-001",
+      "sha256": "b839cd9022d02b1c79b31e9d5a8eb463378a2e7c819c2c10f974fd813779503a"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
+      "path": "review/visual/previews/deck-responsive-1040-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
+      "sha256": "987e04db04c0305857f33fc861b4b8f5d0d876439b194f093016e6102ccb86f6"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1040-001",
+      "path": "review/visual/previews/deck-responsive-1040.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1040-001",
+      "sha256": "1599879a9d81c85e25315647cd4f789c2ef63b9f027db5a8d7406eb6a2a19639"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "path": "review/visual/previews/deck-responsive-600-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "sha256": "54ad8423920df32d03d6f1291631f7dd9b69391cd7f134d9ea0fcb32525cd3a6"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-600-001",
+      "path": "review/visual/previews/deck-responsive-600.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-600-001",
+      "sha256": "50e72ef3dc41be82b9f86d822c3e108153c12a618f62ed5629ed600fca1de409"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "path": "review/visual/previews/deck-responsive-601-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "sha256": "191dbf36db0d1b2d4e881baf80421f12ec942798e120bb1a5e7ea0f44df8ff87"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-601-001",
+      "path": "review/visual/previews/deck-responsive-601.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-601-001",
+      "sha256": "6f898f026e3c505d03ab095bda526f54f8982a741ee080297b897b6139a1df34"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "path": "review/visual/previews/deck-responsive-768-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "sha256": "14e7af082dfe616f8db854f2599d5872c0e7ea78f36b6f8d0274ee8215c7722e"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-768-001",
+      "path": "review/visual/previews/deck-responsive-768.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-768-001",
+      "sha256": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99"
     }
   ]
 }
