@@ -10,7 +10,7 @@ import {
   inspectOpenAIImageBytes,
   normalizeOpenAIImageUsage,
 } from "../../src/models/openai-images.mjs";
-import { readPrivateOpenAIImageRequestId } from "../../src/models/openai-images.mjs";
+import { readPrivateOpenAIImageRequestId, readPrivateOpenAIImageRetryDisposition } from "../../src/models/openai-images.mjs";
 import { chunk, corruptPngCrc, makeInvalidIndexedPng, makePng, makePng16Rgba } from "../../fixtures/models/png.mjs";
 
 const MODEL = "gpt-image-2.5-sunburst-2026-09-08";
@@ -857,6 +857,30 @@ test("HTTP refusals are typed, Retry-After is advisory, and automatic retry neve
       return true;
     });
     assert.equal(fetchCount, 1);
+  });
+});
+
+test("native retry disposition stays private and separates eligible per-request failure from hard stops", async (t) => {
+  const scenarios = [
+    ["eligible request conflict", 409, "request_conflict", "failed", "eligible_retry"],
+    ["authentication", 401, "invalid_api_key", "failed", "hard_stop"],
+    ["permission", 403, "permission_denied", "failed", "hard_stop"],
+    ["exhausted quota", 429, "insufficient_quota", "failed", "hard_stop"],
+    ["moderation", 400, "moderation_blocked", "failed", "hard_stop"],
+    ["malformed request", 400, "invalid_request", "failed", "hard_stop"],
+    ["rate limit is unresolved", 429, "rate_limit_exceeded", "unknown", undefined],
+  ];
+  for (const [name, status, providerCode, outcome, disposition] of scenarios) await t.test(name, async () => {
+    const harness = providerHarness({ fetchImpl: async () => new Response(JSON.stringify({ error: { code: providerCode } }), {
+      status, headers: { "content-type": "application/json", "retry-after": "1" },
+    }) });
+    let failure;
+    try { await harness.provider.generate(harness.ctx); } catch (error) { failure = error; }
+    assert.ok(failure instanceof OpenAIImagesProviderError);
+    assert.equal(failure.provider_outcome, outcome);
+    assert.equal(Object.hasOwn(failure, "retry_disposition"), false);
+    assert.equal(readPrivateOpenAIImageRetryDisposition(failure), disposition);
+    assert.equal(harness.fetchCount, 1, "native adapter never retries the image request itself");
   });
 });
 

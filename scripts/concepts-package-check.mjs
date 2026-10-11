@@ -121,7 +121,7 @@ function copyPublicApiJourneyFixtures() {
   writeFileSync(join(helperDir, "helpers.mjs"), helper, { mode: 0o600 });
 }
 
-let summary = { evidence_schema: "creative-concepts-package-installation/1.1", status: "running",
+let summary = { evidence_schema: "creative-concepts-package-installation/1.2", status: "running",
   runtime: process.version, artifact_dir: artifactDir, package_name: "creative-engine",
   public_subpath: "creative-engine/api/v1", provider_dispatches: 0, paid_provider_calls: 0,
   actual_network_requests: 0, provider_credentials_read: false, commands };
@@ -165,11 +165,19 @@ try {
 
   const installedJourney = run("installed-public-concepts-api-journey", process.execPath,
     ["--test", "--test-concurrency=1", "--test-reporter=tap",
-      "--test-name-pattern=actual Creative API v1\\.1 concepts\\.create edits two authorized references and publishes parentless siblings|concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST",
+      "--test-name-pattern=actual Creative API v1\\.1 concepts\\.create edits two authorized references and publishes parentless siblings|concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST|a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen|concept publication rejects a forged slot ordinal before either generic sibling becomes visible|completed concepts replay validates its retained brief after a legitimate brief revision|durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend",
       "tests/models/creative-api-integration.test.mjs"], consumerDir);
-  assert.match(installedJourney.stdout, /# tests 2\n# suites 0\n# pass 2\n# fail 0/,
-    "The retained installed-package fixture must execute the public two-reference and negative-version journeys.");
-  assert.match(installedJourney.stdout, /2 tests? passed|# pass 2/);
+  assert.match(installedJourney.stdout, /# tests 19\n# suites 0\n# pass 19\n# fail 0/,
+    "The retained installed-package fixture must execute the public journey and the F1/F2/F3 API regressions.");
+  for (const title of [
+    "actual Creative API v1.1 concepts.create edits two authorized references and publishes parentless siblings",
+    "concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST",
+    "a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen",
+    "concept publication rejects a forged slot ordinal before either generic sibling becomes visible",
+    "completed concepts replay validates its retained brief after a legitimate brief revision",
+    "durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend",
+  ]) assert.ok(installedJourney.stdout.includes(`# Subtest: ${title}`), `Installed TAP is missing ${title}`);
+  assert.match(installedJourney.stdout, /19 tests? passed|# pass 19/);
   assert.doesNotMatch(installedJourney.stdout, /not ok /);
   const publicJourneyLine = installedJourney.stdout.split("\n").find(line => line.includes("INSTALLED_CONCEPTS_PUBLIC_JOURNEY "));
   const negativeJourneyLine = installedJourney.stdout.split("\n").find(line => line.includes("INSTALLED_CONCEPTS_NEGATIVES "));
@@ -197,11 +205,19 @@ try {
       test_file: join(consumerDir, "tests/models/creative-api-integration.test.mjs"),
       fixtures: ["two authorized reference assets", "C03 reserve/settle/reconciliation fixture", "intercepted native edits fetch"],
       test_names: ["actual Creative API v1.1 concepts.create edits two authorized references and publishes parentless siblings",
-        "concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST"],
+        "concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST",
+        "a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen",
+        "concept publication rejects a forged slot ordinal before either generic sibling becomes visible",
+        "completed concepts replay validates its retained brief after a legitimate brief revision",
+        "durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend"],
       assertions: ["POST /images/edits carries both authorized image[] references", "two immutable parentless versions are publicly listed, compared, restored, and inspected",
-        "completed duplicate replay performs no second dispatch", "v1.0 concepts and v1.1 legacy operation negatives dispatch zero times"],
+        "completed duplicate replay performs no second dispatch", "v1.0 concepts and v1.1 legacy operation negatives dispatch zero times",
+        "a settled per-slot failure preserves the other ordered candidate across replay and reopen",
+        "forged ordinal publication cannot expose either generic sibling",
+        "completed replay fails closed against missing or hash-tampered retained brief history",
+        "auth, permission, quota, moderation, and malformed-request hard stops block fresh sibling spend and replay"],
       measured: { ...publicJourney, negatives: negativeJourney }, tap_sha256: sha256(Buffer.from(installedJourney.stdout)),
-      test_summary: "2 passed, 0 failed" },
+      selected_journey_count: 6, test_summary: "6 selected API journeys; 19 TAP tests passed, 0 failed" },
       typescript: compilerVersion.stdout.trim(), typecheck: "strict NodeNext/ES2022 with expected-negative version and authority assertions",
       fixture_tree_sha256: treeSha256(consumerDir) },
     install_mode: "fresh local tarball install; offline; lifecycle scripts disabled; intercepted fixture provider; no credentials or network",

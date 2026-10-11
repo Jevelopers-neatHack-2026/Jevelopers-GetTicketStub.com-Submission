@@ -31,6 +31,7 @@ const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, value) => {
 });
 const PRIVATE_PROVIDER_REQUEST_IDS = new WeakMap();
 const PRIVATE_TARGET_BINDING_SHA256 = new WeakMap();
+const PRIVATE_RETRY_DISPOSITIONS = new WeakMap();
 
 /** The documented candidate pin is explicit and never auto-selected. Owner capability evidence is still required. */
 export const OPENAI_IMAGE_CANDIDATE_PROFILES = Object.freeze({
@@ -86,9 +87,13 @@ function attachUsageObservation(error, usage, privateProviderRequestId) {
 }
 
 function fail(code, message, options) {
-  const { private_provider_request_id: privateProviderRequestId, usage, ...publicOptions } = options ?? {};
+  const { private_provider_request_id: privateProviderRequestId, private_retry_disposition: privateRetryDisposition,
+    usage, ...publicOptions } = options ?? {};
   const error = new OpenAIImagesProviderError(code, message, publicOptions);
   attachUsageObservation(error, usage, privateProviderRequestId);
+  if (privateRetryDisposition === "eligible_retry" || privateRetryDisposition === "hard_stop") {
+    PRIVATE_RETRY_DISPOSITIONS.set(error, privateRetryDisposition);
+  }
   throw error;
 }
 
@@ -100,6 +105,11 @@ export function readPrivateOpenAIImageRequestId(value) {
 /** Internal runtime accessor; not exported from the public model subpath. */
 export function readPrivateOpenAIImageTargetBindingSha256(value) {
   return value !== null && typeof value === "object" ? PRIVATE_TARGET_BINDING_SHA256.get(value) : undefined;
+}
+
+/** Internal runtime accessor; retry authority is never exposed on the provider error object. */
+export function readPrivateOpenAIImageRetryDisposition(value) {
+  return value !== null && typeof value === "object" ? PRIVATE_RETRY_DISPOSITIONS.get(value) : undefined;
 }
 
 function isRecord(value) {
@@ -1395,12 +1405,16 @@ function knownProviderError(payload, status) {
   const code = typeof payload?.error?.code === "string" ? payload.error.code : "";
   const type = typeof payload?.error?.type === "string" ? payload.error.type : "";
   const marker = `${code} ${type}`.toLowerCase();
-  if (/moderation|content[_-]?policy|safety[_-]?system/.test(marker)) return { code: "moderation_blocked", outcome: "failed" };
-  if (/insufficient[_-]?quota|quota[_-]?exceeded|billing[_-]?hard[_-]?limit/.test(marker)) return { code: "provider_quota_exhausted", outcome: "failed" };
-  if (status === 401 || /invalid[_-]?api[_-]?key|authentication/.test(marker)) return { code: "authentication_denied", outcome: "failed" };
-  if (status === 403 || /permission[_-]?denied|forbidden/.test(marker)) return { code: "operation_permission_denied", outcome: "failed" };
+  if (/moderation|content[_-]?policy|safety[_-]?system/.test(marker)) return { code: "moderation_blocked", outcome: "failed", retry_disposition: "hard_stop" };
+  if (/insufficient[_-]?quota|quota[_-]?exceeded|billing[_-]?hard[_-]?limit/.test(marker)) return { code: "provider_quota_exhausted", outcome: "failed", retry_disposition: "hard_stop" };
+  if (status === 401 || /invalid[_-]?api[_-]?key|authentication/.test(marker)) return { code: "authentication_denied", outcome: "failed", retry_disposition: "hard_stop" };
+  if (status === 403 || /permission[_-]?denied|forbidden/.test(marker)) return { code: "operation_permission_denied", outcome: "failed", retry_disposition: "hard_stop" };
   if (status === 429 || /rate[_-]?limit|overload/.test(marker)) return { code: "provider_rate_limited", outcome: "unknown" };
-  return { code: "provider_request_failed", outcome: status >= 500 ? "unknown" : "failed" };
+  if (status === 409 && code === "request_conflict") {
+    return { code: "provider_request_failed", outcome: "failed", retry_disposition: "eligible_retry" };
+  }
+  return { code: "provider_request_failed", outcome: status >= 500 ? "unknown" : "failed",
+    ...(status >= 400 && status < 500 ? { retry_disposition: "hard_stop" } : {}) };
 }
 
 async function providerError(response, retryContext, providerRequestRef, rawProviderRequestId, transportAttemptId,
@@ -1429,7 +1443,7 @@ async function providerError(response, retryContext, providerRequestRef, rawProv
   }
   fail(mapped.code, "Provider returned a bounded failure response.", {
     outcome: mapped.outcome, http_status: response.status, retry, provider_request_ref: providerRequestRef, usage,
-    private_provider_request_id: rawProviderRequestId,
+    private_provider_request_id: rawProviderRequestId, private_retry_disposition: mapped.retry_disposition,
   });
 }
 
@@ -1776,7 +1790,7 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
       const mapped = knownProviderError(payload, response.status);
       fail(mapped.code, "Provider refused the image request.", {
         outcome: mapped.outcome, http_status: response.status, provider_request_ref: providerRequestRef, usage: observedUsage,
-        private_provider_request_id: rawProviderRequestId,
+        private_provider_request_id: rawProviderRequestId, private_retry_disposition: mapped.retry_disposition,
       });
     }
     if (!Array.isArray(payload.data) || payload.data.length !== 1 || !isRecord(payload.data[0]) ||

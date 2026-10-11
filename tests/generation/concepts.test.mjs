@@ -877,7 +877,14 @@ test("known failure retries only through a distinct C03 reservation and complete
 
   let current = firstReserved.batch;
   current = dispatch(current, current.slots[0], firstReserved).batch;
-  current = providerOutcome(current, current.slots[0], firstReserved, "failed", null, { usage_completeness: "complete" }).batch;
+  const failedUsageRef = `usage-observation-${firstReserved.billableAttemptId}`;
+  current = providerOutcome(current, current.slots[0], firstReserved, "failed", null, {
+    usage_completeness: "complete",
+    retry_disposition: "eligible_retry",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: firstReserved.reservationRef,
+      source_observation_id: failedUsageRef, effective_billable_attempt_id: firstReserved.billableAttemptId },
+  }).batch;
   const repeatedIdentity = {
     ...event(current, current.slots[0], "reserve_attempt", {}),
     billable_attempt_id: firstReserved.billableAttemptId,
@@ -1066,7 +1073,7 @@ test("proposal schema 0.1 remains readable but cannot accept the 0.2 C03 settlem
   eventSequence = 0;
   const input = conceptProposalInput();
   const current = createCreativeConceptBatchProposal(input);
-  assert.equal(current.schema_version, "0.2.0");
+  assert.equal(current.schema_version, "0.3.0");
   const legacy = Object.freeze({ ...current, schema_version: "0.1.0" });
   assert.equal(replayCreativeConceptBatch(legacy, { trusted_scope: input.trusted_scope, request: input.request }).status, "replayed");
   const reserved = reserve(legacy, legacy.slots[0], "legacy-v1");
@@ -1090,6 +1097,106 @@ test("proposal schema 0.1 remains readable but cannot accept the 0.2 C03 settlem
   const legacyOutcome = providerOutcome(dispatching, dispatching.slots[0], reserved, "unknown", null);
   assert.equal(legacyOutcome.batch.slots[0].attempts[0].unknown_financial_exposure, true,
     "legacy batches retain their original conservative unknown-exposure behavior");
+});
+
+test("proposal schema 0.2 retains settlement compatibility and does not accept 0.3 retry authority", () => {
+  eventSequence = 0;
+  const input = conceptProposalInput();
+  const current = createCreativeConceptBatchProposal(input);
+  const prior = Object.freeze({ ...current, schema_version: "0.2.0" });
+  assert.equal(replayCreativeConceptBatch(prior, { trusted_scope: input.trusted_scope, request: input.request }).status, "replayed");
+  const reserved = reserve(prior, prior.slots[0], "prior-v2");
+  const dispatching = dispatch(reserved.batch, reserved.batch.slots[0], reserved).batch;
+  const usageRef = "usage-prior-v2-settlement";
+  const settlement = event(dispatching, dispatching.slots[0], "provider_outcome", {
+    billable_attempt_id: reserved.billableAttemptId,
+    transport_attempt_id: reserved.transportAttemptId,
+    outcome: "failed",
+    outcome_evidence_ref: "prior-v2-settlement",
+    provider_request_id: "prior-v2-provider-request",
+    usage_evidence_ref: usageRef,
+    usage_completeness: "complete",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: usageRef, effective_billable_attempt_id: reserved.billableAttemptId },
+  });
+  const settled = applyCreativeConceptEvent(dispatching, settlement).batch;
+  assert.equal(settled.slots[0].attempts[0].financial_exposure_status, "settled");
+  assert.equal(Object.hasOwn(settled.slots[0].attempts[0], "latest_retry_disposition"), false);
+  const retryExtension = { ...settlement, event_id: "prior-v2-retry-extension", retry_disposition: "eligible_retry" };
+  expectCode("unsupported_field", () => applyCreativeConceptEvent(dispatching, retryExtension));
+  assert.equal(dispatching.slots[0].status, "dispatching");
+});
+
+test("legacy concept histories upgrade by event and failed attempts without retry evidence stay unclassified", () => {
+  eventSequence = 0;
+  const input = conceptProposalInput();
+  const current = createCreativeConceptBatchProposal(input);
+  for (const schemaVersion of ["0.1.0", "0.2.0"]) {
+    const legacy = Object.freeze({ ...current, schema_version: schemaVersion });
+    const reserved = reserve(legacy, legacy.slots[0], `legacy-upgrade-${schemaVersion}`);
+    const dispatching = dispatch(reserved.batch, reserved.batch.slots[0], reserved).batch;
+    const outcome = providerOutcome(dispatching, dispatching.slots[0], reserved, "failed", null,
+      schemaVersion === "0.2.0" ? {
+        financial_exposure_status: "settled",
+        financial_settlement_evidence: { status: "settled", reservation_id: reserved.reservationRef,
+          source_observation_id: `usage-observation-${reserved.billableAttemptId}`,
+          effective_billable_attempt_id: reserved.billableAttemptId },
+      } : {});
+    const oldEventHistory = structuredClone(outcome.batch.events);
+    const upgradeEvent = {
+      tenant_id: outcome.batch.tenant_id,
+      project_id: outcome.batch.project_id,
+      action_id: outcome.batch.action_id,
+      batch_id: outcome.batch.batch_id,
+      concept_id: null,
+      event_id: `legacy-upgrade-event-${schemaVersion}`,
+      event_type: "upgrade_retry_disposition",
+      from_schema_version: schemaVersion,
+      to_schema_version: "0.3.0",
+    };
+    const upgraded = applyCreativeConceptEvent(outcome.batch, upgradeEvent);
+    assert.equal(upgraded.status, "applied");
+    assert.equal(upgraded.batch.schema_version, "0.3.0");
+    assert.deepEqual(upgraded.batch.events.slice(0, oldEventHistory.length), oldEventHistory,
+      "migration appends one event and preserves every historical event identity/hash");
+    assert.equal(upgraded.batch.events.at(-1).event_type, "upgrade_retry_disposition");
+    const attempt = upgraded.batch.slots[0].attempts[0];
+    assert.equal(attempt.latest_provider_outcome, "failed");
+    assert.equal(attempt.provider_observations[0].retry_disposition, undefined,
+      "the migration does not invent a native classification for historical provider evidence");
+    assert.equal(attempt.latest_retry_disposition, "legacy_unclassified");
+    if (schemaVersion === "0.2.0") {
+      assert.equal(attempt.financial_exposure_status, "settled",
+        "historical owner-backed settlement remains intact through the upgrade");
+      assert.equal(attempt.unknown_financial_exposure, false);
+    }
+    assert.equal(applyCreativeConceptEvent(upgraded.batch, upgradeEvent).status, "duplicate");
+    expectCode("retry_not_authorized", () => reserve(upgraded.batch, upgraded.batch.slots[0],
+      `legacy-upgrade-retry-${schemaVersion}`));
+  }
+});
+
+test("proposal schema 0.3 requires explicit settled retry eligibility and preserves hard stops", () => {
+  eventSequence = 0;
+  const batch = createCreativeConceptBatchProposal(conceptProposalInput());
+  const reserved = reserve(batch, batch.slots[0], "hard-stop");
+  const dispatching = dispatch(reserved.batch, reserved.batch.slots[0], reserved).batch;
+  const hardStop = providerOutcome(dispatching, dispatching.slots[0], reserved, "failed", null, {
+    retry_disposition: "hard_stop",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: `usage-observation-${reserved.billableAttemptId}`,
+      effective_billable_attempt_id: reserved.billableAttemptId },
+  }).batch;
+  const hardStoppedAttempt = hardStop.slots[0].attempts[0];
+  assert.equal(hardStoppedAttempt.latest_retry_disposition, "hard_stop");
+  assert.equal(hardStoppedAttempt.provider_observations[0].retry_disposition, "hard_stop");
+  expectCode("retry_not_authorized", () => reserve(hardStop, hardStop.slots[0], "must-not-retry"));
+  assert.equal(hardStop.slots[0].attempts.length, 1);
+
+  const unsettled = providerOutcome(dispatching, dispatching.slots[0], reserved, "failed", null).batch;
+  expectCode("retry_not_authorized", () => reserve(unsettled, unsettled.slots[0], "unsettled-retry"));
 });
 
 test("cancellation suppresses same-attempt late success while retaining evidence and the unknown hold", () => {

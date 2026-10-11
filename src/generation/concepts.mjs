@@ -12,12 +12,14 @@ import { hashArtifactBytes } from "../storage/content-addressed.mjs";
 
 export const CREATIVE_CONCEPT_PROPOSAL = Object.freeze({
   contract: "CreativeConceptBatchProposal",
-  schema_version: "0.2.0",
+  schema_version: "0.3.0",
   acceptance_status: "unaccepted_local_proposal",
 });
 const LEGACY_CONCEPT_SCHEMA_VERSION = "0.1.0";
+const SETTLEMENT_CONCEPT_SCHEMA_VERSION = "0.2.0";
 function supportedConceptSchemaVersion(version) {
-  return version === LEGACY_CONCEPT_SCHEMA_VERSION || version === CREATIVE_CONCEPT_PROPOSAL.schema_version;
+  return version === LEGACY_CONCEPT_SCHEMA_VERSION || version === SETTLEMENT_CONCEPT_SCHEMA_VERSION ||
+    version === CREATIVE_CONCEPT_PROPOSAL.schema_version;
 }
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
@@ -479,6 +481,7 @@ function contextSlot(batch, event) {
   nonEmpty(event.event_type, "event.event_type");
   const common = ["tenant_id", "project_id", "action_id", "batch_id", "concept_id", "event_id", "event_type"];
   const eventFields = {
+    upgrade_retry_disposition: ["from_schema_version", "to_schema_version"],
     reserve_attempt: ["billable_attempt_id", "transport_attempt_id", "metered_attempt", "reservation"],
     dispatch_started: ["billable_attempt_id", "transport_attempt_id", "dispatch_intent_ref", "provider_target_binding_sha256", "rendered_prompt_sha256"],
     provider_outcome: ["billable_attempt_id", "transport_attempt_id", "outcome", "outcome_evidence_ref", "provider_request_id", "artifact_sha256", "usage_evidence_ref", "usage_completeness"],
@@ -490,9 +493,12 @@ function contextSlot(batch, event) {
     cancel_concept: ["billable_attempt_id", "transport_attempt_id", "cancellation_evidence_ref"],
     late_provider_evidence: ["billable_attempt_id", "transport_attempt_id", "outcome", "outcome_evidence_ref", "provider_request_id", "artifact_sha256", "usage_evidence_ref", "usage_completeness"],
   };
-  if (batch.schema_version === CREATIVE_CONCEPT_PROPOSAL.schema_version) {
+  if ([SETTLEMENT_CONCEPT_SCHEMA_VERSION, CREATIVE_CONCEPT_PROPOSAL.schema_version].includes(batch.schema_version)) {
     eventFields.provider_outcome.push("financial_exposure_status", "financial_settlement_evidence");
     eventFields.reconcile_unknown_attempt.push("financial_exposure_status", "financial_settlement_evidence");
+  }
+  if (batch.schema_version === CREATIVE_CONCEPT_PROPOSAL.schema_version) {
+    eventFields.provider_outcome.push("retry_disposition");
   }
   if (!eventFields[event.event_type]) fail("unsupported_event", "event.event_type", `Unsupported concept event ${String(event.event_type)}.`);
   onlyKeys(event, [...common, ...eventFields[event.event_type]], "event");
@@ -628,6 +634,12 @@ function appendProviderObservation(attempt, event, outcome) {
         "The C03 settlement, observation, usage reference, and billable attempt must bind exactly.");
     }
   }
+  const retryDisposition = event.retry_disposition;
+  if (retryDisposition !== undefined && (outcome !== "failed" ||
+      !["eligible_retry", "hard_stop"].includes(retryDisposition))) {
+    fail("invalid_retry_disposition", "event.retry_disposition",
+      "A native retry disposition must explicitly classify a known failed provider response.");
+  }
   const observation = Object.freeze({
     event_id: event.event_id,
     outcome,
@@ -636,6 +648,7 @@ function appendProviderObservation(attempt, event, outcome) {
     artifact_sha256: event.artifact_sha256 === undefined ? null : hash(event.artifact_sha256, "event.artifact_sha256"),
     usage_evidence_ref: nonEmpty(event.usage_evidence_ref, "event.usage_evidence_ref"),
     usage_completeness: event.usage_completeness,
+    ...(retryDisposition ? { retry_disposition: retryDisposition } : {}),
     ...(financialExposureStatus ? { financial_exposure_status: financialExposureStatus,
       financial_settlement_evidence: Object.freeze({ status: settlementEvidence.status,
         reservation_id: settlementEvidence.reservation_id, source_observation_id: settlementEvidence.source_observation_id,
@@ -649,6 +662,7 @@ function appendProviderObservation(attempt, event, outcome) {
   }
   attempt.provider_observations.push(observation);
   attempt.latest_provider_outcome = outcome;
+  if (Object.hasOwn(attempt, "latest_retry_disposition")) attempt.latest_retry_disposition = retryDisposition ?? null;
   attempt.latest_provider_request_id = observation.provider_request_id;
   attempt.usage_evidence_refs.push(observation.usage_evidence_ref);
   attempt.usage_evidence_ref = observation.usage_evidence_ref;
@@ -694,7 +708,9 @@ function validatePublishedVersionIdentities(batch, slot, version) {
 export function applyCreativeConceptEvent(batch, incomingEvent) {
   const event = cloned(incomingEvent);
   const slot = contextSlot(batch, event);
-  if (event.event_type !== "cancel_batch" && !slot) fail("missing_concept", "event.concept_id", "This event type requires an ordered concept slot.");
+  if (!["cancel_batch", "upgrade_retry_disposition"].includes(event.event_type) && !slot) {
+    fail("missing_concept", "event.concept_id", "This event type requires an ordered concept slot.");
+  }
   if (slot) {
     validateEventAttemptIdentity(slot, event);
     const { duplicate } = eventReplay(batch, event, slot);
@@ -707,12 +723,41 @@ export function applyCreativeConceptEvent(batch, incomingEvent) {
     if (duplicate) return Object.freeze({ status: "duplicate", batch });
   }
 
+  if (event.event_type === "upgrade_retry_disposition") {
+    if (event.concept_id !== null || ![LEGACY_CONCEPT_SCHEMA_VERSION, SETTLEMENT_CONCEPT_SCHEMA_VERSION].includes(batch.schema_version) ||
+        event.from_schema_version !== batch.schema_version || event.to_schema_version !== CREATIVE_CONCEPT_PROPOSAL.schema_version) {
+      fail("invalid_schema_upgrade", "event.schema_version", "Retry disposition upgrades must advance a supported legacy batch to proposal 0.3.0 exactly once.");
+    }
+    const next = cloned(batch);
+    next.schema_version = CREATIVE_CONCEPT_PROPOSAL.schema_version;
+    for (const concept of next.slots) {
+      for (const attempt of concept.attempts) {
+        if (attempt.latest_retry_disposition !== undefined) continue;
+        // Initializing the field lets any subsequent observation on an in-flight
+        // legacy attempt replace null with its private classification. A prior
+        // failure with no historical classification stays durably non-retryable.
+        attempt.latest_retry_disposition = attempt.latest_provider_outcome === "failed"
+          ? "legacy_unclassified" : null;
+      }
+    }
+    appendEvent(next, event, canonicalHash(event));
+    return Object.freeze({ status: "applied", batch: freezeDeep(next) });
+  }
+
   const next = cloned(batch);
   const nextSlot = slot ? next.slots.find((item) => item.concept_id === slot.concept_id) : null;
   switch (event.event_type) {
     case "reserve_attempt": {
       if (nextSlot.status !== "pending" && nextSlot.status !== "failed") {
         fail("dispatch_not_allowed", "event.concept_id", "Only a pending concept or a known failed concept may receive a new C03 reservation.");
+      }
+      const priorAttempt = nextSlot.attempts.at(-1);
+      if (next.schema_version === CREATIVE_CONCEPT_PROPOSAL.schema_version &&
+          nextSlot.status === "failed" && priorAttempt?.latest_provider_outcome === "failed" &&
+          (priorAttempt.latest_retry_disposition !== "eligible_retry" || priorAttempt.usage_completeness !== "complete" ||
+            priorAttempt.financial_exposure_status !== "settled" || priorAttempt.unknown_financial_exposure)) {
+        fail("retry_not_authorized", "event.billable_attempt_id",
+          "A native failure may retry only after explicit eligibility, complete usage, and exact settled C03 evidence.");
       }
       const { attempt, reservation, transportId } = validateReservation(event, next, nextSlot);
       if (nextSlot.attempts.some((item) => item.billable_attempt_id === attempt.billable_attempt_id)) {
@@ -730,6 +775,7 @@ export function applyCreativeConceptEvent(batch, incomingEvent) {
         unknown_financial_exposure: false,
         provider_observations: [],
         latest_provider_outcome: null,
+        ...(next.schema_version === CREATIVE_CONCEPT_PROPOSAL.schema_version ? { latest_retry_disposition: null } : {}),
         latest_provider_request_id: null,
         usage_evidence_ref: null,
         usage_evidence_refs: [],

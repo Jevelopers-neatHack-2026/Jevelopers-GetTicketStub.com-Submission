@@ -20,7 +20,7 @@ type DeepReadonly<T> = T extends readonly (infer Value)[]
 
 export declare const CREATIVE_CONCEPT_PROPOSAL: Readonly<{
   contract: "CreativeConceptBatchProposal";
-  schema_version: "0.2.0";
+  schema_version: "0.3.0";
   acceptance_status: "unaccepted_local_proposal";
 }>;
 
@@ -129,6 +129,7 @@ export interface ConceptProviderObservationProposal {
   readonly artifact_sha256: `sha256:${string}` | null;
   readonly usage_evidence_ref: string;
   readonly usage_completeness: "complete" | "partial" | "unknown";
+  readonly retry_disposition?: "eligible_retry" | "hard_stop";
   readonly financial_exposure_status?: "settled";
   readonly financial_settlement_evidence?: Readonly<{
     status: "settled";
@@ -151,6 +152,7 @@ export interface ConceptAttemptProposal {
   readonly unknown_financial_exposure: boolean;
   readonly provider_observations: readonly ConceptProviderObservationProposal[];
   readonly latest_provider_outcome: "succeeded" | "failed" | "unknown" | null;
+  readonly latest_retry_disposition?: "eligible_retry" | "hard_stop" | "legacy_unclassified" | null;
   readonly latest_provider_request_id: string | null;
   readonly usage_evidence_ref: string | null;
   readonly usage_evidence_refs: readonly string[];
@@ -205,7 +207,7 @@ export interface ConceptSlotProposal {
 
 export interface CreativeConceptBatchProposal {
   readonly contract: "CreativeConceptBatchProposal";
-  readonly schema_version: "0.1.0" | "0.2.0";
+  readonly schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   readonly acceptance_status: "unaccepted_local_proposal";
   readonly batch_id: string;
   readonly tenant_id: string;
@@ -243,6 +245,12 @@ export interface CreativeConceptEventContext {
 }
 
 export type CreativeConceptBatchEvent =
+  | (Omit<CreativeConceptEventContext, "concept_id"> & {
+      readonly concept_id: null;
+      readonly event_type: "upgrade_retry_disposition";
+      readonly from_schema_version: "0.1.0" | "0.2.0";
+      readonly to_schema_version: "0.3.0";
+    })
   | (CreativeConceptEventContext & {
       readonly event_type: "reserve_attempt";
       readonly billable_attempt_id: string;
@@ -259,7 +267,26 @@ export type CreativeConceptBatchEvent =
       readonly rendered_prompt_sha256: `sha256:${string}`;
     })
   | (CreativeConceptEventContext & {
-      readonly event_type: "provider_outcome" | "reconcile_unknown_attempt";
+      readonly event_type: "provider_outcome";
+      readonly billable_attempt_id: string;
+      readonly transport_attempt_id: string;
+      readonly outcome: "succeeded" | "failed" | "unknown";
+      readonly outcome_evidence_ref: string;
+      readonly provider_request_id?: string;
+      readonly artifact_sha256?: `sha256:${string}`;
+      readonly usage_evidence_ref: string;
+      readonly usage_completeness: "complete" | "partial" | "unknown";
+      readonly retry_disposition?: "eligible_retry" | "hard_stop";
+      readonly financial_exposure_status?: "settled";
+      readonly financial_settlement_evidence?: Readonly<{
+        status: "settled";
+        reservation_id: string;
+        source_observation_id: string;
+        effective_billable_attempt_id: string;
+      }>;
+    })
+  | (CreativeConceptEventContext & {
+      readonly event_type: "reconcile_unknown_attempt";
       readonly billable_attempt_id: string;
       readonly transport_attempt_id: string;
       readonly outcome: "succeeded" | "failed" | "unknown";

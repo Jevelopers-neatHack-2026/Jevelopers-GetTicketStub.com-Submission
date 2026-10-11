@@ -2365,7 +2365,8 @@ export class CreativeVersionStore {
       if (!brief || canonicalHash(brief) !== batch.brief_sha256) reject("stale_version", "concept.brief_hash");
       genericWrites.push({ scope, brief_id: scope.brief_id, actor_id, brief_snapshot: brief,
         design_version: version, artifact_bytes: Uint8Array.from(stage.response_bytes), selection: { mode: "concept" },
-        creation, configuration_snapshot: batch.adapter_snapshot.configuration });
+        creation, configuration_snapshot: batch.adapter_snapshot.configuration,
+        concept_identity: { concept_id, ordinal: slot.ordinal } });
       const event = snapshotJson({
         tenant_id: batch.tenant_id, project_id: batch.project_id, action_id,
         batch_id: batch.batch_id, concept_id, event_id: candidate.event_id,
@@ -2456,12 +2457,19 @@ export class CreativeVersionStore {
           output_lineage.design_sha256 !== row.design_hash || output_lineage.artifact_id !== row.artifact_id ||
           output_lineage.artifact_sha256 !== row.artifact_hash || output_lineage.artifact_media_type !== row.media_type ||
           !generic || canonicalSerialize(generic) !== canonicalSerialize(design_version)) reject("integrity_error", "concept.version");
-      const batchRow = this.db.prepare(`SELECT batch_json FROM creative_concept_batches_v1
+      const batchRow = this.db.prepare(`SELECT batch_json,job_id FROM creative_concept_batches_v1
         WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
         .get(scope.tenant_id, scope.project_id, scope.brief_id, row.action_id);
       if (!batchRow) reject("integrity_error", "concept.batch");
       const batch = snapshotJson(JSON.parse(batchRow.batch_json), "integrity_error", "concept.batch");
       const slot = batch.slots.find((item) => item.concept_id === row.concept_id);
+      const expectedActionId = row.ordinal === 1 ? action_id
+        : `concept-version-${canonicalHash({ action_id, concept_id: row.concept_id }).slice(7)}`;
+      const versionIdentity = this.db.prepare(`SELECT action_id,creation_job_id FROM design_versions
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, row.design_version_id);
+      if (!slot || slot.ordinal !== row.ordinal || versionIdentity?.action_id !== expectedActionId ||
+          versionIdentity.creation_job_id !== batchRow.job_id) reject("integrity_error", "concept.version_identity");
       const expectedLineage = creativeConceptLineage(batch, slot, design_version);
       if (!isRecord(lineageRecord) || canonicalSerialize(Object.keys(lineageRecord).sort()) !==
           canonicalSerialize(["creative_concept_lineage", "lineage_evidence_ref", "output_lineage", "storage_commit_ref"].sort()) ||
@@ -2718,17 +2726,32 @@ export class CreativeVersionStore {
     if (!publication || this.db.isTransaction !== true || !Array.isArray(inputs) || inputs.length < 1 || inputs.length > 2) {
       reject("scope_denied", "publication_transaction");
     }
+    const conceptIdentities = [];
     const prepared = inputs.map((input, index) => {
       if (!isRecord(input)) reject("invalid_request", `concept.design_versions[${index}]`);
-      const value = this.prepareWrite(input, { allowConcept: true });
+      const identity = snapshotJson(input.concept_identity, "invalid_request", `concept.design_versions[${index}].identity`);
+      if (!isRecord(identity) || Object.keys(identity).some((key) => !["concept_id", "ordinal"].includes(key)) ||
+          Object.keys(identity).length !== 2 || !Number.isSafeInteger(identity.ordinal) || ![1, 2].includes(identity.ordinal)) {
+        reject("invalid_request", `concept.design_versions[${index}].identity`);
+      }
+      const { concept_identity: _conceptIdentity, ...writeInput } = input;
+      const value = this.prepareWrite(writeInput, { allowConcept: true });
+      conceptIdentities.push(identity);
+      const expectedActionId = identity.ordinal === 1 ? publication.action_id
+        : `concept-version-${canonicalHash({ action_id: publication.action_id, concept_id: identity.concept_id }).slice(7)}`;
       if (value.selection.mode !== "concept" || value.design.parent_version_id !== null ||
           value.creation.job_id !== publication.job_id || value.creation.actor_id !== publication.actor_id ||
           value.creation.request_hash !== publication.request_hash ||
-          (index === 0 ? value.creation.action_id !== publication.action_id : value.creation.action_id === publication.action_id) ||
+          value.creation.action_id !== expectedActionId ||
           value.scope.tenant_id !== publication.scope.tenant_id || value.scope.project_id !== publication.scope.project_id ||
           value.scope.brief_id !== publication.scope.brief_id) reject("scope_denied", "concept.design_version_identity");
       return value;
     });
+    if (new Set(conceptIdentities.map((identity) => identity.concept_id)).size !== conceptIdentities.length ||
+        new Set(conceptIdentities.map((identity) => identity.ordinal)).size !== conceptIdentities.length ||
+        conceptIdentities.some((identity, index) => index > 0 && identity.ordinal <= conceptIdentities[index - 1].ordinal)) {
+      reject("integrity_error", "concept.design_version_identity");
+    }
     const scope = prepared[0].scope;
     const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
       .get(scope.tenant_id, scope.project_id, publication.job_id);
@@ -2736,6 +2759,16 @@ export class CreativeVersionStore {
         job.action_id !== publication.action_id || job.request_hash !== publication.request_hash || job.operation !== "concepts.create") {
       reject("cancelled", "concept.publication_authority");
     }
+    const conceptBatchRow = this.db.prepare(`SELECT batch_json,job_id FROM creative_concept_batches_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, scope.brief_id, publication.action_id);
+    const conceptBatch = conceptBatchRow
+      ? snapshotJson(JSON.parse(conceptBatchRow.batch_json), "integrity_error", "concept.batch") : null;
+    if (!conceptBatch || conceptBatchRow.job_id !== publication.job_id || conceptBatch.action_id !== publication.action_id ||
+        conceptIdentities.some((identity) => {
+          const slot = conceptBatch.slots.find((item) => item.concept_id === identity.concept_id);
+          return !slot || slot.ordinal !== identity.ordinal || slot.status !== "staged";
+        })) reject("integrity_error", "concept.design_version_identity");
     const brief = this.getBrief({ scope, brief_id: scope.brief_id });
     if (!brief || canonicalHash(brief) !== prepared[0].design.brief_hash ||
         prepared.some((value) => canonicalSerialize(value.brief) !== canonicalSerialize(brief))) {
@@ -2763,16 +2796,24 @@ export class CreativeVersionStore {
       if (existing) reject("conflict", "concept.design_version_identity");
     }
     const primary = prepared[0];
+    // The creation action is the immutable batch/job replay anchor. Its intent
+    // can describe a successful later ordinal while the public version keeps
+    // that candidate's own deterministic per-slot action identity.
+    const { concept_identity: _primaryConceptIdentity, ...primaryWriteInput } = inputs[0];
+    const anchor = primary.creation.action_id === publication.action_id ? primary : this.prepareWrite({
+      ...primaryWriteInput, creation: { ...primaryWriteInput.creation, action_id: publication.action_id },
+    }, { allowConcept: true });
     this.db.prepare(`INSERT INTO creation_actions
       (tenant_id,project_id,brief_id,action_id,actor_id,job_id,request_hash,payload_hash,state,intent_json,result_json,created_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,'commit_intent',?,NULL,?,?)`)
-      .run(scope.tenant_id, scope.project_id, scope.brief_id, primary.creation.action_id, primary.actor_id,
-        primary.creation.job_id, primary.creation.request_hash, primary.payload_hash,
-        canonicalSerialize(primary.intent), primary.now, primary.now);
+      .run(scope.tenant_id, scope.project_id, scope.brief_id, publication.action_id, anchor.actor_id,
+        anchor.creation.job_id, anchor.creation.request_hash, anchor.payload_hash,
+        canonicalSerialize(anchor.intent), anchor.now, anchor.now);
     const intentRow = this.db.prepare(`SELECT * FROM creation_actions WHERE tenant_id=? AND project_id=? AND action_id=?`)
-      .get(scope.tenant_id, scope.project_id, primary.creation.action_id);
+      .get(scope.tenant_id, scope.project_id, publication.action_id);
     const intent = validateCommitIntentRow(intentRow, scope);
-    if (intent.selection.mode !== "concept" || intent.job_result !== null) reject("integrity_error", "concept.creation_intent");
+    if (intent.selection.mode !== "concept" || intent.job_result !== null ||
+        intent.design_version.design_version_id !== primary.design.design_version_id) reject("integrity_error", "concept.creation_intent");
     const results = [];
     for (const value of prepared) {
       this.#assertBriefNotInvalidated(scope, value.brief);
@@ -2841,9 +2882,21 @@ export class CreativeVersionStore {
       const versionRow = this.db.prepare(`SELECT action_id,creation_job_id,created_at FROM design_versions
         WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
         .get(scope.tenant_id, scope.project_id, scope.brief_id, result.design_version.design_version_id);
-      if (!versionRow || versionRow.action_id !== row.action_id || versionRow.creation_job_id !== row.job_id ||
+      const conceptIdentity = intent.selection.mode === "concept"
+        ? this.db.prepare(`SELECT concept_id,ordinal FROM creative_concept_versions_v1
+            WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND design_version_id=?`)
+          .get(scope.tenant_id, scope.project_id, scope.brief_id, row.action_id, result.design_version.design_version_id)
+        : null;
+      const expectedVersionActionId = intent.selection.mode === "concept" && conceptIdentity
+        ? conceptIdentity.ordinal === 1 ? row.action_id
+          : `concept-version-${canonicalHash({ action_id: row.action_id, concept_id: conceptIdentity.concept_id }).slice(7)}`
+        : row.action_id;
+      if (!versionRow || versionRow.action_id !== expectedVersionActionId || versionRow.creation_job_id !== row.job_id ||
         result.created_at !== versionRow.created_at || result.created_at !== row.updated_at) {
         reject("integrity_error", "creation.result");
+      }
+      if (intent.selection.mode === "concept" && (!conceptIdentity || ![1, 2].includes(conceptIdentity.ordinal))) {
+        reject("integrity_error", "creation.result.concept_identity");
       }
       const stored = this.getDesignVersion({ scope, brief_id: scope.brief_id,
         design_version_id: result.design_version.design_version_id });

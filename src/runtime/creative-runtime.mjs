@@ -9,7 +9,8 @@ import {
   computeDesignVersionHash,
 } from "../contracts/index.mjs";
 import { validateUsageObservation } from "../contracts/metering.mjs";
-import { inspectOpenAIImageBytes, readPrivateOpenAIImageTargetBindingSha256 } from "../models/openai-images.mjs";
+import { inspectOpenAIImageBytes, readPrivateOpenAIImageRetryDisposition,
+  readPrivateOpenAIImageTargetBindingSha256 } from "../models/openai-images.mjs";
 import {
   validateDecisionRequest,
   validateDecisionResult,
@@ -53,6 +54,7 @@ import {
 import { isSafePublicInspectionReference, snapshotPlainRecord } from "../inspection/deterministic.mjs";
 import { INSPECTION_POLICY_VERSION, INSPECTION_QUESTION_SCHEMA_VERSION } from "../inspection/questions.mjs";
 import {
+  CREATIVE_CONCEPT_PROPOSAL,
   applyCreativeConceptEvent,
   createCreativeConceptBatchProposal,
   inspectCreativeConceptReferenceBytes,
@@ -1057,7 +1059,8 @@ function providerFailureUsage(error) {
       ? outcomeDescriptor.value : undefined;
     const providerOutcome = ["failed", "partial", "unknown"].includes(reportedOutcome) ? reportedOutcome : "unknown";
     return Object.freeze({ usage: projected.value, provider_outcome: providerOutcome,
-      target_binding_sha256: readPrivateOpenAIImageTargetBindingSha256(error) });
+      target_binding_sha256: readPrivateOpenAIImageTargetBindingSha256(error),
+      retry_disposition: readPrivateOpenAIImageRetryDisposition(error) });
   } catch {
     return undefined;
   }
@@ -1839,6 +1842,7 @@ export function createCreativeApi(options = {}) {
     const attempt = meteredAttempt(principal, request, attemptId, operationKind, checkedRoute, logicalOperationId);
     const deadline = startDeadline(request.operation, MAX_PORT_WAIT_MS, now, maximumDeadlineAt);
     let providerValue;
+    let providerRetryDisposition;
     let validatedDecisionRequest;
     let preDispatchError;
     let currentPermissionProofs = Object.freeze([]);
@@ -2110,6 +2114,7 @@ export function createCreativeApi(options = {}) {
         }); } catch (error) {
           const failed = providerFailureUsage(error);
           if (!failed) throw error;
+          providerRetryDisposition = failed.retry_disposition;
           const mappedUsage = await usageObservation({ attempt: dispatchContext.attempt,
             trustedScope: meteredTrustedScope(principal), rawUsage: failed.usage, profile: usageProfile,
             transportAttemptId, idFactory, usageProfileAuthority: telemetry.usage_profile_authority,
@@ -2172,6 +2177,7 @@ export function createCreativeApi(options = {}) {
       usage_completeness: usageEvidence?.status === "settled_owner_mapping" ? "complete" :
         ["partial", "unknown"].includes(providerValue?.usage?.completeness) ? providerValue.usage.completeness : "unknown",
       usage_ref: observationRef ?? outcome.observation_ack?.source_observation_id,
+      ...(providerRetryDisposition ? { private_retry_disposition: providerRetryDisposition } : {}),
       ...(usageEvidence ? { usage_evidence: usageEvidence } : {}),
       evidence_refs: Object.freeze([...(evidenceRefs ?? [])]), telemetry_evidence: telemetryEvidence };
   }
@@ -3041,11 +3047,25 @@ export function createCreativeApi(options = {}) {
     const baseEvent = (slot, event_type, fields = {}) => Object.freeze({ tenant_id: batch.tenant_id,
       project_id: batch.project_id, action_id: batch.action_id, batch_id: batch.batch_id,
       concept_id: slot?.concept_id ?? null, event_id: boundedString(idFactory(), "concept_event_id", 256), event_type, ...fields });
+    if (batch.schema_version !== CREATIVE_CONCEPT_PROPOSAL.schema_version) {
+      const priorSchemaVersion = batch.schema_version;
+      await persistEvent(baseEvent(null, "upgrade_retry_disposition", {
+        from_schema_version: priorSchemaVersion, to_schema_version: CREATIVE_CONCEPT_PROPOSAL.schema_version,
+      }));
+    }
     const dispatchCount = () => batch.slots.reduce((total, slot) => total + slot.attempts.length, 0);
+    const batchHasNativeHardStop = () => batch.slots.some((slot) => slot.attempts.some((attempt) =>
+      ["hard_stop", "legacy_unclassified"].includes(attempt.latest_retry_disposition)));
+    const hasEligibleSettledFailure = (slot) => {
+      const latest = slot.attempts.at(-1);
+      return latest?.latest_provider_outcome === "failed" && latest.latest_retry_disposition === "eligible_retry" &&
+        latest.usage_completeness === "complete" && latest.financial_exposure_status === "settled" &&
+        latest.unknown_financial_exposure === false;
+    };
     const responseStagePort = requiredPort(ports, "storage.getConceptResponseStage", operation);
     const getStage = async (slot) => responseStagePort(Object.freeze({ scope, action_id: request.action_id, concept_id: slot.concept_id }));
     const appendOutcome = async (slot, attempt, outcome, artifactHash, providerRequestRef, usageEvidenceRef,
-      usageCompleteness, recovered = false, financialSettlementEvidence = undefined) => {
+      usageCompleteness, recovered = false, financialSettlementEvidence = undefined, retryDisposition = undefined) => {
       const eventType = recovered && attempt.status === "unknown" ? "reconcile_unknown_attempt" : "provider_outcome";
       await persistEvent(baseEvent(slot, eventType, {
         billable_attempt_id: attempt.billable_attempt_id, transport_attempt_id: attempt.transport_attempt_id,
@@ -3056,6 +3076,9 @@ export function createCreativeApi(options = {}) {
         ...(artifactHash ? { artifact_sha256: artifactHash } : {}),
         ...(financialSettlementEvidence ? { financial_exposure_status: "settled",
           financial_settlement_evidence: financialSettlementEvidence } : {}),
+        ...(eventType === "provider_outcome" && batch.schema_version === CREATIVE_CONCEPT_PROPOSAL.schema_version &&
+          ["eligible_retry", "hard_stop"].includes(retryDisposition)
+          ? { retry_disposition: retryDisposition } : {}),
         usage_evidence_ref: conceptUsageRef(usageEvidenceRef, batch, slot, attempt), usage_completeness: usageCompleteness,
       }));
     };
@@ -3169,7 +3192,9 @@ export function createCreativeApi(options = {}) {
 
     const dispatchSlot = async (conceptId) => {
       let slot = batch.slots.find((item) => item.concept_id === conceptId);
-      if (!slot || !["pending", "failed"].includes(slot.status) || dispatchCount() >= 2) return false;
+      if (!slot || !["pending", "failed"].includes(slot.status) || dispatchCount() >= 2 || batchHasNativeHardStop() ||
+          slot.status === "failed" && slot.attempts.at(-1)?.latest_provider_outcome === "failed" &&
+            !hasEligibleSettledFailure(slot)) return false;
       assertPolicyCurrent(batch.policy_snapshot);
       await assertConceptCurrent();
       let reservationCapture;
@@ -3300,7 +3325,8 @@ export function createCreativeApi(options = {}) {
         const providerOutcome = ["succeeded", "failed"].includes(metered.provider_outcome)
           ? metered.provider_outcome : "unknown";
         await appendOutcome(latestSlot, currentAttempt, providerOutcome, undefined, providerRequestRef,
-          metered.usage_ref, metered.usage_completeness, false, financialSettlementEvidence);
+          metered.usage_ref, metered.usage_completeness, false, financialSettlementEvidence,
+          metered.private_retry_disposition);
       }
       return true;
     };
@@ -3318,19 +3344,21 @@ export function createCreativeApi(options = {}) {
         await markUnobservedAttemptUnknown(slot);
       }
       slot = batch.slots.find((item) => item.concept_id === snapshotSlot.concept_id);
-      if (["pending", "failed"].includes(slot.status) && !slot.attempts.some((attempt) => attempt.unknown_financial_exposure)) {
+      if (["pending", "failed"].includes(slot.status) && !slot.attempts.some((attempt) => attempt.unknown_financial_exposure) &&
+          !batchHasNativeHardStop()) {
         await dispatchSlot(slot.concept_id);
       }
-      if (batch.slots.some((item) => item.status === "unknown" || item.attempts.some((attempt) => attempt.unknown_financial_exposure))) break;
+      if (batchHasNativeHardStop() || batch.slots.some((item) => item.status === "unknown" ||
+          item.attempts.some((attempt) => attempt.unknown_financial_exposure))) break;
     }
     // A second billable attempt is allowed only for a known failed provider outcome
     // with complete usage and a fresh C03 reservation; never retry unknown exposure.
     for (const slotSnapshot of [...batch.slots]) {
       const slot = batch.slots.find((item) => item.concept_id === slotSnapshot.concept_id);
       const latest = slot.attempts.at(-1);
+      if (batchHasNativeHardStop()) break;
       if (dispatchCount() >= 2 || slot.status !== "failed" || slot.attempts.length !== 1 || !latest ||
-          latest.latest_provider_outcome !== "failed" || latest.usage_completeness !== "complete" ||
-          latest.unknown_financial_exposure) continue;
+          !hasEligibleSettledFailure(slot)) continue;
       await dispatchSlot(slot.concept_id);
     }
 
@@ -4248,7 +4276,8 @@ export function createCreativeApi(options = {}) {
             version.design_version.design_hash !== candidate.design_version.design_hash) {
           throw new CreativeApiError("unavailable", request.operation, "stored_result.concept_version_identity");
         }
-        const publicVersion = await loadDesign(started.scope, brief, version.design_version.design_version_id, request.operation);
+        const publicVersion = await loadDesign(started.scope, brief, version.design_version.design_version_id,
+          request.operation, { allowHistorical: true });
         if (canonicalSerialize(publicVersion) !== canonicalSerialize(version.design_version)) {
           throw new CreativeApiError("unavailable", request.operation, "stored_result.concept_public_version");
         }

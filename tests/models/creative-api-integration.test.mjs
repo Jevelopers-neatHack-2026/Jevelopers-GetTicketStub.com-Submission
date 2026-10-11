@@ -240,6 +240,14 @@ function createNativeProvider({ referenceAssetBytes, store, fetchImpl, authority
   });
 }
 
+function syntheticNativePromptPort() {
+  return { async render({ prompt_template }) {
+    return { prompt: "Synthetic integration prompt with no model authority.",
+      template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+      template_sha256: prompt_template.template_sha256 };
+  } };
+}
+
 function mockOwnerUsageProfileAuthority({ transformResult = (result) => result, beforeMap } = {}) {
   const profileSha = `sha256:${"b".repeat(64)}`;
   return Object.freeze({
@@ -668,7 +676,7 @@ test("malformed native concept output keeps the exact attempts private and publi
   context.store.close();
   const reopened = await setup(t, { root: context.root });
   const reopenedBatch = reopened.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id }).batch;
-  assert.equal(reopenedBatch.schema_version, "0.2.0");
+  assert.equal(reopenedBatch.schema_version, "0.3.0");
   assert.equal(reopenedBatch.slots[0].status, "unknown");
   assert.equal(reopenedBatch.slots[0].attempts[0].financial_exposure_status, "settled");
   assert.equal(reopenedBatch.slots[0].attempts[0].unknown_financial_exposure, false);
@@ -744,7 +752,7 @@ test("public provider and usage-mapper settlement claims cannot clear an unmatch
   }
 });
 
-test("a known fully mapped native failure gets one distinct metered retry for a single requested concept", async (t) => {
+test("an explicitly eligible fully mapped native failure gets one distinct metered retry for a single concept", async (t) => {
   const context = await setup(t);
   const outputBytes = makePng({ width: 16, height: 16 });
   let providerPosts = 0;
@@ -760,8 +768,8 @@ test("a known fully mapped native failure gets one distinct metered retry for a 
       context.counters.provider_posts += 1;
       assert.equal(String(url), "https://api.openai.com/v1/images/edits");
       assert.equal(init.body.getAll("image[]").length, 2);
-      if (providerPosts === 1) return new Response(JSON.stringify({ error: { code: "moderation_blocked" }, usage }),
-        { status: 400, headers: { "content-type": "application/json", "x-request-id": "req-concept-retry-first" } });
+      if (providerPosts === 1) return new Response(JSON.stringify({ error: { code: "request_conflict" }, usage }),
+        { status: 409, headers: { "content-type": "application/json", "x-request-id": "req-concept-retry-first" } });
       return new Response(JSON.stringify({ data: [{ b64_json: outputBytes.toString("base64") }], usage }),
         { status: 200, headers: { "content-type": "application/json", "x-request-id": "req-concept-retry-second" } });
     } });
@@ -779,7 +787,9 @@ test("a known fully mapped native failure gets one distinct metered retry for a 
   const attempts = context.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id }).batch.slots[0].attempts;
   assert.equal(attempts.length, 2);
   assert.equal(attempts[0].latest_provider_outcome, "failed");
+  assert.equal(attempts[0].latest_retry_disposition, "eligible_retry");
   assert.equal(attempts[0].usage_completeness, "complete");
+  assert.equal(attempts[0].financial_exposure_status, "settled");
   assert.equal(attempts[0].unknown_financial_exposure, false);
   assert.equal(attempts[1].latest_provider_outcome, "succeeded");
   assert.equal(attempts[1].usage_completeness, "complete");
@@ -787,6 +797,265 @@ test("a known fully mapped native failure gets one distinct metered retry for a 
   assert.equal(new Set(attempts.map((attempt) => attempt.billable_attempt_id)).size, 2);
   assert.equal(new Set(attempts.map((attempt) => attempt.transport_attempt_id)).size, 2);
   assert.equal(context.store.getConceptVersions({ scope: SCOPE, action_id: request.action_id }).length, 1);
+});
+
+test("durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend", async (t) => {
+  const cases = [
+    { label: "auth count one", count: 1, status: 401, code: "invalid_api_key" },
+    { label: "permission count one", count: 1, status: 403, code: "permission_denied" },
+    { label: "quota count one", count: 1, status: 429, code: "insufficient_quota" },
+    { label: "moderation count one", count: 1, status: 400, code: "moderation_blocked" },
+    { label: "malformed request count one", count: 1, status: 400, code: "invalid_request" },
+    { label: "auth count two", count: 2, status: 401, code: "invalid_api_key", reopen: true },
+    { label: "quota count two", count: 2, status: 429, code: "insufficient_quota", reopen: true },
+    { label: "moderation count two", count: 2, status: 400, code: "moderation_blocked", reopen: true },
+  ];
+  const usage = { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+    input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+    output_tokens_details: { image_tokens: 9, text_tokens: 1 } };
+  for (const scenario of cases) await t.test(scenario.label, async (subtest) => {
+    const context = await setup(subtest);
+    const outputBytes = makePng({ width: 16, height: 16 });
+    let providerPosts = 0;
+    const provider = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+      promptPort: { async render({ prompt_template }) { return { prompt: "Synthetic integration prompt with no model authority.",
+        template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+        template_sha256: prompt_template.template_sha256 }; } },
+      fetchImpl: async () => {
+        providerPosts += 1;
+        context.counters.provider_posts += 1;
+        if (providerPosts === 1) return new Response(JSON.stringify({ error: { code: scenario.code }, usage }),
+          { status: scenario.status, headers: { "content-type": "application/json", "x-request-id": `req-hard-stop-${scenario.label.replaceAll(" ", "-")}` } });
+        return new Response(JSON.stringify({ data: [{ b64_json: outputBytes.toString("base64") }], usage }),
+          { status: 200, headers: { "content-type": "application/json", "x-request-id": `req-unexpected-second-${scenario.label.replaceAll(" ", "-")}` } });
+      } });
+    installConceptAuthority(context, provider);
+    const request = conceptRequest(`concept-hard-stop-${scenario.label.replaceAll(" ", "-")}`, "1.1", scenario.count);
+    const result = await context.api.invoke(authorizedActor(), request);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.result.status, "partial");
+    assert.equal(result.result.candidates.length, 0);
+    assert.deepEqual(result.result.progress.map((slot) => slot.status), scenario.count === 1 ? ["failed"] : ["failed", "pending"]);
+    assert.equal(providerPosts, 1);
+    assert.equal(context.counters.provider_posts, 1);
+    assert.equal(context.counters.reserves, 1);
+    assert.equal(context.counters.settlements, 1);
+    assert.equal(context.counters.held, 0);
+    const batch = context.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id }).batch;
+    const attempt = batch.slots[0].attempts[0];
+    assert.equal(attempt.latest_provider_outcome, "failed");
+    assert.equal(attempt.latest_retry_disposition, "hard_stop");
+    assert.equal(attempt.provider_observations[0].retry_disposition, "hard_stop");
+    assert.equal(attempt.usage_completeness, "complete");
+    assert.equal(attempt.financial_exposure_status, "settled");
+    assert.equal(attempt.unknown_financial_exposure, false);
+    assert.equal(context.store.getConceptVersions({ scope: SCOPE, action_id: request.action_id }).length, 0);
+
+    if (scenario.reopen) {
+      const root = context.root;
+      context.store.close();
+      const reopened = await setup(subtest, { root, idPrefix: `hard-stop-reopen-${scenario.label.replaceAll(" ", "-")}` });
+      const reopenedProvider = createNativeProvider({ store: reopened.store, referenceAssetBytes: reopened.referenceAssetBytes,
+        fetchImpl: async () => { throw new Error("durable hard stop must not dispatch after process restart"); } });
+      installConceptAuthority(reopened, reopenedProvider);
+      const replay = await reopened.api.invoke(authorizedActor(), request);
+      assert.equal(replay.ok, true, JSON.stringify(replay));
+      assert.equal(replay.replayed, true);
+      assert.deepEqual(replay.result, result.result);
+      assert.equal(reopened.counters.provider_posts, 0);
+      assert.equal(reopened.counters.reserves, 0);
+      assert.equal(reopened.counters.settlements, 0);
+    } else {
+      const replay = await context.api.invoke(authorizedActor(), request);
+      assert.equal(replay.ok, true, JSON.stringify(replay));
+      assert.equal(replay.replayed, true);
+      assert.deepEqual(replay.result, result.result);
+      assert.equal(providerPosts, 1);
+    }
+  });
+});
+
+test("a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen", async (t) => {
+  for (const failedOrdinal of [1, 2]) await t.test(`ordinal ${failedOrdinal} fails`, async (subtest) => {
+    const context = await setup(subtest);
+    const outputs = [makePng({ width: 16, height: 16 }), makePng({ width: 16, height: 16, transparent: true })];
+    const usage = { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+      input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+      output_tokens_details: { image_tokens: 9, text_tokens: 1 } };
+    let providerPosts = 0;
+    const provider = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+      promptPort: { async render({ prompt_template }) { return { prompt: "Synthetic integration prompt with no model authority.",
+        template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+        template_sha256: prompt_template.template_sha256 }; } },
+      fetchImpl: async (url, init) => {
+        providerPosts += 1;
+        context.counters.provider_posts += 1;
+        assert.equal(String(url), "https://api.openai.com/v1/images/edits");
+        assert.equal(init.body.getAll("image[]").length, 2);
+        assert.equal(init.body.has("mask"), false);
+        if (providerPosts === failedOrdinal) return new Response(JSON.stringify({ error: { code: "request_conflict" }, usage }),
+          { status: 409, headers: { "content-type": "application/json", "x-request-id": `req-partial-conflict-${failedOrdinal}` } });
+        return new Response(JSON.stringify({ data: [{ b64_json: outputs[providerPosts - 1].toString("base64") }], usage }),
+          { status: 200, headers: { "content-type": "application/json", "x-request-id": `req-partial-success-${failedOrdinal}` } });
+      } });
+    installConceptAuthority(context, provider);
+    const request = conceptRequest(`concept-partial-ordinal-${failedOrdinal}`, "1.1", 2);
+    const result = await context.api.invoke(authorizedActor(), request);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.result.status, "partial");
+    assert.equal(result.result.candidates.length, 1);
+    const candidate = result.result.candidates[0];
+    const expectedOrdinal = failedOrdinal === 1 ? 2 : 1;
+    assert.equal(candidate.ordinal, expectedOrdinal);
+    assert.equal(candidate.design_version.parent_version_id, null);
+    assert.equal(providerPosts, 2);
+    assert.equal(context.counters.reserves, 2);
+    assert.equal(context.counters.settlements, 2);
+    const generic = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: candidate.design_version.design_version_id });
+    assert.deepEqual(generic, candidate.design_version);
+    const listed = context.store.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 100 });
+    assert.ok(listed.items.some((item) => item.design_version_id === candidate.design_version.design_version_id));
+    const durable = context.store.getConceptVersions({ scope: SCOPE, action_id: request.action_id });
+    assert.equal(durable.length, 1);
+    assert.equal(durable[0].ordinal, expectedOrdinal);
+    assert.deepEqual(durable[0].design_version, generic);
+    const versionRow = context.store.db.prepare(`SELECT action_id,creation_job_id FROM design_versions
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
+      .get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, candidate.design_version.design_version_id);
+    const batchAction = context.store.db.prepare(`SELECT action_id,state FROM creation_actions
+      WHERE tenant_id=? AND project_id=? AND action_id=?`)
+      .get(SCOPE.tenant_id, SCOPE.project_id, request.action_id);
+    assert.equal(versionRow.action_id, expectedOrdinal === 1 ? request.action_id
+      : `concept-version-${canonicalHash({ action_id: request.action_id, concept_id: candidate.concept_id }).slice(7)}`);
+    assert.equal(batchAction.action_id, request.action_id);
+    assert.equal(batchAction.state, "committed");
+
+    const replay = await context.api.invoke(authorizedActor(), request);
+    assert.equal(replay.ok, true, JSON.stringify(replay));
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.result, result.result);
+    assert.equal(providerPosts, 2, "same-action replay never bills or regenerates the durable candidate");
+
+    const root = context.root;
+    context.store.close();
+    const reopened = await setup(subtest, { root, idPrefix: `partial-reopen-${failedOrdinal}` });
+    let reopenedPosts = 0;
+    installConceptAuthority(reopened, createNativeProvider({ store: reopened.store,
+      referenceAssetBytes: reopened.referenceAssetBytes,
+      fetchImpl: async () => { reopenedPosts += 1; throw new Error("durable partial replay must not dispatch"); } }));
+    const reopenedReplay = await reopened.api.invoke(authorizedActor(), request);
+    assert.equal(reopenedReplay.ok, true, JSON.stringify(reopenedReplay));
+    assert.equal(reopenedReplay.replayed, true);
+    assert.deepEqual(reopenedReplay.result, result.result);
+    assert.equal(reopenedPosts, 0);
+    assert.equal(reopened.counters.reserves, 0);
+    assert.equal(reopened.counters.settlements, 0);
+  });
+});
+
+test("concept publication rejects a forged slot ordinal before either generic sibling becomes visible", async (t) => {
+  const context = await setup(t);
+  const usage = { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+    input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+    output_tokens_details: { image_tokens: 9, text_tokens: 1 } };
+  let providerPosts = 0;
+  const provider = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+    promptPort: syntheticNativePromptPort(),
+    fetchImpl: async () => {
+      providerPosts += 1;
+      context.counters.provider_posts += 1;
+      const outputBytes = makePng({ width: 16, height: 16, transparent: providerPosts === 2 });
+      return new Response(JSON.stringify({ data: [{ b64_json: outputBytes.toString("base64") }], usage }),
+        { status: 200, headers: { "content-type": "application/json", "x-request-id": `req-forged-ordinal-${providerPosts}` } });
+    } });
+  installConceptAuthority(context, provider);
+  const commit = context.store.commitConceptDesignVersions.bind(context.store);
+  context.store.commitConceptDesignVersions = (inputs, transaction) => commit(inputs.map((input, index) => index === 1
+    ? { ...input, concept_identity: { ...input.concept_identity, ordinal: 1 } } : input), transaction);
+  const request = conceptRequest("concept-forged-publication-ordinal", "1.1", 2);
+  const result = await context.api.invoke(authorizedActor(), request);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "stale_version",
+    "the API job port maps a publication identity conflict to its established stale-context response");
+  assert.equal(result.error.field, "creative_context");
+  assert.equal(providerPosts, 2);
+  assert.equal(context.counters.reserves, 2);
+  assert.equal(context.counters.settlements, 2);
+  assert.equal(context.store.getConceptVersions({ scope: SCOPE, action_id: request.action_id }).length, 0);
+  assert.equal(context.store.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 100 }).items.length, 0);
+  const job = context.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id });
+  assert.deepEqual(job.batch.slots.map((slot) => slot.status), ["staged", "staged"],
+    "the failed publication transaction leaves both staged candidates private and resumable");
+  assert.equal(context.store.db.prepare(`SELECT COUNT(*) AS count FROM creation_actions
+    WHERE tenant_id=? AND project_id=? AND action_id=?`).get(SCOPE.tenant_id, SCOPE.project_id, request.action_id).count, 0);
+});
+
+test("completed concepts replay validates its retained brief after a legitimate brief revision", async (t) => {
+  const successfulAction = async (subtest, actionId) => {
+    const context = await setup(subtest);
+    let providerPosts = 0;
+    const outputBytes = makePng({ width: 16, height: 16 });
+    const provider = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+      promptPort: { async render({ prompt_template }) { return { prompt: "Synthetic integration prompt with no model authority.",
+        template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+        template_sha256: prompt_template.template_sha256 }; } },
+      fetchImpl: async () => {
+        providerPosts += 1;
+        context.counters.provider_posts += 1;
+        return new Response(JSON.stringify({ data: [{ b64_json: outputBytes.toString("base64") }],
+          usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+            input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+            output_tokens_details: { image_tokens: 9, text_tokens: 1 } } }),
+        { status: 200, headers: { "content-type": "application/json", "x-request-id": `req-history-${actionId}` } });
+      } });
+    installConceptAuthority(context, provider);
+    const request = conceptRequest(actionId, "1.1", 1);
+    const original = await context.api.invoke(authorizedActor(), request);
+    assert.equal(original.ok, true, JSON.stringify(original));
+    const revisedBrief = structuredClone(context.brief);
+    revisedBrief.event_id = `event-revised-${actionId}`;
+    revisedBrief.facts.verified[0].value = "Updated event name";
+    const update = context.store.putBrief({ scope: SCOPE, brief: revisedBrief,
+      expected_brief_hash: canonicalHash(context.brief) });
+    assert.equal(update.status, "saved");
+    return { context, request, original, providerPosts: () => providerPosts };
+  };
+
+  await t.test("authorized exact replay returns identical result without redispatch", async (subtest) => {
+    const { context, request, original, providerPosts } = await successfulAction(subtest, "concept-history-replay");
+    const otherActor = await context.api.invoke({ ...authorizedActor(), actor_id: "different-authorized-actor" }, request);
+    assert.equal(otherActor.ok, false);
+    const wrongScope = await context.api.invoke(authorizedActor(), { ...request, project_id: "different-project" });
+    assert.equal(wrongScope.ok, false);
+    const replay = await context.api.invoke(authorizedActor(), request);
+    assert.equal(replay.ok, true, JSON.stringify(replay));
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.result, original.result);
+    assert.equal(providerPosts(), 1);
+    assert.equal(context.counters.reserves, 1);
+    assert.equal(context.counters.settlements, 1);
+  });
+
+  for (const historyMode of ["missing", "tampered"]) await t.test(`${historyMode} retained brief fails closed`, async (subtest) => {
+    const { context, request, providerPosts } = await successfulAction(subtest, `concept-history-${historyMode}`);
+    const storage = context.ports.storage;
+    context.ports.storage = { ...storage, async getBriefVersionByHash(input) {
+      const historic = await storage.getBriefVersionByHash(input);
+      if (historyMode === "missing") return null;
+      const changed = structuredClone(historic);
+      changed.facts.verified[0].value = "Tampered retained event";
+      return changed;
+    } };
+    const replay = await context.api.invoke(authorizedActor(), request);
+    assert.equal(replay.ok, false);
+    assert.equal(replay.error.code, historyMode === "missing" ? "unavailable" : "failed");
+    assert.equal(replay.error.field, historyMode === "missing" ? "brief_history" : "brief_history.hash");
+    assert.equal(providerPosts(), 1, "invalid history cannot trigger a replacement generation");
+    assert.equal(context.counters.reserves, 1);
+    assert.equal(context.counters.settlements, 1);
+    assert.equal(context.store.getConceptVersions({ scope: SCOPE, action_id: request.action_id }).length, 1);
+  });
 });
 
 test("concept response stage survives a hard process exit and resumes the identical attempt without redispatch", async (t) => {
@@ -889,6 +1158,215 @@ test("concept response stage survives a hard process exit and resumes the identi
   assert.equal(batchAfter.batch.slots[0].attempts[0].transport_attempt_id, attemptBefore.transport_attempt_id);
   assert.equal(batchAfter.batch.slots[1].attempts.length, 0);
   assert.equal(recovered.store.getConceptVersions({ scope: SCOPE, action_id: request.action_id }).length, 1);
+});
+
+test("a durable native hard stop blocks fresh sibling spend after process exit", async (t) => {
+  if (process.env.CONCEPT_HARD_STOP_CHILD === "1") {
+    const root = process.env.CONCEPT_HARD_STOP_ROOT;
+    assert.equal(typeof root, "string");
+    const context = await setup(t, { root, idPrefix: "hard-stop-crash-child" });
+    const usage = { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+      input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+      output_tokens_details: { image_tokens: 9, text_tokens: 1 } };
+    const appendConceptEvent = context.ports.storage.appendConceptEvent;
+    let nativePosts = 0;
+    const nativeProvider = createNativeProvider({ store: context.store,
+      referenceAssetBytes: context.referenceAssetBytes, promptPort: syntheticNativePromptPort(),
+      fetchImpl: async () => {
+        nativePosts += 1;
+        return new Response(JSON.stringify({ error: { code: "invalid_api_key" }, usage }),
+          { status: 401, headers: { "content-type": "application/json", "x-request-id": "req-hard-stop-crash" } });
+      } });
+    installConceptAuthority(context, nativeProvider);
+    context.ports.storage = { ...context.ports.storage, async appendConceptEvent(input) {
+      const ack = await appendConceptEvent(input);
+      if (input.event.event_type === "provider_outcome" && input.event.outcome === "failed") {
+        const batch = ack.batch;
+        const attempt = batch.slots[0].attempts[0];
+        process.stdout.write("durable_hard_stop=" + batch.slots[0].status + ";retry=" +
+          attempt.latest_retry_disposition + ";financial=" + attempt.financial_exposure_status +
+          ";unknown=" + attempt.unknown_financial_exposure + ";posts=" + nativePosts + "\n");
+        process.exit(86);
+      }
+      return ack;
+    } };
+    await context.api.invoke(authorizedActor(), conceptRequest("hard-stop-process-exit", "1.1", 2));
+    process.exit(87);
+  }
+
+  const initial = await setup(t);
+  const root = initial.root;
+  initial.store.close();
+  const childEnvironment = { ...process.env, CONCEPT_HARD_STOP_CHILD: "1", CONCEPT_HARD_STOP_ROOT: root };
+  delete childEnvironment.NODE_TEST_CONTEXT;
+  delete childEnvironment.NODE_TEST_WORKER_ID;
+  const child = spawnSync(process.execPath,
+    ["--test", "--test-reporter=tap", "--test-name-pattern=a durable native hard stop blocks fresh sibling spend",
+      fileURLToPath(import.meta.url)],
+    { cwd: process.cwd(), env: childEnvironment, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+  assert.equal(child.error, undefined, child.error?.message);
+  process.stdout.write(child.stdout);
+  process.stderr.write(child.stderr);
+  assert.equal(child.status, 1);
+  assert.match(child.stdout, /durable_hard_stop=failed;retry=hard_stop;financial=settled;unknown=false;posts=1/);
+  assert.match(child.stdout, /exitCode: 86/);
+
+  const recovered = await setup(t, { root, initialNow: NOW + 61_000, idPrefix: "hard-stop-crash-recovery" });
+  const request = conceptRequest("hard-stop-process-exit", "1.1", 2);
+  const before = recovered.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id }).batch;
+  assert.deepEqual(before.slots.map((slot) => slot.status), ["failed", "pending"]);
+  assert.equal(before.slots[0].attempts[0].latest_retry_disposition, "hard_stop");
+  assert.equal(before.slots[0].attempts[0].financial_exposure_status, "settled");
+  assert.equal(before.slots[0].attempts[0].unknown_financial_exposure, false);
+  const eventCount = recovered.store.db.prepare("SELECT COUNT(*) AS count FROM creative_concept_events_v1 WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?")
+    .get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, request.action_id).count;
+  let resumedPosts = 0;
+  installConceptAuthority(recovered, createNativeProvider({ store: recovered.store,
+    referenceAssetBytes: recovered.referenceAssetBytes,
+    fetchImpl: async () => { resumedPosts += 1; throw new Error("durable hard stop must not spend after restart"); } }));
+  const resumed = await recovered.api.invoke(authorizedActor(), request);
+  assert.equal(resumed.ok, true, JSON.stringify(resumed));
+  assert.equal(resumed.result.status, "partial");
+  assert.deepEqual(resumed.result.progress.map((slot) => slot.status), ["failed", "pending"]);
+  assert.equal(resumed.result.candidates.length, 0);
+  assert.equal(resumedPosts, 0);
+  assert.equal(recovered.counters.provider_posts, 0);
+  assert.equal(recovered.counters.reserves, 0);
+  assert.equal(recovered.counters.settlements, 0);
+  assert.equal(recovered.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id }).batch.slots[0]
+    .attempts[0].latest_retry_disposition, "hard_stop");
+  assert.equal(recovered.store.db.prepare("SELECT COUNT(*) AS count FROM creative_concept_events_v1 WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?")
+    .get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, request.action_id).count, eventCount,
+  "recovery completes the partial job without changing or repeating the hard-stop event history");
+});
+
+test("legacy concept batches upgrade through durable events before recovery", async (t) => {
+  if (process.env.CONCEPT_LEGACY_SCHEMA_CHILD === "1") {
+    const root = process.env.CONCEPT_LEGACY_SCHEMA_ROOT;
+    const schemaVersion = process.env.CONCEPT_LEGACY_SCHEMA_VERSION;
+    assert.equal(typeof root, "string");
+    assert.ok(["0.1.0", "0.2.0"].includes(schemaVersion));
+    const context = await setup(t, { root, idPrefix: "legacy-schema-child" });
+    const usage = { input_tokens: 20, output_tokens: 10, total_tokens: 30,
+      input_tokens_details: { image_tokens: 18, text_tokens: 2 },
+      output_tokens_details: { image_tokens: 9, text_tokens: 1 } };
+    const provider = createNativeProvider({ store: context.store,
+      referenceAssetBytes: context.referenceAssetBytes,
+      promptPort: syntheticNativePromptPort(),
+      fetchImpl: async () => {
+        context.counters.provider_posts += 1;
+        if (schemaVersion === "0.1.0") {
+          throw new Error("legacy v0.1 cut exits before provider response");
+        }
+        return new Response(JSON.stringify({ error: { code: "request_conflict" }, usage }),
+          { status: 409, headers: { "content-type": "application/json", "x-request-id": "req-legacy-v2-conflict" } });
+      } });
+    installConceptAuthority(context, provider);
+    const originalAppend = context.ports.storage.appendConceptEvent;
+    context.ports.storage = { ...context.ports.storage, async appendConceptEvent(input) {
+      if (schemaVersion === "0.1.0" && input.event.event_type === "dispatch_started") {
+        const ack = await originalAppend(input);
+        const legacy = structuredClone(ack.batch);
+        legacy.schema_version = "0.1.0";
+        for (const slot of legacy.slots) for (const attempt of slot.attempts) delete attempt.latest_retry_disposition;
+        context.store.db.prepare("UPDATE creative_concept_batches_v1 SET batch_json=? WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?")
+          .run(JSON.stringify(legacy), SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, input.action_id);
+        process.stdout.write("legacy_seed=0.1.0;state=" + legacy.slots[0].status + ";posts=" +
+          context.counters.provider_posts + "\n");
+        process.exit(86);
+      }
+      if (schemaVersion === "0.2.0" && input.event.event_type === "provider_outcome") {
+        const current = context.store.getConceptBatch({ scope: SCOPE, action_id: input.action_id }).batch;
+        const legacy = structuredClone(current);
+        legacy.schema_version = "0.2.0";
+        for (const slot of legacy.slots) for (const attempt of slot.attempts) delete attempt.latest_retry_disposition;
+        context.store.db.prepare("UPDATE creative_concept_batches_v1 SET batch_json=? WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?")
+          .run(JSON.stringify(legacy), SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, input.action_id);
+        const legacyEvent = { ...input.event };
+        delete legacyEvent.retry_disposition;
+        const ack = await originalAppend({ ...input, event: legacyEvent });
+        const attempt = ack.batch.slots[0].attempts[0];
+        process.stdout.write("legacy_seed=0.2.0;state=" + ack.batch.slots[0].status +
+          ";retry=" + attempt.latest_retry_disposition + ";financial=" + attempt.financial_exposure_status +
+          ";unknown=" + attempt.unknown_financial_exposure + ";posts=" + context.counters.provider_posts + "\n");
+        process.exit(86);
+      }
+      return originalAppend(input);
+    } };
+    await context.api.invoke(authorizedActor(), conceptRequest("legacy-schema-resume-" + schemaVersion, "1.1", 2));
+    process.exit(87);
+  }
+
+  for (const schemaVersion of ["0.1.0", "0.2.0"]) await t.test("persisted " + schemaVersion + " history", async (subtest) => {
+    const initial = await setup(subtest);
+    const root = initial.root;
+    initial.store.close();
+    const childEnvironment = { ...process.env, CONCEPT_LEGACY_SCHEMA_CHILD: "1",
+      CONCEPT_LEGACY_SCHEMA_ROOT: root, CONCEPT_LEGACY_SCHEMA_VERSION: schemaVersion };
+    delete childEnvironment.NODE_TEST_CONTEXT;
+    delete childEnvironment.NODE_TEST_WORKER_ID;
+    const child = spawnSync(process.execPath,
+      ["--test", "--test-reporter=tap", "--test-name-pattern=legacy concept batches upgrade through durable events",
+        fileURLToPath(import.meta.url)],
+      { cwd: process.cwd(), env: childEnvironment, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+    assert.equal(child.error, undefined, child.error?.message);
+    process.stdout.write(child.stdout);
+    process.stderr.write(child.stderr);
+    assert.equal(child.status, 1);
+    assert.match(child.stdout, /exitCode: 86/);
+    if (schemaVersion === "0.1.0") {
+      assert.match(child.stdout, /legacy_seed=0\.1\.0;state=dispatching;posts=0/);
+    } else {
+      assert.match(child.stdout, /legacy_seed=0\.2\.0;state=failed;retry=undefined;financial=settled;unknown=false;posts=1/);
+    }
+
+    const recovered = await setup(subtest, { root, initialNow: NOW + 61_000, idPrefix: "legacy-schema-recovery" });
+    const request = conceptRequest("legacy-schema-resume-" + schemaVersion, "1.1", 2);
+    const priorRow = recovered.store.db.prepare("SELECT batch_json FROM creative_concept_batches_v1 WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?")
+      .get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, request.action_id);
+    assert.ok(priorRow);
+    const priorBatch = JSON.parse(priorRow.batch_json);
+    assert.equal(priorBatch.schema_version, schemaVersion);
+    const priorEvents = recovered.store.db.prepare("SELECT sequence,event_id,event_type,event_hash,event_json FROM creative_concept_events_v1 WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? ORDER BY sequence")
+      .all(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, request.action_id);
+    assert.ok(priorEvents.length >= (schemaVersion === "0.1.0" ? 2 : 3));
+    if (schemaVersion === "0.2.0") {
+      assert.equal(priorBatch.slots[0].status, "failed");
+      assert.equal(priorBatch.slots[0].attempts[0].financial_exposure_status, "settled");
+      assert.equal(priorBatch.slots[0].attempts[0].unknown_financial_exposure, false);
+      assert.equal(priorBatch.slots[0].attempts[0].latest_retry_disposition, undefined);
+    }
+    let resumedPosts = 0;
+    installConceptAuthority(recovered, createNativeProvider({ store: recovered.store,
+      referenceAssetBytes: recovered.referenceAssetBytes,
+      fetchImpl: async () => { resumedPosts += 1; throw new Error("legacy recovery must not dispatch again"); } }));
+    const resumed = await recovered.api.invoke(authorizedActor(), request);
+    assert.equal(resumed.ok, true, JSON.stringify(resumed));
+    assert.equal(resumed.result.status, schemaVersion === "0.1.0" ? "unknown_hold" : "partial");
+    assert.deepEqual(resumed.result.progress.map((slot) => slot.status),
+      schemaVersion === "0.1.0" ? ["unknown", "pending"] : ["failed", "pending"]);
+    assert.equal(resumed.result.candidates.length, 0);
+    assert.equal(resumedPosts, 0);
+    assert.equal(recovered.counters.provider_posts, 0);
+    assert.equal(recovered.counters.reserves, 0);
+    assert.equal(recovered.counters.settlements, 0);
+    const after = recovered.store.getConceptBatch({ scope: SCOPE, action_id: request.action_id }).batch;
+    assert.equal(after.schema_version, "0.3.0");
+    if (schemaVersion === "0.1.0") {
+      assert.equal(after.slots[0].attempts[0].latest_retry_disposition, null);
+      assert.equal(after.slots[0].attempts[0].unknown_financial_exposure, true);
+    } else {
+      assert.equal(after.slots[0].attempts[0].latest_retry_disposition, "legacy_unclassified");
+      assert.equal(after.slots[0].attempts[0].financial_exposure_status, "settled");
+    }
+    assert.deepEqual(after.events.slice(0, priorBatch.events.length), priorBatch.events,
+      "the migration keeps every prior event identity and hash in place");
+    assert.equal(after.events[priorBatch.events.length].event_type, "upgrade_retry_disposition");
+    const recoveredEvents = recovered.store.db.prepare("SELECT sequence,event_id,event_type,event_hash,event_json FROM creative_concept_events_v1 WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? ORDER BY sequence")
+      .all(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, request.action_id);
+    assert.deepEqual(recoveredEvents.slice(0, priorEvents.length), priorEvents,
+      "the upgrade appends a new immutable database event without rewriting historical event bytes");
+  });
 });
 
 test("a reconciled staged sibling resumes the untouched slot after a hard process exit", async (t) => {
