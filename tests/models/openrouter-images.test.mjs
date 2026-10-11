@@ -524,7 +524,9 @@ test("capabilities are bound to the supplied n and input_references descriptors 
   const denied = [
     ["edit maximum above the descriptor maximum", { capabilities: edit(5), supported_parameters: refs(0, 4) }],
     ["descriptor maximum zero while edit is claimed", { capabilities: edit(2), supported_parameters: refs(0, 0) }],
-    ["generation requires zero references", { capabilities: { generation: true, edit: false }, supported_parameters: refs(2, 8) }],
+    ["edit capability maximum below the descriptor minimum", { capabilities: { generation: false, edit: { max_input_references: 1 } }, supported_parameters: refs(2, 8) }],
+    ["generation-capable profile requires references", { capabilities: edit(2), supported_parameters: refs(1, 16) }],
+    ["generation-only profile requires references", { capabilities: { generation: true, edit: false }, supported_parameters: refs(2, 8) }],
     ["n maximum zero", { supported_parameters: { n: { type: "range", min: 0, max: 0 } } }],
     ["n minimum above one", { supported_parameters: { n: { type: "range", min: 2, max: 4 } } }],
   ];
@@ -536,9 +538,11 @@ test("capabilities are bound to the supplied n and input_references descriptors 
   // The same descriptors are fine when the profile makes no contradicting claim.
   for (const overrides of [
     { capabilities: edit(4), supported_parameters: refs(0, 4) },
+    { capabilities: edit(2), supported_parameters: refs(0, 16) },
     { capabilities: { generation: false, edit: { max_input_references: 2 } }, supported_parameters: refs(1, 16) },
     { capabilities: { generation: true, edit: false }, supported_parameters: refs(0, 0) },
     { capabilities: { generation: false, edit: { max_input_references: 8 } }, supported_parameters: refs(2, 8) },
+    { capabilities: { generation: false, edit: { max_input_references: 4 } }, supported_parameters: refs(2, 8) },
     { supported_parameters: { n: { type: "range", min: 1, max: 1 } } },
     { supported_parameters: { n: { type: "range", min: 0, max: 10 } } },
     { supported_parameters: { ...LIVE_DESCRIPTORS }, configuration: { quality: "low" } },
@@ -1084,6 +1088,28 @@ test("usage is raw, unknown, identity-bound, and missing values are reported, ne
     assert.ok(!equal.missing_fields.some((field) => field.endsWith(".exceeds_parent")), "equal to the parent is valid");
     const valid = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: { cached_tokens: 1 }, completion_tokens_details: { image_tokens: 1 } });
     assert.deepEqual(valid.missing_fields, ["usage.profile_mapping_pending"]);
+  });
+  await t.test("disjoint detail counters are summed against the parent without clamping", () => {
+    const sum = (usage) => normalizeOpenRouterImageUsage(usage).missing_fields;
+    const findings = sum({ prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 60, cache_write_tokens: 60 } });
+    assert.ok(findings.includes("usage.input_tokens_details.sum_exceeds_parent"));
+    assert.ok(!findings.includes("usage.input_tokens_details.exceeds_parent"), "each counter alone is within the parent");
+    const kept = normalizeOpenRouterImageUsage({ prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 60, cache_write_tokens: 60 } });
+    assert.deepEqual(kept.input_tokens_details, { cache_write_tokens: 60, cached_tokens: 60 }, "not clamped");
+    assert.ok(sum({ prompt_tokens: 100, prompt_tokens_details: { audio_tokens: 40, file_tokens: 40, video_tokens: 40 } })
+      .includes("usage.input_tokens_details.sum_exceeds_parent"), "modalities partition the prompt");
+    assert.ok(sum({ completion_tokens: 10, completion_tokens_details: { audio_tokens: 6, image_tokens: 6 } })
+      .includes("usage.output_tokens_details.sum_exceeds_parent"));
+    for (const valid of [
+      { prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 60, cache_write_tokens: 40 } },
+      { prompt_tokens: 100, prompt_tokens_details: { audio_tokens: 50, file_tokens: 30, video_tokens: 20 } },
+      // Cache and modality counters may describe the same tokens, and reasoning is a purpose split: never added together.
+      { prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 90, audio_tokens: 90 } },
+      { completion_tokens: 10, completion_tokens_details: { reasoning_tokens: 10, image_tokens: 10 } },
+    ]) assert.ok(!sum(valid).some((field) => field.includes("exceeds_parent")), JSON.stringify(valid));
+    const single = sum({ prompt_tokens: 5, prompt_tokens_details: { cached_tokens: 9 } });
+    assert.ok(single.includes("usage.input_tokens_details.exceeds_parent"), "per-detail finding still works");
+    assert.ok(!JSON.stringify(findings).includes("60"), "findings carry no values");
   });
   await t.test("details without their parent counter are kept and flagged", () => {
     const orphan = normalizeOpenRouterImageUsage({ prompt_tokens_details: { cached_tokens: 3 }, completion_tokens_details: { image_tokens: 4 } });
