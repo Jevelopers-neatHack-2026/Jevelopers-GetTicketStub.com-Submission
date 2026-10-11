@@ -210,6 +210,7 @@ if (process.argv[2] === '--registry-propagation-probe') {
       || probe.stdout !== 'forwarded') {
     fail('AH-11-OPS ownership registry propagation failed.');
   }
+  process.stdout.write('forwarded');
   process.exit(0);
 }
 if (caseId !== 'AH-11-OPS' || mode !== 'mock' || !FIXTURES.has(fixture)) {

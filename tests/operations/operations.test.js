@@ -567,6 +567,18 @@ async function cleanupCi1OwnedTemporaryDirectory(temporary, overrides = {}) {
   return !incomplete;
 }
 
+function registerCi1OwnedTemporaryDirectoryFinalizer(testContext, cleanup, temporary, state) {
+  testContext.after(async () => {
+    let cleanupConfirmed = false;
+    try { cleanupConfirmed = await cleanup(temporary) === true; } catch {}
+    if (!cleanupConfirmed) {
+      state.ci1PhaseCaptureIncomplete = true;
+      state.ci1PhaseCaptureOwnedGroupCloseUnconfirmed = true;
+      throw new Error('AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED');
+    }
+  });
+}
+
 function tempDirectory(prefix = 'ah11-ops-', options = {}) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
   const custody = options.ci1OwnedGroups === true ? ci1TemporaryCustody(directory) : null;
@@ -2723,7 +2735,7 @@ test('OPS03_FAIRNESS_BACKPRESSURE protects a second tenant and persists hierarch
 
 test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport boundary without a second transport', async t => {
   const temporary = tempDirectory('ah11-jev-sigterm-', { ci1OwnedGroups: true });
-  t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(temporary); });
+  registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupCi1OwnedTemporaryDirectory, temporary, METRICS);
   const store = openStore(temporary.databasePath);
   store.close();
   const phases = [
@@ -2967,7 +2979,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
   });
   await t.test('OPS04.C02 fixture assertion failure after pausing the owned runner executes bounded finally cleanup', async t => {
     const failureDir = tempDirectory('ah11-jev-fixture-failure-', { ci1OwnedGroups: true });
-    t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(failureDir); });
+    registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupCi1OwnedTemporaryDirectory, failureDir, METRICS);
     const markerDirectory = join(failureDir.directory, 'marker-is-a-directory');
     mkdirSync(markerDirectory);
     const resultPath = join(failureDir.directory, 'failure-result.json');
@@ -3040,7 +3052,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     for (const markerMode of ['missing', 'partial']) {
       const mode = `failure-runner-marker-${markerMode}`;
       const markerDir = tempDirectory(`ah11-jev-marker-${markerMode}-`, { ci1OwnedGroups: true });
-      t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(markerDir); });
+      registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupCi1OwnedTemporaryDirectory, markerDir, METRICS);
       const databasePath = join(markerDir.directory, 'marker-control.sqlite');
       const markerPath = join(markerDir.directory, 'marker-control.json');
       const resultPath = join(markerDir.directory, 'marker-result.json');
@@ -3558,7 +3570,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       'unconfirmed close is explicit rather than a zero-survivor claim');
 
     const inertGroupDir = tempDirectory('ah11-jev-owned-group-finalizer-', { ci1OwnedGroups: true });
-    t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(inertGroupDir); });
+    registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupCi1OwnedTemporaryDirectory, inertGroupDir, METRICS);
     const watchdogControlPath = join(inertGroupDir.directory, 'watchdog-control.json');
     writeFileSync(watchdogControlPath, JSON.stringify({ state: 'armed' }), { mode: 0o600 });
     const watchdogStartedAt = performance.now();
@@ -6613,7 +6625,7 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   }
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
-  await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async () => {
+  await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async t => {
     assert.match(evidenceVerifier, /REQUIRED_LOCAL_CASES/u);
     assert.match(evidenceVerifier, /missingLocalCases/u);
     assert.match(evidenceVerifier, /OPS_CI1_OWNED_GROUP_REGISTRY/u);
@@ -6669,6 +6681,60 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     });
     assert.equal(malformedRegistry.status, 1);
     assert.match(malformedRegistry.stderr, /ownership registry is missing or invalid/u);
+
+    let registeredFinalizer;
+    let finalizerCleanupCalls = 0;
+    const finalizerState = {
+      ci1PhaseCaptureIncomplete: false,
+      ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+    };
+    registerCi1OwnedTemporaryDirectoryFinalizer({ after(callback) { registeredFinalizer = callback; } }, async () => {
+      finalizerCleanupCalls += 1;
+      return false;
+    }, { directory: 'private' }, finalizerState);
+    await assert.rejects(registeredFinalizer(), error =>
+      error?.message === 'AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED');
+    assert.equal(finalizerCleanupCalls, 1, 'an after-hook attempts its cleanup exactly once');
+    assert.equal(finalizerState.ci1PhaseCaptureIncomplete, true);
+    assert.equal(finalizerState.ci1PhaseCaptureOwnedGroupCloseUnconfirmed, true);
+
+    const finalizerDirectory = tempDirectory('ah11-ops-finalizer-control-');
+    t.after(() => finalizerDirectory.cleanup());
+    const finalizerHarnessPath = join(finalizerDirectory.directory, 'finalizer-control.mjs');
+    const finalizerHarness = [
+      "import { test } from 'node:test';",
+      `const registerFinalizer = (${registerCi1OwnedTemporaryDirectoryFinalizer.toString()});`,
+      'const mode = process.env.CI1_FINALIZER_CONTROL_MODE;',
+      'const state = { ci1PhaseCaptureIncomplete: false, ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false };',
+      "test('controlled temporary cleanup finalizer', async t => {",
+      '  registerFinalizer(t, async () => mode === \'success\', { directory: \'private\' }, state);',
+      "  if (mode === 'primary') throw new Error('PRIMARY_TEST_FAILURE_SENTINEL');",
+      '});'
+    ].join('\n');
+    writeFileSync(finalizerHarnessPath, finalizerHarness, { mode: 0o600 });
+    const runFinalizerControl = mode => spawnSync(process.execPath, [
+      '--test', '--test-reporter=tap', finalizerHarnessPath
+    ], {
+      cwd: ROOT, encoding: 'utf8', timeout: 5_000, maxBuffer: 8_192,
+      env: { ...baseEnvironment(), CI1_FINALIZER_CONTROL_MODE: mode }
+    });
+    const finalizerSuccess = runFinalizerControl('success');
+    assert.equal(finalizerSuccess.status, 0, 'confirmed cleanup leaves the controlled test green');
+    assert.equal(finalizerSuccess.signal, null);
+    const finalizerFailure = runFinalizerControl('failure');
+    assert.equal(finalizerFailure.status, 1, 'an unconfirmed after-hook makes the test command fail');
+    assert.equal(finalizerFailure.signal, null);
+    const finalizerFailureOutput = `${finalizerFailure.stdout}\n${finalizerFailure.stderr}`;
+    assert.equal(/AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED/u.test(finalizerFailureOutput), true,
+      'cleanup failure output includes the fixed custody error');
+    const finalizerPrimaryFailure = runFinalizerControl('primary');
+    assert.equal(finalizerPrimaryFailure.status, 1);
+    assert.equal(finalizerPrimaryFailure.signal, null);
+    const finalizerPrimaryOutput = `${finalizerPrimaryFailure.stdout}\n${finalizerPrimaryFailure.stderr}`;
+    assert.equal(/PRIMARY_TEST_FAILURE_SENTINEL/u.test(finalizerPrimaryOutput), true,
+      'cleanup failure does not erase the primary test failure');
+    assert.equal(/AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED/u.test(finalizerPrimaryOutput), true,
+      'the cleanup failure remains visible alongside the primary failure');
 
     const custodyState = () => ({
       ci1PhaseCaptureIncomplete: false,
@@ -6765,6 +6831,68 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.equal(await cleanupCi1OwnedTemporaryDirectory(pendingPersistFailure, pendingCleanupOverrides), true);
     assert.equal(pendingPersistFailureRemoved, true, 'retry removes the directory after the custody update succeeds');
     assert.equal(pendingCancelCalls, 1, 'the same pending launch is not cancelled twice on retry');
+
+    const retryDirectory = tempDirectory('ah11-ops-temp-custody-retry-', { ci1OwnedGroups: true });
+    const retryRegistryPath = join(retryDirectory.directory, 'owned-groups.json');
+    const retryState = custodyState();
+    const withRetryRegistry = async callback => {
+      const previousRegistryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+      process.env.OPS_CI1_OWNED_GROUP_REGISTRY = retryRegistryPath;
+      try { return await callback(); } finally {
+        if (previousRegistryPath === undefined) delete process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+        else process.env.OPS_CI1_OWNED_GROUP_REGISTRY = previousRegistryPath;
+      }
+    };
+    const cleanupRetryDirectory = (temporary, overrides = {}) =>
+      withRetryRegistry(() => cleanupCi1OwnedTemporaryDirectory(temporary, overrides));
+    registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupRetryDirectory, retryDirectory, retryState);
+    await withRetryRegistry(async () => {
+      writeFileSync(retryRegistryPath, JSON.stringify({
+        schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+      }), { mode: 0o600 });
+      const retryToken = randomUUID();
+      assert.equal(beginCi1OwnedGroupLaunch(retryToken, retryDirectory.ci1Custody), true,
+        'the real sidecar and pending token exist before cleanup begins');
+      const retainedSidecarPath = retryDirectory.ci1Custody.sidecarPath;
+      assert.equal(existsSync(retainedSidecarPath), true);
+      let persistCalls = 0;
+      let cancelCalls = 0;
+      const persistWithOneFailure = custody => {
+        persistCalls += 1;
+        return persistCalls === 1 ? false : writeCi1TemporaryCustody(custody);
+      };
+      const firstCleanup = await cleanupCi1OwnedTemporaryDirectory(retryDirectory, {
+        state: retryState,
+        cancelPendingLaunch: token => {
+          cancelCalls += 1;
+          return cancelCi1OwnedGroupLaunch(token);
+        },
+        persist: persistWithOneFailure
+      });
+      assert.equal(firstCleanup, false, 'a failed sidecar update keeps cleanup explicitly incomplete');
+      assert.equal(retryState.ci1PhaseCaptureIncomplete, true);
+      assert.equal(retryState.ci1PhaseCaptureOwnedGroupCloseUnconfirmed, true);
+      assert.equal(persistCalls, 2, 'the failed update is followed by a bounded handoff write attempt');
+      assert.equal(cancelCalls, 1);
+      assert.equal(existsSync(retryDirectory.directory), true,
+        'the exact temporary directory remains for the outer owner');
+      assert.equal(existsSync(retainedSidecarPath), true,
+        'the exact sidecar remains available for outer custody');
+      const retainedCustody = JSON.parse(readFileSync(retainedSidecarPath, 'utf8'));
+      assert.equal(retainedCustody.schema, CI1_TEMP_CUSTODY_SCHEMA);
+      assert.equal(retainedCustody.launches.length, 1);
+      assert.equal(retainedCustody.launches[0].spawnAttempted, false);
+      assert.equal(retainedCustody.launches[0].registryCleared, true);
+      assert.deepEqual(readCi1OwnedGroupRegistry(retryRegistryPath), {
+        schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+      }, 'the already-cancelled pending token is not mistaken for a spawned process');
+      assert.equal(await cleanupCi1OwnedTemporaryDirectory(retryDirectory, { state: retryState }), true,
+        'a later confirmed retry completes cleanup without cancelling twice');
+      assert.equal(cancelCalls, 1);
+      assert.equal(existsSync(retryDirectory.directory), false);
+      assert.equal(existsSync(retainedSidecarPath), false);
+    });
+
     const registryFailureState = custodyState();
     const registryFailure = custodyRecord('/synthetic/ops-temp-registry-failure');
     let registryFailureRemoved = false;
