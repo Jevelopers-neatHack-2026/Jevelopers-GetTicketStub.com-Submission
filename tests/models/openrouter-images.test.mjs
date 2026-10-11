@@ -676,6 +676,28 @@ test("usage is raw, unknown, identity-bound, and missing values are reported, ne
     const nullish = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: null });
     assert.ok(!("input_tokens_details" in nullish) && nullish.missing_fields.length === 1);
   });
+  await t.test("a detail counter above its parent is a fixed finding and the counters are preserved", () => {
+    const over = normalizeOpenRouterImageUsage({ prompt_tokens: 5, prompt_tokens_details: { cached_tokens: 999, cache_write_tokens: 2 },
+      completion_tokens: 7, completion_tokens_details: { image_tokens: 8 } });
+    assert.deepEqual(over.input_tokens_details, { cache_write_tokens: 2, cached_tokens: 999 }, "real counters are not clamped or dropped");
+    assert.deepEqual(over.output_tokens_details, { image_tokens: 8 });
+    assert.ok(over.missing_fields.includes("usage.input_tokens_details.exceeds_parent"));
+    assert.ok(over.missing_fields.includes("usage.output_tokens_details.exceeds_parent"));
+    assert.equal(over.completeness, "unknown");
+    assert.ok(!JSON.stringify(over.missing_fields).includes("999"));
+    const equal = normalizeOpenRouterImageUsage({ prompt_tokens: 5, prompt_tokens_details: { cached_tokens: 5 } });
+    assert.ok(!equal.missing_fields.some((field) => field.endsWith(".exceeds_parent")), "equal to the parent is valid");
+    const valid = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: { cached_tokens: 1 }, completion_tokens_details: { image_tokens: 1 } });
+    assert.deepEqual(valid.missing_fields, ["usage.profile_mapping_pending"]);
+  });
+  await t.test("details without their parent counter are kept and flagged", () => {
+    const orphan = normalizeOpenRouterImageUsage({ prompt_tokens_details: { cached_tokens: 3 }, completion_tokens_details: { image_tokens: 4 } });
+    assert.deepEqual(orphan.input_tokens_details, { cached_tokens: 3 });
+    assert.deepEqual(orphan.output_tokens_details, { image_tokens: 4 });
+    assert.ok(orphan.missing_fields.includes("usage.input_tokens_details.parent_missing"));
+    assert.ok(orphan.missing_fields.includes("usage.output_tokens_details.parent_missing"));
+    assert.ok(orphan.missing_fields.includes("usage.input_tokens"));
+  });
   await t.test("unknown detail keys are anonymous findings and over-wide details are bounded", async () => {
     const unknown = normalizeOpenRouterImageUsage({ ...FULL_USAGE,
       prompt_tokens_details: { cached_tokens: 2, secret_vendor_key: 9 }, completion_tokens_details: { image_tokens: 1, other: 1 } });

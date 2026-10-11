@@ -249,6 +249,12 @@ export function normalizeOpenRouterImageUsage(raw, identities = {}) {
       }
       if (Object.keys(details).some((key) => !keys.includes(key))) missing.add(`usage.${source}.unmapped_fields`);
       result[target] = Object.freeze(safeDetails);
+      // Details are documented subsets of their parent. Real counters are never clamped or dropped; a contradiction
+      // or a missing parent is only reported, as a fixed finding that carries no provider value.
+      const parent = result[target === "input_tokens_details" ? "input_tokens" : "output_tokens"];
+      const counters = Object.values(safeDetails);
+      if (counters.length > 0 && parent === undefined) missing.add(`usage.${target}.parent_missing`);
+      else if (parent !== undefined && counters.some((counter) => counter > parent)) missing.add(`usage.${target}.exceeds_parent`);
     }
     if (Object.hasOwn(rawData, "is_byok")) {
       if (typeof rawData.is_byok === "boolean") result.is_byok = rawData.is_byok;
