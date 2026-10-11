@@ -1,0 +1,265 @@
+{
+  "scope": "MM-08 static collateral accessibility evidence; not canonical asset/provenance schema or release approval",
+  "visualCandidate": "456053c5a12fa189f3c16a4cd9067a242e218031",
+  "checkedAt": "2026-10-11 UTC",
+  "accountableMarketingOwner": "User-assigned marketing-material supervisor",
+  "verificationRole": "UI author; selected UI model/settings runtime evidence retained by supervisor",
+  "independentReview": "pending",
+  "publicationApproval": "pending",
+  "thresholds": {
+    "normalText": 4.5,
+    "largeText": 3,
+    "essentialMarks": 3,
+    "largeRegularEffectivePx": 24,
+    "largeBoldEffectivePx": 18.67,
+    "largeBoldMinimumWeight": 700
+  },
+  "views": [
+    {
+      "source": "demo/diagrams/demo-workflow.svg",
+      "output": "demo/diagrams/demo-workflow.png",
+      "viewport": [
+        1440,
+        900
+      ],
+      "minimumEffectiveTextPx": 22.0,
+      "alternative": "demo/diagrams/demo-workflow-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "demo/screenshots/synthetic-stub-mockup.svg",
+      "output": "demo/screenshots/synthetic-stub-mockup.png",
+      "viewport": [
+        1200,
+        900
+      ],
+      "minimumEffectiveTextPx": 24.0,
+      "alternative": "demo/screenshots/synthetic-stub-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "launch/assets/x-submission-key-visual.svg",
+      "output": "launch/assets/x-submission-key-visual.png",
+      "viewport": [
+        1200,
+        675
+      ],
+      "minimumEffectiveTextPx": 40.0,
+      "alternative": "launch/assets/x-submission-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "examples/synthetic/redaction-before.svg",
+      "output": "examples/synthetic/redaction-before.png",
+      "viewport": [
+        800,
+        500
+      ],
+      "minimumEffectiveTextPx": 24.0,
+      "alternative": null,
+      "result": "EXPECTED_NEGATIVE_RELEASE_BLOCKED",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "examples/synthetic/redaction-after.svg",
+      "output": "examples/synthetic/redaction-after.png",
+      "viewport": [
+        800,
+        500
+      ],
+      "minimumEffectiveTextPx": 24.0,
+      "alternative": "examples/synthetic/redaction-after-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "launch/assets/x-submission-key-visual.svg",
+      "output": "review/visual/previews/x-feed-390.png",
+      "viewport": [
+        390,
+        220
+      ],
+      "minimumEffectiveTextPx": 13.0,
+      "alternative": "launch/assets/x-submission-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "demo/diagrams/demo-workflow.svg",
+      "output": "review/visual/previews/workflow-presentation-960.png",
+      "viewport": [
+        960,
+        600
+      ],
+      "minimumEffectiveTextPx": 14.6667,
+      "alternative": "demo/diagrams/demo-workflow-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "demo/screenshots/synthetic-stub-mockup.svg",
+      "output": "review/visual/previews/mockup-presentation-720.png",
+      "viewport": [
+        720,
+        540
+      ],
+      "minimumEffectiveTextPx": 14.4,
+      "alternative": "demo/screenshots/synthetic-stub-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-presentation-1440.png",
+      "viewport": [
+        1440,
+        1200
+      ],
+      "minimumEffectiveTextPx": 20,
+      "alternative": "demo/diagrams/demo-workflow-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": null
+    },
+    {
+      "source": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-mobile-390.png",
+      "viewport": [
+        390,
+        740
+      ],
+      "minimumEffectiveTextPx": 20,
+      "alternative": "demo/diagrams/demo-workflow-alt-text.md",
+      "result": "PASS_AUTHOR_CHECK",
+      "nonColorLabels": "Explicit conceptual/synthetic/draft/review labels; numbered workflow where applicable",
+      "fullPageOutput": "review/visual/previews/deck-mobile-full.png"
+    }
+  ],
+  "alternativeOnlyReview": {
+    "status": "PASS_AUTHOR_CHECK",
+    "reviewedFiles": [
+      "demo/diagrams/demo-workflow-alt-text.md",
+      "demo/screenshots/synthetic-stub-alt-text.md",
+      "examples/synthetic/redaction-after-alt-text.md",
+      "launch/assets/x-submission-alt-text.md"
+    ],
+    "observations": "Key message, process order, limitation, review action and CTA where present recoverable without graphics; detailed observations in accessibility-checklist.md."
+  },
+  "mobileFailureAndRecheck": {
+    "initial": "FAIL: small scaled diagram labels at390px",
+    "fix": "Below600px hide dense diagram and show20px ordered text",
+    "recheck": "PASS_AUTHOR_CHECK: corrected viewport/full-page images inspected; no horizontal overflow, actual Tab focus visible",
+    "historicalFailedCaptureRetained": false,
+    "historicalFailureEvidence": "Author observed failure recorded in review/visual/verification.md; failed image not delivered"
+  },
+  "captionTiming": {
+    "status": "NOT_APPLICABLE",
+    "reason": "Current bundle contains only static SVG/PNG/HTML, no speech/video",
+    "futureVideo": "PENDING: final video needs captions/transcript and timing review"
+  },
+  "hashes": [
+    {
+      "path": "demo/deck/concept-overview.html",
+      "sha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66"
+    },
+    {
+      "path": "demo/diagrams/demo-workflow-alt-text.md",
+      "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1"
+    },
+    {
+      "path": "demo/diagrams/demo-workflow.png",
+      "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe"
+    },
+    {
+      "path": "demo/diagrams/demo-workflow.svg",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971"
+    },
+    {
+      "path": "demo/screenshots/synthetic-stub-alt-text.md",
+      "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186"
+    },
+    {
+      "path": "demo/screenshots/synthetic-stub-mockup.png",
+      "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578"
+    },
+    {
+      "path": "demo/screenshots/synthetic-stub-mockup.svg",
+      "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2"
+    },
+    {
+      "path": "examples/synthetic/redaction-after-alt-text.md",
+      "sha256": "40b233ce0e5fe2957e03ece9c953034acc1a6f1432e562938cfc0d66df0f11e6"
+    },
+    {
+      "path": "examples/synthetic/redaction-after.png",
+      "sha256": "5fe36c9934933874a988c60b4837bdb0c2a8cab95bbc6064cc2267cb7afc42b6"
+    },
+    {
+      "path": "examples/synthetic/redaction-after.svg",
+      "sha256": "c2a8a07b4daa3cb63151c1a5051ba07fcec065b0780ca48c4f5b1c3c55ebec58"
+    },
+    {
+      "path": "examples/synthetic/redaction-before.png",
+      "sha256": "93747429f5b72e63c426ac33f976293d4cb3486136e53a9c22d0ab3cf6764325"
+    },
+    {
+      "path": "examples/synthetic/redaction-before.svg",
+      "sha256": "1fa090e3957d392ca114fa298e6904e7195444920961f4af25429555c0c36ac5"
+    },
+    {
+      "path": "launch/assets/x-submission-alt-text.md",
+      "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554"
+    },
+    {
+      "path": "launch/assets/x-submission-key-visual.png",
+      "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee"
+    },
+    {
+      "path": "launch/assets/x-submission-key-visual.svg",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699"
+    },
+    {
+      "path": "review/visual/browser-render-evidence.json",
+      "sha256": "95dae8d05e25fc8aa9df53d2bb16f82838495986d5a5393f30e2914ddc72d308"
+    },
+    {
+      "path": "review/visual/contrast-evidence.json",
+      "sha256": "9552e809332821f8851ea2961f00e0818fc4c956da1ebc816c23f434c2f867ae"
+    },
+    {
+      "path": "review/visual/previews/deck-mobile-390.png",
+      "sha256": "266126d53623b4b9207f4a52ad3154d3f02b54bc54ecacc63f5d6b9c6af63882"
+    },
+    {
+      "path": "review/visual/previews/deck-mobile-full.png",
+      "sha256": "7a9a6cdf0f440eff58482bef4dc8b63c4944071a867694128172cb8cd4a9002c"
+    },
+    {
+      "path": "review/visual/previews/deck-presentation-1440.png",
+      "sha256": "77b83b36f26b1d6fcbdaf9826f176545cfcd2f56ca6317fe32a701d39a73d5f3"
+    },
+    {
+      "path": "review/visual/previews/mockup-presentation-720.png",
+      "sha256": "444a73d443dfc9342c50cb8d3b753609bbbdda974c18adc872b1c35b48c40e7d"
+    },
+    {
+      "path": "review/visual/previews/workflow-presentation-960.png",
+      "sha256": "660e36ab0e1960a151c2ca441e779ab009a4c48378931e4133501f0d7812f6c4"
+    },
+    {
+      "path": "review/visual/previews/x-feed-390.png",
+      "sha256": "5ae620dc2927c968556231bc48de629df3d7f5fb1a21c711f4bdb89be65d5dcd"
+    }
+  ]
+}
