@@ -37,6 +37,16 @@ PROJECTION_STAGES = STAGES | {
     "accepted_policy_fixture", "canonical_agreement_and_fixture",
     "live_evidence", "readiness_config",
 }
+PROJECTION_STAGE_ORDER = {
+    "accepted_policy_fixture": 0,
+    "fixture": 0,
+    "canonical_agreement_and_fixture": 1,
+    "contract": 1,
+    "readiness_config": 2,
+    "runnable": 3,
+    "live_evidence": 4,
+    "final_acceptance": 5,
+}
 REQUIRED_STAGE_REASONS = {
     "live body prerequisite",
     "explicit transitive closure of all 59 required leaves, not additional implementation ordering",
@@ -1084,6 +1094,19 @@ def _validate_map_v2(
                 _add_issue(issues, "STAGE_RELATION_PRODUCER_SOURCE_MISMATCH", ident)
             if relation.get("producer_requirement_ids") != source_row.get("prerequisite_requirement_ids"):
                 _add_issue(issues, "STAGE_RELATION_PRODUCER_REQUIREMENT_SOURCE_MISMATCH", ident)
+            source_receipts = source_row.get("required_owner_receipt_ids", [])
+            relation_receipts = relation.get("required_owner_receipt_ids", [])
+            if (
+                not isinstance(source_receipts, list)
+                or any(not _safe_key(value) for value in source_receipts)
+                or len(source_receipts) != len(set(source_receipts))
+                or not isinstance(relation_receipts, list)
+                or any(not _safe_key(value) for value in relation_receipts)
+                or len(relation_receipts) != len(set(relation_receipts))
+            ):
+                _add_issue(issues, "STAGE_RELATION_RECEIPTS_INVALID", ident)
+            elif relation_receipts != source_receipts:
+                _add_issue(issues, "STAGE_RELATION_RECEIPTS_SOURCE_MISMATCH", ident)
             if relation.get("shared_requirement_ids") != source_row.get("shared_requirement_ids"):
                 _add_issue(issues, "STAGE_RELATION_SHARED_REQUIREMENT_SOURCE_MISMATCH", ident)
             if relation.get("external_endpoint") is not source_row.get("external_endpoint") or relation.get("disjoint_internal") is not source_row.get("disjoint_internal"):
@@ -1148,6 +1171,13 @@ def _validate_map_v2(
             _add_issue(issues, "STAGE_RELATION_STAGE_INVALID", ident)
         if not isinstance(relation.get("applicability"), str) or relation.get("applicability") not in {"required", "unresolved"}:
             _add_issue(issues, "STAGE_RELATION_APPLICABILITY_INVALID", ident)
+        required_receipts = relation.get("required_owner_receipt_ids", [])
+        if (
+            not isinstance(required_receipts, list)
+            or any(not _safe_key(value) for value in required_receipts)
+            or len(required_receipts) != len(set(required_receipts))
+        ):
+            _add_issue(issues, "STAGE_RELATION_RECEIPTS_INVALID", ident)
         if not isinstance(relation.get("status"), str) or relation.get("status") not in {"unverified", "pending", "satisfied", "rejected"}:
             _add_issue(issues, "STAGE_RELATION_STATUS_INVALID", ident)
         if not isinstance(relation.get("source_evidence_file"), str) or not relation.get("source_evidence_file", "").strip():
@@ -1266,7 +1296,16 @@ def _validate_issue_readbacks_v2(
                 if current.get(field) != row.get(field):
                     _add_issue(issues, "CURRENT_READBACK_MISMATCH", key)
                     break
-            if row.get("state") == "closed" and not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
+        entry_state = entry.get("state")
+        readback_state = row.get("state")
+        if entry_state == "closed" and readback_state != "closed":
+            _add_issue(issues, "ISSUE_READBACK_STATE_MISMATCH", key)
+        elif readback_state == "closed":
+            if isinstance(entry_state, str) and entry_state in {
+                "planned", "in_progress", "blocked", "deferred", "not_planned", "not-planned"
+            }:
+                _add_issue(issues, "ISSUE_READBACK_STATE_MISMATCH", key)
+            if not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
                 _add_issue(issues, "CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", key)
         current = entry.get("current_readback")
         if isinstance(current, dict):
@@ -2447,6 +2486,31 @@ def _validate_release(
                     edge_receipts = edge.get("required_owner_receipt_ids")
                     if isinstance(edge_receipts, list):
                         leaf_required_set.update(value for value in edge_receipts if isinstance(value, str))
+        if projection_relations is not None:
+            for relation in projection_relations:
+                if (
+                    not isinstance(relation, dict)
+                    or relation.get("applicability") != "required"
+                ):
+                    continue
+                consumer_key = relation.get("consumer_key")
+                consumer_leaf = leaves.get(consumer_key) if isinstance(consumer_key, str) else None
+                consumer_stage = relation.get("consumer_stage")
+                selected_stage = consumer_leaf.get("required_release_stage") if isinstance(consumer_leaf, dict) else None
+                if (
+                    consumer_leaf is None
+                    or consumer_stage not in PROJECTION_STAGE_ORDER
+                    or selected_stage not in PROJECTION_STAGE_ORDER
+                    or PROJECTION_STAGE_ORDER[consumer_stage] > PROJECTION_STAGE_ORDER[selected_stage]
+                    or (relation.get("application_scope") == "live_only" and consumer_leaf.get("required_mode") != "live")
+                ):
+                    continue
+                external_id = relation.get("external_artifact_id")
+                receipt_owner = consumer_key if external_id is not None else relation.get("producer_key")
+                if receipt_owner == leaf:
+                    relation_receipts = relation.get("required_owner_receipt_ids", [])
+                    if isinstance(relation_receipts, list):
+                        leaf_required_set.update(value for value in relation_receipts if isinstance(value, str))
         if set(value for value in required_receipts if isinstance(value, str)) != leaf_required_set:
             _add_issue(issues, "REQUIRED_OWNER_RECEIPTS_MISMATCH", leaf)
         provided_receipt_set = set(value for value in provided_receipts if isinstance(value, str))
@@ -2548,7 +2612,7 @@ def _validate_release(
     if projection_relations is not None:
         _validate_projection_relation_evidence(
             manifest, projection_relations, evidence_by_id, outcomes, leaves,
-            external_artifacts or {}, issues,
+            external_artifacts or {}, receipt_by_id, tested, issues,
         )
 
     for leaf, entry in leaves.items():
@@ -2592,6 +2656,8 @@ def _validate_projection_relation_evidence(
     outcomes: dict[str, dict[str, Any]],
     leaves: dict[str, dict[str, Any]],
     external_artifacts: dict[str, dict[str, Any]],
+    receipt_by_id: dict[str, dict[str, Any]],
+    tested: set[tuple[str, str]],
     issues: list[dict[str, str]],
 ) -> None:
     """Bind v2 stage evidence to the exact directional relation and content."""
@@ -2606,16 +2672,6 @@ def _validate_projection_relation_evidence(
             _add_issue(issues, "STAGE_EVIDENCE_INVALID", f"stage-evidence-{index}")
             continue
         by_relation.setdefault(row["relation_id"], []).append(row)
-    stage_order = {
-        "accepted_policy_fixture": 0,
-        "canonical_agreement_and_fixture": 1,
-        "readiness_config": 2,
-        "runnable": 3,
-        "live_evidence": 4,
-        "final_acceptance": 5,
-        "fixture": 0,
-        "contract": 1,
-    }
     for relation in relations:
         if not isinstance(relation, dict):
             continue
@@ -2629,9 +2685,9 @@ def _validate_projection_relation_evidence(
         selected_stage = outcome.get("evaluated_stage")
         consumer_stage = relation.get("consumer_stage")
         if (
-            not isinstance(selected_stage, str) or selected_stage not in stage_order
-            or not isinstance(consumer_stage, str) or consumer_stage not in stage_order
-            or stage_order[consumer_stage] > stage_order[selected_stage]
+            not isinstance(selected_stage, str) or selected_stage not in PROJECTION_STAGE_ORDER
+            or not isinstance(consumer_stage, str) or consumer_stage not in PROJECTION_STAGE_ORDER
+            or PROJECTION_STAGE_ORDER[consumer_stage] > PROJECTION_STAGE_ORDER[selected_stage]
         ):
             continue
         if relation.get("applicability") != "required":
@@ -2677,14 +2733,94 @@ def _validate_projection_relation_evidence(
             and proof.get("source_revision") == outcome.get("revision")
             and proof.get("mode") == outcome.get("required_mode")
         )
-        producer_bound = external_id is not None or (
-            producer_outcome is not None and expected_producer_evidence in producer_ids
-        )
+        if external_id is not None:
+            producer_bound = expected_producer_evidence is None
+        else:
+            producer_artifact = evidence_by_id.get(expected_producer_evidence) if isinstance(expected_producer_evidence, str) else None
+            artifact_binding = producer_artifact.get("stage_binding") if isinstance(producer_artifact, dict) else None
+            producer_revision = proof.get("producer_revision")
+            producer_mode = proof.get("producer_mode")
+            producer_digest = proof.get("producer_content_sha256")
+            producer_entry = leaves.get(expected_producer) if isinstance(expected_producer, str) else None
+            producer_repo = producer_entry.get("repository") if isinstance(producer_entry, dict) else None
+            producer_revision_tested = (
+                isinstance(producer_repo, str)
+                and isinstance(producer_revision, str)
+                and (producer_repo, producer_revision) in tested
+            )
+            expected_binding = {
+                "relation_id": relation_id,
+                "leaf_key": expected_producer,
+                "requirement_ids": relation.get("producer_requirement_ids"),
+                "stage": relation.get("prerequisite_stage"),
+            }
+            producer_bound = (
+                producer_artifact is not None
+                and artifact_binding == expected_binding
+                and producer_artifact.get("source_revision") == producer_revision
+                and producer_artifact.get("mode") == producer_mode
+                and producer_artifact.get("sha256") == producer_digest
+                and isinstance(producer_mode, str)
+                and producer_mode in MODES
+                and isinstance(producer_digest, str)
+                and HASH_RE.fullmatch(producer_digest) is not None
+                and producer_revision_tested
+                and (producer_entry.get("required_mode") is None or producer_entry.get("required_mode") == producer_mode)
+                and (
+                    expected_producer_evidence not in producer_ids
+                    or (
+                        isinstance(producer_outcome, dict)
+                        and producer_outcome.get("revision") == producer_revision
+                        and producer_outcome.get("required_mode") == producer_mode
+                    )
+                )
+            )
         if (
             not exact_fields or not digest_matches or not isinstance(evidence_id, str) or evidence_id not in evidence_ids
             or evidence is None or not producer_bound
         ):
             _add_issue(issues, "STAGE_EVIDENCE_BINDING_MISMATCH", relation_id)
+
+        required_receipts = relation.get("required_owner_receipt_ids", [])
+        if not isinstance(required_receipts, list) or any(not _safe_key(value) for value in required_receipts):
+            _add_issue(issues, "STAGE_RELATION_RECEIPTS_INVALID", relation_id)
+            continue
+        receipt_owner = consumer if external_id is not None else expected_producer
+        receipt_outcome = outcomes.get(receipt_owner) if isinstance(receipt_owner, str) else None
+        receipt_owner_ids = receipt_outcome.get("owner_receipt_ids", []) if isinstance(receipt_outcome, dict) else []
+        receipt_evidence_ids = receipt_outcome.get("evidence_ids", []) if isinstance(receipt_outcome, dict) else []
+        for receipt_id in required_receipts:
+            receipt = receipt_by_id.get(receipt_id)
+            receipt_evidence_id = receipt.get("evidence_id") if isinstance(receipt, dict) else None
+            receipt_evidence = evidence_by_id.get(receipt_evidence_id) if isinstance(receipt_evidence_id, str) else None
+            receipt_binding = receipt_evidence.get("receipt_binding") if isinstance(receipt_evidence, dict) else None
+            expected_receipt_binding = {
+                "relation_id": relation_id,
+                "receipt_id": receipt_id,
+                "owner_leaf_key": receipt_owner,
+                "external_artifact_id": external_id,
+            }
+            if (
+                not isinstance(receipt, dict)
+                or not isinstance(receipt_outcome, dict)
+                or receipt_id not in receipt_owner_ids
+                or receipt.get("status") != "accepted"
+                or receipt.get("stage_relation_id") != relation_id
+                or receipt.get("owner_leaf_key") != receipt_owner
+                or receipt.get("external_artifact_id") != external_id
+                or receipt.get("source_revision") != receipt_outcome.get("revision")
+                or receipt_evidence is None
+                or receipt_evidence_id not in receipt_evidence_ids
+                or receipt_evidence.get("source_revision") != receipt_outcome.get("revision")
+                or receipt_evidence.get("mode") != receipt_outcome.get("required_mode")
+                or receipt_evidence.get("kind") != "receipt"
+                or receipt_binding != expected_receipt_binding
+                or not isinstance(receipt.get("owner_role"), str)
+                or not receipt.get("owner_role", "").strip()
+                or not isinstance(receipt.get("action"), str)
+                or not receipt.get("action", "").strip()
+            ):
+                _add_issue(issues, "STAGE_RELATION_OWNER_RECEIPT_MISSING", relation_id)
 
 
 def _required_test_ids(entry: dict[str, Any]) -> list[str]:

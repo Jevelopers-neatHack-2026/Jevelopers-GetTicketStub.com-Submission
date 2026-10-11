@@ -141,12 +141,14 @@ class CoverageProjectionV2Tests(unittest.TestCase):
              "deliverable": "Consumer runnable fixture requires producer canonical fixture.",
              "evidence_file": "issues/2.md", "evidence_line": 7, "reason": "live body prerequisite", "status": "satisfied",
              "consumer_requirement_ids": ["REQ-LOCAL"], "prerequisite_requirement_ids": ["REQ-GLOBAL"],
+             "required_owner_receipt_ids": [],
              "shared_requirement_ids": [], "external_endpoint": False, "disjoint_internal": True},
             {"source_pointer": "/staged_edges/1", "consumer_key": "ACV1-RELEASE-GATE", "prerequisite_key": "EXT-CANONICAL",
              "consumer_stage": "final_acceptance", "prerequisite_stage": "accepted_policy_fixture",
              "deliverable": "An external canonical artifact is required.", "evidence_file": "issues/24.md", "evidence_line": 12,
              "reason": "external artifact, not external epic closure", "status": "unverified",
              "consumer_requirement_ids": ["REQ-GLOBAL"], "prerequisite_requirement_ids": None,
+             "required_owner_receipt_ids": [],
              "shared_requirement_ids": [], "external_endpoint": True, "disjoint_internal": False},
         ]
         stage_relations = [
@@ -160,6 +162,7 @@ class CoverageProjectionV2Tests(unittest.TestCase):
              "source_evidence_file": row["evidence_file"], "source_evidence_line": row["evidence_line"],
              "shared_requirement_ids": row["shared_requirement_ids"], "external_endpoint": row["external_endpoint"],
              "disjoint_internal": row["disjoint_internal"],
+             "required_owner_receipt_ids": row["required_owner_receipt_ids"],
              "applicability": "required", "application_scope": "declared_stage"}
             for i, row in enumerate(stage_sources)
         ]
@@ -425,6 +428,9 @@ class CoverageProjectionV2Tests(unittest.TestCase):
             "producer_stage": ("fixture", "STAGE_EVIDENCE_BINDING_MISMATCH"),
             "evidence_id": ("ev-missing", "STAGE_EVIDENCE_BINDING_MISMATCH"),
             "producer_evidence_id": ("ev-missing", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_revision": ("b" * 40, "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_mode": ("recorded", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_content_sha256": ("f" * 64, "STAGE_EVIDENCE_BINDING_MISMATCH"),
             "content_sha256": ("f" * 64, "STAGE_EVIDENCE_BINDING_MISMATCH"),
             "source_revision": ("b" * 40, "STAGE_EVIDENCE_BINDING_MISMATCH"),
             "mode": ("recorded", "STAGE_EVIDENCE_BINDING_MISMATCH"),
@@ -442,6 +448,168 @@ class CoverageProjectionV2Tests(unittest.TestCase):
         self.paths["release"].write_bytes(_bytes(changed))
         report = self.validate(release_path=self.paths["release"], require_specialists=False)
         self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(report))
+
+        changed = copy.deepcopy(release)
+        stage_artifact = next(item for item in changed["evidence"] if item["id"] == "ev-stage-ah")
+        stage_artifact["stage_binding"]["stage"] = "fixture"
+        self.paths["release"].write_bytes(_bytes(changed))
+        self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(
+            self.validate(release_path=self.paths["release"], require_specialists=False)
+        ))
+
+        changed = copy.deepcopy(release)
+        stage_artifact = next(item for item in changed["evidence"] if item["id"] == "ev-stage-ah")
+        stage_artifact["stage_binding"]["requirement_ids"] = ["REQ-LOCAL"]
+        self.paths["release"].write_bytes(_bytes(changed))
+        self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(
+            self.validate(release_path=self.paths["release"], require_specialists=False)
+        ))
+
+        changed = copy.deepcopy(release)
+        changed["stage_evidence"][0]["producer_evidence_id"] = "ev-ce-leaf"
+        self.paths["release"].write_bytes(_bytes(changed))
+        self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(
+            self.validate(release_path=self.paths["release"], require_specialists=False)
+        ))
+
+    def test_bound_prerequisite_artifact_does_not_require_producer_outcome_at_that_stage(self) -> None:
+        release, expected_paths = self._release_manifest()
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        self.coverage["entries"][0]["required_release_stage"] = "fixture"
+        self.write()
+        release["outcomes"][0]["evaluated_stage"] = "fixture"
+        self.paths["release"].write_bytes(_bytes(release))
+        report = self.validate(release_path=self.paths["release"], require_specialists=False)
+        self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY")
+
+    def test_v2_relation_receipts_are_preserved_and_checked_only_when_declared(self) -> None:
+        release, expected_paths = self._release_manifest()
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        self.paths["release"].write_bytes(_bytes(release))
+        self.assertEqual(self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+                         "SCOPED_RELEASE_EVIDENCE_READY")
+
+        receipt_id = "receipt-source-required"
+        relation = self.coverage["stage_relations"][0]
+        self.coverage["source_stage_rows"][0]["required_owner_receipt_ids"] = [receipt_id]
+        self.write()
+        self.assertIn("STAGE_RELATION_RECEIPTS_SOURCE_MISMATCH",
+                      self.codes(self.validate(require_specialists=False)))
+        relation["required_owner_receipt_ids"] = [receipt_id]
+        self.write()
+        self.paths["release"].write_bytes(_bytes(release))
+        absent_codes = self.codes(self.validate(release_path=self.paths["release"], require_specialists=False))
+        self.assertIn("REQUIRED_OWNER_RECEIPTS_MISMATCH", absent_codes)
+        self.assertIn("STAGE_RELATION_OWNER_RECEIPT_MISSING", absent_codes)
+
+        release, expected_paths = self._release_manifest()
+        self.coverage["source_stage_rows"][0]["required_owner_receipt_ids"] = [receipt_id]
+        self.coverage["stage_relations"][0]["required_owner_receipt_ids"] = [receipt_id]
+        self.write()
+        revision = "a" * 40
+        receipt_content = "relation-bound receipt evidence"
+        receipt_path = self.work / "stage-receipt.txt"
+        receipt_path.write_text(receipt_content, encoding="utf-8")
+        expected_paths[receipt_path] = receipt_content
+        receipt_evidence_id = "ev-receipt-source"
+        release["evidence"].append({
+            "id": receipt_evidence_id, "path": str(receipt_path), "sha256": _sha(receipt_content.encode()),
+            "producer": "synthetic-control", "source_revision": revision, "captured_at": "2026-10-11T17:00:00Z",
+            "mode": "mock", "kind": "receipt",
+            "receipt_binding": {"relation_id": "STG-000", "receipt_id": receipt_id,
+                                "owner_leaf_key": "AH-LEAF", "external_artifact_id": None},
+        })
+        ah_outcome = next(row for row in release["outcomes"] if row["leaf_key"] == "AH-LEAF")
+        ah_outcome["evidence_ids"].append(receipt_evidence_id)
+        ah_outcome["required_owner_receipts"] = [receipt_id]
+        ah_outcome["owner_receipt_ids"] = [receipt_id]
+        receipt = {
+            "id": receipt_id, "status": "accepted", "source_revision": revision,
+            "evidence_id": receipt_evidence_id, "owner_role": "Shared-contracts owner",
+            "action": "Provide exact prerequisite receipt", "stage_relation_id": "STG-000",
+            "owner_leaf_key": "AH-LEAF", "external_artifact_id": None,
+        }
+        release["owner_receipts"] = [receipt]
+        self.paths["release"].write_bytes(_bytes(release))
+        self.assertEqual(self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+                         "SCOPED_RELEASE_EVIDENCE_READY")
+
+        mutations = {
+            "wrong_id": lambda doc: doc["owner_receipts"][0].update({"id": "receipt-other"}),
+            "wrong_revision": lambda doc: doc["owner_receipts"][0].update({"source_revision": "b" * 40}),
+            "rejected": lambda doc: doc["owner_receipts"][0].update({"status": "rejected"}),
+            "wrong_evidence_kind": lambda doc: next(item for item in doc["evidence"] if item["id"] == receipt_evidence_id).update({"kind": "runtime"}),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(receipt=label):
+                changed = copy.deepcopy(release)
+                mutate(changed)
+                self.paths["release"].write_bytes(_bytes(changed))
+                self.assertIn("STAGE_RELATION_OWNER_RECEIPT_MISSING",
+                              self.codes(self.validate(release_path=self.paths["release"], require_specialists=False)))
+
+    def test_external_relation_receipt_is_bound_to_consumer_outcome(self) -> None:
+        receipt_id = "receipt-external-required"
+        self.coverage["source_stage_rows"][1]["required_owner_receipt_ids"] = [receipt_id]
+        self.coverage["stage_relations"][1]["required_owner_receipt_ids"] = [receipt_id]
+        release, expected_paths = self._release_manifest()
+        revision = "a" * 40
+        receipt_content = "synthetic external-relation receipt"
+        receipt_path = self.work / "external-stage-receipt.txt"
+        receipt_path.write_text(receipt_content, encoding="utf-8")
+        expected_paths[receipt_path] = receipt_content
+        receipt_evidence_id = "ev-external-receipt"
+        release["evidence"].append({
+            "id": receipt_evidence_id, "path": str(receipt_path), "sha256": _sha(receipt_content.encode()),
+            "producer": "synthetic-control", "source_revision": revision,
+            "captured_at": "2026-10-11T17:00:00Z", "mode": "mock", "kind": "receipt",
+            "receipt_binding": {"relation_id": "STG-001", "receipt_id": receipt_id,
+                                "owner_leaf_key": "ACV1-RELEASE-GATE",
+                                "external_artifact_id": "EXT-CANONICAL"},
+        })
+        gate_outcome = next(row for row in release["outcomes"] if row["leaf_key"] == "ACV1-RELEASE-GATE")
+        gate_outcome["evidence_ids"].append(receipt_evidence_id)
+        gate_outcome["required_owner_receipts"] = [receipt_id]
+        gate_outcome["owner_receipt_ids"] = [receipt_id]
+        release["owner_receipts"] = [{
+            "id": receipt_id, "status": "accepted", "source_revision": revision,
+            "evidence_id": receipt_evidence_id, "owner_role": "External fixture owner",
+            "action": "Provide the declared external-stage receipt", "stage_relation_id": "STG-001",
+            "owner_leaf_key": "ACV1-RELEASE-GATE", "external_artifact_id": "EXT-CANONICAL",
+        }]
+        self.paths["release"].write_bytes(_bytes(release))
+        self.assertEqual(self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+                         "SCOPED_RELEASE_EVIDENCE_READY")
+
+        changed = copy.deepcopy(release)
+        changed["outcomes"][-1]["owner_receipt_ids"] = []
+        self.paths["release"].write_bytes(_bytes(changed))
+        self.assertIn("STAGE_RELATION_OWNER_RECEIPT_MISSING",
+                      self.codes(self.validate(release_path=self.paths["release"], require_specialists=False)))
+
+    def test_v2_map_closed_requires_closed_issue_readback(self) -> None:
+        self.coverage["entries"][0]["state"] = "closed"
+        self.coverage["entries"][0]["closure_evidence"] = [{"commit": "a" * 40, "tests": ["test-ah-leaf"]}]
+        self.write()
+        codes = self.codes(self.validate(require_specialists=False))
+        self.assertIn("ISSUE_READBACK_STATE_MISMATCH", codes)
+
+    def test_v2_closed_issue_with_exact_closure_evidence_remains_valid(self) -> None:
+        entry = self.coverage["entries"][0]
+        entry["state"] = "closed"
+        entry["historical_issue_state"] = "closed"
+        entry["current_readback"]["state"] = "closed"
+        entry["closure_evidence"] = [{"commit": "a" * 40, "tests": ["test-ah-leaf"]}]
+        self.readbacks["issues"][0]["state"] = "closed"
+        self.write()
+        self.assertEqual(self.validate(require_specialists=False)["status"], "BACKLOG_READY")
+
+    def test_v2_internal_completion_does_not_claim_issue_closed(self) -> None:
+        self.coverage["entries"][0]["state"] = "complete"
+        self.write()
+        self.assertEqual(self.validate(require_specialists=False)["status"], "BACKLOG_READY")
 
     def test_v2_release_cannot_lower_a_leafs_declared_stage(self) -> None:
         release, expected_paths = self._release_manifest()
@@ -505,6 +673,8 @@ class CoverageProjectionV2Tests(unittest.TestCase):
              "producer_key": internal["producer_key"], "producer_requirement_ids": internal["producer_requirement_ids"],
              "external_artifact_id": None, "producer_stage": internal["prerequisite_stage"],
              "evidence_id": ids["EI-LEAF"], "producer_evidence_id": ids["AH-LEAF"],
+             "producer_revision": revision, "producer_mode": "mock",
+             "producer_content_sha256": None,
              "content_sha256": next(item["sha256"] for item in evidence if item["id"] == ids["EI-LEAF"]),
              "source_revision": revision, "mode": "mock"},
             {"relation_id": external["relation_id"], "consumer_key": external["consumer_key"],
@@ -512,9 +682,25 @@ class CoverageProjectionV2Tests(unittest.TestCase):
              "producer_key": None, "producer_requirement_ids": None,
              "external_artifact_id": external["external_artifact_id"], "producer_stage": external["prerequisite_stage"],
              "evidence_id": ids["ACV1-RELEASE-GATE"], "producer_evidence_id": None,
+             "producer_revision": None, "producer_mode": None, "producer_content_sha256": None,
              "content_sha256": next(item["sha256"] for item in evidence if item["id"] == ids["ACV1-RELEASE-GATE"]),
              "source_revision": revision, "mode": "mock"},
         ]
+        stage_content = "synthetic canonical prerequisite artifact"
+        stage_path = self.work / "stage-artifact-ah.txt"
+        stage_path.write_text(stage_content, encoding="utf-8")
+        stage_id = "ev-stage-ah"
+        stage_digest = _sha(stage_content.encode())
+        evidence.append({
+            "id": stage_id, "path": str(stage_path), "sha256": stage_digest,
+            "producer": "synthetic-control", "source_revision": revision,
+            "captured_at": "2026-10-11T17:00:00Z", "mode": "mock", "kind": "configuration",
+            "stage_binding": {"relation_id": internal["relation_id"], "leaf_key": "AH-LEAF",
+                              "requirement_ids": ["REQ-GLOBAL"], "stage": "canonical_agreement_and_fixture"},
+        })
+        paths[stage_path] = stage_content
+        stage_evidence[0]["producer_evidence_id"] = stage_id
+        stage_evidence[0]["producer_content_sha256"] = stage_digest
         self.write()
         tested_repositories = sorted({entry["repository"] for entry in self.coverage["entries"]})
         return ({"format": "acv1.release-manifest/v2", "tested_revisions": [

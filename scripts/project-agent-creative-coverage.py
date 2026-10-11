@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -64,6 +65,29 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _finite_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ProjectionError("invalid-number")
+    return number
+
+
+def _validate_json_strings(value: Any, role: str) -> None:
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            try:
+                current.encode("utf-8")
+            except UnicodeEncodeError as exc:
+                raise ProjectionError(f"{role}-invalid-string") from exc
+        elif isinstance(current, dict):
+            pending.extend(current.keys())
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+
+
 def _load(path: str, role: str, limit: int = MAX_INPUT) -> tuple[Any, bytes]:
     try:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
@@ -103,12 +127,16 @@ def _load(path: str, role: str, limit: int = MAX_INPUT) -> tuple[Any, bytes]:
     if failure is not None:
         raise ProjectionError(failure) from cause
     try:
-        value = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs,
-                           parse_constant=lambda _: (_ for _ in ()).throw(ProjectionError("invalid-number")))
+        value = json.loads(
+            raw.decode("utf-8"), object_pairs_hook=_pairs,
+            parse_constant=lambda _: (_ for _ in ()).throw(ProjectionError("invalid-number")),
+            parse_float=_finite_float,
+        )
     except ProjectionError:
         raise
     except (UnicodeError, ValueError, RecursionError) as exc:
         raise ProjectionError(f"{role}-invalid-json") from exc
+    _validate_json_strings(value, role)
     return value, raw
 
 
@@ -206,6 +234,8 @@ def project(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
         pair_review_rows.append({**row, "review_row_id": f"PAIR-{index + 1:04d}",
                                  "source_pointer": f"/pairs/{index}"})
         decision = row.get("after_recommendation")
+        if not isinstance(decision, str):
+            raise ProjectionError("pair-review-decision-invalid")
         if decision == "PRESERVE_TYPED_SCOPED_CONTRIBUTION":
             role = row.get("recommended_role")
             if not isinstance(role, str) or role not in EXTRA_ROLES or pair in extras:
@@ -289,7 +319,12 @@ def project(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
         accountable = row.get("accountable_delivery_leaf")
         acceptance = row.get("acceptance_owner_leaf")
         contributors = row.get("required_contributors", [])
-        if accountable not in entry_keys or acceptance not in entry_keys or not isinstance(contributors, list) or any(x not in entry_keys for x in contributors):
+        if (
+            not isinstance(accountable, str) or accountable not in entry_keys
+            or not isinstance(acceptance, str) or acceptance not in entry_keys
+            or not isinstance(contributors, list)
+            or any(not isinstance(x, str) or x not in entry_keys for x in contributors)
+        ):
             raise ProjectionError("ownership-endpoint-invalid")
         accountable_pairs.add((requirement_id, accountable))
         contributor_pairs.update((requirement_id, leaf) for leaf in contributors)
@@ -382,13 +417,27 @@ def project(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
             raise ProjectionError("stage-relation-row-invalid")
         consumer, producer = row.get("consumer_key"), row.get("prerequisite_key")
         consumer_stage, producer_stage = row.get("consumer_stage"), row.get("prerequisite_stage")
-        if consumer not in entry_keys or not isinstance(consumer_stage, str) or consumer_stage not in STAGES or not isinstance(producer_stage, str) or producer_stage not in STAGES:
+        if (
+            not isinstance(consumer, str) or consumer not in entry_keys
+            or not isinstance(consumer_stage, str) or consumer_stage not in STAGES
+            or not isinstance(producer_stage, str) or producer_stage not in STAGES
+            or not isinstance(row.get("external_endpoint"), bool)
+        ):
             raise ProjectionError("stage-relation-endpoint-or-stage-invalid")
         external_id = producer if row.get("external_endpoint") is True else None
-        if external_id is None and producer not in entry_keys:
+        if not isinstance(producer, str) or (external_id is None and producer not in entry_keys):
             raise ProjectionError("stage-relation-producer-invalid")
         reason = row.get("reason")
-        applicability = "required" if reason in REQUIRED_STAGE_REASONS else "unresolved"
+        if reason is not None and not isinstance(reason, str):
+            raise ProjectionError("stage-relation-reason-invalid")
+        applicability = "required" if isinstance(reason, str) and reason in REQUIRED_STAGE_REASONS else "unresolved"
+        receipt_ids = row.get("required_owner_receipt_ids", [])
+        if (
+            not isinstance(receipt_ids, list)
+            or any(not isinstance(value, str) or not SAFE_KEY.fullmatch(value) for value in receipt_ids)
+            or len(receipt_ids) != len(set(receipt_ids))
+        ):
+            raise ProjectionError("stage-relation-receipts-invalid")
         projected = {
             "relation_id": f"STG-{index:03d}", "source_pointer": row.get("source_pointer"),
             "consumer_key": consumer, "consumer_requirement_ids": row.get("consumer_requirement_ids"),
@@ -400,6 +449,7 @@ def project(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
             "shared_requirement_ids": row.get("shared_requirement_ids"),
             "external_endpoint": row.get("external_endpoint"), "disjoint_internal": row.get("disjoint_internal"),
             "status": row.get("status"), "applicability": applicability,
+            "required_owner_receipt_ids": list(receipt_ids),
             "application_scope": "live_only" if reason == "live dispatch only; no additional block on offline implementation" else "declared_stage",
         }
         stage_relations.append(projected)
@@ -412,12 +462,28 @@ def project(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
         ident = node["artifact_id"]
         if ident in node_by_id:
             raise ProjectionError("external-artifact-duplicate")
+        if (
+            not isinstance(node.get("owner_role"), str) or not node.get("owner_role", "").strip()
+            or not isinstance(node.get("deliverable"), str) or not node.get("deliverable", "").strip()
+        ):
+            raise ProjectionError("external-artifact-row-invalid")
         status = node.get("status")
+        if not isinstance(status, str):
+            raise ProjectionError("external-artifact-status-invalid")
         if status not in {"pending_external", "accepted", "rejected", "unresolved"}:
             raise ProjectionError("external-artifact-status-invalid")
+        action_status = node.get("action_status", "not_declared_in_source")
+        action = node.get("action")
+        if (
+            not isinstance(action_status, str)
+            or action_status not in {"declared_in_source", "not_declared_in_source"}
+            or (action_status == "not_declared_in_source" and action is not None)
+            or (action_status == "declared_in_source" and (not isinstance(action, str) or not action.strip()))
+        ):
+            raise ProjectionError("external-artifact-action-invalid")
         node_by_id[ident] = {
-            **node, "action": node.get("action"),
-            "action_status": node.get("action_status", "not_declared_in_source"),
+            **node, "action": action,
+            "action_status": action_status,
             "source_pointer": f"/nodes/{index}", "independent_artifact": True,
         }
     for row in stage_relations:
@@ -430,6 +496,12 @@ def project(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
         raise ProjectionError("execution-dag-missing")
     gate_keys = [item["key"] for item in entries if item.get("key") == "ACV1-RELEASE-GATE"]
     edges = graph["edges"]
+    if any(
+        not isinstance(prerequisites, list)
+        or any(not isinstance(prerequisite, str) for prerequisite in prerequisites)
+        for prerequisites in edges.values()
+    ):
+        raise ProjectionError("execution-dag-invalid")
     projected = {
         "format": "agent-harness.coverage-projection/v2",
         "complete": source.get("complete") is True,
@@ -513,8 +585,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         projection, pins = project(args)
-        map_raw = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        pins_raw = json.dumps(pins, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        map_raw = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+        pins_raw = json.dumps(pins, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
         _write(args.output_map, map_raw)
         try:
             _write(args.output_pins, pins_raw)
@@ -526,6 +598,12 @@ def main(argv: list[str] | None = None) -> int:
             raise
     except ProjectionError as exc:
         sys.stderr.write(json.dumps({"code": str(exc)[:96]}, sort_keys=True, separators=(",", ":")) + "\n")
+        return 2
+    except (TypeError, ValueError, OverflowError, UnicodeError, RecursionError):
+        sys.stderr.write('{"code":"projection-input-invalid"}\n')
+        return 2
+    except Exception:
+        sys.stderr.write('{"code":"projection-failed"}\n')
         return 2
     sys.stdout.write(json.dumps({"status": "projected", "map_bytes": len(map_raw), "pins_bytes": len(pins_raw)}, sort_keys=True, separators=(",", ":")) + "\n")
     return 0
