@@ -5,6 +5,7 @@ import { runWithSafeFetchLifecycle, safeFetchProvenance } from '../security/inte
 import { composeSourceIdentity, SourceIdentityCompositionError } from '../discovery/identity/from-extraction.mjs';
 import { compareEntityIdentity } from '../discovery/entities/identity.mjs';
 import { compareOccurrenceIdentity } from '../discovery/occurrences/identity.mjs';
+import { parseAndValidateUrl } from '../security/url-policy.mjs';
 
 const PRIVATE_DRAFT_SCHEMA = 'ei-private-retrieval-draft/v1';
 const MAX_ADMISSIONS = 8;
@@ -395,10 +396,195 @@ function completionPayloadHashFromObservations(observations, outcome, truncatedC
   return digestJson({ outcome, suggestions, truncatedCount });
 }
 
+function projectionReferenceKey(reference) {
+  if (!reference || typeof reference !== 'object' || Array.isArray(reference)) return null;
+  const referenceKeys = Reflect.ownKeys(reference);
+  if (referenceKeys.length !== 5 || referenceKeys.some((key) => typeof key !== 'string')
+    || ['evidenceId', 'contentHash', 'locator', 'field', 'value'].some((key) => !Object.hasOwn(reference, key))
+    || typeof reference.evidenceId !== 'string' || reference.evidenceId.length < 1
+    || typeof reference.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(reference.contentHash)
+    || typeof reference.field !== 'string' || reference.field.length < 1
+    || typeof reference.value !== 'string' || reference.value.length < 1) return null;
+  const locator = reference.locator;
+  if (!locator || typeof locator !== 'object' || Array.isArray(locator)) return null;
+  const locatorKeys = Reflect.ownKeys(locator);
+  let normalizedLocator;
+  if (locator.kind === 'text-range' && locatorKeys.length === 3
+    && locatorKeys.every((key) => typeof key === 'string')
+    && Number.isSafeInteger(locator.startByte) && locator.startByte >= 0
+    && Number.isSafeInteger(locator.endByte) && locator.endByte > locator.startByte) {
+    normalizedLocator = { kind: 'text-range', startByte: locator.startByte, endByte: locator.endByte };
+  } else if (locator.kind === 'json-pointer' && locatorKeys.length === 2
+    && locatorKeys.every((key) => typeof key === 'string')
+    && typeof locator.pointer === 'string') {
+    normalizedLocator = { kind: 'json-pointer', pointer: locator.pointer };
+  } else {
+    return null;
+  }
+  return JSON.stringify([
+    reference.evidenceId, reference.contentHash, normalizedLocator, reference.field, reference.value,
+  ]);
+}
+
+function projectionReferenceKeys(references) {
+  if (!Array.isArray(references)) return null;
+  const keys = references.map(projectionReferenceKey);
+  if (keys.some((key) => key === null)) return null;
+  return keys.sort(stableTextCompare);
+}
+
+function projectionObservationPathExists(observations, startCandidateId, targetCandidateId, excludedIndex) {
+  if (startCandidateId === targetCandidateId) return true;
+  const edges = new Map();
+  observations.forEach((observation, index) => {
+    if (index === excludedIndex || observation.kind !== 'link') return;
+    const children = edges.get(observation.parentCandidateId) ?? [];
+    children.push(observation.targetCandidateId);
+    edges.set(observation.parentCandidateId, children);
+  });
+  const pending = [startCandidateId];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === targetCandidateId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    for (const child of edges.get(current) ?? []) pending.push(child);
+  }
+  return false;
+}
+
+function projectionSnapshotReferencesMatch(snapshot, seeds) {
+  if (!Array.isArray(snapshot?.candidates) || !Array.isArray(snapshot.observations)
+    || !Array.isArray(seeds) || !Number.isSafeInteger(snapshot.limits?.maxDepth)
+    || !Array.isArray(snapshot.stopReasons)) return false;
+  const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
+  if (candidatesById.size !== snapshot.candidates.length) return false;
+  const canonicalCandidateIds = new Map();
+  for (const candidate of snapshot.candidates) {
+    if (!candidate || typeof candidate.candidateId !== 'string' || typeof candidate.canonicalUrl !== 'string'
+      || !Number.isSafeInteger(candidate.depth) || candidate.depth < 0 || typeof candidate.seed !== 'boolean') return false;
+    const prior = canonicalCandidateIds.get(candidate.canonicalUrl);
+    if (prior !== undefined && prior !== candidate.candidateId) return false;
+    canonicalCandidateIds.set(candidate.canonicalUrl, candidate.candidateId);
+  }
+
+  const seedInputs = new Map();
+  for (const seed of seeds) {
+    let canonicalUrl;
+    try { canonicalUrl = parseAndValidateUrl(seed.url).url.href; } catch { return false; }
+    const sourceRefKeys = projectionReferenceKeys(seed.sourceRefs ?? []);
+    if (!sourceRefKeys) return false;
+    const key = JSON.stringify([seed.url, canonicalUrl, sourceRefKeys]);
+    seedInputs.set(key, (seedInputs.get(key) ?? 0) + 1);
+  }
+
+  const targetReferences = new Map();
+  const targetObservationCounts = new Map();
+  const targetOriginCounts = new Map();
+  const targetMinimumDepth = new Map();
+  const seedTargets = new Set();
+  const linkDispositions = new Set(['duplicate', 'cycle', 'depth_limit', 'queued', 'retained_after_stop']);
+  const maximumDepth = snapshot.limits.maxDepth;
+  for (const [observationIndex, observation] of snapshot.observations.entries()) {
+    if (!observation || !['seed', 'link'].includes(observation.kind)
+      || typeof observation.targetCandidateId !== 'string' || typeof observation.canonicalUrl !== 'string') return false;
+    const target = candidatesById.get(observation.targetCandidateId);
+    if (!target || target.canonicalUrl !== observation.canonicalUrl) return false;
+    const referenceKeys = projectionReferenceKeys(observation.sourceRefs);
+    if (!referenceKeys) return false;
+    targetObservationCounts.set(observation.targetCandidateId,
+      (targetObservationCounts.get(observation.targetCandidateId) ?? 0) + 1);
+    if (!Number.isSafeInteger(observation.depth) || observation.depth < 0) return false;
+    targetMinimumDepth.set(observation.targetCandidateId,
+      Math.min(targetMinimumDepth.get(observation.targetCandidateId) ?? Number.POSITIVE_INFINITY, observation.depth));
+    const accumulated = targetReferences.get(observation.targetCandidateId) ?? [];
+    accumulated.push(...referenceKeys);
+    targetReferences.set(observation.targetCandidateId, accumulated);
+
+    if (observation.kind === 'seed') {
+      if (observation.parentCandidateId !== null || observation.depth !== 0
+        || !['seed', 'duplicate'].includes(observation.disposition)
+        || (observation.outcome !== undefined && observation.outcome !== null)
+        || typeof observation.suppliedUrl !== 'string') return false;
+      const key = JSON.stringify([observation.suppliedUrl, observation.canonicalUrl, referenceKeys]);
+      const remaining = seedInputs.get(key) ?? 0;
+      if (remaining < 1) return false;
+      if (remaining === 1) seedInputs.delete(key);
+      else seedInputs.set(key, remaining - 1);
+      seedTargets.add(observation.targetCandidateId);
+      if (observation.disposition === 'seed') {
+        targetOriginCounts.set(observation.targetCandidateId,
+          (targetOriginCounts.get(observation.targetCandidateId) ?? 0) + 1);
+      }
+    } else {
+      const parent = candidatesById.get(observation.parentCandidateId);
+      if (!parent || !Number.isSafeInteger(parent.depth) || parent.depth < 0
+        || typeof observation.suppliedUrl !== 'string' || observation.outcome !== 'links_observed'
+        || !linkDispositions.has(observation.disposition)
+        || !Number.isSafeInteger(observation.depth) || observation.depth < parent.depth + 1
+        || (observation.depth > maximumDepth + 1 && observation.disposition !== 'cycle')) return false;
+      if (observation.disposition === 'depth_limit') {
+        if (observation.depth <= maximumDepth) return false;
+      } else if (observation.disposition !== 'cycle' && observation.depth > maximumDepth) {
+        return false;
+      }
+      if (observation.disposition === 'retained_after_stop'
+        && (!snapshot.stopReasons.some((stop) => stop.reason === 'attempt_limit') || snapshot.state === 'active')) {
+        return false;
+      }
+      if (['queued', 'depth_limit', 'retained_after_stop'].includes(observation.disposition)) {
+        targetOriginCounts.set(observation.targetCandidateId,
+          (targetOriginCounts.get(observation.targetCandidateId) ?? 0) + 1);
+      }
+      if (observation.disposition === 'cycle'
+        && !projectionObservationPathExists(snapshot.observations, observation.targetCandidateId,
+          observation.parentCandidateId, observationIndex)) return false;
+    }
+  }
+  if (seedInputs.size !== 0) return false;
+  for (const candidate of snapshot.candidates) {
+    if (candidate.seed !== seedTargets.has(candidate.candidateId)
+      || candidate.depth !== targetMinimumDepth.get(candidate.candidateId)
+      || (targetObservationCounts.get(candidate.candidateId) ?? 0) < 1) return false;
+    if ((targetOriginCounts.get(candidate.candidateId) ?? 0) !== 1) return false;
+    const expected = [...new Set(targetReferences.get(candidate.candidateId) ?? [])].sort(stableTextCompare);
+    const actual = projectionReferenceKeys(candidate.sourceRefs);
+    if (!actual || JSON.stringify(actual) !== JSON.stringify(expected)) return false;
+  }
+  return true;
+}
+
+function projectionObservationTargetsMatch(snapshot, parentCandidateId, observations) {
+  if (!Array.isArray(snapshot?.candidates) || !Array.isArray(snapshot.observations)
+    || !Number.isSafeInteger(snapshot.limits?.maxDepth)) return false;
+  const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
+  const parent = candidatesById.get(parentCandidateId);
+  if (!parent || !Number.isSafeInteger(parent.depth) || parent.depth < 0) return false;
+  const maximumDepth = snapshot.limits.maxDepth;
+  for (const observation of observations) {
+    if (observation.parentCandidateId !== parentCandidateId
+      || typeof observation.targetCandidateId !== 'string'
+      || typeof observation.canonicalUrl !== 'string'
+      || !Number.isSafeInteger(observation.depth) || observation.depth < parent.depth + 1
+      || observation.depth > maximumDepth + 1 && observation.disposition !== 'cycle') return false;
+    const target = candidatesById.get(observation.targetCandidateId);
+    if (!target || target.canonicalUrl !== observation.canonicalUrl
+      || !Number.isSafeInteger(target.depth) || target.depth < 0 || target.depth > observation.depth) return false;
+    if (observation.disposition === 'depth_limit') {
+      if (observation.depth <= maximumDepth) return false;
+    } else if (observation.disposition !== 'cycle' && observation.depth > maximumDepth) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function completionPayloadMatches(receipt, snapshot, candidateId, completion, truncatedCount) {
   if (!completion || typeof completion.payloadHash !== 'string') return false;
   const observations = completionObservations(snapshot, candidateId);
   return observationsMatchSuggestions(observations, receipt.suggestions, receipt.outcome)
+    && projectionObservationTargetsMatch(snapshot, candidateId, observations)
     && completionPayloadHashFromObservations(observations, receipt.outcome, truncatedCount) === completion.payloadHash;
 }
 
@@ -748,6 +934,7 @@ export async function runPrivateRetrieval(value) {
         || binding.claim.claimKey !== receipt.claim.claimKey
         || binding.claim.workerId !== receipt.claim.workerId
         || binding.claim.leaseToken !== receipt.claim.leaseToken
+        || !projectionSnapshotReferencesMatch(snapshot, input.seeds)
         || binding.completion?.completionKey !== receipt.completionKey
         || binding.completion?.outcome !== receipt.outcome
         || !completionPayloadMatches(receipt, snapshot, candidateId, binding.completion, truncatedCount)) {
@@ -774,6 +961,9 @@ export async function runPrivateRetrieval(value) {
       const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
       const parents = new Set(verifiedCompletionProofs.keys());
       const hasLegacyReceipt = [...verifiedCompletionProofs.values()].some((proof) => proof.legacyReceipt);
+      if (!projectionSnapshotReferencesMatch(snapshot, input.seeds)) {
+        return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+      }
       for (const observation of snapshot.observations) {
         if (observation.kind !== 'link') continue;
         const parentCandidateId = observation.parentCandidateId;

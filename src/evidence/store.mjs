@@ -1735,7 +1735,7 @@ export function createEvidenceStore(options) {
       const positions = positionsInput.map((positionValue) => {
         const position = ownDataRecord(positionValue, new Set(['locator', 'contentHash']));
         if (!position || !isDigest(position.contentHash)) fail('EVIDENCE_INTEGRITY');
-        return { locator: copyLocator(position.locator), contentHash: position.contentHash };
+        return { locator: copyStoredLocator(position.locator, reference.representation), contentHash: position.contentHash };
       });
       return {
         evidenceId: reference.evidenceId,

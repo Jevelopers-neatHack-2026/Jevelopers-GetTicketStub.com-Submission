@@ -402,6 +402,86 @@ function insertUnverifiedQueuedParentLinkObservation({ databasePath, tenantHash,
   }
 }
 
+function reassignLinkObservationTarget({ databasePath, tenantHash, runId, canonicalUrl, targetCandidateId }) {
+  const database = new DatabaseSync(databasePath);
+  try {
+    database.exec('PRAGMA foreign_keys=ON');
+    const observation = database.prepare(`SELECT sequence, target_candidate_id, canonical_url
+      FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND canonical_url = ?
+      ORDER BY sequence LIMIT 1`).get(tenantHash, runId, canonicalUrl);
+    assert.ok(observation, 'the selected parent link observation exists');
+    assert.notEqual(targetCandidateId, observation.target_candidate_id,
+      'the replacement target differs from the observation target');
+    assert.ok(database.prepare(`SELECT 1 AS found FROM frontier_candidates
+      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, targetCandidateId),
+    'the replacement target is a real candidate in this run');
+    const updated = database.prepare(`UPDATE frontier_observations SET target_candidate_id = ?
+      WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`).run(
+      targetCandidateId, tenantHash, runId, observation.sequence,
+    );
+    assert.equal(updated.changes, 1);
+    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
+      'the reassigned target remains a valid same-run foreign key');
+    return observation;
+  } finally {
+    database.close();
+  }
+}
+
+function reassignCandidateDepth({ databasePath, tenantHash, runId, candidateId, depth }) {
+  const database = new DatabaseSync(databasePath);
+  try {
+    const candidate = database.prepare(`SELECT best_depth FROM frontier_candidates
+      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, candidateId);
+    assert.ok(candidate, 'the selected candidate exists in this run');
+    const updated = database.prepare(`UPDATE frontier_candidates SET best_depth = ?
+      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).run(depth, tenantHash, runId, candidateId);
+    assert.equal(updated.changes, 1);
+    return candidate.best_depth;
+  } finally {
+    database.close();
+  }
+}
+
+function insertUnobservedCandidate({ databasePath, tenantHash, runId, canonicalUrl, depth = 1 }) {
+  const candidateId = createHash('sha256')
+    .update(`event-intelligence:frontier-candidate:v1\0${tenantHash}\0${runId}\0${canonicalUrl}`)
+    .digest('hex');
+  const database = new DatabaseSync(databasePath);
+  try {
+    database.exec('PRAGMA foreign_keys=ON');
+    const run = database.prepare(`SELECT max_depth FROM frontier_runs WHERE tenant_hash = ? AND run_id = ?`)
+      .get(tenantHash, runId);
+    assert.ok(run, 'the candidate belongs to a persisted frontier run');
+    assert.ok(depth <= run.max_depth, 'the orphan control is otherwise eligible for the projection');
+    database.prepare(`INSERT INTO frontier_candidates
+      (tenant_hash, run_id, candidate_id, canonical_url, best_depth, state, is_seed)
+      VALUES (?, ?, ?, ?, ?, 'queued', 0)`)
+      .run(tenantHash, runId, candidateId, canonicalUrl, depth);
+    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
+      'the unsupported candidate still has valid foreign keys');
+    return candidateId;
+  } finally {
+    database.close();
+  }
+}
+
+function readPrivateReceiptRows(databasePath, tenantHash) {
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    return database.prepare(`SELECT state, payload_hash, payload_bytes, sealed
+      FROM private_retrieval_receipts WHERE tenant_hash = ? ORDER BY receipt_key`)
+      .all(tenantHash).map((row) => ({
+        state: row.state,
+        payloadHash: row.payload_hash,
+        payloadBytes: row.payload_bytes,
+        sealed: Buffer.from(row.sealed),
+      }));
+  } finally {
+    database.close();
+  }
+}
+
 test('sensitive seed query and fragment material is rejected before frontier persistence', async (t) => {
   const server = await startFixture((_request, response) => {
     respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
@@ -1573,6 +1653,307 @@ test('a queued link child keeps provenance from its verified completed parent ac
   assert.deepEqual(replay.linkCandidates.find((item) => item.candidateId === child.candidateId).sourceRefs, child.sourceRefs);
 });
 
+test('modern and baseline receipts reject link provenance reassigned to another candidate', async (t) => {
+  let requestCount = 0;
+  const firstUrl = 'https://links.example.org/a-first';
+  const secondUrl = 'https://links.example.org/z-last';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' },
+      eventHtmlWithCanonicalLinks([firstUrl, secondUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-modern-target-reassignment';
+  const seeds = [{ url: sourceUrl('/target-reassignment-parent') }];
+  const limits = { maxDepth: 1, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 2 };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.equal(first.linkCandidates.length, 2);
+  assert.equal(requestCount, 1);
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const databasePath = path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const immutableReceiptRows = readPrivateReceiptRows(evidencePath, tenantHash);
+  const scope = await h.frontier.scopeForAuthenticatedRequest(request());
+  const before = await h.frontier.getSnapshot(scope, runId);
+  const firstObservation = before.observations.find((item) => item.kind === 'link' && item.canonicalUrl === firstUrl);
+  const secondObservation = before.observations.find((item) => item.kind === 'link' && item.canonicalUrl === secondUrl);
+  assert.ok(firstObservation && secondObservation);
+  const firstCandidateId = firstObservation.targetCandidateId;
+  const secondCandidateId = secondObservation.targetCandidateId;
+  assert.notEqual(firstCandidateId, secondCandidateId);
+  const transportBefore = await h.frontier.getTransportProgress(scope, runId);
+
+  reassignLinkObservationTarget({ databasePath, tenantHash, runId, canonicalUrl: firstUrl,
+    targetCandidateId: secondCandidateId });
+  const reassigned = await h.frontier.getSnapshot(scope, runId);
+  assert.deepEqual(reassigned.candidates.find((candidate) => candidate.candidateId === firstCandidateId).sourceRefs, [],
+    'the original target loses the moved position in the tampered projection');
+  assert.equal(reassigned.candidates.find((candidate) => candidate.candidateId === secondCandidateId).sourceRefs.length,
+    firstObservation.sourceRefs.length + secondObservation.sourceRefs.length,
+    'the other target now receives both source positions');
+
+  h.frontier.close();
+  const replayFrontier = h.openFrontier();
+  const replayStore = createEvidenceStore(h.evidenceConfig);
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: replayFrontier, store: replayStore,
+  }));
+  assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+  assert.equal(replay.draft, null);
+  assert.ok(replay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'rejected modern target association does not redispatch the parent or child');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), immutableReceiptRows,
+    'the target association failure leaves authenticated receipt bytes unchanged');
+  const replayScope = await replayFrontier.scopeForAuthenticatedRequest(request());
+  assert.deepEqual(await replayFrontier.getTransportProgress(replayScope, runId), transportBefore,
+    'the target association failure leaves transport accounting unchanged');
+
+  const legacyRequests = { count: 0 };
+  const legacy = await legacyOvercapWorkspace(t, legacyRequests);
+  let legacyFrontier = legacy.openFrontier();
+  let legacyStore = legacy.openEvidenceStore();
+  const legacyFirst = await legacy.run(legacyFrontier, legacyStore);
+  assert.equal(legacyFirst.status, 'draft', JSON.stringify(legacyFirst));
+  assert.equal(legacyRequests.count, 0);
+  const legacyRows = legacy.readLegacyReceiptRows();
+  const legacyScope = await legacyFrontier.scopeForAuthenticatedRequest(legacy.request);
+  const legacySnapshot = await legacyFrontier.getSnapshot(legacyScope, legacy.runId);
+  const legacyLink = legacySnapshot.observations.find((item) => item.kind === 'link');
+  const legacySeed = legacySnapshot.candidates.find((candidate) => candidate.seed);
+  assert.ok(legacyLink && legacySeed);
+  const legacyTransport = await legacyFrontier.getTransportProgress(legacyScope, legacy.runId);
+  const legacyDatabasePath = path.join(legacy.frontierDirectory, legacy.fixture.tenantHash, 'frontier.sqlite');
+  reassignLinkObservationTarget({ databasePath: legacyDatabasePath, tenantHash: legacy.fixture.tenantHash,
+    runId: legacy.runId, canonicalUrl: legacyLink.canonicalUrl, targetCandidateId: legacySeed.candidateId });
+  const legacyTampered = await legacyFrontier.getSnapshot(legacyScope, legacy.runId);
+  assert.ok(legacyTampered.candidates.find((candidate) => candidate.seed).sourceRefs.length > 0,
+    'the invalid link position is now incorrectly aggregated into the existing seed row');
+
+  legacyFrontier.close();
+  legacyFrontier = legacy.openFrontier();
+  legacyStore = legacy.openEvidenceStore();
+  const legacyReplay = await legacy.run(legacyFrontier, legacyStore);
+  assert.equal(legacyReplay.status, 'incomplete', JSON.stringify(legacyReplay));
+  assert.equal(legacyReplay.draft, null);
+  assert.ok(legacyReplay.limitations.includes('legacy_receipt_fanout_recovery_unverified'));
+  assert.ok(legacyReplay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(legacyRequests.count, 0, 'rejected legacy target association does not redispatch');
+  assert.deepEqual(legacy.readLegacyReceiptRows(), legacyRows,
+    'the legacy target association failure does not rewrite the old encrypted receipt');
+  const legacyReplayScope = await legacyFrontier.scopeForAuthenticatedRequest(legacy.request);
+  assert.deepEqual(await legacyFrontier.getTransportProgress(legacyReplayScope, legacy.runId), legacyTransport);
+});
+
+test('duplicate seed observations bind to the configured seed multiset and references', async (t) => {
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-duplicate-seed-observation-proof';
+  const seedUrl = sourceUrl('/duplicate-seed-proof');
+  const seed = {
+    url: seedUrl,
+    sourceRefs: [{
+      evidenceId: '123e4567-e89b-42d3-a456-426614174000',
+      contentHash: createHash('sha256').update('seed-input-evidence').digest('hex'),
+      locator: { kind: 'text-range', startByte: 0, endByte: 1 },
+      field: 'seed_url',
+      value: seedUrl,
+    }],
+  };
+  const seeds = [seed, seed];
+  const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1 };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const debugEvidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  assert.equal(first.status, 'draft', JSON.stringify({ first, snapshot: await h.frontier.getSnapshot(h.scope, runId),
+    requests: h.requests.size, receipts: readPrivateReceiptRows(debugEvidencePath, tenantHash) }));
+  assert.equal(requestCount, 1, 'duplicate seed inputs retain one canonical candidate and one request');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const immutableReceiptRows = readPrivateReceiptRows(evidencePath, tenantHash);
+  const scope = await h.frontier.scopeForAuthenticatedRequest(request());
+  const before = await h.frontier.getSnapshot(scope, runId);
+  const seedObservations = before.observations.filter((item) => item.kind === 'seed');
+  assert.equal(seedObservations.length, 2, 'both configured duplicate seed observations are retained');
+  assert.deepEqual(seedObservations[0].sourceRefs, seedObservations[1].sourceRefs);
+  assert.equal(before.candidates[0].sourceRefs.length, 1);
+  const transportBefore = await h.frontier.getTransportProgress(scope, runId);
+  const frontierPath = path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite');
+  const database = new DatabaseSync(frontierPath);
+  try {
+    const row = database.prepare(`SELECT sequence FROM frontier_observations
+      WHERE tenant_hash = ? AND run_id = ? AND kind = 'seed' ORDER BY sequence LIMIT 1`).get(tenantHash, runId);
+    assert.ok(row);
+    database.prepare(`UPDATE frontier_observations SET source_refs_json = '[]'
+      WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`).run(tenantHash, runId, row.sequence);
+  } finally {
+    database.close();
+  }
+  const tampered = await h.frontier.getSnapshot(scope, runId);
+  assert.equal(tampered.candidates[0].sourceRefs.length, 1,
+    'deduplicated candidate provenance alone still looks unchanged after one duplicate is altered');
+  assert.equal(tampered.observations.filter((item) => item.kind === 'seed')[0].sourceRefs.length, 0);
+
+  h.frontier.close();
+  const replayFrontier = h.openFrontier();
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: replayFrontier, store: createEvidenceStore(h.evidenceConfig),
+  }));
+  assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+  assert.equal(replay.draft, null);
+  assert.ok(replay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'seed-observation mismatch does not repeat retrieval');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), immutableReceiptRows);
+  const replayScope = await replayFrontier.scopeForAuthenticatedRequest(request());
+  assert.deepEqual(await replayFrontier.getTransportProgress(replayScope, runId), transportBefore);
+});
+
+test('a candidate without any authenticated incoming observation is withheld from projection', async (t) => {
+  let requestCount = 0;
+  const targetUrl = 'https://links.example.org/orphan-projection-control';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtmlWithCanonicalLinks([targetUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-orphan-candidate-projection';
+  const seeds = [{ url: sourceUrl('/orphan-control-parent') }];
+  const limits = { maxDepth: 1, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 1 };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.equal(first.linkCandidates.length, 1, 'the valid target provides the positive projection control');
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const immutableReceiptRows = readPrivateReceiptRows(evidencePath, tenantHash);
+  const scope = await h.frontier.scopeForAuthenticatedRequest(request());
+  const transportBefore = await h.frontier.getTransportProgress(scope, runId);
+  const orphanUrl = 'https://links.example.org/unobserved-candidate-row';
+  const candidateId = insertUnobservedCandidate({
+    databasePath: path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite'),
+    tenantHash, runId, canonicalUrl: orphanUrl,
+  });
+  const tampered = await h.frontier.getSnapshot(scope, runId);
+  assert.deepEqual(tampered.candidates.find((candidate) => candidate.candidateId === candidateId).sourceRefs, []);
+  assert.ok(!tampered.observations.some((observation) => observation.targetCandidateId === candidateId));
+
+  h.frontier.close();
+  const replayFrontier = h.openFrontier();
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: replayFrontier, store: createEvidenceStore(h.evidenceConfig),
+  }));
+  assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+  assert.equal(replay.draft, null);
+  assert.ok(replay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'unsupported candidate rows do not dispatch again');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), immutableReceiptRows);
+  const replayScope = await replayFrontier.scopeForAuthenticatedRequest(request());
+  assert.deepEqual(await replayFrontier.getTransportProgress(replayScope, runId), transportBefore);
+});
+
+test('a candidate depth must equal its earliest authenticated frontier observation', async (t) => {
+  let requestCount = 0;
+  const targetUrl = 'https://links.example.org/depth-bound-child';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtmlWithCanonicalLinks([targetUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-target-depth-bound-to-observations';
+  const seeds = [{ url: sourceUrl('/depth-bound-parent') }];
+  const limits = { maxDepth: 1, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 1 };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.equal(requestCount, 1);
+
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const databasePath = path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const immutableReceiptRows = readPrivateReceiptRows(evidencePath, tenantHash);
+  const scope = await h.frontier.scopeForAuthenticatedRequest(request());
+  const before = await h.frontier.getSnapshot(scope, runId);
+  const linkObservation = before.observations.find((item) => item.kind === 'link' && item.canonicalUrl === targetUrl);
+  assert.ok(linkObservation);
+  const target = before.candidates.find((candidate) => candidate.candidateId === linkObservation.targetCandidateId);
+  assert.ok(target);
+  assert.equal(target.depth, 1);
+  const transportBefore = await h.frontier.getTransportProgress(scope, runId);
+
+  reassignCandidateDepth({ databasePath, tenantHash, runId, candidateId: target.candidateId, depth: 0 });
+  const tampered = await h.frontier.getSnapshot(scope, runId);
+  assert.equal(tampered.candidates.find((candidate) => candidate.candidateId === target.candidateId).depth, 0);
+
+  h.frontier.close();
+  const replayFrontier = h.openFrontier();
+  const replayStore = createEvidenceStore(h.evidenceConfig);
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: replayFrontier, store: replayStore,
+  }));
+  assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+  assert.equal(replay.draft, null);
+  assert.ok(replay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'rejecting a forged candidate depth never retries private transport');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), immutableReceiptRows,
+    'the depth mismatch leaves authenticated receipt bytes unchanged');
+  const replayScope = await replayFrontier.scopeForAuthenticatedRequest(request());
+  assert.deepEqual(await replayFrontier.getTransportProgress(replayScope, runId), transportBefore);
+});
+
+test('the completion boundary rejects a reassigned target before receipt proof', async (t) => {
+  let requestCount = 0;
+  const firstUrl = 'https://links.example.org/concurrent-a-first';
+  const secondUrl = 'https://links.example.org/concurrent-z-last';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' },
+      eventHtmlWithCanonicalLinks([firstUrl, secondUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-concurrent-target-reassignment';
+  const seeds = [{ url: sourceUrl('/concurrent-target-parent') }];
+  const limits = { maxDepth: 1, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 2 };
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const frontierPath = path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  let targetChanged = false;
+  let receiptRowsAtMutation;
+  let transportAtMutation;
+  const instrumentedFrontier = frontierWithMethodOverrides(h.frontier, {
+    completeCandidate: async (...args) => {
+      const completed = await h.frontier.completeCandidate(...args);
+      if (!targetChanged) {
+        const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+        const otherTarget = snapshot.candidates.find((candidate) => candidate.canonicalUrl === secondUrl);
+        assert.ok(otherTarget);
+        reassignLinkObservationTarget({ databasePath: frontierPath, tenantHash, runId,
+          canonicalUrl: firstUrl, targetCandidateId: otherTarget.candidateId });
+        targetChanged = true;
+        receiptRowsAtMutation = readPrivateReceiptRows(evidencePath, tenantHash);
+        transportAtMutation = await h.frontier.getTransportProgress(h.scope, runId);
+      }
+      return completed;
+    },
+  });
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: instrumentedFrontier,
+  }));
+  assert.equal(targetChanged, true, 'the target changes after atomic frontier completion and before receipt proof');
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'the concurrent proof rejection never retries transport');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), receiptRowsAtMutation,
+    'completion-proof rejection leaves the finalized authenticated receipt unchanged');
+  assert.deepEqual(await h.frontier.getTransportProgress(h.scope, runId), transportAtMutation);
+});
+
 test('legacy overcap replay rejects a link observation attributed to an unverified queued parent', async (t) => {
   const requests = { count: 0 };
   const h = await legacyOvercapWorkspace(t, requests);
@@ -1684,6 +2065,80 @@ test('the final projection rechecks all verified parents when an outgoing observ
   const actualSnapshot = await h.frontier.getSnapshot(h.scope, runId);
   assert.equal(actualSnapshot.observations.filter((observation) => observation.kind === 'link').length, 1,
     'the test withholds the observation only from the final projection snapshot');
+});
+
+test('the final projection rejects a changed link target after receipt proof', async (t) => {
+  let requestCount = 0;
+  const firstUrl = 'https://links.example.org/final-target-a-first';
+  const secondUrl = 'https://links.example.org/final-target-z-last';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' },
+      eventHtmlWithCanonicalLinks([firstUrl, secondUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-final-projection-target-change';
+  const seeds = [{ url: sourceUrl('/final-target-parent') }];
+  const limits = { maxDepth: 1, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 2 };
+  let completionFinished = false;
+  let receiptReadAfterCompletion = false;
+  let proofSnapshotPending = false;
+  let proofSnapshotSeen = false;
+  let laterSnapshotTargetChanged = false;
+  const observedStore = Object.create(null);
+  for (const method of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'lookupEvidence', 'lookupFact',
+    'materializeSelected', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+    'ingestEvidence', 'ingestAssetSourceEvidence',
+  ]) observedStore[method] = h.evidenceStore[method].bind(h.evidenceStore);
+  observedStore.readPrivateRunReceipt = async (...args) => {
+    const receipt = await h.evidenceStore.readPrivateRunReceipt(...args);
+    if (completionFinished && receipt.state === 'complete') receiptReadAfterCompletion = true;
+    return receipt;
+  };
+  const instrumentedFrontier = frontierWithMethodOverrides(h.frontier, {
+    completeCandidate: async (...args) => {
+      const result = await h.frontier.completeCandidate(...args);
+      completionFinished = true;
+      return result;
+    },
+    getCandidateReceiptBinding: async (...args) => {
+      if (receiptReadAfterCompletion) {
+        receiptReadAfterCompletion = false;
+        proofSnapshotPending = true;
+      }
+      return h.frontier.getCandidateReceiptBinding(...args);
+    },
+    getSnapshot: async (...args) => {
+      const snapshot = await h.frontier.getSnapshot(...args);
+      if (proofSnapshotPending) {
+        proofSnapshotPending = false;
+        proofSnapshotSeen = true;
+        return snapshot;
+      }
+      if (!proofSnapshotSeen) return snapshot;
+      const firstObservation = snapshot.observations.find((item) => item.kind === 'link' && item.canonicalUrl === firstUrl);
+      const secondObservation = snapshot.observations.find((item) => item.kind === 'link' && item.canonicalUrl === secondUrl);
+      assert.ok(firstObservation && secondObservation);
+      laterSnapshotTargetChanged = true;
+      return {
+        ...snapshot,
+        observations: snapshot.observations.map((observation) => observation === firstObservation
+          ? { ...observation, targetCandidateId: secondObservation.targetCandidateId }
+          : observation),
+      };
+    },
+  });
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: instrumentedFrontier, store: observedStore,
+  }));
+  assert.equal(proofSnapshotSeen, true, 'the exact receipt and original target association are proved first');
+  assert.equal(laterSnapshotTargetChanged, true, 'a later snapshot supplies a different existing target id');
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'late projection rejection causes no additional private request');
 });
 
 test('metadata-v1 replay rejects a link observation attributed to an unverified queued parent', async (t) => {
