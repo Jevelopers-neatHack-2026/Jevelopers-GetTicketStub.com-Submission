@@ -18,11 +18,11 @@ ART-03/04/05 remain open; no mock peer is called real conformance.
 | PP-06B.5 | Inert formula/markup parser values; injection-safe error CSV; private telemetry contains no attendee/seat values | Accepted privacy/UsageEvent intake |
 | PP-06B.6 | Typed baseline capability rejection and executable conditional real CSV corpus | Positive approved launch decision absent |
 | PP-09A.1 | Exact constrained SVG, unchanged PNG source bytes, embedded approved fonts and vector text/shapes | Confirmed target SVG/font rights policy |
-| PP-09A.2 | 300-DPI PNG dimensions/pHYs/sRGB/opaque pixels; exact PDF boxes, ICC default RGB and embedded fonts | Arabic/wrap-space PDF blocked; CMYK/PDF-X unsupported |
+| PP-09A.2 | 300-DPI PNG and exact PDF boxes/ICC/font programs; policy-2 parsed Arabic/wrap-space glyph/Unicode proof | Independent semantic/full-candidate review pending; CMYK/PDF-X unsupported |
 | PP-09A.3 | Independent browser replay checks byte, pixel and semantic equality; normalized dates/policy pins | Linux exact candidate attestation absent |
 | PP-09A.4 | Real independent parsers plus final preflight; tamper/dimensions/fonts/profile and issued-receipt rejection | Real supplier final-file policy and approved input pins |
 | PP-09A.5 | Deterministic exact ZIP dialect; independent sizes/CRC/hash/set/type inspection; traversal/symlink/hidden bytes reject | Canonical supplied manifest adapter absent |
-| PP-09A.6 | Exact template-declared file set; unsupported format/profile/PDF cases fail the row | Approved real format roster absent |
+| PP-09A.6 | Exact declared file set; unsupported profiles/PDF mechanisms fail closed; semantic policy identity explicit | Approved real format roster and independent semantic review absent |
 | PP-09B.1 | Private scoped lineage, source/layout/font/policy/renderer/repair/CSV/batch refs; privacy-safe descriptors | Canonical ProductionBundle package/schema/version missing |
 | PP-09B.2 | Actual parsed file descriptors and full preflight report digest/check inventory; readiness external-blocked | Canonical report and warning vocabulary |
 | PP-09B.3 | Detached nonrecursive payload→inventory→ZIP protocol and independent verification | Canonical owner hash protocol agreement |
@@ -32,7 +32,7 @@ ART-03/04/05 remain open; no mock peer is called real conformance.
 | PP-12F.1 | Exact local lock/font/browser/profile pins and revision refs; real modules vs synthetic ports recorded | Shared/creative/event/app/fulfillment component revisions absent |
 | PP-12F.2 | Actual names/seat/leading zeros through real render plus source-byte preservation | Real approved golden inputs and ART-03 owner acceptance |
 | PP-12F.3 | Existing composition negative suites plus output dimensions/DPI/visibility/overflow/font/profile/revocation/spec cases | Real supplier/template/approval scopes remain external |
-| PP-12F.4 | Real mechanical normalization export; material escalation; all enabled formats parsed; hash/ZIP lineage checked | Unsupported required PDF cases block; canonical manifest absent |
+| PP-12F.4 | Mechanical normalization/material escalation; parsed glyph/cluster/space/font/hash mutation proof and all requested files | Independent semantic acceptance pending; canonical manifest absent |
 | PP-12F.5 | Actual duplicate/partial/atomic/concurrency/idempotency/cancel/reopen/kill/outbox joins and conditional CSV | Frozen durability corpus includes partial writes and bounded recovery; DUR-R6/R7 independent disposition pending |
 | PP-12F.6 | No fake fulfillment/app acceptance is emitted; real local publication precedes read-only validation | Real unchanged-hash fulfillment validator, scoped app fixtures, finance intake and EvaluationEvidence absent |
 | PP-12F.7 | Fresh corpus index, actual artifacts, exact counts/commands/digests; all outer gates nonzero | Parent manual QA, independent review and canonical consumer release evidence |

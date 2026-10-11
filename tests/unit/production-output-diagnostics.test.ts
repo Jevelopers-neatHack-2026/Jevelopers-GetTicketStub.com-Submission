@@ -6,7 +6,7 @@ import {
 	privateResultPage,
 	runPrivateBatch,
 } from "../../src/personalization/private-batch.js";
-test("persists an exact failed PDF diagnostic without publishing a completed batch", {
+test("persists a genuine failed preflight diagnostic without publishing a completed batch", {
 	timeout: 30000,
 }, async () => {
 	using f = await batchFixture();
@@ -18,7 +18,7 @@ test("persists an exact failed PDF diagnostic without publishing a completed bat
 			{
 				rowId: "wrap",
 				fields: {
-					name: "A long exact attendee name wrapping across multiple measured lines",
+					name: "W".repeat(200),
 					detail: "0007",
 				},
 			},
@@ -38,7 +38,7 @@ test("persists an exact failed PDF diagnostic without publishing a completed bat
 	assert.equal(rows[0]?.publication, null);
 	assert.equal(rows[0]?.archiveDigest, null);
 	assert.deepEqual(rows[0]?.errors, [
-		{ code: "OUTPUT_CONTENT", path: "pdf.exactUnicodeOrWrapSpaces" },
+		{ code: "OUTPUT_PREFLIGHT", path: "model" },
 	]);
 	assert.deepEqual(
 		privateResultPage(f.engine, f.context.input.scope, job.id),

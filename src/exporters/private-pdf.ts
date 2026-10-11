@@ -4,6 +4,7 @@ import { digest, fingerprint } from "../composition/primitives.js";
 import type { PrivateArtifact } from "../composition/private-model.js";
 import { requireOutput } from "./private-policy.js";
 import { bindPdfSrgb, inspectPdfSrgb } from "./private-pdf-profile.js";
+import { inspectPdfSemantics } from "./private-pdf-semantic.js";
 
 const pt = (mm: number) => (mm * 72) / 25.4;
 export async function normalizePdf(
@@ -31,12 +32,13 @@ export async function normalizePdf(
 	const epoch = new Date("2000-01-01T00:00:00Z");
 	doc.setCreationDate(epoch);
 	doc.setModificationDate(epoch);
-	doc.setCreator("private-output-1");
-	doc.setProducer("pinned-chromium_private-output-1");
+	doc.setCreator("private-output-2");
+	doc.setProducer("pinned-chromium_private-output-2");
 	bindPdfSrgb(doc);
 	return doc.save({ useObjectStreams: false });
 }
 export async function inspectPdf(bytes: Uint8Array, artifact: PrivateArtifact) {
+	const semantics = await inspectPdfSemantics(bytes, artifact);
 	const doc = await PDFDocument.load(bytes, { updateMetadata: false });
 	requireOutput(
 		doc.getPageCount() === 1 && !doc.isEncrypted,
@@ -167,17 +169,19 @@ export async function inspectPdf(bytes: Uint8Array, artifact: PrivateArtifact) {
 			: [],
 	);
 	const actual = extracted.join("");
-	requireOutput(
-		lines.every((line) => actual.includes(line)),
-		"OUTPUT_CONTENT",
-		"pdf.exactUnicodeOrWrapSpaces",
-	);
+	const readerCorroboration = {
+		library: "pdfjs-dist-6.4.299",
+		exactLinesMatch: lines.every((line) => actual.includes(line)),
+		extractedDigest: fingerprint(extracted),
+	};
 	const profile = inspectPdfSrgb(doc);
 	return {
+		semantics,
+		readerCorroboration,
 		profile,
 		boxes,
 		embedded,
-		textDigest: fingerprint(extracted),
-		semanticDigest: fingerprint({ boxes, embedded, extracted, profile }),
+		textDigest: fingerprint(semantics.lines),
+		semanticDigest: fingerprint({ boxes, embedded, semantics, profile }),
 	};
 }

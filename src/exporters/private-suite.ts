@@ -8,65 +8,23 @@ import {
 	durabilityExpectedTests,
 	durabilityProcessEvidence,
 } from "../internal/independent-tests.js";
+import { IndependentTestFailure } from "../internal/independent-diagnostics.js";
 import { VerificationFailure } from "../runtime/errors.js";
 export { suiteNames, suiteRegistry } from "./private-suite-registry.js";
 import type { SuiteName } from "./private-suite-registry.js";
 export type { SuiteName } from "./private-suite-registry.js";
 
-export const compositionTestFiles = {
-	templates: ["composition-model", "composition-image-scale"],
-	composition: [
-		"composition-model",
-		"composition-image-scale",
-		"composition-visibility",
-	],
-	typography: ["composition-model", "composition-text-scale"],
-	"approved-assets": ["composition-assets", "composition-image-scale"],
-	preflight: [
-		"composition-preflight",
-		"composition-visibility",
-		"composition-text-scale",
-		"composition-image-scale",
-		"composition-report-provenance",
-	],
-	"bounded-repair": [
-		"composition-repair",
-		"composition-text-scale",
-		"composition-report-provenance",
-	],
-} as const;
-export const outputTestFiles = {
-	personalization: [
-		"production-output-rows",
-		"production-output-batch",
-		"production-output-diagnostics",
-	],
-	"csv-personalization": ["production-output-csv"],
-	exporters: ["production-output-containers"],
-	manifests: ["production-output-containers"],
-	"integration-production": [
-		"production-output-rows",
-		"production-output-csv",
-		"production-output-containers",
-		"production-output-batch",
-		"production-output-diagnostics",
-	],
-} as const;
-export const compositionExpectedTests = {
-	templates: 67,
-	composition: 79,
-	typography: 69,
-	"approved-assets": 77,
-	preflight: 82,
-	"bounded-repair": 55,
-} as const;
-export const outputExpectedTests = {
-	personalization: 35,
-	"csv-personalization": 32,
-	exporters: 32,
-	manifests: 32,
-	"integration-production": 61,
-} as const;
+import {
+	compositionTestFiles,
+	outputTestFiles,
+	compositionExpectedTests,
+	outputExpectedTests,
+	semanticRequirements,
+} from "./private-suite-manifest.js";
+export {
+	compositionExpectedTests,
+	outputExpectedTests,
+} from "./private-suite-manifest.js";
 export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 	const root = join(evidenceDir, suite, "local"),
 		receipt = join(evidenceDir, `${suite}-local.json`);
@@ -148,6 +106,8 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 				"integration/production-output-process.test.js",
 				"integration/production-output-receipt.test.js",
 				"integration/production-output-pdf-mapping.test.js",
+				"integration/production-output-pdf-semantic.test.js",
+				"integration/production-output-pdf-font-adversarial.test.js",
 				"fixtures/production-output/canary.js",
 			];
 			directoryVariable = "PP_OUTPUT_EVIDENCE_DIR";
@@ -178,7 +138,7 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 					path: "pdf-mapping/arabic.json",
 					schema: z.object({
 						mode: z.literal("diagnostic-synthetic-not-production"),
-						productionExactness: z.literal("blocked"),
+						productionExactness: z.literal("verified-private-not-approved"),
 						networkRequests: z.literal(0),
 						fileDigest: z.string().regex(/^[a-f0-9]{64}$/),
 						expected: z.array(z.string()).min(1),
@@ -188,7 +148,7 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 					path: "pdf-mapping/wrap.json",
 					schema: z.object({
 						mode: z.literal("diagnostic-synthetic-not-production"),
-						productionExactness: z.literal("blocked"),
+						productionExactness: z.literal("verified-private-not-approved"),
 						networkRequests: z.literal(0),
 						fileDigest: z.string().regex(/^[a-f0-9]{64}$/),
 						expected: z.array(z.string()).min(1),
@@ -203,6 +163,7 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 					}),
 				},
 			];
+			requiredEvidence.push(...semanticRequirements);
 			expectedTests = outputExpectedTests[key];
 		}
 		const result = await runIndependentTests({
@@ -235,6 +196,9 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 						state: "failed-private-mechanisms",
 						externalState: "external-blocked",
 						code: "RUNTIME_FAILURE",
+						...(error instanceof IndependentTestFailure
+							? { diagnostic: error.diagnostic }
+							: {}),
 					},
 					null,
 					2,

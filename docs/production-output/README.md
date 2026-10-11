@@ -78,14 +78,12 @@ Images use its ICCBased space; DefaultRGB binds vector RGB to the same profile.
 Gray image spaces are permitted. PDF/X, CMYK and arbitrary ICC profiles are
 unsupported; no conversion or certification is asserted.
 
-PDF extraction must contain each original measured line exactly, with no Unicode
-normalization or removal of wrap spaces. The pinned Chromium/PDF.js pipeline
-fails Arabic Unicode and trailing wrap-space cases. The generated Arabic PDF
-already carries correct ActualText spans; the independent pinned extraction
-path ignores them. The wrap PDF contains the trailing space CID and correct
-ToUnicode mapping, but that reader discards the trailing whitespace. Requested
-PDF fails the entire row as
-`OUTPUT_CONTENT / pdf.exactUnicodeOrWrapSpaces`; it is never silently omitted.
+The parent-authorized policy-2 semantic inspector now reconstructs exact strings
+from bounded PDF cluster/CMap bytes and validates the painted licensed glyphs,
+instructions, geometry, colors, spaces, source raster and hash binding. Literal
+strings are unchanged. PDF.js results remain separate known-lossy corroboration.
+The earlier policy-1 Arabic/wrap-space rejections remain in immutable evidence;
+the new private proof requires independent full-candidate review before acceptance.
 An explicitly supplied SVG/PNG-only template can render Arabic. This is a local
 capability fixture, not permission to change a real launch roster. Other Unicode
 cases also fail closed when exact extraction cannot be proved.
@@ -167,5 +165,6 @@ Parent owns manual QA, independent review, push and any merge/closure transition
 [Acceptance matrix](ACCEPTANCE.md) records local proof separately from external
 acceptance. This work does not mark ART-03/04/05 or release complete.
 
-[PDF mapping investigation](PDF-MAPPING.md) records actual CMaps/ActualText,
-reader behavior, feasible approaches and the unchanged exactness rejection.
+[PDF mapping investigation](PDF-MAPPING.md) records the earlier source evidence.
+[PDF semantic inspector](PDF-SEMANTIC.md) records the new policy, parsed evidence,
+bounded mechanisms, rejection corpus and retained reliability limitation.

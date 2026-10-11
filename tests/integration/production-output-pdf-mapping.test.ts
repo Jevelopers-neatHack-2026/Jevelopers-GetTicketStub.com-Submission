@@ -22,10 +22,7 @@ import { assertEnvironment } from "../../src/runtime/environment.js";
 import { openOfflineBrowser } from "../../src/exporters/offline-browser.js";
 import { renderFiles } from "../../src/exporters/private-render.js";
 import { inspectPdf } from "../../src/exporters/private-pdf.js";
-import {
-	OutputError,
-	defaultOutputPolicy,
-} from "../../src/exporters/private-policy.js";
+import { defaultOutputPolicy } from "../../src/exporters/private-policy.js";
 import {
 	recheckPermissions,
 	verifyArtifactIdentity,
@@ -80,12 +77,9 @@ for (const [id, name, rtl] of [
 				),
 				false,
 			);
-			await assert.rejects(
-				inspectPdf(rendered.pdf, f.artifact),
-				(error) =>
-					error instanceof OutputError &&
-					error.path === "pdf.exactUnicodeOrWrapSpaces",
-			);
+			const semantic = await inspectPdf(rendered.pdf, f.artifact);
+			assert.deepEqual(semantic.semantics.lines, expected);
+			assert.equal(semantic.readerCorroboration.exactLinesMatch, false);
 			assert.equal(offline.denied.length, 0);
 			assert.equal(f.state.generationCalls, 0);
 			const pdfPath = join(root, `${id}.pdf`);
@@ -105,7 +99,7 @@ for (const [id, name, rtl] of [
 						...evidence,
 						sourceArtworkHashes: f.artifact.sourceArtworkHashes,
 						networkRequests: offline.denied.length,
-						productionExactness: "blocked",
+						productionExactness: "verified-private-not-approved",
 					},
 					null,
 					2,

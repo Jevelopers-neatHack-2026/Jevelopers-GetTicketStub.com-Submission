@@ -6,10 +6,7 @@ import {
 	fixtureConstraints,
 } from "../fixtures/composition/corpus.js";
 import { exportPrivateFiles } from "../../src/exporters/private-output.js";
-import {
-	defaultOutputPolicy,
-	OutputError,
-} from "../../src/exporters/private-policy.js";
+import { defaultOutputPolicy } from "../../src/exporters/private-policy.js";
 import { composeArtifact } from "../../src/composition/private-model.js";
 const localContext = (f: Awaited<ReturnType<typeof fixtureArtifact>>) => ({
 	artifact: f.artifact,
@@ -39,17 +36,27 @@ for (const [id, name, rtl] of [
 		false,
 	],
 ] as const)
-	test(`blocks requested PDF honestly for unsupported exact ${id}`, {
+	test(`proves exact ${id} PDF from parsed glyph clusters despite lossy reader corroboration`, {
 		timeout: 30000,
 	}, async () => {
 		const f = await fixtureArtifact(name, "Seat 0007", rtl);
-		await assert.rejects(
-			exportPrivateFiles(localContext(f)),
-			(error) =>
-				error instanceof OutputError &&
-				error.code === "OUTPUT_CONTENT" &&
-				error.path === "pdf.exactUnicodeOrWrapSpaces",
+		const exported = await exportPrivateFiles(localContext(f));
+		const pdf = exported.files.find((file) => file.name === "output.pdf");
+		assert.ok(pdf);
+		const inspected = await (
+			await import("../../src/exporters/private-pdf.js")
+		).inspectPdf(pdf.bytes, f.artifact);
+		assert.deepEqual(
+			inspected.semantics.lines,
+			f.artifact.texts.flatMap((t) =>
+				t.state === "measured"
+					? t.lines.filter((l) => l.value.length > 0).map((l) => l.value)
+					: [],
+			),
 		);
+		assert.equal(inspected.readerCorroboration.exactLinesMatch, false);
+		assert.equal(exported.report.draftReady, true);
+		assert.equal(exported.handoffEligible, false);
 	});
 test("renders Arabic and wrap spaces exactly when the explicit template requests supported SVG and PNG", {
 	timeout: 30000,

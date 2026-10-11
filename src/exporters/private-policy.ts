@@ -2,6 +2,7 @@ import { z } from "zod";
 import { digestSchema, parse } from "../composition/primitives.js";
 import { hash } from "../internal/durability.js";
 import type { OutputFile } from "../storage/local-store.js";
+import { pdfSemanticRevision } from "./private-pdf-semantic-identity.js";
 
 export const outputCodes = [
 	"OUTPUT_LIMIT",
@@ -35,7 +36,8 @@ export function requireOutput(
 }
 export const outputPolicySchema = z
 	.object({
-		revision: z.literal("private-output-1"),
+		revision: z.literal("private-output-2"),
+		pdfSemanticInspector: z.literal(pdfSemanticRevision),
 		dpi: z.number().int().min(72).max(1200),
 		maxPixels: z.number().int().positive().max(40000000),
 		maxBytes: z.number().int().positive().max(64000000),
@@ -48,7 +50,8 @@ export const outputPolicySchema = z
 	.readonly();
 export type OutputPolicy = z.infer<typeof outputPolicySchema>;
 export const defaultOutputPolicy: OutputPolicy = outputPolicySchema.parse({
-	revision: "private-output-1",
+	revision: "private-output-2",
+	pdfSemanticInspector: pdfSemanticRevision,
 	dpi: 300,
 	maxPixels: 16000000,
 	maxBytes: 16000000,

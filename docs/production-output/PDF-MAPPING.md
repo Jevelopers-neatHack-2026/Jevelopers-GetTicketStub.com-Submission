@@ -1,5 +1,9 @@
 # Exact PDF mapping investigation
 
+Historical policy-1 investigation. The later parent-authorized implementation
+and its still-pending acceptance are described in [PDF-SEMANTIC.md](PDF-SEMANTIC.md).
+This history is retained; it is not a description of the policy-2 exactness oracle.
+
 The frozen integration keeps requested Arabic and trailing-wrap-space PDF output
 blocked as `OUTPUT_CONTENT / pdf.exactUnicodeOrWrapSpaces`. No production exporter
 or exactness check is relaxed. The safe result of this investigation is a
