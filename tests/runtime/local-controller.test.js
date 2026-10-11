@@ -1200,23 +1200,23 @@ test('completion recovery eligibility requires an unconsumed raw primary SQLite 
   }
 
   const nonEligible = [
-    syntheticSqliteBusy({ code: 'BUSY', errcode: undefined }),
-    syntheticSqliteBusy({ code: 'LOCKED', errcode: undefined }),
-    syntheticSqliteBusy({ code: 'SQLITE_BUSY', errcode: 5 }),
-    syntheticSqliteBusy({ code: 'SQLITE_LOCKED', errcode: undefined }),
-    syntheticSqliteBusy({ code: 'ERR_SQLITE_ERROR', errcode: 6 }),
-    syntheticSqliteBusy({ code: 'ERR_SQLITE_ERROR', errcode: undefined }),
-    localCompletionBusy()
+    { error: syntheticSqliteBusy({ code: 'BUSY', errcode: undefined }), mappedCode: 'STORE_BUSY' },
+    { error: syntheticSqliteBusy({ code: 'LOCKED', errcode: undefined }), mappedCode: 'STORE_BUSY' },
+    { error: syntheticSqliteBusy({ code: 'SQLITE_BUSY', errcode: 5 }), mappedCode: 'STORE_BUSY' },
+    { error: syntheticSqliteBusy({ code: 'SQLITE_LOCKED', errcode: undefined }), mappedCode: 'STORE_BUSY' },
+    { error: syntheticSqliteBusy({ code: 'ERR_SQLITE_ERROR', errcode: 6 }), mappedCode: 'STORE_BUSY' },
+    { error: syntheticSqliteBusy({ code: 'ERR_SQLITE_ERROR', errcode: undefined }), mappedCode: 'STORE_WRITE_FAILED' },
+    { error: localCompletionBusy(), mappedCode: 'STORE_BUSY' }
   ];
-  for (const primary of nonEligible) {
+  for (const control of nonEligible) {
     let caught;
     try {
-      inLocalCompletionTransaction(makeDriver(), '_localControllerComplete', () => { throw primary; });
+      inLocalCompletionTransaction(makeDriver(), '_localControllerComplete', () => { throw control.error; });
     } catch (error) {
       caught = error;
     }
     assert.ok(caught instanceof RuntimeError);
-    assert.equal(caught.code, 'STORE_BUSY');
+    assert.equal(caught.code, control.mappedCode);
     assert.equal(consumeLocalCompletionBusyAfterConfirmedInactive(caught), false);
   }
 });
@@ -1448,9 +1448,16 @@ test('an unresolved external attempt before pending-outcome observation stays un
 
 test('pending completion rechecks cancellation, lease fence, and external custody before its next write', async t => {
   const controls = [
-    { name: 'cancel', expectedReason: 'WORKFLOW_TERMINAL' },
-    { name: 'fence', expectedReason: 'WORKFLOW_SNAPSHOT_CHANGED' },
-    { name: 'external', expectedReason: 'EXTERNAL_OUTCOME_UNRESOLVED' }
+    {
+      name: 'cancel', expectedStatus: 'stopped', expectedReason: 'WORKFLOW_TERMINAL'
+    },
+    {
+      name: 'fence', expectedStatus: 'stopped', expectedReason: 'WORKFLOW_SNAPSHOT_CHANGED'
+    },
+    {
+      name: 'external', expectedStatus: 'external-reconciliation-required',
+      expectedReason: 'EXTERNAL_OUTCOME_UNRESOLVED'
+    }
   ];
   for (const control of controls) {
     await t.test(`post-pending ${control.name} blocks the next local write`, async () => {
@@ -1459,6 +1466,8 @@ test('pending completion rechecks cancellation, lease fence, and external custod
       const workflowId = 'completion-after-pending-' + control.name;
       const lease = createRunningWorkflow(store, workflowId);
       makeAdmission(store, lease, SINGLE_PLAN, '{}', workflowId + ':admit');
+      const checkpointBeforeRun = store.getCheckpoint(workflowId).data;
+      const eventsBeforeRun = store.listEvents({ workflowId });
       const blockers = [];
       try {
         const originalComplete = store._localControllerComplete.bind(store);
@@ -1519,16 +1528,21 @@ test('pending completion rechecks cancellation, lease fence, and external custod
           ...localCompletionRetryBudget()
         });
         assert.equal(changedAfterPending, true, control.name);
-        assert.equal(result.status, 'stopped', control.name);
+        assert.equal(result.status, control.expectedStatus, control.name);
         assert.equal(result.reason, control.expectedReason, control.name);
         assert.equal(completeCalls, 1, control.name);
         assert.equal(resolverCalls, 1, control.name);
         const checkpoint = store.getCheckpoint(workflowId).data;
         assert.equal(checkpoint.pendingStepId, 'only', control.name);
-        assert.equal(checkpoint.budget.stepsAdmitted, 1, control.name);
-        assert.equal(checkpoint.budget.stepAttempts, 1, control.name);
+        assert.equal(checkpoint.budget.stepsAdmitted, checkpointBeforeRun.budget.stepsAdmitted, control.name);
+        assert.equal(checkpoint.budget.stepAttempts, checkpointBeforeRun.budget.stepAttempts + 1, control.name);
+        assert.equal(checkpoint.budget.localRetries, checkpointBeforeRun.budget.localRetries + 1, control.name);
+        assert.equal(checkpoint.budget.iterations, checkpointBeforeRun.budget.iterations + 1, control.name);
         assert.equal(store.listEvents({ workflowId }).filter(event =>
-          event.type === 'private_local_step_admitted').length, 1, control.name);
+          event.type === 'private_local_step_replayed').length, 1, control.name);
+        assert.equal(store.listEvents({ workflowId }).filter(event =>
+          event.type === 'private_local_step_admitted').length,
+        eventsBeforeRun.filter(event => event.type === 'private_local_step_admitted').length, control.name);
         assert.equal(store.listEvents({ workflowId }).some(event =>
           event.type === 'private_local_step_completed'), false, control.name);
         if (control.name === 'cancel') {
