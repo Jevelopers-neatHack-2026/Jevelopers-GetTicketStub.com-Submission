@@ -23,11 +23,12 @@ import {
   type FinishValue,
 } from "@/customer/desk/Desk";
 import { AskIcon, FlipIcon, FriendsIcon, RemixIcon } from "@/customer/desk/icons";
-import { play, stopPrint, type Cue, type Emphasis } from "@/customer/studio/feedback";
+import { getPrintVoice, play, setPrintVoice, stopPrint, type Cue, type Emphasis, type PrintBurst, type PrintVoice } from "@/customer/studio/feedback";
 import { PALE_HOURS, newStub } from "@/customer/studio/fixtures";
 import { MaterialFrame } from "@/customer/studio/editor/MaterialFrame";
 import { StubView } from "@/customer/studio/stub/StubView";
 import type { Edition, Finish, Material, Stub } from "@/customer/studio/types";
+import { useMounted } from "@/customer/pages/useMounted";
 import s from "./parts.module.css";
 
 const MATERIALS: { value: Material; label: string; sub: string }[] = [
@@ -158,7 +159,17 @@ const CUES: { cue: Cue; job: string }[] = [
   { cue: "flip", job: "Stub turns over" },
   { cue: "tear", job: "Stub tears off" },
   { cue: "pin", job: "Pinned to the wall" },
-  { cue: "print", job: "Printer runs (2 s)" },
+  { cue: "remix", job: "Shuffle for new art" },
+  { cue: "print", job: "Printer feeds a stub" },
+];
+
+/** The same shape of feed the printing stage uses: six short runs with rests between. */
+const DEMO_FEED: PrintBurst[] = [0.18, 0.62, 1.04, 1.5, 1.92, 2.36].map((at, i) => ({ at, dur: [0.3, 0.26, 0.34, 0.24, 0.32, 0.28][i] }));
+
+const VOICE_OPTIONS: { value: PrintVoice; label: string; sub: string }[] = [
+  { value: "chatter", label: "Chatter", sub: "receipt printer" },
+  { value: "ticks", label: "Ticks", sub: "quiet head" },
+  { value: "roller", label: "Roller", sub: "softest" },
 ];
 
 function specimenStub(id: string, edition: Edition, finish: Finish): Stub {
@@ -202,6 +213,15 @@ function StubDesk() {
 
 function SoundBoard() {
   const [emphasis, setEmphasis] = useState<Emphasis>("normal");
+  // the device's choice, read after mount so the server render and the first client render agree
+  const mounted = useMounted();
+  const [picked, setVoice] = useState<PrintVoice | null>(null);
+  const voice: PrintVoice = picked ?? (mounted ? getPrintVoice() : "chatter");
+  const printDemo = (v: PrintVoice) => {
+    stopPrint();
+    play("print", { emphasis, schedule: DEMO_FEED, voice: v });
+    setTimeout(stopPrint, 3000);
+  };
   return (
     <section className={s.sheets}>
       <p className="desk-label">Sounds</p>
@@ -223,8 +243,8 @@ function SoundBoard() {
             type="button"
             className={s.cue}
             onClick={() => {
-              play(cue, { emphasis });
-              if (cue === "print") setTimeout(stopPrint, 2000);
+              if (cue === "print") printDemo(voice);
+              else play(cue, { emphasis });
             }}
           >
             <span className={s.cueName}>{cue}</span>
@@ -232,6 +252,18 @@ function SoundBoard() {
           </button>
         ))}
       </div>
+      <p className="desk-label">Printer voice</p>
+      <p className={s.body}>Pick the printer you like best. It plays with the stub feeding out, and the app uses your choice on this device.</p>
+      <PunchTabs
+        label="Printer voice"
+        value={voice}
+        onChange={(v: PrintVoice) => {
+          setVoice(v);
+          setPrintVoice(v);
+          printDemo(v);
+        }}
+        options={VOICE_OPTIONS}
+      />
     </section>
   );
 }

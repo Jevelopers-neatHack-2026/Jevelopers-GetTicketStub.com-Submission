@@ -50,7 +50,7 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
   const run = async () => {
     setBusy(true);
     setError(null);
-    play("print");
+    play("remix");
     try {
       const { art, limitNote } = await remixArtNoted(stub, vibe ?? undefined);
       if (limitNote) {

@@ -84,7 +84,7 @@ export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant, folded 
   const remix = async () => {
     if (busy) return;
     setBusy("art");
-    play("print");
+    play("remix");
     try {
       const art = await remixArt(stub, "moodier");
       onChange(addArtVersion(stub, art));
