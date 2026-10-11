@@ -1518,9 +1518,51 @@ threeP.then(start => {
   } else useStatic();
 });
 
+// sizes and positions a scene's performer (or photo panel); returns the hand point [x, y] the stub leaves from
+function placeFigure(sceneEl, i, left, W, H, phone){
+  const s = SCENES[i]; const stage = sceneEl.querySelector('.stage');
+  let hx, hy;
+  if (s.panel){
+    const fig = stage.querySelector('.panel'); const img = fig.querySelector('img');
+    const ar = (img.naturalWidth / img.naturalHeight) || .667;
+    const pw = Math.min(W * (phone ? .9 : .5), H * ar * 1.05), ph = H;
+    const lx = left ? 0 : W - pw;
+    Object.assign(fig.style, { width: pw + 'px', left: lx + 'px' });
+    const sc = Math.max(pw / img.naturalWidth, ph / img.naturalHeight);
+    const dx = (pw - img.naturalWidth * sc) / 2, dy = (ph - img.naturalHeight * sc) / 2;
+    hx = lx + dx + s.anchor[0] * img.naturalWidth * sc; hy = dy + s.anchor[1] * img.naturalHeight * sc;
+  } else {
+    const img = stage.querySelector('.athlete'); const [u, v] = s.anchor;
+    const ar = (img.naturalWidth / img.naturalHeight) || .8;
+    const big = s.key === 'hockey' ? .9 : s.key === 'festival' ? .66 : s.key === 'theater' ? .78 : s.key === 'soccer' ? .9 : .95;
+    let h = H * (phone ? big * .5 : big);
+    let w = h * ar; const maxW = W * (phone ? .92 : .56); if (w > maxW){ w = maxW; h = w / ar; }
+    let top = phone ? H * .24 : H - h * .97;
+    if (s.key === 'hockey') top = H - h - H * (phone ? .3 : .08);
+    if (s.key === 'festival') top = H - h - H * (phone ? .3 : .02);
+    if (s.key === 'basketball' && !phone) top = H * .12;
+    if (s.key === 'theater') top = phone ? H * .26 : H * .14;
+    if (s.key === 'soccer') top = phone ? H * .22 : H * .05;
+    hx = left ? W * (phone ? .8 : .42) : W * (phone ? .2 : .58);
+    if (s.key === 'hockey') hx = W * (phone ? .16 : .4);   // the stick blade: the player follows through to the right of it
+    if (s.key === 'festival') hx = W * (phone ? .12 : .5);
+    if (s.key === 'theater') hx = W * (phone ? .5 : .3);
+    if (s.key === 'soccer') hx = W * (phone ? .5 : .27);
+    hy = top + v * h;
+    Object.assign(img.style, { width: w + 'px', height: h + 'px', left: (hx - u * w) + 'px', top: top + 'px' });
+    img.style.setProperty('--ox', (u*100) + '%'); img.style.setProperty('--oy', (v*100) + '%');
+  }
+  stage.style.setProperty('--hx', hx + 'px'); stage.style.setProperty('--hy', hy + 'px');
+  return [hx, hy];
+}
+
 function startStaticLoop(){
   const nav = document.getElementById('nav'); let lastY = scrollY, live = true;
-  const scenes = [...document.querySelectorAll('.scene')].map(el => ({ el, st: el.querySelector('.stage') }));
+  const scenes = [...document.querySelectorAll('.scene')].map(el => ({ el, st: el.querySelector('.stage'), hand: [0, 0] }));
+  // without the 3D layout the performers still need placing (even scenes = performer on the left)
+  const place = () => { const W = innerWidth, H = innerHeight; scenes.forEach(s => { const i = +s.el.dataset.i; s.hand = placeFigure(s.el, i, i % 2 === 0, W, H, W < 760); }); };
+  place(); addEventListener('resize', place);
+  scenes.forEach(s => s.el.querySelectorAll('.athlete,.panel img').forEach(im => { if (!im.complete) im.addEventListener('load', place, { once: true }); }));
   const tick = () => {
     if (!live) return;
     const sy = scrollY, Hh = innerHeight, Ww = innerWidth;
@@ -1529,15 +1571,15 @@ function startStaticLoop(){
     // writes
     paintNav(nav, col); const onWall = b.top < Hh * .9 && b.bottom > Hh;
     if ((sy > lastY + 2 && sy > 400) || onWall) nav.classList.add('hide'); else if (sy < lastY - 2) nav.classList.remove('hide'); lastY = sy;
-    scenes.forEach(({ st }, i) => { const r = rs[i]; if (r.top > Hh || r.bottom < 0) return;
+    scenes.forEach(({ st, hand }, i) => { const r = rs[i]; if (r.top > Hh || r.bottom < 0) return;
       const p = Math.max(0, Math.min(1, -r.top / (r.height - Hh))); const t = Math.max(0, Math.min(1, (p - .1) / .8)); const dir = i % 2 ? -1 : 1;
-      st.style.setProperty('--hx', (i % 2 ? Ww * .62 : Ww * .38) + 'px'); st.style.setProperty('--hy', Hh * .3 + 'px');
+      st.style.setProperty('--hx', hand[0] + 'px'); st.style.setProperty('--hy', hand[1] + 'px');
       st.style.setProperty('--tx', (dir * t * Ww * .8) + 'px'); st.style.setProperty('--ty', (Math.sin(t * Math.PI) * -80 + t * 120) + 'px'); st.style.setProperty('--tr', (dir * t * 220) + 'deg'); });
     if (!fallbackBuilt && b.top < Hh * 3) buildFallbackWall();
     boardState(b, Hh);
     requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
-  return { stop(){ live = false; } };
+  return { stop(){ live = false; removeEventListener('resize', place); } };
 }
 
 async function build3D(){
@@ -1744,39 +1786,7 @@ async function build3D(){
     throwGroup.scale.setScalar(stageScale); throwGroup.updateMatrixWorld(true);
     META.throws.forEach((t, i) => {
       const sceneEl = document.querySelector(`.scene[data-i="${i}"]`); if (!sceneEl) return;
-      const s = SCENES[i]; const stage = sceneEl.querySelector('.stage'); const left = t.side < 0;
-      let hx, hy;
-      if (s.panel){
-        const fig = stage.querySelector('.panel'); const img = fig.querySelector('img');
-        const ar = (img.naturalWidth / img.naturalHeight) || .667;
-        const pw = Math.min(W * (phone ? .9 : .5), H * ar * 1.05), ph = H;
-        const lx = left ? 0 : W - pw;
-        Object.assign(fig.style, { width: pw + 'px', left: lx + 'px' });
-        const sc = Math.max(pw / img.naturalWidth, ph / img.naturalHeight);
-        const dx = (pw - img.naturalWidth * sc) / 2, dy = (ph - img.naturalHeight * sc) / 2;
-        hx = lx + dx + s.anchor[0] * img.naturalWidth * sc; hy = dy + s.anchor[1] * img.naturalHeight * sc;
-      } else {
-        const img = stage.querySelector('.athlete'); const [u, v] = s.anchor;
-        const ar = (img.naturalWidth / img.naturalHeight) || .8;
-        const big = s.key === 'hockey' ? .9 : s.key === 'festival' ? .66 : s.key === 'theater' ? .78 : s.key === 'soccer' ? .9 : .95;
-        let h = H * (phone ? big * .5 : big);
-        let w = h * ar; const maxW = W * (phone ? .92 : .56); if (w > maxW){ w = maxW; h = w / ar; }
-        let top = phone ? H * .24 : H - h * .97;
-        if (s.key === 'hockey') top = H - h - H * (phone ? .3 : .08);
-        if (s.key === 'festival') top = H - h - H * (phone ? .3 : .02);
-        if (s.key === 'basketball' && !phone) top = H * .12;
-        if (s.key === 'theater') top = phone ? H * .26 : H * .14;
-        if (s.key === 'soccer') top = phone ? H * .22 : H * .05;
-        hx = left ? W * (phone ? .8 : .42) : W * (phone ? .2 : .58);
-        if (s.key === 'hockey') hx = W * (phone ? .16 : .4);   // the stick blade: the player follows through to the right of it
-        if (s.key === 'festival') hx = W * (phone ? .12 : .5);
-        if (s.key === 'theater') hx = W * (phone ? .5 : .3);
-        if (s.key === 'soccer') hx = W * (phone ? .5 : .27);
-        hy = top + v * h;
-        Object.assign(img.style, { width: w + 'px', height: h + 'px', left: (hx - u * w) + 'px', top: top + 'px' });
-        img.style.setProperty('--ox', (u*100) + '%'); img.style.setProperty('--oy', (v*100) + '%');
-      }
-      stage.style.setProperty('--hx', hx + 'px'); stage.style.setProperty('--hy', hy + 'px');
+      const [hx, hy] = placeFigure(sceneEl, i, t.side < 0, W, H, phone);
       const startW = new THREE.Vector3(...t.start).multiplyScalar(stageScale);
       throwOffsets[i] = screenToWorld(hx, hy, startW.z).sub(startW).divideScalar(stageScale);
     });
