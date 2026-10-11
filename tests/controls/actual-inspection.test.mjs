@@ -159,4 +159,19 @@ test('cumulative simulated units are enforced independently from repair count',a
 
 test('concurrent identical explicit repairs share exact saved result and one root claim',async t=>{const {host}=await setup(t),apply=await saved(host);host.policy.recommend_repair=true;const view=await begin(host,apply);const input={inspection_action_id:view.references.inspection_action_id,repair_action:'image.edit',repair_action_id:'concurrent-repair'};const [a,b]=await Promise.all([host.inspection.repair(principal,input),host.inspection.repair(principal,input)]);assert.equal(a.ok,true,JSON.stringify(a));assert.deepEqual(a,b);assert.equal(host.counts().image_calls,2);assert.equal(host.counts().reservations,5);const session=await host.ports.storage.getInspectionSession({scope:host.scope,action_id:view.references.inspection_action_id});const state=host.ports.storage.inspectionRepair.getState({scope:{...host.scope,design_version_id:session.root_design_version_id},inspection_id:session.result.inspection_id});assert.equal(state.repairs_used,1);assert.equal(state.simulated_units_used,1);});
 
+test('concurrent repairs cannot bind one action to two distinct inspections',async t=>{
+ const {host}=await setup(t),apply=await saved(host);host.policy.recommend_repair=true;
+ const ids=['repair-binding-first-inspection','repair-binding-second-inspection'];
+ for(const id of ids)assert.equal((await begin(host,apply,id)).repair_available,true);
+ const lookup=host.inspection.lookup.bind(host.inspection);let arrivals=0,release;
+ const barrier=new Promise(resolve=>{release=resolve;});
+ host.inspection.lookup=async(...args)=>{const result=await lookup(...args);if(++arrivals===2)release();await barrier;return result;};
+ const results=await Promise.all(ids.map(inspection_action_id=>host.inspection.repair(principal,{inspection_action_id,repair_action:'image.edit',repair_action_id:'conflicting-concurrent-repair'})));
+ assert.equal(results.filter(result=>result.ok).length,1);assert.equal(results.filter(result=>result.code==='conflict').length,1);
+ const winner=results.findIndex(result=>result.ok),row=host.inspection.row(principal,'conflicting-concurrent-repair');
+ assert.equal(JSON.parse(row.binding_json).inspection_action_id,ids[winner]);assert.equal(host.counts().image_calls,2);assert.equal(host.counts().reservations,8);
+ const counts=host.counts();assert.equal((await host.inspection.repair(principal,{inspection_action_id:ids[1-winner],repair_action:'image.edit',repair_action_id:'conflicting-concurrent-repair'})).code,'conflict');assert.deepEqual(host.counts(),counts);
+ const claims=host.store.db.prepare("SELECT action_id FROM creative_inspection_action_v2 WHERE action_id='conflicting-concurrent-repair'").all();assert.equal(claims.length,1);
+});
+
 test('corrupt bytes for an exact saved artifact fail inspection before observer or JEV without erasing edit',async t=>{const {host}=await setup(t),apply=await saved(host),selection=host.selection();const read=host.ports.storage.getArtifactBytes;host.ports.storage.getArtifactBytes=async input=>{const bytes=Buffer.from(await read(input));bytes[bytes.length-1]^=1;return bytes;};const view=await begin(host,apply);assert.equal(view.status,'completed',JSON.stringify(view));assert.equal(view.outcome,'failure');assert.equal(view.repair_available,false);assert.deepEqual([host.counts().observer_calls,host.counts().jev_calls,host.counts().image_calls],[0,0,1]);assert.deepEqual(host.selection(),selection);});

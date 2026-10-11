@@ -219,6 +219,9 @@ export class InspectionControlsAdapter {
       request.payload.inspection_repair = { contract: 'CreativeInspectionRepairRequest', schema_version: '1.0',
         inspection_action_id: input.inspection_action_id, report_hash: view.report_hash, repair_action: 'image.edit' };
       row = this.persist(principal, source.source_operation_id, 'repair', request, design);
+      // Another caller may have bound this action while lookup/saved awaited.
+      // Recheck the durable winner before joining or executing its work.
+      if (row.kind !== 'repair' || JSON.parse(row.binding_json).inspection_action_id !== input.inspection_action_id) return rejected('conflict');
       return await this.execute(principal, row);
     } catch { return rejected('unavailable'); }
   }
