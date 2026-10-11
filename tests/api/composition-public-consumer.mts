@@ -155,6 +155,22 @@ const asynchronousFence: CreativeCompositionStoragePort["assertCurrentCompositio
 const commitInput: CreativeCompositionCommitInput = { scope, actor_id: "actor:consumer", action_id: "action:commit",
   job_id: "job:commit", request_hash: "sha256:request", revision_sha256: "sha256:revision" };
 const transaction: CreativePublicationTransaction = { job_id: "job:commit", lease_token: "lease:commit" };
+const synchronousPortCommit: CreativeCompositionStoragePort["commitCompositionRevision"] =
+  (input, publication) => store.commitCompositionRevision(input, publication);
+const synchronousStoreCommit: CreativeVersionStore["commitCompositionRevision"] =
+  (input, publication) => store.commitCompositionRevision(input, publication);
+const asyncPortCommitCandidate = async (
+  input: Parameters<CreativeCompositionStoragePort["commitCompositionRevision"]>[0],
+  publication: Parameters<CreativeCompositionStoragePort["commitCompositionRevision"]>[1],
+) => storagePort.commitCompositionRevision(input, publication);
+// @ts-expect-error Publication storage commit must return inside the synchronous transaction callback.
+const asynchronousPortCommit: CreativeCompositionStoragePort["commitCompositionRevision"] = asyncPortCommitCandidate;
+const asyncStoreCommitCandidate = async (
+  input: Parameters<CreativeVersionStore["commitCompositionRevision"]>[0],
+  publication: Parameters<CreativeVersionStore["commitCompositionRevision"]>[1],
+) => store.commitCompositionRevision(input, publication);
+// @ts-expect-error The inherited store commit method shares the synchronous publication contract.
+const asynchronousStoreCommit: CreativeVersionStore["commitCompositionRevision"] = asyncStoreCommitCandidate;
 const committed: ReturnType<CreativeVersionStore["commitCompositionRevision"]> =
   store.commitCompositionRevision(commitInput, transaction);
 
@@ -172,5 +188,6 @@ void [compositionRequests, compositionV13Requests, historyRequest, revalidateReq
   stillValidApi12StorageProducer, stillValidApi12AuthorityProducer, plan, oldEmptyPlan, emptyPlanUpdate,
   malformedOperation, malformedCreate, malformedGet,
   unsupportedCompositionOperation, preservedLegacyRequest, unsupportedLegacyComposition, currentStoreValue,
-  historyStoreValue, currentPortValue, currentFenceStatus, asynchronousFence, committed, validBeforeCommit,
+  historyStoreValue, currentPortValue, currentFenceStatus, asynchronousFence, synchronousPortCommit,
+  synchronousStoreCommit, asynchronousPortCommit, asynchronousStoreCommit, committed, validBeforeCommit,
   asynchronousBeforeCommit, publicVersions, publicOperations, actor];

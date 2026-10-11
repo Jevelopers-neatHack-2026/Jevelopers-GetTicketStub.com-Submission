@@ -21,6 +21,9 @@ build:
 	node --check src/controls/inspection-integration.mjs
 	node --check src/controls/inspection-result.mjs
 	node --check src/controls/inspection-view.mjs
+	node --check src/controls/composition-projection.mjs
+	node --check src/controls/composition-integration.mjs
+	node --check src/controls/composition-view.mjs
 	node --check src/controls/index.mjs
 	node --check src/runtime/creative-runtime.mjs
 	node --check src/api/v1.mjs
@@ -48,6 +51,7 @@ controls-runtime-prerequisite:
 controls-package-check:
 	node scripts/controls-package-check.mjs --evidence-dir $(CONTROLS_PACKAGE_EVIDENCE)
 	node fixtures/controls/installed-inspection-check.mjs --evidence-dir $(CONTROLS_PACKAGE_EVIDENCE)/actual-inspection
+	node fixtures/controls/installed-composition-check.mjs --evidence-dir $(CONTROLS_PACKAGE_EVIDENCE)/actual-composition
 
 typecheck-contracts:
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc -p tests/contracts/types/tsconfig.json
@@ -108,7 +112,7 @@ check:
 		metering-contract:mock) npm run check:metering-contract && $(MAKE) typecheck-boundary-contracts ;; \
 		handoff-contract:mock) npm run check:handoff-contract && $(MAKE) typecheck-boundary-contracts ;; \
 		api:mock) npm run check:api && $(MAKE) typecheck-api ;; \
-		controls:mock) node fixtures/controls/check.mjs && $(MAKE) controls-runtime-prerequisite && $(MAKE) typecheck-controls && $(MAKE) controls-package-check ;; \
+		controls:mock) npm run check:controls && $(MAKE) controls-runtime-prerequisite && $(MAKE) typecheck-controls && $(MAKE) controls-package-check ;; \
 		all:mock) npm test && npm run check:eval-policy && npm run check:metering-contract && npm run check:handoff-contract && npm run check:access-preflight && node scripts/access-preflight-check.mjs --mode mock --out build/access-preflight-evidence.json && npm run check:models && node scripts/image-adapter-check.mjs --mode mock --out build/image-adapter-evidence.json && node scripts/openrouter-image-adapter-check.mjs --mode mock --out build/openrouter-image-adapter-evidence.json && npm run check:brief && npm run check:versions && $(MAKE) check TARGET=composition MODE=mock && npm run check:creative-metering && npm run check:inspection && $(MAKE) typecheck-contracts && $(MAKE) typecheck-api && $(MAKE) typecheck-preflight && $(MAKE) typecheck-brief && $(MAKE) typecheck-telemetry && $(MAKE) typecheck-models && $(MAKE) typecheck-inspection && $(MAKE) check TARGET=controls MODE=mock ;; \
 		*) echo "Unsupported TARGET=$(TARGET) MODE=$(MODE): only offline mock checks are implemented and no live provider dispatch exists; access-preflight, image-adapter, openrouter-image-adapter, composition, and inspection live gates are fail-closed." >&2; exit 2 ;; \
 	esac
