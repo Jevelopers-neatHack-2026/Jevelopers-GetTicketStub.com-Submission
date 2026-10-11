@@ -11,6 +11,11 @@ const STATE_DIRECTORY = ".attempt-store-v1";
 const COMMIT_MARKER = ".attempt-store-committed.json";
 const MAX_ID_LENGTH = 1024;
 const MAX_HISTORY_LENGTH = 1_000_000;
+const TEST_HISTORY_LIMIT = Symbol("attempt-store-history-limit-for-tests");
+
+type InternalAttemptStoreOptions = LocalAttemptPersistenceOptions & {
+  readonly [TEST_HISTORY_LIMIT]?: number;
+};
 
 type StoreErrorCode =
   | "invalid_path"
@@ -473,10 +478,10 @@ function parseHistoryRow(value: unknown): AttemptHistoryRow {
   return row;
 }
 
-function parseStoredAttempt(value: unknown): StoredAttempt {
+function parseStoredAttempt(value: unknown, historyLimit: number): StoredAttempt {
   if (!isPlainRecord(value) || !hasOnlyDataProperties(value, ["immutableDigest", "record", "revision", "history"]) ||
     !validText(value.immutableDigest, 128) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0 ||
-    !Array.isArray(value.history) || value.history.length === 0 || value.history.length > MAX_HISTORY_LENGTH) {
+    !Array.isArray(value.history) || value.history.length === 0 || value.history.length > historyLimit) {
     throw new AttemptStoreError("corrupt_state");
   }
   let record: SubmitAttemptRecord;
@@ -524,7 +529,7 @@ function parseStoredAttempt(value: unknown): StoredAttempt {
   };
 }
 
-function parseState(value: unknown, expected: StoreBinding): AttemptStoreState {
+function parseState(value: unknown, expected: StoreBinding, historyLimit: number): AttemptStoreState {
   if (!isPlainRecord(value)) throw new AttemptStoreError("corrupt_state");
   if (typeof value.format === "string" && value.format.startsWith("fc-attempt-store/") && value.format !== STORE_FORMAT) {
     throw new AttemptStoreError("unsupported_version");
@@ -539,7 +544,7 @@ function parseState(value: unknown, expected: StoreBinding): AttemptStoreState {
   }
   if (value.binding.providerId !== expected.providerId || value.binding.mode !== expected.mode ||
     value.binding.ownerUid !== expected.ownerUid) throw new AttemptStoreError("binding_mismatch");
-  const entries = value.entries.map(parseStoredAttempt);
+  const entries = value.entries.map((entry) => parseStoredAttempt(entry, historyLimit));
   const keys = new Set<string>();
   const actions = new Set<string>();
   const authorizations = new Set<string>();
@@ -578,8 +583,15 @@ export class LocalAttemptPersistence implements AttemptPersistence {
   private readonly writerLockPath: string;
   private readonly recoveryLockPath: string;
   private readonly store: DurableJsonStore;
+  private readonly historyLimit: number;
 
-  private constructor(directory: string, stateDirectory: string, binding: StoreBinding, store: DurableJsonStore) {
+  private constructor(
+    directory: string,
+    stateDirectory: string,
+    binding: StoreBinding,
+    store: DurableJsonStore,
+    historyLimit: number
+  ) {
     this.directory = directory;
     this.stateDirectory = stateDirectory;
     this.statePath = join(stateDirectory, "metering-state.json");
@@ -590,11 +602,17 @@ export class LocalAttemptPersistence implements AttemptPersistence {
     this.providerId = binding.providerId;
     this.mode = binding.mode;
     this.store = store;
+    this.historyLimit = historyLimit;
   }
 
   static async open(options: LocalAttemptPersistenceOptions): Promise<LocalAttemptPersistence> {
     if (options === null || typeof options !== "object" || !isAbsolute(options.directory) ||
       !validText(options.providerId) || (options.mode !== "simulated" && options.mode !== "sandbox")) {
+      throw new AttemptStoreError("invalid_path");
+    }
+    const internalOptions = options as InternalAttemptStoreOptions;
+    const historyLimit = internalOptions[TEST_HISTORY_LIMIT] ?? MAX_HISTORY_LENGTH;
+    if (!Number.isSafeInteger(historyLimit) || historyLimit < 1 || historyLimit > MAX_HISTORY_LENGTH) {
       throw new AttemptStoreError("invalid_path");
     }
     const uid = ownerUid();
@@ -618,7 +636,7 @@ export class LocalAttemptPersistence implements AttemptPersistence {
     } catch (error) {
       throw mapStorageError(error);
     }
-    const persistence = new LocalAttemptPersistence(directory, stateDirectory, binding, store);
+    const persistence = new LocalAttemptPersistence(directory, stateDirectory, binding, store, historyLimit);
     await persistence.assertManagedPathsSafe();
     await persistence.readState();
     return persistence;
@@ -684,8 +702,9 @@ export class LocalAttemptPersistence implements AttemptPersistence {
       if (existing.immutableDigest !== immutableDigest(record)) throw new AttemptStoreError("immutable_binding");
       this.assertForwardUpdate(existing.record, record);
       if (JSON.stringify(existing.record) === JSON.stringify(record)) return { state, result: undefined };
+      if (existing.history.length >= this.historyLimit) throw new AttemptStoreError("storage_unavailable");
       const revision = existing.revision + 1;
-      if (!Number.isSafeInteger(revision) || revision > MAX_HISTORY_LENGTH) throw new AttemptStoreError("storage_unavailable");
+      if (!Number.isSafeInteger(revision) || revision >= this.historyLimit) throw new AttemptStoreError("storage_unavailable");
       const nextEntry: StoredAttempt = {
         immutableDigest: existing.immutableDigest,
         record,
@@ -753,7 +772,7 @@ export class LocalAttemptPersistence implements AttemptPersistence {
     try {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await this.assertManagedPathsSafe();
-        const state = parseState(await this.store.read(), this.binding);
+        const state = parseState(await this.store.read(), this.binding, this.historyLimit);
         const statePathExists = await pathExists(this.statePath);
         const markerPresent = await hasCommitMarker(this.commitMarkerPath, this.binding);
         if ((!statePathExists && state.entries.length > 0) ||
@@ -780,7 +799,7 @@ export class LocalAttemptPersistence implements AttemptPersistence {
       try {
         await this.assertManagedPathsSafe();
         const committed = await this.store.update((value) => {
-          const current = parseState(value, this.binding);
+          const current = parseState(value, this.binding, this.historyLimit);
           this.assertMutationSnapshot(current);
           const changed = mutate(current);
           return {
@@ -813,4 +832,18 @@ export async function createLocalAttemptPersistence(
   options: LocalAttemptPersistenceOptions
 ): Promise<LocalAttemptPersistence> {
   return LocalAttemptPersistence.open(options);
+}
+
+/** @internal A bounded history limit used only to exercise capacity behavior in tests. */
+export async function createLocalAttemptPersistenceForTests(
+  options: LocalAttemptPersistenceOptions,
+  historyLimit: number
+): Promise<LocalAttemptPersistence> {
+  if (!Number.isSafeInteger(historyLimit) || historyLimit < 1 || historyLimit > MAX_HISTORY_LENGTH) {
+    throw new AttemptStoreError("invalid_path");
+  }
+  return LocalAttemptPersistence.open({
+    ...options,
+    [TEST_HISTORY_LIMIT]: historyLimit
+  } as InternalAttemptStoreOptions);
 }

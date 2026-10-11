@@ -4,8 +4,7 @@ import { createConnection, createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DurableJsonStore } from "../dist/metering-store.js";
-import { AttemptStoreError, createLocalAttemptPersistence } from "../dist/attempt-store.js";
-import { ConnectorError } from "../dist/index.js";
+import { AttemptStoreError, ConnectorError } from "../dist/index.js";
 import {
   ATTEMPT_MODE,
   ATTEMPT_PROVIDER,
@@ -13,6 +12,7 @@ import {
   makeAttemptRecord,
   makePrivateTempDirectory,
   openAttemptStore,
+  openAttemptStoreWithHistoryLimitForTests,
   removePrivateTempDirectory,
   runAttemptChild
 } from "./attempt-store-fixtures.mjs";
@@ -195,6 +195,44 @@ test("a scoped claim and its state history survive reopening the real JSON store
       tenantId: "another-tenant",
       projectId: "another-project"
     }, record.idempotencyKey), undefined);
+  });
+});
+
+test("history capacity allows the final valid row, keeps exact repeats safe, and rejects overflow before writing", async () => {
+  await withRoot(async (root) => {
+    const directory = join(root, "attempts");
+    const store = await openAttemptStoreWithHistoryLimitForTests(directory, 3);
+    const record = makeAttemptRecord();
+    await store.claimSubmitAttempt(record);
+    const pending = { ...record, budgetReservationState: "pending", updatedAt: record.updatedAt + 1 };
+    await store.saveSubmitAttempt(pending);
+    const possible = { ...pending, sideEffectState: "possible", updatedAt: record.updatedAt + 2 };
+    await store.saveSubmitAttempt(possible);
+
+    const paths = statePaths(directory);
+    const snapshotAtCapacity = await readFile(paths.snapshot, "utf8");
+    const markerAtCapacity = await readFile(paths.marker, "utf8");
+    assert.equal(JSON.parse(snapshotAtCapacity).entries[0].history.length, 3);
+
+    await store.saveSubmitAttempt(possible);
+    assert.equal(await readFile(paths.snapshot, "utf8"), snapshotAtCapacity);
+    assert.equal(await readFile(paths.marker, "utf8"), markerAtCapacity);
+
+    const overCapacity = {
+      ...possible,
+      sideEffectState: "confirmed",
+      providerRequestId: "capacity-provider-request",
+      budgetReservationState: "reserved",
+      budgetReservationReference: "capacity-reservation-reference",
+      updatedAt: record.updatedAt + 3
+    };
+    await expectStoreError(store.saveSubmitAttempt(overCapacity), "storage_unavailable");
+    assert.equal(await readFile(paths.snapshot, "utf8"), snapshotAtCapacity);
+    assert.equal(await readFile(paths.marker, "utf8"), markerAtCapacity);
+
+    const reopened = await openAttemptStoreWithHistoryLimitForTests(directory, 3);
+    assert.deepEqual(await reopened.getSubmitAttempt(record.providerId, ATTEMPT_SCOPE, record.idempotencyKey), possible);
+    assert.equal((await reopened.attemptHistory(ATTEMPT_SCOPE, record.idempotencyKey)).length, 3);
   });
 });
 

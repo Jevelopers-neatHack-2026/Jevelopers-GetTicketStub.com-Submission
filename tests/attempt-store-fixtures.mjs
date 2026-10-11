@@ -4,7 +4,8 @@ import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createLocalAttemptPersistence } from "../dist/attempt-store.js";
+import { createLocalAttemptPersistence } from "../dist/index.js";
+import { createLocalAttemptPersistenceForTests } from "../dist/attempt-store.js";
 
 export const ATTEMPT_PROVIDER = "development-deterministic-simulator";
 export const ATTEMPT_MODE = "simulated";
@@ -46,6 +47,15 @@ export async function openAttemptStore(directory, overrides = {}) {
     mode: overrides.mode ?? ATTEMPT_MODE,
     ...(overrides.faultHooks === undefined ? {} : { faultHooks: overrides.faultHooks })
   });
+}
+
+export async function openAttemptStoreWithHistoryLimitForTests(directory, historyLimit, overrides = {}) {
+  return createLocalAttemptPersistenceForTests({
+    directory,
+    providerId: overrides.providerId ?? ATTEMPT_PROVIDER,
+    mode: overrides.mode ?? ATTEMPT_MODE,
+    ...(overrides.faultHooks === undefined ? {} : { faultHooks: overrides.faultHooks })
+  }, historyLimit);
 }
 
 export async function removePrivateTempDirectory(directory) {

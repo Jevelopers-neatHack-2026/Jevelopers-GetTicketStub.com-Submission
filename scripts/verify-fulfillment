@@ -9,6 +9,7 @@ let catalogApiAvailable = false;
 let runtimeMeteringAvailable = false;
 let quoteApiAvailable = false;
 let privateQuoteFormat = null;
+let attemptStoreApiAvailable = false;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -25,6 +26,8 @@ try {
     typeof catalog.evaluatePrivateQuoteCurrent === "function" &&
     typeof catalog.QuoteExecutionError === "function";
   privateQuoteFormat = catalog.PRIVATE_QUOTE_FORMAT ?? null;
+  attemptStoreApiAvailable = typeof catalog.createLocalAttemptPersistence === "function" &&
+    typeof catalog.LocalAttemptPersistence === "function" && typeof catalog.AttemptStoreError === "function";
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
 }
@@ -62,7 +65,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
@@ -102,11 +105,18 @@ const quoteBlockers = [
   "scoped durable quote persistence is not implemented",
   "no selected provider sandbox adapter, account-tested quote behavior, or live mode is established"
 ];
+const attemptStoreBlockers = [
+  "this result covers only the private local AttemptPersistence implementation and offline simulated fixtures",
+  "canonical shared-contract acceptance, issuer-backed authorization, and authoritative finance holds or releases remain unavailable",
+  "provider outcome reconciliation, provider retry authority, production encryption, and production storage operations remain unavailable",
+  "the existing runtime port does not return a cached accepted result or express transport intent and compare-and-swap revisions"
+];
 
 let checks = [];
 let meteringReport = null;
 let mockReport = null;
 let quoteReport = null;
+let attemptStoreReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -123,6 +133,7 @@ if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(ar
 if (args.suite === "metering" && args.mode !== "simulated") failureReasons.push("metering_fixture_suite_requires_simulated_mode");
 if (args.suite === "mock" && args.mode !== "simulated") failureReasons.push("mock_suite_requires_simulated_mode");
 if (args.suite === "quote" && args.mode !== "simulated") failureReasons.push("quote_fixture_suite_requires_simulated_mode");
+if (args.suite === "attempt-store" && args.mode !== "simulated") failureReasons.push("attempt_store_fixture_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -220,6 +231,24 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("quote_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "attempt-store" && args.mode === "simulated") {
+  if (!attemptStoreApiAvailable || !runtimeMeteringAvailable || !simulatorApiAvailable) {
+    failureReasons.push("attempt_store_runtime_build_prerequisite_missing");
+  }
+  try {
+    if (failureReasons.length === 0) {
+      const { runAttemptStoreTests } = await import("./run-attempt-store-tests.mjs");
+      attemptStoreReport = runAttemptStoreTests();
+      checks = attemptStoreReport.results ?? [];
+      if (attemptStoreReport.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_attempt_store_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("attempt_store_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -268,6 +297,8 @@ const result = {
           ? "local_private_mock_simulator_suite"
         : args.suite === "quote"
           ? "local_private_quote_normalization_suite"
+        : args.suite === "attempt-store"
+          ? "local_private_attempt_persistence_and_simulated_runtime_suite"
           : args.suite === "metering"
             ? "local_private_metering_fixture_suite"
             : "local_private_fixture_contract_suite"
@@ -279,6 +310,7 @@ const result = {
     ...(args.suite === "catalog" ? catalogBlockers : []),
     ...(args.suite === "mock" ? mockBlockers : []),
     ...(args.suite === "quote" ? quoteBlockers : []),
+    ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
     ...(args.suite === "provider-matrix" ? [
       "print-production has not selected and approved an actual Prodigi SKU and print specification",
       "destination and shipping method have not been selected or approved",
@@ -403,6 +435,33 @@ const result = {
       blockers: catalogBlockers
     }
   } : {}),
+  ...(args.suite === "attempt-store" ? {
+    attemptStoreAssessment: {
+      schemaVersion: "fulfillment-attempt-store-assessment/1",
+      evidenceScope: "private_offline_local_attempt_persistence_and_simulated_runtime_fixtures_only",
+      completion: "partial_local_attempt_persistence",
+      issue11: "open",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      persistence: "local_private_crash_safe_json_implementation_of_existing_attempt_persistence_port",
+      runtimeIntegration: "simulated_runtime_with_real_reopened_local_attempt_store_and_synthetic_ports",
+      authorizationAuthority: "synthetic_fixture_only",
+      financeAuthority: "not_implemented",
+      providerReconciliation: "not_implemented",
+      transportIntentAndCompareAndSwap: "not_expressible_by_current_port",
+      encryptedProductionStorage: "not_implemented",
+      canonicalSchemaAcceptance: "pending",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: attemptStoreReport?.externalProviderCalls ?? 0,
+      blockers: attemptStoreBlockers
+    }
+  } : {}),
   providerMatrixAssessment: args.suite === "provider-matrix" ? {
     schemaVersion: "fulfillment-provider-matrix-assessment/1",
     evidenceScope: "documented_metadata_and_private_policy_fixtures_only",
@@ -491,10 +550,12 @@ if (args["evidence-dir"] !== undefined) {
       ...(args.suite === "catalog" ? catalogBlockers : []),
       ...(args.suite === "mock" ? mockBlockers : []),
       ...(args.suite === "quote" ? quoteBlockers : []),
+      ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
       ...failureReasons
     ];
     if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
     if (result.quoteAssessment !== undefined) result.quoteAssessment.localFixtureResult = "failed";
+    if (result.attemptStoreAssessment !== undefined) result.attemptStoreAssessment.localFixtureResult = "failed";
   }
 }
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

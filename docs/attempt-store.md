@@ -8,8 +8,10 @@ or permission to release a reservation or repeat a provider effect.
 
 ## Opening a store
 
-After building, repository-local integrations can import
-createLocalAttemptPersistence from dist/attempt-store.js and provide a
+The package root exports `createLocalAttemptPersistence`,
+`LocalAttemptPersistence`, `AttemptStoreError`, and their public option and
+history types. After building, integrations can import the factory from the
+package root and provide a
 dedicated absolute directory, the immutable provider ID, and the immutable
 mode (simulated or sandbox). Use a separate directory for each provider and
 mode. The factory rejects non-absolute paths, symlinked path components,
@@ -30,6 +32,10 @@ if the caller did not receive its return value. Stale locks are recovered
 using the existing store's process-liveness check, not by expiring claims.
 Malformed locks, corruption, missing committed state, unsupported formats,
 and storage/access failures stop the operation.
+
+Each attempt history is limited to 1,000,000 rows. An exact repeat at the
+limit remains a safe no-op; a changed update beyond the limit fails with
+`storage_unavailable` before changing either the snapshot or commit marker.
 
 Each mutation validates the marker and the exact snapshot read while holding
 the writer lock. A present marker paired with a missing or empty snapshot is
@@ -88,19 +94,27 @@ reconciliation. The store does not mint or verify authorization, create an
 authoritative financial hold, release funds, reconcile a provider outcome, or
 blindly retry a provider request.
 
-This module is intentionally not re-exported from the package root, and is
-not a supported package subpath. It is a private repository-local
-implementation of the current port, not an accepted canonical cross-repository
-schema or production integration. Snapshot contents are plain JSON protected
-by local filesystem permissions; they are not encrypted. Use only in a
-trusted local environment and do not place secrets in attempt fields.
+The package-root API is a private local-development implementation of the
+current port, not an accepted canonical cross-repository schema or production
+integration. It is not exposed as a separate package subpath. Snapshot
+contents are plain JSON protected by local filesystem permissions; they are
+not encrypted. Use only in a trusted local environment and do not place
+secrets in attempt fields.
+
+The local persistence and simulator evidence do not complete issue 11. The
+current port cannot represent transport intent, compare-and-swap revisions,
+or a cached accepted submit result. No issuer authority, authoritative finance
+hold or release, provider outcome reconciliation, provider retry authority,
+or production encrypted storage is supplied. Authorization and budget
+decisions in the runtime scenario use synthetic fixture ports. The issue
+remains open pending those contracts and integrations.
 
 ## Local validation
 
-Build the project, then run the standalone suite:
+Build and run the standalone suite, then write the simulated verifier evidence:
 
-    npm run build
-    node tests/attempt-store-suite.mjs
+    npm run test:attempt-store
+    npm run verify:attempt-store
 
 The suite exercises process restarts, simultaneous child-process claims,
 crash barriers before and after commit, lock recovery, changed fingerprints,
