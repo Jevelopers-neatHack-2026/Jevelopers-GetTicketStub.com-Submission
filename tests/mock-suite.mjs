@@ -903,7 +903,32 @@ test("delayed, duplicate, out-of-order callbacks keep status monotonic and split
   assert.equal(harness.simulator.deliverCallback(delayedProduction).outcome, "delayed");
   assert.equal(harness.simulator.deliverCallback(shipped).outcome, "delivered");
   assert.equal(harness.simulator.deliverCallback(packageOne).outcome, "delivered");
+
+  const afterPackageOne = harness.simulator.snapshot();
+  const packageOneRecord = afterPackageOne.callbacks.find((callback) => callback.eventId === packageOne);
+  const packageTwoBeforeDelivery = afterPackageOne.callbacks.find((callback) => callback.eventId === packageTwo);
+  assert.ok(packageOneRecord);
+  assert.ok(packageTwoBeforeDelivery);
+  assert.equal(packageOneRecord.applied, true);
+  assert.equal(packageTwoBeforeDelivery.applied, false);
+  assert.notEqual(packageOneRecord.shipment.providerShipmentId, packageTwoBeforeDelivery.shipment.providerShipmentId);
+  assert.deepEqual(harness.simulator.shipments(requestId), [packageOneRecord.shipment]);
+  assert.equal(harness.simulator.orders().length, 1);
+  assert.equal(harness.simulator.dispatchCounters().submit, 1);
+
   assert.equal(harness.simulator.deliverCallback(packageTwo).outcome, "delivered");
+  const afterPackageTwo = harness.simulator.snapshot();
+  const packageTwoRecord = afterPackageTwo.callbacks.find((callback) => callback.eventId === packageTwo);
+  assert.ok(packageTwoRecord);
+  assert.equal(packageTwoRecord.applied, true);
+  const expectedPackages = [packageOneRecord.shipment, packageTwoRecord.shipment]
+    .sort((left, right) => left.providerShipmentId < right.providerShipmentId ? -1 : left.providerShipmentId > right.providerShipmentId ? 1 : 0);
+  const storedPackages = harness.simulator.shipments(requestId);
+  assert.deepEqual(storedPackages, expectedPackages);
+  assert.equal(new Set(storedPackages.map((shipment) => shipment.providerShipmentId)).size, 2);
+  assert.equal(harness.simulator.orders().length, 1);
+  assert.equal(harness.simulator.dispatchCounters().submit, 1);
+
   assert.equal(harness.simulator.deliverCallback(packageOne).outcome, "duplicate");
   harness.simulator.advanceTime(500);
   assert.equal(harness.simulator.deliverCallback(delayedProduction).outcome, "delivered");
