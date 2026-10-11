@@ -39,6 +39,15 @@ const PINNED_SELECTOR_TWO_FILES = Object.freeze({
   'src/extraction/xhtml.mjs': 'b54f16a21d5228f7d0825e495e6bd5b327a89f8cc4c582e90b15372aa0f43588',
   'src/extraction/source.mjs': '4a0942a8222c8785a8b2ad9f8b7c2daab387ef96a1fe75e6c7a1ab8ea7e8b40d',
 });
+const PINNED_SELECTOR_THREE_COMMIT = '2b11c84e2a1684184fc7f2619c5cbbe353193d3c';
+const PINNED_SELECTOR_THREE_FILES = Object.freeze({
+  'src/evidence/store.mjs': 'b2e19816020e9dfa27aec6da53649f1648a7a3c976fdbba8f91a7f8429da768e',
+  'src/extraction/index.mjs': '80ac799d0447d9240ec6ca74d7417fb0b0af60ab2dd353d45a79de88a7285881',
+  'src/extraction/html.mjs': 'dceac310d7e423d2ad80fa64d543cc6efcf1a578d190c1ad8be1e64de93445d9',
+  'src/extraction/jsonld.mjs': '67a14953fab7c29e4abdeb48005de71b2b22d907520aa5110cefa9bccb5a7e29',
+  'src/extraction/xhtml.mjs': 'b54f16a21d5228f7d0825e495e6bd5b327a89f8cc4c582e90b15372aa0f43588',
+  'src/extraction/source.mjs': '4a0942a8222c8785a8b2ad9f8b7c2daab387ef96a1fe75e6c7a1ab8ea7e8b40d',
+});
 
 function documentFrom(html, overrides = {}) {
   return {
@@ -298,6 +307,36 @@ async function loadPinnedSelectorTwoStore(t) {
   assert.ok(oldStoreSource.includes(importSpecifier));
   const parserImport = `from '../extraction/${path.basename(parserDirectory)}/index.mjs';`;
   const modulePath = path.join(ROOT, 'src/evidence', `.legacy-selector-two-store-${process.pid}-${Date.now()}.mjs`);
+  await writeFile(modulePath, oldStoreSource.replace(importSpecifier, parserImport), { flag: 'wx', mode: 0o600 });
+  t.after(() => rm(modulePath, { force: true }));
+  return import(pathToFileURL(modulePath).href);
+}
+
+async function loadPinnedSelectorThreeStore(t) {
+  const parserDirectory = await mkdtemp(path.join(ROOT, 'src/extraction/.legacy-selector-three-'));
+  t.after(() => rm(parserDirectory, { recursive: true, force: true }));
+  for (const sourcePath of Object.keys(PINNED_SELECTOR_THREE_FILES).filter((file) => file.startsWith('src/extraction/'))) {
+    const relativePath = sourcePath.slice('src/extraction/'.length);
+    const extracted = spawnSync('git', ['show', `${PINNED_SELECTOR_THREE_COMMIT}:${sourcePath}`], {
+      cwd: ROOT,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    assert.equal(extracted.status, 0, `pinned selector-three parser source exists: ${sourcePath}`);
+    assert.equal(digest(extracted.stdout), PINNED_SELECTOR_THREE_FILES[sourcePath], `pinned selector-three parser bytes match: ${sourcePath}`);
+    await writeFile(path.join(parserDirectory, relativePath), extracted.stdout, { flag: 'wx', mode: 0o600 });
+  }
+
+  const oldStore = spawnSync('git', ['show', `${PINNED_SELECTOR_THREE_COMMIT}:src/evidence/store.mjs`], {
+    cwd: ROOT,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(oldStore.status, 0, 'pinned selector-three store source exists');
+  assert.equal(digest(oldStore.stdout), PINNED_SELECTOR_THREE_FILES['src/evidence/store.mjs'], 'pinned selector-three store bytes match');
+  const importSpecifier = "from '../extraction/index.mjs';";
+  const oldStoreSource = oldStore.stdout.toString('utf8');
+  assert.ok(oldStoreSource.includes(importSpecifier));
+  const parserImport = `from '../extraction/${path.basename(parserDirectory)}/index.mjs';`;
+  const modulePath = path.join(ROOT, 'src/evidence', `.legacy-selector-three-store-${process.pid}-${Date.now()}.mjs`);
   await writeFile(modulePath, oldStoreSource.replace(importSpecifier, parserImport), { flag: 'wx', mode: 0o600 });
   t.after(() => rm(modulePath, { force: true }));
   return import(pathToFileURL(modulePath).href);
@@ -660,6 +699,130 @@ test('empty and missing HTML/XHTML asset attributes remain quarantined beside va
   }
 });
 
+test('selector 4 stores complete non-ASCII HTML attribute values and reopens exact source ranges', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request(TENANT));
+  const forms = [
+    { form: 'html-img-src' },
+    { form: 'html-icon-link' },
+    { form: 'open-graph-image' },
+  ];
+  const whitespace = [
+    { name: 'NBSP', value: '\u00a0', entity: '&#160;' },
+    { name: 'EM SPACE', value: '\u2003', entity: '&#x2003;' },
+  ];
+  const cases = [];
+  for (const item of forms) {
+    for (const space of whitespace) {
+      cases.push(
+        { name: `${item.form} ${space.name} value-only`, ...item, syntax: 'html-unquoted', value: space.value, expectedQuarantine: 'invalid_or_empty' },
+        { name: `${item.form} ${space.name} leading`, ...item, syntax: 'html-unquoted', value: `${space.value}/leading-${space.name.toLowerCase().replaceAll(' ', '-')}.png`, expectedQuarantine: null },
+        { name: `${item.form} ${space.name} internal`, ...item, syntax: 'html-unquoted', value: `/internal-${space.name.toLowerCase().replaceAll(' ', '-')}${space.value}value.png`, expectedQuarantine: null },
+        { name: `${item.form} ${space.name} quoted`, ...item, syntax: 'html-quoted', value: `/quoted-${space.name.toLowerCase().replaceAll(' ', '-')}${space.value}value.png`, expectedQuarantine: null },
+        { name: `${item.form} ${space.name} character reference`, ...item, syntax: 'html-entity', value: `/entity-${space.entity}value.png`, expectedQuarantine: null },
+        { name: `XHTML ${item.form} ${space.name} quoted`, ...item, syntax: 'xhtml-quoted', value: `/xhtml-${space.name.toLowerCase().replaceAll(' ', '-')}${space.value}value.png`, expectedQuarantine: null },
+        { name: `XHTML ${item.form} ${space.name} character reference`, ...item, syntax: 'xhtml-entity', value: `/xhtml-entity-${space.entity}value.png`, expectedQuarantine: null },
+      );
+    }
+  }
+
+  const records = [];
+  for (const [index, item] of cases.entries()) {
+    const isXhtml = item.syntax.startsWith('xhtml-');
+    const isImg = item.form === 'html-img-src';
+    const isEntity = item.syntax.endsWith('entity');
+    const rawAttributeValue = item.value;
+    const sourceAttributeValue = isEntity
+      ? (isXhtml ? `"${item.value}"` : item.value)
+      : item.syntax.endsWith('quoted') ? `"${item.value}"` : item.value;
+    const targetMarkup = item.form === 'html-img-src'
+      ? `<img src=${sourceAttributeValue}${isXhtml ? ' />' : '>'}`
+      : item.form === 'html-icon-link'
+        ? `<link rel="icon" href=${sourceAttributeValue}${isXhtml ? ' />' : '>'}`
+        : `<meta property="og:image" content=${sourceAttributeValue}${isXhtml ? ' />' : '>'}`;
+    const source = isXhtml
+      ? `<html xmlns="http://www.w3.org/1999/xhtml"><head>${isImg ? '' : targetMarkup}</head>`
+        + `<body>🧭${isImg ? targetMarkup : ''}<img src="/poster.png" /></body></html>`
+      : `<html><head>${isImg ? '' : targetMarkup}</head>`
+        + `<body>🧭${isImg ? targetMarkup : ''}<img src="/poster.png"></body></html>`;
+    const bytes = Buffer.from(source, 'utf8');
+    const doc = documentFrom(bytes, {
+      contentType: isXhtml ? 'application/xhtml+xml; charset=utf-8' : 'text/html; charset=utf-8',
+      url: `https://events.example.com/unicode-asset-fixtures/${index}.html`,
+    });
+    const extraction = await extractDeterministically(doc);
+    const parsed = extraction.assetSources.find((asset) => asset.sourceForm === item.form
+      && asset.candidate.rawValue === rawAttributeValue);
+    assert.ok(parsed, `${item.name}: production parser returned the target candidate`);
+    assert.ok(parsed.candidate.source.locator.endByte > parsed.candidate.source.locator.startByte,
+      `${item.name}: Unicode whitespace belongs to a positive-length URL-value range`);
+    assert.equal(bytes.subarray(parsed.candidate.source.locator.startByte, parsed.candidate.source.locator.endByte).toString('utf8'),
+      rawAttributeValue, `${item.name}: parser locator selects the complete original value spelling`);
+    assert.equal(Object.hasOwn(parsed, 'emptyAttributeToken'), false, `${item.name}: nonempty decoded value is not an empty-attribute token`);
+
+    const discovered = await discoverAssetCandidates({
+      store: harness.store,
+      scope,
+      document: doc,
+      retentionHandle: harness.createPermit(TENANT),
+      request: request(TENANT),
+    });
+    assert.equal(discovered.outcome, 'stored', item.name);
+    assert.equal(discovered.sourceHash, digest(bytes), item.name);
+    assert.equal(discovered.metadata.contentHash, digest(bytes), item.name);
+    const descriptor = discovered.candidates.find((candidate) => candidate.sourceForm === item.form
+      && candidate.locator.startByte === parsed.candidate.source.locator.startByte
+      && candidate.locator.endByte === parsed.candidate.source.locator.endByte);
+    assert.ok(descriptor, `${item.name}: the exact parser range is stored`);
+    assert.equal(descriptor.excerptKind, 'url-value', item.name);
+    assert.equal(descriptor.excerptHash, digest(Buffer.from(rawAttributeValue, 'utf8')), item.name);
+    assert.equal(descriptor.quarantineReason, item.expectedQuarantine, item.name);
+    if (item.expectedQuarantine === 'invalid_or_empty') {
+      assert.equal(descriptor.normalizedSuggestion, null, item.name);
+      assert.equal(descriptor.fetchSuggestion, null, item.name);
+    } else {
+      assert.equal(descriptor.quarantineReason, null, item.name);
+      assert.ok(descriptor.fetchSuggestion?.startsWith('https://events.example.com/'), item.name);
+    }
+    assert.ok(discovered.candidates.some((candidate) => candidate.sourceForm === 'html-img-src'
+      && candidate.fetchSuggestion === 'https://events.example.com/poster.png'), `${item.name}: valid poster is retained`);
+    records.push({ ...item, bytes, doc, evidenceId: discovered.metadata.evidenceId, sourceHash: discovered.sourceHash, descriptor });
+  }
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request(TENANT));
+  for (const item of records) {
+    const evidence = await reopened.lookupEvidence(reopenedScope, item.evidenceId);
+    const selected = await reopened.materializeSelected(reopenedScope, { evidence: [evidence], facts: [] }, request(TENANT));
+    const view = selected.evidence[0];
+    assert.equal(view.source.contentHash, item.sourceHash, item.name);
+    assert.equal(view.source.assetSource.selectorVersion, 'ei-asset-source-selector/4', item.name);
+    assert.equal(view.source.assetSource.extractorVersion, 'ei-deterministic-extraction/1.4.0', item.name);
+    const candidate = view.source.assetSource.candidates.find((entry) => entry.sourceForm === item.form
+      && entry.locator.startByte === item.descriptor.locator.startByte
+      && entry.locator.endByte === item.descriptor.locator.endByte);
+    assert.ok(candidate, `${item.name}: authorized reopened descriptor retains the exact range`);
+    assert.equal(candidate.excerptHash, item.descriptor.excerptHash, item.name);
+    assert.equal(candidate.excerptKind, 'url-value', item.name);
+    assert.equal(candidate.quarantineReason, item.expectedQuarantine, item.name);
+    if (item.expectedQuarantine === 'invalid_or_empty') {
+      assert.equal(candidate.normalizedSuggestion, null, item.name);
+      assert.equal(candidate.fetchSuggestion, null, item.name);
+    }
+    assert.ok(view.source.assetSource.candidates.some((entry) => entry.sourceForm === 'html-img-src'
+      && entry.fetchSuggestion === 'https://events.example.com/poster.png'), `${item.name}: reopened poster remains available`);
+
+    const privateRead = await reopened.withPrivatePayload(reopenedScope, evidence, request(TENANT));
+    assert.equal(privateRead.sourceHash, digest(item.bytes), item.name);
+    const excerpt = privateRead.positions.find((position) => position.locator.startByte === candidate.locator.startByte
+      && position.locator.endByte === candidate.locator.endByte);
+    assert.ok(excerpt, `${item.name}: authorized private consumer received the target excerpt`);
+    assert.equal(item.bytes.subarray(excerpt.locator.startByte, excerpt.locator.endByte).toString('utf8'), excerpt.text, item.name);
+    assert.equal(excerpt.text, item.value, item.name);
+    assert.equal(excerpt.contentHash, candidate.excerptHash, item.name);
+  }
+});
+
 test('fatal XHTML parser failures reject before empty discovery without writing any evidence', async (t) => {
   const harness = await createHarness(t);
   const scope = await harness.store.scopeForAuthenticatedRequest(request(TENANT));
@@ -833,7 +996,7 @@ test('asset URL quarantine checks original policy syntax across HTML, XHTML, JSO
   }
 });
 
-test('selector 3 keeps selector 1 encrypted asset records readable without rewriting them', async (t) => {
+test('selector 4 keeps selector 1 encrypted asset records readable without rewriting them', async (t) => {
   const harness = await createHarness(t);
   const requestValue = request(TENANT);
   const doc = documentFrom('<html><body><img src="http://0x08080808/logo.png"></body></html>', {
@@ -886,7 +1049,8 @@ test('selector 3 keeps selector 1 encrypted asset records readable without rewri
   );
   assert.equal(oldReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/1');
   assert.equal(oldReadback.evidence[0].source.assetSource.candidates[0].fetchSuggestion, 'http://8.8.8.8/logo.png');
-  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/4');
+  assert.equal(newReadback.evidence[0].source.assetSource.extractorVersion, 'ei-deterministic-extraction/1.4.0');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].excerptKind, 'url-value');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].normalizedSuggestion, null);
@@ -894,7 +1058,7 @@ test('selector 3 keeps selector 1 encrypted asset records readable without rewri
   assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed);
 });
 
-test('selector 3 keeps actual selector 2 producer records readable without rewriting them', async (t) => {
+test('selector 4 keeps actual selector 2 producer records readable without rewriting them', async (t) => {
   const harness = await createHarness(t);
   const requestValue = request(TENANT);
   const doc = documentFrom('<html><body><img src="http://0x08080808/logo.png"></body></html>', {
@@ -940,9 +1104,77 @@ test('selector 3 keeps actual selector 2 producer records readable without rewri
   const newReadback = await restarted.materializeSelected(restartedScope, { evidence: [newAfterRestart], facts: [] }, requestValue);
   assert.equal(oldReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/2');
   assert.equal(oldReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
-  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/4');
+  assert.equal(newReadback.evidence[0].source.assetSource.extractorVersion, 'ei-deterministic-extraction/1.4.0');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].excerptKind, 'url-value');
   assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
+  assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed);
+});
+
+test('selector 4 reads actual selector 3 producer ciphertext without relabeling it', async (t) => {
+  const harness = await createHarness(t);
+  const requestValue = request(TENANT);
+  const doc = documentFrom('<html><body><img src=""><img src="/poster.png"></body></html>', {
+    url: 'https://events.example.com/selector-profile/selector-three.html',
+  });
+  const legacyModule = await loadPinnedSelectorThreeStore(t);
+  const legacyHarness = createPinnedLegacyOptions(harness.directory);
+  const legacyStore = legacyModule.createEvidenceStore(legacyHarness.options);
+  const legacyScope = await legacyStore.scopeForAuthenticatedRequest(requestValue);
+  const legacyWritten = await legacyStore.ingestAssetSourceEvidence(
+    legacyScope, sourceInput(doc, legacyHarness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(legacyWritten.outcome, 'stored');
+  assert.equal(legacyWritten.created, true);
+  const legacyId = legacyWritten.metadata.evidenceId;
+  const legacySealed = readEvidenceBytes(harness.directory, legacyId);
+  const legacyBundle = openBundle(legacySealed, legacyId);
+  assert.equal(legacyBundle.assetSource.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(legacyBundle.assetSource.extractorVersion, 'ei-deterministic-extraction/1.3.0');
+  assert.ok(legacyBundle.assetSource.candidates.some((candidate) => candidate.excerptKind === 'html-empty-attribute-token'));
+
+  const current = harness.openStore();
+  const currentScope = await current.scopeForAuthenticatedRequest(requestValue);
+  const oldHandle = await current.lookupEvidence(currentScope, legacyId);
+  const oldBeforeWrite = await current.materializeSelected(currentScope, { evidence: [oldHandle], facts: [] }, requestValue);
+  const oldProvenance = oldBeforeWrite.evidence[0].source.assetSource;
+  assert.equal(oldProvenance.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(oldProvenance.extractorVersion, 'ei-deterministic-extraction/1.3.0');
+  assert.ok(oldProvenance.candidates.some((candidate) => candidate.excerptKind === 'html-empty-attribute-token'));
+
+  const currentWritten = await current.ingestAssetSourceEvidence(
+    currentScope, sourceInput(doc, harness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(currentWritten.outcome, 'stored');
+  assert.equal(currentWritten.created, true);
+  assert.notEqual(currentWritten.metadata.evidenceId, legacyId);
+  assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed,
+    'authentic selector-3 ciphertext remains byte-identical after a selector-4 write');
+
+  const restarted = harness.openStore();
+  const restartedScope = await restarted.scopeForAuthenticatedRequest(requestValue);
+  const oldAfterRestart = await restarted.lookupEvidence(restartedScope, legacyId);
+  const newAfterRestart = await restarted.lookupEvidence(restartedScope, currentWritten.metadata.evidenceId);
+  const oldReadback = await restarted.materializeSelected(restartedScope, { evidence: [oldAfterRestart], facts: [] }, requestValue);
+  const newReadback = await restarted.materializeSelected(restartedScope, { evidence: [newAfterRestart], facts: [] }, requestValue);
+  const oldAssetSource = oldReadback.evidence[0].source.assetSource;
+  const newAssetSource = newReadback.evidence[0].source.assetSource;
+  assert.equal(oldAssetSource.selectorVersion, 'ei-asset-source-selector/3');
+  assert.equal(oldAssetSource.extractorVersion, 'ei-deterministic-extraction/1.3.0');
+  const oldEmptyToken = oldAssetSource.candidates.find((candidate) => candidate.excerptKind === 'html-empty-attribute-token');
+  assert.ok(oldEmptyToken);
+  assert.equal(oldEmptyToken.quarantineReason, 'invalid_or_empty');
+  assert.equal(oldEmptyToken.normalizedSuggestion, null);
+  assert.equal(oldEmptyToken.fetchSuggestion, null);
+  assert.equal(newAssetSource.selectorVersion, 'ei-asset-source-selector/4');
+  assert.equal(newAssetSource.extractorVersion, 'ei-deterministic-extraction/1.4.0');
+  assert.ok(newAssetSource.candidates.some((candidate) => candidate.excerptKind === 'html-empty-attribute-token'));
+  const oldPrivate = await restarted.withPrivatePayload(restartedScope, oldAfterRestart, requestValue);
+  assert.equal(oldPrivate.sourceHash, digest(doc.bytes));
+  const oldTokenPosition = oldPrivate.positions.find((position) => JSON.stringify(position.locator) === JSON.stringify(oldEmptyToken.locator));
+  assert.ok(oldTokenPosition);
+  assert.equal(oldTokenPosition.text, 'src=""');
+  assert.equal(oldTokenPosition.contentHash, oldEmptyToken.excerptHash);
   assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed);
 });
 
@@ -1517,7 +1749,7 @@ test('stored candidate order, metadata, locator, selector, and ciphertext tamper
     (bundle) => { bundle.assetSource.candidates[0].excerptKind = 'future-kind'; },
     (bundle) => { bundle.assetSource.candidates[0].locator.startByte += 1; },
     (bundle) => { bundle.assetSource.selectorVersion = 'ei-asset-source-selector/future'; },
-    (bundle) => { bundle.assetSource.extractorVersion = 'ei-deterministic-extraction/1.4.0'; },
+    (bundle) => { bundle.assetSource.extractorVersion = 'ei-deterministic-extraction/1.5.0'; },
     (bundle) => { bundle.schemaVersion = 4; },
   ];
   for (const corrupt of corruptors) {
@@ -1569,7 +1801,7 @@ test('stored candidate order, metadata, locator, selector, and ciphertext tamper
     (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INTEGRITY');
 });
 
-test('selector 3 rejects an otherwise digest-consistent nonempty attribute token before private release', async (t) => {
+test('selector 4 rejects an otherwise digest-consistent nonempty attribute token before private release', async (t) => {
   let consumerCalls = 0;
   const harness = await createHarness(t, {
     storeOptions: {
@@ -1594,7 +1826,7 @@ test('selector 3 rejects an otherwise digest-consistent nonempty attribute token
   const bundle = openBundle(sealed, evidenceId);
   const candidateIndex = bundle.assetSource.candidates.findIndex((candidate) => candidate.excerptKind === 'html-empty-attribute-token');
   assert.ok(candidateIndex >= 0);
-  assert.equal(assetDerivationDigest(bundle), bundle.assetSource.derivationDigest, 'test digest matches the actual selector-3 derivation');
+  assert.equal(assetDerivationDigest(bundle), bundle.assetSource.derivationDigest, 'test digest matches the actual selector-4 derivation');
   const candidate = bundle.assetSource.candidates[candidateIndex];
   const position = bundle.positions[candidate.positionIndex];
   assert.equal(Buffer.from(position.content, 'base64').toString('utf8'), 'src=""');

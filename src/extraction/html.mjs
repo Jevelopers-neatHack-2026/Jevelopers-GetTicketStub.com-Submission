@@ -29,6 +29,7 @@ const OPEN_GRAPH_FIELDS = new Map([
 const STATUS_TEXT = /\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(?:ed|e|ing)|new date|date changed|moved to)\b/i;
 const ACCESS_TEXT = /\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i;
 const JS_REQUIRED_TEXT = /\b(?:javascript|js) (?:is )?(?:required|disabled|not enabled)|enable (?:javascript|js) to continue\b/i;
+const HTML_ASCII_WHITESPACE = /[\t\n\f\r ]/;
 const MOUNT_IDS = new Set(["root", "app", "__next", "__nuxt", "svelte"]);
 
 export function declaredCharsetFromHtmlDocument(htmlDocument, byteOffsetMap, maximumByteOffset = 2048) {
@@ -563,9 +564,9 @@ function attributeValueRange(text, elementLocation, attributeName, decodedValue)
   const startOffset = location.startOffset;
   const raw = text.slice(startOffset, location.endOffset);
   let cursor = 0;
-  while (cursor < raw.length && !/[\s=/>]/.test(raw[cursor])) cursor += 1;
+  while (cursor < raw.length && !/[\t\n\f\r =/>]/.test(raw[cursor])) cursor += 1;
   if (raw.slice(0, cursor).toLowerCase() !== attributeName.toLowerCase()) return null;
-  while (/\s/.test(raw[cursor] ?? "")) cursor += 1;
+  while (HTML_ASCII_WHITESPACE.test(raw[cursor] ?? "")) cursor += 1;
   if (raw[cursor] !== "=") {
     // parse5 may end the attribute source location at its name for an
     // unquoted empty value (`src=`). Inspect only the adjacent attribute
@@ -593,7 +594,7 @@ function attributeValueRange(text, elementLocation, attributeName, decodedValue)
   }
   const equalsOffset = startOffset + cursor;
   cursor += 1;
-  while (/\s/.test(raw[cursor] ?? "")) cursor += 1;
+  while (HTML_ASCII_WHITESPACE.test(raw[cursor] ?? "")) cursor += 1;
   const quote = raw[cursor] === '"' || raw[cursor] === "'" ? raw[cursor] : null;
   if (quote !== null) {
     cursor += 1;
@@ -609,7 +610,7 @@ function attributeValueRange(text, elementLocation, attributeName, decodedValue)
     };
   }
   const valueStart = cursor;
-  while (cursor < raw.length && !/[\s>]/.test(raw[cursor])) cursor += 1;
+  while (cursor < raw.length && !/[\t\n\f\r >]/.test(raw[cursor])) cursor += 1;
   if (valueStart === cursor) {
     return {
       startOffset: equalsOffset + 1,

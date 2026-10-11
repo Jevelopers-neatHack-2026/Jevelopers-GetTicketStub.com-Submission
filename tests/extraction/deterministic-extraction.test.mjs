@@ -285,6 +285,48 @@ test("discovers bounded HTML and JSON-LD asset source claims from exact parser l
   assertExactRanges(result, bytes);
 });
 
+test("uses ASCII HTML whitespace syntax when attributing unquoted canonical, metadata, and asset values", async () => {
+  const nbsp = "\u00a0";
+  const emSpace = "\u2003";
+  const bytes = Buffer.from(
+    `<html><head><link rel=canonical href=/calendar${nbsp}edition>`
+    + `<meta property=og:description content=venue${emSpace}copy>`
+    + `<meta property=og:image content=/card${nbsp}image.png>`
+    + `<link rel=icon href=/icon${emSpace}mark.svg></head><body>`
+    + `<img src=${nbsp}><img src=/leading${nbsp}start.png><img src=/internal${emSpace}space.png>`
+    + `<img src="/quoted${nbsp}space.png"><img src=/entity&#160;value.png></body></html>`,
+  );
+  const input = document(bytes);
+  const result = await extractDeterministically(input);
+  assert.equal(result.status, "PARTIAL");
+  const assertRawBytes = (candidate, raw, label) => {
+    assert.equal(candidate.rawValue, raw, `${label} keeps the complete source spelling`);
+    const { startByte, endByte } = candidate.source.locator;
+    assert.equal(bytes.subarray(startByte, endByte).toString("utf8"), raw, `${label} maps to the complete original UTF-8 range`);
+  };
+
+  assertRawBytes(result.canonicalSuggestions[0], `/calendar${nbsp}edition`, "canonical href");
+  const description = result.pageMetadata.find((candidate) => candidate.field === "openGraph.description");
+  assertRawBytes(description, `venue${emSpace}copy`, "Open Graph description");
+  const targets = [
+    { form: "open-graph-image", raw: `/card${nbsp}image.png` },
+    { form: "html-icon-link", raw: `/icon${emSpace}mark.svg` },
+    { form: "html-img-src", raw: nbsp },
+    { form: "html-img-src", raw: `/leading${nbsp}start.png` },
+    { form: "html-img-src", raw: `/internal${emSpace}space.png` },
+    { form: "html-img-src", raw: `/quoted${nbsp}space.png` },
+    { form: "html-img-src", raw: "/entity&#160;value.png" },
+  ];
+  for (const expected of targets) {
+    const asset = result.assetSources.find((candidate) => candidate.sourceForm === expected.form
+      && candidate.candidate.rawValue === expected.raw);
+    assert.ok(asset, `${expected.form} candidate retains ${JSON.stringify(expected.raw)}`);
+    assertRawBytes(asset.candidate, expected.raw, expected.form);
+  }
+  assert.equal(result.assetSources.find((asset) => asset.candidate.rawValue === nbsp).candidate.normalizedValue, "");
+  assertExactRanges(result, bytes);
+});
+
 function formIsJsonLd(value) {
   return value === "jsonld-image" || value === "jsonld-logo";
 }

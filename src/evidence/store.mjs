@@ -73,7 +73,7 @@ const PDF_DERIVED_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const ASSET_SOURCE_EXCERPT_REPRESENTATION = 'asset-source-excerpt';
 const ASSET_SOURCE_BUNDLE_VERSION = 3;
 const ASSET_SOURCE_BINDING_VERSION = 1;
-const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/3';
+const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/4';
 const ASSET_SOURCE_MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const ASSET_SOURCE_MAX_POSITIONS = 64;
 const ASSET_SOURCE_MAX_EXCERPT_BYTES = 8 * 1024;
@@ -109,6 +109,12 @@ const ASSET_SOURCE_READ_PROFILES = new Map([
   ['ei-asset-source-selector/3\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
     selectorVersion: 'ei-asset-source-selector/3',
     extractorVersion: 'ei-deterministic-extraction/1.3.0',
+    completeness: 'static-selected-forms-only',
+    limitations: ASSET_SOURCE_LIMITATIONS,
+  })],
+  ['ei-asset-source-selector/4\u0000ei-deterministic-extraction/1.4.0', Object.freeze({
+    selectorVersion: 'ei-asset-source-selector/4',
+    extractorVersion: 'ei-deterministic-extraction/1.4.0',
     completeness: 'static-selected-forms-only',
     limitations: ASSET_SOURCE_LIMITATIONS,
   })],
@@ -788,7 +794,7 @@ function emptyHtmlAttributeTokenState(bytes, expectedName) {
   const token = Buffer.from(bytes).toString('utf8');
   if (!Buffer.from(token, 'utf8').equals(Buffer.from(bytes)) || !isWellFormed(token)) return null;
   let cursor = 0;
-  while (cursor < token.length && !/[\s=/>]/.test(token[cursor])) cursor += 1;
+  while (cursor < token.length && !/[\t\n\f\r =/>]/.test(token[cursor])) cursor += 1;
   if (cursor === 0 || token.slice(0, cursor).toLowerCase() !== expectedName) return null;
   while (cursor < token.length && /[\t\n\f\r ]/.test(token[cursor])) cursor += 1;
   if (cursor === token.length) return 'missing';
@@ -938,7 +944,9 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
       || (candidate.role !== 'unknown' || candidate.permission !== 'unknown' || candidate.inspection !== 'pending')) {
       fail('EVIDENCE_INTEGRITY');
     }
-    if (profile.selectorVersion === 'ei-asset-source-selector/3') {
+    const hasExcerptKind = profile.selectorVersion === 'ei-asset-source-selector/3'
+      || profile.selectorVersion === 'ei-asset-source-selector/4';
+    if (hasExcerptKind) {
       if (!Object.hasOwn(candidate, 'excerptKind')
         || !['url-value', 'html-empty-attribute-token'].includes(candidate.excerptKind)) fail('EVIDENCE_INTEGRITY');
       if (candidate.excerptKind === 'html-empty-attribute-token') {
@@ -981,7 +989,7 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
       association: cloneJsonValue(candidate.association),
       locator,
       excerptHash: candidate.excerptHash,
-      ...(profile.selectorVersion === 'ei-asset-source-selector/3' ? { excerptKind: candidate.excerptKind } : {}),
+      ...(hasExcerptKind ? { excerptKind: candidate.excerptKind } : {}),
       normalizedSuggestion: candidate.normalizedSuggestion,
       fetchSuggestion: candidate.fetchSuggestion,
       quarantineReason: candidate.quarantineReason,
