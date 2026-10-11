@@ -2,10 +2,12 @@
 // The version history (GT-06A): every version with its thumbnail, short id, parent, how it was made and when; pick any two
 // to compare in words and side by side (switchable on the phone); restore one without changing or generating anything.
 // The selected version is the one checkout and the wall use, and it is named at the top so nothing is ambiguous.
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { DesignVersion, Stub } from "../types";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play } from "@/customer/studio/feedback";
+import { api, ApiError, type ApprovalInfo } from "@/customer/account/api";
+import { messageFor } from "@/customer/feedback-messages/messages";
 import { PunchTabs, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { atVersion } from "../editor/ops";
 import { whenLabel } from "../facts/FactsReview";
@@ -45,6 +47,81 @@ function Identity({ stub, v }: { stub: Stub; v: DesignVersion }) {
   );
 }
 
+/** The print approval of the selected version (GT-06B): read from the server, changed only by the two buttons. Never a purchase. */
+function PrintApproval({ stub }: { stub: Stub }) {
+  const [live, setLive] = useState<ApprovalInfo | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "off">("loading");
+  const [said, setSaid] = useState("");
+  const [busy, setBusy] = useState(false);
+  const stubId = stub.id;
+  const versionId = stub.currentVersionId;
+
+  // null: signed out, or not saved to a wall yet (approval needs both).
+  const show = useCallback(
+    (all: ApprovalInfo[] | null) => {
+      setLive(all?.find((x) => x.approval.purpose === "print.compose" && x.status === "active" && x.approval.binding.versionId === versionId) ?? null);
+      setState(all ? "ready" : "off");
+    },
+    [versionId],
+  );
+  useEffect(() => {
+    let alive = true;
+    api.approvals(stubId).then(
+      (all) => alive && show(all),
+      () => alive && show(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [stubId, show, stub.updatedAt]);
+
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      play("stamp");
+      setSaid(done);
+    } catch (e) {
+      setSaid(messageFor(e instanceof ApiError ? e.code : "unknown").message);
+    }
+    await api.approvals(stubId).then(show, () => show(null));
+    setBusy(false);
+  };
+
+  if (state === "loading") return null;
+  return (
+    <div className={styles.approval} data-approved={live ? "true" : undefined}>
+      {state === "off" ? (
+        <p className={styles.note}>Sign in and save this stub to your wall to approve it for print.</p>
+      ) : live ? (
+        <>
+          <p className={styles.selectedLine}>
+            <strong>Approved for print</strong> · <span className={styles.hash}>{live.approval.id.slice(4, 10)}</span>
+          </p>
+          <p className={styles.note}>Covers this version, its facts and settings until {whenLabel(live.approval.expiresAt)}. Change any of them and it needs approving again. It isn&apos;t an order.</p>
+          <Tags label="Print approval">
+            <Tag disabled={busy} onClick={() => act(() => api.revokeApproval(stubId, live.approval.id), "Approval revoked. Your art is still saved.")}>
+              Revoke approval
+            </Tag>
+          </Tags>
+        </>
+      ) : (
+        <>
+          <p className={styles.note}>Not approved for print yet. Approving covers this exact version, its facts and settings for 7 days. It isn&apos;t an order or a payment.</p>
+          <Tags label="Print approval">
+            <Tag disabled={busy} onClick={() => act(() => api.approve(stubId, versionId), "Approved for print.")}>
+              Approve for print
+            </Tag>
+          </Tags>
+        </>
+      )}
+      <p className={styles.note} role="status" data-announce="change">
+        {said}
+      </p>
+    </div>
+  );
+}
+
 export function VersionsPanel({ stub, onChange, layout }: Props) {
   const [picks, setPicks] = useState<string[]>([]);
   const [side, setSide] = useState<"a" | "b">("a");
@@ -73,6 +150,7 @@ export function VersionsPanel({ stub, onChange, layout }: Props) {
           <span className={styles.hash}>#{selected.hash}</span> {selected.text}
         </p>
         <p className={styles.note}>Checkout and your wall use this version. Pick another below to switch. Nothing is made again.</p>
+        <PrintApproval stub={stub} />
       </section>
 
       <ul className={styles.list} aria-label="Design versions, newest first">

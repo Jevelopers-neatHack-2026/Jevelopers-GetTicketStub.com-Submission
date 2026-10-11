@@ -18,6 +18,13 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+.approval {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--desk-rule);
+}
 .note {
   margin: 0;
   font: var(--type-label);

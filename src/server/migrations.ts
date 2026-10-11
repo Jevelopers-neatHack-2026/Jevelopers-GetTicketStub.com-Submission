@@ -142,6 +142,43 @@ const MIGRATIONS: string[] = [
     SELECT RAISE(ABORT, 'events are kept for 90 days');
   END;
   `,
+  `
+  -- Artwork approvals (ticketstub.approval/1). Append-only: an approval is never updated, and a revocation is a
+  -- new row in its own table. Rows leave only with their account (account deletion), never before: see src/server/approval.ts.
+  -- record is the signed record as canonical JSON (hashes, ids and times only); the token is re-derived from it.
+  CREATE TABLE approvals (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    tenant TEXT NOT NULL,
+    project TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    idem_key TEXT NOT NULL,
+    record TEXT NOT NULL,
+    issued_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+  CREATE INDEX approvals_project ON approvals (tenant, project, seq);
+  CREATE TABLE approval_revocations (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    approval_id TEXT NOT NULL UNIQUE REFERENCES approvals (id),
+    tenant TEXT NOT NULL,
+    revoked_at INTEGER NOT NULL
+  );
+  CREATE TRIGGER approvals_no_update BEFORE UPDATE ON approvals BEGIN
+    SELECT RAISE(ABORT, 'approvals are append-only');
+  END;
+  CREATE TRIGGER approval_revocations_no_update BEFORE UPDATE ON approval_revocations BEGIN
+    SELECT RAISE(ABORT, 'revocations are append-only');
+  END;
+  CREATE TRIGGER approvals_keep BEFORE DELETE ON approvals
+  WHEN EXISTS (SELECT 1 FROM accounts WHERE id = OLD.tenant) BEGIN
+    SELECT RAISE(ABORT, 'approvals are kept while their account exists');
+  END;
+  CREATE TRIGGER approval_revocations_keep BEFORE DELETE ON approval_revocations
+  WHEN EXISTS (SELECT 1 FROM accounts WHERE id = OLD.tenant) BEGIN
+    SELECT RAISE(ABORT, 'revocations are kept while their account exists');
+  END;
+  `,
 ];
 
 export function migrate(db: DatabaseSync): void {
