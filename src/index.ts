@@ -42,3 +42,29 @@ export type {
   VerifiedSandboxDecision
 } from "./provider-matrix.js";
 export * from "./security.js";
+export {
+  evaluatePrivateQuoteCurrent,
+  executePrivateQuote,
+  PRIVATE_QUOTE_FORMAT,
+  QuoteExecutionError
+} from "./quotes.js";
+export type {
+  BoundedQuotePort,
+  PrivateQuoteBinding,
+  PrivateQuoteResponse,
+  PrivateQuoteSnapshot,
+  ProviderAmountInput,
+  QuoteClock,
+  QuoteCurrentEvaluation,
+  QuoteCurrentReason,
+  QuoteDependencies,
+  QuoteErrorCode,
+  QuoteExecutionPolicy,
+  QuoteLeadTime,
+  QuoteProviderCallContext,
+  QuoteProviderRequest,
+  QuoteRequiredAction,
+  QuoteUnknownReason,
+  QuotedAmount
+} from "./quotes.js";
+export type { ExactMoney as PrivateQuoteExactMoney } from "./quotes.js";

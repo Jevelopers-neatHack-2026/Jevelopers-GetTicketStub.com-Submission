@@ -16,6 +16,8 @@ The private FC-03 catalog normalizer is exported from the package root and cover
 
 The deterministic FC-02 mock adapter is compiled for local runtime tests and covered by `npm test` / `npm run verify:mock`. It exercises simulated provider behavior, restart snapshots, and runtime observations through the local durable metering outbox; its synthetic authorization, budget, and contract fixtures do not establish provider sandbox, finance, or release readiness. See [simulator behavior and evidence limits](docs/simulator.md).
 
+The private FC-04 quote normalizer is exported from the package root and covered by `npm test` / `npm run test:quote`; its offline evidence command is `npm run verify:quote`. It obtains estimates only through an injected bounded quote port. It does not authorize submission, reserve a budget, or record an actual expense, and this repository includes no live provider adapter or network transport. The canonical shared-contracts #25 mapping, consumer conformance, and scoped persistence remain pending; sandbox and release readiness remain false. See [quote semantics and evidence limits](docs/quotes.md).
+
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
