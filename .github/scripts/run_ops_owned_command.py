@@ -109,6 +109,7 @@ RECEIPT_KEYS = frozenset({
 })
 TIMEOUT_STAGES = frozenset({"none", "command_wait", "watchdog", "signal", "launch_gate"})
 ESCALATION_STAGES = frozenset({"none", "term", "kill", "unconfirmed"})
+ESCALATION_STAGE_RANK = {"none": 0, "term": 1, "kill": 2, "unconfirmed": 3}
 PROCESS_SIGNAL_NAMES = {signal.SIGINT: "SIGINT", signal.SIGTERM: "SIGTERM"}
 _received_signal: int | None = None
 
@@ -683,6 +684,30 @@ def cleanup_target_group(pgid: int, process: subprocess.Popen[bytes] | None,
     if not group_absent:
         escalation = "unconfirmed"
     return command_exit, command_reaped, group_absent, capture_drained, escalation
+
+
+def combine_escalation_stages(*stages: object) -> str:
+    """Keep the strongest fixed cleanup stage while preserving uncertainty."""
+    selected = "none"
+    for stage in stages:
+        if not isinstance(stage, str) or stage not in ESCALATION_STAGE_RANK:
+            stage = "unconfirmed"
+        if ESCALATION_STAGE_RANK[stage] > ESCALATION_STAGE_RANK[selected]:
+            selected = stage
+    return selected
+
+
+def cleanup_record_escalation(record: object) -> str:
+    """Return only a bounded stage from an already schema-validated record."""
+    if not isinstance(record, dict) or record.get("allAbsent") is not True:
+        return "unconfirmed"
+    if record.get("not_needed") is True:
+        return "none"
+    for phase in ("kill", "term"):
+        signals = record.get(phase)
+        if isinstance(signals, dict) and any(value == "sent" for value in signals.values()):
+            return phase
+    return "none"
 
 
 def stop_watchdog(process: subprocess.Popen[bytes], pgid: int | None,
@@ -1822,12 +1847,24 @@ def valid_cleanup_record(value: object, expected_groups: list[int] | None,
     if expected_groups is not None and sorted(groups) != sorted(expected_groups):
         return False
     if value.get("not_needed") is True:
-        return allow_not_needed and groups == [] and all_absent is True and value.get("final") == {}
+        return (allow_not_needed and groups == [] and all_absent is True
+                and value.get("final") == {} and "term" not in value and "kill" not in value)
     final = value.get("final")
     if not isinstance(final, dict) or set(final) != {str(group) for group in groups}:
         return False
     if all_absent and any(state is not False for state in final.values()):
         return False
+    if "term" not in value or "kill" not in value:
+        return False
+    allowed_signal_results = {"sent", "already_absent", "permission_unknown", "signal_error"}
+    expected_signal_keys = {str(group) for group in groups}
+    for phase in ("term", "kill"):
+        signals = value.get(phase)
+        if (not isinstance(signals, dict)
+                or not set(signals).issubset(expected_signal_keys)
+                or any(not isinstance(result, str) or result not in allowed_signal_results
+                       for result in signals.values())):
+            return False
     return True
 
 
@@ -1932,6 +1969,7 @@ def run_route(route: str, root: Path) -> int:
     watchdog_absent = False
     timeout_stage = "none"
     escalation_stage = "none"
+    watchdog_target_escalation = "none"
     capture: Capture | None = None
     artifact_root_identity: tuple[int, int] | None = None
     state_directory_identities: dict[str, tuple[int, int]] = {}
@@ -2093,6 +2131,10 @@ def run_route(route: str, root: Path) -> int:
                 watchdog_record["targetAckSent"] is True
                 and (timed_out or watchdog_record["controlState"] == "cleanup")
             )
+            if watchdog_target_cleanup_attempted:
+                watchdog_target_escalation = cleanup_record_escalation(
+                    watchdog_record["targetCleanup"]
+                )
             if (watchdog_target_cleanup_attempted
                     and watchdog_record["targetCleanup"].get("allAbsent") is not True):
                 owner_error = True
@@ -2104,6 +2146,9 @@ def run_route(route: str, root: Path) -> int:
                  escalation_stage) = cleanup_target_group(
                     target_pgid, process, command_exit, command_reaped,
                     capture, cleanup_budget, watchdog_target_cleanup_attempted,
+                )
+                escalation_stage = combine_escalation_stages(
+                    escalation_stage, watchdog_target_escalation
                 )
             else:
                 command_exit, command_reaped, capture_drained = wait_process_and_capture(
@@ -2135,9 +2180,9 @@ def run_route(route: str, root: Path) -> int:
             except Exception:
                 owner_error = True
                 custody["sidecarsReconciled"] = False
-            if custody.get("escalationStage") in ("term", "kill"):
-                if escalation_stage == "none" or custody["escalationStage"] == "kill":
-                    escalation_stage = str(custody["escalationStage"])
+            escalation_stage = combine_escalation_stages(
+                escalation_stage, custody.get("escalationStage", "none")
+            )
             if (custody.get("outerRegistryEmpty") is not True
                     or custody.get("localRegistryEmpty") is not True
                     or custody.get("sidecarsReconciled") is not True):

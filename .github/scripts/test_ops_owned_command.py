@@ -6,6 +6,7 @@ signal a process group and do not invoke npm, Make, Node, a fixture, or CI.
 from __future__ import annotations
 
 import hashlib
+import io
 import importlib.util
 import json
 import os
@@ -76,8 +77,23 @@ class FakePipe:
                 self.last_chunk_returned.set()
             return chunk
         if self.hold_open_after_chunks:
-            self.release.wait()
+            # Keep the negative "pipe is still open" assertion meaningful,
+            # but never let a broken test cleanup hold interpreter shutdown.
+            self.release.wait(1.0)
         return b""
+
+
+def run_fake_capture_assertions(thread: threading.Thread, pipe: FakePipe,
+                                assertions) -> None:
+    thread.daemon = True
+    thread.start()
+    try:
+        assertions()
+    finally:
+        pipe.release.set()
+        thread.join(0.5)
+    if thread.is_alive():
+        raise AssertionError("fake capture thread did not stop after release")
 
 
 def private_file(path: Path, data: bytes = b"") -> None:
@@ -106,34 +122,404 @@ def custody_sidecar(directory: Path, token: str, *, group_id: int | None = None,
 
 
 def valid_watchdog_result(pid: int, target_pgid: int | None,
-                          control_state: str = "finish") -> dict[str, object]:
+                          control_state: str = "finish", *,
+                          target_escalation: str = "none",
+                          timed_out: bool = False) -> dict[str, object]:
     acknowledged = target_pgid is not None
+    cleanup_requested = timed_out or control_state == "cleanup"
+    target_cleaned = acknowledged and cleanup_requested
     target_cleanup = {
-        "groups": [target_pgid] if acknowledged and control_state == "cleanup" else [],
-        "final": {str(target_pgid): False} if acknowledged and control_state == "cleanup" else {},
+        "groups": [target_pgid] if target_cleaned else [],
+        "final": {str(target_pgid): False} if target_cleaned else {},
         "allAbsent": True,
+        "term": ({str(target_pgid): "sent"}
+                 if target_cleaned and target_escalation == "term" else {}),
+        "kill": ({str(target_pgid): "sent"}
+                 if target_cleaned and target_escalation == "kill" else {}),
     }
-    if not acknowledged or control_state == "finish":
+    if not acknowledged or not cleanup_requested:
         target_cleanup["not_needed"] = True
+        target_cleanup.pop("term")
+        target_cleanup.pop("kill")
+    registry_cleanup: dict[str, object] = {
+        "groups": [], "final": {}, "allAbsent": True,
+    }
+    if timed_out:
+        registry_cleanup.update({"term": {}, "kill": {}})
+    else:
+        registry_cleanup["not_needed"] = True
     return {
         "schema": "ops-owned-group-watchdog-result.v1",
         "pid": pid,
         "pgid": pid,
         "startedMonotonicNs": 1,
-        "timedOut": False,
-        "controlState": control_state,
+        "timedOut": timed_out,
+        "controlState": "watchdog_timeout" if timed_out else control_state,
         "targetPgid": target_pgid,
         "targetAckSent": acknowledged,
         "targetCleanup": target_cleanup,
         "registryError": None,
-        "registeredGroupCleanup": {
-            "groups": [], "final": {}, "allAbsent": True, "not_needed": True,
-        },
+        "registeredGroupCleanup": registry_cleanup,
         "elapsedMs": 25,
     }
 
 
+def run_fake_route_case(root: Path, *, ack_ready: bool = True,
+                        gate_write: bool = True, command_exit: int = 0,
+                        result_mode: str = "valid", target_escalation: str = "none",
+                        parent_escalation: str = "none",
+                        custody_escalation: str = "none",
+                        maximum_schedule: bool = False
+                        ) -> tuple[int, dict[str, object], dict[str, object]]:
+    """Drive run_route with fake processes, probes, signals, and wait budget."""
+    events: list[tuple[object, ...]] = []
+    processes: list[object] = []
+    budget_refs: list[OWNER.WaitBudget] = []
+    clock_ms = [0]
+    watchdog_pid = 45_001
+    target_pid = 45_002
+    state: dict[str, object] = {
+        "gate_released": False,
+        "wait_grants": [],
+        "signal_calls": [],
+        "group_probes": [],
+        "getpgid_calls": [],
+        "killpg_calls": [],
+        "custody_watchdog_cleanup": None,
+        "result_read_after_exit": False,
+    }
+
+    class FakeProcess:
+        def __init__(self, pid: int, returncode: int | None):
+            self.pid = pid
+            self.returncode = returncode
+            self.stdout = object()
+            self.stderr = object()
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+    class FakeCapture:
+        def __init__(self, paths: dict[str, Path]):
+            self.paths = paths
+            self.overflow = threading.Event()
+            self.read_failed = threading.Event()
+
+        def start(self, process: FakeProcess) -> None:
+            events.append(("capture_start", process.pid))
+
+    def consume_waits(budget: OWNER.WaitBudget, waits: list[int]) -> None:
+        for requested in waits:
+            started = clock_ms[0] / 1000
+            granted, limited = budget.reserve(requested)
+            state["wait_grants"].append((requested, granted))
+            clock_ms[0] += granted
+            budget.settle(granted, started, limited, True)
+
+    def fake_popen(_argv, **_kwargs):
+        if not processes:
+            process = FakeProcess(watchdog_pid, None)
+            events.append(("popen_watchdog", watchdog_pid))
+        else:
+            process = FakeProcess(target_pid, None)
+            events.append(("popen_target", target_pid))
+        processes.append(process)
+        return process
+
+    def fake_wait_file(path: Path, _process: FakeProcess, _timeout_ms: int,
+                       _budget: OWNER.WaitBudget | None = None) -> bool:
+        result = path.name == "watchdog-ready.json" or (
+            path.name == "watchdog-target-ack.json" and ack_ready
+        )
+        events.append(("wait_file", path.name, result))
+        return result
+
+    def fake_read_small_json(path: Path, _limit: int = 4_096):
+        events.append(("read_json", path.name))
+        if path.name == "watchdog-ready.json":
+            return {
+                "schema": "ops-owned-group-watchdog-ready.v1",
+                "pid": watchdog_pid,
+                "pgid": watchdog_pid,
+                "startedMonotonicNs": 1,
+            }
+        if path.name == "watchdog-target-ack.json":
+            return {
+                "schema": "ops-owned-group-target-ack.v1",
+                "targetPgid": target_pid,
+                "verified": True,
+            }
+        if path.name == "watchdog-result.json":
+            state["result_read_after_exit"] = processes[0].returncode is not None
+            if result_mode == "malformed":
+                return {"schema": "invalid"}
+            if not ack_ready:
+                return valid_watchdog_result(watchdog_pid, None, "cleanup")
+            timed_out = result_mode == "timeout"
+            control_state = ("finish" if command_exit == 0 and gate_write and not timed_out
+                             else "cleanup")
+            return valid_watchdog_result(
+                watchdog_pid, target_pid, control_state,
+                target_escalation=target_escalation, timed_out=timed_out,
+            )
+        raise AssertionError("unexpected fake protocol path")
+
+    def fake_control(_path: Path, control_state: str, pgid: int | None) -> bool:
+        events.append(("control", control_state, pgid))
+        return True
+
+    def fake_gate_write(_path: Path, _value: object, _mode: int = 0o600) -> bool:
+        state["gate_released"] = gate_write
+        if gate_write:
+            processes[1].returncode = command_exit
+        events.append(("gate_write", gate_write))
+        return gate_write
+
+    def fake_signal(signum: int, handler: object) -> object:
+        events.append(("signal", signum, handler))
+        state["signal_calls"].append((signum, handler))
+        return f"previous:{signum}"
+
+    def fake_stop_watchdog(process: FakeProcess, _pgid: int,
+                           budget: OWNER.WaitBudget) -> dict[str, object]:
+        process.returncode = 0
+        events.append(("stop_watchdog", process.pid))
+        budget_refs.append(budget)
+        if maximum_schedule:
+            consume_waits(budget, list(OWNER.WATCHDOG_STOP_SEQUENCE_MS))
+        return {
+            "exitCode": 0,
+            "reaped": True,
+            "groupAbsent": True,
+            "cleanup": {"allAbsent": True, "groups": []},
+        }
+
+    def fake_cleanup_target(pgid: int, process: FakeProcess,
+                            previous_exit: int | None, _reaped: bool,
+                            _capture: FakeCapture, budget: OWNER.WaitBudget,
+                            _cleanup_attempted: bool):
+        events.append(("cleanup_target", pgid))
+        budget_refs.append(budget)
+        if maximum_schedule:
+            consume_waits(budget, [
+                OWNER.TERM_WAIT_MS, OWNER.KILL_WAIT_MS,
+                OWNER.DIRECT_REAP_MS, OWNER.TARGET_RECHECK_MS,
+            ])
+        if process.returncode is None:
+            process.returncode = command_exit
+        return (process.returncode if previous_exit is None else previous_exit,
+                True, True, True, parent_escalation)
+
+    def fake_reconcile(_tmp_root: Path, _registry_path: Path,
+                       _target_pgid: int | None, _watchdog_pgid: int | None,
+                       _identities: dict[str, tuple[int, int]],
+                       budget: OWNER.WaitBudget,
+                       watchdog_cleanup: dict[str, object] | None = None
+                       ) -> dict[str, object]:
+        events.append(("reconcile_custody",))
+        budget_refs.append(budget)
+        state["custody_watchdog_cleanup"] = watchdog_cleanup
+        if maximum_schedule:
+            consume_waits(budget, [
+                OWNER.TERM_WAIT_MS, OWNER.KILL_WAIT_MS, OWNER.TARGET_RECHECK_MS,
+                *([OWNER.SIDECAR_GROUP_PROBE_MS] * OWNER.SIDECAR_GROUP_PROBE_MAX),
+            ])
+        return {
+            "outerRegistryEmpty": True,
+            "localRegistryEmpty": True,
+            "sidecarsReconciled": True,
+            "groupsObserved": 0,
+            "sidecarsObserved": 0,
+            "sidecarsReconciledCount": 0,
+            "pendingLaunchesRemaining": 0,
+            "escalationStage": custody_escalation,
+        }
+
+    def fake_group_exists(pgid: int) -> bool:
+        state["group_probes"].append(pgid)
+        return True
+
+    def fake_killpg(pgid: int, sig: int) -> None:
+        state["killpg_calls"].append((pgid, sig))
+
+    def fake_getpgid(pid: int) -> int:
+        state["getpgid_calls"].append(pid)
+        return pid
+
+    with (
+        patch.object(OWNER.subprocess, "Popen", side_effect=fake_popen),
+        patch.object(OWNER.shutil, "which", return_value="/fake/bin/npm"),
+        patch.object(OWNER, "private_environment", return_value={"PATH": "/fake/bin"}),
+        patch.object(OWNER, "Capture", FakeCapture),
+        patch.object(OWNER, "wait_file", side_effect=fake_wait_file),
+        patch.object(OWNER, "read_small_json", side_effect=fake_read_small_json),
+        patch.object(OWNER, "atomic_control", side_effect=fake_control),
+        patch.object(OWNER, "atomic_write_json", side_effect=fake_gate_write),
+        patch.object(OWNER, "stop_watchdog", side_effect=fake_stop_watchdog),
+        patch.object(OWNER, "cleanup_target_group", side_effect=fake_cleanup_target),
+        patch.object(OWNER, "reconcile_custody", side_effect=fake_reconcile),
+        patch.object(OWNER, "group_exists", side_effect=fake_group_exists),
+        patch.object(OWNER.os, "getpgid", side_effect=fake_getpgid),
+        patch.object(OWNER.os, "getpgrp", return_value=45_000),
+        patch.object(OWNER.os, "killpg", side_effect=fake_killpg),
+        patch.object(OWNER.signal, "signal", side_effect=fake_signal),
+        patch.object(OWNER.time, "monotonic", side_effect=lambda: clock_ms[0] / 1000),
+        patch.object(OWNER.sys, "stderr", io.StringIO()),
+    ):
+        status = OWNER.run_route("runtime-foundation", root)
+
+    receipt_path = root / ".runtime-artifacts" / str(
+        OWNER.ROUTES["runtime-foundation"]["receipt"]
+    )
+    saved_receipt = OWNER.strict_json_bytes(
+        OWNER.read_bounded(receipt_path, OWNER.RECEIPT_MAX_BYTES, mode=0o600)
+    )
+    state["events"] = events
+    state["process_count"] = len(processes)
+    state["budget_refs"] = budget_refs
+    state["budget_state"] = (
+        budget_refs[0].maximum_ms, budget_refs[0].remaining_ms,
+        budget_refs[0].used_ms, budget_refs[0].exhausted,
+    ) if budget_refs else None
+    state["watchdog_pid"] = watchdog_pid
+    state["target_pid"] = target_pid
+    return status, saved_receipt, state
+
+
 class RouteValidationTests(unittest.TestCase):
+    def test_run_route_fake_readiness_ack_gate_and_signal_restoration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            status, saved, state = run_fake_route_case(root)
+
+        events = state["events"]
+        self.assertEqual(status, 0)
+        self.assertTrue(OWNER.validate_receipt_value(saved, "runtime-foundation"))
+        self.assertEqual(set(saved), OWNER.RECEIPT_KEYS)
+        self.assertEqual(state["process_count"], 2)
+        self.assertTrue(state["gate_released"])
+        self.assertEqual(state["group_probes"], [state["watchdog_pid"]])
+        self.assertEqual(state["getpgid_calls"], [state["watchdog_pid"]])
+        self.assertEqual(state["killpg_calls"], [])
+        self.assertTrue(state["result_read_after_exit"])
+        self.assertLess(
+            events.index(("read_json", "watchdog-ready.json")),
+            events.index(("popen_target", state["target_pid"])),
+        )
+        self.assertLess(
+            events.index(("read_json", "watchdog-target-ack.json")),
+            events.index(("gate_write", True)),
+        )
+        self.assertLess(
+            events.index(("stop_watchdog", state["watchdog_pid"])),
+            events.index(("read_json", "watchdog-result.json")),
+        )
+        for signum in OWNER.PROCESS_SIGNAL_NAMES:
+            calls = [(called_signum, handler) for called_signum, handler
+                     in state["signal_calls"] if called_signum == signum]
+            self.assertEqual(len(calls), 2)
+            self.assertIs(calls[0][1], OWNER._signal_handler)
+            self.assertEqual(calls[1][1], f"previous:{signum}")
+
+    def test_run_route_fake_failures_before_and_after_ack_retain_cleanup(self) -> None:
+        cases = (
+            {"ack_ready": False, "gate_write": True, "gate_expected": False},
+            {"ack_ready": True, "gate_write": False, "gate_expected": False},
+        )
+        for case in cases:
+            with self.subTest(ack_ready=case["ack_ready"]), tempfile.TemporaryDirectory() as temporary:
+                status, saved, state = run_fake_route_case(
+                    Path(temporary), ack_ready=case["ack_ready"],
+                    gate_write=case["gate_write"],
+                )
+                events = state["events"]
+                self.assertEqual(status, 1)
+                self.assertEqual(saved["wrapperExitCode"], 1)
+                self.assertEqual(saved["commandExitCode"], 0)
+                self.assertEqual(saved["timeoutStage"], "launch_gate")
+                self.assertTrue(saved["commandGroupAbsent"])
+                self.assertTrue(saved["sidecarsReconciled"])
+                self.assertEqual(state["gate_released"], case["gate_expected"])
+                self.assertEqual(state["process_count"], 2)
+                self.assertIn(("cleanup_target", state["target_pid"]), events)
+                if case["ack_ready"]:
+                    self.assertLess(
+                        events.index(("read_json", "watchdog-target-ack.json")),
+                        events.index(("gate_write", False)),
+                    )
+                else:
+                    self.assertFalse(any(
+                        event[0] == "gate_write" for event in events
+                    ))
+                self.assertEqual(state["killpg_calls"], [])
+
+    def test_run_route_fake_timeout_and_malformed_watchdog_result_fail_closed(self) -> None:
+        for result_mode in ("timeout", "malformed"):
+            with self.subTest(result_mode=result_mode), tempfile.TemporaryDirectory() as temporary:
+                status, saved, state = run_fake_route_case(
+                    Path(temporary), result_mode=result_mode,
+                )
+                self.assertEqual(status, 1)
+                self.assertEqual(saved["wrapperExitCode"], 1)
+                self.assertTrue(saved["commandGroupAbsent"])
+                self.assertEqual(state["killpg_calls"], [])
+                if result_mode == "timeout":
+                    self.assertEqual(saved["timeoutStage"], "watchdog")
+                    self.assertTrue(saved["sidecarsReconciled"])
+                    self.assertIsNotNone(state["custody_watchdog_cleanup"])
+                else:
+                    self.assertFalse(saved["sidecarsReconciled"])
+                    self.assertIsNone(state["custody_watchdog_cleanup"])
+
+    def test_run_route_fake_receipt_preserves_watchdog_escalation_and_command_status(self) -> None:
+        cases = (("term", "none", "term"), ("kill", "term", "kill"))
+        for watchdog_stage, registry_stage, expected_stage in cases:
+            with self.subTest(watchdog_stage=watchdog_stage), tempfile.TemporaryDirectory() as temporary:
+                status, saved, state = run_fake_route_case(
+                    Path(temporary), command_exit=37,
+                    target_escalation=watchdog_stage,
+                    custody_escalation=registry_stage,
+                )
+                self.assertEqual(status, 37)
+                self.assertEqual(saved["commandExitCode"], 37)
+                self.assertEqual(saved["wrapperExitCode"], 37)
+                self.assertEqual(saved["escalationStage"], expected_stage)
+                self.assertTrue(saved["commandGroupAbsent"])
+                self.assertEqual(set(saved), OWNER.RECEIPT_KEYS)
+                self.assertEqual(state["killpg_calls"], [])
+
+    def test_run_route_fake_uses_one_shared_maximum_wait_schedule(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            status, saved, state = run_fake_route_case(
+                Path(temporary), parent_escalation="term", maximum_schedule=True,
+            )
+
+        expected = (
+            sum(OWNER.WATCHDOG_STOP_SEQUENCE_MS)
+            + OWNER.TERM_WAIT_MS + OWNER.KILL_WAIT_MS
+            + OWNER.DIRECT_REAP_MS + OWNER.TARGET_RECHECK_MS
+            + OWNER.TERM_WAIT_MS + OWNER.KILL_WAIT_MS + OWNER.TARGET_RECHECK_MS
+            + OWNER.SIDECAR_GROUP_PROBE_MS * OWNER.SIDECAR_GROUP_PROBE_MAX
+        )
+        refs = state["budget_refs"]
+        self.assertEqual(status, 0)
+        self.assertEqual(saved["escalationStage"], "term")
+        self.assertEqual(expected, OWNER.POST_COMMAND_WAIT_MAX_MS)
+        self.assertEqual(len(refs), 3)
+        self.assertTrue(all(budget is refs[0] for budget in refs))
+        self.assertEqual(
+            state["budget_state"],
+            (OWNER.POST_COMMAND_WAIT_MAX_MS, 0, OWNER.POST_COMMAND_WAIT_MAX_MS, False),
+        )
+        self.assertTrue(all(requested == granted for requested, granted in state["wait_grants"]))
+        self.assertEqual(state["killpg_calls"], [])
+
+    def test_escalation_precedence_is_fixed_and_fail_closed(self) -> None:
+        self.assertEqual(OWNER.combine_escalation_stages("none", "term"), "term")
+        self.assertEqual(OWNER.combine_escalation_stages("term", "kill"), "kill")
+        self.assertEqual(OWNER.combine_escalation_stages("kill", "unconfirmed"), "unconfirmed")
+        self.assertEqual(OWNER.combine_escalation_stages("term", "private detail"), "unconfirmed")
+
     def test_exact_route_vectors_only(self) -> None:
         for route in OWNER.ROUTE_IDS:
             self.assertEqual(OWNER.parse_route_args(["--route", route]), route)
@@ -424,14 +810,32 @@ class RouteValidationTests(unittest.TestCase):
             capture = OWNER.Capture({"stdout": output})
             pipe = FakePipe([b"1234", b"5"], hold_open_after_chunks=True)
             thread = threading.Thread(target=capture._drain, args=("stdout", pipe))
-            thread.start()
-            self.assertTrue(pipe.last_chunk_returned.wait(1.0))
-            self.assertTrue(capture.overflow.wait(1.0))
-            self.assertTrue(thread.is_alive())
-            self.assertEqual(output.read_bytes(), b"1234")
-            pipe.release.set()
-            thread.join(1.0)
+
+            def assert_overflow_while_open() -> None:
+                self.assertTrue(pipe.last_chunk_returned.wait(0.5))
+                self.assertTrue(capture.overflow.wait(0.5))
+                self.assertTrue(thread.is_alive())
+                self.assertEqual(output.read_bytes(), b"1234")
+
+            run_fake_capture_assertions(thread, pipe, assert_overflow_while_open)
             self.assertFalse(thread.is_alive())
+
+            private_file(output)
+            forced_pipe = FakePipe([b"1234", b"5"], hold_open_after_chunks=True)
+            forced_capture = OWNER.Capture({"stdout": output})
+            forced_thread = threading.Thread(
+                target=forced_capture._drain, args=("stdout", forced_pipe)
+            )
+
+            def force_assertion_error() -> None:
+                self.assertTrue(forced_pipe.last_chunk_returned.wait(0.5))
+                raise AssertionError("forced fake assertion before normal release")
+
+            with self.assertRaisesRegex(AssertionError, "forced fake assertion"):
+                run_fake_capture_assertions(
+                    forced_thread, forced_pipe, force_assertion_error
+                )
+            self.assertFalse(forced_thread.is_alive())
 
     def test_capture_combined_cap_and_read_write_errors_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary, \
