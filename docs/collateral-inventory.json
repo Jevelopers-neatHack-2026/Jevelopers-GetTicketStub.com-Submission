@@ -4960,6 +4960,18 @@
       "trackedAtRevision": "3b06552124bc38b8516659471235839c3ad5d133",
       "sha256": "370228dd6e87aff579500b823344c5a739ae9fefb821e33a5923fc3f5de483f0",
       "provenanceRecordId": "PROV-FILE-BB0E1AB425C4"
+    },
+    {
+      "fileId": "FILE-DA43D93E03D4",
+      "path": "release/v0.1.0-rehearsal/history/manifest-67758e86c3d3948e.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "98f63c9763099a8c874da487ad3e11ada9578b49",
+      "sha256": "67758e86c3d3948edba7dd58f049457c7959eb38a72c6cca6fde2ab152bfe4d3",
+      "provenanceRecordId": "PROV-FILE-DA43D93E03D4"
     }
   ],
   "submissionScope": {
