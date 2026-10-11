@@ -1,0 +1,30 @@
+{
+  "starting_head": "d428365ab7a76951bf044f7c7d0653796318b148",
+  "package_version": "0.8.2",
+  "integration_package_version": "0.8.3",
+  "integration_sources": ["4c696b6141c722eca7defa41460768fb7fe0679e", "36caec56456a5f5b54a961590ff00c97212b0860"],
+  "integration_decision": "Retain both repair histories and all 27 desktop plus 157 native regression cases. Four desktop duplicate-success/failure expectations are tightened to exact INVALID_BATCH refusals: the unchanged context interface supplies no prior admission evidence. No assertion is skipped or weakened; accepted admission still permits later failure and genuine partial outcomes.",
+  "status": "locally_repaired_review_pending",
+  "fresh_whole_candidate_review": "required_before_merge",
+  "findings": [
+    {
+      "id": "SC-CHK-009",
+      "cause": "ProductionBundle compared only handoff ID and digest with the supplied manifest; related commerce paths omitted contract identity.",
+      "repair": "Compare contract/schema/ID/digest and the record's own revision when present; verify the supplied handoff's canonical digest independently of the rebound lookup.",
+      "coverage": "tests/commerce-semantic-links.test.mjs",
+      "status": "locally_repaired_review_pending"
+    },
+    {
+      "id": "SC-CHK-010",
+      "cause": "Exact receipt membership and hashes could override rejected admission; bound receipt fields and receipt identities were not fully reconciled.",
+      "repair": "Accepted admission permits success, later failure or pending; rejected requires failure; unknown/duplicate remains pending without prior admission evidence. Validate status/error and request identity, unique receipt IDs and complete nonduplicate membership with typed refusals.",
+      "coverage": "tests/research-batch-semantics.test.mjs",
+      "status": "locally_repaired_review_pending"
+    }
+  ],
+  "wire_change": false,
+  "schema_hashes_and_canonical_fixture_bytes": "preserved",
+  "accepted_pins_or_upgrades": false,
+  "prior_dispositions": "Retain the exact d428365 independent review dispositions. Its FC-001 through FC-004 repairs and narrow historical Finance compatibility evidence do not approve commerce/research, this archive, or the whole candidate. Historical checkpoint and owner finding records remain historical evidence.",
+  "limits": "Local semantic repair only. Supervisor owns fresh independent exact-head/base/candidate review, delivery, authenticated owner/consumer acceptance, CI and protected merge. No closure, publication or adoption is claimed."
+}

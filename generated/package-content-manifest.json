@@ -17,6 +17,7 @@
     "compatibility/owner-findings.json": "sha256:439277b856243391f80adafe2fd4db8eb659da98bf215da3df1b125553f6b55f",
     "compatibility/privacy-policy.json": "sha256:305551c6948d793cb720150433848d0894b38b8166600dff5376199dd5269fae",
     "compatibility/proposal-intake.json": "sha256:90cf33964d5c7b91024039070391a0fb2176022367a64aa3dbf55747718ec100",
+    "compatibility/semantic-links-findings.json": "sha256:033141d2b4737b8ea0c93dc0787314d74239f50e2e646a7c08ea1c2c57296899",
     "compatibility/version-policy.json": "sha256:0ab5a03a4045d7667130cf37897cc505428d9bfe90b605eff80d50e1968acbd7",
     "docs/acceptance-criteria.json": "sha256:e68d640eb80a7b8d51176ee29b308f1a1377f42ef90dd3631a12faee6669b09a",
     "docs/adr/0001-canonical-schemas.md": "sha256:97be5ff166a51e5de5192cc8614a1837ed46e48a2598c766611e91bb4ce8db93",
@@ -24,7 +25,7 @@
     "docs/architecture/OWNERSHIP.md": "sha256:5f53c8e15c017e73783d997ce228a3b0528521198f026c0618d5f2b8aa3d7e60",
     "docs/authority-dependencies.json": "sha256:d4bed3cb91e46fa0e13fb50981f6cbb7f63a6aaab23494089cb94e48f44b5293",
     "docs/capability-contracts.md": "sha256:073d6cfb36d5d311146fcce1e26775f2b3715ed68f84b35ffa28c55d1d33b311",
-    "docs/commerce-evidence-contracts.md": "sha256:998397348aecaae227ec022886750a09ef5156c2f3bc583e4ef43801597db006",
+    "docs/commerce-evidence-contracts.md": "sha256:3d9fa7bf179932094a62513fc7e5156e152595b3a7bbff0ca219f01c6ae3f9b9",
     "docs/consumer-handoff.md": "sha256:561885470d00a6dd3cdef4d657798e6b5f7ee81f16b70d6e60073aea1b88e4d9",
     "docs/contract-catalog.md": "sha256:3039072d723c16e2c8af41d520116d120f0713c4395fe9eac413073df3cb8457",
     "docs/dependency-handoff.md": "sha256:dcce9e3b26d6f92aa03081da58521e1a16cbacadcb75f61014c385c13a40445c",
@@ -35,7 +36,7 @@
     "docs/privacy-policy.md": "sha256:8710f71141723a4c7afd07800de636bb44e70e1ba032d499e73989c345204022",
     "docs/release-guide.md": "sha256:65e48d37aff7ef3ea090b59f6bc072ef14f9f62f5b76010ea95eae2ab09dc0a5",
     "docs/requirements.json": "sha256:c82c19b084cb2956a1f4a6318ef05f497d0b262ce2b3d8f38a0e60763cef1de9",
-    "docs/research-creative-contracts.md": "sha256:07b6b7a1d43eef4ed5dd8b69d2b9805c55b3baf6912a7c5a271bc185b78dd4ca",
+    "docs/research-creative-contracts.md": "sha256:c6348d72fcb4f999402d9758a10b1641d59312521d3124d9da28f5253fb0362a",
     "examples/capability-consumer.mjs": "sha256:38651af331cc4135313730d22df9b420d0ef1d206a50d8091f0c7e8b939f5258",
     "examples/commerce-evidence-consumer.mjs": "sha256:f00779982137a5d3f187ad5463bae22a4b97a7e599a72aadd453d7f61e3af71e",
     "examples/consumer.mjs": "sha256:de7af1dbe0eda4c5adf76b4ae524e6409ebe7a889020f5a4353748923126bd95",
@@ -234,13 +235,13 @@
     "tooling/capability-data.mjs": "sha256:4ac642d00b6860e26d3006f8d650d3a626eda3b58daaed7133f1b23fd498319d",
     "tooling/capability-identity.mjs": "sha256:e740cafa16f4dba394d3e9b78f4b1c7badd39edf5a9776f5bc77d2c1a9522c81",
     "tooling/capability.mjs": "sha256:ff9e31737b760196e08851a2a20fae6147a9195bd0ab947518e875ba8fc485e4",
-    "tooling/commerce-evidence.mjs": "sha256:6c056c4c828631178c2a8247f3550dd3214b345e1bc93e0ed1ba08ad005df96b",
+    "tooling/commerce-evidence.mjs": "sha256:0e6bfb76e7d7808c52457986da6d318081a442adbe653174d04b2f894a4a27d3",
     "tooling/finance-v2.mjs": "sha256:59a32db2d6d4c3aef56afa1950c275b73150d58b6f7323339fd935be88cd132a",
     "tooling/fixture-harness.mjs": "sha256:caae1104c26ba8712e8be8f7dbc23bc9de9927d9e6aca4d382a65235339192ed",
     "tooling/historical-finance-fixtures.mjs": "sha256:fd6ba9668356090ff4b2011347b0e4e5c744b946667775c0cf3586305604c85d",
     "tooling/operations.mjs": "sha256:2744ade5ae232d2ecff821bd2a9a8465d96a2590c2e3dc2a202e402d17942bf8",
-    "tooling/research-creative.mjs": "sha256:5255a783831696427d1b29b108727002ea62cd4f203fcdf6bcda47fe756e4631",
+    "tooling/research-creative.mjs": "sha256:0599480ed3dc6bf263f55f7da3710dba6d0a48e741fcbcd86f171edb13fba393",
     "tooling/runtime.mjs": "sha256:66d969987a44cb106644d423e8c915b4fd07516fbf063f5120697aa91bd2333f"
   },
-  "digest": "sha256:ab68de6f4f16e136ba498bc9c29a742b9729ff123acf34f8a14a18ef0fd7a63b"
+  "digest": "sha256:016a308d1d2b3a3c846f0f1f2a0078a1e6af882a3a23206406ddf8098093b2f1"
 }

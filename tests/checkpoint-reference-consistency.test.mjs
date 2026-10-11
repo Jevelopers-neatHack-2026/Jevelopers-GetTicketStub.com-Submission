@@ -53,7 +53,7 @@ for (const policy of ['partial', 'all_or_nothing']) {
   for (const [status, outcome, accepted] of [
     ['rejected', 'successful', false], ['rejected', 'pending', false], ['rejected', 'failed', true],
     ['accepted', 'successful', true], ['accepted', 'failed', true], ['accepted', 'pending', true],
-    ['duplicate', 'successful', true], ['duplicate', 'failed', true], ['duplicate', 'pending', true],
+    ['duplicate', 'successful', false], ['duplicate', 'failed', false], ['duplicate', 'pending', true],
     ['unknown', 'pending', true]
   ]) test('SC-CHK-010 ' + policy + ' admission ' + status + ' with ' + outcome + ' outcome', async () => {
     // Given an exact bound admission receipt with a separately selected batch outcome.
@@ -69,7 +69,8 @@ for (const policy of ['partial', 'all_or_nothing']) {
     assert.equal(validateContract(value.contract, value).ok, true);
     // When the batch reconciles admission evidence and outcome membership.
     const result = checkResearchBatchReceipt(value, context);
-    // Then rejection is terminal failure; admitted work may still succeed, fail or be pending.
+    // Then rejection is terminal failure; accepted work may still succeed, fail or be pending.
+    // Duplicate admission remains unresolved without an independently supplied prior admission.
     if (accepted) assert.equal(result.ok, true);
     else assertFixture(result, { ok: false, code: 'INVALID_BATCH', path: '/' + outcome + '_request_ids' });
   });

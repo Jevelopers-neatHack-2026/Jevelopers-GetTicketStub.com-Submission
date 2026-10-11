@@ -26,6 +26,19 @@ Request receipts bind the exact request hash and identity; answer receipts bind 
 
 The 0.8.3 batch helper reconciles terminal rejected admissions with outcome membership. A bound rejected request must be in failed_request_ids, under either policy; listing it as successful or pending returns INVALID_BATCH at the contradictory membership array. Accepted requests can still fail during execution or remain pending, and a partial batch can retain admitted successes alongside rejected failures. This semantic safety narrowing does not change wire schemas, fixture encodings or acceptance authority.
 
+Each independently supplied request receipt must have a unique receipt ID, match one request and one exact contract/schema/receipt-ID/hash reference, and preserve its request-reference identity/hash and admission/error relationship. Rejection requires an ErrorEnvelope reference; other admission states require null error. Exact hashes and membership cannot override admission. The permitted batch outcomes are:
+
+| Request admission | Permitted batch membership |
+| --- | --- |
+| accepted | successful, failed after admission, or pending |
+| rejected | failed |
+| unknown | pending |
+| duplicate | pending until prior admission is independently resolved |
+
+This interface supplies no prior admission record for unknown/duplicate receipts. It therefore cannot infer completed success or failure from those states. The desktop repair's four duplicate-success/failure positive expectations conflicted with the native repair's typed refusals for the same admission states. Integration retains those cases with exact INVALID_BATCH assertions: duplicate delivery is not independent evidence of accepted or rejected admission. A genuine partial batch may mix accepted successes, accepted later failures, rejected failures and unresolved pending items. All-or-nothing disallows successful membership alongside failed or pending items, while preserving wholly failed or pending observations. Omitted, overlapping, duplicated, malformed or foreign-scope receipts/membership return typed failures. Answer receipt descriptors still require independent exact lookup; this helper neither loads answer records nor infers their request identity from an opaque receipt ID.
+
+The [native candidate finding notes](../compatibility/semantic-links-findings.json) retain the 0.8.2 development evidence for SC-CHK-010 and the related SC-CHK-009 tuple repair, integrated in 0.8.3. Wire schemas and canonical fixture bytes are preserved; no accepted pin, upgrade or closure follows from local validation. A fresh independent review of the resulting exact candidate remains required.
+
 ## Corrections and invalidations
 
 Correction requests are proposed changes bound to the expected package, actor/authority, allowed facts and provenance/evidence. Application-supplied correction context separately determines proposed/accepted/rejected status. Missing/wrong-type context yields typed INVALID_TRUST_CONTEXT, not a throw or approval. An accepted receipt binds the request hash and a new parent-linked immutable package version. Changed facts must match the requested values/status/provenance with advanced revisions; unchanged facts remain exact. No in-place rewrite, duplicate fact insertion or caller approved=true is accepted. EI owns CAS, history and recomputation.

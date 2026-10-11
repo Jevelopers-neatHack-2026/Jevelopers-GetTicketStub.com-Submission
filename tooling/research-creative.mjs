@@ -137,13 +137,18 @@ export function checkEventIntelligencePackage(input, context) {
   const parsed = boundary('EventIntelligencePackage', input, context); return parsed.ok ? packageFacts(parsed.value, context) : parsed;
 }
 
+function requestReceiptFields(value, path = '') {
+  if (value.request_ref.contract !== 'ResearchRequest' || value.request_ref.schema_version !== value.schema_version || value.request_ref.id !== value.request_id || value.request_ref.content_hash !== value.request_hash) return fail('INVALID_RECEIPT', path + '/request_ref');
+  if ((value.status === 'rejected') !== (value.error_ref !== null) || (value.error_ref !== null && value.error_ref.contract !== 'ErrorEnvelope')) return fail('INVALID_RECEIPT', path + '/error_ref');
+  return ok(value);
+}
+
 export function checkResearchRequestReceipt(input, context) {
   const parsed = boundary('ResearchRequestReceipt', input, context); if (!parsed.ok) return parsed;
   const request = validateContract('ResearchRequest', context.request); if (!request.ok || !checkTrustedContext(request.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/request');
   const v = parsed.value;
   if (v.request_id !== request.value.request_id || v.request_hash !== hashManifest(request.value) || v.request_ref.id !== request.value.request_id || v.request_ref.content_hash !== v.request_hash) return fail('INVALID_RECEIPT', '/request_hash');
-  if ((v.status === 'rejected') !== (v.error_ref !== null)) return fail('INVALID_RECEIPT', '/error_ref');
-  return parsed;
+  const fields = requestReceiptFields(v); return fields.ok ? parsed : fields;
 }
 
 export function checkResearchAnswerReceipt(input, context) {
@@ -163,12 +168,23 @@ export function checkResearchBatchReceipt(input, context) {
   const parsed = boundary('ResearchBatchReceipt', input, context); if (!parsed.ok) return parsed;
   const v = parsed.value, ids = [...v.successful_request_ids, ...v.failed_request_ids, ...v.pending_request_ids];
   if (!sameSet(v.request_ids, context.request_ids) || !sameSet(ids, v.request_ids)) return fail('INVALID_BATCH', '/request_ids');
-  if (!Array.isArray(context.request_receipts) || context.request_receipts.some(receipt => !validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok)) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
-  if (!sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
-  for (const receipt of context.request_receipts) {
-    if (!validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok || !v.request_receipt_refs.some(ref => ref.contract === 'ResearchRequestReceipt' && ref.id === receipt.receipt_id && ref.content_hash === hashManifest(receipt))) return fail('INVALID_RECEIPT', '/request_receipt_refs');
-    if (receipt.status === 'rejected' && v.successful_request_ids.includes(receipt.request_id)) return fail('INVALID_BATCH', '/successful_request_ids');
-    if (receipt.status === 'rejected' && v.pending_request_ids.includes(receipt.request_id)) return fail('INVALID_BATCH', '/pending_request_ids');
+  if (!Array.isArray(context.request_receipts)) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  for (const receipt of context.request_receipts) if (!validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  if (!sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || new Set(context.request_receipts.map(receipt => receipt.receipt_id)).size !== context.request_receipts.length || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  for (const [index, receipt] of context.request_receipts.entries()) {
+    const fields = requestReceiptFields(receipt, '/request_receipts/' + index); if (!fields.ok) return fields;
+    if (!v.request_receipt_refs.some(ref => ref.contract === receipt.contract && ref.schema_version === receipt.schema_version && ref.id === receipt.receipt_id && ref.content_hash === hashManifest(receipt))) return fail('INVALID_RECEIPT', '/request_receipt_refs');
+    switch (receipt.status) {
+      case 'accepted': break;
+      case 'rejected':
+        if (!v.failed_request_ids.includes(receipt.request_id)) return fail('INVALID_BATCH', v.successful_request_ids.includes(receipt.request_id) ? '/successful_request_ids' : '/pending_request_ids');
+        break;
+      case 'duplicate':
+      case 'unknown':
+        if (!v.pending_request_ids.includes(receipt.request_id)) return fail('INVALID_BATCH', v.successful_request_ids.includes(receipt.request_id) ? '/successful_request_ids' : '/failed_request_ids');
+        break;
+      default: return fail('INVALID_RECEIPT', '/request_receipts/' + index + '/status');
+    }
   }
   if (v.acceptance_policy !== context.acceptance_policy || (v.acceptance_policy === 'all_or_nothing' && v.successful_request_ids.length && (v.failed_request_ids.length || v.pending_request_ids.length))) return fail('INVALID_BATCH', '/acceptance_policy');
   return parsed;

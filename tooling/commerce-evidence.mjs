@@ -7,6 +7,7 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 const token = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const sameSet = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && new Set(a).size === a.length && a.every(value => b.includes(value));
+const recordReference = (reference, record, identity) => reference.contract === record.contract && reference.schema_version === record.schema_version && Object.entries(identity).every(([key, value]) => reference[key] === value);
 
 export function commerceContentHash(value, field) {
   canonicalJson(value);
@@ -61,14 +62,14 @@ export function checkApprovalReference(input, context) {
   const parsed = boundary('ApprovalReference', input, context); if (!parsed.ok) return parsed;
   const current = approvalState(context); if (!current.ok) return current;
   const v = parsed.value, r = current.value;
-  if (v.approval_id !== r.approval_id || v.receipt_ref.contract !== 'ApprovalReceipt' || v.receipt_ref.id !== r.approval_id || v.receipt_ref.content_hash !== r.receipt_hash || v.binding_hash !== hashManifest(r.binding) || v.intended_use !== r.binding.intended_use || v.audience !== context.audience) return fail('STALE_APPROVAL', '/receipt_ref');
+  if (v.approval_id !== r.approval_id || !recordReference(v.receipt_ref, r, { id: r.approval_id, content_hash: r.receipt_hash }) || v.binding_hash !== hashManifest(r.binding) || v.intended_use !== r.binding.intended_use || v.audience !== context.audience) return fail('STALE_APPROVAL', '/receipt_ref');
   return parsed;
 }
 
 export function checkApprovalVerificationRequest(input, context) {
   const parsed = boundary('ApprovalVerificationRequest', input, context); if (!parsed.ok) return parsed;
   const current = approvalState(context, false); if (!current.ok) return current;
-  if (parsed.value.expected_audience !== context.audience || !same(parsed.value.expected_binding, context.expected_binding) || parsed.value.approval_ref.id !== current.value.approval_id || parsed.value.approval_ref.content_hash !== current.value.receipt_hash) return fail('STALE_APPROVAL', '/expected_binding');
+  if (parsed.value.expected_audience !== context.audience || !same(parsed.value.expected_binding, context.expected_binding) || !recordReference(parsed.value.approval_ref, current.value, { id: current.value.approval_id, content_hash: current.value.receipt_hash })) return fail('STALE_APPROVAL', '/expected_binding');
   return parsed;
 }
 
@@ -78,11 +79,12 @@ export function checkApprovalVerificationOutcome(input, context) {
   const request = checkApprovalVerificationRequest(context.verification_request, { ...context, references: context.verification_request_references });
   if (!request.ok) return fail('INVALID_TRUST_CONTEXT', '/verification_request');
   const v = parsed.value;
-  if (v.request_id !== request.value.request_id || v.request_ref.id !== request.value.request_id || v.request_ref.content_hash !== hashManifest(request.value) || v.status !== context.current_approval.status || v.checked_at !== context.current_approval.checked_at) return fail('INVALID_RECEIPT', '/status');
+  if (v.request_id !== request.value.request_id || !recordReference(v.request_ref, request.value, { id: request.value.request_id, content_hash: hashManifest(request.value) }) || v.status !== context.current_approval.status || v.checked_at !== context.current_approval.checked_at) return fail('INVALID_RECEIPT', '/status');
   if (v.status === 'valid') {
     const valid = approvalState(context); if (!valid.ok) return valid;
-    if (!v.receipt_ref || v.receipt_ref.id !== valid.value.approval_id || v.receipt_ref.content_hash !== valid.value.receipt_hash || !v.verified_binding || !same(v.verified_binding, context.expected_binding)) return fail('INVALID_RECEIPT', '/verified_binding');
+    if (!v.receipt_ref || !recordReference(v.receipt_ref, valid.value, { id: valid.value.approval_id, content_hash: valid.value.receipt_hash }) || !v.verified_binding || !same(v.verified_binding, context.expected_binding)) return fail('INVALID_RECEIPT', '/verified_binding');
   } else if (v.verified_binding !== null) return fail('INVALID_RECEIPT', '/verified_binding');
+  if (v.receipt_ref && !recordReference(v.receipt_ref, current.value, { id: current.value.approval_id, content_hash: current.value.receipt_hash })) return fail('INVALID_RECEIPT', '/receipt_ref');
   return parsed;
 }
 
@@ -100,9 +102,9 @@ export function checkArtifactHandoffManifest(input, context) {
   const v = parsed.value, d = design.value, binding = approval.value.binding;
   if (!validateVersionedReference(context.artwork_ref).ok || !validateVersionedReference(context.preview_ref).ok) return fail('INVALID_TRUST_CONTEXT', '/artwork_ref');
   if (v.manifest_hash !== commerceContentHash(v, 'manifest_hash')) return fail('REFERENCE_MISMATCH', '/manifest_hash');
-  if (v.design_ref.contract !== 'DesignVersion' || v.design_ref.id !== d.design_version_id || v.design_ref.revision !== d.revision || v.design_ref.content_hash !== d.design_hash) return fail('REFERENCE_MISMATCH', '/design_ref');
+  if (!recordReference(v.design_ref, d, { id: d.design_version_id, revision: d.revision, content_hash: d.design_hash })) return fail('REFERENCE_MISMATCH', '/design_ref');
   if (v.artwork.role !== 'source_artwork' || v.artwork.artifact_id !== d.artwork.artifact_id || v.artwork.byte_hash !== d.artwork.byte_hash || v.artwork.media_type !== d.artwork.media_type || v.artwork.byte_size !== d.artwork.byte_size || v.preview_ref.id !== d.preview.artifact_id || v.preview_ref.content_hash !== d.preview.byte_hash) return fail('REFERENCE_MISMATCH', '/artwork');
-  if (v.approval_ref.contract !== 'ApprovalReceipt' || v.approval_ref.id !== approval.value.approval_id || v.approval_ref.content_hash !== approval.value.receipt_hash || binding.subject_type !== 'artwork' || binding.subject_ref.contract !== 'Artifact' || !same(binding.subject_ref, v.artwork_ref) || !same(v.artwork_ref, context.artwork_ref) || v.artwork_ref.id !== d.artwork.artifact_id || v.artwork_ref.content_hash !== d.artwork.byte_hash || !same(binding.preview_ref, v.preview_ref) || !same(v.preview_ref, context.preview_ref) || v.preview_ref.id !== d.preview.artifact_id || v.preview_ref.content_hash !== d.preview.byte_hash || binding.intended_use !== 'production' || binding.composition_hash !== v.composition_hash || !same(binding.facts_ref, v.facts_ref) || binding.facts_hash !== v.facts_ref.content_hash) return fail('STALE_APPROVAL', '/approval_ref');
+  if (!recordReference(v.approval_ref, approval.value, { id: approval.value.approval_id, content_hash: approval.value.receipt_hash }) || binding.subject_type !== 'artwork' || binding.subject_ref.contract !== 'Artifact' || !same(binding.subject_ref, v.artwork_ref) || !same(v.artwork_ref, context.artwork_ref) || v.artwork_ref.id !== d.artwork.artifact_id || v.artwork_ref.content_hash !== d.artwork.byte_hash || !same(binding.preview_ref, v.preview_ref) || !same(v.preview_ref, context.preview_ref) || v.preview_ref.id !== d.preview.artifact_id || v.preview_ref.content_hash !== d.preview.byte_hash || binding.intended_use !== 'production' || binding.composition_hash !== v.composition_hash || !same(binding.facts_ref, v.facts_ref) || binding.facts_hash !== v.facts_ref.content_hash) return fail('STALE_APPROVAL', '/approval_ref');
   if (Date.parse(v.access.expires_at) <= Date.parse(context.now)) return fail('EXPIRED', '/access/expires_at');
   const bytes = verifyBytes(v.artwork, context.artifact_bytes, '/artwork'); return bytes.ok ? parsed : bytes;
 }
@@ -114,19 +116,18 @@ export function checkArtifactConsumptionReceipt(input, context) {
   const v = parsed.value, h = handoff.value;
   const binding = approval.value.binding;
   if (h.manifest_hash !== commerceContentHash(h, 'manifest_hash')) return fail('INVALID_TRUST_CONTEXT', '/handoff/manifest_hash');
-  if (!same(v.approval_ref, h.approval_ref) || h.approval_ref.contract !== 'ApprovalReceipt' || h.approval_ref.id !== approval.value.approval_id ||
-      h.approval_ref.content_hash !== approval.value.receipt_hash || binding.intended_use !== 'production' || binding.subject_type !== 'artwork' ||
+  if (!same(v.approval_ref, h.approval_ref) || !recordReference(h.approval_ref, approval.value, { id: approval.value.approval_id, content_hash: approval.value.receipt_hash }) || binding.intended_use !== 'production' || binding.subject_type !== 'artwork' ||
       binding.subject_ref.contract !== 'Artifact' || !same(binding.subject_ref, h.artwork_ref) || !same(binding.preview_ref, h.preview_ref) ||
       !same(binding.facts_ref, h.facts_ref) || binding.facts_hash !== h.facts_ref.content_hash || binding.composition_hash !== h.composition_hash ||
       !same(context.artwork_ref, h.artwork_ref) || !same(context.preview_ref, h.preview_ref) ||
       h.artwork_ref.id !== h.artwork.artifact_id || h.artwork_ref.content_hash !== h.artwork.byte_hash) return fail('STALE_APPROVAL', '/approval_ref');
   const design = validateContract('DesignVersion', context.design);
   if (!design.ok || !checkTrustedContext(design.value, context.scope).ok || !design.value.artwork || !design.value.preview ||
-      h.design_ref.id !== design.value.design_version_id || h.design_ref.revision !== design.value.revision || h.design_ref.content_hash !== design.value.design_hash ||
+      !recordReference(h.design_ref, design.value, { id: design.value.design_version_id, revision: design.value.revision, content_hash: design.value.design_hash }) ||
       ['artifact_id', 'role', 'byte_hash', 'byte_size', 'media_type'].some(key => h.artwork[key] !== design.value.artwork[key]) ||
       h.preview_ref.id !== design.value.preview.artifact_id || h.preview_ref.content_hash !== design.value.preview.byte_hash) return fail('INVALID_TRUST_CONTEXT', '/handoff/design_ref');
   if (!token(context.consumer_id)) return fail('INVALID_TRUST_CONTEXT', '/consumer_id');
-  if (v.consumer_id !== context.consumer_id || v.manifest_ref.id !== h.handoff_id || v.manifest_ref.revision !== h.revision || v.manifest_ref.content_hash !== h.manifest_hash || v.approval_ref.id !== approval.value.approval_id || v.approval_ref.content_hash !== approval.value.receipt_hash) return fail('INVALID_RECEIPT', '/manifest_ref');
+  if (v.consumer_id !== context.consumer_id || !recordReference(v.manifest_ref, h, { id: h.handoff_id, revision: h.revision, content_hash: h.manifest_hash })) return fail('INVALID_RECEIPT', '/manifest_ref');
   if (v.consumed_artifacts.length !== 1 || !same(v.consumed_artifacts[0], h.artwork) || Date.parse(v.consumed_at) > Date.parse(context.now) ||
       Date.parse(v.consumed_at) >= Date.parse(h.access.expires_at)) return fail('INVALID_RECEIPT', '/consumed_artifacts');
   const bytes = verifyBytes(v.consumed_artifacts[0], context.artifact_bytes, '/consumed_artifacts/0'); if (!bytes.ok) return bytes;
@@ -140,12 +141,12 @@ export function checkArtifactConsumptionReceipt(input, context) {
 export function checkProductionBundle(input, context) {
   const parsed = boundary('ProductionBundle', input, context); if (!parsed.ok) return parsed;
   const h = validateContract('ArtifactHandoffManifest', context.handoff); if (!h.ok || !checkTrustedContext(h.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/handoff');
+  if (h.value.manifest_hash !== commerceContentHash(h.value, 'manifest_hash')) return fail('INVALID_TRUST_CONTEXT', '/handoff/manifest_hash');
   const approval = approvalState(context); if (!approval.ok) return approval;
   const v = parsed.value;
   if (!object(context.expected_spec) || !Array.isArray(context.expected_files) || !object(context.expected_composition) || !object(context.preflight)) return fail('INVALID_TRUST_CONTEXT');
   if (v.bundle_hash !== commerceContentHash(v, 'bundle_hash')) return fail('REFERENCE_MISMATCH', '/bundle_hash');
-  if (v.handoff_ref.contract !== h.value.contract || v.handoff_ref.schema_version !== h.value.schema_version ||
-      v.handoff_ref.id !== h.value.handoff_id || v.handoff_ref.revision !== h.value.revision || v.handoff_ref.content_hash !== h.value.manifest_hash) return fail('REFERENCE_MISMATCH', '/handoff_ref');
+  if (!recordReference(v.handoff_ref, h.value, { id: h.value.handoff_id, revision: h.value.revision, content_hash: h.value.manifest_hash })) return fail('REFERENCE_MISMATCH', '/handoff_ref');
   if (!same(v.print_spec, context.expected_spec) || !same(v.composition, context.expected_composition)) return fail('REFERENCE_MISMATCH', '/composition');
   if (!same(v.files, context.expected_files) || new Set(v.files.map(file => file.filename)).size !== v.files.length || new Set(v.files.map(file => file.artifact_id)).size !== v.files.length || !v.files.some(file => file.role === 'print_output') || !v.files.some(file => file.role === 'composed_preview')) return fail('INVALID_PAYLOAD', '/files');
   for (let i = 0; i < v.files.length; i++) {
@@ -156,7 +157,7 @@ export function checkProductionBundle(input, context) {
   if (!same(v.preflight, context.preflight)) return fail('REFERENCE_MISMATCH', '/preflight');
   if (v.preflight.status !== 'passed' || v.preflight.reasons.length) return fail('UNSUPPORTED_CASE', '/preflight/status');
   const binding = approval.value.binding;
-  if (binding.intended_use !== 'production' || binding.subject_type !== 'composition' || binding.subject_ref.contract !== 'Composition' || !same(binding.subject_ref, v.composition_ref) || !same(binding.composition_ref, v.composition_ref) || v.composition_ref.content_hash !== v.composition.composition_hash || !same(binding.preview_ref, v.composed_preview_ref) || !same(binding.facts_ref, v.facts_ref) || v.facts_ref.content_hash !== v.composition.facts_hash || v.composed_preview_ref.content_hash !== v.composition.composed_preview_hash || !v.files.some(file => file.role === 'composed_preview' && file.artifact_id === v.composed_preview_ref.id && file.byte_hash === v.composed_preview_ref.content_hash) || binding.facts_hash !== v.composition.facts_hash || binding.composition_hash !== v.composition.composition_hash || v.approval_ref.contract !== 'ApprovalReceipt' || v.approval_ref.id !== approval.value.approval_id || v.approval_ref.content_hash !== approval.value.receipt_hash) return fail('STALE_APPROVAL', '/approval_ref');
+  if (binding.intended_use !== 'production' || binding.subject_type !== 'composition' || binding.subject_ref.contract !== 'Composition' || !same(binding.subject_ref, v.composition_ref) || !same(binding.composition_ref, v.composition_ref) || v.composition_ref.content_hash !== v.composition.composition_hash || !same(binding.preview_ref, v.composed_preview_ref) || !same(binding.facts_ref, v.facts_ref) || v.facts_ref.content_hash !== v.composition.facts_hash || v.composed_preview_ref.content_hash !== v.composition.composed_preview_hash || !v.files.some(file => file.role === 'composed_preview' && file.artifact_id === v.composed_preview_ref.id && file.byte_hash === v.composed_preview_ref.content_hash) || binding.facts_hash !== v.composition.facts_hash || binding.composition_hash !== v.composition.composition_hash || !recordReference(v.approval_ref, approval.value, { id: approval.value.approval_id, content_hash: approval.value.receipt_hash })) return fail('STALE_APPROVAL', '/approval_ref');
   if (v.composition.source_artwork_hash !== h.value.artwork.byte_hash || v.composition.displayed_preview_hash !== h.value.preview_ref.content_hash || !v.files.some(file => file.role === 'composed_preview' && file.byte_hash === v.composition.composed_preview_hash)) return fail('REFERENCE_MISMATCH', '/composition');
   return parsed;
 }
@@ -193,7 +194,7 @@ export function checkOrderAuthorization(input, context) {
   if (!same(v, auth.value) || v.actor_id !== context.actor_id || v.audience !== context.audience || v.order_id !== context.expected_order_id) return fail('STALE_APPROVAL', '/terms');
   if (v.authorization_hash !== commerceContentHash(v, 'authorization_hash') || auth.value.authorization_hash !== commerceContentHash(auth.value, 'authorization_hash')) return fail('REFERENCE_MISMATCH', '/authorization_hash');
   if (quote.value.valuation_basis !== 'quoted' || !moneyValid(quote.value.total, context.currency) || !moneyValid(v.maximum, context.currency)) return fail('INVALID_MONEY', '/maximum');
-  if (v.quote_ref.id !== quote.value.quote_id || v.quote_ref.revision !== quote.value.quote_version || v.quote_ref.content_hash !== quote.value.quote_hash || !same(v.bundle_ref, quote.value.bundle_ref) || !same(v.terms, quote.value.terms) || !same(v.terms, context.expected_terms)) return fail('STALE_APPROVAL', '/quote_ref');
+  if (!recordReference(v.quote_ref, quote.value, { id: quote.value.quote_id, revision: quote.value.quote_version, content_hash: quote.value.quote_hash }) || !same(v.bundle_ref, quote.value.bundle_ref) || !same(v.terms, quote.value.terms) || !same(v.terms, context.expected_terms)) return fail('STALE_APPROVAL', '/quote_ref');
   if (compareMoney(quote.value.total, v.maximum) > 0) return fail('INVALID_MONEY', '/maximum');
   if (Date.parse(v.issued_at) > Date.parse(context.now) || Date.parse(v.expires_at) <= Date.parse(context.now) || Date.parse(quote.value.expires_at) <= Date.parse(context.now)) return fail('EXPIRED', '/expires_at');
   return parsed;
