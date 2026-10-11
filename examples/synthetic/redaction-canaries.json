@@ -1,0 +1,17 @@
+{
+  "fixtureId": "PROV-SYNTHETIC-CANARY-001",
+  "syntheticOnly": true,
+  "canaries": [
+    "DUMMY_PERSON_CANARY_A1",
+    "DUMMY_SECRET_CANARY_B2",
+    "DUMMY_METADATA_CANARY_C3",
+    "DUMMY_NOTES_CANARY_D4",
+    "DUMMY_ALT_CANARY_E5"
+  ],
+  "sensitivePixelRegion": [
+    80,
+    180,
+    640,
+    180
+  ]
+}

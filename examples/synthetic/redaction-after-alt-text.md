@@ -1,0 +1,1 @@
+Synthetic redaction test after removal. The central region is blank. Fake identifying and secret-like markers were removed from source and flattened pixels. Metadata, comments and accessible description contain no fake sensitive markers. This tests a procedure; destination-specific privacy approval is still required.
