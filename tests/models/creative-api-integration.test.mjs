@@ -3073,6 +3073,41 @@ test("API 1.3 history exposes identity only and fresh revalidation restores curr
   context.ports.composition.resolveRevalidation = resolver;
   assert.equal(previewCalls, 0, "a missing optional API 1.3 capability fails closed before preview work");
 
+  const preparePreview = context.ports.composition.preparePreview;
+  let resolveCancelPreviewEntered;
+  const cancelPreviewEntered = new Promise((resolve) => { resolveCancelPreviewEntered = resolve; });
+  let releaseCancelPreview;
+  const cancelPreviewGate = new Promise((resolve) => { releaseCancelPreview = resolve; });
+  context.ports.composition.preparePreview = async (input) => {
+    const preview = await preparePreview(input);
+    resolveCancelPreviewEntered(input);
+    await cancelPreviewGate;
+    return preview;
+  };
+  const cancelRevalidationRequest = compositionV13Request("composition-v13-revalidate-cancel",
+    "composition.revalidate", { design_version_id: design.design_version_id,
+      expected_current_revision_id: parent.revision_id, expected_current_revision_sha256: parent.revision_sha256,
+      candidate_revision_id: "composition-revision:cancelled-renewal" });
+  const cancelRevalidationPromise = context.api.invoke(authorizedActor(), cancelRevalidationRequest);
+  const cancelPreviewInput = await cancelPreviewEntered;
+  assert.equal(cancelPreviewInput.candidate.revision_id, "composition-revision:cancelled-renewal");
+  const pendingRevalidationJob = context.store.db.prepare("SELECT job_id,status FROM creative_jobs WHERE action_id=?")
+    .get(cancelRevalidationRequest.action_id);
+  assert.equal(pendingRevalidationJob.status, "running");
+  const cancelRevalidation = await context.api.invoke(authorizedActor(),
+    cancelRequest("composition-v13-revalidate-cancel-request", pendingRevalidationJob.job_id));
+  assert.equal(cancelRevalidation.ok, true, JSON.stringify(cancelRevalidation));
+  assert.equal(cancelRevalidation.job.status, "cancelled");
+  releaseCancelPreview();
+  const rejectedCancellation = await cancelRevalidationPromise;
+  assert.equal(rejectedCancellation.ok, false, JSON.stringify(rejectedCancellation));
+  assert.equal(rejectedCancellation.error.code, "cancelled");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "cancelled revalidation never publishes its renewed child");
+  assert.equal((await context.ports.storage.getCompositionAction({ scope: SCOPE,
+    action_id: cancelRevalidationRequest.action_id })).status, "cancelled");
+  context.ports.composition.preparePreview = preparePreview;
+
   const request = compositionV13Request("composition-v13-revalidate", "composition.revalidate", {
     design_version_id: design.design_version_id, expected_current_revision_id: parent.revision_id,
     expected_current_revision_sha256: parent.revision_sha256, candidate_revision_id: "composition-revision:v13-renewed" });
@@ -3103,8 +3138,8 @@ test("API 1.3 history exposes identity only and fresh revalidation restores curr
   assert.equal(child.dependencies.asset_rights.length, parent.dependencies.asset_rights.length);
   assert.notEqual(child.revision_sha256, parent.revision_sha256);
   assert.equal(successfulRevalidationCalls, 1);
-  assert.equal(rejectedEvidenceCalls, failedEvidenceCases.length);
-  assert.equal(previewCalls, 1);
+  assert.equal(rejectedEvidenceCalls, failedEvidenceCases.length + 1);
+  assert.equal(previewCalls, 2);
   assert.deepEqual(Buffer.from(renewed.result.preview_access.bytes_base64, "base64"), Buffer.from(regeneratedPreviewBytes));
   const parentAgain = await context.ports.storage.getCompositionRevision({ scope: SCOPE,
     composition_id: parent.composition_id, revision_id: parent.revision_id });
@@ -3129,7 +3164,18 @@ test("API 1.3 history exposes identity only and fresh revalidation restores curr
   assert.equal(replay.result.composition.revision.revision_sha256, child.revision_sha256);
   assert.deepEqual(Buffer.from(replay.result.preview_access.bytes_base64, "base64"), Buffer.from(regeneratedPreviewBytes));
   assert.equal(successfulRevalidationCalls, 1, "completed replay does not request fresh rights or policy proofs");
-  assert.equal(previewCalls, 1, "completed replay does not prepare another preview");
+  assert.equal(previewCalls, 2, "completed replay does not prepare another preview");
+  const completedRevalidationJob = context.store.db.prepare("SELECT job_id,status FROM creative_jobs WHERE action_id=?")
+    .get(request.action_id);
+  assert.equal(completedRevalidationJob.status, "completed");
+  const completedCancel = cancelRequest("composition-v13-completed-cancel", completedRevalidationJob.job_id);
+  const completedCancellation = await context.api.invoke(authorizedActor(), completedCancel);
+  assert.equal(completedCancellation.ok, true, JSON.stringify(completedCancellation));
+  assert.equal(completedCancellation.job.status, "completed",
+    "cancelling a completed renewal is idempotent and does not regress its completed job");
+  const completedCancelReplay = await context.api.invoke(authorizedActor(), completedCancel);
+  assert.equal(completedCancelReplay.ok, true, JSON.stringify(completedCancelReplay));
+  assert.equal(completedCancelReplay.job.status, "completed");
   assert.deepEqual({ dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
     posts: context.counters.provider_posts, settlements: context.counters.settlements }, before);
 });
@@ -3441,7 +3487,7 @@ test("composition.get preserves final storage integrity errors separately from o
           db.exec("BEGIN IMMEDIATE");
           try {
             for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
-            const changed = db.prepare(`UPDATE creative_composition_revisions_v1 SET revision_json='{'`
+            const changed = db.prepare(`UPDATE creative_composition_revisions_v1 SET revision_json='{'
               WHERE tenant_id=? AND project_id=? AND brief_id=? AND composition_id=? AND revision_id=?`)
               .run(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, revision.composition_id, revision.revision_id).changes;
             assert.equal(changed, 1);
