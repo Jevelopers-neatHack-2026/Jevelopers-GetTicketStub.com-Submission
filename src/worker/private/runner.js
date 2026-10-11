@@ -12,15 +12,23 @@ import {
 } from '../../internal/private-ops-diagnostics.js';
 
 function safeArgs(args) {
-  if (args.length !== 9) return null;
+  if (args.length !== 10) return null;
   const [databasePath, jobId, ownerId, generationText, fenceText, busyTimeoutText,
-    maxStoreBytesText, maxWalBytesText, minFreeDiskBytesText] = args;
+    maxStoreBytesText, maxWalBytesText, minFreeDiskBytesText, runtimeDeadlineNsText] = args;
   const generation = Number(generationText);
   const fence = Number(fenceText);
   const busyTimeoutMs = Number(busyTimeoutText);
   const maxStoreBytes = Number(maxStoreBytesText);
   const maxWalBytes = Number(maxWalBytesText);
   const minFreeDiskBytes = Number(minFreeDiskBytesText);
+  let runtimeDeadlineNs;
+  try {
+    if (typeof runtimeDeadlineNsText !== 'string' || !/^(?:0|[1-9][0-9]{0,29})$/u.test(runtimeDeadlineNsText)) return null;
+    runtimeDeadlineNs = BigInt(runtimeDeadlineNsText);
+  } catch {
+    return null;
+  }
+  const remainingRuntimeNs = runtimeDeadlineNs - process.hrtime.bigint();
   if (typeof databasePath !== 'string' || databasePath.length === 0 || databasePath.length > 1024
       || !/^ops-job:[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(jobId)
       || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(ownerId)
@@ -29,14 +37,15 @@ function safeArgs(args) {
       || !Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 1 || busyTimeoutMs > 250
       || !Number.isSafeInteger(maxStoreBytes) || maxStoreBytes < 16_777_216 || maxStoreBytes > 1_073_741_824
       || !Number.isSafeInteger(maxWalBytes) || maxWalBytes < 1_048_576 || maxWalBytes > 134_217_728
-      || !Number.isSafeInteger(minFreeDiskBytes) || minFreeDiskBytes < 1_048_576 || minFreeDiskBytes > 1_073_741_824) return null;
+      || !Number.isSafeInteger(minFreeDiskBytes) || minFreeDiskBytes < 1_048_576 || minFreeDiskBytes > 1_073_741_824
+      || runtimeDeadlineNs < 1n || remainingRuntimeNs > 60_000_000_000n) return null;
   return { databasePath, jobId, ownerId, generation, fence, busyTimeoutMs,
-    maxStoreBytes, maxWalBytes, minFreeDiskBytes };
+    maxStoreBytes, maxWalBytes, minFreeDiskBytes, runtimeDeadlineNs };
 }
 
 const rawArgs = process.argv.slice(2);
-const captureRequested = rawArgs.length === 10 && rawArgs[9] === OPS07_CAPTURE_FLAG;
-const args = safeArgs(captureRequested ? rawArgs.slice(0, 9) : rawArgs);
+const captureRequested = rawArgs.length === 11 && rawArgs[10] === OPS07_CAPTURE_FLAG;
+const args = safeArgs(captureRequested ? rawArgs.slice(0, 10) : rawArgs);
 const captureEnabled = captureRequested && enableOperationsRunnerCaptureFromFd3();
 if (!args) {
   if (captureEnabled) {
@@ -82,6 +91,8 @@ if (!args) {
       workflowId: claim.workflowId,
       ownerId: claim.ownerId,
       fence: claim.fence,
+      busyTimeoutMs: args.busyTimeoutMs,
+      runtimeDeadlineNs: args.runtimeDeadlineNs,
       planJson: claim.work.planJson,
       limitsJson: claim.work.limitsJson
     });

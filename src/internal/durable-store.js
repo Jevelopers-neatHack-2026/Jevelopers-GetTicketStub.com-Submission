@@ -37,6 +37,7 @@ const SAFE_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const SAFE_PROVIDER_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const LOCAL_CHECKPOINT_KIND = 'agent-harness.private-bounded-local-checkpoint';
 const LOCAL_STEP_ID = /^[a-z][a-z0-9_-]{0,47}$/u;
+const CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS = new WeakSet();
 const OPS_EVENT_RESERVATION = 96;
 const OPS_MAX_WORKER_GENERATIONS = 16;
 const OPS_GENERATION_WRITE_RESERVE_BYTES = 16_384;
@@ -75,6 +76,10 @@ const TRANSITIONS = new Map([
   ['cancelled', new Set()]
 ]);
 const requireBuiltin = createRequire(import.meta.url);
+
+export function consumeLocalCompletionBusyAfterConfirmedInactive(error) {
+  return error instanceof RuntimeError && CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.delete(error);
+}
 
 function fail(operation, code, safe_message, retryable = false) {
   throw runtimeError({ module: 'state', operation, code, safe_message, retryable });
@@ -660,6 +665,23 @@ function mapStorageError(operation, error) {
   });
 }
 
+function isRawSqliteBusyPrimary(error) {
+  if (!utilTypes.isNativeError(error) || error instanceof RuntimeError) return false;
+  let code;
+  let errcode;
+  try {
+    code = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+    errcode = Object.getOwnPropertyDescriptor(error, 'errcode')?.value;
+  } catch {
+    return false;
+  }
+  return code === 'ERR_SQLITE_ERROR'
+    && Number.isSafeInteger(errcode)
+    && errcode >= 0
+    && errcode <= 0x7fffffff
+    && (errcode & 0xff) === 5;
+}
+
 function inTransaction(db, operation, callback) {
   try {
     db.exec('BEGIN IMMEDIATE');
@@ -673,6 +695,67 @@ function inTransaction(db, operation, callback) {
     }
   } catch (error) {
     throw mapStorageError(operation, error);
+  }
+}
+
+/** @internal Transaction boundary used only by the private local completion path. */
+export function inLocalCompletionTransaction(db, operation, callback) {
+  let began = false;
+  let startedFromInactive = false;
+  try {
+    startedFromInactive = db.isTransaction === false;
+    db.exec('BEGIN IMMEDIATE');
+    began = true;
+    const value = callback();
+    db.exec('COMMIT');
+    return value;
+  } catch (primaryError) {
+    const rawBusyPrimary = isRawSqliteBusyPrimary(primaryError);
+    const mappedPrimary = mapStorageError(operation, primaryError);
+    const inheritedEligibility = CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.has(mappedPrimary);
+    CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.delete(mappedPrimary);
+    let rollbackError = null;
+    let transactionState;
+    try {
+      transactionState = db.isTransaction;
+    } catch {
+      transactionState = undefined;
+    }
+    if (began && transactionState === true) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (error) {
+        rollbackError = error;
+      }
+    }
+    if (rollbackError) {
+      const mappedRollback = mapStorageError(operation, rollbackError);
+      CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.delete(mappedRollback);
+      throw mappedRollback;
+    }
+    let inactive = false;
+    try {
+      inactive = db.isTransaction === false;
+    } catch {
+      inactive = false;
+    }
+    const dispositionKnown = transactionState === false
+      || (began && transactionState === true && rollbackError === null);
+    if (
+      !inheritedEligibility
+      && rawBusyPrimary
+      && startedFromInactive
+      && dispositionKnown
+      && inactive
+      && mappedPrimary instanceof RuntimeError
+      && mappedPrimary.module === 'state'
+      && mappedPrimary.operation === operation
+      && mappedPrimary.code === 'STORE_BUSY'
+      && mappedPrimary.retryable === true
+    ) {
+      CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.add(mappedPrimary);
+    }
+    throw mappedPrimary;
   }
 }
 
@@ -3335,6 +3418,135 @@ export class DurableWorkflowStore {
     });
   }
 
+  /** @internal Classifies one exact local completion without writing or retrying. */
+  _localControllerResolveCompletion(capability, input) {
+    const operation = '_localControllerResolveCompletion';
+    if (capability !== LOCAL_CONTROLLER_STORAGE_CAPABILITY) {
+      fail(operation, 'INVALID_INPUT', 'The private local controller capability is required.');
+    }
+    const fields = readOwnDataRecord(input, [
+      'workflowId', 'ownerId', 'fence', 'expectedRevision', 'expectedCheckpointSequence',
+      'stepId', 'eventId', 'previousCheckpointSha256', 'controllerState'
+    ], operation);
+    expectString(fields.workflowId, 'workflowId', operation);
+    expectString(fields.ownerId, 'ownerId', operation);
+    expectInteger(fields.fence, 'fence', operation, 1);
+    expectInteger(fields.expectedRevision, 'expectedRevision', operation);
+    expectInteger(fields.expectedCheckpointSequence, 'expectedCheckpointSequence', operation, 1);
+    if (!LOCAL_STEP_ID.test(fields.stepId)) fail(operation, 'INVALID_INPUT', 'The local step identity is invalid.');
+    expectString(fields.eventId, 'eventId', operation);
+    if (typeof fields.previousCheckpointSha256 !== 'string'
+        || !/^[0-9a-f]{64}$/u.test(fields.previousCheckpointSha256)) {
+      fail(operation, 'INVALID_INPUT', 'The previous checkpoint identity is invalid.');
+    }
+    const attempted = readLocalControllerState(fields.controllerState, operation);
+    if (
+      attempted.workflowId !== fields.workflowId
+      || attempted.pendingStepId !== null
+      || attempted.lastAdmissionStepId !== fields.stepId
+    ) fail(operation, 'INVALID_INPUT', 'The local completion candidate is invalid.');
+    const attemptedPayload = serializeCheckpoint(attempted, operation);
+    const attemptedHash = digest(attemptedPayload);
+    const targetSequence = fields.expectedCheckpointSequence + 1;
+    const targetRevision = fields.expectedRevision + 1;
+    if (!Number.isSafeInteger(targetSequence) || !Number.isSafeInteger(targetRevision)) {
+      fail(operation, 'INVALID_INPUT', 'The local completion version is invalid.');
+    }
+    this.#assertOpen(operation);
+    if (this.#db.isTransaction !== false) {
+      return Object.freeze({ kind: 'unknown', reason: 'transaction_active' });
+    }
+
+    return withConsistentReadSnapshot(this.#db, operation, () => {
+      const workflowRow = this.#workflow(fields.workflowId, operation);
+      const workflow = mapWorkflow(workflowRow);
+      const checkpoint = this.getCheckpoint(fields.workflowId);
+      const event = this.#db.prepare(`
+        SELECT sequence, event_id, workflow_id, revision, event_type, from_state, to_state, fence_token
+        FROM workflow_events WHERE event_id = ?
+      `).get(fields.eventId);
+      const outbox = this.#db.prepare(`
+        SELECT event_id, event_sequence FROM outbox WHERE event_id = ?
+      `).get(fields.eventId);
+      const target = this.#db.prepare(`
+        SELECT sequence, schema_version, payload_json, sha256, revision
+        FROM workflow_checkpoints WHERE workflow_id = ? AND sequence = ?
+      `).get(fields.workflowId, targetSequence);
+      const unresolvedRows = this.#db.prepare(`
+        SELECT state FROM operation_attempts
+        WHERE workflow_id = ? AND state IN ('intent','outcome_unknown','response_received')
+        ORDER BY attempt_id LIMIT 33
+      `).all(fields.workflowId);
+      const snapshot = Object.freeze({
+        workflow: Object.freeze(workflow),
+        checkpoint: Object.freeze(checkpoint),
+        externalAttemptStates: Object.freeze(unresolvedRows.slice(0, 32).map(row => row.state)),
+        externalAttemptsTruncated: unresolvedRows.length > 32,
+        hasUnresolvedExternalAttempt: unresolvedRows.length > 0
+      });
+
+      const exactEvent = Boolean(event
+        && Number(event.revision) === targetRevision
+        && event.event_id === fields.eventId
+        && event.workflow_id === fields.workflowId
+        && event.event_type === 'private_local_step_completed'
+        && event.from_state === 'running'
+        && event.to_state === 'running'
+        && Number(event.fence_token) === fields.fence);
+      const exactOutbox = Boolean(outbox
+        && outbox.event_id === fields.eventId
+        && event
+        && Number(outbox.event_sequence) === Number(event.sequence));
+      const exactTarget = Boolean(target
+        && Number(target.sequence) === targetSequence
+        && Number(target.schema_version) === CHECKPOINT_SCHEMA_VERSION
+        && Number(target.revision) === targetRevision
+        && typeof target.payload_json === 'string'
+        && Buffer.byteLength(target.payload_json, 'utf8') <= MAX_CHECKPOINT_SERIALIZED_BYTES
+        && digest(target.payload_json) === target.sha256
+        && target.sha256 === attemptedHash);
+
+      if (exactEvent && exactOutbox && exactTarget) {
+        return Object.freeze({
+          kind: 'committed',
+          workflowId: fields.workflowId,
+          revision: targetRevision,
+          checkpointSequence: targetSequence,
+          eventSequence: Number(event.sequence),
+          stepId: fields.stepId,
+          snapshot,
+          now: this.#now(operation)
+        });
+      }
+      if (event || outbox || target) {
+        return Object.freeze({ kind: 'unknown', reason: 'partial_or_mismatched_commit' });
+      }
+
+      if (
+        Number(workflow.revision) !== fields.expectedRevision
+        || Number(workflow.checkpointSequence) !== fields.expectedCheckpointSequence
+        || workflow.state !== 'running'
+        || workflow.cancellationRequested
+        || workflow.leaseOwner !== fields.ownerId
+        || workflow.fence !== fields.fence
+        || checkpoint.sequence !== fields.expectedCheckpointSequence
+        || checkpoint.sha256 !== fields.previousCheckpointSha256
+      ) return Object.freeze({ kind: 'unknown', reason: 'pending_state_changed' });
+
+      const previous = readLocalControllerState(checkpoint.data, operation);
+      assertPrivateCheckpointPins(previous, attempted, fields.workflowId, operation);
+      assertCompletionBudget(previous, attempted, fields.stepId, operation);
+      const now = this.#now(operation);
+      if (workflow.leaseExpiresAtMs === null || workflow.leaseExpiresAtMs <= now) {
+        return Object.freeze({ kind: 'unknown', reason: 'lease_expired' });
+      }
+      if (unresolvedRows.length > 0) {
+        return Object.freeze({ kind: 'unknown', reason: 'external_outcome_unresolved' });
+      }
+      return Object.freeze({ kind: 'pending', snapshot, now });
+    });
+  }
+
   /** @internal Persists the allowance before a reviewed pure local step runs. */
   _localControllerAdmit(capability, input) {
     const operation = '_localControllerAdmit';
@@ -3468,7 +3680,7 @@ export class DurableWorkflowStore {
     const payload = serializeCheckpoint(next, operation);
     const payloadHash = digest(payload);
     this.#assertOpen(operation);
-    return inTransaction(this.#db, operation, () => {
+    return inLocalCompletionTransaction(this.#db, operation, () => {
       const row = this.#workflow(fields.workflowId, operation);
       const now = this.#assertLease(row, { ownerId: fields.ownerId, fence: fields.fence }, operation);
       this.#assertMutable(row, operation);
