@@ -8,6 +8,8 @@ import { ApprovalHandoffContractError, createConsumptionReceipt, hashComposition
 import { FakeMeteringAuthority } from "../../fixtures/contracts/metering/fake-authority.mjs";
 import { MeteringContractError } from "../../src/contracts/metering.mjs";
 import { CreativeApiError, createCreativeApi } from "../../src/api/v1.mjs";
+import { makePng } from "../../fixtures/models/png.mjs";
+import { canonicalHash as inspectionCanonicalHash } from "../../src/contracts/validation.mjs";
 
 const FIXTURE = async (name) => JSON.parse(await readFile(new URL(`../../fixtures/api/${name}.json`, import.meta.url), "utf8"));
 const NOW = Date.parse("2026-10-10T12:30:00.000Z");
@@ -120,6 +122,8 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
   const cancelActions = new Map();
   const handoffContexts = new Map();
   const stateArtifactBytes = new Map();
+  const inspectionSessions = new Map();
+  const repairStates = new Map();
   const leaseTokens = new Map();
   const dispatchIntents = [];
   const calls = { storage: [], provider: 0, reserve: 0, usage: [], approval: 0, handoff: 0, cancel: 0, inspection: 0, decision: 0,
@@ -201,7 +205,10 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
           intent.transport_attempt_id === input.transport_attempt_id);
         if (existing) {
           const sameFence = canonicalSerialize(existing.context_fence) === canonicalSerialize(input.context_fence);
-          const sameAttempt = (existing.billable_attempt_id ?? null) === (input.billable_attempt_id ?? null);
+          const sameAttempt = (existing.billable_attempt_id ?? null) === (input.billable_attempt_id ?? null) &&
+            (existing.reservation_ref ?? null) === (input.reservation_ref ?? null) &&
+            (existing.provider_name ?? null) === (input.provider_name ?? null) &&
+            (existing.provider_model ?? null) === (input.provider_model ?? null);
           return sameFence && sameAttempt
             ? { status: "authorized", dispatch_intent_ref: existing.dispatch_intent_ref }
             : { status: "lease_lost" };
@@ -209,9 +216,31 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
         dispatchIntentCounter += 1;
         const dispatch_intent_ref = `dispatch-intent:${input.job_id}:${dispatchIntentCounter}`;
         dispatchIntents.push({ job_id: input.job_id, transport_attempt_id: input.transport_attempt_id,
-          billable_attempt_id: input.billable_attempt_id, context_fence: structuredClone(input.context_fence), dispatch_intent_ref });
+          billable_attempt_id: input.billable_attempt_id, reservation_ref: input.reservation_ref,
+          provider_name: input.provider_name, provider_model: input.provider_model,
+          context_fence: structuredClone(input.context_fence), dispatch_intent_ref });
         return { status: "authorized", dispatch_intent_ref };
       });
+    },
+    assertDispatchCurrent(input) {
+      const job = records.get(input.job_id);
+      if (!job || job.tenant_id !== input.scope.tenant_id || job.project_id !== input.scope.project_id ||
+        job.actor_id !== input.actor_id || job.action_id !== input.action_id || job.operation !== input.operation ||
+        leaseTokens.get(input.job_id) !== input.lease_token) return { status: "lease_lost" };
+      if (job.status === "cancelled") return { status: "cancelled" };
+      if (job.status !== "running") return { status: "lease_lost" };
+      if (!contextFenceMatches(input.context_fence)) return { status: "stale_context" };
+      const intent = dispatchIntents.find((entry) => entry.job_id === input.job_id &&
+        entry.transport_attempt_id === input.transport_attempt_id);
+      if (!intent || intent.dispatch_intent_ref !== input.dispatch_intent_ref ||
+        (intent.billable_attempt_id ?? null) !== (input.billable_attempt_id ?? null) ||
+        (intent.reservation_ref ?? null) !== (input.reservation_ref ?? null) ||
+        (intent.provider_name ?? null) !== (input.provider_name ?? null) ||
+        (intent.provider_model ?? null) !== (input.provider_model ?? null) ||
+        canonicalSerialize(intent.context_fence) !== canonicalSerialize(input.context_fence)) {
+        return { status: "lease_lost" };
+      }
+      return { status: "authorized", dispatch_intent_ref: intent.dispatch_intent_ref };
     },
     async completeIfActive(input, publish) {
       return withLock(input.job_id, async () => {
@@ -278,6 +307,61 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
       const design = designs.get(input.design_version_id);
       if (!design || design.brief_id !== input.brief_id) return null;
       return structuredClone(design);
+    },
+    getArtifactBytes(input) {
+      calls.storage.push({ method: "getArtifactBytes", scope: input.scope });
+      const design = designs.get(input.design_version_id);
+      if (!design || design.tenant_id !== input.scope.tenant_id || design.project_id !== input.scope.project_id ||
+          design.brief_id !== input.brief_id) return null;
+      const bytes = stateArtifactBytes.get(design.artifact.artifact_id);
+      return bytes ? Uint8Array.from(bytes) : null;
+    },
+    beginInspectionSession(input) {
+      const key = `${input.scope.tenant_id}/${input.scope.project_id}/${input.action_id}`;
+      const old = inspectionSessions.get(key);
+      const identity = Object.fromEntries(Object.entries(input).filter(([name]) => name !== "lease_token"));
+      if (old && inspectionCanonicalHash(old.identity) !== inspectionCanonicalHash(identity)) throw new Error("inspection identity conflict");
+      if (!old) inspectionSessions.set(key, { identity, status: "active", stages: [] });
+      const session = inspectionSessions.get(key);
+      return structuredClone({ ...session.identity, status: session.status, stages: session.stages });
+    },
+    getInspectionSession(input) {
+      const key = `${input.scope.tenant_id}/${input.scope.project_id}/${input.action_id}`;
+      const session = inspectionSessions.get(key);
+      return session ? structuredClone({ ...session.identity, status: session.status, result: session.result, stages: session.stages }) : null;
+    },
+    stageInspectionStage(input) {
+      const key = `${input.scope.tenant_id}/${input.scope.project_id}/${input.action_id}`;
+      const session = inspectionSessions.get(key);
+      if (!session) throw new Error("inspection session required");
+      const prior = session.stages.find((item) => item.stage === input.stage);
+      if (prior) {
+        if (prior.attempt_id !== input.attempt_id || inspectionCanonicalHash(prior.intent) !== inspectionCanonicalHash(input.intent)) {
+          throw new Error("inspection stage conflict");
+        }
+        return structuredClone({ ...session.identity, status: session.status, stages: session.stages });
+      }
+      session.stages.push({ stage: input.stage, attempt_id: input.attempt_id, intent: structuredClone(input.intent), status: "dispatching" });
+      return structuredClone({ ...session.identity, status: session.status, stages: session.stages });
+    },
+    completeInspectionStage(input) {
+      const key = `${input.scope.tenant_id}/${input.scope.project_id}/${input.action_id}`;
+      const session = inspectionSessions.get(key);
+      const stage = session?.stages.find((item) => item.stage === input.stage);
+      if (!stage || stage.attempt_id !== input.attempt_id) throw new Error("inspection stage unavailable");
+      const result_hash = inspectionCanonicalHash(input.result);
+      if (stage.status === "completed" && inspectionCanonicalHash(stage.result) !== result_hash) throw new Error("inspection stage conflict");
+      stage.status = "completed";
+      stage.result = structuredClone(input.result);
+      return { status: "recorded", result_hash };
+    },
+    completeInspectionSession(input) {
+      const key = `${input.scope.tenant_id}/${input.scope.project_id}/${input.action_id}`;
+      const session = inspectionSessions.get(key);
+      if (!session) throw new Error("inspection session unavailable");
+      session.status = "completed";
+      session.result = structuredClone(input.result);
+      return { status: "completed", result_hash: inspectionCanonicalHash(input.result) };
     },
     getCurrentDesignVersion(input) {
       calls.storage.push({ method: "getCurrentDesignVersion", scope: input.scope });
@@ -470,11 +554,10 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
       calls.inspectionReservationRefs.push(input.reservation_ref);
       const transport_attempt_id = input.transport_attempt_id;
       await input.recordTransportAttempt(transport_attempt_id);
-      return { tenant_id: input.scope.tenant_id, project_id: input.scope.project_id, brief_id: input.brief.brief_id,
-        design_version_id: input.design_version.design_version_id, artifact_id: input.design_version.artifact.artifact_id,
-        artifact_hash: input.design_version.artifact.content_hash, design_hash: input.design_version.design_hash,
-        inspection_id: `inspection-${calls.inspection}`, observations: [],
-        usage: { completeness: "complete", input_tokens: 1, output_tokens: 1, transport_attempt_id } };
+      return { status: "complete", observer: { type: "model", id: "fixture-vision-observer",
+        model_id: "fixture-vision-model", config_ref: inspectionCanonicalHash("fixture-vision-config") },
+        uncertainty: { status: "unknown", note: "not_independently_measured" },
+        findings: [], usage: { completeness: "complete", input_tokens: 1, output_tokens: 1 } };
     },
   };
   const trace = { record(event) { calls.traces.push(event); } };
@@ -503,6 +586,23 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
               probabilities: Object.fromEntries(q.criteria.map((_, index) => [String(index), index === 0 ? 1 : 0])), confidence: 1 } }])),
       usage: { completeness: "complete", input_tokens: 1, output_tokens: 1, provider_request_id: `provider:jev:${input.billable_attempt_id}` } }); },
   };
+  const inspectionRepair = {
+    startInspection(input) {
+      const key = `${input.scope.tenant_id}/${input.scope.project_id}/${input.scope.brief_id}/${input.inspection_id}`;
+      const prior = repairStates.get(key);
+      if (prior && (prior.brief_hash !== input.brief_hash || prior.design_hash !== input.design_hash)) throw new Error("repair series identity conflict");
+      if (!prior) repairStates.set(key, { brief_hash: input.brief_hash, design_hash: input.design_hash,
+        remaining_repairs: 2, remaining_elapsed_ms: 60_000, remaining_simulated_units: 3 });
+      return { status: "active" };
+    },
+    getState(input) {
+      return repairStates.get(`${input.scope.tenant_id}/${input.scope.project_id}/${input.scope.brief_id}/${input.inspection_id}`) ?? null;
+    },
+    recordRepairClaim() { return { status: "unknown_cost" }; },
+    recordRepairOutcome() { return { status: "recorded" }; },
+    cancelInspection() { return { status: "cancelled" }; },
+  };
+  storage.inspectionRepair = inspectionRepair;
   const portMap = { jobs, storage, provider, metering, approval, handoff, trace, decisionPort, inspection,
     telemetry: { outbox: memoryTelemetryOutbox(), modes: { provider_execution_mode: "mock", commerce_mode: "simulated" },
       usage_profiles: {
@@ -519,7 +619,7 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
     idFactory: () => { idCounter += 1; return `generated-id-${idCounter}`; },
   });
   const state = { brief, designs, current, selectionRevisions, jobs: records, actions, calls, authority, handoffContexts,
-    stateArtifactBytes, leaseTokens, dispatchIntents, clock };
+    stateArtifactBytes, inspectionSessions, repairStates, leaseTokens, dispatchIntents, clock };
   return { api, state, ports: portMap };
 
 }
@@ -533,9 +633,11 @@ function awaitableCloneBrief() {
 async function setup(options = {}) {
   briefFixture = await FIXTURE("brief");
   initialDesign = await FIXTURE("design-version");
-  const artworkBytes = Buffer.from("fixture artwork bytes");
+  const artworkBytes = makePng({ width: 16, height: 16 });
   initialDesign = versionFrom(initialDesign, { artifact: { ...initialDesign.artifact,
-    content_hash: "sha256:" + createHash("sha256").update(artworkBytes).digest("hex") } });
+    content_hash: "sha256:" + createHash("sha256").update(artworkBytes).digest("hex") },
+    creative_asset_use: { contract: "CreativeAssetUseSet", schema_version: "1.0", status: "verified",
+      brief_hash: canonicalHash(briefFixture), entries: [] } });
   const harness = makeHarness(options);
   if (options.withDesign !== false) {
     harness.state.designs.set(initialDesign.design_version_id, structuredClone(initialDesign));
@@ -543,15 +645,17 @@ async function setup(options = {}) {
     harness.state.selectionRevisions.set(initialDesign.brief_id, 0);
     harness.state.stateArtifactBytes.set(initialDesign.artifact.artifact_id, artworkBytes);
     if (options.secondDesign) {
+      const secondBytes = makePng({ width: 8, height: 8 });
       const second = versionFrom(initialDesign, {
         event_id: "event-design-2",
         occurred_at: "2026-10-10T12:04:00.000Z",
         ingested_at: "2026-10-10T12:04:00.000Z",
         design_version_id: "design-api-2",
         parent_version_id: initialDesign.design_version_id,
-        artifact: { artifact_id: "artifact-api-2", content_hash: `sha256:${"d".repeat(64)}`, media_type: "image/png" },
+        artifact: { artifact_id: "artifact-api-2", content_hash: `sha256:${createHash("sha256").update(secondBytes).digest("hex")}`, media_type: "image/png" },
       });
       harness.state.designs.set(second.design_version_id, second);
+      harness.state.stateArtifactBytes.set(second.artifact.artifact_id, secondBytes);
       harness.state.current.set(second.brief_id, second.design_version_id);
       harness.state.selectionRevisions.set(second.brief_id, 1);
     }
@@ -802,12 +906,14 @@ test("forged tenant or project scope and foreign artifact records never cross st
 test("inspect, compare, and list use scoped reads and deterministic keyset pagination", async () => {
   await loadPlans();
   const { api, state } = await setup({ secondDesign: true });
+  state.current.set("brief-api-1", "design-api-1");
   const inspected = await api.invoke(actor(), request("inspect", { brief_id: "brief-api-1", design_version_id: "design-api-1" }, "inspect-valid"));
   assert.equal(inspected.ok, true, JSON.stringify(inspected));
   const inspectionReservationRef = state.calls.inspectionReservationRefs[0];
   assert.equal(typeof inspectionReservationRef, "string");
   assert.equal(state.authority.reservations.has(inspectionReservationRef), true);
   assert.equal(state.authority.reservations.get(inspectionReservationRef).reservation_id, inspectionReservationRef);
+  state.current.set("brief-api-1", "design-api-2");
   const compared = await api.invoke(actor(), request("compare", {
     brief_id: "brief-api-1", left_design_version_id: "design-api-1", right_design_version_id: "design-api-2",
   }));
@@ -854,11 +960,11 @@ test("inspection normalizes nested observations and rejects credential-shaped ne
   const malicious = await setup();
   const secret = "SYNTHETIC-NOT-A-REAL-CREDENTIAL";
   const inspect = malicious.ports.inspection.inspect;
-  malicious.ports.inspection.inspect = async (input) => ({ ...(await inspect(input)), observations: [{
-    observer: { type: "model", id: "observer-model", api_key: secret },
-    content_hash: input.design_version.artifact.content_hash,
-    uncertainty: { status: "unknown", raw_response: secret }, summary: "Observed safely.",
-  }] });
+  malicious.ports.inspection.inspect = async (input) => {
+    const output = await inspect(input);
+    return { ...output, observer: { ...output.observer, api_key: secret },
+      uncertainty: { ...output.uncertainty, raw_response: secret } };
+  };
   const rejected = await malicious.api.invoke(actor(), request("inspect", {
     brief_id: "brief-api-1", design_version_id: "design-api-1",
   }, "inspect-nested-private"));
@@ -868,18 +974,16 @@ test("inspection normalizes nested observations and rejects credential-shaped ne
 
   const replayHarness = await setup();
   const replayInspect = replayHarness.ports.inspection.inspect;
-  replayHarness.ports.inspection.inspect = async (input) => ({ ...(await replayInspect(input)), observations: [{
-    observer: { type: "model", id: "observer-model" },
-    content_hash: input.design_version.artifact.content_hash,
-    uncertainty: { status: "unknown" }, summary: "Observed safely.",
-  }] });
+  replayHarness.ports.inspection.inspect = async (input) => replayInspect(input);
   const body = request("inspect", { brief_id: "brief-api-1", design_version_id: "design-api-1" }, "inspect-replay-private");
   const first = await replayHarness.api.invoke(actor(), body);
   assert.equal(first.ok, true, JSON.stringify(first));
   const stored = [...replayHarness.state.jobs.values()].find((job) => job.action_id === "inspect-replay-private");
   stored.result = structuredClone(stored.result);
-  stored.result.inspection.observations[0].observer.api_key = secret;
-  stored.result.inspection.observations[0].uncertainty.raw_response = secret;
+  stored.result.report.observations[0].observer.api_key = secret;
+  stored.result.report.observations[0].uncertainty.raw_response = secret;
+  const session = replayHarness.state.inspectionSessions.get("tenant-api-1/project-api-1/inspect-replay-private");
+  session.result = structuredClone(stored.result);
   const replay = structuredClone(body);
   replay.event_id += ":replay";
   replay.request_id += ":replay";
@@ -907,12 +1011,15 @@ test("inspection public text rejects credential, signed URL, and personal data v
         observer: { type: "model", id: "observer-model" },
         content_hash: input.design_version.artifact.content_hash,
         uncertainty: { status: "unknown" },
-        summary: "A blue-green mark is visible near the upper right.",
+        findings: result.findings,
       };
       let target = observation;
       for (const key of sensitive.path.slice(0, -1)) target = target[key];
       target[sensitive.path.at(-1)] = sensitive.value;
-      return { ...result, observations: [observation] };
+      if (sensitive.path[0] === "summary") {
+        return { ...result, uncertainty: { ...result.uncertainty, note: sensitive.value } };
+      }
+      return { ...result, [sensitive.path[0]]: { ...result[sensitive.path[0]], [sensitive.path[1]]: sensitive.value } };
     };
     const body = request("inspect", { brief_id: "brief-api-1", design_version_id: "design-api-1" }, `inspect-text-private-${index}`);
     const rejected = await liveHarness.api.invoke(actor(), body);
@@ -925,12 +1032,14 @@ test("inspection public text rejects credential, signed URL, and personal data v
     assert.equal(completed.ok, true, JSON.stringify(completed));
     const stored = [...replayHarness.state.jobs.values()].find((job) => job.action_id === replayBody.action_id);
     stored.result = structuredClone(stored.result);
-    stored.result.inspection.observations = [{ observer: { type: "model", id: "observer-model" },
-      content_hash: stored.result.inspection.artifact_hash, uncertainty: { status: "unknown" },
-      summary: "A blue-green mark is visible near the upper right." }];
-    let target = stored.result.inspection.observations[0];
-    for (const key of sensitive.path.slice(0, -1)) target = target[key];
-    target[sensitive.path.at(-1)] = sensitive.value;
+    const session = replayHarness.state.inspectionSessions.get(`tenant-api-1/project-api-1/${replayBody.action_id}`);
+    if (sensitive.path[0] === "summary") {
+      stored.result.report.observations[0].uncertainty.note = sensitive.value;
+      session.result.report.observations[0].uncertainty.note = sensitive.value;
+    } else {
+      stored.result.report.observations[0][sensitive.path[0]][sensitive.path[1]] = sensitive.value;
+      session.result.report.observations[0][sensitive.path[0]][sensitive.path[1]] = sensitive.value;
+    }
     const replay = structuredClone(replayBody);
     replay.event_id += ":replay";
     replay.request_id += ":replay";
@@ -962,7 +1071,8 @@ test("all public identifier fields reject credential-shaped values on fresh and 
   assert.equal(completed.ok, true, JSON.stringify(completed));
   const stored = [...replayHarness.state.jobs.values()].find((job) => job.action_id === replayBody.action_id);
   stored.result = structuredClone(stored.result);
-  stored.result.inspection.inspection_id = secret;
+    stored.result.inspection_id = secret;
+    replayHarness.state.inspectionSessions.get(`tenant-api-1/project-api-1/${replayBody.action_id}`).result.inspection_id = secret;
   const replayRequest = structuredClone(replayBody);
   replayRequest.event_id += ":replay";
   replayRequest.request_id += ":replay";
@@ -1111,7 +1221,9 @@ test("public projection rejects sensitive object keys and Basic credentials with
       ...stored.result.design.artifact, extra: structuredClone(testCase.extra),
     } });
     replayHarness.state.designs.set(changed.design_version_id, changed);
-    stored.result.design = structuredClone(changed);
+    const replacedJob = structuredClone(stored);
+    replacedJob.result.design = structuredClone(changed);
+    replayHarness.state.jobs.set(stored.job_id, replacedJob);
     const replay = structuredClone(replayRequest);
     replay.event_id += ":retry";
     replay.request_id += ":retry";
@@ -1496,8 +1608,12 @@ test("trace projection drops sensitive references and maps unknown operations to
 test("stale metered inspection is reconciled but never published", async () => {
   await loadPlans();
   const harness = await setup();
-  const inspect = harness.ports.inspection.inspect;
-  harness.ports.inspection.inspect = async (input) => ({ ...(await inspect(input)), design_hash: `sha256:${"0".repeat(64)}` });
+  const completeStage = harness.ports.storage.completeInspectionStage.bind(harness.ports.storage);
+  harness.ports.storage.completeInspectionStage = async (input) => {
+    const result = await completeStage(input);
+    harness.state.brief.facts.verified[0].value = "Changed after the metered observation";
+    return result;
+  };
   const response = await harness.api.invoke(actor(), request("inspect", {
     brief_id: "brief-api-1", design_version_id: "design-api-1",
   }, "inspect-stale-output"));
@@ -1524,7 +1640,7 @@ test("inspection publication fence rejects brief drift after metered observation
   assert.equal(response.ok, false);
   assert.equal(response.error.code, "stale_version");
   assert.equal(harness.state.calls.inspection, 1);
-  assert.equal(harness.state.calls.usage.length, 1);
+  assert.equal(harness.state.calls.usage.length, 3);
   const job = [...harness.state.jobs.values()].find((entry) => entry.action_id === "inspect-brief-drift-publication");
   assert.equal(job.status, "failed");
   assert.equal(job.result, undefined);

@@ -21,7 +21,7 @@ mkdirSync(artifactDir, { recursive: true });
 
 const acceptedNodeVersions = ['22.23.3', '24.15.0'];
 const packageFiles = [
-  'src/api', 'src/contracts', 'src/controls', 'src/models/index.mjs', 'src/models/index.d.mts',
+  'src/api', 'src/contracts', 'src/controls', 'src/inspection', 'src/models/index.mjs', 'src/models/index.d.mts',
   'src/models/openai-images.mjs', 'src/models/codec-runtime/index.mjs', 'src/models/codec-runtime/package.json',
   'src/models/codec-runtime/package-lock.json', 'src/planning', 'src/preflight', 'src/runtime', 'src/storage',
   'src/telemetry', 'src/versions',
@@ -149,7 +149,7 @@ try {
     private: true,
     type: 'module',
   }, null, 2)}\n`);
-  for (const name of ['runtime-consumer.mjs', 'package-exports-consumer.mjs', 'package-consumer.mts', 'tsconfig.json']) {
+  for (const name of ['runtime-consumer.mjs', 'package-exports-consumer.mjs', 'package-consumer.mts', 'package-inspection-consumer.mts', 'tsconfig.json']) {
     copyFileSync(join(root, 'tests/package/controls', name), join(consumerDir, name));
   }
   const install = run('offline-install', 'npm', [

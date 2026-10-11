@@ -1,0 +1,16 @@
+{
+  "contract": "CreativeInspectionFixtureSet",
+  "schema_version": "1.0",
+  "mode": "fixture",
+  "policy_version": "fixture-policy/1.0",
+  "promotion_status": "not_promoted",
+  "buckets": [
+    { "id": "corrupt_integrity", "purpose": "bad PNG checksum or artifact hash mismatch", "fixture": { "format": "png", "corruption": "idat_crc" }, "fixture_hash": "sha256:0e42a00c10532b55c8cfd2813d0ab30df54df8160ad4e1f11d8539e45dfdbffa", "expected": "failure_without_decision" },
+    { "id": "revoked_permission", "purpose": "asset permission denied or unknown", "fixture": { "asset_action": "reproduce", "permission": "denied" }, "fixture_hash": "sha256:830dc59fe438e2c7afb114fb6874a994ed94485ca5cdab71bf96de0a5fb590eb", "expected": "deterministic_failure_or_review" },
+    { "id": "valid_unchanged", "purpose": "valid output with no structured defects", "fixture": { "finding": null, "permission": "granted" }, "fixture_hash": "sha256:b0de2c00922f909326b2c9dd9a306d89e7974da5518852e4811ff03f81dd9d43", "expected": "acceptable_for_review_only" },
+    { "id": "wrong_subject", "purpose": "separately sourced wrong-subject observation", "fixture": { "finding": "wrong_subject", "severity": "high" }, "fixture_hash": "sha256:ea8c2a80bdbd43bba32b3a4c6317bca7baa3253ef89b1cf146fa576d473d125a", "expected": "bounded_repair_or_human_review" },
+    { "id": "mask_drift", "purpose": "separately sourced mask-drift observation", "fixture": { "finding": "mask_drift", "severity": "high" }, "fixture_hash": "sha256:c9fc5b22c1facddb4ecd68779c66d9d4d8eeb84df473d633afbfe4a225db3d95", "expected": "bounded_repair_or_human_review" },
+    { "id": "poor_result", "purpose": "poor or materially changed output", "fixture": { "finding": "other_visual_defect", "severity": "critical" }, "fixture_hash": "sha256:05a30db3709534fb9bd01a5cdd70d4f026a6e576f01f447dc6228b3fd81c0be5", "expected": "bounded_repair_or_human_review" },
+    { "id": "adversarial_observation", "purpose": "instruction injection and malformed decision response", "fixture": { "injection": "ignore_deterministic_checks", "malformed_response": true }, "fixture_hash": "sha256:0d5fbc9b969754944368d0eee523d4482b965347c32cb8e29faa3b8931e513e1", "expected": "review_without_capability_expansion" }
+  ]
+}

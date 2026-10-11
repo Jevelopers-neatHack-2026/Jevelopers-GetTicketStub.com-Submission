@@ -46,6 +46,57 @@ jobs:
         run: make check TARGET=brief MODE=mock
       - name: CE-03 native Images adapter and actual API/C03/CE08 fixtures
         run: make check TARGET=image-adapter MODE=mock
+      - name: CE-09 public inspection, seven fixtures, migration and restart evidence
+        run: make check TARGET=inspection MODE=mock
+      - name: Verify CE-09 live inspection gate fails before any dispatch
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=inspection MODE=live > build/inspection-live-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending CE-09 live gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/inspection-live-gate.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-09');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.promotion_status, 'not_promoted');
+          assert.ok(gate.missing_owner_evidence.includes('finance_metering_budget_protocol_and_accepted_usage_mapping'));
+          NODE
+      - name: Verify CE-09 external owner acceptance remains pending
+        shell: bash
+        run: |
+          set +e
+          make acceptance TARGET=inspection > build/inspection-acceptance-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected CE-09 owner acceptance to remain pending with exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/inspection-acceptance-gate.stdout.json', 'utf8'));
+          assert.equal(gate.schema_version, 'creative-inspection-acceptance-result/v1');
+          assert.equal(gate.target, 'CE-09');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.promotion_status, 'not_promoted');
+          assert.ok(gate.missing_owner_evidence.includes('finance_metering_budget_protocol'));
+          assert.ok(gate.missing_owner_evidence.includes('shared_contracts_decision_port'));
+          NODE
       - name: Verify CE-02 external acceptance remains pending
         shell: bash
         run: |
@@ -182,4 +233,9 @@ jobs:
             build/image-adapter-live-gate.json
             build/image-adapter-live-gate.stdout.json
             build/image-adapter-acceptance-gate.stdout.json
+            build/inspection-evidence.json
+            build/inspection-test.tap
+            build/inspection-live-gate.json
+            build/inspection-live-gate.stdout.json
+            build/inspection-acceptance-gate.stdout.json
           if-no-files-found: warn

@@ -23,6 +23,7 @@ import type {
   MeteringPort,
 } from "../contracts/metering.mjs";
 import type { CreativeTelemetryConfiguration, CreativeTelemetryEvidence } from "../telemetry/index.mjs";
+import type { CreativeInspectionReport, CreativeVisualObservation, DeterministicInspection } from "../inspection/index.mjs";
 import type {
   ApprovalStalenessRequest,
   AssetPermissionEvidence,
@@ -60,6 +61,11 @@ export interface DispatchAuthorizationInput {
   transport_attempt_id: string;
   /** Atomically compared with authoritative creative records when inserting each transport intent. */
   context_fence: CreativeContextFence;
+}
+
+/** Synchronous owner re-read for the exact dispatch permit after external ACKs and immediately before transport. */
+export interface DispatchCurrentInput extends DispatchAuthorizationInput {
+  dispatch_intent_ref: string;
 }
 
 export interface CreativeImageReferenceManifest {
@@ -163,6 +169,33 @@ export type DispatchAuthorizationResult =
   | { status: "authorized"; dispatch_intent_ref: string }
   | { status: "cancelled" | "lease_lost" | "stale_context" };
 
+export interface CreativeInspectionRepairFence {
+  inspection_id: string;
+  action_id: string;
+  request_hash: `sha256:${string}`;
+  claim_ref: `sha256:${string}`;
+  root_brief_hash: `sha256:${string}`;
+  root_design_hash: `sha256:${string}`;
+  root_design_version_id: string;
+  started_at_ms: number;
+  deadline_at_ms: number;
+  simulated_units_milli: number;
+  result_hash?: `sha256:${string}`;
+}
+
+export interface CreativeAssetPermissionFence {
+  proofs: readonly Readonly<{
+    asset_id: string;
+    action: "reproduce" | "modify" | "publish" | "display";
+    source_ref: string;
+    content_hash: `sha256:${string}`;
+    package_id: string;
+    package_hash: `sha256:${string}`;
+    checked_at?: number;
+    expires_at: number;
+  }>[];
+}
+
 export interface CreativeContextFence {
   brief_id: string;
   brief_hash: string;
@@ -170,6 +203,10 @@ export interface CreativeContextFence {
   design_hash?: string;
   expected_current_design_version_id?: string | null;
   expected_current_design_hash?: string | null;
+  /** Current asset proofs rechecked under dispatch/publication SQLite fences. */
+  inspection_rights?: CreativeAssetPermissionFence;
+  /** Root inspection repair claim and its cumulative deadline. */
+  inspection_repair?: CreativeInspectionRepairFence;
 }
 
 /** A transaction capability owned by a durable jobs/storage adapter. Runtime
@@ -217,13 +254,36 @@ export interface CreativeApiRequestEnvelope {
 }
 
 export type CreativeDecisionInput = Pick<DecisionPortRequest, "execution_mode" | "state" | "questions">;
+export interface InspectionRepairRequest {
+  readonly contract: "CreativeInspectionRepairRequest";
+  readonly schema_version: "1.0";
+  /** Completed, scoped inspect action whose report explicitly recommended this exact action. */
+  readonly inspection_action_id: string;
+  readonly report_hash: `sha256:${string}`;
+  readonly repair_action: "image.edit";
+}
+export interface InspectionRepairExecutionEvidence {
+  readonly contract: "CreativeInspectionRepairExecution";
+  readonly schema_version: "1.0";
+  readonly inspection_id: string;
+  readonly inspection_action_id: string;
+  readonly source_report_hash: `sha256:${string}`;
+  readonly repair_action: "image.edit";
+  readonly claim_ref: string;
+  readonly root_design_version_id: string;
+  readonly root_design_hash: `sha256:${string}`;
+  readonly output_design_version_id: string;
+  readonly output_design_hash: `sha256:${string}`;
+  readonly billable_attempt_id: string;
+}
 export type CreativeApiRequest =
   | (CreativeApiRequestEnvelope & { operation: "generate"; action_id: string;
       payload: { brief_id: string; plan: EditPlan; decision_request?: CreativeDecisionInput } })
   | (CreativeApiRequestEnvelope & { operation: "edit"; action_id: string;
       payload: { brief_id: string; design_version_id: string; plan: EditPlan;
         selection_mode?: "advance" | "branch"; decision_request?: CreativeDecisionInput;
-        image_reference_manifest?: CreativeImageReferenceManifest } })
+        image_reference_manifest?: CreativeImageReferenceManifest;
+        inspection_repair?: InspectionRepairRequest } })
   | (CreativeApiRequestEnvelope & { operation: "inspect"; action_id: string;
       payload: { brief_id: string; design_version_id: string } })
   | (CreativeApiRequestEnvelope & { operation: "list"; action_id?: string;
@@ -339,6 +399,8 @@ export interface CreativeRuntimePorts {
     isAssetFenced?(input: { scope: TrustedScope; asset_id: string; content_hash: string }):
       Promise<boolean> | boolean;
     getDesignVersion(input: { scope: TrustedScope; brief_id: string; design_version_id: string }): Promise<DesignVersion | null> | DesignVersion | null;
+    /** Read exact immutable content-addressed bytes; the runtime snapshots and verifies the hash before decode. */
+    getArtifactBytes(input: { scope: TrustedScope; brief_id: string; design_version_id: string }): Promise<Uint8Array | null> | Uint8Array | null;
     getCurrentDesignVersion(input: { scope: TrustedScope; brief_id: string }): Promise<DesignVersion | null> | DesignVersion | null;
     getSelection(input: { scope: TrustedScope; brief_id: string }): Promise<DesignSelection | null> | DesignSelection | null;
     listDesignVersions(input: { scope: TrustedScope; brief_id: string; limit: number;
@@ -354,6 +416,8 @@ export interface CreativeRuntimePorts {
     prepareDesignVersion?(input: { scope: TrustedScope; brief_id: string; design_version: DesignVersion;
       artifact_bytes: Uint8Array; selection_mode: "advance" | "branch";
       creation: CreativeVersionCreationEvidence; lease_token: string; job_result: unknown;
+      /** Complete current authority persisted with the intent for safe crash recovery. */
+      publication_fence: CreativeContextFence;
       expected_brief_hash: string; expected_current_design_version_id: string | null;
       expected_current_design_hash: string | null; expected_parent_design_version_id: string | null;
       expected_parent_design_hash: string | null }): Promise<PreparedDesignVersion> | PreparedDesignVersion;
@@ -371,6 +435,19 @@ export interface CreativeRuntimePorts {
       artifact: HandoffArtifact;
       layer_manifest: HandoffLayer[];
     } | null> | { binding: ApprovalBinding; artifact: HandoffArtifact; layer_manifest: HandoffLayer[] } | null;
+    /** Durable CE09 staged state on the same CE08 SQLite connection as jobs, versions, and telemetry. */
+    beginInspectionSession?(input: InspectionSessionIdentity & { lease_token: string }): Promise<InspectionSessionRecord> | InspectionSessionRecord;
+    getInspectionSession?(input: { scope: TrustedScope & { brief_id: string }; action_id: string }):
+      Promise<InspectionSessionRecord | null> | InspectionSessionRecord | null;
+    stageInspectionStage?(input: InspectionStageIdentity & { lease_token: string; stage: InspectionStageName;
+      attempt_id: string; intent: unknown }): Promise<InspectionSessionRecord> | InspectionSessionRecord;
+    completeInspectionStage?(input: InspectionStageIdentity & { lease_token: string; stage: InspectionStageName;
+      attempt_id: string; result: unknown }): Promise<{ status: "recorded" | "replayed"; result_hash: string }> |
+      { status: "recorded" | "replayed"; result_hash: string };
+    completeInspectionSession?(input: InspectionStageIdentity & { result: unknown },
+      transaction?: CreativePublicationTransaction): Promise<{ status: "completed" | "replayed"; result_hash: string }> |
+      { status: "completed" | "replayed"; result_hash: string };
+    inspectionRepair?: InspectionRepairPort;
   };
   jobs?: {
     /** Fail closed before job creation or any operation-specific external port calls. */
@@ -388,8 +465,13 @@ export interface CreativeRuntimePorts {
     get(input: { scope: TrustedScope; job_id: string }): Promise<CreativeJobRecord | null> | CreativeJobRecord | null;
     cancel(input: { scope: TrustedScope; actor_id: string; job_id: string; target_action_id: string; action_id: string; request_hash: string }):
       Promise<CancelJobResult> | CancelJobResult;
+    /** Claim an expired inspect job with a fresh lease; active workers are never displaced. */
+    resumeExpired?(input: { scope: TrustedScope & { brief_id: string }; actor_id: string; job_id: string;
+      action_id: string; request_hash: string }): Promise<StartedJob | ExistingJob | ConflictingJob> | StartedJob | ExistingJob | ConflictingJob;
     /** Atomically compare context_fence and linearize each dispatch intent with cancellation and lease ownership. */
     authorizeDispatch(input: DispatchAuthorizationInput): Promise<DispatchAuthorizationResult> | DispatchAuthorizationResult;
+    /** Synchronously re-read the same owner rows; implementations must not await or use caller-supplied status. */
+    assertDispatchCurrent(input: DispatchCurrentInput): DispatchAuthorizationResult;
     /** Persist transport, provider, and usage identity references before artifact bytes are staged. */
     recordAttemptEvidence?(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
       action_id: string; request_hash: string; creation: CreativeVersionCreationEvidence }):
@@ -420,9 +502,20 @@ export interface CreativeRuntimePorts {
     execute(input: DecisionDispatchInput): Promise<DecisionPortResult>;
   };
   inspection?: {
-    resolveRoute(input: { scope: TrustedScope; actor_id: string; design_version: DesignVersion }):
+    resolveRoute(input: { scope: TrustedScope; actor_id: string; design_version: DesignVersion;
+      artifact: Readonly<{ artifact_id: string; content_hash: string; media_type: string;
+        width: number; height: number; format: "png" | "jpeg" | "webp" }> }):
       Promise<CreativeProviderRoute> | CreativeProviderRoute;
     inspect(input: InspectionInput): Promise<InspectionPortOutput>;
+    /** Offline fixture-only estimate for the local 3-unit repair bound; never a Finance quote or grant. */
+    estimateFixtureRepairCost?(input: { scope: TrustedScope; actor_id: string; repair_action: "image.edit";
+      source_report_hash: string; source_design_hash: string; plan_hash: string }):
+      Promise<Readonly<{ contract: "CreativeFixtureRepairEstimate"; schema_version: "1.0"; evidence_mode: "fixture";
+        policy_version: "fixture-repair-estimate/1"; simulated_units: number }> |
+        Readonly<{ status: "unknown" }>> |
+      Readonly<{ contract: "CreativeFixtureRepairEstimate"; schema_version: "1.0"; evidence_mode: "fixture";
+        policy_version: "fixture-repair-estimate/1"; simulated_units: number }> |
+      Readonly<{ status: "unknown" }>;
   };
   approval?: {
     verifyApproval: ApprovalVerifier["verifyApproval"];
@@ -552,6 +645,8 @@ export interface DecisionDispatchInput extends Omit<MeteredDispatchContext, "rec
   deadline_at: string;
   dispatch_intent_ref: string;
   recordTransportAttempt(transport_attempt_id: string): Promise<string>;
+  revalidateDispatch(input: Readonly<{ reservation_ref: string; billable_attempt_id: string; transport_attempt_id: string;
+    dispatch_intent_ref: string; target_binding_sha256: `sha256:${string}`; signal: AbortSignal }>): Promise<string>;
 }
 
 export interface ProviderOutput {
@@ -566,6 +661,65 @@ export interface ProviderOutput {
   usage?: ProviderUsageRecord;
 }
 
+export type InspectionStageName = "observer" | "decision_evidence" | "decision_route";
+export interface InspectionSessionIdentity {
+  scope: TrustedScope & { brief_id: string };
+  actor_id: string;
+  job_id: string;
+  action_id: string;
+  request_hash: string;
+  brief_id: string;
+  brief_hash: string;
+  design_version_id: string;
+  design_hash: string;
+  parent_version_id: string | null;
+  parent_design_hash: string | null;
+  artifact_id: string;
+  artifact_hash: string;
+  root_design_version_id: string;
+  root_design_hash: string;
+}
+export interface InspectionStageIdentity {
+  scope: TrustedScope & { brief_id: string };
+  actor_id: string;
+  job_id: string;
+  action_id: string;
+  request_hash: string;
+  brief_id: string;
+}
+export interface InspectionSessionStageRecord {
+  readonly stage: InspectionStageName;
+  readonly attempt_id: string;
+  readonly intent: unknown;
+  readonly status: "dispatching" | "completed" | "unknown";
+  readonly result?: unknown;
+}
+export interface InspectionSessionRecord extends Readonly<Omit<InspectionSessionIdentity, "scope">> {
+  /** Authoritative stored session identity; both the record and this scope are immutable. */
+  readonly scope: Readonly<TrustedScope & { brief_id: string }>;
+  readonly status: "active" | "completed" | "failed" | "unknown";
+  readonly result?: unknown;
+  readonly stages: readonly InspectionSessionStageRecord[];
+}
+export interface InspectionRepairPort {
+  startInspection(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    inspection_id: string; brief_hash: string; design_hash: string }): Readonly<Record<string, unknown>>;
+  recordRepairClaim(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    inspection_id: string; action_id: string; request_hash: string; repair_action: string; simulated_units?: number | null }):
+    Readonly<Record<string, unknown>>;
+  recordRepairOutcome(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    inspection_id: string; action_id: string; result_hash: string }): Readonly<Record<string, unknown>>;
+  recordRepairOutcomeInPublication(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    inspection_id: string; action_id: string; result_hash: string; proof: CreativeInspectionRepairFence }):
+    Readonly<{ status: "recorded" | "cancelled"; result_hash?: string }>;
+  isClaimCurrent(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    proof: CreativeInspectionRepairFence }): boolean;
+  cancelInspection(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    inspection_id: string }): Readonly<Record<string, unknown>>;
+  getState(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string }):
+    Readonly<Record<string, unknown>> | null;
+}
+
 export interface InspectionInput {
   scope: TrustedScope;
   actor_id: string;
@@ -573,11 +727,18 @@ export interface InspectionInput {
   attempt: MeteredAttemptRequest;
   brief: CreativeBrief;
   design_version: DesignVersion;
+  parent_design: DesignVersion | null;
+  deterministic: DeterministicInspection;
+  /** Private exact artifact bytes are passed only to the configured visual observer, never to DecisionPort. */
+  artifact_bytes: Uint8Array;
+  used_assets: readonly Readonly<{ asset_id: string; action: "reproduce" | "modify" | "publish" | "display" }>[];
   /** Exact reservation reference validated and returned by the trusted C03 authority. */
   readonly reservation_ref: string;
   transport_attempt_id: string;
   dispatch_intent_ref: string;
   recordTransportAttempt(transport_attempt_id: string): Promise<string>;
+  revalidateDispatch(input: Readonly<{ reservation_ref: string; billable_attempt_id: string; transport_attempt_id: string;
+    dispatch_intent_ref: string; target_binding_sha256: `sha256:${string}`; signal: AbortSignal }>): Promise<string>;
   signal: AbortSignal;
   deadline_at: string;
 }
@@ -601,25 +762,24 @@ export interface CreativeTelemetryEvidenceStatus {
 
 /** Raw result returned by the injected inspection capability before the API
  * attaches its own durable telemetry delivery status. */
-export interface InspectionPortOutput {
-  tenant_id: string;
-  project_id: string;
-  brief_id: string;
-  design_version_id: string;
-  artifact_id: string;
-  artifact_hash: string;
-  design_hash: string;
-  inspection_id: string;
-  observations: StructuredObservation[];
-  usage?: ProviderUsageRecord;
-}
+export type InspectionPortOutput = Readonly<{
+  status: "complete";
+  observer: CreativeVisualObservation["observer"];
+  uncertainty: CreativeVisualObservation["uncertainty"];
+  findings: CreativeVisualObservation["findings"];
+  usage: ProviderUsageRecord;
+}> | Readonly<{ status: "refused" | "unavailable" | "timeout" | "cancelled"; usage?: ProviderUsageRecord }>;
 
-export interface InspectionOutput extends InspectionPortOutput {
-  telemetry_evidence: CreativeTelemetryEvidenceStatus;
+export interface InspectionOutput {
+  readonly report: CreativeInspectionReport;
+  readonly inspection_id: string;
+  readonly attempt_ids: readonly string[];
+  readonly telemetry_evidence: readonly CreativeTelemetryEvidenceStatus[];
 }
 
 export type CreativeApiResult =
-  | { design_version: DesignVersion; usage: UsageRecord; telemetry_evidence: CreativeTelemetryEvidenceStatus }
+  | { design_version: DesignVersion; usage: UsageRecord; telemetry_evidence: CreativeTelemetryEvidenceStatus;
+      inspection_repair?: InspectionRepairExecutionEvidence }
   | InspectionOutput
   | { items: DesignVersion[]; next_cursor: string | null }
   | { left: DesignVersion; right: DesignVersion; changed_fields: readonly string[] }

@@ -11,6 +11,7 @@ const publicSubpaths = [
   'planning',
   'versions',
   'controls',
+  'inspection',
   'models',
   'telemetry',
 ];
