@@ -11,6 +11,11 @@ import {
 } from '../../internal/checkpoint-bounds.js';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from '../../internal/private-local-store-capability.js';
 import {
+  recordOperationsDiagnosticError,
+  recordOperationsDiagnosticProgress,
+  setOperationsDiagnosticPhase
+} from '../../internal/private-ops-diagnostics.js';
+import {
   advanceBudget,
   checkClockBudget,
   checkStepDuration,
@@ -449,6 +454,9 @@ function elapsedNow(baseElapsed, processStart) {
 export async function runBoundedLocalPlan(input) {
   let workflowId = null;
   let checkpointSequence = null;
+  let diagnosticPhase = 'initial_snapshot';
+  let admissionOrdinal = 0;
+  let completionOrdinal = 0;
   try {
     const fields = ownDataRecord(input, INPUT_KEYS, ['store', 'workflowId', 'ownerId', 'fence']);
     workflowId = fields.workflowId;
@@ -468,6 +476,7 @@ export async function runBoundedLocalPlan(input) {
     ) fail('CONTROLLER_INPUT_INVALID');
 
     const store = fields.store;
+    setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
     const now = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
     let snapshot = store._localControllerSnapshot(LOCAL_CONTROLLER_STORAGE_CAPABILITY, workflowId);
     checkpointSequence = snapshot.checkpoint.sequence;
@@ -548,6 +557,8 @@ export async function runBoundedLocalPlan(input) {
     }
 
     assertPrivateCheckpointRoundTrip(snapshot, state, plan, limitSet, now);
+    diagnosticPhase = 'initial_admission';
+    setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
     let currentAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
       workflowId,
       ownerId: fields.ownerId,
@@ -559,9 +570,13 @@ export async function runBoundedLocalPlan(input) {
       eventId: eventId(admissionKind),
       controllerState: state
     });
+    admissionOrdinal += 1;
+    recordOperationsDiagnosticProgress('admission_committed', admissionOrdinal, currentAdmission.checkpointSequence);
 
     while (true) {
       await yieldAtControllerBoundary();
+      diagnosticPhase = 'loop_snapshot';
+      setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
       snapshot = store._localControllerSnapshot(LOCAL_CONTROLLER_STORAGE_CAPABILITY, workflowId);
       checkpointSequence = snapshot.checkpoint.sequence;
       const stopped = unavailableSnapshot(snapshot);
@@ -633,6 +648,8 @@ export async function runBoundedLocalPlan(input) {
         limitSet
       );
       if (commitClockReason) return controllerStop(commitClockReason, workflowId, checkpointSequence);
+      diagnosticPhase = 'completion';
+      setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
       const completion = store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
         workflowId,
         ownerId: fields.ownerId,
@@ -643,6 +660,8 @@ export async function runBoundedLocalPlan(input) {
         eventId: eventId('complete'),
         controllerState: completedState
       });
+      completionOrdinal += 1;
+      recordOperationsDiagnosticProgress('completion_committed', completionOrdinal, completion.checkpointSequence);
       state = completedState;
       checkpointSequence = completion.checkpointSequence;
       const allResults = validatePrivateCheckpointResults(plan, state.completedResultsJson);
@@ -667,6 +686,8 @@ export async function runBoundedLocalPlan(input) {
       if (!nextBudget.allowed) return controllerStop(nextBudget.reason, workflowId, checkpointSequence);
       const nextState = buildAdmissionCheckpoint(state, 'step', stepId, nextBudget.state);
       assertPrivateCheckpointRoundTrip(snapshot, nextState, plan, limitSet, nextWall);
+      diagnosticPhase = 'next_admission';
+      setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
       const nextAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
         workflowId,
         ownerId: fields.ownerId,
@@ -678,12 +699,18 @@ export async function runBoundedLocalPlan(input) {
         eventId: eventId('step'),
         controllerState: nextState
       });
+      admissionOrdinal += 1;
+      recordOperationsDiagnosticProgress('admission_committed', admissionOrdinal, nextAdmission.checkpointSequence);
       state = nextState;
       pendingStepId = stepId;
       // The next loop iteration uses this committed admission's revision/fence.
       currentAdmission = nextAdmission;
     }
   } catch (error) {
+    recordOperationsDiagnosticError('controller_error', error, {
+      phase: diagnosticPhase,
+      checkpointSequence
+    });
     return safeFailure(error, workflowId, checkpointSequence);
   }
 }

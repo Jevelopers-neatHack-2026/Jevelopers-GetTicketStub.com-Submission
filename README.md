@@ -41,7 +41,7 @@ Requires Node **22.23.3** ([`.node-version`](.node-version); `engines` accepts `
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
 make check
-make test
+python3 .github/scripts/run_ops_owned_command.py --route runtime-foundation
 ```
 
 Already have the locked packages in your npm cache? `make bootstrap` installs offline and builds in one step. Toolchain pins, the full verification case list and CI details are in the [runtime setup runbook](docs/runbooks/runtime-setup.md).
@@ -52,7 +52,8 @@ All checks run offline in mock mode and call no provider.
 
 ```sh
 make check                # syntax, entrypoint and SDK import, strict typecheck
-make test                 # every offline suite (npm test)
+python3 .github/scripts/run_ops_owned_command.py --route runtime-foundation
+                           # offline runtime tests with OPS process and registry ownership
 make neatlogs-sdk-test    # Neatlogs SDK local-capture tests only
 make verify CASE=AH-03 MODE=mock FIXTURE=state-crash-matrix
 make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline
@@ -60,6 +61,15 @@ python3 tools/verify_provider_readiness.py --profile fixtures/provider-profile.j
 ```
 
 Each `make verify` case prints its scope and is internal prerequisite evidence only; unsupported cases exit `2`. The provider readiness fixture is deliberately incomplete and is expected to exit `2` (pending). See the [runbook](docs/runbooks/runtime-setup.md#named-verification-cases) for all seven cases.
+
+Run the two AH-11-OPS fixtures through the same owner so their detached process groups, private registry and cleanup receipts are reconciled:
+
+```sh
+python3 .github/scripts/run_ops_owned_command.py --route ops-quota-shutdown-restart
+python3 .github/scripts/run_ops_owned_command.py --route ops-runbook-clean-start
+```
+
+The owner accepts only these fixed routes. It caps cleanup authority at 16 unique recorded groups across both registries and reconciles at most six custody sidecars. Its configured post-command wait allowances sum to 18.4 seconds; this is a sum of bounded waits, not a universal wall-clock guarantee. Do not run `npm test` or either AH-11-OPS fixture directly; each route needs the fresh registry and private temporary directory that the owner creates.
 
 ## Docs
 

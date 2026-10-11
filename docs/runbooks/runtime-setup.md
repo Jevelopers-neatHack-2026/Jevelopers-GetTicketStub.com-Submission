@@ -1,6 +1,6 @@
 # Runtime setup and verification
 
-This runbook collects the local setup and offline verification commands for the experimental internal runtime. Every command below is defined in the [`Makefile`](../../Makefile), [`package.json`](../../package.json) or the CI workflows under [`.github/workflows/`](../../.github/workflows). All of it runs in mock/offline mode; none of it reaches a provider, Neatlogs, Entire or a live service. For what the runtime does and does not implement, see the [runtime foundation decision](../decisions/runtime-foundation.md).
+This runbook collects the local setup and offline verification commands for the experimental internal runtime. Commands below use the [`Makefile`](../../Makefile), [`package.json`](../../package.json), fixed OPS route owner, or CI workflows under [`.github/workflows/`](../../.github/workflows). All of it runs in mock/offline mode; none of it reaches a provider, Neatlogs, Entire or a live service. For what the runtime does and does not implement, see the [runtime foundation decision](../decisions/runtime-foundation.md).
 
 ## Toolchain
 
@@ -40,9 +40,18 @@ make check
 
 | Command | What it runs |
 | --- | --- |
-| `make test` / `npm test` | Every offline suite, serially: runtime, planning, recovery, observability, Neatlogs SDK and JEV adapter contract tests |
+| `python3 .github/scripts/run_ops_owned_command.py --route runtime-foundation` | `npm test`, with an invocation-private registry and bounded process cleanup |
 | `make neatlogs-sdk-test` / `npm run test:neatlogs-sdk` | The Neatlogs SDK local-capture tests only |
 | `npm run typecheck` | The strict `.d.ts` consumer check only |
+
+Run the AH-11-OPS fixtures through their fixed owner routes:
+
+```sh
+python3 .github/scripts/run_ops_owned_command.py --route ops-quota-shutdown-restart
+python3 .github/scripts/run_ops_owned_command.py --route ops-runbook-clean-start
+```
+
+The owner creates a fresh private `TMPDIR` and registry for every route, then reconciles both the outer and OPS13 local registries before writing a fixed receipt under `.runtime-artifacts/`. Across both namespaces it permits at most 16 unique recorded process groups and six custody sidecars (49,152 bytes total). The configured post-command waits sum to 18.4 seconds: 2.25 seconds for the target group, 1.75 seconds for one combined registry batch and final absence check, 9.6 seconds for watchdog shutdown, and up to 4.8 seconds for sixteen independent sidecar-group probes. This is the sum of bounded wait allowances, not a universal wall-clock guarantee. Bare `npm test` and direct AH-11-OPS `make verify` commands do not provide this ownership and remain fail-closed. The owner uses only the three route IDs shown above and checks the pinned Node version without installing packages or contacting a provider.
 
 ## Named verification cases
 
@@ -79,5 +88,5 @@ The committed fixture is intentionally incomplete, so the second command exits `
 
 | Workflow | Steps |
 | --- | --- |
-| [Runtime foundation](../../.github/workflows/runtime-foundation.yml) | Node from `.node-version`; `npm ci --ignore-scripts --no-audit --no-fund`; `make check`; `npm test`; `npm run test:neatlogs-sdk`; `make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline`; uploads the sanitized `.runtime-artifacts/` evidence |
+| [Runtime foundation](../../.github/workflows/runtime-foundation.yml) | Node from `.node-version`; `npm ci --ignore-scripts --no-audit --no-fund`; `make check`; owner-wrapped runtime and AH-11-OPS routes; `npm run test:neatlogs-sdk`; `make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline`; uploads the exact sanitized evidence allowlist |
 | [Provider profile readiness](../../.github/workflows/provider-readiness.yml) | Python 3.9; the offline adversarial unittest suite; confirms the sample profile exits `2` and stays `pending` with no network access; uploads the sanitized report |
