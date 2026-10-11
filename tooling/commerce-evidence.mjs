@@ -1,5 +1,6 @@
 import { validateContract, validateContractVersion, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest, hashBytes, projectEvidence, ContractError } from './runtime.mjs';
 import { validateVersionedReference } from './operations.mjs';
+import { researchContentHash } from './research-creative.mjs';
 import { DefinitionApprovalBinding } from '../generated/validators.mjs';
 const ok = value => ({ ok: true, value });
 const fail = (code, path = '') => ({ ok: false, errors: [{ code, path }] });
@@ -95,9 +96,22 @@ function verifyBytes(artifact, bytesById, path) {
   return ok(artifact);
 }
 
+function suppliedDesign(context, path) {
+  const parsed = validateContract('DesignVersion', context.design);
+  if (!parsed.ok || !checkTrustedContext(parsed.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', path);
+  const design = parsed.value;
+  if (design.design_hash !== researchContentHash(design, 'design_hash')) return fail('INVALID_TRUST_CONTEXT', path + '/design_hash');
+  const kinds = { parent_ref: 'DesignVersion', brief_ref: 'CreativeBrief', control_ref: 'DesignControlSchema', job_ref: 'JobStatus', 'artwork/source_artifact_ref': 'Artifact' };
+  for (const [slot, reference] of refs(design)) {
+    if (!validateVersionedReference(reference).ok || (kinds[slot] && reference.contract !== kinds[slot])) return fail('INVALID_TRUST_CONTEXT', path + '/' + slot);
+  }
+  return parsed;
+}
+
 export function checkArtifactHandoffManifest(input, context) {
   const parsed = boundary('ArtifactHandoffManifest', input, context); if (!parsed.ok) return parsed;
-  const design = validateContract('DesignVersion', context.design); if (!design.ok || !checkTrustedContext(design.value, context.scope).ok || !design.value.artwork || !design.value.preview) return fail('INVALID_TRUST_CONTEXT', '/design');
+  const design = suppliedDesign(context, '/design'); if (!design.ok) return design;
+  if (!design.value.artwork || !design.value.preview) return fail('INVALID_TRUST_CONTEXT', '/design');
   const approval = approvalState(context); if (!approval.ok) return approval;
   const v = parsed.value, d = design.value, binding = approval.value.binding;
   if (!validateVersionedReference(context.artwork_ref).ok || !validateVersionedReference(context.preview_ref).ok) return fail('INVALID_TRUST_CONTEXT', '/artwork_ref');
@@ -121,8 +135,8 @@ export function checkArtifactConsumptionReceipt(input, context) {
       !same(binding.facts_ref, h.facts_ref) || binding.facts_hash !== h.facts_ref.content_hash || binding.composition_hash !== h.composition_hash ||
       !same(context.artwork_ref, h.artwork_ref) || !same(context.preview_ref, h.preview_ref) ||
       h.artwork_ref.id !== h.artwork.artifact_id || h.artwork_ref.content_hash !== h.artwork.byte_hash) return fail('STALE_APPROVAL', '/approval_ref');
-  const design = validateContract('DesignVersion', context.design);
-  if (!design.ok || !checkTrustedContext(design.value, context.scope).ok || !design.value.artwork || !design.value.preview ||
+  const design = suppliedDesign(context, '/handoff/design_ref'); if (!design.ok) return design;
+  if (!design.value.artwork || !design.value.preview ||
       !recordReference(h.design_ref, design.value, { id: design.value.design_version_id, revision: design.value.revision, content_hash: design.value.design_hash }) ||
       ['artifact_id', 'role', 'byte_hash', 'byte_size', 'media_type'].some(key => h.artwork[key] !== design.value.artwork[key]) ||
       h.preview_ref.id !== design.value.preview.artifact_id || h.preview_ref.content_hash !== design.value.preview.byte_hash) return fail('INVALID_TRUST_CONTEXT', '/handoff/design_ref');

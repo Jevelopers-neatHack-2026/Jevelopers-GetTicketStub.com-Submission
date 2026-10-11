@@ -1,0 +1,42 @@
+{
+  "package_version": "0.8.3",
+  "state": "development_candidate_fresh_whole_pr_review_required",
+  "source_head": "795608ef8d1d91f5fed2dfd77206572adb3970e8",
+  "finding": {
+    "id": "SC-CHK-012",
+    "severity": "medium",
+    "blocking": true,
+    "status": "locally_repaired_pending_fresh_exact_candidate_review",
+    "affected_routes": ["ArtifactHandoffManifest", "ArtifactConsumptionReceipt"],
+    "cause": "Commerce validated the supplied DesignVersion shape and scope, but bound its self-declared design_hash without recomputing the canonical body or enforcing intrinsic nested reference kinds.",
+    "remedy": "Reuse researchContentHash in one private supplied-design check shared by both narrow commerce routes. Check supported reference versions and the established parent/design, brief, control, job and source-artifact kinds before direct tuple binding. Preserve independent approval, artwork, bytes and scope checks.",
+    "original_ten_cases": {
+      "before": "6/10 expectations met identically on source Node22 and frozen installed Node22/24",
+      "required_after": "10/10 with exact original inputs and hashes",
+      "positive_controls": ["exact", "recomputed-digest-bound"],
+      "negative_controls": ["stale-digest", "recomputed-digest-unbound", "wrong-nested-kind-bound"]
+    }
+  },
+  "independent_finding_provenance": {
+    "reviewed_head": "795608ef8d1d91f5fed2dfd77206572adb3970e8",
+    "reviewed_tree": "b06fd8a1d2ce1f7eded454174728ac117b665ddf",
+    "verdict": "REQUEST_CHANGES",
+    "report": "final-review-795608e-result.json",
+    "approval_of_repair": false
+  },
+  "preservation": {
+    "SC-CHK-009": "Complete supplied handoff tuple and manifest digest remain checked.",
+    "SC-CHK-010": "Rejected research admissions remain failed members; valid partial outcomes remain supported.",
+    "SC-CHK-011": "Seven research/design record-contract comparisons remain repaired. ResearchRequest has no domain revision; trusted descriptor revision positives remain supported.",
+    "prior_dispositions": "Every prior finding, external gap, historical approval limitation and conflict disposition remains retained in private evidence. No approval transfers to changed bytes.",
+    "neutral_external_references": "No new kind policy for configuration, policy, decision or usage descriptors.",
+    "hash_domains": "Existing research body hashes, whole-record hashes, commerce hashes and byte hashes are unchanged. Mutable manifest access exclusions and design delivery exclusions remain supported."
+  },
+  "limits": [
+    "No schema, fixture, public API/type, package/version/lockfile, Finance, capability or research helper changes.",
+    "No absent transitive records, current-job/prior-design contexts, authenticated registry versions or approval grants are fabricated.",
+    "Host registry immutability, authenticity and current authority remain external responsibilities.",
+    "Author tests are not independent approval, release acceptance, registry publication or actual provider/production/geometry/ledger conformance.",
+    "Supervisor owns delivery, integration, manual QA and a fresh exact whole-PR Astra High review."
+  ]
+}
