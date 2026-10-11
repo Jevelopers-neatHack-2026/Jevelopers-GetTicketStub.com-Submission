@@ -3,7 +3,8 @@
 // another, with the printer running. They pile up under the slot; then "Published" lands.
 // Same printer and slot as the fan reveal (research/Printing.tsx), run once per guest.
 import { useEffect, useState, type CSSProperties } from "react";
-import { PaperButton, Stamped, TearLink } from "@/customer/desk/Desk";
+import { PaperButton, SourceMark, Stamped, TearLink } from "@/customer/desk/Desk";
+import { FeedbackNote } from "@/customer/feedback-messages/progress";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play, stopPrint } from "@/customer/studio/feedback";
 import type { Stub } from "@/customer/studio/types";
@@ -14,7 +15,7 @@ const PILE = 6; // stubs kept in the DOM under the slot; older ones have long si
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function PrintRun({ stubs, names, orderId, onClose, onClaim }: { stubs: Stub[]; names: string[]; orderId: string; onClose: () => void; onClaim: () => void }) {
+export function PrintRun({ stubs, names, orderId, problem, onClose, onClaim }: { stubs: Stub[]; names: string[]; orderId: string; problem?: string; onClose: () => void; onClaim: () => void }) {
   const n = stubs.length;
   const [count, setCount] = useState(0);
   const [done, setDone] = useState(false);
@@ -59,9 +60,16 @@ export function PrintRun({ stubs, names, orderId, onClose, onClaim }: { stubs: S
   const current = count > 0 ? names[count - 1] : "";
 
   return (
-    <section className={`desk-surface ${s.stage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="Printing every guest's stub" style={{ "--feed": `${Math.min(per * 0.9, 560)}ms` } as CSSProperties}>
+    <section className={`desk-surface ${s.stage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="Sandbox print run of every guest's stub" style={{ "--feed": `${Math.min(per * 0.9, 560)}ms` } as CSSProperties}>
       <div className={s.status} role="status" aria-live="polite">
-        {done ? <Stamped>Published</Stamped> : <span className={s.count}>{count === 0 ? "Warming up the printer…" : `Printing ${count} of ${n}`}</span>}
+        {done ? (
+          <Stamped>Run complete</Stamped>
+        ) : (
+          <span className={s.count}>
+            {count === 0 ? "Starting the sandbox run…" : `Sandbox run: stub ${count} of ${n}`}
+            <SourceMark p="simulated" />
+          </span>
+        )}
       </div>
       <p className={s.guest}>{done ? `${n} ${n === 1 ? "stub" : "stubs"}, one for every guest` : current || " "}</p>
 
@@ -86,8 +94,10 @@ export function PrintRun({ stubs, names, orderId, onClose, onClaim }: { stubs: S
       {done ? (
         <div className={s.after}>
           <p className={s.summary}>
-            Sandbox order <span className={s.num}>{orderId}</span>. No real charge, and nothing went to a printer.
+            Sandbox order <span className={s.num}>{orderId}</span>
+            <SourceMark p="sandbox" />. This run is a preview: no real charge, and nothing went to a printer.
           </p>
+          {problem ? <FeedbackNote code={problem}>{null}</FeedbackNote> : null}
           <div className={s.actions}>
             <PaperButton type="button" onClick={() => close(onClose)}>
               Back to the organizer

@@ -2,10 +2,12 @@ import { randomBytes } from "node:crypto";
 import type { Order } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
+import { recordEvent } from "@/server/event-log";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
 import { newToken } from "@/server/crypto";
+import { refOf } from "@/server/events";
 import { receiptMail, stubImageUrl } from "@/server/templates";
 import { parseEmail, parseText } from "@/server/validate";
 
@@ -63,7 +65,13 @@ export const POST = route(async (req: Request) => {
   limit(`orders:ip:${clientIp(req)}`, 30, 15 * 60_000);
   const body = await readJson(req, 64 * 1024);
   if (!isObject(body)) throw bad("Send { order }.");
-  const parsed = parseOrder(body.order);
+  let parsed: ReturnType<typeof parseOrder>;
+  try {
+    parsed = parseOrder(body.order);
+  } catch (e) {
+    if (e instanceof HttpError && e.code === "variant_not_orderable") await recordEvent(req, "order_blocked", { code: e.code });
+    throw e;
+  }
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "order.create");
   const account = ctx.actor.kind === "account" ? await accountOf(ctx) : null;
@@ -88,6 +96,7 @@ export const POST = route(async (req: Request) => {
   } catch {
     // The order is saved either way; sendMail has logged why the receipt didn't go.
   }
+  await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
   return json({ order });
 });
 

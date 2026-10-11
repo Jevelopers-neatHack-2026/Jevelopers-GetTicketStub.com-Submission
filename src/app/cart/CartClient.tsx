@@ -8,7 +8,7 @@ import { formatMoney, type Stub } from "@/customer/studio/types";
 import { CartLineSpec } from "@/customer/studio/editor/MaterialPicker";
 import { PageShell, EmptyState, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
 import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
-import { placeOrder, type Placed } from "@/customer/account/orders";
+import { useOrderFlow } from "@/customer/account/useOrderFlow";
 import { CART_EVENT, SANDBOX_LABEL, billableSeats, cartItemState, cartMarks, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { useMounted } from "@/customer/pages/useMounted";
@@ -29,7 +29,7 @@ export default function CartClient() {
   const [paid, setPaid] = useState(false);
   // set before the cart is cleared, so the page keeps its receipt instead of following the cart to empty
   const paidRef = useRef(false);
-  const [placed, setPlaced] = useState<Placed | null>(null);
+  const { placed, progress, place: placeOrder, retry } = useOrderFlow();
   const [emailError, setEmailError] = useState("");
   const receipt = useReceiptEmail();
 
@@ -84,7 +84,7 @@ export default function CartClient() {
     paidRef.current = true;
     setPaid(true);
     const totals = cartTotals(items);
-    void placeOrder({
+    placeOrder({
       stubIds: items.map((i) => i.stubId),
       lines: items.map((i) => ({ title: i.title, material: i.material, finish: i.finish, size: i.size, totalMinor: i.unitMinor * billableSeats(i), variantStatus: variantFor(i.material, i.size, i.finish)?.status })),
       capabilityVersion: CAPABILITY_VERSION,
@@ -94,7 +94,7 @@ export default function CartClient() {
       quoteId: items.length === 1 ? items[0].quoteId : undefined,
       method: "card",
       email: receipt.email || undefined,
-    }).then(setPlaced);
+    });
     for (const i of items) {
       const st = stubs[i.stubId];
       if (st) upsertStub({ ...st, material: i.material, finish: i.finish, torn: true });
@@ -209,7 +209,7 @@ export default function CartClient() {
               ) : null}
               {paid ? (
                 <div className={s.done}>
-                  <AfterPay placed={placed} email={receipt.email} signedIn={receipt.signedIn} />
+                  <AfterPay placed={placed} email={receipt.email} signedIn={receipt.signedIn} progress={progress} onRetry={retry} />
                 </div>
               ) : (
                 <Stamp block onClick={pay} disabled={!!hold}>

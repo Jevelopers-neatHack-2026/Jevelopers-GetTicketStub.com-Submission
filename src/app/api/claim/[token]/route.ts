@@ -1,4 +1,5 @@
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
+import { recordEvent } from "@/server/event-log";
 import { hashToken } from "@/server/crypto";
 import { HttpError, checkOrigin, json, notFound, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
@@ -47,6 +48,7 @@ export const POST = route(async (req: Request, ctx: Ctx) => {
   switch (result.status) {
     case "claimed":
     case "already":
+      await recordEvent(req, "claim_redeemed", { status: result.status }, { ctx: rc });
       return json({ stub: result.stub });
     case "taken":
       throw new HttpError(409, "already_claimed", "Someone else already claimed this stub.");

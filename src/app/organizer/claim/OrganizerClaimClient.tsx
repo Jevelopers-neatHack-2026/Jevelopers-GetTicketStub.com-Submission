@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import d from "@/customer/desk/Desk.module.css";
-import { Field, PunchTabs, Rule, Stamp, TearLink } from "@/customer/desk/Desk";
+import { Field, MarkLegend, PunchTabs, Rule, Stamp, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play } from "@/customer/studio/feedback";
 import { encodeStub, upsertStub } from "@/customer/studio/store";
@@ -173,6 +173,8 @@ export default function OrganizerClaimClient({ token }: { token?: string }) {
           <Stamp type="submit" block disabled={claiming}>
             Claim my stub
           </Stamp>
+          <p className={ui.status}>This claim link is a simulated demo. The stub is saved on this device only.</p>
+          <MarkLegend marks={["simulated"]} />
         </form>
       </div>
     </PageShell>

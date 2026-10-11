@@ -3,7 +3,9 @@ import { useId, useState } from "react";
 import { Field, PunchTabs, Rule, SandboxStrip, Stamp, Stamped, Switch, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
-import { api } from "@/customer/account/api";
+import { ApiError, api } from "@/customer/account/api";
+import { messageForError } from "@/customer/feedback-messages/messages";
+import { ProgressNote, useProgress } from "@/customer/feedback-messages/progress";
 import { sharePath } from "@/customer/account/share";
 import { getStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
@@ -26,6 +28,7 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
   const [giftPath, setGiftPath] = useState<string | null>(null);
   const [giftToken, setGiftToken] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
+  const progress = useProgress();
 
   if (mounted && stub === undefined) setStub(getStub(id) ?? null);
 
@@ -75,30 +78,26 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
       }
     }
     if (cartItem && seatIndex !== undefined) updateSeat(cartItem, seatIndex, { decision: "gift", name: to });
-    const path = await sharePath(gift);
-    let link = path;
-    let token: string | null = null;
-    if (/^\/s\/[\w-]+$/.test(path)) {
-      try {
-        const made = await api.createGift(gift.id, to, message);
-        token = made.giftToken;
-        link = wrap ? made.sharePath : `${made.sharePath}&wrap=0`;
-      } catch {
-        if (message) {
-          setError("We couldn't attach your message just now. Try again in a moment.");
-          return;
+    // The server half: share the copy, then attach the note. Only real states are shown (sending, still working, failed).
+    const made = await progress.run(async () => {
+      const path = await sharePath(gift);
+      if (/^\/s\/[\w-]+$/.test(path)) {
+        try {
+          const g = await api.createGift(gift.id, to, message);
+          return { token: g.giftToken as string | null, link: wrap ? g.sharePath : `${g.sharePath}&wrap=0` };
+        } catch (e) {
+          if (message) throw e; // the note can't travel without the server: say so rather than send a link without it
+          return { token: null, link: wrap ? `${path}?gift=1&to=${encodeURIComponent(to)}` : path };
         }
-        link = wrap ? `${path}?gift=1&to=${encodeURIComponent(to)}` : path;
       }
-    } else if (message) {
-      setError("Your message needs the server, and we couldn't reach it. Try again in a moment.");
-      return;
-    } else if (wrap) {
-      link = `${path}?gift=1&to=${encodeURIComponent(to)}`;
-    }
-    setGiftToken(token);
+      if (message) throw new ApiError("unavailable", "offline");
+      return { token: null, link: wrap ? `${path}?gift=1&to=${encodeURIComponent(to)}` : path };
+    });
+    if (!made) return;
+    progress.reset();
+    setGiftToken(made.token);
     setRevoked(false);
-    setGiftPath(link);
+    setGiftPath(made.link);
     haptic([18, 40, 28]);
   }
 
@@ -143,8 +142,8 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
                       try {
                         await api.revokeGift(giftToken);
                         setRevoked(true);
-                      } catch {
-                        setError("We couldn't stop the gift link just now. Try again in a moment.");
+                      } catch (e) {
+                        setError(messageForError(e).message);
                       }
                     }}
                   >
@@ -201,8 +200,9 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
               Wrap it
             </Switch>
 
-            <Stamp type="submit" block>
-              Send the gift
+            <ProgressNote state={progress.state} labels={{ sending: "Making your gift link" }} onRetry={() => void send()} />
+            <Stamp type="submit" block disabled={progress.busy}>
+              {progress.busy ? "Sending" : "Send the gift"}
             </Stamp>
           </form>
         )}

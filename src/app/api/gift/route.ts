@@ -1,5 +1,7 @@
 import { getRequestContext, ensureDevice, requireCapability } from "@/server/context";
 import { hashToken, newToken } from "@/server/crypto";
+import { refOf } from "@/server/events";
+import { recordEvent } from "@/server/event-log";
 import { HttpError, checkOrigin, clientIp, isObject, json, limit, notFound, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
 import { cleanGiftText, GIFT_MESSAGE_MAX, GIFT_TO_MAX } from "@/server/validate";
@@ -24,5 +26,6 @@ export const POST = route(async (req: Request) => {
   const giftToken = newToken(16);
   const shareToken = await getStorage().createGift(ctx.tenant.id, body.stub, hashToken(giftToken), to, message, Date.now());
   if (!shareToken) throw notFound(); // owned, but not shared yet: nothing to unwrap
+  await recordEvent(req, "gift_created", { share: refOf(shareToken), messageChars: message.length }, { project: body.stub, ctx });
   return json({ giftToken, sharePath: `/s/${shareToken}?gift=${giftToken}` }, device?.cookie ? { headers: { "set-cookie": device.cookie } } : undefined);
 });

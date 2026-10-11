@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { pushRing, requestIdOf, sanitizeEvent } from "./events";
 import { hit } from "./ratelimit";
 
 export class HttpError extends Error {
@@ -28,13 +29,39 @@ export function errorResponse(e: unknown): NextResponse {
   return json({ error: { code: "internal", message: "Something broke on our side. Try again in a moment." } }, { status: 500 });
 }
 
-/** Wraps a handler so thrown HttpErrors become `{ error: { code, message } }`. */
+/** The one error body: `{ error: { code, message } }`, plus any extra top-level fields (retryAt, art). */
+export function errorJson(status: number, code: string, message: string, extra?: Record<string, unknown>, headers?: Record<string, string>): NextResponse {
+  return json({ error: { code, message }, ...extra }, { status, headers });
+}
+
+/** Tags a response with the request's correlation id. Redirects and other frozen headers are left alone. */
+function tagged<R extends Response>(res: R, requestId: string): R {
+  try {
+    res.headers.set("x-request-id", requestId);
+  } catch {
+    /* immutable headers */
+  }
+  return res;
+}
+
+/**
+ * Wraps a handler so thrown HttpErrors become `{ error: { code, message } }`, and every answer carries
+ * `x-request-id` (the caller's, when well formed, or a new one). A 503 storage_unavailable is noted in the
+ * in-memory event ring, because there is no storage to write it to.
+ */
 export function route<A extends unknown[]>(fn: (...args: A) => Promise<Response>) {
   return async (...args: A): Promise<Response> => {
+    const req = args[0] instanceof Request ? args[0] : undefined;
+    const requestId = req ? requestIdOf(req.headers) : requestIdOf(new Headers());
     try {
-      return await fn(...args);
+      return tagged(await fn(...args), requestId);
     } catch (e) {
-      return errorResponse(e);
+      if (e instanceof HttpError && e.code === "storage_unavailable") {
+        const path = req ? new URL(req.url).pathname.replace(/^\/api\//, "").replace(/[^a-z0-9]+/gi, "_").toLowerCase().slice(0, 40) : "unknown";
+        const ev = sanitizeEvent({ type: "storage_unavailable", requestId, fields: { code: "storage_unavailable", route: /^[a-z]/.test(path) ? path : "unknown" } });
+        if (ev) pushRing(ev);
+      }
+      return tagged(errorResponse(e), requestId);
     }
   };
 }

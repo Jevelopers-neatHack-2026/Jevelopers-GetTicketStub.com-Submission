@@ -1,4 +1,5 @@
 import { getRequestContext, requireCapability } from "@/server/context";
+import { recordEvent } from "@/server/event-log";
 import { HttpError, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
 
@@ -13,5 +14,6 @@ export const POST = route(async (req: Request) => {
   const ctx = await getRequestContext(req, { kind: "stub", id: body.stubId });
   requireCapability(ctx, "share.revoke"); // a stub that isn't theirs is a 404, exactly as if it did not exist
   const revoked = await getStorage().revokeShare(ctx.tenant.id, body.stubId);
+  await recordEvent(req, "share_revoked", { revoked }, { project: body.stubId, ctx });
   return json({ ok: true, revoked });
 });

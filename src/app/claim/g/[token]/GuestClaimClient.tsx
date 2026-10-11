@@ -3,8 +3,10 @@
 // then one tap puts the stub on their wall.
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Stamp, Stamped, TearLink } from "@/customer/desk/Desk";
+import { MarkLegend, PaperButton, Stamp, Stamped, TearLink } from "@/customer/desk/Desk";
 import { ApiError, api, type ClaimInfo } from "@/customer/account/api";
+import { messageFor } from "@/customer/feedback-messages/messages";
+import { ProgressNote, useProgress } from "@/customer/feedback-messages/progress";
 import { openSignIn } from "@/customer/account/signin";
 import { useAccount } from "@/customer/account/useAccount";
 import { StubView } from "@/customer/studio/stub/StubView";
@@ -15,23 +17,22 @@ import { formatDate } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "../../[set]/claim.module.css";
 
-type Load = { state: "loading" } | { state: "ready"; info: ClaimInfo } | { state: "missing" } | { state: "offline" };
+type Load = { state: "loading" } | { state: "ready"; info: ClaimInfo } | { state: "missing" } | { state: "offline"; code: string };
 
 export default function GuestClaimClient({ token }: { token: string }) {
   const router = useRouter();
   const mounted = useMounted();
   const { status, account, savingOff } = useAccount();
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [busy, setBusy] = useState(false);
+  const progress = useProgress();
   const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     let live = true;
     api
       .claimInfo(token)
       .then((info) => live && setLoad({ state: "ready", info }))
-      .catch((e: ApiError) => live && setLoad({ state: e.status === 404 ? "missing" : "offline" }));
+      .catch((e: ApiError) => live && setLoad(e.status === 404 ? { state: "missing" } : { state: "offline", code: e.code }));
     return () => {
       live = false;
     };
@@ -48,7 +49,10 @@ export default function GuestClaimClient({ token }: { token: string }) {
   if (load.state === "offline") {
     return (
       <PageShell>
-        <FriendlyError title="We can't open this claim link right now." body="We couldn't reach the server. Check your connection and open the link again." />
+        <FriendlyError title="We can't open this claim link right now." body={messageFor(load.code).message} />
+        <PaperButton type="button" onClick={() => window.location.reload()}>
+          Try again
+        </PaperButton>
       </PageShell>
     );
   }
@@ -61,27 +65,12 @@ export default function GuestClaimClient({ token }: { token: string }) {
   const first = info.guestName.split(/\s+/)[0] || info.guestName;
 
   async function claim() {
-    setBusy(true);
-    setError("");
-    try {
-      const res = await api.claim(token);
-      upsertStub({ ...res.stub, torn: true });
-      haptic([20]);
-      setDone(true);
-      setTimeout(() => router.push(`/wall?pinned=${encodeURIComponent(res.stub.id)}`), 900);
-    } catch (err) {
-      const status = (err as ApiError).status;
-      setError(
-        status === 409
-          ? "This stub was claimed with a different email. Ask the organizer for a new link."
-          : status === 410
-            ? "This link has expired. Ask the organizer for a new one."
-            : status === 401
-              ? "Sign in first, so the stub has a wall to land on."
-              : "We couldn't claim it just now. Try again in a moment.",
-      );
-      setBusy(false);
-    }
+    const res = await progress.run(() => api.claim(token));
+    if (!res) return;
+    upsertStub({ ...res.stub, torn: true });
+    haptic([20]);
+    setDone(true);
+    setTimeout(() => router.push(`/wall?pinned=${encodeURIComponent(res.stub.id)}`), 900);
   }
 
   const expired = info.expired;
@@ -120,16 +109,12 @@ export default function GuestClaimClient({ token }: { token: string }) {
               <p className={ui.muted}>
                 Signed in as <strong>{account.email}</strong>. Claiming puts this stub on your wall, on every device you sign in on.
               </p>
-              <Stamp type="button" block disabled={busy} onClick={() => void claim()}>
-                Claim my stub
+              <Stamp type="button" block disabled={progress.busy} onClick={() => void claim()}>
+                {progress.busy ? "Claiming" : "Claim my stub"}
                 <LeavesMark />
               </Stamp>
+              <ProgressNote state={progress.state} labels={{ sending: "Putting it on your wall" }} onRetry={() => void claim()} onSignIn={() => openSignIn({ reason: "claim", returnTo: `/claim/g/${encodeURIComponent(token)}` })} />
               {info.claimed ? <p className={ui.muted}>Already claimed? Claiming again with the same email is fine.</p> : null}
-              {error ? (
-                <p className={ui.err} role="alert">
-                  {error}
-                </p>
-              ) : null}
             </div>
           ) : (
             <div className={s.form}>
@@ -145,6 +130,7 @@ export default function GuestClaimClient({ token }: { token: string }) {
               </TearLink>
             </div>
           )}
+          <MarkLegend marks={["sandbox"]} />
         </section>
       </div>
     </PageShell>

@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { api } from "@/customer/account/api";
+import { ApiError, api } from "@/customer/account/api";
+import { PaperButton } from "@/customer/desk/Desk";
+import { messageFor } from "@/customer/feedback-messages/messages";
 import type { Stub } from "@/customer/studio/types";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { decodeWall, formatDate, memoryPath } from "@/customer/pages/share";
@@ -16,14 +18,14 @@ export default function PublicWall({ token }: { token: string }) {
   const mounted = useMounted();
   // A short token is the account's public wall on the server; an old link carries the stubs themselves.
   const legacy = useMemo(() => (mounted ? decodeWall(token) : []), [mounted, token]);
-  const [remote, setRemote] = useState<{ token: string; stubs: Stub[] | null } | null>(null);
+  const [remote, setRemote] = useState<{ token: string; stubs: Stub[] | null; code?: string } | null>(null);
   useEffect(() => {
     if (!mounted || token.includes(".")) return;
     let live = true;
     api
       .publicWall(token)
       .then((r) => live && setRemote({ token, stubs: r.stubs }))
-      .catch(() => live && setRemote({ token, stubs: null }));
+      .catch((e: ApiError) => live && setRemote({ token, stubs: null, code: e.status === 404 ? undefined : e.code }));
     return () => {
       live = false;
     };
@@ -40,7 +42,12 @@ export default function PublicWall({ token }: { token: string }) {
       <DeskPage>
         <div className={s.lost}>
           <h1 className={c.title}>We couldn&apos;t open this wall.</h1>
-          <p className={s.lede}>The link may be cut short. Ask for the link again, or make a wall of your own.</p>
+          <p className={s.lede}>{remote?.code ? messageFor(remote.code).message : "The link may be cut short. Ask for the link again, or make a wall of your own."}</p>
+          {remote?.code ? (
+            <PaperButton type="button" onClick={() => window.location.reload()}>
+              Try again
+            </PaperButton>
+          ) : null}
           <StampLink href="/">Make your own wall</StampLink>
         </div>
       </DeskPage>

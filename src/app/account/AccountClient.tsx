@@ -3,7 +3,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Field, MarkLegend, PaperButton, PaperSheet, Rule, SourceMark, Stamp, Stamped, TearLink } from "@/customer/desk/Desk";
-import { ApiError, EMAIL_RE, api } from "@/customer/account/api";
+import { EMAIL_RE, api } from "@/customer/account/api";
+import { codeOf } from "@/customer/feedback-messages/messages";
+import { FeedbackNote, ProgressNote, useProgress } from "@/customer/feedback-messages/progress";
 import { openSignIn } from "@/customer/account/signin";
 import { refreshAccount, useAccount } from "@/customer/account/useAccount";
 import { MATERIALS, formatMoney } from "@/customer/studio/types";
@@ -23,6 +25,8 @@ export default function AccountClient() {
   const mounted = useMounted();
   const { status, account, signOut, savingOff } = useAccount();
   const [orders, setOrders] = useState<Order[] | null | "error">(null);
+  const [ordersCode, setOrdersCode] = useState("unknown");
+  const [attempt, setAttempt] = useState(0);
   const [sheet, setSheet] = useState<"email" | "delete" | null>(null);
   // /account?email=changed|taken is where the emailed confirmation link lands
   const [note] = useState(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("email")));
@@ -33,11 +37,15 @@ export default function AccountClient() {
     api
       .orders()
       .then((o) => live && setOrders(o))
-      .catch(() => live && setOrders("error"));
+      .catch((e) => {
+        if (!live) return;
+        setOrdersCode(codeOf(e));
+        setOrders("error");
+      });
     return () => {
       live = false;
     };
-  }, [status]);
+  }, [status, attempt]);
 
   useEffect(() => {
     if (note === "changed") void refreshAccount();
@@ -117,7 +125,13 @@ export default function AccountClient() {
           {orders === null ? (
             <p className={s.muted}>Loading your orders.</p>
           ) : orders === "error" ? (
-            <p className={s.muted}>We couldn&apos;t load your orders. Try again in a moment.</p>
+            <FeedbackNote
+              code={ordersCode}
+              onRetry={() => {
+                setOrders(null);
+                setAttempt((n) => n + 1);
+              }}
+            />
           ) : orders.length === 0 ? (
             <p className={s.muted}>No orders yet. When you print a stub, the receipt lands here.</p>
           ) : (
@@ -188,28 +202,17 @@ export default function AccountClient() {
 
 function ChangeEmail() {
   const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const progress = useProgress();
   const [sent, setSent] = useState<{ email: string; devLink?: string } | null>(null);
   async function send() {
     const to = email.trim();
     if (!EMAIL_RE.test(to)) return setError("That email doesn't look right. Check it and try again.");
-    setBusy(true);
     setError("");
-    try {
-      const r = await api.changeEmail(to);
+    const r = await progress.run(() => api.changeEmail(to));
+    if (r) {
       setSent({ email: to, devLink: r.devLink });
-    } catch (e) {
-      const err = e as ApiError;
-      setError(
-        err.status === 409
-          ? "That email already has an account."
-          : err.code === "disposable_email"
-            ? "That looks like a throwaway address. Use an email you keep."
-            : "We couldn't send the link. Try again in a moment.",
-      );
-    } finally {
-      setBusy(false);
+      progress.reset();
     }
   }
   if (sent) {
@@ -252,10 +255,12 @@ function ChangeEmail() {
         onChange={(e) => {
           setEmail(e.target.value);
           setError("");
+          if (progress.state.phase === "failed") progress.reset();
         }}
       />
-      <Stamp type="submit" block disabled={busy}>
-        {busy ? "Sending" : "Email me a link"}
+      <ProgressNote state={progress.state} labels={{ sending: "Sending your link" }} onRetry={() => void send()} />
+      <Stamp type="submit" block disabled={progress.busy}>
+        {progress.busy ? "Sending" : "Email me a link"}
       </Stamp>
     </form>
   );
@@ -263,20 +268,15 @@ function ChangeEmail() {
 
 function DeleteAccount({ email, onDone }: { email: string; onDone: () => void }) {
   const [typed, setTyped] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const progress = useProgress();
   const match = typed.trim().toLowerCase() === email.toLowerCase();
   async function go() {
-    setBusy(true);
-    setError("");
-    try {
+    const done = await progress.run(async () => {
       await api.deleteAccount(typed.trim());
       await refreshAccount();
-      onDone();
-    } catch {
-      setError("We couldn't delete the account. Try again in a moment.");
-      setBusy(false);
-    }
+      return true;
+    });
+    if (done) onDone();
   }
   return (
     <form
@@ -287,9 +287,10 @@ function DeleteAccount({ email, onDone }: { email: string; onDone: () => void })
       }}
     >
       <p className={s.lede}>This removes your wall, share links and organizer events from our server, and anonymises your receipts. The stubs on this device stay here.</p>
-      <Field id="acct-confirm" type="email" label="Type your email to confirm" autoComplete="off" value={typed} hint={error || email} onChange={(e) => setTyped(e.target.value)} />
-      <Stamp type="submit" block disabled={!match || busy}>
-        {busy ? "Deleting" : "Delete my account"}
+      <Field id="acct-confirm" type="email" label="Type your email to confirm" autoComplete="off" value={typed} hint={email} onChange={(e) => setTyped(e.target.value)} />
+      <ProgressNote state={progress.state} labels={{ sending: "Deleting your account" }} onRetry={() => void go()} />
+      <Stamp type="submit" block disabled={!match || progress.busy}>
+        {progress.busy ? "Deleting" : "Delete my account"}
       </Stamp>
     </form>
   );

@@ -16,8 +16,8 @@ interface Slot {
   status: StorageStatus;
 }
 
-// One connection per process (the V8 suffix makes a hot-reloaded dev server pick up new storage code). The global survives dev hot reloads so we don't reopen the file each time.
-const g = globalThis as unknown as { __ticketstubStorageV8?: Slot };
+// One connection per process (the V9 suffix makes a hot-reloaded dev server pick up new storage code). The global survives dev hot reloads so we don't reopen the file each time.
+const g = globalThis as unknown as { __ticketstubStorageV9?: Slot };
 
 const dbPath = () => process.env.TICKETSTUB_DB?.trim() || "./data/ticketstub.sqlite";
 
@@ -69,7 +69,7 @@ function probe(): Slot {
   }
 }
 
-const slot = (): Slot => (g.__ticketstubStorageV8 ??= probe());
+const slot = (): Slot => (g.__ticketstubStorageV9 ??= probe());
 
 export const storageStatus = (): StorageStatus => slot().status;
 export const storageAvailable = (): boolean => slot().status.state === "available";

@@ -10,7 +10,7 @@ import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/stu
 import { PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
 import { formatDate } from "@/customer/pages/share";
 import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
-import { placeOrder, type Placed } from "@/customer/account/orders";
+import { useOrderFlow } from "@/customer/account/useOrderFlow";
 import { FINISHES, SANDBOX_LABEL, cartItemFromStub, finishMarks, finishPrices, gateFor, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, HOLO_WORDS, SIZE_COPY, statusMark } from "@/customer/pages/capabilities";
 import { addToCartAndFly } from "@/customer/cart/cartStore";
@@ -30,7 +30,7 @@ export default function CheckoutClient({ id }: { id: string }) {
   const email = receipt.email;
   const [error, setError] = useState("");
   const [paid, setPaid] = useState(false);
-  const [placed, setPlaced] = useState<Placed | null>(null);
+  const { placed, progress, place: placeOrder, retry } = useOrderFlow();
   const [quoteAt, setQuoteAt] = useState(nowMs);
   const [now, setNow] = useState(nowMs);
   // The stub being priced: material and finish live on it, exactly as in the editor.
@@ -101,7 +101,7 @@ export default function CheckoutClient({ id }: { id: string }) {
       return;
     }
     setPaid(true);
-    void placeOrder({
+    placeOrder({
       stubIds: [stub.id],
       lines: [{ title: stub.event.title, material, finish, size, totalMinor: q.totalMinor, variantStatus: q.variantStatus }],
       capabilityVersion: q.capabilityVersion,
@@ -110,7 +110,7 @@ export default function CheckoutClient({ id }: { id: string }) {
       quoteId: q.quoteId,
       method: "card",
       email: email || undefined,
-    }).then(setPlaced);
+    });
     upsertStub({ ...stub, material, finish, torn: true });
     haptic([18, 40, 28]);
   }
@@ -237,7 +237,7 @@ export default function CheckoutClient({ id }: { id: string }) {
           <div className={s.actions}>
             {paid ? (
               <div className={s.done}>
-                <AfterPay placed={placed} email={email} signedIn={receipt.signedIn} />
+                <AfterPay placed={placed} email={email} signedIn={receipt.signedIn} progress={progress} onRetry={retry} />
               </div>
             ) : (
               <Stamp block onClick={pay} disabled={!gate.ok}>

@@ -29,7 +29,7 @@ function client(label) {
   const jar = new Map();
   const ip = `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
   const api = async (method, path, body, opts = {}) => {
-    const headers = { "x-real-ip": ip, ...(opts.origin === null ? {} : { origin: opts.origin ?? BASE }) };
+    const headers = { "x-real-ip": ip, ...(opts.origin === null ? {} : { origin: opts.origin ?? BASE }), ...(opts.headers ?? {}) };
     if (body !== undefined) headers["content-type"] = "application/json";
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
     const res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body), redirect: "manual" });
@@ -471,6 +471,7 @@ ${passed} passed, ${failed} failed`);
   check("errors have the contract shape", (await sync(b, [])).json?.error?.code === "unauthorized");
 
   await gt08(anon);
+  await gt09();
 
   console.log(`\n${passed} passed, ${failed} failed in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   process.exit(failed ? 1 : 0);
@@ -913,6 +914,164 @@ async function gt08(anon) {
   check(`static: no client component imports src/server (${graph.roots} client files, ${graph.files} files)`, graph.roots > 10 && graph.bad.length === 0, graph.bad.join(" | "));
   const chunks = clientChunkScan();
   check(`static: no server marker in built client chunks (${chunks.scanned} files in ${chunks.dirs} build dirs)`, chunks.dirs > 0 && chunks.scanned > 0 && chunks.hits.length === 0, chunks.hits.slice(0, 5).join(" | "));
+}
+
+// GT-09: product events, the error envelope and the message catalog.
+async function gt09() {
+  const t0 = Date.now() - 1000;
+  const evs = await import(pathToFileURL(join(ROOT, "src", "server", "events.ts")).href);
+  const { MESSAGES, MESSAGE_CODES } = await import(pathToFileURL(join(ROOT, "src", "customer", "feedback-messages", "messages.ts")).href);
+  const { sanitizeEvent, sanitizeFields, refOf, requestIdOf, EVENT_SCHEMA, EVENT_TYPES, EVENT_SPEC, pushRing, ringEvents, exportToHarness } = evs;
+  const UNSAFE = /@|:\/\/|[?&][\w.%-]+=|[A-Za-z0-9_-]{24,}/;
+
+  // --- The sanitizer: nothing outside the taxonomy, and nothing that looks like an email, URL, query string or token, survives.
+  const ref = refOf("stub-1");
+  check("events: the taxonomy names every required type", ["intake_submitted", "intake_rejected", "research_started", "fact_corrected", "art_requested", "art_ready", "art_failed", "art_limit", "version_selected", "share_created", "share_revoked", "gift_created", "order_placed", "order_blocked", "signin_link_sent", "signed_in", "claim_redeemed", "storage_unavailable"].every((t) => EVENT_TYPES.includes(t)));
+  check("events: refOf is a stable 16-hex hash that does not contain the id", refOf("stub-1") === ref && /^[a-f0-9]{16}$/.test(ref) && refOf("stub-2") !== ref && !ref.includes("stub"));
+  const dirty = {
+    code: "me@example.com",
+    source: "https://example.com/e?token=abcdefghijklmnopqrstuvwxyz0123456789",
+    note: "my private note",
+    email: "someone@example.com",
+    url: "https://x.example/p?a=b",
+    prompt: "a moody poster of Alice",
+    photo: "data:image/png;base64,AAAA",
+    token: "abcdefghijklmnopqrstuvwxyz0123456789ABCD",
+    facts: 4,
+  };
+  const hostile = sanitizeEvent({ type: "intake_rejected", fields: dirty });
+  check("events: the sanitizer strips an email in a code field and every field the type does not name", hostile && Object.keys(hostile.fields).length === 0, JSON.stringify(hostile?.fields));
+  const research = sanitizeEvent({ type: "research_started", fields: dirty });
+  check("events: a URL with a query string or a token in an enum field is dropped; a clean count is kept", research && research.fields.facts === 4 && !("source" in research.fields) && Object.keys(research.fields).length === 1, JSON.stringify(research?.fields));
+  const wrongKinds = sanitizeFields("order_placed", { order: "ord_abc@x.com", lines: "3", totalMinor: -5 });
+  check("events: values of the wrong kind (unhashed id, string count, negative) are dropped", Object.keys(wrongKinds).length === 0, JSON.stringify(wrongKinds));
+  const all = sanitizeEvent({ type: "gift_created", requestId: "bad id with spaces & https://x?y=1", actor: "account", actorRef: "me@example.com", projectRef: "not-a-ref", fields: { share: ref, messageChars: 12, message: "Happy birthday Bob" } });
+  check("events: a malformed request id, actor ref and project ref are replaced or dropped", all.requestId.startsWith("req_") && all.actorRef === undefined && all.projectRef === undefined && all.fields.share === ref && all.fields.messageChars === 12 && !("message" in all.fields));
+  check("events: nothing in a finished event matches an email, URL, query string or long token", !UNSAFE.test(JSON.stringify([hostile, research, all]).replace(/"(?:requestId)":"req_[\w-]+"/g, "")));
+  check("events: an unknown type is refused, and the prototype is not a type", sanitizeEvent({ type: "page_view" }) === null && sanitizeEvent({ type: "__proto__" }) === null && sanitizeEvent({ type: "constructor" }) === null);
+  check("events: every spec field is one of ref, code, count, ts, flag or a fixed word list", EVENT_TYPES.every((t) => Object.values(EVENT_SPEC[t]).every((k) => ["ref", "code", "count", "ts", "flag"].includes(k) || Array.isArray(k))));
+  check("events: x-request-id is kept when well formed and replaced when not", requestIdOf(new Headers({ "x-request-id": "smoke-0123456789" })) === "smoke-0123456789" && /^req_/.test(requestIdOf(new Headers({ "x-request-id": "no spaces allowed here!" }))) && /^req_/.test(requestIdOf(new Headers())));
+  const down = sanitizeEvent({ type: "storage_unavailable", fields: { code: "storage_unavailable", route: "auth_link" } });
+  pushRing(down);
+  check("events: with storage down an event goes to the in-memory ring", ringEvents().some((e) => e.type === "storage_unavailable" && e.fields.route === "auth_link"));
+  check("events: exportToHarness is a no-op stub (nothing sent, nothing thrown)", (await exportToHarness([down])) === undefined);
+
+  // --- Real actions, then what was recorded.
+  const P = client("evP"); // owner
+  const Q = client("evQ"); // another account
+  const emailP = `smoke-evp-${run}@example.com`;
+  const emailQ = `smoke-evq-${run}@example.com`;
+  const rid = (what) => `smoke-${run}-${what}`;
+  const asReq = (what) => ({ headers: { "x-request-id": rid(what) } });
+  const linkRes = await P.api("POST", "/api/auth/link", { email: emailP, returnTo: "/wall", reason: "save" }, asReq("link"));
+  check("events: the answer carries the caller's x-request-id", linkRes.headers.get("x-request-id") === rid("link"), String(linkRes.headers.get("x-request-id")));
+  const badRid = await P.api("POST", "/api/auth/link", { email: "nope", reason: "save" }, { headers: { "x-request-id": "bad id!" } });
+  check("events: a malformed x-request-id is replaced by a generated one", /^req_[\w-]{8,}$/.test(badRid.headers.get("x-request-id") ?? ""), String(badRid.headers.get("x-request-id")));
+  const tok = tokenOf(linkRes.json.devLink);
+  await P.api("POST", "/api/auth/confirm", { token: tok }, asReq("confirm"));
+  await Q.signIn(emailQ);
+  const sid = `ev-${run}`;
+  const t = Date.now() - 3_600_000;
+  await sync(P, [stub(sid, "Event smoke", t)]);
+  const share = await P.api("POST", "/api/share", { stub: stub(sid, "Event smoke", t) }, asReq("share"));
+  const gift = await P.api("POST", "/api/gift", { stub: sid, to: "Alice", message: "Private words for Alice" }, asReq("gift"));
+  const order = await P.api("POST", "/api/orders", { order: { stubIds: [sid], lines: [{ title: "Event smoke", material: "digital", finish: "matte", size: "file", totalMinor: 900 }], totalMinor: 900, method: "card" } }, asReq("order"));
+  const blocked = await P.api("POST", "/api/orders", { order: { stubIds: [sid], lines: [{ title: "Event smoke", material: "digital", finish: "matte", size: "classic", totalMinor: 900 }], totalMinor: 900, method: "card" } }, asReq("blocked"));
+  check("events: setup ran (share, gift, order placed, an order blocked)", share.status === 200 && gift.status === 200 && order.status === 200 && blocked.status === 422 && blocked.json?.error?.code === "variant_not_orderable", `${share.status} ${gift.status} ${order.status} ${blocked.status}`);
+  await P.api("POST", "/api/research", { query: "neat" }, asReq("search"));
+  await P.api("POST", "/api/research", { url: "neathack" }, asReq("research"));
+  const rej = await P.api("POST", "/api/research", { url: "" }, asReq("rejected"));
+  check("events: a rejected intake is the one error envelope", rej.status === 422 && rej.json?.error?.code === "unreadable_link" && typeof rej.json.error.message === "string", rej.text);
+  const art = await P.api("POST", "/api/art", { event: { title: "Event smoke" } }, asReq("art"));
+  check("events: art still answers", art.status === 200 || art.status === 429, String(art.status));
+  const cev = await P.api("POST", "/api/organizer/events", { title: "Event smoke set", stub: stub(`evset-${run}`, "Event smoke set", t), guests: [{ name: "Guest One" }] });
+  const claimed = await Q.api("POST", `/api/claim/${cev.json.claims[0].token}`, {}, asReq("claim"));
+  check("events: a guest claim went through", claimed.status === 200, claimed.text.slice(0, 120));
+  const vs = await P.api("POST", "/api/events", { type: "version_selected", project: sid, fields: { version: "v-secret-1", versions: 3, note: "x@y.com" } }, asReq("version"));
+  const fc = await P.api("POST", "/api/events", { type: "fact_corrected", project: sid, fields: { fact: "date", versions: 1 } }, asReq("fact"));
+  check("events: the browser can report a version choice and a fact correction for its own stub", vs.status === 200 && fc.status === 200, `${vs.status} ${fc.status}`);
+  check("events: only the owner's own project can collect browser events (another account gets 404)", (await Q.api("POST", "/api/events", { type: "version_selected", project: sid, fields: {} })).status === 404);
+  check("events: the browser cannot report a server-side type", (await P.api("POST", "/api/events", { type: "order_placed", fields: {} })).status === 400 && (await P.api("POST", "/api/events", { type: "signed_in" })).status === 400);
+  check("events: POST /api/events needs a same-site Origin", (await P.api("POST", "/api/events", { type: "version_selected", fields: {} }, { origin: null })).status === 403);
+  await P.api("POST", "/api/share/revoke", { stubId: sid }, asReq("revoke"));
+
+  // --- The owner's history, and nobody else's.
+  const mine = await P.api("GET", `/api/events?project=stub:${sid}`);
+  const types = (mine.json?.events ?? []).map((e) => e.type);
+  check("events: the owner reads their project's history", mine.status === 200 && mine.json.schema === EVENT_SCHEMA && ["share_created", "gift_created", "version_selected", "fact_corrected", "share_revoked"].every((x) => types.includes(x)), `${mine.status} ${types}`);
+  check("events: every event carries the schema, a request id, a time and the project's hash only", mine.json.events.every((e) => e.schema === EVENT_SCHEMA && /^[\w.-]{8,64}$/.test(e.requestId) && Number.isInteger(e.at) && e.projectRef === refOf(sid)));
+  check("events: the correlation id the caller sent is on the events it caused", mine.json.events.some((e) => e.type === "share_created" && e.requestId === rid("share")) && mine.json.events.some((e) => e.type === "gift_created" && e.requestId === rid("gift")));
+  const leak = [emailP, emailQ, sid, share.json.token, gift.json.giftToken, tok, "Alice", "Private words", "Event smoke", "v-secret-1", "x@y.com", "devLink"];
+  check("events: the history leaks no id, email, name, note, token or title", !leak.some((v) => v && mine.text.includes(v)), leak.filter((v) => v && mine.text.includes(v)).join(","));
+  check("events: no ref is a raw id (every ref field is 16-hex)", mine.json.events.every((e) => Object.entries(e.fields).every(([k, v]) => !["share", "version", "fact"].includes(k) || /^[a-f0-9]{16}$/.test(v))));
+  const theirs = await Q.api("GET", `/api/events?project=stub:${sid}`);
+  const nothing = await Q.api("GET", `/api/events?project=stub:nothing-${run}`);
+  check("events: another account asking for it gets 404, identical to a project that does not exist (A vs B)", theirs.status === 404 && theirs.text === nothing.text && theirs.json.error.code === "not_found", `${theirs.status} ${theirs.text}`);
+  check("events: an organizer event's history is the captain's alone", (await Q.api("GET", `/api/events?project=event:${cev.json.eventId}`)).status === 404 && (await P.api("GET", `/api/events?project=event:${cev.json.eventId}`)).status === 200);
+  const capt = await P.api("GET", `/api/events?project=event:${cev.json.eventId}`);
+  check("events: the captain's history never repeats the event id", !capt.text.includes(cev.json.eventId));
+  check("events: anonymous gets 404", (await client("evAnon").api("GET", `/api/events?project=stub:${sid}`)).status === 404);
+  check("events: no project and no scope is a 404, and so is a malformed project", (await P.api("GET", "/api/events")).status === 404 && (await P.api("GET", "/api/events?project=%00bad")).status === 404);
+  const wide = await P.api("GET", "/api/events?scope=all");
+  check("events: the staff-wide scope is a 404 for an ordinary account", wide.status === 404 && wide.json.error.code === "not_found");
+  if (ADMIN_EMAIL) {
+    const S = client("evStaff");
+    await S.signIn(ADMIN_EMAIL);
+    const all2 = await S.api("GET", "/api/events?scope=all");
+    const wideTypes = new Set((all2.json?.events ?? []).map((e) => e.type));
+    check("events: staff read events across projects under admin.view", all2.status === 200 && ["intake_rejected", "research_started", "order_placed", "signin_link_sent", "signed_in", "claim_redeemed"].every((x) => wideTypes.has(x)), `${all2.status} ${[...wideTypes]}`);
+    check("events: the staff-wide history is just as clean", !leak.some((v) => v && all2.text.includes(v)));
+  } else {
+    console.log("skip staff-wide events check: set SMOKE_ADMIN_EMAIL to run it");
+  }
+
+  // --- The table itself: every main action recorded, append-only, nothing unsafe stored.
+  try {
+    const db = new DatabaseSync(DB);
+    const rows = db.prepare("SELECT * FROM events WHERE at >= ?").all(t0);
+    const seen = new Set(rows.map((r) => r.type));
+    const wanted = ["intake_submitted", "intake_rejected", "research_started", "art_requested", "art_ready", "version_selected", "fact_corrected", "share_created", "share_revoked", "gift_created", "order_placed", "order_blocked", "signin_link_sent", "signed_in", "claim_redeemed"];
+    check("events: the table recorded every main action of this run", wanted.every((x) => seen.has(x)), `missing ${wanted.filter((x) => !seen.has(x))}`);
+    check("events: one request id ties a request's events together", rows.some((r) => r.request_id === rid("share") && r.type === "share_created") && rows.some((r) => r.request_id === rid("link") && r.type === "signin_link_sent"));
+    const text = JSON.stringify(rows).replace(/"(?:actor_ref|tenant_ref|project_ref)":"[a-f0-9]{16}"/g, "").replace(/"request_id":"[\w.-]+"/g, "");
+    check("events: nothing stored matches an email, URL, query string or long token", !UNSAFE.test(text), text.match(UNSAFE)?.[0]);
+    check("events: the stored refs are hashes, never the account or stub id", rows.every((r) => [r.actor_ref, r.tenant_ref, r.project_ref].every((v) => v === null || /^[a-f0-9]{16}$/.test(v))));
+    let updated = false;
+    try {
+      db.prepare("UPDATE events SET type = 'x' WHERE at >= ?").run(t0);
+      updated = true;
+    } catch {
+      /* refused, as intended */
+    }
+    let deleted = false;
+    try {
+      db.prepare("DELETE FROM events WHERE at >= ?").run(t0);
+      deleted = true;
+    } catch {
+      /* refused, as intended */
+    }
+    check("events: the table is append-only (UPDATE and DELETE of a recent row are refused)", !updated && !deleted && db.prepare("SELECT COUNT(*) AS n FROM events WHERE at >= ?").get(t0).n === rows.length);
+    db.close();
+  } catch (e) {
+    check("events: could read the events table", false, `(${DB}: ${e.message})`);
+  }
+
+  // --- Every error body so far is the one envelope, and every code has a catalog entry.
+  const errors = responses
+    .map((r) => {
+      try {
+        return JSON.parse(r);
+      } catch {
+        return null;
+      }
+    })
+    .filter((j) => j && typeof j === "object" && "error" in j);
+  const badShape = errors.filter((j) => !(j.error && typeof j.error === "object" && typeof j.error.code === "string" && typeof j.error.message === "string" && j.error.message.length > 0));
+  check(`errors: every API error body (${errors.length} seen) is { error: { code, message } }`, errors.length > 20 && badShape.length === 0, JSON.stringify(badShape.slice(0, 2)));
+  const unknownCodes = [...new Set(errors.map((j) => j.error?.code).filter((c) => !Object.hasOwn(MESSAGES, c)))];
+  check("errors: every code the server answered with has a catalog entry", unknownCodes.length === 0, unknownCodes.join(", "));
+  check("errors: no error message carries a stack or a path", errors.every((j) => !/\bat \w+ \(|node_modules|[A-Z]:\\|\.tsx?:\d+/.test(j.error?.message ?? "")));
+  check(`errors: the catalog has ${MESSAGE_CODES.length} entries`, MESSAGE_CODES.length >= 40);
 }
 
 main().catch((e) => {

@@ -6,6 +6,7 @@ import { safeEqual } from "./crypto";
 import { DatabaseSync } from "node:sqlite";
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
+import { EVENT_RETENTION_MS, EVENT_SCHEMA, type StoredEvent, type TicketstubEvent } from "./events";
 import { migrate } from "./migrations";
 import type { Account, AccountState, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, GiftView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
 
@@ -214,6 +215,7 @@ export class SqliteStorage implements Storage {
 
   async prune(now: number): Promise<void> {
     this.run("DELETE FROM sessions WHERE expires_at <= ?", now);
+    this.run("DELETE FROM events WHERE at <= ?", now - EVENT_RETENTION_MS);
     // Keep used and expired links for a day so a second click still reads as "used", then drop them.
     this.run("DELETE FROM login_links WHERE expires_at <= ?", now - 24 * 3600_000);
   }
@@ -376,6 +378,32 @@ export class SqliteStorage implements Storage {
 
   async revokeGift(ownerKey: string, tokenHash: string): Promise<boolean> {
     return Number(this.run("DELETE FROM gifts WHERE token_hash = ? AND owner_key = ?", tokenHash, ownerKey).changes) > 0;
+  }
+
+  async appendEvent(e: TicketstubEvent, tenantRef?: string): Promise<void> {
+    this.run(
+      "INSERT INTO events (type, at, request_id, actor, actor_ref, tenant_ref, project_ref, mode, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      e.type, e.at, e.requestId, e.actor, e.actorRef ?? null, tenantRef ?? null, e.projectRef ?? null, e.mode, JSON.stringify(e.fields),
+    );
+  }
+
+  async listEvents(filter: { projectRef?: string; limit: number }): Promise<StoredEvent[]> {
+    const rows = filter.projectRef
+      ? this.all("SELECT * FROM events WHERE project_ref = ? ORDER BY seq DESC LIMIT ?", filter.projectRef, filter.limit)
+      : this.all("SELECT * FROM events ORDER BY seq DESC LIMIT ?", filter.limit);
+    return rows.map((r) => ({
+      schema: EVENT_SCHEMA,
+      seq: Number(r.seq),
+      type: r.type as StoredEvent["type"],
+      at: Number(r.at),
+      requestId: r.request_id as string,
+      actor: r.actor as StoredEvent["actor"],
+      ...(r.actor_ref ? { actorRef: r.actor_ref as string } : {}),
+      ...(r.tenant_ref ? { tenantRef: r.tenant_ref as string } : {}),
+      ...(r.project_ref ? { projectRef: r.project_ref as string } : {}),
+      mode: r.mode as StoredEvent["mode"],
+      fields: JSON.parse(r.fields as string) as StoredEvent["fields"],
+    }));
   }
 
   async ownsStub(tenantId: string, stubId: string): Promise<boolean> {

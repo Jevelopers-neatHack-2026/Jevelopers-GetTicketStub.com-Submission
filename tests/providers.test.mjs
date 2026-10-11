@@ -125,7 +125,7 @@ test("unsupported image model fails before generation, without simulated fallbac
   let calls = 0;
   globalThis.fetch = async () => { calls++; return response({ data: [] }); };
   const result = await art.POST(req({ event, first: true, edition: "researched" }));
-  assert.equal(result.status, 422); assert.equal((await result.json()).code, "unsupported_image_model"); assert.equal(calls, 1);
+  assert.equal(result.status, 422); assert.equal((await result.json()).error.code, "unsupported_image_model"); assert.equal(calls, 1);
 });
 
 for (const [key, value, code] of [
@@ -145,7 +145,7 @@ for (const [status, code] of [[401, "provider_authentication_failed"], [403, "pr
   globalThis.fetch = async () => { calls++; return response({ error: "secret provider response" }, status); };
   const result = await agent.POST(req({ event, message: "Hello?" }));
   assert.equal(result.status, status === 429 ? 429 : 502);
-  const data = await result.json(); assert.equal(data.code, code);
+  const data = await result.json(); assert.equal(data.error.code, code);
   assert.ok(!JSON.stringify(data).includes("secret")); assert.equal(calls, 1);
 });
 
@@ -208,7 +208,7 @@ test("invalid provider configuration surfaces an error at the route boundary", a
   configure(); process.env.TICKETSTUB_AGENT_PROVIDER = "typo";
   globalThis.fetch = () => { assert.fail("invalid provider attempted network"); };
   const result = await agent.POST(req({ event, message: "Hello?" }));
-  assert.equal(result.status, 503); assert.equal((await result.json()).code, "invalid_provider_configuration");
+  assert.equal(result.status, 503); assert.equal((await result.json()).error.code, "invalid_provider_configuration");
 });
 
 test("research rejects malformed enrichment with a safe provider error", async () => {
@@ -217,7 +217,7 @@ test("research rejects malformed enrichment with a safe provider error", async (
     ? new Response('<script type="application/ld+json">{"@type":"MusicEvent","name":"Offline Test"}</script>')
     : response(textResponse("[null]"));
   const result = await research.POST(req({ url: "https://example.com/test-event" }));
-  assert.equal(result.status, 502); assert.equal((await result.json()).code, "invalid_provider_response");
+  assert.equal(result.status, 502); assert.equal((await result.json()).error.code, "invalid_provider_response");
 });
 
 test("optional direct-provider paths still simulate without credentials", async () => {

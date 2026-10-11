@@ -117,6 +117,31 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX gifts_owner ON gifts (owner_key, stub_id);
   `,
+  `
+  -- Product events (ticketstub.event/1). Append-only: no UPDATE ever, and no DELETE until a row is past retention
+  -- (90 days), so only prune can remove them. Only hashes, codes, counts and timestamps: see src/server/events.ts.
+  CREATE TABLE events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    request_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    actor_ref TEXT,
+    tenant_ref TEXT,
+    project_ref TEXT,
+    mode TEXT NOT NULL,
+    fields TEXT NOT NULL
+  );
+  CREATE INDEX events_project ON events (project_ref, seq);
+  CREATE INDEX events_at ON events (at);
+  CREATE TRIGGER events_no_update BEFORE UPDATE ON events BEGIN
+    SELECT RAISE(ABORT, 'events are append-only');
+  END;
+  CREATE TRIGGER events_keep_recent BEFORE DELETE ON events
+  WHEN OLD.at > (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 90 * 24 * 3600 * 1000) BEGIN
+    SELECT RAISE(ABORT, 'events are kept for 90 days');
+  END;
+  `,
 ];
 
 export function migrate(db: DatabaseSync): void {

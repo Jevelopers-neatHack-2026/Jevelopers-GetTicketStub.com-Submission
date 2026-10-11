@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/customer/account/api";
+import { messageForError } from "@/customer/feedback-messages/messages";
 import { sharePath } from "@/customer/account/share";
 import d from "@/customer/desk/Desk.module.css";
-import { PaperButton, Rule, Stamp, Stamped, Tool, Tools } from "@/customer/desk/Desk";
+import { MarkLegend, PaperButton, Rule, SourceMark, Stamp, Stamped, Tool, Tools } from "@/customer/desk/Desk";
 import { FlipIcon } from "@/customer/desk/icons";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
@@ -129,8 +130,8 @@ export default function MemoryPage({ token, gift, giftTo, giftToken, wrap = true
       setStopped(true);
       setConfirmStop(false);
       say("Sharing stopped. The old link no longer works.", true);
-    } catch {
-      say("We couldn't stop sharing just now. Try again in a moment.");
+    } catch (err) {
+      say(messageForError(err).message);
     }
   }
 
@@ -203,12 +204,16 @@ export default function MemoryPage({ token, gift, giftTo, giftToken, wrap = true
                   Share your stub
                 </Stamp>
                 <div className={s.actionsPair}>
-                  <PaperLink href={`/checkout/${stub.id}`}>{stub.material === "digital" ? "Get the file" : "Print it"} · {formatMoney(printMinor(stub))}</PaperLink>
+                  <PaperLink href={`/checkout/${stub.id}`}>
+                    {stub.material === "digital" ? "Get the file" : "Print it"} · {formatMoney(printMinor(stub))}
+                    <SourceMark p="sandbox" />
+                  </PaperLink>
                   <PaperLink href={`/wallet/${stub.id}`}>Add to Wallet</PaperLink>
                 </div>
                 <div className={s.tearHolder}>
                   <TearAnchor href={`/friends/${stub.id}`}>Send matching stubs to friends</TearAnchor>
                 </div>
+                <MarkLegend marks={["sandbox"]} />
               </div>
             ) : null}
             <div className={`${ui.status} ${s.status}`} aria-live="polite">

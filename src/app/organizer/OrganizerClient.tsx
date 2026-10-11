@@ -6,8 +6,9 @@ import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play } from "@/customer/studio/feedback";
 import { VariantNote } from "@/customer/studio/editor/MaterialPicker";
 import { EDITIONS, MATERIALS, formatMoney, withGuestName, type Edition, type Finish, type Material, type Stub } from "@/customer/studio/types";
-import { ApiError, api, type OrganizerEventReply } from "@/customer/account/api";
-import { placeOrder } from "@/customer/account/orders";
+import { api, type OrganizerEventReply } from "@/customer/account/api";
+import { placeOrder, resendOrder, type Placed } from "@/customer/account/orders";
+import { FeedbackNote, ProgressNote, useProgress } from "@/customer/feedback-messages/progress";
 import { openSignIn } from "@/customer/account/signin";
 import { useAccount } from "@/customer/account/useAccount";
 import { absoluteUrl, copyText } from "@/customer/pages/share";
@@ -155,8 +156,9 @@ export default function OrganizerClient() {
   const [sizePick, setSizePick] = useState<PrintSize | null>(null);
   const { status: acct, account, savingOff } = useAccount();
   const [events, setEvents] = useState<OrganizerEventReply | null>(null);
-  const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState("");
+  const publishProgress = useProgress();
+  const orderProgress = useProgress();
+  const [heldOrder, setHeldOrder] = useState<Placed | null>(null);
   const [resumed, setResumed] = useState(false);
 
   // Back from the emailed link: put the design, the guest list and the choices back as they were.
@@ -255,10 +257,20 @@ export default function OrganizerClient() {
   const finishLabel = FINISHES.find((f) => f.id === finish)?.label ?? finish;
   const verb = physical ? "Print" : "Send";
 
+  /** The order is real only once the server (or, with saving off, this device) has it; a refusal leaves it on this device and says so. */
+  function settleOrder(p: Placed | undefined) {
+    if (!p) return;
+    setHeldOrder(p);
+    setOrdered(p.order.id);
+  }
+  function retryOrder() {
+    if (heldOrder) void orderProgress.run(() => resendOrder(heldOrder)).then(settleOrder);
+  }
+
   function startRun() {
-    if (!gate.ok) return;
+    if (!gate.ok || orderProgress.busy) return;
     if (!ordered) {
-      void placeOrder({
+      void orderProgress.run(() => placeOrder({
         stubIds: guests.map((_, i) => `${design.setId}-${i}`),
         lines: [{ title: `${design.title} · ${n} guest stubs`, material, finish, size, totalMinor: total, variantStatus: run.variantStatus }],
         capabilityVersion: run.capabilityVersion,
@@ -266,9 +278,13 @@ export default function OrganizerClient() {
         quoteId: run.quoteId,
         method: "organizer-print",
         email: account?.email,
-      }).then((p) => setOrdered(p.order.id));
+      })).then((p) => {
+        settleOrder(p);
+        if (p) setRunning(true);
+      });
+    } else {
+      setRunning(true);
     }
-    setRunning(true);
   }
 
   /** Publishing keeps the guest links on the server, so it needs an account. Signed out, the sheet opens first. */
@@ -288,25 +304,20 @@ export default function OrganizerClient() {
       });
       return;
     }
-    setPublishing(true);
-    setPublishError("");
-    try {
-      const base = { ...designStub(design, { id: `${design.setId}-base` }), material, finish };
-      const res = await api.publishEvent(
+    const base = { ...designStub(design, { id: `${design.setId}-base` }), material, finish };
+    const res = await publishProgress.run(() =>
+      api.publishEvent(
         design.title,
         base,
         guests.map((g) => ({ name: g.name, seat: g.seat })),
-      );
-      setEvents(res);
-      setPublished(true);
-      play("success");
-      haptic([18, 40, 28]);
-    } catch (e) {
-      const err = e as ApiError;
-      setPublishError(err.status === 401 ? "Your session ran out. Sign in again to publish." : "We couldn't publish just now. Your design and guest list are still here. Try again in a moment.");
-    } finally {
-      setPublishing(false);
-    }
+      ),
+    );
+    if (!res) return;
+    publishProgress.reset();
+    setEvents(res);
+    setPublished(true);
+    play("success");
+    haptic([18, 40, 28]);
   }
 
   // Back from sign-in with the draft restored: publish without asking twice.
@@ -601,18 +612,28 @@ export default function OrganizerClient() {
                   <MarkLegend marks={["estimated", ...(mark ? [mark] : [])]} />
                   {ordered ? (
                     <div className={s.done} role="status">
-                      <Stamped>Published</Stamped>
+                      <Stamped>{heldOrder?.code ? "Saved here" : "Ordered"}</Stamped>
                       <p className={ui.muted}>
-                        Sandbox order <span className={ui.num}>{ordered}</span>. No real charge, and nothing went to a printer.
+                        Sandbox order <span className={ui.num}>{ordered}</span>
+                        <SourceMark p="sandbox" />. No real charge, and nothing went to a printer.
                       </p>
+                      {heldOrder?.code ? (
+                        <>
+                          <p className={ui.muted}>This order is saved on this device only. The server didn&apos;t take it.</p>
+                          <FeedbackNote code={heldOrder.code} onRetry={retryOrder} />
+                        </>
+                      ) : null}
                       <TearLink type="button" onClick={() => setRunning(true)}>
                         Watch the run again
                       </TearLink>
                     </div>
                   ) : (
-                    <Stamp block price={formatMoney(total)} onClick={startRun} disabled={!gate.ok}>
-                      {verb} all {n}
-                    </Stamp>
+                    <>
+                      <ProgressNote state={orderProgress.state} labels={{ sending: "Placing the sandbox order" }} />
+                      <Stamp block price={formatMoney(total)} onClick={startRun} disabled={!gate.ok || orderProgress.busy}>
+                        {orderProgress.busy ? "Placing" : `${verb} all ${n}`}
+                      </Stamp>
+                    </>
                   )}
                 </div>
               ) : (
@@ -631,14 +652,15 @@ export default function OrganizerClient() {
                     </div>
                   ) : (
                     <>
-                      <Stamp block disabled={publishing || n === 0 || savingOff} onClick={() => void publishClaims()}>
-                        {publishing ? "Publishing" : savingOff ? "Saving is off on this preview" : acct === "in" ? `Publish ${n} guest ${n === 1 ? "link" : "links"}` : "Sign in to publish"}
+                      <Stamp block disabled={publishProgress.busy || n === 0 || savingOff} onClick={() => void publishClaims()}>
+                        {publishProgress.busy ? "Publishing" : savingOff ? "Saving is off on this preview" : acct === "in" ? `Publish ${n} guest ${n === 1 ? "link" : "links"}` : "Sign in to publish"}
                       </Stamp>
-                      {publishError ? (
-                        <p className={ui.err} role="alert">
-                          {publishError}
-                        </p>
-                      ) : null}
+                      <ProgressNote
+                        state={publishProgress.state}
+                        labels={{ sending: "Publishing your guest links" }}
+                        onRetry={() => void publishClaims()}
+                        onSignIn={() => openSignIn({ reason: "claim", returnTo: "/organizer", title: "Sign in to publish", lede: "Your session ran out. We'll email you a link, and your design and guest list are kept." })}
+                      />
                       <TearLink type="button" onClick={() => setPublished(true)}>
                         Share one link without guest names
                       </TearLink>
@@ -693,6 +715,7 @@ export default function OrganizerClient() {
           stubs={guestStubs}
           names={guests.map((g) => g.name)}
           orderId={ordered}
+          problem={heldOrder?.code}
           onClose={() => setRunning(false)}
           onClaim={() => {
             setRunning(false);

@@ -8,5 +8,5 @@ export const POST = route(async (req: Request) => {
   const body = await readJson(req, 16 * 1024);
   if (!isObject(body) || typeof body.token !== "string") throw new HttpError(400, "bad_request", "Send { token }.");
   const result = await verifyContextTokenLive(body.token);
-  return result.ok ? json({ ok: true, context: result.ctx }) : json({ ok: false, reason: result.reason }, { status: 401 });
+  return result.ok ? json({ ok: true, context: result.ctx }) : json({ ok: false, reason: result.reason, error: { code: "unauthorized", message: "That context token is no longer good." } }, { status: 401 });
 });

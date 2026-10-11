@@ -1,5 +1,7 @@
 import { getRequestContext, ensureDevice, guestTenant, requireCapability } from "@/server/context";
 import { newToken } from "@/server/crypto";
+import { refOf } from "@/server/events";
+import { recordEvent } from "@/server/event-log";
 import { HttpError, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
 import { publicStub } from "@/server/project";
@@ -21,5 +23,6 @@ export const POST = route(async (req: Request) => {
   const device = ctx.actor.kind === "account" ? null : ensureDevice(req);
   const owner = device ? guestTenant(device.id) : ctx.tenant.id;
   const token = await getStorage().upsertShare(owner, stub, newToken(9), now);
+  await recordEvent(req, "share_created", { share: refOf(token) }, { project: stub.id, ctx });
   return json({ token }, device?.cookie ? { headers: { "set-cookie": device.cookie } } : undefined);
 });

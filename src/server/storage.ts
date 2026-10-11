@@ -3,6 +3,7 @@ import "server-only";
 // implementing it. Every method is async for that reason, even though node:sqlite is synchronous.
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
+import type { StoredEvent, TicketstubEvent } from "./events";
 
 export interface Account {
   id: string;
@@ -154,6 +155,11 @@ export interface Storage {
   ownsStub(tenantId: string, stubId: string): Promise<boolean>;
   /** The account that created an organizer event, or null. */
   getEventCaptain(eventId: string): Promise<string | null>;
+
+  // product events (append-only; see src/server/events.ts)
+  appendEvent(event: TicketstubEvent, tenantRef?: string): Promise<void>;
+  /** Newest first. `projectRef` narrows to one project; without it the caller must be staff. */
+  listEvents(filter: { projectRef?: string; limit: number }): Promise<StoredEvent[]>;
 
   // art generation caps
   /**

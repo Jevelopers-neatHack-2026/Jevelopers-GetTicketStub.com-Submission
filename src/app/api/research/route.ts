@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/server/event-log";
+import { errorJson, route } from "@/server/http";
 import { generateText, ProviderError, providerFailure } from "@/server/ai/providers";
 import { HARBOUR_GAME, NEATHACK, PALE_HOURS } from "@/customer/studio/fixtures";
 import type { EventData, EventType, Fact } from "@/customer/studio/types";
@@ -347,24 +349,30 @@ function slugEvent(link: TicketmasterUrl): EventData | undefined {
 
 // ---------- Handler ----------
 
-function readError(status = 422) {
-  return NextResponse.json({ error: READ_ERROR }, { status });
+async function readError(req: Request, status = 422) {
+  await recordEvent(req, "intake_rejected", { code: "unreadable_link" });
+  return errorJson(status, "unreadable_link", READ_ERROR);
 }
 
-export async function POST(req: Request) {
+/** A provider failure in the one error envelope; the code and fixed message come from providerFailure. */
+const providerEnvelope = (failure: NonNullable<ReturnType<typeof providerFailure>>) => errorJson(failure.status, failure.body.code, failure.body.error);
+
+export const POST = route(async (req: Request) => {
   let body: { url?: string; query?: string };
   try {
     body = (await req.json()) as { url?: string; query?: string };
   } catch {
-    return NextResponse.json({ error: "Send a link or a search." }, { status: 400 });
+    await recordEvent(req, "intake_rejected", { code: "bad_request" });
+    return errorJson(400, "bad_request", "Send a link or a search.");
   }
 
   if (typeof body.query === "string" && !body.url) {
+    await recordEvent(req, "intake_submitted", { source: "search" });
     return NextResponse.json({ results: searchFixtures(body.query) });
   }
 
   const raw = typeof body.url === "string" ? body.url.trim() : "";
-  if (!raw) return readError();
+  if (!raw) return readError(req);
 
   let url: URL | undefined;
   try {
@@ -377,6 +385,7 @@ export async function POST(req: Request) {
   // Ticketmaster / Live Nation links go to the Discovery API first. Without a key, or on any API failure
   // (429 included), we fall through to the page parse below and say so in `ticketmaster`.
   // Demo preview (the default) never calls Ticketmaster or fetches pages; only live mode does.
+  await recordEvent(req, "intake_submitted", { source: "link" });
   const live = process.env.TICKETSTUB_RUNTIME_MODE === "live";
   const tmLink = url && live ? parseTicketmasterUrl(url) : undefined;
   let tmMeta: TicketmasterMeta | undefined;
@@ -397,6 +406,7 @@ export async function POST(req: Request) {
   // Demo keywords / known demo URLs return the fixture with its provenance as set.
   const fixture = tmLink ? undefined : matchFixture(raw);
   if (fixture) {
+    await recordEvent(req, "research_started", { source: "fixture", facts: fixture.facts.length });
     const e = clone(fixture);
     if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
       e.facts = e.facts.map((fact) => ({
@@ -419,18 +429,20 @@ export async function POST(req: Request) {
     return NextResponse.json(withTm(e));
   }
 
-  if (!url) return readError();
+  if (!url) return readError(req);
 
   if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
-    return NextResponse.json({ error: "This preview uses demo events. Try neatHack, The Pale Hours, or Harbour FC." }, { status: 422 });
+    await recordEvent(req, "intake_rejected", { code: "demo_only" });
+    return errorJson(422, "demo_only", "This preview uses demo events. Try neatHack, The Pale Hours, or Harbour FC.");
   }
 
   // A Ticketmaster page often refuses bots; the slug still names the event, so don't dead-end the person.
   const tmFallback = () => {
     const e = tmLink ? slugEvent(tmLink) : undefined;
-    return e ? NextResponse.json(withTm(e)) : readError();
+    return e ? NextResponse.json(withTm(e)) : readError(req);
   };
 
+  await recordEvent(req, "research_started", { source: tmLink ? "ticketmaster" : "link" });
   try {
     const html = await fetchPage(url.toString());
     const ex = extract(html, url.toString());
@@ -458,7 +470,7 @@ export async function POST(req: Request) {
     return NextResponse.json(withTm(event));
   } catch (error) {
     const failure = providerFailure(error);
-    if (failure) return NextResponse.json(failure.body, { status: failure.status });
+    if (failure) return providerEnvelope(failure);
     return tmFallback();
   }
-}
+});

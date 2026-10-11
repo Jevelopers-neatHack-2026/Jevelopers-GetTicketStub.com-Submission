@@ -1,5 +1,6 @@
 import { LINK_TTL_MS, sandboxMail } from "@/server/auth";
 import { hashToken, newToken } from "@/server/crypto";
+import { recordEvent } from "@/server/event-log";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
@@ -31,9 +32,13 @@ export const POST = route(async (req: Request) => {
   const url = `${appOrigin(req)}/signin/confirm?token=${token}`;
 
   const { delivered } = await sendMail(email, magicLinkMail(reason, url, stubImageUrl(appOrigin(req), shareToken)), "sign-in link");
-  if (delivered) return json({ ok: true });
+  if (delivered) {
+    await recordEvent(req, "signin_link_sent", { reason, delivery: "mail" });
+    return json({ ok: true });
+  }
   if (!sandboxMail()) throw new HttpError(503, "mail_unavailable", "Email isn't set up on this server yet.");
   // Sandbox: no mail key, so the link is logged here and handed to the UI for its "Open the link" button.
   console.log(`[mail] sandbox sign-in link for ${email}: ${url}`);
+  await recordEvent(req, "signin_link_sent", { reason, delivery: "sandbox" });
   return json({ ok: true, sandbox: true, devLink: url });
 });

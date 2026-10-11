@@ -6,8 +6,9 @@ import { useState } from "react";
 import { Field, MarkLegend, PaperSheet, Rule, SourceMark, Stamp, TearLink } from "@/customer/desk/Desk";
 import d from "@/customer/desk/Desk.module.css";
 import { LeavesMark } from "@/customer/pages/ui";
+import { ProgressNote, useProgress } from "@/customer/feedback-messages/progress";
 import { play } from "@/customer/studio/feedback";
-import { ApiError, EMAIL_RE, api, type LinkReason } from "./api";
+import { EMAIL_RE, api, type LinkReason } from "./api";
 import { SAVING_OFF_LINE, useSavingOff } from "./saving";
 import { closeSignIn, updateSignIn, type SignInRequest } from "./signin";
 import s from "./account.module.css";
@@ -48,8 +49,8 @@ function Body({ request }: { request: SignInRequest }) {
 function Form({ request }: { request: SignInRequest }) {
   const copy = { ...COPY[request.reason], ...(request.lede ? { lede: request.lede } : {}) };
   const [email, setEmail] = useState(request.email ?? "");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const progress = useProgress();
   const sent = request.sent;
 
   async function send() {
@@ -58,27 +59,12 @@ function Form({ request }: { request: SignInRequest }) {
       setError("That email doesn't look right. Check it and try again.");
       return;
     }
-    setBusy(true);
     setError("");
-    try {
-      const res = await api.link(to, request.reason, request.returnTo);
+    const res = await progress.run(() => api.link(to, request.reason, request.returnTo));
+    if (res) {
       play("success", { emphasis: "subtle" });
       updateSignIn({ sent: { email: to, devLink: res.devLink } });
-    } catch (e) {
-      const err = e as ApiError;
-      setError(
-        err.code === "disposable_email"
-          ? "That looks like a throwaway address. Use an email you keep, so we can find your wall again."
-          : err.code === "mail_unavailable"
-          ? "Email sign-in isn't set up on this preview yet. Your stubs stay safe on this device."
-          : err.status === 429
-          ? "That's a lot of links. Give it a few minutes, then try again."
-          : err.code === "network" || err.code === "unavailable"
-            ? "We can't reach the server, so we can't send a link right now. Your stubs are safe on this device."
-            : "We couldn't send the link. Check the address and try again.",
-      );
-    } finally {
-      setBusy(false);
+      progress.reset();
     }
   }
 
@@ -110,6 +96,7 @@ function Form({ request }: { request: SignInRequest }) {
             onClick={() => {
               updateSignIn({ sent: undefined, email: sent.email });
               setError("");
+              progress.reset();
             }}
           >
             Use a different email
@@ -144,6 +131,7 @@ function Form({ request }: { request: SignInRequest }) {
         onChange={(ev) => {
           setEmail(ev.target.value);
           setError("");
+          if (progress.state.phase === "failed") progress.reset();
         }}
         aria-invalid={!!error}
       />
@@ -152,8 +140,9 @@ function Form({ request }: { request: SignInRequest }) {
           {error}
         </p>
       ) : null}
-      <Stamp type="submit" block disabled={busy}>
-        {busy ? "Sending" : "Email me a link"}
+      <ProgressNote state={progress.state} labels={{ sending: "Sending your link" }} onRetry={() => void send()} />
+      <Stamp type="submit" block disabled={progress.busy}>
+        {progress.busy ? "Sending" : "Email me a link"}
       </Stamp>
       <TearLink type="button" onClick={closeSignIn}>
         Not now

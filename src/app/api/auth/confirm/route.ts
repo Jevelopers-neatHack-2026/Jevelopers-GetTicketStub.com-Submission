@@ -1,6 +1,7 @@
 import { getSession, sessionCookie, startSession } from "@/server/auth";
 import { guestTenant, readDevice } from "@/server/context";
 import { lookupLink } from "@/server/confirm";
+import { recordEvent } from "@/server/event-log";
 import { hashToken } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
@@ -54,5 +55,6 @@ export const POST = route(async (req: Request) => {
   const device = readDevice(req);
   if (device) await storage.adoptShares(guestTenant(device), account.id);
   const session = await startSession(account.id);
+  await recordEvent(req, "signed_in", {}, { account: account.id });
   return redirect(withSignedIn(link.returnTo), sessionCookie(session));
 });

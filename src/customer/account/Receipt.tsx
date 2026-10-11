@@ -4,6 +4,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Field, PaperButton, Stamped, TearLink } from "@/customer/desk/Desk";
+import { FeedbackNote, ProgressNote, type ProgressState } from "@/customer/feedback-messages/progress";
 import { EMAIL_RE } from "./api";
 import { type Placed } from "./orders";
 import { openSignIn } from "./signin";
@@ -45,20 +46,34 @@ export function ReceiptField({ id, r, onChange }: { id: string; r: ReturnType<ty
   );
 }
 
-/** What replaces the Pay stamp once the order is in. Signed in, or with nobody to email, it walks on to the wall. */
-export function AfterPay({ placed, email, signedIn }: { placed: Placed | null; email: string; signedIn: boolean }) {
+/**
+ * What replaces the Pay stamp once the order is in. The stamp says "Ordered" only after the server's answer
+ * (or, with saving off, the local record): until then it is the real progress state. If the server refused,
+ * the order is said to be on this device only, with a way to send it again. Signed in, or with nobody to
+ * email, a clean order walks on to the wall.
+ */
+export function AfterPay({ placed, email, signedIn, progress, onRetry }: { placed: Placed | null; email: string; signedIn: boolean; progress?: ProgressState; onRetry?: () => void }) {
   const router = useRouter();
   const offer = !signedIn && !!email && placed?.receipt === true;
+  const problem = placed?.code;
   useEffect(() => {
-    if (!placed || offer) return;
+    if (!placed || offer || problem) return;
     const t = setTimeout(() => router.push(email ? "/wall?email=sent" : "/wall"), 900);
     return () => clearTimeout(t);
-  }, [placed, offer, email, router]);
+  }, [placed, offer, problem, email, router]);
   return (
     <div className={s.after}>
-      <Stamped>Ordered</Stamped>
+      {placed && !problem ? <Stamped>Ordered</Stamped> : null}
       {!placed ? (
-        <p className={s.small}>Placing your order.</p>
+        <ProgressNote state={progress ?? { phase: "sending" }} labels={{ sending: "Placing your order" }} onRetry={onRetry} />
+      ) : problem ? (
+        <>
+          <p className={s.small}>Your order is saved on this device only. The server didn&apos;t take it.</p>
+          <FeedbackNote code={problem} onRetry={onRetry} />
+          <TearLink type="button" onClick={() => router.push("/wall")}>
+            Open your wall
+          </TearLink>
+        </>
       ) : offer ? (
         <>
           <p className={s.lede}>
