@@ -15,7 +15,7 @@ function hasDestructiveMigrationStatement(sql) {
   const tokens = [];
   let index = 0;
   let statement = 0;
-  let dollarDelimiter = null;
+  const dollarDelimiters = [];
   while (index < sql.length) {
     const rest = sql.slice(index);
     const current = sql[index];
@@ -34,15 +34,18 @@ function hasDestructiveMigrationStatement(sql) {
       }
       continue;
     }
-    if (dollarDelimiter && rest.startsWith(dollarDelimiter)) {
-      index += dollarDelimiter.length;
-      dollarDelimiter = null;
+    const activeDollarDelimiter = dollarDelimiters.at(-1);
+    if (activeDollarDelimiter && rest.startsWith(activeDollarDelimiter)) {
+      index += activeDollarDelimiter.length;
+      dollarDelimiters.pop();
       continue;
     }
-    if (!dollarDelimiter && current === '$') {
+    if (current === '$') {
       const delimiter = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(rest)?.[0];
       if (delimiter) {
-        dollarDelimiter = delimiter;
+        // Procedural bodies can contain their own tagged strings. Track each
+        // delimiter so nested tags cannot merge with or hide SQL keywords.
+        dollarDelimiters.push(delimiter);
         index += delimiter.length;
         continue;
       }
@@ -65,18 +68,23 @@ function hasDestructiveMigrationStatement(sql) {
           contents += sql[index++];
         }
       }
-      for (const match of contents.matchAll(/[A-Za-z_][A-Za-z0-9_$]*/g)) {
-        tokens.push({ kind: 'word', value: match[0].toUpperCase(), statement, quoted: true, inDollar: dollarDelimiter !== null });
+      const searchableContents = contents.replace(/\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/g, ' ');
+      for (const match of searchableContents.matchAll(/[A-Za-z_][A-Za-z0-9_$]*/g)) {
+        tokens.push({ kind: 'word', value: match[0].toUpperCase(), statement, quoted: true, inDollar: dollarDelimiters.length > 0 });
       }
       continue;
     }
-    const word = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(rest)?.[0];
+    let word = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(rest)?.[0];
     if (word) {
-      tokens.push({ kind: 'word', value: word.toUpperCase(), statement, quoted: false, inDollar: dollarDelimiter !== null });
+      if (dollarDelimiters.length > 0) {
+        const nestedDelimiter = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(word);
+        if (nestedDelimiter) word = word.slice(0, nestedDelimiter.index);
+      }
+      tokens.push({ kind: 'word', value: word.toUpperCase(), statement, quoted: false, inDollar: dollarDelimiters.length > 0 });
       index += word.length;
       continue;
     }
-    if (current === ';' && dollarDelimiter === null) {
+    if (current === ';' && dollarDelimiters.length === 0) {
       statement++;
     } else if (current === ';') {
       tokens.push({ kind: 'punctuation', value: ';', statement, quoted: false, inDollar: true });
@@ -151,6 +159,22 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     'procedural bodies remain scanned for destructive statements');
   assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN TRUNCATE TABLE schema.table; END $$;'), true,
     'procedural TRUNCATE statements remain forbidden');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN EXECUTE $q$DROP TABLE ci_test.reviewer_guard$q$; END $$;'), true,
+    'nested tagged strings cannot hide DROP immediately after their opening delimiter');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN EXECUTE $q$TRUNCATE TABLE ci_test.reviewer_guard$q$; END $$;'), true,
+    'nested tagged strings cannot hide TRUNCATE immediately after their opening delimiter');
+  assert.equal(hasDestructiveMigrationStatement("SELECT '$q$DROP TABLE ci_test.reviewer_guard$q$';"), true,
+    'dollar tags inside quoted dynamic SQL text cannot hide DROP');
+  assert.equal(hasDestructiveMigrationStatement('DO $outer$ BEGIN EXECUTE $inner$DROP TABLE ci_test.reviewer_guard$inner$; END $outer$;'), true,
+    'distinct nested dollar tags remain scanned through their matching closing delimiters');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN EXECUTE $q$TRUNCATE$q$ || $r$ TABLE ci_test.reviewer_guard$r$; END $$;'), true,
+    'a closing tag adjacent to a destructive keyword cannot split it out of the scan');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN EXECUTE $q$SELECT 1$q$; END $$;'), false,
+    'nested dollar tags without destructive statements remain allowed');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN -- DROP TABLE ci_test.reviewer_guard\n EXECUTE $q$SELECT 1$q$; END $$;'), false,
+    'commented destructive keywords inside procedural bodies remain ignored');
+  assert.equal(hasDestructiveMigrationStatement('SELECT 1 /* DROP TABLE ci_test.reviewer_guard */;'), false,
+    'commented keywords outside procedural bodies remain ignored');
   assert.equal(hasDestructiveMigrationStatement("SELECT 'DROP TABLE schema.table';"), true,
     'dynamic destructive SQL text is rejected conservatively');
   assert.equal(hasDestructiveMigrationStatement("EXECUTE 'TRUNCATE TABLE schema.table';"), true,
