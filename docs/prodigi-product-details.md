@@ -12,7 +12,9 @@ The unknown-field rule is deliberately fail-closed: a new top-level, product, di
 
 This data is not a catalog snapshot or orderability decision. In particular, the parsed response does not establish `available` versus `removed`, selected variant, current price, quote expiry, tax/currency treatment, shipping eligibility for an actual destination, print-art eligibility, approval, or authorization. The module performs no HTTP, secret access, quote, order, status, cancellation, finance, authorization, or metering operation, and is not wired into the runtime.
 
-The static suite `tests/prodigi-product-details-suite.mjs` uses only synthetic fixtures and placeholder values; it is designed to run after a TypeScript build. It makes no provider request.
+The decoder and DTO types are exported through the package root. The static suite `tests/prodigi-product-details-suite.mjs` uses only synthetic fixtures and placeholder values; it is designed to run after a TypeScript build. It makes no provider request. `npm test` and the simulated `npm run verify:prodigi-product-details` command cover this suite; verifier evidence records a private local projection only.
+
+This leaf does not complete the broader issue 15 order lifecycle. That acceptance still includes the supported cancellation outcome; this module implements no order submission, retrieval, cancellation, or other provider operation. Product selection, approved destination, authenticated account access, sandbox evidence, and canonical/application conformance remain separate prerequisites.
 
 ## Provider reference
 

@@ -64,3 +64,6 @@ jobs:
 
       - name: Verify private offline status fixtures
         run: npm run verify:status
+
+      - name: Verify private simulated Product Details decoder fixtures
+        run: npm run verify:prodigi-product-details

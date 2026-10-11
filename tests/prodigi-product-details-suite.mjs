@@ -3,7 +3,7 @@ import {
   decodeProdigiProductDetails,
   prodigiProductDetailsPath,
   ProdigiProductDetailsError
-} from "../dist/prodigi-product-details.js";
+} from "../dist/index.js";
 
 const fixtureSku = "FIXTURE-CANVAS-SYNTHETIC-01";
 

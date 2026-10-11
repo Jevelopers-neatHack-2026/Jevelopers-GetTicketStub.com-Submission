@@ -24,6 +24,8 @@ The FC-06 attempt persistence implementation is exported from the package root f
 
 The private FC-09 quote comparison projection is exported from the package root and covered by `npm test` / `npm run test:comparison`; `npm run verify:comparison` writes its simulated evidence result. It preserves exact source quote terms and reports unknown or incompatible bases without ranking, choosing a provider, or submitting an order. Currentness uses one captured trusted clock value, so a consumer must recheck at use time. The shared-contracts #25 mapping and application consumer review remain pending; issue 14 stays partial/open, and sandbox, live, and release readiness remain false. See [comparison field semantics and evidence limits](docs/comparison.md).
 
+The private Prodigi Product Details wire decoder and relative path helper are exported from the package root and covered by `npm test` / `npm run test:prodigi-product-details`; `npm run verify:prodigi-product-details` records the simulated synthetic-fixture result. They make no provider request and do not select a product, establish orderability, or add HTTP or runtime behavior. Issue 15's full acceptance still includes cancellation outcomes; this parser implements no order lifecycle operation. Sandbox, live, and release readiness remain false. See [Product Details wire fields and evidence limits](docs/prodigi-product-details.md).
+
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
