@@ -1,9 +1,9 @@
 {
-  "revision": "60136d61edce96ae9f1be493796af87de1e7afbc",
-  "tree": "f164c41d477bacd40c529f8c76ed75fcfaa974b4",
-  "lockfile_digest": "35b944a5e2563d3b7f11bbe30faf392d0330a0ddba2e8f03585c0a7b47f618a6",
-  "schema_manifest_digest": "bb3f551c380d6de68c09985fe745b000ed053937e5b71377421b2ad802978bf3",
-  "fixture_manifest_digest": "12dacbe8e4b4b458642def98a5d3634ce1bb4115cb25f2c5f41103df895648ad",
-  "catalog_digest": "d97af7da0a56fde9ced2b23db1519bfcc70488a4cc0d8c00544e9fe5411f0e2b",
+  "revision": "d969f68a13fc4c3e71d59b635ffd29b65d3205d5",
+  "tree": "52a0bd98e97b4ee22b211f7db33c8a805c5c981b",
+  "lockfile_digest": "0f3c205e35cbc6103bb463246ef6d5257982e0c394fc9a26a25bb2e54074f30a",
+  "schema_manifest_digest": "4b79fcc8cae42bbbffa818767e9303c112caaef91a187c85a3062ac1dd3219d0",
+  "fixture_manifest_digest": "6008ae8230d1232ecd465d48862309410e7b1bf8783c1615206b2b6c49150242",
+  "catalog_digest": "f8809b85d020912817b3d4c604d6b4320635314e5bf3405c85563ccc7e1a7785",
   "node_version": "22.23.3"
 }

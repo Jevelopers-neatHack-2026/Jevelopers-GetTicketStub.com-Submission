@@ -21,7 +21,7 @@ from integration_evals.validation import git_value
 
 
 class FixtureManifest(Record):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, strict=True, extra="ignore")
+    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, strict=True, extra="allow")
     files: dict[str, str]
     digest: str
 

@@ -20,15 +20,35 @@ class ContractPin(Record):
     node_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
 
 
-class ContractSlice(Record):
-    """Executed frozen fixture IDs and original schema identity for one export."""
+class ContractIdentity(Record):
+    """Identify an exact advertised version without collapsing its contract name."""
 
     contract: Identifier
     version: str
+
+    @property
+    def key(self) -> tuple[str, str]:
+        """Return the exact metadata join key."""
+        return self.contract, self.version
+
+
+class FixtureSemantics(Record):
+    """Preserve semantic labels actually emitted by the pinned producer harness."""
+
+    case: Identifier
+    profile: Literal["historical_finance_characterization"]
+    operational_authority: Literal[False]
+
+
+class ContractSlice(ContractIdentity):
+    """Executed frozen fixture IDs and original schema identity for one export."""
+
     schema_digest: Digest
     cases: tuple[Identifier, ...] = Field(min_length=1)
     failures: tuple[Identifier, ...]
     categories: tuple[Identifier, ...]
+    fixture_path: str | None = None
+    semantic_records: tuple[FixtureSemantics, ...] = ()
 
 
 class ContractRuntime(Record):
@@ -44,6 +64,7 @@ class ContractObservation(Record):
     node_version: str
     fixture_digest: Digest
     required_contracts: tuple[Identifier, ...] = Field(min_length=1)
+    required_versions: tuple[ContractIdentity, ...] | None = Field(default=None, min_length=1)
     results: tuple[ContractSlice, ...] = Field(min_length=1)
 
 

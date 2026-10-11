@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
-          ref: 60136d61edce96ae9f1be493796af87de1e7afbc
+          ref: d969f68a13fc4c3e71d59b635ffd29b65d3205d5
           path: .contract-producer
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020

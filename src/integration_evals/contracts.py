@@ -15,7 +15,11 @@ from pydantic import ValidationError
 
 from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
 from integration_evals.contract_records import ContractObservation, ContractPin, ContractReceipt
-from integration_evals.contract_sources import bind_contract_observation, required_contracts
+from integration_evals.contract_sources import (
+    bind_contract_observation,
+    missing_exports,
+    required_exports,
+)
 from integration_evals.errors import InvalidArtifactError, fail
 from integration_evals.processes import ProcessSettings, invoke
 from integration_evals.validation import git_value, source_fingerprint, unique_ids
@@ -81,11 +85,22 @@ def validate_contract_observation(observation: ContractObservation, pin: Contrac
     if observation.node_version != pin.node_version:
         fail("contract_runtime_version_mismatch", "node")
     unique_ids(observation.required_contracts, "canonical_catalog")
-    unique_ids(tuple(result.contract for result in observation.results), "canonical_exports")
+    if len({result.key for result in observation.results}) != len(observation.results):
+        fail("duplicate_contract_version", "canonical_exports")
+    if observation.required_versions is None:
+        unique_ids(tuple(result.contract for result in observation.results), "canonical_exports")
+    elif len({item.key for item in observation.required_versions}) != len(
+        observation.required_versions
+    ):
+        fail("duplicate_contract_version", "canonical_catalog")
     for result in observation.results:
         unique_ids(result.cases, result.contract)
         if result.contract not in observation.required_contracts:
             fail("orphan_contract_export", result.contract)
+        if observation.required_versions is not None and result.key not in {
+            item.key for item in observation.required_versions
+        }:
+            fail("orphan_contract_version", result.contract)
         if not set(result.failures).issubset(result.cases):
             fail("orphan_fixture_failure", result.contract)
         if not MANDATORY_CATEGORIES.issubset(result.categories):
@@ -141,8 +156,8 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
             reason = "canonical SDK output or execution rejected; private output withheld"
             observation = None
     failed = observation is not None and any(result.failures for result in observation.results)
-    available: set[str] = (
-        {result.contract for result in observation.results} if observation else set()
+    available: set[tuple[str, str]] = (
+        {result.key for result in observation.results} if observation else set()
     )
     return ContractReceipt(
         id="contracts-" + uuid4().hex,
@@ -160,11 +175,7 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
         exit_code=exit_code,
         output_digest=digest(output),
         observation=observation,
-        missing_contracts=tuple(
-            name for name in observation.required_contracts if name not in available
-        )
-        if observation
-        else required_contracts(settings.producer),
+        missing_contracts=missing_exports(required_exports(settings.producer), available),
         limitations=(
             "Source SDK fixture execution; installed-package adoption remains unverified.",
             "Synthetic contexts and offline mode do not authenticate product or finance authority.",

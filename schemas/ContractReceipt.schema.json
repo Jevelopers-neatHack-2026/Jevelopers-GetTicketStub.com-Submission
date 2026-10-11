@@ -1,5 +1,27 @@
 {
   "$defs": {
+    "ContractIdentity": {
+      "additionalProperties": false,
+      "description": "Identify an exact advertised version without collapsing its contract name.",
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Contract",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contract",
+        "version"
+      ],
+      "title": "ContractIdentity",
+      "type": "object"
+    },
     "ContractObservation": {
       "additionalProperties": false,
       "description": "Strict output boundary for the isolated Node consumer driver.",
@@ -22,6 +44,22 @@
           "minItems": 1,
           "title": "Required Contracts",
           "type": "array"
+        },
+        "required_versions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ContractIdentity"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Versions"
         },
         "results": {
           "items": {
@@ -139,6 +177,26 @@
           },
           "title": "Categories",
           "type": "array"
+        },
+        "fixture_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixture Path"
+        },
+        "semantic_records": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FixtureSemantics"
+          },
+          "title": "Semantic Records",
+          "type": "array"
         }
       },
       "required": [
@@ -150,6 +208,35 @@
         "categories"
       ],
       "title": "ContractSlice",
+      "type": "object"
+    },
+    "FixtureSemantics": {
+      "additionalProperties": false,
+      "description": "Preserve semantic labels actually emitted by the pinned producer harness.",
+      "properties": {
+        "case": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Case",
+          "type": "string"
+        },
+        "profile": {
+          "const": "historical_finance_characterization",
+          "title": "Profile",
+          "type": "string"
+        },
+        "operational_authority": {
+          "const": false,
+          "title": "Operational Authority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "case",
+        "profile",
+        "operational_authority"
+      ],
+      "title": "FixtureSemantics",
       "type": "object"
     }
   },

@@ -23,16 +23,52 @@ def metadata_packet(root: Path) -> tuple[ContractObservation, ContractPin]:
     _ = (root / "generated/schema-manifest.json").write_text(
         json.dumps({"schemas": [schema]}), encoding="utf-8"
     )
-    _ = (root / "generated/fixture-manifest.json").write_text(
-        json.dumps({"digest": "sha256:" + digest(b"fixtures")}), encoding="utf-8"
-    )
     cases = [
         {"id": "positive", "category": "minimal"},
         {"id": "negative", "category": "unknown_field"},
     ]
-    _ = (root / "fixtures/Example.json").write_text(json.dumps({"cases": cases}), encoding="utf-8")
+    fixture_bytes = json.dumps(
+        {"contract": "Example", "schema_version": "1.0.0", "cases": cases}
+    ).encode()
+    _ = (root / "fixtures/Example.json").write_bytes(fixture_bytes)
+    _ = (root / "generated/fixture-manifest.json").write_text(
+        json.dumps(
+            {
+                "digest": "sha256:" + digest(b"fixtures"),
+                "files": {"fixtures/Example.json": "sha256:" + digest(fixture_bytes)},
+                "contracts": [
+                    {
+                        "contract": "Example",
+                        "version": "1.0.0",
+                        "path": "fixtures/Example.json",
+                        "cases": cases,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     _ = (root / "docs/contract-catalog.md").write_text(
-        '```json catalog\n{"contracts":[{"name":"Example"},{"name":"Missing"}]}\n```',
+        "```json catalog\n"
+        + json.dumps(
+            {
+                "contracts": [
+                    {
+                        "name": "Example",
+                        "schema_version": "1.0.0",
+                        "schema_path": "schema.json",
+                        "fixtures": "fixtures/Example.json",
+                    },
+                    {
+                        "name": "Missing",
+                        "schema_version": "1.0.0",
+                        "schema_path": "missing.json",
+                        "fixtures": "fixtures/Missing.json",
+                    },
+                ]
+            }
+        )
+        + "\n```",
         encoding="utf-8",
     )
     pin = ContractPin(

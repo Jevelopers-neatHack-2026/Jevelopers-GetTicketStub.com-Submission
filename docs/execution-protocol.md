@@ -174,8 +174,8 @@ in both JSON and Markdown. Neither issue closure nor model review updates accept
 The contracts command consumes the actual pinned shared-contracts ESM SDK and its
 golden fixtures. contracts/producer-pin.json fixes the reviewed producer commit/tree,
 lockfile, schema/fixture manifest and machine-catalog bytes. It currently selects the
-unreleased 0.5.0 candidate with all 45 catalog exports. No copied product validator or
-provider adapter is introduced.
+unreleased 0.6.0 candidate with 54 contract/version exports across 45 names. No copied
+product validator or provider adapter is introduced.
 
 Stage a platform-specific executable identity with:
 
@@ -196,6 +196,10 @@ helper from the source target of its `./fixture-harness` export. The producer ow
 fixture dispatch, byte-array contexts, expected canonical hashes and serialization
 roundtrips. The consumer independently verifies schema hashes, every frozen case ID
 and category, and complete harness accounting for successful and failed cases.
+Schema and fixture joins use exact `(contract, version)` pairs. Fixture paths come
+from the producer's fixture manifest and must agree with the catalog version entry;
+the evaluator never infers a filename from a contract name. Every declared catalog
+version remains required, including retained v1 exports when v2 is active.
 Malformed manifests or missing canonical categories fail closed. Failures and complete
 missing export names are retained in an immutable contracts.json receipt with a byte
 hash. Raw payloads are withheld.
@@ -204,6 +208,19 @@ An explicit candidate-scope pass establishes only the implemented synthetic fixt
 slice. Both scopes exit 0 for the complete pinned catalog; omitting candidate-scope
 exits 2 when the producer's full catalog has missing exports. Every receipt keeps
 product_acceptance blocked and owner acknowledgement null.
+New receipts retain `required_versions` and each result's `fixture_path`. Missing
+multi-version obligations are qualified, for example `BudgetReservation@2.0.0`;
+single-version missing names remain unchanged. Original 0.5 receipts without those
+fields remain readable and bind against their own single-version source checkpoint.
+They cannot serve as unversioned coverage claims against a multi-version producer,
+and their historical bytes are never rewritten or assigned new semantic labels.
+
+The actual 0.6 harness's v1 finance semantic records retain
+`historical_finance_characterization` and `operational_authority=false`. These labels
+must exactly match the owner-declared legacy profile and executed semantic cases;
+omission or invented current authority is rejected. Current operational helpers
+reject that retired v1 semantic profile. V2 remains unaccepted source-only
+representation checking, not permission, reservation, dispatch or ledger execution.
 Package installation, owner agreement, real consumer domain handoffs and composed
 release verification remain separate requirements. CI runs both scopes against exact
 producer and Node pins; no provider credential or API budget is used.
@@ -213,6 +230,8 @@ IE_CONTRACT_SOURCE and IE_CONTRACT_RUNTIME pointing to that actual checkout and
 runtime record. They verify complete candidate/full scope and make owned temporary copies
 to contradict a golden verdict or canonical hash, invalidate a retained-encoding
 category, or remove one schema-manifest export, repinning each controlled test revision.
+Version-focused regressions additionally remove only finance v2, duplicate an exact
+pair, cross schema/fixture paths, omit cases, and forge or remove historical labels.
 The unchanged SDK must retain the precise golden failure or missing export with CLI
 exits 1 and 2 respectively; invalid category coverage produces an error receipt.
 They change no producer-owned source.
