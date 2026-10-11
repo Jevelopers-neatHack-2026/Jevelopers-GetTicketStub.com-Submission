@@ -188,8 +188,16 @@ interface MutableAttempt {
   reservationCandidate: DurableJson;
   reservationEnvelope: DurableJson | null;
   reservationReceipts: ContractReceipt[];
-  reservationState: "not_requested" | "requesting" | "unknown" | "reserved" | "denied" | "released";
+  reservationState: ReservationState;
   reservationReference: string | null;
+  /** First finance-confirmed terminal result; never cleared by late responses. */
+  reservationRetirement: ReservationRetirementEvidence | null;
+  /** First conflicting finance result, retained as a fail-closed diagnostic. */
+  reservationConflictEvidence: ReservationConflictEvidence | null;
+  /** Legacy /2 unknown states cannot reveal whether an earlier conflict was overwritten. */
+  reservationHistoryUncertain: boolean;
+  /** First replacement attempt for this logical operation, written atomically. */
+  supersededByAttemptId: string | null;
   phase: "accounting_pending" | "reservation_pending" | "reservation_unknown" | "denied" | "ready" | "dispatch_intent" | "dispatching" | "unknown" | "provider_accepted" | "not_dispatched";
   transportAttemptId: string | null;
   providerRequestId: string | null;
@@ -229,6 +237,26 @@ interface MeteringStoreContext {
   readonly billingMode: ProviderMode;
   readonly evidenceMode: EvidenceMode;
   readonly scope: TrustedScope;
+}
+
+type ReservationState = "not_requested" | "requesting" | "unknown" | "reserved" | "denied" | "released";
+type ReservationResponseSource = "authorization" | "resolver" | "legacy_state";
+
+interface ReservationRetirementEvidence {
+  readonly reservationRequestId: string;
+  readonly state: "denied" | "released";
+  readonly source: ReservationResponseSource;
+  readonly observedAt: string;
+}
+
+interface ReservationConflictEvidence {
+  readonly reservationRequestId: string;
+  readonly priorState: ReservationState;
+  readonly priorReference: string | null;
+  readonly receivedState: "reserved" | "denied" | "released";
+  readonly receivedReference: string | null;
+  readonly source: Exclude<ReservationResponseSource, "legacy_state">;
+  readonly observedAt: string;
 }
 
 interface NormalizedObservation {
@@ -414,6 +442,47 @@ function validUtc(value: unknown): value is string {
   return Number.isFinite(parsed) && new Date(parsed).toISOString().replace(/\.000Z$/, "Z") === value.replace(/\.000Z$/, "Z");
 }
 
+function normalizeReservationRetirement(
+  value: unknown,
+  reservationRequestId: unknown
+): ReservationRetirementEvidence | null | undefined {
+  if (value === null) return null;
+  if (!isRecord(value) || value.reservationRequestId !== reservationRequestId ||
+      (value.state !== "denied" && value.state !== "released") ||
+      !["authorization", "resolver", "legacy_state"].includes(String(value.source)) ||
+      !validUtc(value.observedAt)) return undefined;
+  return {
+    reservationRequestId: value.reservationRequestId as string,
+    state: value.state,
+    source: value.source as ReservationResponseSource,
+    observedAt: value.observedAt
+  };
+}
+
+function normalizeReservationConflict(
+  value: unknown,
+  reservationRequestId: unknown
+): ReservationConflictEvidence | null | undefined {
+  if (value === null) return null;
+  if (!isRecord(value) || value.reservationRequestId !== reservationRequestId ||
+      !["not_requested", "requesting", "unknown", "reserved", "denied", "released"].includes(String(value.priorState)) ||
+      !(value.priorReference === null || requireToken(value.priorReference)) ||
+      !["reserved", "denied", "released"].includes(String(value.receivedState)) ||
+      !(value.receivedReference === null || requireToken(value.receivedReference)) ||
+      (value.source !== "authorization" && value.source !== "resolver") || !validUtc(value.observedAt)) return undefined;
+  if ((value.priorState === "reserved") !== (value.priorReference !== null) ||
+      (value.receivedState === "reserved") !== (value.receivedReference !== null)) return undefined;
+  return {
+    reservationRequestId: value.reservationRequestId as string,
+    priorState: value.priorState as ReservationState,
+    priorReference: value.priorReference as string | null,
+    receivedState: value.receivedState as "reserved" | "denied" | "released",
+    receivedReference: value.receivedReference as string | null,
+    source: value.source,
+    observedAt: value.observedAt
+  };
+}
+
 function cloneReceipts(value: unknown, shape: SharedShape, scope: TrustedScope, schemaVersion: string): ContractReceipt[] | undefined {
   let snapshot: unknown;
   try { snapshot = cloneData(value); } catch { return undefined; }
@@ -476,9 +545,66 @@ function validateState(value: DurableJson, expectedContext?: MeteringStoreContex
         candidate.phase === "provider_accepted" || (candidate.phase === "not_dispatched" && candidate.outcome !== null)) {
       if (!requireToken(candidate.transportAttemptId)) return undefined;
     }
+    const terminalReservation = candidate.reservationState === "denied" || candidate.reservationState === "released";
+    const terminalPhase = candidate.phase === "denied" || candidate.phase === "not_dispatched";
+    let retirement: ReservationRetirementEvidence | null;
+    if (Object.hasOwn(candidate, "reservationRetirement")) {
+      const normalized = normalizeReservationRetirement(candidate.reservationRetirement, candidate.reservationRequestId);
+      if (normalized === undefined || (normalized === null && terminalReservation && terminalPhase)) return undefined;
+      retirement = normalized;
+    } else if (terminalReservation) {
+      // Schema /2 snapshots written before retirement evidence was added kept
+      // the terminal finance fact in these fields. Normalize that fact without
+      // rewriting the file; the next successful mutation persists the evidence.
+      retirement = {
+        reservationRequestId: candidate.reservationRequestId,
+        state: candidate.reservationState as "denied" | "released",
+        source: "legacy_state",
+        observedAt: candidate.updatedAt
+      };
+    } else {
+      retirement = null;
+    }
+    const conflictEvidence = Object.hasOwn(candidate, "reservationConflictEvidence")
+      ? normalizeReservationConflict(candidate.reservationConflictEvidence, candidate.reservationRequestId)
+      : null;
+    const historyUncertain = Object.hasOwn(candidate, "reservationHistoryUncertain")
+      ? candidate.reservationHistoryUncertain
+      : candidate.reservationState === "unknown";
+    const supersededByAttemptId = Object.hasOwn(candidate, "supersededByAttemptId")
+      ? candidate.supersededByAttemptId
+      : null;
+    if (retirement === undefined || conflictEvidence === undefined ||
+        typeof historyUncertain !== "boolean" ||
+        !(supersededByAttemptId === null || requireToken(supersededByAttemptId)) ||
+        (retirement === null && terminalReservation) ||
+        (retirement !== null && (!terminalReservation || retirement.state !== candidate.reservationState)) ||
+        (supersededByAttemptId !== null && retirement === null) ||
+        (historyUncertain && retirement === null && candidate.reservationState !== "unknown") ||
+        (conflictEvidence !== null && retirement === null && candidate.reservationState !== "unknown" &&
+          !phaseHasEffectProgress(candidate.phase as MutableAttempt["phase"]))) return undefined;
+    candidate.reservationRetirement = retirement as unknown as DurableJson;
+    candidate.reservationConflictEvidence = conflictEvidence as unknown as DurableJson;
+    candidate.reservationHistoryUncertain = historyUncertain as DurableJson;
+    candidate.supersededByAttemptId = supersededByAttemptId as DurableJson;
     if (attemptIds.has(candidate.attemptId) || attemptKeys.has(candidate.clientAttemptKey)) return undefined;
     attemptIds.add(candidate.attemptId);
     attemptKeys.add(candidate.clientAttemptKey);
+  }
+  const attemptPositions = new Map<string, number>();
+  for (let index = 0; index < value.attempts.length; index += 1) {
+    const candidate = value.attempts[index] as Record<string, unknown>;
+    attemptPositions.set(candidate.attemptId as string, index);
+  }
+  for (let index = 0; index < value.attempts.length; index += 1) {
+    const candidate = value.attempts[index] as Record<string, unknown>;
+    if (candidate.supersededByAttemptId === null) continue;
+    const successorIndex = attemptPositions.get(candidate.supersededByAttemptId as string);
+    if (successorIndex === undefined || successorIndex <= index) return undefined;
+    const successor = value.attempts[successorIndex] as Record<string, unknown>;
+    if (successor.providerId !== candidate.providerId || successor.logicalOperationId !== candidate.logicalOperationId ||
+        !isRecord(successor.scope) || !isRecord(candidate.scope) ||
+        successor.scope.tenantId !== candidate.scope.tenantId || successor.scope.projectId !== candidate.scope.projectId) return undefined;
   }
   const eventIds = new Set<string>();
   const observationIds = new Set<string>();
@@ -592,40 +718,134 @@ function phaseHasEffectProgress(phase: MutableAttempt["phase"]): boolean {
 function mergeReservationFact(
   stored: MutableAttempt,
   fact: ReservationFact,
-  updatedAt: string
+  updatedAt: string,
+  source: Exclude<ReservationResponseSource, "legacy_state">,
+  siblingHasOwner: boolean
 ): ReservationMerge {
-  if (fact.state === "unknown") return { attempt: stored, conflict: false };
-
+  if (fact.state === "unknown") {
+    return { attempt: stored, conflict: stored.reservationConflictEvidence !== null || stored.reservationHistoryUncertain };
+  }
   const sameFact = stored.reservationState === fact.state && stored.reservationReference === fact.reference;
+  const newConflict: ReservationConflictEvidence = {
+    reservationRequestId: stored.reservationRequestId,
+    priorState: stored.reservationState,
+    priorReference: stored.reservationReference,
+    receivedState: fact.state,
+    receivedReference: fact.reference,
+    source,
+    observedAt: updatedAt
+  };
+  const withUnknownConflict = (): ReservationMerge => {
+    const preserveEffectProgress = phaseHasEffectProgress(stored.phase);
+    return {
+      attempt: stored.reservationConflictEvidence === null
+        ? {
+            ...stored,
+            reservationState: preserveEffectProgress ? stored.reservationState : "unknown",
+            reservationReference: preserveEffectProgress ? stored.reservationReference : null,
+            reservationConflictEvidence: newConflict,
+            phase: preserveEffectProgress ? stored.phase : "reservation_unknown",
+            updatedAt
+          }
+        : stored,
+      conflict: true
+    };
+  };
+  const retirementForFact = (): ReservationRetirementEvidence => ({
+    reservationRequestId: stored.reservationRequestId,
+    state: fact.state as "denied" | "released",
+    source,
+    observedAt: updatedAt
+  });
+  const canRecordRetirement = (phase: MutableAttempt["phase"]): boolean =>
+    !phaseHasEffectProgress(phase) || phase === "not_dispatched";
+  const terminalPhaseFor = (phase: MutableAttempt["phase"]): MutableAttempt["phase"] =>
+    phase === "not_dispatched" ? "not_dispatched" : "denied";
+
+  if (stored.reservationRetirement !== null) {
+    if (sameFact && fact.state === stored.reservationRetirement.state) {
+      return { attempt: stored, conflict: stored.reservationConflictEvidence !== null || stored.reservationHistoryUncertain };
+    }
+    return {
+      attempt: stored.reservationConflictEvidence === null
+        ? { ...stored, reservationConflictEvidence: newConflict, updatedAt }
+        : stored,
+      conflict: true
+    };
+  }
+
+  if (stored.reservationHistoryUncertain) {
+    if ((fact.state === "denied" || fact.state === "released") && canRecordRetirement(stored.phase)) {
+      return {
+        attempt: {
+          ...stored,
+          reservationState: fact.state,
+          reservationReference: null,
+          reservationRetirement: retirementForFact(),
+          phase: terminalPhaseFor(stored.phase),
+          updatedAt
+        },
+        conflict: true
+      };
+    }
+    if (fact.state === "reserved") return withUnknownConflict();
+    return { attempt: stored, conflict: true };
+  }
+
+  if (stored.reservationConflictEvidence !== null) {
+    if ((fact.state === "denied" || fact.state === "released") && canRecordRetirement(stored.phase)) {
+      return {
+        attempt: {
+          ...stored,
+          reservationState: fact.state,
+          reservationReference: null,
+          reservationRetirement: retirementForFact(),
+          phase: terminalPhaseFor(stored.phase),
+          updatedAt
+        },
+        conflict: true
+      };
+    }
+    return { attempt: stored, conflict: true };
+  }
+
   if (sameFact) return { attempt: stored, conflict: false };
 
-  // A finance-confirmed release is the one permitted reservation change after
-  // a provider has definitively not dispatched. Keep that attempt terminal;
-  // a later distinct key may be considered only after this exact confirmation.
-  if (stored.phase === "not_dispatched" && stored.reservationState === "reserved" && fact.state === "released") {
+  const canRetire = (fact.state === "denied" || fact.state === "released") &&
+    canRecordRetirement(stored.phase) &&
+    (stored.reservationState === "requesting" || stored.reservationState === "unknown" ||
+      (stored.phase === "not_dispatched" && stored.reservationState === "reserved"));
+  if (canRetire) {
     return {
-      attempt: { ...stored, reservationState: "released", reservationReference: null, updatedAt },
+      attempt: {
+        ...stored,
+        reservationState: fact.state,
+        reservationReference: null,
+        reservationRetirement: retirementForFact(),
+        phase: terminalPhaseFor(stored.phase),
+        updatedAt
+      },
       conflict: false
     };
   }
 
   const currentIsKnown = stored.reservationState === "reserved" || stored.reservationState === "denied" ||
     stored.reservationState === "released";
-  const incomingIsKnown = fact.state === "reserved" || fact.state === "denied" || fact.state === "released";
-  const conflict = currentIsKnown || stored.reservationState === "not_requested";
-  const reservationState = conflict ? "unknown" : fact.state;
-  const reservationReference = conflict ? null : fact.reference;
-  const phase = phaseHasEffectProgress(stored.phase)
-    ? stored.phase
-    : conflict || reservationState === "unknown"
-      ? "reservation_unknown"
-      : reservationState === "reserved"
-        ? "ready"
-        : "denied";
+  const mustRemainUnknown = fact.state !== "reserved" || currentIsKnown || stored.reservationState === "not_requested";
+  if (mustRemainUnknown) return withUnknownConflict();
 
+  // A late reserved result cannot activate an attempt after a sibling has
+  // claimed or completed the same logical operation.
+  if (siblingHasOwner || stored.supersededByAttemptId !== null) return withUnknownConflict();
   return {
-    attempt: { ...stored, reservationState, reservationReference, phase, updatedAt },
-    conflict: conflict || !incomingIsKnown
+    attempt: {
+      ...stored,
+      reservationState: "reserved",
+      reservationReference: fact.reference,
+      phase: phaseHasEffectProgress(stored.phase) ? stored.phase : "ready",
+      updatedAt
+    },
+    conflict: false
   };
 }
 
@@ -824,6 +1044,10 @@ export class FulfillmentMetering {
       reservationReceipts: [],
       reservationState: "not_requested",
       reservationReference: null,
+      reservationRetirement: null,
+      reservationConflictEvidence: null,
+      reservationHistoryUncertain: false,
+      supersededByAttemptId: null,
       phase: "accounting_pending",
       transportAttemptId: null,
       providerRequestId: null,
@@ -840,6 +1064,13 @@ export class FulfillmentMetering {
             stored.scope.tenantId === this.dependencies.scope.tenantId && stored.scope.projectId === this.dependencies.scope.projectId &&
             stored.logicalOperationId === normalized.logicalOperationId && !this.canStartAnother(stored))) {
           return { state, result: false };
+        }
+        for (let index = 0; index < state.attempts.length; index += 1) {
+          const stored = state.attempts[index]!;
+          if (this.sameLogicalOperation(stored, attempt) && this.canStartAnother(stored) &&
+              stored.supersededByAttemptId === null) {
+            state.attempts[index] = { ...stored, supersededByAttemptId: attemptId };
+          }
         }
         state.attempts.push(attempt);
         state.outbox.push(this.newAttemptEvent(state, attempt, "billable_attempt_prepared", "attempt_prepared", null));
@@ -868,8 +1099,8 @@ export class FulfillmentMetering {
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     const attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    if (attempt.phase === "ready" && attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
-      return { status: "ready", attemptId, reservationReference: attempt.reservationReference };
+    if (attempt.reservationHistoryUncertain || attempt.reservationConflictEvidence !== null) {
+      return { status: "blocked", attemptId, reason: "budget_unknown" };
     }
     if (attempt.phase === "denied") return { status: "denied", attemptId, reason: "budget_denied" };
     if (attempt.phase === "dispatch_intent" || attempt.phase === "dispatching" || attempt.phase === "unknown") {
@@ -880,6 +1111,12 @@ export class FulfillmentMetering {
       if (attempt.reservationState === "denied" || attempt.reservationState === "released") {
         return { status: "denied", attemptId, reason: "budget_denied" };
       }
+    }
+    if (this.hasSiblingOwner(read.state, attempt)) {
+      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
+    }
+    if (attempt.phase === "ready" && attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
+      return { status: "ready", attemptId, reservationReference: attempt.reservationReference };
     }
     if (attempt.reservationState !== "requesting" && attempt.reservationState !== "unknown" &&
         !(attempt.phase === "not_dispatched" && attempt.reservationState === "reserved")) {
@@ -895,7 +1132,7 @@ export class FulfillmentMetering {
     const updatedAt = this.nowUtc();
     if (updatedAt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
     try {
-      const merged = await this.applyReservationFact(attemptId, attempt.reservationRequestId, status, updatedAt);
+      const merged = await this.applyReservationFact(attemptId, attempt.reservationRequestId, status, updatedAt, "resolver");
       if (merged === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
       if (merged.conflict) return { status: "blocked", attemptId, reason: "budget_unknown" };
       return this.reservationResult(merged.attempt);
@@ -908,6 +1145,13 @@ export class FulfillmentMetering {
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     let attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
+    if (attempt.reservationRetirement !== null || attempt.reservationHistoryUncertain ||
+        attempt.supersededByAttemptId !== null) {
+      return { status: "blocked", attemptId, reason: "attempt_not_ready" };
+    }
+    if (this.hasSiblingOwner(read.state, attempt)) {
+      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
+    }
     if (attempt.phase === "provider_accepted" || attempt.phase === "not_dispatched" || attempt.phase === "unknown" || attempt.phase === "dispatching") {
       return {
         status: "blocked",
@@ -940,7 +1184,10 @@ export class FulfillmentMetering {
           const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
           if (index < 0) return { state, result: false };
           const stored = state.attempts[index]!;
-          if (stored.transportAttemptId !== null || stored.phase !== "ready") return { state, result: false };
+          if (stored.transportAttemptId !== null || stored.phase !== "ready" ||
+              stored.reservationRetirement !== null || stored.reservationHistoryUncertain ||
+              stored.supersededByAttemptId !== null ||
+              this.hasSiblingOwner(state, stored)) return { state, result: false };
           const updated = { ...stored, transportAttemptId, phase: "dispatch_intent" as const, updatedAt: observedAt };
           state.attempts[index] = updated;
           state.outbox.push(this.newAttemptEvent(state, updated, "transport_attempt_intent", "dispatching", transportAttemptId));
@@ -972,7 +1219,10 @@ export class FulfillmentMetering {
         const intentDelivered = state.outbox.some((event) => event.attemptId === attemptId &&
           event.eventType === "transport_attempt_intent" && event.deliveryState === "delivered");
         if (stored.phase !== "dispatch_intent" || stored.transportAttemptId === null || pendingOutbox || !intentDelivered ||
-            stored.reservationState !== "reserved" || stored.reservationReference === null) {
+            stored.reservationState !== "reserved" || stored.reservationReference === null ||
+            stored.reservationRetirement !== null || stored.reservationHistoryUncertain ||
+            stored.supersededByAttemptId !== null ||
+            this.hasSiblingOwner(state, stored)) {
           return { state, result: { claimed: false as const, attempt: stored } };
         }
         const claimed: MutableAttempt = { ...stored, phase: "dispatching", dispatchStartedAt, updatedAt: dispatchStartedAt };
@@ -1116,7 +1366,8 @@ export class FulfillmentMetering {
     attemptId: string,
     expectedRequestId: string,
     fact: ReservationFact,
-    updatedAt: string
+    updatedAt: string,
+    source: Exclude<ReservationResponseSource, "legacy_state">
   ): Promise<{ readonly attempt: MutableAttempt; readonly conflict: boolean } | undefined> {
     return this.mutateState((state) => {
       const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
@@ -1125,7 +1376,7 @@ export class FulfillmentMetering {
       if (stored.reservationRequestId !== expectedRequestId) {
         return { state, result: { attempt: stored, conflict: true } };
       }
-      const merged = mergeReservationFact(stored, fact, updatedAt);
+      const merged = mergeReservationFact(stored, fact, updatedAt, source, this.hasSiblingOwner(state, stored));
       if (merged.attempt !== stored) state.attempts[index] = merged.attempt;
       return { state, result: merged };
     });
@@ -1156,15 +1407,27 @@ export class FulfillmentMetering {
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     let attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    const terminal = this.preparationResult(attempt);
-    if (terminal !== undefined) return terminal;
+    if (attempt.phase !== "ready") {
+      const terminal = this.preparationResult(attempt);
+      if (terminal !== undefined) return terminal;
+    }
+    if (this.hasSiblingOwner(read.state, attempt)) {
+      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
+    }
+    if (attempt.phase === "ready") return this.preparationResult(attempt) as MeteringResult;
     const accounting = await this.replayPending();
     read = await this.safeReadState();
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    const afterReplay = this.preparationResult(attempt);
-    if (afterReplay !== undefined) return afterReplay;
+    if (attempt.phase !== "ready") {
+      const afterReplay = this.preparationResult(attempt);
+      if (afterReplay !== undefined) return afterReplay;
+    }
+    if (this.hasSiblingOwner(read.state, attempt)) {
+      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
+    }
+    if (attempt.phase === "ready") return this.preparationResult(attempt) as MeteringResult;
     if (accounting.pending > 0 || read.state.outbox.some((event) => event.attemptId === attemptId && event.deliveryState === "pending")) {
       return { status: "blocked", attemptId, reason: "usage_sink_unavailable" };
     }
@@ -1176,7 +1439,9 @@ export class FulfillmentMetering {
         const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
         if (index < 0) return { state, result: undefined };
         const stored = state.attempts[index]!;
-        if (stored.phase !== "reservation_pending" && stored.phase !== "reservation_unknown" && stored.phase !== "accounting_pending") {
+        if ((stored.phase !== "reservation_pending" && stored.phase !== "reservation_unknown" && stored.phase !== "accounting_pending") ||
+            stored.reservationRetirement !== null || stored.supersededByAttemptId !== null ||
+            this.hasSiblingOwner(state, stored)) {
           return { state, result: stored };
         }
         const updated = { ...stored, phase: "ready" as const, updatedAt };
@@ -1194,6 +1459,9 @@ export class FulfillmentMetering {
 
   private preparationResult(attempt: MutableAttempt): MeteringResult | undefined {
     const attemptId = attempt.attemptId;
+    if (attempt.reservationHistoryUncertain || attempt.reservationConflictEvidence !== null) {
+      return { status: "blocked", attemptId, reason: "budget_unknown" };
+    }
     if (attempt.phase === "ready") {
       return attempt.reservationState === "reserved" && attempt.reservationReference !== null
         ? { status: "ready", attemptId, reservationReference: attempt.reservationReference }
@@ -1214,6 +1482,11 @@ export class FulfillmentMetering {
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     let attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined || attempt.reservationState !== "not_requested") return { status: "blocked", attemptId, reason: "reservation_unavailable" };
+    if (attempt.reservationRetirement !== null || attempt.reservationHistoryUncertain ||
+        attempt.reservationConflictEvidence !== null || attempt.supersededByAttemptId !== null ||
+        this.hasSiblingOwner(read.state, attempt)) {
+      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
+    }
     if (attempt.reservationAmount.amount === null) return { status: "blocked", attemptId, reason: "budget_unknown" };
     const boundary = await this.validateOutbound(attempt.operation, SHAPE_BUDGET, attempt.reservationCandidate, attempt.scope);
     if (boundary === undefined) return { status: "blocked", attemptId, reason: "contract_unavailable" };
@@ -1223,9 +1496,15 @@ export class FulfillmentMetering {
     if (updatedAt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
     const budgetEventResult = await this.mutateState((state) => {
       const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
-      if (index < 0) return { state, result: false };
+      if (index < 0) return { state, result: { claimed: false, ownerConflict: false } };
       const stored = state.attempts[index]!;
-      if (stored.reservationState !== "not_requested") return { state, result: false };
+      const ownerConflict = this.hasSiblingOwner(state, stored);
+      if (ownerConflict) return { state, result: { claimed: false, ownerConflict: true } };
+      if (stored.reservationState !== "not_requested" || stored.reservationRetirement !== null ||
+          stored.reservationHistoryUncertain || stored.reservationConflictEvidence !== null ||
+          stored.supersededByAttemptId !== null) {
+        return { state, result: { claimed: false, ownerConflict: false } };
+      }
       const current: MutableAttempt = {
         ...stored,
         reservationEnvelope: canonical,
@@ -1261,9 +1540,11 @@ export class FulfillmentMetering {
         attemptId,
         candidate: this.observationCandidate("budget_reservation_requested", normalized, updatedAt, current.reservationRequestId)
       }));
-      return { state, result: true };
+      return { state, result: { claimed: true, ownerConflict: false } };
     });
-    if (!budgetEventResult) return { status: "blocked", attemptId, reason: "reservation_unavailable" };
+    if (!budgetEventResult.claimed) {
+      return { status: "blocked", attemptId, reason: budgetEventResult.ownerConflict ? "logical_operation_blocked" : "reservation_unavailable" };
+    }
     const refreshed = await this.safeReadState();
     if (refreshed.state === undefined) return { status: "blocked", attemptId, reason: refreshed.reason };
     const reservationEvent = [...refreshed.state.outbox].reverse().find((event) => event.attemptId === attemptId && event.eventType === "budget_reservation_requested");
@@ -1276,6 +1557,9 @@ export class FulfillmentMetering {
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "reservation_unavailable" };
     if (attempt.reservationState !== "requesting" || attempt.reservationEnvelope === null || attempt.phase !== "reservation_pending") {
       return this.reservationResult(attempt);
+    }
+    if (this.hasSiblingOwner(afterPersist.state, attempt)) {
+      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
     }
     let raw: unknown;
     let reservationState: "unknown" | "denied" | "reserved" = "unknown";
@@ -1298,7 +1582,7 @@ export class FulfillmentMetering {
       const fact: ReservationFact = reservationState === "reserved"
         ? { state: "reserved", reference: reference as string }
         : { state: reservationState, reference: null };
-      const merged = await this.applyReservationFact(attemptId, attempt.reservationRequestId, fact, finishedAt);
+      const merged = await this.applyReservationFact(attemptId, attempt.reservationRequestId, fact, finishedAt, "authorization");
       if (merged === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
       if (merged.conflict) return { status: "blocked", attemptId, reason: "budget_unknown" };
       return this.reservationResult(merged.attempt);
@@ -1527,9 +1811,25 @@ export class FulfillmentMetering {
     };
   }
 
+  private sameLogicalOperation(left: MutableAttempt, right: MutableAttempt): boolean {
+    return left.providerId === right.providerId &&
+      left.scope.tenantId === right.scope.tenantId &&
+      left.scope.projectId === right.scope.projectId &&
+      left.logicalOperationId === right.logicalOperationId;
+  }
+
+  private hasSiblingOwner(state: MutableState, attempt: MutableAttempt): boolean {
+    return state.attempts.some((sibling) => sibling.attemptId !== attempt.attemptId &&
+      this.sameLogicalOperation(sibling, attempt) && !this.canStartAnother(sibling));
+  }
+
   private canStartAnother(attempt: MutableAttempt): boolean {
     return (attempt.phase === "not_dispatched" || attempt.phase === "denied") &&
-      (attempt.reservationState === "denied" || attempt.reservationState === "released");
+      (attempt.reservationState === "denied" || attempt.reservationState === "released") &&
+      attempt.reservationRetirement !== null &&
+      attempt.reservationRetirement.reservationRequestId === attempt.reservationRequestId &&
+      attempt.reservationRetirement.state === attempt.reservationState &&
+      attempt.reservationConflictEvidence === null && !attempt.reservationHistoryUncertain;
   }
 
   private parseReservationResolution(value: unknown):

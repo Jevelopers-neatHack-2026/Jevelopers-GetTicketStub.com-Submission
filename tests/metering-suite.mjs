@@ -831,6 +831,98 @@ await test("corrupt durable state fails closed rather than being reset", async (
   }
 });
 
+await test("schema /2 terminal and unknown reservation histories migrate without resetting durable data", async () => {
+  for (const legacyKind of ["terminal", "unknown", "effect-terminal"]) {
+    const directory = await newTempDir();
+    try {
+      const harness = createHarness(directory, {
+        budgetBehavior: async (_check, state) => {
+          if (legacyKind === "effect-terminal") return { authorized: true, reference: `legacy-reservation-${state.budgetCalls.length}` };
+          throw new Error("fixture authorization ambiguity");
+        }
+      });
+      harness.resolver.status = "released";
+      const meter = await FulfillmentMetering.open(harness.dependencies);
+      const original = await meter.prepareBillableAttempt(billableInput(`legacy-${legacyKind}`));
+      if (legacyKind === "effect-terminal") assert.equal(original.status, "ready");
+      else assert.equal(original.status, "blocked");
+      if (legacyKind === "terminal") {
+        assert.equal((await meter.reconcileReservation(original.attemptId)).status, "denied");
+      } else if (legacyKind === "effect-terminal") {
+        const outcome = await meter.dispatchPreparedAttempt(original.attemptId, async () => ({
+          outcome: "provider_accepted",
+          providerRequestId: "legacy-effect-accepted"
+        }));
+        assert.equal(outcome.status, "effect_recorded");
+      }
+      const durablePath = resolve(directory, "metering-state.json");
+      const legacy = JSON.parse(await readFile(durablePath, "utf8"));
+      const targetAttemptId = original.attemptId;
+      const attempt = legacy.attempts.find((stored) => stored.attemptId === targetAttemptId);
+      assert.ok(attempt);
+      if (legacyKind === "unknown") {
+        attempt.reservationState = "unknown";
+        attempt.phase = "reservation_unknown";
+        attempt.reservationReference = null;
+      } else if (legacyKind === "effect-terminal") {
+        attempt.reservationState = "released";
+        attempt.reservationReference = null;
+      }
+      for (const field of ["reservationRetirement", "reservationConflictEvidence", "reservationHistoryUncertain", "supersededByAttemptId"]) {
+        delete attempt[field];
+      }
+      const originalLegacyBytes = JSON.stringify(legacy);
+      await writeFile(durablePath, originalLegacyBytes);
+
+      const reopened = await FulfillmentMetering.open(harness.dependencies);
+      if (legacyKind === "unknown") {
+        const blocked = await reopened.reconcileReservation(original.attemptId);
+        assert.equal(blocked.status, "blocked");
+        assert.equal(blocked.reason, "budget_unknown");
+        assert.equal(harness.state.resolverCalls.length, 0);
+        const distinct = await reopened.prepareBillableAttempt(billableInput("legacy-unknown-replacement"));
+        assert.equal(distinct.status, "blocked");
+        assert.equal(distinct.reason, "logical_operation_blocked");
+        assert.equal(await readFile(durablePath, "utf8"), originalLegacyBytes);
+      } else if (legacyKind === "terminal") {
+        const terminalResult = await reopened.prepareBillableAttempt(billableInput(`legacy-${legacyKind}`));
+        assert.equal(terminalResult.status, "denied");
+        assert.equal(await readFile(durablePath, "utf8"), originalLegacyBytes);
+      } else {
+        const terminalResult = await reopened.prepareBillableAttempt(billableInput(`legacy-${legacyKind}`));
+        assert.equal(terminalResult.status, "blocked");
+        assert.equal(terminalResult.reason, "attempt_not_ready");
+        assert.equal(await readFile(durablePath, "utf8"), originalLegacyBytes);
+      }
+      const observation = await reopened.recordObservation({
+        operation: "status",
+        sourceEventKey: `legacy-migration-${legacyKind}`,
+        outcome: "observed",
+        completeness: "partial",
+        effect: "non_billable_observation"
+      });
+      assert.equal(observation.status, "recorded");
+      const migrated = JSON.parse(await readFile(durablePath, "utf8"));
+      const migratedAttempt = migrated.attempts.find((stored) => stored.attemptId === targetAttemptId);
+      if (legacyKind === "unknown") {
+        assert.equal(migratedAttempt.reservationRetirement, null);
+        assert.equal(migratedAttempt.reservationHistoryUncertain, true);
+        assert.equal(migratedAttempt.reservationState, "unknown");
+      } else {
+        assert.equal(migratedAttempt.reservationRetirement.state, "released");
+        assert.equal(migratedAttempt.reservationRetirement.source, "legacy_state");
+        assert.equal(migratedAttempt.reservationHistoryUncertain, false);
+      }
+      if (legacyKind === "effect-terminal") {
+        assert.equal(migratedAttempt.phase, "provider_accepted");
+        assert.equal(migratedAttempt.outcome, "provider_accepted");
+      }
+      assert.equal(migratedAttempt.reservationConflictEvidence, null);
+      assert.equal(migratedAttempt.supersededByAttemptId, null);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
+});
+
 await test("durable metering state is bound to provider, modes and tenant-project context", async () => {
   const directory = await newTempDir();
   try {
@@ -1077,6 +1169,284 @@ await test("concurrent reservation resolutions cannot move dispatch intent or te
     assert.equal((await authorizingMeter.snapshot()).attempts[0].phase, "provider_accepted");
     assert.equal(harness.state.budgetCalls.length, 1);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+await test("released reservations stay retired through stale responses, restart, replay and replacement dispatch", async () => {
+  for (const terminalStatus of ["released", "denied"]) {
+    for (const responseOrder of ["authorize_then_resolvers", "resolvers_then_authorize"]) {
+      for (const newerEffect of ["before_stale_responses", "after_stale_responses"]) {
+        for (const restart of [false, true]) {
+        const directory = await newTempDir();
+        try {
+          const authorizeStarted = deferred();
+          const authorizeResponse = deferred();
+          const resolverStarted = [deferred(), deferred()];
+          const resolverResponses = [deferred(), deferred()];
+          const releaseStarted = deferred();
+          const releaseResponse = deferred();
+          let resolverCalls = 0;
+          const harness = createHarness(directory, {
+            budgetBehavior: async (_check, state) => {
+              if (state.budgetCalls.length === 1) {
+                authorizeStarted.resolve();
+                return authorizeResponse.promise;
+              }
+              return { authorized: true, reference: "replacement-reservation" };
+            }
+          });
+          harness.resolver.status = async () => {
+            const index = resolverCalls++;
+            if (index < resolverResponses.length) {
+              resolverStarted[index].resolve();
+              return resolverResponses[index].promise;
+            }
+            releaseStarted.resolve();
+            return releaseResponse.promise;
+          };
+
+          let manager = await FulfillmentMetering.open(harness.dependencies);
+          const authorizingManager = await FulfillmentMetering.open(harness.dependencies);
+          const firstResolver = await FulfillmentMetering.open(harness.dependencies);
+          const secondResolver = await FulfillmentMetering.open(harness.dependencies);
+          const releaseResolver = await FulfillmentMetering.open(harness.dependencies);
+          const originalPreparation = authorizingManager.prepareBillableAttempt(billableInput("retired-old-key"));
+          await withTimeout(authorizeStarted.promise, "retired attempt authorization");
+          const oldAttemptId = (await manager.snapshot()).attempts[0].attemptId;
+          const oldResolution1 = firstResolver.reconcileReservation(oldAttemptId);
+          await withTimeout(resolverStarted[0].promise, "first stale reservation resolver");
+          const oldResolution2 = secondResolver.reconcileReservation(oldAttemptId);
+          await withTimeout(resolverStarted[1].promise, "second stale reservation resolver");
+          const releaseResolution = releaseResolver.reconcileReservation(oldAttemptId);
+          await withTimeout(releaseStarted.promise, "terminal reservation resolver");
+          releaseResponse.resolve({ status: terminalStatus });
+          assert.equal((await withTimeout(releaseResolution, "released reservation result")).status, "denied");
+
+          const replacement = await manager.prepareBillableAttempt(billableInput("retired-new-key"));
+          assert.equal(replacement.status, "ready");
+          let raw = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+          const originalRetirement = raw.attempts.find((attempt) => attempt.attemptId === oldAttemptId).reservationRetirement;
+          assert.equal(originalRetirement.state, terminalStatus);
+          assert.equal(originalRetirement.reservationRequestId, raw.attempts[0].reservationRequestId);
+          assert.equal(raw.attempts.find((attempt) => attempt.attemptId === oldAttemptId).phase, "denied");
+          assert.equal(raw.attempts.find((attempt) => attempt.attemptId === oldAttemptId).supersededByAttemptId, replacement.attemptId);
+
+          // A replayed prepared event must not rewrite the terminal finance fact
+          // or the immutable edge to its replacement.
+          const preparedEvent = raw.outbox.find((event) => event.attemptId === oldAttemptId && event.eventType === "billable_attempt_prepared");
+          assert.ok(preparedEvent);
+          preparedEvent.deliveryState = "pending";
+          await writeFile(resolve(directory, "metering-state.json"), JSON.stringify(raw));
+          manager = await FulfillmentMetering.open(harness.dependencies);
+          assert.equal((await manager.replayPending()).pending, 0);
+          raw = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+          const replayedOldAttempt = raw.attempts.find((attempt) => attempt.attemptId === oldAttemptId);
+          assert.deepEqual(replayedOldAttempt.reservationRetirement, originalRetirement);
+          assert.equal(replayedOldAttempt.supersededByAttemptId, replacement.attemptId);
+
+          if (restart) manager = await FulfillmentMetering.open(harness.dependencies);
+          let firstConflict;
+          const assertRetired = async () => {
+            const state = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+            const stored = state.attempts.find((attempt) => attempt.attemptId === oldAttemptId);
+            assert.equal(stored.phase, "denied");
+            assert.equal(stored.reservationState, terminalStatus);
+            assert.equal(stored.reservationReference, null);
+            assert.deepEqual(stored.reservationRetirement, originalRetirement);
+            assert.equal(stored.supersededByAttemptId, replacement.attemptId);
+            assert.equal(stored.reservationHistoryUncertain, false);
+            assert.ok(stored.reservationConflictEvidence);
+            assert.equal(stored.reservationConflictEvidence.receivedState, "reserved");
+            if (firstConflict === undefined) firstConflict = structuredClone(stored.reservationConflictEvidence);
+            else assert.deepEqual(stored.reservationConflictEvidence, firstConflict);
+          };
+          const staleAuthorization = async () => {
+            authorizeResponse.resolve({ authorized: true, reference: "old-released-reservation" });
+            const result = await withTimeout(originalPreparation, "late authorization result");
+            assert.equal(result.status, "blocked");
+            assert.equal(result.reason, "budget_unknown");
+            await assertRetired();
+          };
+          const staleResolver = async (index, operation) => {
+            resolverResponses[index].resolve({ status: "reserved", reference: "old-released-reservation" });
+            const result = await withTimeout(operation, "late reservation resolver " + (index + 1));
+            assert.equal(result.status, "blocked");
+            assert.equal(result.reason, "budget_unknown");
+            await assertRetired();
+          };
+
+          const calls = [];
+          const dispatch = async (identity) => {
+            calls.push(identity);
+            return { outcome: "provider_accepted", providerRequestId: "single-effect-" + calls.length };
+          };
+          let replacementDispatch;
+          if (newerEffect === "before_stale_responses") {
+            replacementDispatch = await manager.dispatchPreparedAttempt(replacement.attemptId, dispatch);
+            assert.equal(replacementDispatch.status, "effect_recorded");
+          }
+          const completions = {
+            authorize: staleAuthorization,
+            resolver1: () => staleResolver(0, oldResolution1),
+            resolver2: () => staleResolver(1, oldResolution2)
+          };
+          const order = responseOrder === "authorize_then_resolvers"
+            ? ["authorize", "resolver1", "resolver2"]
+            : ["resolver1", "resolver2", "authorize"];
+          for (const completion of order) {
+            await completions[completion]();
+            if (restart) manager = await FulfillmentMetering.open(harness.dependencies);
+          }
+
+          const oldDispatch = await manager.dispatchPreparedAttempt(oldAttemptId, dispatch);
+          assert.equal(oldDispatch.status, "blocked");
+          assert.equal(calls.length, newerEffect === "before_stale_responses" ? 1 : 0);
+          if (newerEffect === "after_stale_responses") {
+            replacementDispatch = await manager.dispatchPreparedAttempt(replacement.attemptId, dispatch);
+            assert.equal(replacementDispatch.status, "blocked");
+            assert.equal(replacementDispatch.reason, "logical_operation_blocked");
+          }
+          assert.equal(calls.length, newerEffect === "before_stale_responses" ? 1 : 0);
+          if (calls.length === 1) {
+            assert.equal(calls[0].billableAttemptId, replacement.attemptId);
+            assert.equal(calls[0].logicalOperationId, "logical-order-1");
+          }
+          await assertRetired();
+          const final = await manager.snapshot();
+          assert.equal(final.attempts.find((attempt) => attempt.attemptId === oldAttemptId).phase, "denied");
+          assert.equal(final.attempts.find((attempt) => attempt.attemptId === replacement.attemptId).phase,
+            newerEffect === "before_stale_responses" ? "provider_accepted" : "ready");
+          assert.equal(final.outbox.filter((event) => event.eventType === "billable_attempt_outcome").length,
+            newerEffect === "before_stale_responses" ? 1 : 0);
+          } finally { await rm(directory, { recursive: true, force: true }); }
+        }
+      }
+    }
+  }
+});
+
+await test("a late conflict fences a replacement before its reservation can activate", async () => {
+  const directory = await newTempDir();
+  try {
+    const authorizationStarted = deferred();
+    const authorizationResponse = deferred();
+    const staleResolverStarted = deferred();
+    const staleResolverResponse = deferred();
+    const releaseResolverStarted = deferred();
+    const releaseResolverResponse = deferred();
+    const replacementPreparedSink = deferred();
+    const releaseReplacementSink = deferred();
+    let preparedEvents = 0;
+    let resolverCalls = 0;
+    const harness = createHarness(directory, {
+      budgetBehavior: async (_check, state) => {
+        if (state.budgetCalls.length === 1) {
+          authorizationStarted.resolve();
+          return authorizationResponse.promise;
+        }
+        return { authorized: true, reference: "replacement-reservation" };
+      },
+      sinkRecordHook: async (payload) => {
+        if (payload.event_type === "billable_attempt_prepared" && ++preparedEvents === 2) {
+          replacementPreparedSink.resolve();
+          await releaseReplacementSink.promise;
+        }
+      }
+    });
+    harness.resolver.status = async () => {
+      const index = resolverCalls++;
+      if (index === 0) {
+        staleResolverStarted.resolve();
+        return staleResolverResponse.promise;
+      }
+      releaseResolverStarted.resolve();
+      return releaseResolverResponse.promise;
+    };
+    const originalManager = await FulfillmentMetering.open(harness.dependencies);
+    const authorizationManager = await FulfillmentMetering.open(harness.dependencies);
+    const staleResolverManager = await FulfillmentMetering.open(harness.dependencies);
+    const releaseResolverManager = await FulfillmentMetering.open(harness.dependencies);
+    const originalPreparation = authorizationManager.prepareBillableAttempt(billableInput("activation-fence-old"));
+    await withTimeout(authorizationStarted.promise, "old activation-fence authorization");
+    const oldAttemptId = (await originalManager.snapshot()).attempts[0].attemptId;
+    const staleResolution = staleResolverManager.reconcileReservation(oldAttemptId);
+    await withTimeout(staleResolverStarted.promise, "old activation-fence stale resolver");
+    const releaseResolution = releaseResolverManager.reconcileReservation(oldAttemptId);
+    await withTimeout(releaseResolverStarted.promise, "old activation-fence release resolver");
+    releaseResolverResponse.resolve({ status: "released" });
+    assert.equal((await withTimeout(releaseResolution, "old activation-fence release result")).status, "denied");
+
+    const preparingManager = await FulfillmentMetering.open(harness.dependencies);
+    const replacementPreparation = preparingManager.prepareBillableAttempt(billableInput("activation-fence-new"));
+    await withTimeout(replacementPreparedSink.promise, "replacement prepared outbox delivery");
+    authorizationResponse.resolve({ authorized: true, reference: "old-reservation" });
+    assert.equal((await withTimeout(originalPreparation, "late original authorization")).status, "blocked");
+    staleResolverResponse.resolve({ status: "reserved", reference: "old-reservation" });
+    assert.equal((await withTimeout(staleResolution, "late original resolver")).status, "blocked");
+
+    const restarted = await FulfillmentMetering.open(harness.dependencies);
+    const reopenedState = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+    const oldStored = reopenedState.attempts.find((attempt) => attempt.attemptId === oldAttemptId);
+    const replacementStored = reopenedState.attempts.find((attempt) => attempt.clientAttemptKey === "activation-fence-new");
+    assert.equal(oldStored.reservationState, "released");
+    assert.equal(oldStored.reservationRetirement.state, "released");
+    assert.equal(oldStored.supersededByAttemptId, replacementStored.attemptId);
+    assert.equal(oldStored.reservationConflictEvidence.receivedState, "reserved");
+    releaseReplacementSink.resolve();
+    const preparationResult = await withTimeout(replacementPreparation, "replacement activation after conflict");
+    assert.equal(preparationResult.status, "blocked");
+    assert.equal(preparationResult.reason, "logical_operation_blocked");
+    assert.equal(harness.state.budgetCalls.length, 1);
+    const effects = [];
+    assert.equal((await restarted.dispatchPreparedAttempt(oldAttemptId, async () => {
+      effects.push("old");
+      return { outcome: "provider_accepted" };
+    })).status, "blocked");
+    assert.equal((await restarted.dispatchPreparedAttempt(replacementStored.attemptId, async () => {
+      effects.push("new");
+      return { outcome: "provider_accepted" };
+    })).status, "blocked");
+    assert.equal(effects.length, 0);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+await test("confirmed release and denial permit one replacement before any conflicting finance response", async () => {
+  for (const terminalStatus of ["released", "denied"]) {
+    const directory = await newTempDir();
+    try {
+      const harness = createHarness(directory, {
+        budgetBehavior: async (_check, state) => {
+          if (state.budgetCalls.length === 1) throw new Error("fixture authorization ambiguity");
+          return { authorized: true, reference: "replacement-reservation" };
+        }
+      });
+      const meter = await FulfillmentMetering.open(harness.dependencies);
+      const original = await meter.prepareBillableAttempt(billableInput("positive-control-old"));
+      assert.equal(original.status, "blocked");
+      harness.resolver.status = terminalStatus;
+      const resolved = await meter.reconcileReservation(original.attemptId);
+      assert.equal(resolved.status, "denied");
+      const replacement = await meter.prepareBillableAttempt(billableInput("positive-control-new"));
+      assert.equal(replacement.status, "ready");
+      const effects = [];
+      const dispatched = await meter.dispatchPreparedAttempt(replacement.attemptId, async (identity) => {
+        effects.push(identity);
+        return { outcome: "provider_accepted", providerRequestId: "positive-control-effect" };
+      });
+      assert.equal(dispatched.status, "effect_recorded");
+      assert.equal(effects.length, 1);
+      assert.equal(effects[0].billableAttemptId, replacement.attemptId);
+      assert.equal((await meter.dispatchPreparedAttempt(original.attemptId, async () => {
+        effects.push("duplicate");
+        return { outcome: "provider_accepted" };
+      })).status, "blocked");
+      assert.equal(effects.length, 1);
+      const stored = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+      const retired = stored.attempts.find((attempt) => attempt.attemptId === original.attemptId);
+      assert.equal(retired.reservationRetirement.state, terminalStatus);
+      assert.equal(retired.reservationConflictEvidence, null);
+      assert.equal(retired.supersededByAttemptId, replacement.attemptId);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
 });
 
 await test("same-key preparation remains terminal across replay waits and release reconciliation", async () => {
