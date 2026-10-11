@@ -70,7 +70,7 @@ function Form({ request }: { request: SignInRequest }) {
         err.code === "disposable_email"
           ? "That looks like a throwaway address. Use an email you keep, so we can find your wall again."
           : err.code === "mail_unavailable"
-          ? "We can't send email right now. Your stubs are safe on this device. Try again later."
+          ? "Email sign-in isn't set up on this preview yet. Your stubs stay safe on this device."
           : err.status === 429
           ? "That's a lot of links. Give it a few minutes, then try again."
           : err.code === "network" || err.code === "unavailable"

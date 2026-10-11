@@ -46,6 +46,6 @@ export async function endSession(req: Request): Promise<void> {
 }
 
 /** devLink goes back to the UI only outside production, or when the sandbox flag is on. */
-/** Sandbox sign-in links show on screen in development, in the demo preview (not live mode), or when asked. */
-export const sandboxMail = () =>
-  process.env.NODE_ENV !== "production" || process.env.TICKETSTUB_RUNTIME_MODE !== "live" || process.env.TICKETSTUB_SANDBOX_MAIL === "1";
+/** Sandbox sign-in links show on screen only in development, or when a deploy sets TICKETSTUB_SANDBOX_MAIL=1
+ *  on purpose. A production build never shows them otherwise (#27): without a mail key, sign-in is off. */
+export const sandboxMail = () => process.env.NODE_ENV !== "production" || process.env.TICKETSTUB_SANDBOX_MAIL === "1";
