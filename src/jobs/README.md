@@ -1,5 +1,7 @@
 # jobs
 
-Private structured batch planning, claims, fencing and restart recovery are
-implemented in durable-batch.ts. See [durability](../../docs/durability/README.md).
-CSV, public job contracts and actual production row rendering remain blocked.
+Private batch planning, claims, fencing and restart recovery are implemented in
+`durable-batch.ts`. Local row and CSV rendering adapters use synthetic fixtures;
+public job contracts and accepted production rendering remain blocked. See
+[durability](../../docs/durability/README.md) and
+[production output](../../docs/production-output/README.md).

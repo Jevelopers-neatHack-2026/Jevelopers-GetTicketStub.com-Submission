@@ -1,10 +1,11 @@
 # PP-01A runtime foundation
 
-This package implements synthetic local calibration and verification dispatch.
-The ESM exports are `renderCalibration(directory)`, `verifyRuntime(directory)`
-and `VerificationFailure`. Production contracts and supplier specifications
-await PP-01B and the external owners. Planned directories have explicit boundary
-documents; no supplier, approval, purchase, identity or ledger authority exists.
+This package includes a synthetic local calibration harness and private
+composition/output mechanics. The public ESM exports are
+`renderCalibration(directory)`, `verifyRuntime(directory)` and
+`VerificationFailure`; the root API still exposes runtime verification only.
+Production contracts and supplier specifications await PP-01B and the external
+owners. No supplier, approval, purchase, identity or ledger authority exists.
 
 ## Run
 
@@ -30,12 +31,14 @@ missing pins, browser revision/version/executable hash changes and font/license
 changes. There is no global-browser or system-font fallback.
 
 All three verification flags are mandatory. Missing/unknown/duplicate/extra
-arguments fail with sanitized JSON stderr and exit 1. Every registered leaf
-except `runtime` is unimplemented and exits 1 with its concrete dependency.
-`release` executes the real runtime leaf, records each mandatory failure, and
-exits 1 with `RELEASE_INCOMPLETE`. Canonical shared-contracts, accepted supplier,
-app and finance consumer pins are null. Calibration does not complete production
-typography, exporters, preflight or any other global acceptance gate.
+arguments fail with sanitized JSON stderr and exit 1. `runtime` verifies only
+the local calibration. Several `external-blocked` leaves run private local
+suites, record their evidence, then exit 1 with the missing external dependency;
+`api-contracts` remains unimplemented. `release` records each required leaf and
+exits 1 with `RELEASE_INCOMPLETE` while any leaf or immutable external pin is
+missing. Canonical shared-contracts, accepted supplier, app and finance consumer
+pins are null. Passing private mechanics does not meet supplier or consumer
+acceptance.
 
 ## Calibration profile
 

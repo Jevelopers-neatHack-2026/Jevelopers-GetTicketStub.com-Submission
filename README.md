@@ -7,11 +7,11 @@
 
 # print-production
 
-Print composition and production manifests for TicketStub; today it holds the PP-01A runtime foundation, an offline SVG-to-PNG/PDF calibration and verification harness.
+Private print-production engines for TicketStub, with a pinned offline calibration harness and local composition, batch, render and archive mechanics.
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
-  <a href="#status"><img alt="Status: PP-01A local foundation; production behaviour planned" src="https://img.shields.io/badge/status-PP--01A%20local%20foundation-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: private local mechanics; external acceptance blocked" src="https://img.shields.io/badge/status-private%20mechanics%20%7C%20acceptance%20blocked-B4693E?style=flat-square&labelColor=17140F"></a>
   <a href=".nvmrc"><img alt="Node.js 24.21.0" src="https://img.shields.io/badge/node-24.21.0-26302A?style=flat-square&labelColor=17140F"></a>
   <a href="docs/runtime/pins.json"><img alt="Chromium 156.0.8078.4 via Playwright 1.64.0, pinned" src="https://img.shields.io/badge/chromium-156.0.8078.4-7CC6D2?style=flat-square&labelColor=17140F"></a>
 </p>
@@ -20,14 +20,13 @@ Print composition and production manifests for TicketStub; today it holds the PP
 
 ## Status
 
-PP-01A implements a strict Node 24 / TypeScript ESM runtime foundation, exercised locally:
+The package has a strict Node 24 / TypeScript ESM runtime foundation and private local engines. Current local work includes:
 
-- Offline Chromium SVG-to-PNG/PDF calibration of one synthetic 4 x 2 inch Latin fixture, with independent PNG and PDF checks and normalized repeat hashes.
-- Exact environment, dependency, font and browser pins ([pins.json](docs/runtime/pins.json)); mismatches fail with typed `VerificationFailure` codes, with no global-browser or system-font fallback.
-- A fail-closed suite dispatcher (`pp-verify`): only the `runtime` suite is implemented; every other registered suite exits 1 with its named dependency, and `release` exits 1 with `RELEASE_INCOMPLETE`.
-- The package root exports `renderCalibration`, `verifyRuntime` and `VerificationFailure`.
+- Offline Chromium calibration renders a synthetic 4 × 2 inch Latin fixture to PNG/PDF, independently checks both outputs and compares normalized repeats.
+- Private composition, typography, asset, template, preflight and repair mechanics; local rendering, output inspection, CSV batches and archives; exact dependency, font and browser pins live in [`pins.json`](docs/runtime/pins.json).
+- `pp-verify` runs the calibration and private test suites. Private suites can pass their local checks while still reporting `external-blocked`; release exits 1 with `RELEASE_INCOMPLETE` until its outside contracts and acceptance evidence are available.
 
-Not implemented: production composition, templates, typography, personalization, exporters, preflight, manifests, storage, repair, job recovery and metering, and canonical consumer contracts (these await PP-01B and external owners). There is no provider connection and no supplier, approval, purchase, identity or ledger authority. The calibration is an sRGB profile, not CMYK/ICC, PDF/X, trim/bleed or printer certification.
+These private mechanisms do not define accepted public production operations or a canonical `ProductionBundle`. Test inputs and permission ports are synthetic; no supplier format is enabled, and no supplier, approval, purchase, identity or ledger authority is connected. Handoff eligibility remains false and production eligibility unknown. The calibration profile is sRGB; local output does not claim CMYK, PDF/X or printer certification.
 
 Pending: the revised Linux sandbox configuration (ROOT-R1) still needs remote CI execution and independent review; macOS receipts do not certify Linux. See [evidence and remaining acceptance](docs/runtime/README.md#evidence-and-remaining-acceptance) and [the security policy record](scripts/security/README.md).
 
@@ -53,30 +52,24 @@ npm test
 npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/local-macos
 ```
 
-`--suite`, `--mode offline` and `--evidence-dir` are all mandatory; the runtime suite writes `runtime.json` and two renders under the evidence directory. Linux CI ([runtime workflow](.github/workflows/runtime.yml)) installs inside a digest-pinned Playwright image, then runs [`scripts/ci-offline.sh`](scripts/ci-offline.sh) with networking disabled, including the additional Linux sandbox suites.
+`--suite`, `--mode offline` and `--evidence-dir` are all mandatory; the runtime suite writes `runtime.json` and two renders under the evidence directory. Linux CI ([runtime workflow](.github/workflows/runtime.yml)) runs the bounded workloads and final verification in a digest-pinned Playwright image with networking disabled, including the Linux sandbox suites.
 
 ## Module map
 
-| Path | State | Notes |
+| Path | State | Details |
 | --- | --- | --- |
-| `src/runtime/`, `src/index.ts` | Implemented (PP-01A) | Environment guard, calibration, typed errors. [Runtime guide](docs/runtime/README.md) |
-| `src/exporters/`, `src/preflight/`, `src/typography/` | Calibration only | Offline browser adapter, PNG/PDF output checks, calibration font checks; not production behaviour |
-| [`src/assets/`](src/assets/README.md) | Calibration font only | Licensed Noto Sans WOFF2 and OFL; production asset approval unimplemented |
-| [`src/api/`](src/api/README.md) | Planned | Production contracts await PP-01B/shared-contracts |
-| [`src/composition/`](src/composition/README.md) | Planned | Artwork, text and logo composition |
-| [`src/templates/`](src/templates/README.md) | Planned | Layouts bound to a confirmed supplier specification |
-| [`src/personalization/`](src/personalization/README.md) | Planned | Canonical attendee fields, later CSV import |
-| [`src/manifests/`](src/manifests/README.md) | Planned | Production bundle manifests |
-| [`src/storage/`](src/storage/README.md) | Planned | Production artifact storage |
-| [`src/jobs/`](src/jobs/README.md) | Planned | Durable jobs and recovery |
-| [`src/repair/`](src/repair/README.md) | Planned | Bounded repair |
-| [`src/telemetry/`](src/telemetry/README.md) | Planned | Production metering and traces |
-| [`scripts/verify/`](scripts/verify/dispatcher.ts) | Implemented | `pp-verify` CLI and suite registry |
-| [`scripts/security/`](scripts/security/README.md) | Implemented, Linux CI pending | Container/sandbox policy, probes and diagnostics |
+| [`src/runtime/`](docs/runtime/README.md), `src/index.ts` | Local runtime implemented | Pinned offline calibration; the package root exports runtime verification only. |
+| [`src/composition/`](docs/composition/README.md), `src/templates/`, `src/typography/`, `src/assets/`, `src/preflight/`, `src/repair/` | Private local mechanics | Synthetic inputs and private adapters; no approved supplier roster or canonical production contracts. |
+| `src/exporters/`, `src/personalization/`, `src/manifests/`, `src/storage/`, `src/jobs/` | Private output and batch mechanics | Local files, inspection, CSV/batches, archives and durable storage; no handoff-eligible bundle. See [production output](docs/production-output/README.md). |
+| [`src/api/`](src/api/README.md) | Canonical API pending | Public production contracts await PP-01B and shared-contracts acceptance. |
+| [`scripts/verify/`](scripts/verify/dispatcher.ts) | Local suites; release blocked | Private checks run locally; external integration gates remain open. |
+| [`scripts/security/`](scripts/security/README.md) | Linux candidate pending CI | Runtime sandbox policy and probes; remote execution and review are required for this candidate. |
 
 ## Docs
 
 - [PP-01A runtime: run, calibration profile, evidence and limits](docs/runtime/README.md)
+- [Private composition mechanics and limits](docs/composition/README.md)
+- [Private output, CSV, archive and acceptance holds](docs/production-output/README.md)
 - [Linux renderer security policy and ROOT-R1 diagnosis](scripts/security/README.md)
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md) · [acceptance view](docs/architecture/ACCEPTANCE.md)
 - [Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)

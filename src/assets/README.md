@@ -1,3 +1,7 @@
 # assets
 
-Owns the licensed calibration font files and provenance in docs/runtime/pins.json. Production asset approval remains externally owned and unimplemented.
+Contains licensed Noto Sans calibration and composition fonts, their license
+records, and bounded private asset parsing. Runtime pins are in
+[`docs/runtime/pins.json`](../../docs/runtime/pins.json). Asset approval and
+authoritative permissions remain external; see the
+[composition guide](../../docs/composition/README.md).
