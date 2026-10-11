@@ -122,7 +122,7 @@ test("outcome words follow the final status, and an abort wins", () => {
 
 test("collection is off unless TICKETSTUB_OPS_TELEMETRY=log; off changes nothing about responses", async () => {
   setOpsSink(undefined);
-  for (const v of [undefined, "", "off", "on", "true", "memory", "https://collector.example"]) {
+  for (const v of [undefined, "", "off", "on", "true", "memory", "https://collector.example", "log off", "no log", "don't log", "off;log", "log,off", "neatlogs disabled", "logging"]) {
     if (v === undefined) delete process.env.TICKETSTUB_OPS_TELEMETRY; else process.env.TICKETSTUB_OPS_TELEMETRY = v;
     assert.equal(activeSink(), undefined, String(v));
   }
@@ -167,6 +167,15 @@ test("agent demo keeps its 204 and is measured as a rules fallback in demo mode"
   assert.equal(e.mode, "demo");
   assert.deepEqual({ ...e.fields, durationMs: 0 }, { operation: "agent_reply", dependency: "demo", fallback: "rules", route: "agent", status: 204, outcome: "no_content", durationMs: 0, aborted: false, attempts: 0, clientCorrelation: false });
   assert.equal(res.headers.get("x-ticketstub-operation"), e.operationId);
+});
+
+test("agent tolerates a facts value that is not a list", async () => {
+  configure();
+  globalThis.fetch = async () => response(textResponse());
+  for (const facts of ["text", null, { a: 1 }, [null, 1]]) {
+    const res = await agent.POST(req({ event: { type: "concert", title: "Odd", facts }, message: "Hello?" }));
+    assert.equal(res.status, 200, JSON.stringify(facts));
+  }
 });
 
 test("agent live success: one provider attempt with reported usage and cost, tied to one server-made operation", async () => {
@@ -307,6 +316,25 @@ test("art without a facts list still generates an image (no internal error)", as
     const r = only("api_request");
     assert.notEqual(r.fields.code, "internal", String(facts));
     assert.equal(r.fields.dependency, "provider", String(facts));
+  }
+});
+
+test("malformed art event fields never crash the prompt build; a null body is a 400", async () => {
+  configure("art", "openai/test-image");
+  globalThis.fetch = async (url) => url.endsWith("/images/models")
+    ? response({ data: [{ id: "openai/test-image", architecture: { output_modalities: ["image"] } }] })
+    : response({ data: [{ b64_json: png, media_type: "image/png" }], usage: { cost: 0.04 } });
+  const bad = [{ facts: [null] }, { facts: [1, "x", { id: 5 }] }, { dateISO: 20240101 }, { dateISO: {} }, { city: 5 }, { city: {} }, { venue: {} }, { type: { evil: 1 } }];
+  for (const extra of bad) {
+    sink.clear();
+    const res = await art.POST(req({ event: { type: "concert", title: "Odd fields", facts: [], ...extra } }));
+    assert.equal(res.status, 200, JSON.stringify(extra));
+    assert.equal((await res.json()).provenance, "live", JSON.stringify(extra));
+    assert.notEqual(only("api_request").fields.code, "internal", JSON.stringify(extra));
+  }
+  for (const body of ["null", "[]", '"text"', '{"event":"x"}']) {
+    const res = await art.POST(req(body));
+    assert.equal(res.status, 400, body);
   }
 });
 
