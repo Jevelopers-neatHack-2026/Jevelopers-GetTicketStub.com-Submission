@@ -59,7 +59,7 @@ after(async () => {
 
 for (const suite of suites) {
 	test(`executes genuine isolated ${suite} tests and fresh artifacts under inherited test context`, {
-		timeout: 60000,
+		timeout: 360000,
 	}, async () => {
 		const directory = join(root, suite);
 		assert.equal(
@@ -112,7 +112,7 @@ for (const suite of suites) {
 		);
 	});
 	test(`invalidates the actual earlier ${suite} receipt after a genuine failed child canary`, {
-		timeout: 60000,
+		timeout: 360000,
 	}, async () => {
 		const directory = join(root, suite);
 		const prior = receiptSchema.parse(

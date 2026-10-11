@@ -142,3 +142,22 @@ The result report links separate immutable failed raw-log hashes, current
 finite diagnostics, standalone/nested evidence and commands. Parent publication,
 actual exact-head Linux CI, manual QA and fresh whole-PR23 independent review
 remain required before any winning merge.
+
+## Child deadline evidence (print-production#25)
+
+Main run 38167673259 timed out the personalization, csv-personalization,
+exporters, manifests and integration-production children at about 60,030 ms
+with unknown counts. Diagnostic run 38171209974 (branch
+`diag/personalization-child-timeout`, not merged) recorded the child's partial
+TAP progress at the deadline. In all seven timed-out executions every started
+test had finished and passed; no test was pending. The nested personalization
+child completed 19 of 51 tests, about 147 s of test time, within 60 s of wall
+time; single real-browser cases take 8-21 s each. The 60-second deadline was
+smaller than the selection's measured work, not evidence of a hang.
+
+The independent child deadline is therefore 300 seconds. It remains a finite
+bound that kills a genuinely stuck child. The dispatcher's per-test budget is
+360 seconds so that it exceeds the child deadline, and workload jobs have 40
+minutes because the CLI group runs every output selection more than once.
+Exact counts, zero skips/cancellations/todo, the 4-MiB output limit, the fresh
+mandatory artifacts and the canaries are unchanged.
