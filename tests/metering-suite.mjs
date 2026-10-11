@@ -1171,6 +1171,226 @@ await test("concurrent reservation resolutions cannot move dispatch intent or te
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+await test("own reservation conflicts during dispatch intent fence effects across finance result orders and managers", async () => {
+  const cases = [
+    { order: "authorize_then_resolver", fact: "released", source: "resolver" },
+    { order: "authorize_then_resolver", fact: "denied", source: "resolver" },
+    { order: "authorize_then_resolver", fact: "different_reference", source: "resolver" },
+    { order: "resolver_then_authorize", fact: "denied", source: "authorization" },
+    { order: "resolver_then_authorize", fact: "different_reference", source: "authorization" }
+  ];
+  for (const scenario of cases) {
+    for (const managerOwnership of ["same_manager", "separate_manager"]) {
+      for (const restartBeforeClaim of [false, true]) {
+        const directory = await newTempDir();
+        const authorizationStarted = deferred();
+        const authorizationResponse = deferred();
+        const resolverStarted = deferred();
+        const resolverResponse = deferred();
+        const intentEntered = deferred();
+        const releaseIntent = deferred();
+        let pauseIntent = false;
+        try {
+          const harness = createHarness(directory, {
+            budgetBehavior: async () => {
+              authorizationStarted.resolve();
+              return authorizationResponse.promise;
+            },
+            sinkRecordHook: async (payload) => {
+              if (pauseIntent && payload.event_type === "transport_attempt_intent") {
+                pauseIntent = false;
+                intentEntered.resolve();
+                await releaseIntent.promise;
+              }
+            }
+          });
+          harness.resolver.status = async () => {
+            resolverStarted.resolve();
+            return resolverResponse.promise;
+          };
+          const preparingManager = await FulfillmentMetering.open(harness.dependencies);
+          const separateManager = await FulfillmentMetering.open(harness.dependencies);
+          const concurrentManager = managerOwnership === "same_manager" ? preparingManager : separateManager;
+          const resolverManager = concurrentManager;
+          const dispatchManager = concurrentManager;
+          const preparation = preparingManager.prepareBillableAttempt(
+            billableInput(`intent-conflict-${scenario.order}-${scenario.fact}-${managerOwnership}-${restartBeforeClaim}`)
+          );
+          await withTimeout(authorizationStarted.promise, "intent conflict authorization start");
+          const attemptId = (await preparingManager.snapshot()).attempts[0].attemptId;
+          const reconciliation = resolverManager.reconcileReservation(attemptId);
+          await withTimeout(resolverStarted.promise, "intent conflict resolver start");
+
+          if (scenario.order === "authorize_then_resolver") {
+            authorizationResponse.resolve({ authorized: true, reference: "ref-original" });
+            assert.equal((await withTimeout(preparation, "initial reservation authorization")).status, "ready");
+          } else {
+            resolverResponse.resolve({ status: "reserved", reference: "ref-original" });
+            assert.equal((await withTimeout(reconciliation, "initial reservation resolver")).status, "ready");
+          }
+
+          pauseIntent = true;
+          const effects = [];
+          const dispatching = dispatchManager.dispatchPreparedAttempt(attemptId, async (identity) => {
+            effects.push(identity);
+            return { outcome: "provider_accepted", providerRequestId: "must-not-dispatch" };
+          });
+          await waitForSignal(intentEntered, dispatching, "intent conflict sink pause");
+
+          if (scenario.source === "resolver") {
+            resolverResponse.resolve(scenario.fact === "different_reference"
+              ? { status: "reserved", reference: "ref-other" }
+              : { status: scenario.fact });
+            const conflictResult = await withTimeout(reconciliation, "late resolver conflict");
+            assert.equal(conflictResult.status, "blocked");
+            assert.equal(conflictResult.reason, "budget_unknown");
+          } else {
+            authorizationResponse.resolve(scenario.fact === "different_reference"
+              ? { authorized: true, reference: "ref-other" }
+              : { authorized: false });
+            const conflictResult = await withTimeout(preparation, "late authorization conflict");
+            assert.equal(conflictResult.status, "blocked");
+            assert.equal(conflictResult.reason, "budget_unknown");
+          }
+
+          const expectedConflict = {
+            reservationRequestId: (await preparingManager.snapshot()).attempts[0].reservationRequestId,
+            priorState: "reserved",
+            priorReference: "ref-original",
+            receivedState: scenario.fact === "different_reference" ? "reserved" : scenario.fact,
+            receivedReference: scenario.fact === "different_reference" ? "ref-other" : null,
+            source: scenario.source,
+            observedAt: "2026-10-10T14:00:00.000Z"
+          };
+          const beforeClaim = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+          assert.equal(beforeClaim.attempts[0].phase, "dispatch_intent");
+          assert.equal(beforeClaim.attempts[0].reservationReference, "ref-original");
+          assert.deepEqual(beforeClaim.attempts[0].reservationConflictEvidence, expectedConflict);
+
+          const reopened = restartBeforeClaim ? await FulfillmentMetering.open(harness.dependencies) : undefined;
+          releaseIntent.resolve();
+          const dispatchResult = await withTimeout(dispatching, "claim after intent conflict");
+          assert.equal(dispatchResult.status, "blocked");
+          assert.equal(dispatchResult.reason, "budget_unknown");
+          assert.equal(effects.length, 0);
+
+          const finalManager = reopened ?? dispatchManager;
+          if (reopened !== undefined) assert.equal((await reopened.replayPending()).pending, 0);
+          const finalState = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+          const finalAttempt = finalState.attempts.find((attempt) => attempt.attemptId === attemptId);
+          assert.equal(finalAttempt.phase, "dispatch_intent");
+          assert.equal(finalAttempt.outcome, null);
+          assert.equal(finalAttempt.reservationReference, "ref-original");
+          assert.deepEqual(finalAttempt.reservationConflictEvidence, expectedConflict);
+          assert.equal(finalState.outbox.filter((event) => event.eventType === "billable_attempt_outcome").length, 0);
+          const retry = await finalManager.dispatchPreparedAttempt(attemptId, async (identity) => {
+            effects.push(identity);
+            return { outcome: "provider_accepted", providerRequestId: "must-not-retry" };
+          });
+          assert.equal(retry.status, "blocked");
+          assert.equal(retry.reason, "budget_unknown");
+          assert.equal(effects.length, 0);
+        } finally {
+          releaseIntent.resolve();
+          await rm(directory, { recursive: true, force: true });
+        }
+      }
+    }
+  }
+});
+
+await test("equivalent reservation responses during dispatch intent retain the positive dispatch path", async () => {
+  for (const order of ["authorize_then_resolver", "resolver_then_authorize"]) {
+    for (const managerOwnership of ["same_manager", "separate_manager"]) {
+      const directory = await newTempDir();
+      const authorizationStarted = deferred();
+      const authorizationResponse = deferred();
+      const resolverStarted = deferred();
+      const resolverResponse = deferred();
+      const intentEntered = deferred();
+      const releaseIntent = deferred();
+      let pauseIntent = false;
+      try {
+        const harness = createHarness(directory, {
+          budgetBehavior: async () => {
+            authorizationStarted.resolve();
+            return authorizationResponse.promise;
+          },
+          sinkRecordHook: async (payload) => {
+            if (pauseIntent && payload.event_type === "transport_attempt_intent") {
+              pauseIntent = false;
+              intentEntered.resolve();
+              await releaseIntent.promise;
+            }
+          }
+        });
+        harness.resolver.status = async () => {
+          resolverStarted.resolve();
+          return resolverResponse.promise;
+        };
+        const preparingManager = await FulfillmentMetering.open(harness.dependencies);
+        const separateManager = await FulfillmentMetering.open(harness.dependencies);
+        const concurrentManager = managerOwnership === "same_manager" ? preparingManager : separateManager;
+        const preparation = preparingManager.prepareBillableAttempt(
+          billableInput(`equivalent-intent-${order}-${managerOwnership}`)
+        );
+        await withTimeout(authorizationStarted.promise, "equivalent authorization start");
+        const attemptId = (await preparingManager.snapshot()).attempts[0].attemptId;
+        const reconciliation = concurrentManager.reconcileReservation(attemptId);
+        await withTimeout(resolverStarted.promise, "equivalent resolver start");
+
+        if (order === "authorize_then_resolver") {
+          authorizationResponse.resolve({ authorized: true, reference: "ref-equivalent" });
+          assert.equal((await withTimeout(preparation, "equivalent authorization result")).status, "ready");
+        } else {
+          resolverResponse.resolve({ status: "reserved", reference: "ref-equivalent" });
+          assert.equal((await withTimeout(reconciliation, "equivalent resolver result")).status, "ready");
+        }
+
+        pauseIntent = true;
+        const effects = [];
+        const dispatching = concurrentManager.dispatchPreparedAttempt(attemptId, async (identity) => {
+          effects.push(identity);
+          return { outcome: "provider_accepted", providerRequestId: "equivalent-effect" };
+        });
+        await waitForSignal(intentEntered, dispatching, "equivalent intent sink pause");
+        if (order === "authorize_then_resolver") {
+          resolverResponse.resolve({ status: "reserved", reference: "ref-equivalent" });
+          const result = await withTimeout(reconciliation, "equivalent late resolver");
+          assert.equal(result.status, "blocked");
+          assert.equal(result.reason, "attempt_outcome_unknown");
+        } else {
+          authorizationResponse.resolve({ authorized: true, reference: "ref-equivalent" });
+          const result = await withTimeout(preparation, "equivalent late authorization");
+          assert.equal(result.status, "blocked");
+          assert.equal(result.reason, "attempt_outcome_unknown");
+        }
+        const beforeDispatchState = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+        assert.equal(beforeDispatchState.attempts[0].reservationConflictEvidence, null);
+        releaseIntent.resolve();
+        const dispatched = await withTimeout(dispatching, "equivalent dispatch outcome");
+        assert.equal(dispatched.status, "effect_recorded");
+        assert.equal(dispatched.outcome, "provider_accepted");
+        assert.equal(effects.length, 1);
+        const reopened = await FulfillmentMetering.open(harness.dependencies);
+        const reopenedState = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
+        const stored = reopenedState.attempts[0];
+        assert.equal(stored.phase, "provider_accepted");
+        assert.equal(stored.outcome, "provider_accepted");
+        assert.equal(stored.reservationConflictEvidence, null);
+        assert.equal((await reopened.dispatchPreparedAttempt(attemptId, async (identity) => {
+          effects.push(identity);
+          return { outcome: "provider_accepted" };
+        })).status, "blocked");
+        assert.equal(effects.length, 1);
+      } finally {
+        releaseIntent.resolve();
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
 await test("released reservations stay retired through stale responses, restart, replay and replacement dispatch", async () => {
   for (const terminalStatus of ["released", "denied"]) {
     for (const responseOrder of ["authorize_then_resolvers", "resolvers_then_authorize"]) {

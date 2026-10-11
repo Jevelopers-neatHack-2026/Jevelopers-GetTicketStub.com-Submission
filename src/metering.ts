@@ -1145,13 +1145,8 @@ export class FulfillmentMetering {
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     let attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    if (attempt.reservationRetirement !== null || attempt.reservationHistoryUncertain ||
-        attempt.supersededByAttemptId !== null) {
-      return { status: "blocked", attemptId, reason: "attempt_not_ready" };
-    }
-    if (this.hasSiblingOwner(read.state, attempt)) {
-      return { status: "blocked", attemptId, reason: "logical_operation_blocked" };
-    }
+    const initialFence = this.preEffectBlockReason(read.state, attempt);
+    if (initialFence !== undefined) return { status: "blocked", attemptId, reason: initialFence };
     if (attempt.phase === "provider_accepted" || attempt.phase === "not_dispatched" || attempt.phase === "unknown" || attempt.phase === "dispatching") {
       return {
         status: "blocked",
@@ -1184,10 +1179,9 @@ export class FulfillmentMetering {
           const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
           if (index < 0) return { state, result: false };
           const stored = state.attempts[index]!;
+          const fence = this.preEffectBlockReason(state, stored);
           if (stored.transportAttemptId !== null || stored.phase !== "ready" ||
-              stored.reservationRetirement !== null || stored.reservationHistoryUncertain ||
-              stored.supersededByAttemptId !== null ||
-              this.hasSiblingOwner(state, stored)) return { state, result: false };
+              fence !== undefined) return { state, result: false };
           const updated = { ...stored, transportAttemptId, phase: "dispatch_intent" as const, updatedAt: observedAt };
           state.attempts[index] = updated;
           state.outbox.push(this.newAttemptEvent(state, updated, "transport_attempt_intent", "dispatching", transportAttemptId));
@@ -1197,7 +1191,10 @@ export class FulfillmentMetering {
       const refreshed = await this.safeReadState();
       if (refreshed.state === undefined) return { status: "blocked", attemptId, reason: refreshed.reason };
       attempt = refreshed.state.attempts.find((item) => item.attemptId === attemptId);
-      if (attempt === undefined || attempt.transportAttemptId === null) return { status: "blocked", attemptId, reason: "attempt_not_ready" };
+      if (attempt === undefined) return { status: "blocked", attemptId, reason: "attempt_not_ready" };
+      const intentFence = this.preEffectBlockReason(refreshed.state, attempt);
+      if (intentFence !== undefined) return { status: "blocked", attemptId, reason: intentFence };
+      if (attempt.transportAttemptId === null) return { status: "blocked", attemptId, reason: "attempt_not_ready" };
     }
     const intent = (await this.safeReadState()).state?.outbox.find((event) => event.attemptId === attemptId && event.eventType === "transport_attempt_intent");
     if (intent === undefined) return { status: "blocked", attemptId, reason: "attempt_not_ready" };
@@ -1210,26 +1207,33 @@ export class FulfillmentMetering {
     try {
       const claim = await this.mutateState<
         | { readonly claimed: true; readonly attempt: MutableAttempt }
-        | { readonly claimed: false; readonly attempt?: MutableAttempt }
+        | { readonly claimed: false; readonly attempt?: MutableAttempt; readonly reason: MeteringFailure }
       >((state) => {
         const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
-        if (index < 0) return { state, result: { claimed: false as const } };
+        if (index < 0) return { state, result: { claimed: false as const, reason: "attempt_not_ready" as const } };
         const stored = state.attempts[index]!;
         const pendingOutbox = state.outbox.some((event) => event.deliveryState === "pending");
         const intentDelivered = state.outbox.some((event) => event.attemptId === attemptId &&
           event.eventType === "transport_attempt_intent" && event.deliveryState === "delivered");
+        const fence = this.preEffectBlockReason(state, stored);
+        if (fence !== undefined) {
+          return { state, result: { claimed: false as const, attempt: stored, reason: fence } };
+        }
         if (stored.phase !== "dispatch_intent" || stored.transportAttemptId === null || pendingOutbox || !intentDelivered ||
             stored.reservationState !== "reserved" || stored.reservationReference === null ||
-            stored.reservationRetirement !== null || stored.reservationHistoryUncertain ||
-            stored.supersededByAttemptId !== null ||
-            this.hasSiblingOwner(state, stored)) {
-          return { state, result: { claimed: false as const, attempt: stored } };
+            stored.reservationRetirement !== null) {
+          const reason: MeteringFailure = stored.phase === "dispatching" || stored.phase === "unknown"
+            ? "attempt_outcome_unknown"
+            : pendingOutbox || !intentDelivered
+              ? "usage_sink_unavailable"
+              : "attempt_not_ready";
+          return { state, result: { claimed: false as const, attempt: stored, reason } };
         }
         const claimed: MutableAttempt = { ...stored, phase: "dispatching", dispatchStartedAt, updatedAt: dispatchStartedAt };
         state.attempts[index] = claimed;
         return { state, result: { claimed: true as const, attempt: claimed } };
       });
-      if (!claim.claimed) return { status: "blocked", attemptId, reason: claim.attempt?.phase === "dispatching" || claim.attempt?.phase === "unknown" ? "attempt_outcome_unknown" : "attempt_not_ready" };
+      if (!claim.claimed) return { status: "blocked", attemptId, reason: claim.reason };
       attempt = claim.attempt;
     } catch (error) { return { status: "blocked", attemptId, reason: safeStoreError(error) }; }
     const identity: DispatchIdentity = deepFreeze({
@@ -1435,21 +1439,23 @@ export class FulfillmentMetering {
     if (attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
       const updatedAt = this.nowUtc();
       if (updatedAt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-      const ready = await this.mutateState((state) => {
+      const ready = await this.mutateState<{ readonly attempt: MutableAttempt; readonly blockedReason: MeteringFailure | null } | undefined>((state) => {
         const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
         if (index < 0) return { state, result: undefined };
         const stored = state.attempts[index]!;
+        const fence = this.preEffectBlockReason(state, stored);
+        if (fence !== undefined) return { state, result: { attempt: stored, blockedReason: fence } };
         if ((stored.phase !== "reservation_pending" && stored.phase !== "reservation_unknown" && stored.phase !== "accounting_pending") ||
-            stored.reservationRetirement !== null || stored.supersededByAttemptId !== null ||
-            this.hasSiblingOwner(state, stored)) {
-          return { state, result: stored };
+            stored.reservationRetirement !== null) {
+          return { state, result: { attempt: stored, blockedReason: null } };
         }
         const updated = { ...stored, phase: "ready" as const, updatedAt };
         state.attempts[index] = updated;
-        return { state, result: updated };
+        return { state, result: { attempt: updated, blockedReason: null } };
       });
       if (ready === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-      const terminalAfterUpdate = this.preparationResult(ready);
+      if (ready.blockedReason !== null) return { status: "blocked", attemptId, reason: ready.blockedReason };
+      const terminalAfterUpdate = this.preparationResult(ready.attempt);
       if (terminalAfterUpdate !== undefined) return terminalAfterUpdate;
       return { status: "blocked", attemptId, reason: "budget_unknown" };
     }
@@ -1816,6 +1822,13 @@ export class FulfillmentMetering {
       left.scope.tenantId === right.scope.tenantId &&
       left.scope.projectId === right.scope.projectId &&
       left.logicalOperationId === right.logicalOperationId;
+  }
+
+  private preEffectBlockReason(state: MutableState, attempt: MutableAttempt): MeteringFailure | undefined {
+    if (attempt.reservationConflictEvidence !== null || attempt.reservationHistoryUncertain) return "budget_unknown";
+    if (attempt.reservationRetirement !== null || attempt.supersededByAttemptId !== null) return "attempt_not_ready";
+    if (this.hasSiblingOwner(state, attempt)) return "logical_operation_blocked";
+    return undefined;
   }
 
   private hasSiblingOwner(state: MutableState, attempt: MutableAttempt): boolean {
