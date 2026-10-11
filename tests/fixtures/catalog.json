@@ -1,0 +1,19 @@
+{
+  "catalogVersion": "td01-boundaries-v1",
+  "dependencyMode": "fixture",
+  "financialSchema": "none-local-route-boundaries-only",
+  "fixedAsOf": "2026-10-10T00:00:00Z",
+  "source": "tests/fixtures/td01.ts",
+  "sha256": "b7184dcbb8eb544f76ce68ca3eab522cafeca95e2844176fabf92dee3bf3955e",
+  "ids": [
+    "td01-loading",
+    "td01-empty",
+    "td01-error",
+    "td01-restricted",
+    "td01-unavailable",
+    "td01-extension",
+    "td01-missing-auth",
+    "td01-scope-race"
+  ],
+  "expected": "Safe route/state labels; no financial amount; restricted/missing data never becomes zero; stale reads never render."
+}
