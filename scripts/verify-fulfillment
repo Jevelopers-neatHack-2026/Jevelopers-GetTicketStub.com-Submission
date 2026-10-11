@@ -6,6 +6,7 @@ let allSharedShapes = [];
 let contractOwnership = {};
 let catalogAvailable = false;
 let catalogApiAvailable = false;
+let runtimeMeteringAvailable = false;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -17,8 +18,22 @@ try {
     && typeof catalog.discoverCatalogSnapshot === "function"
     && typeof catalog.evaluateCatalogSelection === "function"
     && typeof catalog.validateCatalogSnapshotBoundary === "function";
+  runtimeMeteringAvailable = typeof catalog.createRuntimeMeteringResolver === "function";
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
+}
+
+let simulatorFixtureVersion = null;
+let simulatorProviderId = null;
+let simulatorApiAvailable = false;
+try {
+  const simulator = await import("../dist/simulator.js");
+  simulatorFixtureVersion = simulator.SIMULATOR_FIXTURE_VERSION ?? null;
+  simulatorProviderId = simulator.SIMULATOR_PROVIDER_ID ?? null;
+  simulatorApiAvailable = typeof simulator.createDeterministicSimulator === "function" &&
+    typeof simulator.simulatorFixtureDigest === "function";
+} catch {
+  // Keep a missing simulator build machine-readable without masking argument errors.
 }
 
 function parseArgs(argv) {
@@ -41,7 +56,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
@@ -66,6 +81,10 @@ const securityBlockers = [
   "sandbox account access, a selected adapter, and genuine private provider fixtures are unavailable",
   "producer/consumer conformance and genuine release evidence remain missing"
 ];
+const mockBlockers = [
+  "the deterministic simulator and its runtime/metering fixtures are private development fixtures only",
+  "no selected provider sandbox adapter, account-tested behavior, or live mode is established"
+];
 const catalogBlockers = [
   "shared-contracts #4 has not accepted and published the canonical capability/print-spec shape, schema version, source revision, and fixture digest",
   "print-production #6 has not reviewed or acknowledged the catalog snapshot mapping and expected results",
@@ -74,6 +93,7 @@ const catalogBlockers = [
 
 let checks = [];
 let meteringReport = null;
+let mockReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -88,6 +108,7 @@ if (args.suite === "provider-matrix" && args.mode !== "simulated") failureReason
 if (args.suite === "security" && args.mode !== "simulated") failureReasons.push("security_suite_requires_simulated_mode");
 if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(args.mode)) failureReasons.push("catalog_suite_requires_simulated_mode");
 if (args.suite === "metering" && args.mode !== "simulated") failureReasons.push("metering_fixture_suite_requires_simulated_mode");
+if (args.suite === "mock" && args.mode !== "simulated") failureReasons.push("mock_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -151,6 +172,22 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("catalog_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "mock" && args.mode === "simulated") {
+  if (!catalogAvailable || !runtimeMeteringAvailable || !simulatorApiAvailable) failureReasons.push("mock_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runMockTests } = await import("./run-mock-tests.mjs");
+      mockReport = runMockTests();
+      checks = mockReport.results ?? [];
+      if (mockReport.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_mock_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("mock_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -195,6 +232,8 @@ const result = {
         ? "local_private_security_policy_suite"
         : args.suite === "catalog"
           ? "local_private_catalog_fixture_suite"
+        : args.suite === "mock"
+          ? "local_private_mock_simulator_suite"
           : args.suite === "metering"
             ? "local_private_metering_fixture_suite"
             : "local_private_fixture_contract_suite"
@@ -204,6 +243,7 @@ const result = {
   blockers: [
     ...blockers,
     ...(args.suite === "catalog" ? catalogBlockers : []),
+    ...(args.suite === "mock" ? mockBlockers : []),
     ...(args.suite === "provider-matrix" ? [
       "print-production has not selected and approved an actual Prodigi SKU and print specification",
       "destination and shipping method have not been selected or approved",
@@ -226,6 +266,27 @@ const result = {
     expectedResultsMatch: false
   },
   providerMatrix: args.suite === "provider-matrix" ? providerEnvironmentMatrix : null,
+  ...(args.suite === "mock" ? {
+    mockAssessment: {
+      schemaVersion: "fulfillment-mock-assessment/1",
+      evidenceScope: "private_offline_simulated_runtime_and_outbox_fixtures_only",
+      completion: "partial",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      fixtureVersion: simulatorFixtureVersion,
+      providerId: simulatorProviderId,
+      billingMode: "simulated",
+      runtimeMeteringOutbox: "private_local_durable_json_store_with_synthetic_contract_and_usage_ports",
+      sandboxReady: false,
+      liveEnabled: false,
+      externalProviderCalls: mockReport?.externalProviderCalls ?? 0,
+      blockers: mockBlockers
+    }
+  } : {}),
   ...(args.suite === "catalog" ? {
     catalogAssessment: {
       schemaVersion: "fulfillment-catalog-assessment/1",
@@ -358,6 +419,7 @@ if (args["evidence-dir"] !== undefined) {
       ...blockers,
       ...(args.suite === "security" ? securityBlockers : []),
       ...(args.suite === "catalog" ? catalogBlockers : []),
+      ...(args.suite === "mock" ? mockBlockers : []),
       ...failureReasons
     ];
     if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";

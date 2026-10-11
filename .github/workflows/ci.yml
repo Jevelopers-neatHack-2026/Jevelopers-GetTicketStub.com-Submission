@@ -49,3 +49,6 @@ jobs:
 
       - name: Verify the simulated metering and outbox suite
         run: npm run verify:metering
+
+      - name: Verify the deterministic simulated runtime
+        run: npm run verify:mock
