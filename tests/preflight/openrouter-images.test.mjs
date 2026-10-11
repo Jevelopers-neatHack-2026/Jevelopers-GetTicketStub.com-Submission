@@ -314,7 +314,7 @@ test('billable dispatch exists only through a trusted host port and re-checks th
   const input = billable('image_edit');
   const prepared = await composed.prepare(input);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].purpose, 'authorized_billable_operation', 'the OpenAI billable purpose');
+  assert.equal(calls[0].purpose, 'authorized_billable_operation', 'billable operations resolve the authorized_billable_operation purpose');
   assert.equal(calls[0].grant_ref, GRANT);
   assert.ok(!JSON.stringify(prepared).includes(TOKEN_CANARY), 'the credential is not in the value the runner holds');
   assert.deepEqual(await composed.dispatch(dispatchInput(input, prepared)), { host: 'result' });
@@ -420,7 +420,8 @@ test('billable dispatch requires a native runner signal and combines it with the
 
   const proxiedCaller = new AbortController();
   const proxiedSignal = new Proxy(proxiedCaller.signal, {});
-  assert.deepEqual(await adapter.dispatch(dispatchInput(input, prepared, proxiedSignal)), { host: 'result' },
+  const proxiedPrepared = await adapter.prepare(input);
+  assert.deepEqual(await adapter.dispatch(dispatchInput(input, proxiedPrepared, proxiedSignal)), { host: 'result' },
     'Node accepts a proxy over a genuine native signal through its native composition API');
   assert.ok(hostSignals[1] instanceof AbortSignal, 'the host receives the native composite, not the caller proxy');
   proxiedCaller.abort();
@@ -706,7 +707,8 @@ test('OpenRouter generation and edit are separate cells with independent evidenc
 
 test('the metadata observation never supplies permission or quota: the capability verifier decides, and a live adapter cannot run in a mock run', async () => {
   const { fetchImpl, requests } = interceptedFetch();
-  const real = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl });
+  const fixtureNow = new Date(Date.now() + 5000).toISOString();
+  const real = createOpenRouterImagesAdapter({ now: () => Date.parse(fixtureNow), credentialPort: credentialPort(), fetchImpl });
   const unknownVerifier = (input) => ({
     decision: 'unknown', evidence_mode: 'mock', cell_id: input.cell_id, owner_role: input.owner_role, operation_kind: input.operation_kind,
     target_binding: input.target_binding, scope: input.scope, deadline_at: input.deadline_at,
@@ -715,7 +717,7 @@ test('the metadata observation never supplies permission or quota: the capabilit
     evidence: pinned('cap'), owner_evidence: { ...pinned('owner'), owner_role: input.owner_role }, protocol: pinned('protocol'),
   });
   const fixture = createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter', capabilityDecision: unknownVerifier,
-    now: new Date(Date.now() + 5000).toISOString() });
+    now: fixtureNow });
   // A mock-labeled wrapper stands in for the real adapter's observation; the runner must still ignore its permission/quota.
   // The wrapper deliberately claims every positive value the observation shape allows. If the runner trusted the
   // adapter for permission or quota, this test would fail.
@@ -731,7 +733,7 @@ test('the metadata observation never supplies permission or quota: the capabilit
   assert.equal(result.capability_observation.quota, 'unknown');
   // When the capability verifier cannot answer, the retained observation is the adapter's: it must still carry unknown.
   const failing = createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter',
-    capabilityDecision: () => { throw new Error('verifier unavailable'); }, now: new Date(Date.now() + 5000).toISOString() });
+    capabilityDecision: () => { throw new Error('verifier unavailable'); }, now: fixtureNow });
   const unverified = await executeAuthorizedAccessCell({ ...failing.args,
     adapter: { ...failing.adapter, evidence_mode: 'mock', inspect: wrapped.inspect } });
   assert.equal(unverified.status, 'unknown');
@@ -744,8 +746,69 @@ test('the metadata observation never supplies permission or quota: the capabilit
   assert.equal(fixture.calls.reserve, 0);
   assert.equal(requests.length, 4, 'two inspections of two requests each');
 
-  const live = await executeAuthorizedAccessCell({ ...createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter' }).args, adapter: real });
+  const live = await executeAuthorizedAccessCell({ ...createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter', now: fixtureNow }).args, adapter: real });
   assert.equal(live.status, 'blocked');
   assert.equal(live.reason_code, 'mock_requires_fixture_ports');
   assert.equal(requests.length, 4, 'the live adapter is not invoked by a mock run');
+});
+
+test('a clock that turns non-finite after construction fails closed on prepare, dispatch, and inspect without reaching a host port', async () => {
+  for (const bad of [NaN, Infinity, undefined, 'x']) {
+    let reading = Date.parse('2031-03-04T05:06:07.000Z');
+    const badClock = () => reading;
+    const { fetchImpl, requests } = interceptedFetch();
+    const hostCalls = [];
+    const adapter = createOpenRouterImagesAdapter({ now: badClock, credentialPort: grantCredentialPort(), fetchImpl, dispatchPort: {
+      async prepare() { hostCalls.push('prepare'); return {}; },
+      async dispatch() { hostCalls.push('dispatch'); return {}; } } });
+    const input = billable('image_generation', { deadline_at: new Date(reading + 120_000).toISOString() });
+    const prepared = await adapter.prepare(input);
+    reading = bad;
+    await assert.rejects(adapter.prepare(input), (error) => error.code === 'adapter_unavailable', `prepare ${String(bad)}`);
+    await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'adapter_unavailable', `dispatch ${String(bad)}`);
+    await assert.rejects(inspect(adapter), (error) => error.code === 'adapter_unavailable', `inspect ${String(bad)}`);
+    assert.deepEqual(hostCalls, ['prepare'], 'only the prepare made while the clock was valid reached the host');
+    assert.equal(requests.length, 0, 'inspect sent no metadata request');
+  }
+});
+
+test('the host dispatch signal combines a required runner cancellation signal with the deadline timeout', async () => {
+  const seen = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(input) { seen.push(input.signal); return {}; } } });
+  const input = billable();
+  const caller = new AbortController();
+  await adapter.dispatch({ ...input, prepared: await adapter.prepare(input), metering: { signal: caller.signal } });
+  assert.equal(seen[0].aborted, false);
+  caller.abort();
+  assert.equal(seen[0].aborted, true, 'aborting the caller signal aborts the host-facing signal');
+  await assert.rejects(adapter.dispatch({ ...input, prepared: await adapter.prepare(input) }),
+    (error) => error.code === 'invalid_abort_signal');
+  await assert.rejects(adapter.dispatch({ ...input, prepared: await adapter.prepare(input), metering: { signal: {} } }),
+    (error) => error.code === 'invalid_abort_signal');
+  assert.equal(seen.length, 1, 'missing and invalid caller signals never reach the host');
+  const short = billable('image_generation', { deadline_at: new Date(clock() + 5).toISOString() });
+  await adapter.dispatch({ ...short, prepared: await adapter.prepare(short), metering: { signal: new AbortController().signal } });
+  const keepAlive = setTimeout(() => {}, 5_000);
+  await new Promise((resolve) => seen[1].addEventListener('abort', resolve, { once: true }));
+  clearTimeout(keepAlive);
+  assert.equal(seen[1].aborted, true, 'the host-facing signal aborts at the approved deadline');
+});
+
+test('a prepared value is single use and bound to the scope it was prepared for', async () => {
+  let dispatches = 0;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return {}; } } });
+  const input = billable();
+  input.scope = { ...input.scope };
+  const prepared = await adapter.prepare(input);
+  await assert.rejects(adapter.dispatch({ ...input, prepared, scope: { ...input.scope, project_ref: 'project:other' } }),
+    (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 0, 'a scope mismatch never reaches the host and does not consume the value');
+  input.scope.project_ref = 'project:other';
+  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
+  input.scope.project_ref = fixtureScope.project_ref;
+  await adapter.dispatch({ ...input, prepared });
+  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 1, 'the replay was refused before the host port');
 });

@@ -43,6 +43,12 @@ const USAGE_DETAIL_FIELDS = Object.freeze({
   completion_tokens_details: Object.freeze({ target: "output_tokens_details",
     keys: Object.freeze(["audio_tokens", "image_tokens", "reasoning_tokens"]) }),
 });
+// Disjoint groups of detail counters whose sum must not exceed the parent (see the sum check in the normalizer).
+const SUMMED_DETAIL_GROUPS = Object.freeze({
+  input_tokens_details: Object.freeze([Object.freeze(["cached_tokens", "cache_write_tokens"]),
+    Object.freeze(["audio_tokens", "file_tokens", "video_tokens"])]),
+  output_tokens_details: Object.freeze([Object.freeze(["audio_tokens", "image_tokens"])]),
+});
 const USAGE_ROOT_KEYS = Object.freeze(["prompt_tokens", "completion_tokens", "total_tokens", "cost", "cost_details", "is_byok",
   ...Object.keys(USAGE_DETAIL_FIELDS)]);
 // Documented ImageGenerationUsage keys that are deliberately not mapped. Only these fixed names may appear in a
@@ -155,7 +161,12 @@ function validateDescriptorBinding(capabilities, supported) {
   });
   const { n, input_references: references } = supported;
   if (n && !(n.min <= 1 && n.max >= 1)) reject();
+  // Generation sends no references, so a generation-capable profile cannot satisfy a required minimum.
+  if (references && capabilities.generation && references.min >= 1) reject();
   if (references && capabilities.edit !== false) {
+    // Fail closed on min > 1: the adapter's smallest edit is the parent alone (1 image) and it sends the declared
+    // references only when the caller supplies them, so it cannot promise to satisfy a larger required minimum.
+    // Such a profile must declare edit:false.
     // One parent is the smallest edit request, and the declared maximum may not exceed what the provider accepts.
     if (references.max < 1 || references.min > 1 || capabilities.edit.max_input_references > references.max) reject();
   }
@@ -272,6 +283,14 @@ export function normalizeOpenRouterImageUsage(raw, identities = {}) {
       const counters = Object.values(safeDetails);
       if (counters.length > 0 && parent === undefined) missing.add(`usage.${target}.parent_missing`);
       else if (parent !== undefined && counters.some((counter) => counter > parent)) missing.add(`usage.${target}.exceeds_parent`);
+      // Sum check, mirroring src/telemetry/usage.mjs (its OPENAI_RESPONSES profile sums cached_tokens and
+      // cache_write_tokens against input_tokens). Only counters that are disjoint parts of the parent are summed:
+      // cache read and cache write are mutually exclusive; modality counters partition the tokens by media type.
+      // Cache and modality counters can describe the same tokens (cached audio), and reasoning_tokens is a
+      // purpose split that can overlap any modality, so those are never added together (no false positives).
+      // The sum is only reported (fixed finding, no values); counters are never clamped.
+      if (parent !== undefined && SUMMED_DETAIL_GROUPS[target].some((group) =>
+        group.reduce((sum, key) => sum + (safeDetails[key] ?? 0), 0) > parent)) missing.add(`usage.${target}.sum_exceeds_parent`);
     }
     if (Object.hasOwn(rawData, "is_byok")) {
       if (typeof rawData.is_byok === "boolean") result.is_byok = rawData.is_byok;

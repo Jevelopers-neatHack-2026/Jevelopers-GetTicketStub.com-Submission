@@ -20,6 +20,9 @@ import { canonicalHash } from '../contracts/validation.mjs';
 // combining runner cancellation with the bounded deadline, run the metering fence calls (recordTransportAttempt, authorizeTransport,
 // assertTransportReady) in order, and never log or return the token. The credential is never placed in the
 // prepared value the runner sees.
+// The host must also verify that the rendered prompt matches the pinned prompt hash and, for edits, that the source
+// asset bytes and media type match the pinned asset hash and MIME type; this adapter does not receive those bytes.
+// Every clock read must be finite and fails closed before credential, fetch, or host-port work.
 
 export const OPENROUTER_PREFLIGHT_SERVICE = 'openrouter';
 export const OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT = 'https://openrouter.ai/api/v1/images';
@@ -41,17 +44,17 @@ function error(code, message) {
   return new AccessPreflightError(code, message);
 }
 
-function finiteNow(now) {
+function readClock(now) {
   let value;
-  try { value = now(); } catch { /* reported below */ }
-  if (!Number.isFinite(value)) {
-    throw error('adapter_unavailable', 'The clock stopped returning a finite number of milliseconds.');
+  try { value = now(); } catch { value = undefined; }
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw error('adapter_unavailable', 'The clock option must return a finite number of milliseconds.');
   }
   return value;
 }
 
 function remainingUntil(deadlineAt, now) {
-  const remaining = Date.parse(deadlineAt) - finiteNow(now);
+  const remaining = Date.parse(deadlineAt) - readClock(now);
   if (!Number.isFinite(remaining) || remaining <= 0) {
     throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
   }
@@ -199,7 +202,7 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       throw error('credential_unavailable', 'Trusted credential resolver did not return a usable bearer token.');
     }
     safeCredentialEvidence(resolved.evidence);
-    const checkedAt = finiteNow(now);
+    const checkedAt = readClock(now);
     const expiresAt = Date.parse(resolved.expires_at);
     const deadline = deadlineAt ? Date.parse(deadlineAt) : undefined;
     if (typeof resolved.expires_at !== 'string' || !Number.isFinite(expiresAt)
@@ -278,9 +281,10 @@ async function metadataFetch(fetchImpl, url, headers) {
  * this module never sends a paid request by itself. The built-in catalog check is not entitlement.
  */
 export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispatchPort, now = Date.now }) {
-  if (typeof now !== 'function' || !Number.isFinite(now())) {
+  if (typeof now !== 'function') {
     throw error('adapter_unavailable', 'The clock option must be a function returning a finite number of milliseconds.');
   }
+  readClock(now);
   if (!credentialPort || credentialPort.evidence_mode !== 'live' || typeof credentialPort.resolveCredential !== 'function') {
     throw error('credential_unavailable', 'A trusted account/project-bound credential resolver is required.');
   }
@@ -296,7 +300,9 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
 
     async inspect({ run_id, cell_id, target, scope }) {
       validateOpenRouterImageTarget(cell_id, target);
-      const token = await resolveCredential(credentialPort, { scope, target, now }).catch(() => {
+      readClock(now);
+      const token = await resolveCredential(credentialPort, { scope, target, now }).catch((cause) => {
+        if (cause instanceof AccessPreflightError && cause.code === 'adapter_unavailable') throw cause;
         throw error('credential_unavailable', 'Read-only account authentication could not be checked.');
       });
       const catalogUrl = openRouterCatalogEndpoint(target.model);
@@ -357,7 +363,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         // Catalog presence and a valid key are not entitlement: only the capability verifier can establish these.
         operation_permission: 'unknown',
         quota: 'unknown',
-        checked_at: new Date(now()).toISOString(),
+        checked_at: new Date(readClock(now)).toISOString(),
         evidence: {
           ref: `${run_id}:${cell_id}:openrouter-key-and-catalog`,
           sha256: digest(Buffer.from(JSON.stringify({ key_status: keyStatus, catalog_status: catalogStatus,
@@ -375,7 +381,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       validateOpenRouterImageTarget(input.cell_id, input.target);
       if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
         || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
-        || Date.parse(input.deadline_at) <= finiteNow(now)) {
+        || Date.parse(input.deadline_at) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
       const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
@@ -387,7 +393,8 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       // Host preparation is also asynchronous. Never mint a dispatchable value after the grant's deadline.
       remainingUntil(input.deadline_at, now);
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, grant_ref: input.grant_ref,
+      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target,
+        scope: Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref }), grant_ref: input.grant_ref,
         deadline_at: input.deadline_at, credential, hostPrepared });
       return prepared;
     };
@@ -398,10 +405,14 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       validateOpenRouterImageTarget(input.cell_id, input.target);
       const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
       if (!state || state.cell_id !== input.cell_id || state.target !== input.target
-        || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at) {
-        throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, and target.');
+        || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at
+        || !isRecord(input.scope) || input.scope.account_ref !== state.scope?.account_ref
+        || input.scope.project_ref !== state.scope?.project_ref) {
+        throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, scope, and target.');
       }
       const signal = boundedTransportSignal(state.deadline_at, runnerCancellationSignal(input), now);
+      // A correctly bound and validated prepared value is single use; consume it before the host port can run.
+      preparedState.delete(input.prepared);
       return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
         signal });
     };
