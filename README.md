@@ -28,6 +28,7 @@ Implemented locally and exported from the package root:
 - **Security helpers (FC-11).** Provider-neutral helpers for scoped reference access, payload minimization, safe diagnostics, injected secret and asset ports, tombstones and callback hints, with synthetic policy fixtures. They are not wired to an adapter or the submit path. See [security](docs/security.md).
 - **Private fixture slices.** Offline provider matrix (FC-02, [provider matrix](docs/provider-matrix.md)), catalog normalizer (FC-03, [catalog](docs/catalog.md)), quote normalizer (FC-04, [quotes](docs/quotes.md)), local JSON attempt store (partial FC-06, [attempt store](docs/attempt-store.md)) and metering outbox (FC-10, [metering](docs/metering.md)). Their formats are private development shapes, not shared contracts.
 - **Prodigi Product Details wire decoder.** The package exports a pure private response projection and relative path helper, covered by synthetic offline fixtures. It performs no HTTP request, product selection, or orderability decision; issue 15's full acceptance still includes the supported cancellation outcome. See [Product Details](docs/prodigi-product-details.md).
+- **Bounded PNG byte inspection (FC-08, partial).** `inspectPngBytes` reports exact input-byte hash/length and limited facts for one static RGB8 noninterlaced PNG profile, with CRC and bounded zlib checks. Six synthetic renderer PNGs are diagnostic only and have `handoffEligible: false`; unsupported formats/profiles fail closed. This does not validate a production bundle, canonical binding, print eligibility, approval, or dispatch. See [PNG inspection](docs/png-inspection.md).
 - **Status inbox (FC-07, partial).** `LocalStatusStore` records scoped status observations, a derived projection, conflicts, poll work and an at-least-once outbox in the private `fc-status-store/2` format (format 1 is rejected). Its mapping, polling and correction policies, trusted-lookup port and outbox are development fixtures. The local commit marker detects some inconsistent loss but cannot authenticate a coordinated rollback or complete directory loss. [Issue 13](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/13) stays open: the shared-contracts #27 mapping, authenticated provider lookup and callbacks, application consumer conformance, and finance, sandbox and release acceptance are pending. See [status](docs/status.md).
 - **Quote comparison (FC-09, partial).** `comparePrivateQuotes` projects two or more private quote snapshots, preserves exact source terms and reports unknown or incompatible bases. It does not rank, choose a provider or submit an order. Currentness uses one captured trusted clock value, so a consumer must recheck at use time. [Issue 14](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/14) stays open: the shared-contracts #25 mapping and application consumer review are pending. See [comparison](docs/comparison.md).
 
@@ -48,7 +49,7 @@ Requires Node.js 24.15.0 ([`.node-version`](.node-version), `engines`) and npm 1
 
 ```sh
 npm ci      # locked install; may need registry access
-npm test    # builds dist/ and runs all 11 local fixture suites
+npm test    # builds dist/ and runs all 12 local fixture suites
 ```
 
 No test calls a provider or another repository.
@@ -70,8 +71,9 @@ Each `verify:*` script runs `scripts/verify-fulfillment` in simulated mode again
 | `npm run verify:status` | Status inbox (FC-07, partial) | `evidence/FC-07-STATUS` |
 | `npm run verify:comparison` | Quote comparison (FC-09, partial) | `evidence/FC-09-COMPARISON` |
 | `npm run verify:prodigi-product-details` | Private Product Details wire fixtures | `evidence/FC-PRODIGI-PRODUCT-DETAILS` |
+| `npm run verify:png-inspection` | Bounded private PNG byte-observation fixtures (FC-08, partial) | `evidence/FC-08-10-PNG` |
 
-Single suites: `npm run test:catalog` (needs an existing build); `test:quote`, `test:attempt-store`, `test:status`, `test:comparison` and `test:prodigi-product-details` build first. `--suite sandbox` and `--suite release` always fail until an adapter, accepted pins and conformance evidence exist. The [`foundation-ci`](.github/workflows/ci.yml) workflow runs the pinned toolchain check, `npm ci`, `npm test` and all 11 `verify:*` commands with read-only permissions and no secrets. Result fields and blockers: [runtime](docs/runtime.md#runtime-and-commands).
+Single suites: `npm run test:catalog` (needs an existing build); `test:quote`, `test:attempt-store`, `test:status`, `test:comparison`, `test:prodigi-product-details` and `test:png-inspection` build first. `--suite sandbox` and `--suite release` always fail until an adapter, accepted pins and conformance evidence exist. The [`foundation-ci`](.github/workflows/ci.yml) workflow runs the pinned toolchain check, `npm ci`, `npm test` and all 12 `verify:*` commands with read-only permissions and no secrets. The PNG wrapper writes only its fixed git-ignored `evidence/FC-08-10-PNG/result.json` path and rejects a substituted or symlinked evidence location. Result fields and blockers: [runtime](docs/runtime.md#runtime-and-commands).
 
 ## Docs
 

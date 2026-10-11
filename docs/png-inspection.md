@@ -12,11 +12,11 @@ The six pinned PNG fixtures are synthetic diagnostic renderer outputs copied fro
 
 The implementation targets the repository’s pinned Node.js 24.15.0 runtime and uses its synchronous zlib `maxOutputLength` option. The format rules are based on the [W3C PNG Third Edition](https://www.w3.org/TR/png-3/), including its chunk CRC and ordering rules, contiguous but arbitrarily split IDAT stream, and permitted unused trailing bytes in the final IDAT data. Node API behavior is documented in the [Node.js 24.15.0 zlib reference](https://nodejs.org/download/release/v24.15.0/docs/api/zlib.html).
 
-The focused suite imports the compiled module and can be run after compilation:
+The package root exports `inspectPngBytes`, `PNG_INSPECTION_LIMITS`, and the readonly result types. The focused suite imports the compiled module and emits a newline-terminated JSON report with one stable ID for each semantic case. The strict runner rejects malformed, partial, duplicate, extra, reordered, inconsistent, failed, skipped, signaled, nonzero, or stderr-producing child runs. Run it through the package script after installation:
 
 ```sh
-npm run build
-node tests/png-inspection-suite.mjs
+npm run test:png-inspection
+npm run verify:png-inspection
 ```
 
-This suite is limited to the new observer and fixtures. It does not run the legacy integration, wrapper, provider, or fulfillment-verifier suites.
+The verifier runs only in `simulated` mode and writes its result to the fixed, git-ignored `evidence/FC-08-10-PNG/result.json` destination. It rejects a substituted or symlinked destination and fails if the evidence write fails, while retaining the executed case records in its stdout failure result. This is a local observer test only; it does not run a provider or the legacy integration suites. It cannot validate an approved bundle, accepted canonical binding, print eligibility, or dispatch.
