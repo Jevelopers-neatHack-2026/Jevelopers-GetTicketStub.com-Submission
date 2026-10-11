@@ -23,3 +23,16 @@ const wrongUnit: CompositionControlDraft = { categories:{}, exact:{text_size:{va
 // @ts-expect-error complete layer/preview identities are required by neutral revision
 const invented: CreativeCompositionRevision = { revision_id:'invented' };
 void [wrongCategory,purchase,unsupported,wrongUnit,invented];
+
+import { assertCompositionHistory, type CompositionRenewAction, type CompositionHistoryView, type CompositionControlsAdapter } from '../../../src/controls/index.mjs';
+declare const adapter: CompositionControlsAdapter;
+const renew: CompositionRenewAction = { action_version:'creative-composition-renew/1.0',action_id:'renew:typed',intent:'renew',review_sha256:projection.projection_sha256 };
+adapter.apply({actor_id:'actor',tenant_id:'tenant',project_id:'project'},renew);
+const historyAny: IsAny<ReturnType<typeof assertCompositionHistory>> = false; void historyAny;
+declare const history: CompositionHistoryView;
+if (history.ok) { const noApproval: false = history.approval; void noApproval; }
+// @ts-expect-error renewal does not admit a draft or geometry operations
+const authorityEdit: CompositionRenewAction = { ...renew, draft:{categories:{name_size:'large'},exact:{}} };
+// @ts-expect-error renewal remains a separately versioned, explicit action
+const automatic: CompositionRenewAction = { ...renew, intent:'apply' };
+void [authorityEdit,automatic];

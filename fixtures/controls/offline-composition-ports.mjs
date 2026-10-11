@@ -80,6 +80,25 @@ export function attachOfflineComposition(ports, { store, policy, counters, wait,
       const revision = createCompositionRevision(raw, { trustedScope: input.scope, previewBytes: bytes, nowMs: now() }).revision;
       return { contract: 'CreativeCompositionSource', schema_version: '1.1', scope: input.scope, revision, preview_bytes: bytes };
     },
+    async resolveRevalidation(input) {
+      counters.composition_revalidations = (counters.composition_revalidations ?? 0) + 1;
+      await wait('composition-renewal-owner'); assertAuthority();
+      const base = input.base_revision, research = input.research_package;
+      const asset_rights = base.dependencies.asset_rights.map(right => {
+        const asset = research.assets.items.find(x => x.asset_id === right.asset_id);
+        if (!asset || !research.permissions.items.some(x => x.asset_id === right.asset_id && x.action === right.action && x.status === 'granted')) throw new Error('MOCK fresh rights denied');
+        return { ...right, source_ref: asset.source_id, content_hash: asset.content_hash, package_id: research.package_id, package_hash: input.package_hash,
+          evidence_ref: `rights:MOCK:renew:${input.action_id}:${right.action}`, ...fresh() };
+      });
+      const { policy_sha256: _hash, ...priorPolicy } = base.dependencies.edit_policy;
+      const policyBody = { ...priorPolicy, selection_revision: input.selection_revision,
+        locked_layer_ids: [...new Set([...priorPolicy.locked_layer_ids, ...(policy.locked_layer_ids ?? [])])].sort(), ...fresh() };
+      return { contract: 'CreativeCompositionRevalidationEvidence', schema_version: '1.0', scope: input.scope,
+        composition_id: input.composition_id, expected_current: input.expected_current, candidate_revision_id: input.candidate_revision_id,
+        brief_hash: input.brief_hash, facts_revision_id: research.event_id, facts_sha256: canonicalHash(input.brief.facts), package_id: research.package_id, package_sha256: input.package_hash,
+        design_version_id: input.selected_design.design_version_id, design_version_sha256: input.selected_design.design_hash, selection_revision: input.selection_revision,
+        asset_rights, edit_policy: { ...policyBody, policy_sha256: canonicalHash(policyBody) } };
+    },
     async readApprovedAssetBytes(input) { await wait('composition-rights'); assertAuthority(); return { asset_id: input.asset_id, content_hash: fixtureLogoHash, mime_type: 'image/png', bytes: Uint8Array.from(fixtureLogoBytes) }; },
     async preparePreview(input) {
       assertAuthority(); await wait('composition-preview'); assertAuthority();

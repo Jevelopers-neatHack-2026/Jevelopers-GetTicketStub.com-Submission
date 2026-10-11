@@ -15,6 +15,8 @@ const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/
   '/public-result.mjs': ['../../src/controls/public-result.mjs', 'text/javascript'],
   '/inspection-inputs.json': ['../../fixtures/controls/inspection-presentation-inputs.json', 'application/json'] };
 Object.assign(files, { '/composition.html': ['composition.html', 'text/html'], '/composition-app.mjs': ['composition-app.mjs', 'text/javascript'], '/composition-view.mjs': ['../../src/controls/composition-view.mjs', 'text/javascript'] });
+// This explicit MOCK switch tests trusted principal isolation, not application authentication.
+const compositionPrincipal = req => req.headers['x-mock-controls-principal'] === 'other-tenant' ? { ...fixturePrincipal, tenant_id: 'other_fixture_tenant' } : req.headers['x-mock-controls-principal'] === 'other-actor' ? { ...fixturePrincipal, actor_id: 'other_fixture_actor' } : fixturePrincipal;
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
 const server = createServer(async (req, res) => {
@@ -28,10 +30,16 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
-    if (req.method === 'GET' && path === '/api/composition/current') return json(res, { view: await host.composition.current(fixturePrincipal), counters: host.counts() });
+    if (req.method === 'GET' && path === '/api/composition/history') {
+      const query = new URL(req.url, 'http://localhost').searchParams, options = {};
+      if (query.has('limit')) options.limit = Number(query.get('limit'));
+      if (query.has('after_revision_id')) options.after_revision_id = query.get('after_revision_id');
+      return json(res, { view: await host.composition.history(compositionPrincipal(req), options), counters: host.counts() });
+    }
+    if (req.method === 'GET' && path === '/api/composition/current') return json(res, { view: await host.composition.current(compositionPrincipal(req)), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/composition/preview') {
       const query = new URL(req.url, 'http://localhost').searchParams;
-      const value = await host.composition.preview(fixturePrincipal, Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k => [k, query.get(k)])));
+      const value = await host.composition.preview(compositionPrincipal(req), Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k => [k, query.get(k)])));
       if (!value) return json(res, { code: 'permission' }, 403);
       res.writeHead(200, { 'Content-Type': value.metadata.mime_type, 'Content-Length': value.bytes.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(value.bytes);
     }
@@ -51,10 +59,10 @@ const server = createServer(async (req, res) => {
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
-    if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(fixturePrincipal, payload), counters: host.counts() });
-    if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(fixturePrincipal, payload.action_id), counters: host.counts() });
-    if (path === '/api/composition/retry') return json(res, { result: await host.composition.retry(fixturePrincipal, payload.action_id), counters: host.counts() });
-    if (path === '/api/composition/cancel') return json(res, { result: await host.composition.cancel(fixturePrincipal, payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(compositionPrincipal(req), payload), counters: host.counts() });
+    if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(compositionPrincipal(req), payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/retry') return json(res, { result: await host.composition.retry(compositionPrincipal(req), payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/cancel') return json(res, { result: await host.composition.cancel(compositionPrincipal(req), payload.action_id), counters: host.counts() });
     if (path === '/api/artwork/retry') return json(res, { ...mode, ...await host.adapter.retryExisting(fixturePrincipal, payload.action_id), counters: host.counts() });
     if (path === '/api/artwork/status') return json(res, { ...mode, ...await host.adapter.readExisting(fixturePrincipal, payload.action_id), counters: host.counts() });
     if (path === '/api/inspection') return json(res, { view: await host.inspection.start(fixturePrincipal, payload), counters: host.counts() });

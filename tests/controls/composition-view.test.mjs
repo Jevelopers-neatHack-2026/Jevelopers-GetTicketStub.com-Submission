@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
-import { assertCompositionCurrent, assertCompositionCompletion, assertCompositionProjection, verifyCompositionProjectionHash } from '../../src/controls/composition-view.mjs';
+import { assertCompositionCurrent, assertCompositionCompletion, assertCompositionProjection, verifyCompositionProjectionHash, assertCompositionHistory, assertCompositionHistoryIdentity } from '../../src/controls/composition-view.mjs';
 import { assertRenderableSchema } from '../../src/controls/schema.mjs';
 import { validateCompositionControlPolicy } from '../../src/controls/composition-projection.mjs';
 import { fixtureCompositionPolicy } from '../../fixtures/controls/composition-policy.mjs';
@@ -33,7 +33,15 @@ test('deep view allowlists reject hostile extras, previews, geometry, swaps and 
 });
 test('trusted policy is closed, bounded and unambiguous rather than a guessed mapping',()=>{
   const p=fixtureCompositionPolicy(1000);assert.equal(validateCompositionControlPolicy(p).schema_version,'1.0');
-  for(const mutate of [x=>{x.layouts.centered={x_milli:900,y_milli:0,width_milli:200};},x=>{x.layouts.stacked_name=x.layouts.stacked_balanced;},x=>{x.targets.logo_asset_id='https://private.invalid';},x=>{x.html='run';},x=>{x.size_bounds.units=['em'];},x=>{x.checked_at=x.expires_at;}]){const input=structuredClone(p);mutate(input);assert.throws(()=>validateCompositionControlPolicy(input));}
+  for(const mutate of [x=>{x.layouts.centered={x_milli:900,y_milli:0,width_milli:200};},x=>{x.layouts.stacked_name=x.layouts.stacked_balanced;},x=>{x.targets.logo_asset_id='https://private.invalid';},x=>{x.html='run';},x=>{x.size_bounds.units=['em'];},x=>{x.size_bounds.max_value='24';},x=>{x.size_bounds.units=['px'];},x=>{x.checked_at=x.expires_at;}]){const input=structuredClone(p);mutate(input);assert.throws(()=>validateCompositionControlPolicy(input));}
   const hostile=structuredClone(p);let hooks=0;Object.defineProperty(hostile.name_sizes,'large',{get(){hooks++;return p.name_sizes.large;},enumerable:true});assert.throws(()=>validateCompositionControlPolicy(hostile));assert.equal(hooks,0);
   assert.throws(()=>assertCompositionProjection({schema_version:'creative-composition-controls/1.0'}));
+});
+
+
+test('actual metadata history validates; preview access, forged review, duplicate rows and accessor inputs reject',async t=>{
+  const {host}=await context(t), history=await host.composition.history(fixturePrincipal);
+  assert.equal(assertCompositionHistory(history).status,'identity_only');assert.equal(assertCompositionHistoryIdentity(history.identity).current.revision_id,history.review.base.current_revision_id);
+  for(const mutate of [x=>{x.identity.preview_access={bytes_base64:'AAAA'};},x=>{x.identity.revisions[0].preview_sha256='private';},x=>{x.identity.revisions.push(x.identity.revisions[0]);},x=>{x.review.base.current_revision_sha256=`sha256:${'a'.repeat(64)}`;},x=>{x.identity.current.approval=true;},x=>{x.identity.schema_version='2.0';}]){const input=structuredClone(history);mutate(input);assert.throws(()=>assertCompositionHistory(input));}
+  let hooks=0;const hostile=structuredClone(history);Object.defineProperty(hostile.identity,'current',{get(){hooks++;return history.identity.current;},enumerable:true});assert.throws(()=>assertCompositionHistory(hostile));assert.equal(hooks,0);
 });

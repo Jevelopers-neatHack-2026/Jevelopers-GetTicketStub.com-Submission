@@ -54,7 +54,7 @@ export function assertCompositionCurrent(value) {
     if(!exact(x,['ok','status','review','approval','purchase'])||!exact(x.review,['contract','schema_version','base','can_initialize','approval','purchase','review_sha256'])||
       x.review.contract!=='CreativeCompositionInitializationReview'||x.review.schema_version!=='1.0'||!common(x.review)||typeof x.review.can_initialize!=='boolean'||!digest(x.review.review_sha256)||
       !exact(x.review.base,['tenant_id','project_id','brief_id','brief_sha256','design_version_id','design_version_sha256','artwork_sha256','selection_revision'])||
-      !['tenant_id','project_id','brief_id','design_version_id'].every(k=>validId(x.review.base[k]))||!['brief_sha256','design_version_sha256','artwork_sha256'].every(k=>digest(x.review.base[k]))||!Number.isSafeInteger(x.review.base.selection_revision))deny();return x;
+      !['tenant_id','project_id','brief_id','design_version_id'].every(k=>validId(x.review.base[k]))||!['brief_sha256','design_version_sha256','artwork_sha256'].every(k=>digest(x.review.base[k]))||!Number.isSafeInteger(x.review.base.selection_revision)||x.review.base.selection_revision<1)deny();return x;
   }
   if(!x.ok&&['stale','unavailable'].includes(x.status)&&exact(x,['ok','status','code','approval','purchase'])&&['stale_version','unavailable','failed','integrity_error','permission_denied','scope_denied','conflict'].includes(x.code))return x;
   deny();
@@ -67,7 +67,50 @@ export function assertCompositionCompletion(value, action_id) {
       (x.parent_revision_id===null?x.parent_revision_sha256!==null:!validId(x.parent_revision_id)||!digest(x.parent_revision_sha256)))deny();x.preview=assertCompositionPreview(x.preview);
     if(['revision_id','revision_sha256','state_sha256'].some(k=>x[k]!==x.preview[k]))deny();return x;
   }
-  if(!x.ok&&['failed','stale','unknown'].includes(x.status)&&Object.keys(x).every(k=>['ok','status','code','action_id','backend_job_id','approval','purchase'].includes(k))&&
+  if(!x.ok&&['failed','stale','unknown','cancelled'].includes(x.status)&&Object.keys(x).every(k=>['ok','status','code','action_id','backend_job_id','approval','purchase'].includes(k))&&
       ['unavailable','stale_version','failed','conflict','cancelled','validation','invalid_request','unsupported_version','permission_denied','scope_denied','integrity_error'].includes(x.code)&& (x.backend_job_id===undefined||x.backend_job_id===null||validId(x.backend_job_id)))return x;
   deny();
+}
+
+
+/** Identity-only stale history never contains preview/access or approval claims. */
+export function assertCompositionHistoryIdentity(value) {
+  const x = snapshotControlJson(value);
+  if (!exact(x, ['contract','schema_version','status','current','selection_compatibility','revisions','has_more','next_after_revision_id']) ||
+      x.contract !== 'CreativeCompositionHistoryIdentity' || x.schema_version !== '1.0' || !['identity_only','not_initialized'].includes(x.status) ||
+      !['current','changed','different_design','unavailable'].includes(x.selection_compatibility) || !Array.isArray(x.revisions) || x.revisions.length > 20 || typeof x.has_more !== 'boolean') deny();
+  if (x.current !== null && (!exact(x.current, ['composition_id','revision_id','revision_sha256','design_version_id','design_version_sha256','selection_revision','updated_at']) ||
+      !['composition_id','revision_id','design_version_id'].every(k => validId(x.current[k])) || !digest(x.current.revision_sha256) || !digest(x.current.design_version_sha256) ||
+      !Number.isSafeInteger(x.current.selection_revision) || x.current.selection_revision < 1 || typeof x.current.updated_at !== 'string' || !Number.isFinite(Date.parse(x.current.updated_at)))) deny();
+  if (x.status === 'not_initialized' ? x.current !== null || x.revisions.length > 0 || x.has_more : x.current === null) deny();
+  const seen = new Set(); let previousTime = Infinity, previousId = '';
+  for (const r of x.revisions) {
+    if (!exact(r, ['revision_id','revision_sha256','parent_revision_id','parent_revision_sha256','design_version_id','design_version_sha256','created_at']) ||
+        !validId(r.revision_id) || seen.has(r.revision_id) || !digest(r.revision_sha256) || !validId(r.design_version_id) || !digest(r.design_version_sha256) ||
+        (r.parent_revision_id === null ? r.parent_revision_sha256 !== null : !validId(r.parent_revision_id) || !digest(r.parent_revision_sha256)) ||
+        typeof r.created_at !== 'string' || !Number.isFinite(Date.parse(r.created_at)) || Date.parse(r.created_at) > previousTime ||
+        Date.parse(r.created_at) === previousTime && r.revision_id.localeCompare(previousId) < 0 ||
+        x.current && (r.design_version_id !== x.current.design_version_id || r.design_version_sha256 !== x.current.design_version_sha256)) deny();
+    seen.add(r.revision_id); previousTime = Date.parse(r.created_at); previousId = r.revision_id;
+  }
+  if (x.has_more ? !x.revisions.length || x.next_after_revision_id !== x.revisions.at(-1).revision_id : x.next_after_revision_id !== null) deny();
+  return x;
+}
+export function assertCompositionHistory(value) {
+  const x = snapshotControlJson(value);
+  if (!common(x) || typeof x.ok !== 'boolean') deny();
+  if (!x.ok && exact(x, ['ok','status','code','approval','purchase']) && x.status === 'unavailable' && ['stale_version','unavailable','permission_denied','scope_denied','failed','unsupported_version'].includes(x.code)) return x;
+  if (!x.ok || !exact(x, ['ok','status','identity','review','approval','purchase'])) deny();
+  x.identity = assertCompositionHistoryIdentity(x.identity); if (x.status !== x.identity.status) deny();
+  if (x.review === null) { if (x.identity.current !== null) deny(); return x; }
+  const r = x.review;
+  if (!x.identity.current || !exact(r, ['contract','schema_version','base','can_renew','approval','purchase','review_sha256']) ||
+      r.contract !== 'CreativeCompositionRenewalReview' || r.schema_version !== '1.0' || !common(r) || typeof r.can_renew !== 'boolean' || !digest(r.review_sha256) ||
+      !exact(r.base, ['tenant_id','project_id','brief_id','brief_sha256','design_version_id','design_version_sha256','artwork_sha256','selection_revision','composition_id','current_revision_id','current_revision_sha256']) ||
+      !['tenant_id','project_id','brief_id','design_version_id','composition_id','current_revision_id'].every(k => validId(r.base[k])) ||
+      !['brief_sha256','design_version_sha256','artwork_sha256','current_revision_sha256'].every(k => digest(r.base[k])) || !Number.isSafeInteger(r.base.selection_revision) || r.base.selection_revision < 1 ||
+      r.base.current_revision_id !== x.identity.current.revision_id || r.base.current_revision_sha256 !== x.identity.current.revision_sha256 || r.base.composition_id !== x.identity.current.composition_id ||
+      r.base.design_version_id !== x.identity.current.design_version_id || r.base.design_version_sha256 !== x.identity.current.design_version_sha256 ||
+      r.can_renew && !['current','changed'].includes(x.identity.selection_compatibility)) deny();
+  return x;
 }

@@ -81,6 +81,8 @@ export class CreativeControlsAdapter {
   readonly store: ApplyStore;
   projection(principal: TrustedPrincipal): CurrentProjection;
   apply(principal: TrustedPrincipal, body: unknown): Promise<IntegratedApplyResult>;
+  retryExisting(principal: TrustedPrincipal, actionId: string): Promise<IntegratedApplyResult>;
+  readExisting(principal: TrustedPrincipal, actionId: string): Promise<IntegratedApplyResult>;
   cancel(principal: TrustedPrincipal, operationId: string): Promise<IntegratedApplyResult>;
   lookup(principal: TrustedPrincipal, actionId: string): { operation_id: string; status: string } | null;
   close(): void;

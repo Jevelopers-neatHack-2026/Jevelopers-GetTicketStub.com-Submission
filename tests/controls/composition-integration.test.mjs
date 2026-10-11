@@ -194,3 +194,51 @@ test('preview read discards genuine bytes if trusted selection changes during th
   assert.equal(await host.composition.preview(principal, expected), null);
   assert.equal(host.counts().composition_previews, 0); zeroEffects(host);
 });
+
+
+async function renewalAction(host, id = 'renew') {
+  const history = await host.composition.history(principal); assert.equal(history.ok, true, JSON.stringify(history)); assert.equal(history.review.can_renew, true);
+  return { action_version: 'creative-composition-renew/1.0', action_id: id, intent: 'renew', review_sha256: history.review.review_sha256 };
+}
+
+test('expired authority exposes metadata-only history; reviewed renewal appends a child and requires fresh Apply', async t => {
+  const host = await setup(t); await initialize(host); const before = current(host).revision, oldAction = await action(host, {}, { name_size: 'large' }, 'old-draft');
+  host.advance(60001); assert.equal((await host.composition.current(principal)).status, 'stale');
+  const beforeCounts = host.counts(), history = await host.composition.history(principal); assert.deepEqual(host.counts(), beforeCounts);
+  assert.equal(history.identity.current.revision_sha256, before.revision_sha256); assert.equal(history.identity.revisions.length, 1);
+  assert.equal(JSON.stringify(history).includes('preview'), false); assert.equal(history.approval, false);
+  const renew = await renewalAction(host), result = await host.composition.apply(principal, renew); assert.equal(result.ok, true, JSON.stringify(result));
+  const after = current(host).revision; assert.equal(after.parent_revision_sha256, before.revision_sha256);
+  assert.deepEqual(after.geometry, before.geometry); assert.deepEqual(after.layer_manifest, before.layer_manifest); assert.deepEqual(after.artwork, before.artwork);
+  assert.notEqual(after.revision_sha256, before.revision_sha256); assert.equal(result.approval, false); assert.equal(result.purchase, false);
+  assert.equal((await host.composition.apply(principal, oldAction)).ok, false);
+  assert.equal((await host.composition.current(principal)).status, 'current');
+  const replay = await host.composition.apply(principal, renew); assert.equal(replay.revision_sha256, result.revision_sha256); assert.equal(replay.historical, true);
+  assert.equal(host.counts().composition_revalidations, 1); assert.equal(host.counts().composition_previews, 1);
+  assert.equal((await host.composition.apply(principal, await action(host, {}, { name_size: 'large' }, 'fresh-after-renewal'))).ok, true);
+  assert.equal(host.counts().composition_previews, 2); zeroEffects(host);
+  const preserved = host.store.getCompositionRevision({ scope: host.scope, composition_id: before.composition_id, revision_id: before.revision_id });
+  assert.equal(preserved.revision.revision_sha256, before.revision_sha256);
+});
+
+test('public same-design restore remains stale until a fresh reviewed renewal rebinds selection', async t => {
+  const host = await setup(t); await initialize(host); const before = current(host).revision, selection = host.selection();
+  const staleReview = await renewalAction(host, 'stale-renew-review');
+  const restored = await host.restore(selection.design_version_id, selection.revision, 'restore-same-design'); assert.equal(restored.ok, true, JSON.stringify(restored));
+  assert.equal((await host.composition.current(principal)).status, 'stale');
+  const history = await host.composition.history(principal); assert.equal(history.identity.selection_compatibility, 'changed');
+  assert.equal((await host.composition.apply(principal, staleReview)).ok, false); assert.equal(host.counts().composition_previews, 0);
+  const result = await host.composition.apply(principal, await renewalAction(host, 'renew-restored')); assert.equal(result.ok, true, JSON.stringify(result));
+  const after = current(host).revision; assert.equal(after.dependencies.selection_revision, host.selection().revision); assert.equal(after.parent_revision_sha256, before.revision_sha256);
+  assert.equal((await host.composition.current(principal)).status, 'current'); zeroEffects(host);
+});
+
+test('history paginates actual identities without execution; forged renewal review and unavailable owner never authorize a child', async t => {
+  const host = await setup(t); await initialize(host); await host.composition.apply(principal, await action(host, {}, { name_size: 'large' }, 'history-large'));
+  const before = host.counts(), first = await host.composition.history(principal, { limit: 1 });
+  assert.equal(first.identity.has_more, true); const second = await host.composition.history(principal, { limit: 1, after_revision_id: first.identity.next_after_revision_id });
+  assert.equal(second.identity.has_more, false); assert.notEqual(first.identity.revisions[0].revision_id, second.identity.revisions[0].revision_id); assert.deepEqual(host.counts(), before);
+  const forged = { ...await renewalAction(host, 'forged-renewal'), review_sha256: canonicalHash({}) }; assert.equal((await host.composition.apply(principal, forged)).ok, false);
+  const good = await renewalAction(host, 'owner-denied'); host.policy.permitted_asset_ids = []; assert.equal((await host.composition.apply(principal, good)).ok, false);
+  assert.equal(host.store.db.prepare('SELECT COUNT(*) AS n FROM creative_composition_revisions_v1').get().n, 2); zeroEffects(host);
+});
