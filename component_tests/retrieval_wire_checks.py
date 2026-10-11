@@ -4,7 +4,9 @@ from pydantic import ConfigDict
 
 from component_tests.retrieval_budget_checks import BudgetCapture
 from component_tests.retrieval_concurrency_checks import ConcurrencyCapture
+from component_tests.retrieval_handshake_checks import HandshakeCapture
 from component_tests.retrieval_resolver_checks import Mutation, ResolverCapture
+from component_tests.retrieval_tls_checks import TlsCapture
 from integration_evals.artifacts import digest
 from integration_evals.models import CaseResult, Digest, Outcome, Record
 
@@ -55,6 +57,8 @@ class Capture(Record):
     resolver_inputs: ResolverCapture
     resource_budgets: BudgetCapture
     concurrency: ConcurrencyCapture
+    tls_redirects: TlsCapture
+    handshake_deadline: HandshakeCapture
 
 
 def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mutation) -> None:
@@ -94,6 +98,9 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
             | "extra-slot"
+            | "unchecked-tls-hostname"
+            | "unchecked-tls-trust"
+            | "early-handshake-deadline"
         ):
             assert selected.outcome is Outcome.FAILED
         case _:
@@ -127,6 +134,9 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
             | "extra-slot"
+            | "unchecked-tls-hostname"
+            | "unchecked-tls-trust"
+            | "early-handshake-deadline"
         ):
             assert wire.passed is True
             assert over_limit.code == "RESOURCE_LIMIT"

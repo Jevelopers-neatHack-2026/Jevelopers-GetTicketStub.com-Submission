@@ -189,6 +189,9 @@ def assert_concurrency(capture: ConcurrencyCapture, mutation: Mutation) -> None:
             | "unchecked-ip-alias"
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
+            | "unchecked-tls-hostname"
+            | "unchecked-tls-trust"
+            | "early-handshake-deadline"
         ):
             extra_slot = False
         case _:

@@ -64,10 +64,11 @@ transport containment.
 `redirects_checked` requires a successful positive transport control, rejected
 negative calls, no protected fixture connection, a received redirect response that
 is rejected before the protected endpoint, the actual redirect-limit error, and
-all injected resolver-input redirect checks described below.
+all injected resolver-input and HTTPS authentication redirect checks described below.
 `resource_limits_enforced` is limited to declared wire length, chunked identity
 and gzip encoded-body bytes, actual gzip decoded bytes, cumulative decoded bytes,
-per-instance request count, and the bounded concurrency/cancellation checks, each with
+per-instance request count, the bounded concurrency/cancellation checks, and the
+nominal ten-second connect/TLS-handshake timer, each with
 the required typed error and fixture counters. It is not a claim about all resource
 limits.
 
@@ -130,10 +131,39 @@ This covers active HTTP awaiting headers, not body-read, resolver, connect or TL
 cancellation. All event ordering, outcomes and natural closure precede forced cleanup.
 No fixed sleeps, fake clock, private state changes or timeout increases are used.
 
+`tls_redirects` uses owner-generated certificates A/B inside the existing private
+TMPDIR and the actual HTTPS fixture. A trusted relative redirect must return known
+bytes/hash. A redirect to a whitelisted hostname absent from A's SANs must fail TLS
+identity validation. Another fixture rotates its native secure context from A to B
+after the initial HTTP request, then redirects relatively while the client still
+trusts A. Both rejections require actual `TRANSPORT_FAILURE`, two incoming TCP
+connections, one initial HTTP request and zero final HTTP requests, plus natural
+closures. The positive requires two HTTP requests and exact returned bytes/hash.
+Server secureConnection/tlsClientError events are recorded separately: a server
+handshake event does not mean the client trusted its peer. Only public DER certificate
+digests are retained; fixtures and both certificate cleanup handles run in finally.
+
+The existing Linux PATH must provide OpenSSL with `req -addext` support inside the
+unchanged PID/network namespace and writable TMPDIR. Successful owner certificate
+generation is the runtime capability check. Missing tooling is an honest execution
+error, not permission to use host trust stores, system CA/DNS changes or wider
+isolation. No OpenSSL availability or successful TLS rotation is inferred on macOS.
+
+`handshake_deadline` uses a separate raw local TCP listener that accepts and consumes
+client bytes but sends none. Actual SafeFetcher attempts HTTPS through the owner
+TLS seam; its real nominal 10,000ms connect/handshake timer must yield
+`DEADLINE_EXCEEDED`, no returned body and natural peer closure. Monotonic invocation,
+connection, first-client-byte and closure times are retained. The predeclared outcome
+window is 9,900–20,000ms, separating this timer from the 30,000ms overall deadline.
+There is no delayed fixture response/close, sleep oracle or fake clock. This raw
+listener has no TLS/HTTP parser; its byte counts are not validated ClientHello,
+HTTP-request or handshake-success telemetry. Early rejections retain an unreached
+stage. Linux CI must prove all groups fit the unchanged 30-second case timeout.
+
 Uncovered obligations remain explicit in every artifact: wire DNS, TTL rebinding,
-actual CNAME following and mixed wire-DNS answers; deadlines and cancellation during
+actual CNAME following and mixed wire-DNS answers; the overall deadline and cancellation during
 body reads/resolution/connect/TLS, plus real job cancellation;
-TLS/production networking; image/PDF and downstream parser limits; real rejection
+production TLS/public CA/networking; image/PDF and downstream parser limits; real rejection
 handoff into research, JEV or creative; and authoritative external egress capture.
 IE-11A.AC3 content-authority containment is a separate unchanged case. A passing
 mock component execution leaves criterion status in progress and product acceptance
@@ -143,7 +173,7 @@ blocked. All unselected original cases remain planned, not implicitly passed.
 
 The separately invoked `component_tests` suite uses actual `execute` and `save_run`
 with clean owned snapshots and all 42 original cases. It compares a real baseline
-with ten deliberately weakened owned copies: an always-reject fetcher, unchecked
+with thirteen deliberately weakened owned copies: an always-reject fetcher, unchecked
 loopback fetching, and removal of only the identity-body streaming wire counter.
 The positive control detects always-reject behavior; incoming protected server
 counters detect unchecked loopback fetching. The wire-counter mutation must accept
@@ -165,6 +195,14 @@ If the fifth queued-cancellation request is admitted, the probe waits for its HT
 arrival before aborting so an early abort cannot hide the defect; its peer must
 close before launching the survivor. The cap remains declared as four, and both
 observations/component must fail while all outcomes and cleanup are retained.
+TLS copies replace only the hostname-check callback, or disable both certificate
+authorization enforcement points. They must expose final HTTP and exact known-body
+acceptance, failing the explicit TLS group and redirects observation. The trust
+bypass can also bypass hostname rejection; tests retain that effect honestly. Its
+second successful handshake must expose certificate B's public digest, proving
+fixture rotation rather than assuming it. A separate timer copy divides only the
+connect-timer delay by ten while declared limits remain unchanged. Its real early
+deadline and closure must fail the lower timing bound and resource observation.
 Original producer checkouts stay unchanged.
 
 ```sh

@@ -7,10 +7,14 @@ type ResolverMutation = Literal[
     "cached-resolution", "first-answer-only", "unchecked-alias", "unchecked-ip-alias"
 ]
 type BudgetMutation = Literal["unchecked-gzip-wire", "unchecked-aggregate"]
+type TlsMutation = Literal[
+    "unchecked-tls-hostname", "unchecked-tls-trust", "early-handshake-deadline"
+]
 type Mutation = (
     Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire", "extra-slot"]
     | ResolverMutation
     | BudgetMutation
+    | TlsMutation
 )
 type Scenario = Literal[
     "safe-alias", "private-transition", "mixed-answers", "metadata-alias", "ip-alias"
@@ -131,6 +135,9 @@ def assert_resolver_inputs(capture: ResolverCapture, mutation: Mutation) -> None
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
             | "extra-slot"
+            | "unchecked-tls-hostname"
+            | "unchecked-tls-trust"
+            | "early-handshake-deadline"
         ):
             affected = ()
         case _:

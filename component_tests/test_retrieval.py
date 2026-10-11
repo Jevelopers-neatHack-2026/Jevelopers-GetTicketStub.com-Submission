@@ -9,11 +9,13 @@ import pytest
 
 from component_tests.retrieval_budget_checks import assert_byte_budgets, mutate_budget
 from component_tests.retrieval_concurrency_checks import assert_concurrency
+from component_tests.retrieval_handshake_checks import assert_handshake
 from component_tests.retrieval_resolver_checks import (
     Mutation,
     assert_resolver_inputs,
     mutate_resolver,
 )
+from component_tests.retrieval_tls_checks import assert_tls, mutate_tls
 from component_tests.retrieval_wire_checks import Capture, assert_observed_outcome
 from integration_evals.artifacts import digest, load_record, read_bytes
 from integration_evals.errors import fail
@@ -59,6 +61,43 @@ def commit(root: Path) -> None:
     )
 
 
+def mutate_producer(original: str, mutation: Mutation) -> str:
+    marker = "  async fetch(input, options = {}) {"
+    match mutation:
+        case "baseline":
+            changed = original
+        case "always-reject":
+            changed = original.replace(
+                marker, marker + '\n    throw new RetrievalError("POLICY_DENIED");', 1
+            )
+        case "unchecked-private":
+            changed = original.replace(
+                marker,
+                marker
+                + '\n    if (input.startsWith("http://127.0.0.1:")) {'
+                + " const reply = await globalThis.fetch(input);"
+                + " return { bytes: Buffer.from(await reply.arrayBuffer()) }; }",
+                1,
+            )
+        case "unchecked-wire":
+            guard = '        if (encoded > wireMaximum) throw new RetrievalError("RESOURCE_LIMIT");'
+            assert original.count(guard) == 1
+            changed = original.replace(guard, "", 1)
+        case "cached-resolution" | "first-answer-only" | "unchecked-alias" | "unchecked-ip-alias":
+            changed = mutate_resolver(original, mutation)
+        case "unchecked-gzip-wire" | "unchecked-aggregate":
+            changed = mutate_budget(original, mutation)
+        case "extra-slot":
+            guard = "if (this.#active < DEFAULT_RUN_LIMITS.concurrentFetches)"
+            assert original.count(guard) == 1
+            changed = original.replace(guard, guard.replace(" < ", " <= "), 1)
+        case "unchecked-tls-hostname" | "unchecked-tls-trust" | "early-handshake-deadline":
+            changed = mutate_tls(original, mutation)
+        case _:
+            assert_never(mutation)
+    return changed
+
+
 @pytest.fixture
 def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
     # Given exact owner sources and an owned clean evaluator snapshot in a Linux-only workspace.
@@ -91,37 +130,7 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
     producer = tmp_path / "event-intelligence"
     target = producer / "src/security/controlled-fetch.mjs"
     original = target.read_text(encoding="utf-8")
-    marker = "  async fetch(input, options = {}) {"
-    match mutation:
-        case "baseline":
-            changed = original
-        case "always-reject":
-            changed = original.replace(
-                marker, marker + '\n    throw new RetrievalError("POLICY_DENIED");', 1
-            )
-        case "unchecked-private":
-            changed = original.replace(
-                marker,
-                marker
-                + '\n    if (input.startsWith("http://127.0.0.1:")) {'
-                + " const reply = await globalThis.fetch(input);"
-                + " return { bytes: Buffer.from(await reply.arrayBuffer()) }; }",
-                1,
-            )
-        case "unchecked-wire":
-            guard = '        if (encoded > wireMaximum) throw new RetrievalError("RESOURCE_LIMIT");'
-            assert original.count(guard) == 1
-            changed = original.replace(guard, "", 1)
-        case "cached-resolution" | "first-answer-only" | "unchecked-alias" | "unchecked-ip-alias":
-            changed = mutate_resolver(original, mutation)
-        case "unchecked-gzip-wire" | "unchecked-aggregate":
-            changed = mutate_budget(original, mutation)
-        case "extra-slot":
-            guard = "if (this.#active < DEFAULT_RUN_LIMITS.concurrentFetches)"
-            assert original.count(guard) == 1
-            changed = original.replace(guard, guard.replace(" < ", " <= "), 1)
-        case _:
-            assert_never(mutation)
+    changed = mutate_producer(original, mutation)
     if changed != original:
         _ = target.write_text(changed, encoding="utf-8")
         commit(producer)
@@ -150,6 +159,9 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
         "unchecked-gzip-wire",
         "unchecked-aggregate",
         "extra-slot",
+        "unchecked-tls-hostname",
+        "unchecked-tls-trust",
+        "early-handshake-deadline",
     ],
 )
 def test_real_retrieval_component_archives_observed_boundary(
@@ -188,6 +200,8 @@ def test_real_retrieval_component_archives_observed_boundary(
     assert_resolver_inputs(capture.resolver_inputs, mutation)
     assert_byte_budgets(capture.resource_budgets, mutation)
     assert_concurrency(capture.concurrency, mutation)
+    assert_tls(capture.tls_redirects, mutation)
+    assert_handshake(capture.handshake_deadline, mutation)
     original_archive = read_bytes(archive / "run.json")
     with pytest.raises(FileExistsError):
         _ = save_run(run, retrieval_workspace / "reports", tracker, suite, settings.artifacts)

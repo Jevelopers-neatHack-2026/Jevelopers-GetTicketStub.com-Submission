@@ -3,6 +3,7 @@ import { probeChunkedWire } from './retrieval_wire.mjs';
 import { probeResolverInputs } from './retrieval_resolver.mjs';
 import { probeByteBudgets } from './retrieval_budgets.mjs';
 import { probeConcurrency } from './retrieval_concurrency.mjs';
+import { probeTls } from './retrieval_tls.mjs';
 
 export async function probeRetrieval(api, fixtures, metadataUrl) {
   const { SafeFetcher, RetrievalError, DEFAULT_RUN_LIMITS: limits } = api;
@@ -94,24 +95,25 @@ export async function probeRetrieval(api, fixtures, metadataUrl) {
     const resolver_inputs = await probeResolverInputs(api, fixtures);
     const resource_budgets = await probeByteBudgets(api, fixtures);
     const concurrency = await probeConcurrency(api, fixtures);
+    const { tls_redirects, handshake_deadline } = await probeTls(api, fixtures);
     const positive = baseline.code === 'accepted' && baseline.known_bytes && baseline.allowed_connections === 1 && baseline.allowed_requests === 1;
     const denied = rejected.every(row => row.code === 'POLICY_DENIED' && row.protected_connections === 0 && row.protected_requests === 0);
     const redirected = rejected.find(row => row.id === 'redirect-private');
-    return { counters, rows, parser_rows, limits, chunked_wire, resolver_inputs, resource_budgets, concurrency,
+    return { counters, rows, parser_rows, limits, chunked_wire, resolver_inputs, resource_budgets, concurrency, tls_redirects, handshake_deadline,
       boundary_surface: 'SafeFetcher.fetch; parser_rows are separate unit observations.',
       observations: {
         private_targets_reached: counters.protected_connections,
         redirects_checked: positive && denied && redirected.allowed_requests === 1 && loop.code === 'REDIRECT_LIMIT'
-          && loop.allowed_requests === limits.redirectsPerFetch + 1 && resolver_inputs.passed,
+          && loop.allowed_requests === limits.redirectsPerFetch + 1 && resolver_inputs.passed && tls_redirects.passed,
         resource_limits_enforced: positive && wire.code === 'RESOURCE_LIMIT' && wire.allowed_requests === 1
           && decoded.code === 'RESOURCE_LIMIT' && decoded.allowed_requests === 1
           && rows.filter(row => row.id.startsWith('request-') && row.id !== 'request-limit').every(row => row.code === 'accepted' && row.known_bytes)
           && exhausted.code === 'REQUEST_LIMIT' && exhausted.allowed_connections === 0 && chunked_wire.passed
-          && resource_budgets.passed && concurrency.passed,
+          && resource_budgets.passed && concurrency.passed && handshake_deadline.passed,
       },
       capture_scope: 'Main counters cover the original two task-local loopback servers; additional groups record their dedicated fixtures separately. No external egress telemetry.',
-      uncovered: ['Wire DNS, TTL rebinding, actual CNAME following and mixed wire-DNS answers', 'deadlines and cancellation during body reads/resolution/connect/TLS; real job cancellation',
-        'TLS and production networking', 'image/PDF intake and downstream parsers',
+      uncovered: ['Wire DNS, TTL rebinding, actual CNAME following and mixed wire-DNS answers', 'overall deadline and cancellation during body reads/resolution/connect/TLS; real job cancellation',
+        'Production TLS, public CA and production networking', 'image/PDF intake and downstream parsers',
         'research/JEV/creative rejection handoff', 'authoritative external egress capture'],
     };
   } finally {
