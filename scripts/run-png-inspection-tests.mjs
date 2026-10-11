@@ -38,6 +38,11 @@ export const PNG_INSPECTION_SUITE_CASE_IDS = Object.freeze([
   "inputs.reject-revoked-and-trap-proxies-without-reading-expectations",
   "inputs.ignore-overridden-instance-properties",
   "inputs.accept-buffer-and-never-mutate",
+  "inputs.backing-buffer-throwing-prototype-trap-is-not-called",
+  "inputs.backing-buffer-revoked-prototype-proxy-is-not-observed",
+  "inputs.backing-buffer-mutation-prototype-trap-is-not-called",
+  "inputs.accept-genuine-null-prototype-backing-buffer",
+  "inputs.accept-genuine-cross-realm-uint8array",
   "expectations.reject-hostile-values-without-calling-traps",
   "api.package-root-export-and-readonly-result",
   "runner.output-parser.rejects-malformed-and-inconsistent-reports",
@@ -49,7 +54,7 @@ export const PNG_INSPECTION_SUITE_CASE_IDS = Object.freeze([
 
 export const PNG_INSPECTION_SUITE_CASE_COUNT = PNG_INSPECTION_SUITE_CASE_IDS.length;
 
-const repositoryRoot = resolve(new URL("..", import.meta.url).pathname);
+const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const suiteFile = fileURLToPath(new URL("../tests/png-inspection-suite.mjs", import.meta.url));
 const caseSchema = "fulfillment-png-inspection-case-results/1";
 const reportSchema = "fulfillment-png-inspection-suite-result/1";

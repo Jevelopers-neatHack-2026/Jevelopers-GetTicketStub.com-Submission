@@ -124,6 +124,13 @@ const SRGB_INTENTS = new Set([0, 1, 2, 3]);
 const EXPECTED_HASH_PATTERN = /^sha256:[0-9a-f]{64}$/i;
 
 const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+const uint8ArrayConstructor = Uint8Array;
+const reflectApply = Reflect.apply;
+const arrayBufferIsView = ArrayBuffer.isView;
+const arrayBufferByteLengthGetter = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "byteLength")?.get;
+const typedArraySet = Object.getOwnPropertyDescriptor(typedArrayPrototype, "set")?.value as
+  | ((this: Uint8Array, source: ArrayLike<number> | ArrayBufferView) => void)
+  | undefined;
 const typedArrayTagGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, Symbol.toStringTag)?.get;
 const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
 const typedArrayByteLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "byteLength")?.get;
@@ -180,10 +187,20 @@ function result(
   return Object.freeze({ status, code, format, contentType, byteLength, sha256, expectations, metadata });
 }
 
-function isSharedBuffer(buffer: ArrayBufferLike): boolean {
+function isArrayBuffer(buffer: unknown): buffer is ArrayBuffer {
+  if (arrayBufferByteLengthGetter === undefined) return false;
+  try {
+    reflectApply(arrayBufferByteLengthGetter, buffer, []);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isSharedBuffer(buffer: unknown): buffer is SharedArrayBuffer {
   if (sharedArrayBufferByteLengthGetter === undefined) return false;
   try {
-    Reflect.apply(sharedArrayBufferByteLengthGetter, buffer, []);
+    reflectApply(sharedArrayBufferByteLengthGetter, buffer, []);
     return true;
   } catch {
     return false;
@@ -192,8 +209,9 @@ function isSharedBuffer(buffer: ArrayBufferLike): boolean {
 
 /** Copies only a genuine Uint8Array view, without consulting overridable instance properties. */
 function snapshotBytes(value: unknown): SnapshotResult {
-  if (!ArrayBuffer.isView(value)) return { kind: "invalid" };
+  if (!arrayBufferIsView(value)) return { kind: "invalid" };
   if (
+    arrayBufferByteLengthGetter === undefined || typedArraySet === undefined ||
     typedArrayTagGetter === undefined || typedArrayBufferGetter === undefined ||
     typedArrayByteLengthGetter === undefined || typedArrayByteOffsetGetter === undefined ||
     typedArrayLengthGetter === undefined
@@ -205,29 +223,32 @@ function snapshotBytes(value: unknown): SnapshotResult {
   let byteOffset: unknown;
   let elementLength: unknown;
   try {
-    tag = Reflect.apply(typedArrayTagGetter, value, []);
+    tag = reflectApply(typedArrayTagGetter, value, []);
     if (tag !== "Uint8Array") return { kind: "unsupported_view" };
-    backing = Reflect.apply(typedArrayBufferGetter, value, []);
-    byteLength = Reflect.apply(typedArrayByteLengthGetter, value, []);
-    byteOffset = Reflect.apply(typedArrayByteOffsetGetter, value, []);
-    elementLength = Reflect.apply(typedArrayLengthGetter, value, []);
+    backing = reflectApply(typedArrayBufferGetter, value, []);
+    byteLength = reflectApply(typedArrayByteLengthGetter, value, []);
+    byteOffset = reflectApply(typedArrayByteOffsetGetter, value, []);
+    elementLength = reflectApply(typedArrayLengthGetter, value, []);
   } catch {
     return { kind: "invalid" };
   }
   if (
     typeof byteLength !== "number" || !Number.isSafeInteger(byteLength) || byteLength < 0 ||
     typeof byteOffset !== "number" || !Number.isSafeInteger(byteOffset) || byteOffset < 0 ||
-    typeof elementLength !== "number" || elementLength !== byteLength ||
-    !(backing instanceof ArrayBuffer || (typeof SharedArrayBuffer !== "undefined" && backing instanceof SharedArrayBuffer))
+    typeof elementLength !== "number" || elementLength !== byteLength
   ) return { kind: "invalid" };
   if (isSharedBuffer(backing)) return { kind: "shared_memory" };
+  if (!isArrayBuffer(backing)) return { kind: "invalid" };
   if (byteLength > PNG_INSPECTION_LIMITS.maxInputBytes) {
     return { kind: "resource_limit", byteLength };
   }
 
   try {
-    const copy = new Uint8Array(byteLength);
-    Uint8Array.prototype.set.call(copy, value as Uint8Array);
+    // Construct a fresh fixed-length view from the internal-slot-validated buffer and copy with
+    // the captured intrinsic. Neither step walks the caller-controlled prototype chain.
+    const source = new uint8ArrayConstructor(backing, byteOffset, byteLength);
+    const copy = new uint8ArrayConstructor(byteLength);
+    reflectApply(typedArraySet, copy, [source]);
     return { kind: "ok", bytes: copy };
   } catch {
     return { kind: "invalid" };

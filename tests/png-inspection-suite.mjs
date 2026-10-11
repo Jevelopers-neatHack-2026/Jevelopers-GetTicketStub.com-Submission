@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { deflateSync } from "node:zlib";
 import { inspectPngBytes, PNG_INSPECTION_LIMITS } from "../dist/png-inspection.js";
 import {
@@ -36,6 +38,10 @@ function expectResult(bytes, status, code) {
 
 function makeBytes(...values) {
   return Uint8Array.from(values);
+}
+
+function sha256(bytes) {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
 function assertNoInputMutation(input, inspectResult) {
@@ -327,6 +333,93 @@ add("inputs.accept-buffer-and-never-mutate", () => {
   const untouched = makePngFixture();
   assertNoInputMutation(untouched, (input) => inspect(input));
   assert.equal(inspect(Buffer.from(makePngFixture())).status, "inspected");
+});
+
+add("inputs.backing-buffer-throwing-prototype-trap-is-not-called", () => {
+  const input = makePngFixture();
+  const before = Uint8Array.from(input);
+  const expectedHash = sha256(input);
+  const sentinel = new Error("SYNTHETIC_CALLER_PRIVATE_ERROR");
+  let trapCalls = 0;
+  Object.setPrototypeOf(input.buffer, new Proxy({}, {
+    getPrototypeOf() { trapCalls += 1; throw sentinel; }
+  }));
+
+  let observed;
+  let escaped;
+  try { observed = inspect(input); } catch (error) { escaped = error; }
+  assert.equal(escaped, undefined, "caller error must not escape inspection");
+  assert.equal(trapCalls, 0);
+  assert.deepEqual(input, before);
+  assert.equal(observed?.status, "inspected");
+  assert.equal(observed?.sha256, expectedHash);
+  assert.equal(sha256(input), expectedHash);
+});
+
+add("inputs.backing-buffer-revoked-prototype-proxy-is-not-observed", () => {
+  const input = makePngFixture();
+  const before = Uint8Array.from(input);
+  const expectedHash = sha256(input);
+  let trapCalls = 0;
+  const revoked = Proxy.revocable({}, {
+    getPrototypeOf() { trapCalls += 1; return ArrayBuffer.prototype; }
+  });
+  Object.setPrototypeOf(input.buffer, revoked.proxy);
+  revoked.revoke();
+
+  let observed;
+  let escaped;
+  try { observed = inspect(input); } catch (error) { escaped = error; }
+  assert.equal(escaped, undefined, "revoked proxy error must not escape inspection");
+  assert.equal(trapCalls, 0);
+  assert.deepEqual(input, before);
+  assert.equal(observed?.status, "inspected");
+  assert.equal(observed?.sha256, expectedHash);
+});
+
+add("inputs.backing-buffer-mutation-prototype-trap-is-not-called", () => {
+  const input = makePngFixture();
+  const before = Uint8Array.from(input);
+  const expectedHash = sha256(input);
+  let trapCalls = 0;
+  Object.setPrototypeOf(input.buffer, new Proxy({}, {
+    getPrototypeOf() {
+      trapCalls += 1;
+      input[0] = 0;
+      return ArrayBuffer.prototype;
+    }
+  }));
+
+  const observed = inspect(input);
+  assert.equal(trapCalls, 0);
+  assert.deepEqual(input, before, "inspection must snapshot before any caller-controlled mutation");
+  assert.equal(observed.status, "inspected");
+  assert.equal(observed.sha256, expectedHash);
+  assert.equal(sha256(input), expectedHash);
+});
+
+add("inputs.accept-genuine-null-prototype-backing-buffer", () => {
+  const input = makePngFixture();
+  const before = Uint8Array.from(input);
+  const expectedHash = sha256(input);
+  Object.setPrototypeOf(input.buffer, null);
+
+  const observed = inspect(input);
+  assert.deepEqual(input, before);
+  assert.equal(observed.status, "inspected");
+  assert.equal(observed.sha256, expectedHash);
+});
+
+add("inputs.accept-genuine-cross-realm-uint8array", () => {
+  const bytes = makePngFixture();
+  const expectedHash = sha256(bytes);
+  const foreign = runInNewContext("Uint8Array.from(values)", { values: Array.from(bytes) });
+  assert.equal(ArrayBuffer.isView(foreign), true);
+  assert.equal(foreign instanceof Uint8Array, false);
+
+  const observed = inspect(foreign);
+  assert.equal(observed.status, "inspected");
+  assert.equal(observed.sha256, expectedHash);
 });
 
 add("expectations.reject-hostile-values-without-calling-traps", () => {
