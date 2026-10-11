@@ -19,7 +19,7 @@ As of 2026-10-11. The hosted rollout record, its procedural proof, the saved rep
 | GA4 properties, web streams, privacy settings | Separate production and preview properties; enhanced measurement off on both (preview's was found on again, corrected on 2026-10-11 and re-read on the saved stream); no Measurement Protocol secrets or connected tags; redaction on; signals, user-provided data, granular location/device and ad personalization off ([record](#ga4-setup-record)) |
 | Custom definitions | 31 event-scoped dimensions, 2 metrics and key event `tear_complete` (no default value) on both properties |
 | Data retention | Two months for events and users, activity reset off, both properties |
-| Data filters | *TicketStub developer QA* and the default *Internal Traffic* filter in **Testing** (they label, they do not exclude). IP-based internal filtering **deferred by the owner** ([decision](analytics-rollout.md#filters-decision)) |
+| Data filters | *TicketStub developer QA* and the default *Internal Traffic* filter in **Testing** (they label, they do not exclude). IP-based internal filtering **not planned** (closed by the owner) ([decision](analytics-rollout.md#filters-decision)) |
 | Saved reports | 13 views in three read-only shared workspaces: 12 in production, 1 QA view in Preview; definitions re-read after saving, checked against the catalog ([definitions](analytics-rollout.md#saved-reports)) |
 | Host configuration | Preview `G-M2ELMGCNKW` (debug on), production `G-RVV7ZNF463`; after-publish restore of Preview done and verified ([procedure and proof](analytics-rollout.md#after-every-publish-restore-and-verify-preview)) |
 | Hosted checks | Consent (0 requests before a choice, after denial, reload and withdrawal), ids per host, private-value removal, phone activation, desktop sharing/organizer/claims ([record](analytics-rollout.md#hosted-verification-2026-10-11)) |
@@ -135,9 +135,11 @@ it was on:
   `/search?q=b`) counts as a new view;
 - the same pathname + query twice in a row (React Strict Mode double effects, remounts, re-renders) counts once;
   the identity used for this is the raw pathname + query and **never leaves the runtime module**;
-- one narrow exception, in the follow-up and **not yet deployed**: on `/wall` the `pinned` parameter is ignored in
+- one narrow exception, deployed in release `b25563a`: on `/wall` the `pinned` parameter is ignored in
   that identity, so the tear flow's landing on `/wall?pinned=<id>` and the wall's cleanup to `/wall` are one view.
-  Any other wall query, other ids and queries, and back/forward still count. The deployed `0f9baa5` counts two;
+  Any other wall query, other ids and queries, and back/forward still count. The earlier baseline `0f9baa5` counted
+  two; [the release verification](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/39#issuecomment-6113662415)
+  confirmed one hosted wall view after the fix;
 - hash-only changes are not navigations.
 
 **Every URL is reduced to a known route template before anything is sent.** Share links embed serialized stubs
@@ -419,7 +421,7 @@ is in [`evidence/analytics-2026-10-11/`](evidence/analytics-2026-10-11/) ([index
 ### Ongoing GA administration
 
 1. **Filters:** developer QA and default Internal Traffic filters stay in **Testing** (labelling only). IP-based
-   internal filtering is deferred by the owner; activating any filter permanently drops matching data, so it needs
+   internal filtering is not planned (closed by the owner); activating any filter permanently drops matching data, so it needs
    an explicit decision ([analytics-rollout.md](analytics-rollout.md#filters-decision)).
 2. **Access:** quarterly review and on personnel or provider changes; no access grants were made in the rollout.
 3. **Enhanced measurement:** keep it off. GA can re-enable it per stream (it happened once on preview) and code
@@ -562,7 +564,7 @@ clear it. No analytics data is stored by TicketStub servers.
 
 - Production data from 2026-10-11 includes synthetic QA traffic (Preview briefly used production settings after the
   publish, before the restore). It was not purged; no organic baseline is claimed for that day.
-- No IP-based internal traffic filter (deferred by the owner). Filters are in Testing: they label QA traffic and
+- No IP-based internal traffic filter (not planned; closed by the owner). Filters are in Testing: they label QA traffic and
   exclude nothing.
 - Enhanced measurement must stay off in GA's admin; code cannot turn it off, and it has already been found on again
   once. If it is turned back on, outbound-click and download events would carry raw link URLs (data redaction covers
