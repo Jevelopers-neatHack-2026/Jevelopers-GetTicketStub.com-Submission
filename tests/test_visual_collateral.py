@@ -64,7 +64,7 @@ class VisualChecks(unittest.TestCase):
         self.assertIn('DUMMY_SECRET_CANARY_B2',fake_overlay)
     def test_browser_receipt(self):
         r=json.loads((ROOT/'review/visual/browser-render-evidence.json').read_text())
-        self.assertEqual(len(r['results']),10)
+        self.assertEqual(len(r['results']),16)
         for x in r['results']:
             self.assertEqual(x['browserErrors'],[])
             self.assertEqual(x['externalRequests'],[])

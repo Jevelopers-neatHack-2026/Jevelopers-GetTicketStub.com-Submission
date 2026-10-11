@@ -1,8 +1,8 @@
 # Static collateral checklist — MM-08-A/B/C
 
-**Checked visual candidate:** `456053c5a12fa189f3c16a4cd9067a242e218031`. This followup adds evidence/baseline only; it does not change visual sources. Author inspection occurred 2026-10-11 UTC. Accountable marketing owner: user-assigned supervisor. Independent Astra High review: **pending**. Brand/publication approval: **pending**. PASS below means local author accessibility checks for the stated use, not final release approval.
+**Visual baseline:** `456053c5a12fa189f3c16a4cd9067a242e218031`; **MMREV-001 responsive correction** changes the HTML support layout only. Exact corrected HTML and all affected screenshot hashes are in the browser/accessibility receipts. Author inspection occurred 2026-10-11 UTC. Accountable marketing owner: user-assigned supervisor. Independent Astra High review: **pending**. Brand/publication approval: **pending**. PASS below means local author accessibility checks for the stated use, not final release approval.
 
-The exact source/export/alternative/preview hashes, viewing sizes and variant coverage are in [accessibility-results.json](visual/accessibility-results.json). All five browser-rendered SVG/PNG pairs and all six preview PNGs are covered. No currently delivered variant is implicitly covered solely by a template pass.
+The exact source/export/alternative/preview hashes, viewing sizes and variant coverage are in [accessibility-results.json](visual/accessibility-results.json). All five browser-rendered SVG/PNG pairs plus the presentation/feed previews and eight HTML viewport/full-page pairs are covered. No currently delivered variant is implicitly covered solely by a template pass.
 
 | Asset / variant | Intended-size check | Contrast / labels / alternative | Result |
 | --- | --- | --- | --- |
@@ -35,7 +35,7 @@ All states are expressed in words or numbers; color and decorative tear lines ad
 ## Failure, fix and recheck
 
 - **Observed failure:** the initial 390px deck rendering scaled the four-column diagram to unreadably small labels. That capture is not delivered as a passed variant; its observation is recorded in the author verification history.
-- **Fix in visual candidate 456053c:** mobile breakpoint hides the diagram and displays an ordered 20px text equivalent with qualification and recovery path.
+- **Fix in visual candidate 456053c:** initial mobile breakpoint hid the diagram and displayed an ordered 20px text equivalent; the MMREV-001 correction now requires an actual content-container width of at least 960px before showing the diagram with qualification and recovery path.
 - **Actual recheck:** `deck-mobile-390.png` and `deck-mobile-full.png` were reopened and inspected. Entire ordered workflow is readable, no horizontal overflow; real Tab event focuses the named link with a solid visible outline. The final browser receipt and image hashes identify the corrected bytes.
 - **Failing contrast control:** cyan/cream 1.6464 and orange/cream 3.1376 fail 4.5:1 normal text and are rejected by the test suite. Neither is used as normal text in the released-to-review visual candidates. No brand threshold waiver is granted.
 
@@ -44,3 +44,26 @@ All states are expressed in words or numbers; color and decorative tear lines ad
 Static PNG/SVG has no speech, caption timing, video controls or speaker-note container. HTML support has no audio/video or presentation speaker notes. Caption timing/accuracy and speech transcript: **NOT_APPLICABLE for current static exports**. Future final demo video: **PENDING**, must receive its own caption/transcript/timing review on exact final bytes.
 
 No app keyboard, dynamic loading/error, checkout, payment or production behavior is demonstrated. The only HTML interaction checked is the local text-equivalent link. Independent review, brand subset/consumer contract, privacy/rights, content/destination and publication approval remain pending. Asset rights failures stay blocked even if an accessibility check passes.
+
+## MMREV-001 — intermediate-width failure and corrected recheck
+
+Independent Astra finding MMREV-001 reproduced the former >600px failure: at a 601px viewport, the graphic could shrink to about 537px and its smallest label to 8.2px; 768px also fell below the declared 14.67px presentation floor. The previous mobile-only fix was incomplete.
+
+The corrected HTML defaults to visible 20px ordered text. A content-container query enables the graphic only at actual available width ≥960px, after padding and scrollbar allocation. The source graphic is unchanged. A stable scrollbar gutter prevents alternating scrollbar/layout modes. Unsupported container-query browsers retain text.
+
+Actual Chrome recheck (viewport × 900 unless noted):
+
+| Viewport width | Measured content/graphic width | Visible mode | Minimum meaningful text | Result |
+| --- | --- | --- | --- | --- |
+| 600 | 521px container; graphic hidden | Ordered text | 20px | PASS author |
+| 601 | 522px container; graphic hidden | Ordered text | 20px | PASS author |
+| 768 | 689px container; graphic hidden | Ordered text | 20px | PASS author |
+| 1038 | 959px container; graphic hidden | Ordered text | 20px | PASS author |
+| 1039 | 960px graphic | Diagram | 22 × 960/1440 = 14.6667px (14.67 rounded) | PASS author |
+| 1040 | 961px graphic | Diagram | 14.6819px | PASS author |
+| 390 × 740 | 311px container; graphic hidden | Ordered text | 20px | PASS author |
+| 1440 × 1200 | 1361px graphic | Diagram plus 20px HTML text | 20px HTML; 20.7931px graphic | PASS author |
+
+Both sides of the actual container threshold (959/960px) and the former viewport threshold (600/601px) were checked. All affected viewport/full-page captures were generated by the real browser; the author inspected the full-page captures, draft/status/qualification, ordered content and visible focus. Each width recorded a real Tab focus on the named text-equivalent link with a solid outline. Console/runtime/network page errors and external requests: zero. No horizontal overflow. Alt text and the four state labels/recovery path remain unchanged.
+
+This is an author fix/recheck receipt, not the refreshed independent MMREV-001 disposition; that remains pending on the final integrated candidate.

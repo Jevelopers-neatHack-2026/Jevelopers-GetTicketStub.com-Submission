@@ -25,7 +25,7 @@ The checker is local sRGB relative-luminance checker **1.0**, implementing the W
 | Redaction fixture controls | 800 × 500 native inspection only | **24px** text |
 | Text alternatives / social text | Reflowable text; do not embed its full paragraphs in a graphic | Use host text scaling; avoid fixed-size clipping |
 
-These are local, format-specific inspection floors, not universal accessibility guarantees. Presentation diagram and mockup PNGs are not approved as mobile-feed images: use their text alternatives on small screens. The HTML support page hides the dense graphic below 600px and presents an ordered text equivalent. Mobile allows vertical scrolling and must have no horizontal overflow. Any newly requested format, localization or smaller size needs a new recorded check.
+These are local, format-specific inspection floors, not universal accessibility guarantees. Presentation diagram and mockup PNGs are not approved as mobile-feed images: use their text alternatives on small screens. The HTML support page shows its dense graphic only when the actual main content container is at least 960px wide; below that width it presents a 20px ordered text equivalent. The container query measures available graphic space after padding and scrollbar allocation. A stable scrollbar gutter prevents the mode change from causing width oscillation. Browsers without container-query support retain the readable text fallback. Mobile allows vertical scrolling and must have no horizontal overflow. Any newly requested format, localization or smaller size needs a new recorded check.
 
 ## Language, alternatives and interaction
 
