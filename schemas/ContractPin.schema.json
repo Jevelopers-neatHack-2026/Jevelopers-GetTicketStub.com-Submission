@@ -1,0 +1,52 @@
+{
+  "additionalProperties": false,
+  "description": "Reviewed source and manifest bytes required before loading producer code.",
+  "properties": {
+    "revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Revision",
+      "type": "string"
+    },
+    "tree": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Tree",
+      "type": "string"
+    },
+    "lockfile_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Lockfile Digest",
+      "type": "string"
+    },
+    "schema_manifest_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Schema Manifest Digest",
+      "type": "string"
+    },
+    "fixture_manifest_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Fixture Manifest Digest",
+      "type": "string"
+    },
+    "catalog_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Catalog Digest",
+      "type": "string"
+    },
+    "node_version": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "title": "Node Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision",
+    "tree",
+    "lockfile_digest",
+    "schema_manifest_digest",
+    "fixture_manifest_digest",
+    "catalog_digest",
+    "node_version"
+  ],
+  "title": "ContractPin",
+  "type": "object"
+}

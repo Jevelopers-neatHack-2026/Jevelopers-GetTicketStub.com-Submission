@@ -169,6 +169,47 @@ current evidence and exact component revisions before changing their states, pre
 ID, priority, ownership, original verification text and original evidence requirements
 in both JSON and Markdown. Neither issue closure nor model review updates acceptance.
 
+## Canonical candidate conformance
+
+The contracts command consumes the actual pinned shared-contracts ESM SDK and its
+golden fixtures. contracts/producer-pin.json fixes the reviewed producer commit/tree,
+lockfile, schema/fixture manifest and machine-catalog bytes. It currently selects the
+unreleased 0.3.0 candidate. No copied product validator or provider adapter is introduced.
+
+Stage a platform-specific executable identity with:
+
+```sh
+integration-evals contract-runtime --node /approved/node --output node-runtime.json
+```
+
+Review that record before passing it to the runner:
+
+```sh
+integration-evals contracts --pin contracts/producer-pin.json --producer /pinned/shared-contracts \
+  --runtime node-runtime.json --output reports/runs/contracts --candidate-scope
+```
+
+The runner verifies clean actual checkouts and binary bytes, denies network access,
+contains subprocess lifetime, and invokes public canonical APIs for each declared
+fixture mode. Research/creative byte-array contexts follow the producer's documented
+fixture encoding. Returned schema hashes, case IDs and categories must match the full
+frozen source metadata. Failures and complete missing export names are retained in an
+immutable contracts.json receipt with a byte hash. Raw payloads are withheld.
+
+An explicit candidate-scope pass establishes only the implemented synthetic fixture
+slice. Omitting candidate-scope exits 2 when the producer's full catalog has missing
+exports. Every receipt keeps product_acceptance blocked and owner acknowledgement null.
+Package installation, owner agreement, real consumer domain handoffs and composed
+release verification remain separate requirements. CI runs both scopes against exact
+producer and Node pins; no provider credential or API budget is used.
+
+The separate integration_tests/test_canonical_failure.py scenario requires
+IE_CONTRACT_SOURCE and IE_CONTRACT_RUNTIME pointing to that actual checkout and
+runtime record. It makes an owned temporary copy, contradicts one golden expectation,
+repins that controlled test revision and verifies CLI failure retention. It uses the
+original SDK implementation and changes no producer-owned source. CI runs this test
+under Linux isolation in addition to the default dependency-free tooling suite.
+
 ## Current unresolved obligations
 
 The per-run release-audit.json lists every exact leaf AC from all 21 launch issues and

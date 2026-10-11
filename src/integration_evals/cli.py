@@ -20,6 +20,13 @@ from integration_evals.benchmarks import (
     summarize,
     validate_corpus,
 )
+from integration_evals.contract_records import ContractPin, ContractReceipt, ContractRuntime
+from integration_evals.contracts import (
+    ContractSettings,
+    execute_contracts,
+    runtime_digest,
+    save_contract_receipt,
+)
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.execution import Settings
 from integration_evals.models import (
@@ -193,6 +200,47 @@ def benchmark(
 
 @app.command()
 @safe_command
+def contracts(
+    pin: Annotated[Path, typer.Option()],
+    producer: Annotated[Path, typer.Option()],
+    runtime: Annotated[Path, typer.Option()],
+    output: Annotated[Path, typer.Option()],
+    *,
+    candidate_scope: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Execute pinned canonical SDK fixtures; full missing scope exits blocked."""
+    node = load_record(runtime, ContractRuntime)
+    receipt = execute_contracts(
+        ContractSettings(
+            repository=Path.cwd(),
+            producer=producer,
+            node=Path(node.path),
+            node_digest=node.sha256,
+            pin=load_record(pin, ContractPin),
+            candidate_scope=candidate_scope,
+        )
+    )
+    directory = save_contract_receipt(receipt, output)
+    typer.echo(str(directory))
+    if receipt.execution != "passed":
+        raise typer.Exit(1)
+    if receipt.missing_contracts and not candidate_scope:
+        raise typer.Exit(2)
+
+
+@app.command()
+@safe_command
+def contract_runtime(
+    node: Annotated[Path, typer.Option()], output: Annotated[Path, typer.Option()]
+) -> None:
+    """Stage the actual binary identity for review; this creates no runtime authority."""
+    record = ContractRuntime(path=str(node.resolve()), sha256=runtime_digest(node))
+    with output.open("x", encoding="utf-8") as destination:
+        _ = destination.write(record.model_dump_json(indent=2))
+
+
+@app.command()
+@safe_command
 def schemas(destination: Path) -> None:
     """Export evaluator schemas; canonical product schemas are supplied by shared-contracts."""
     destination.mkdir(parents=True, exist_ok=True)
@@ -212,6 +260,9 @@ def schemas(destination: Path) -> None:
         Selection,
         BenchmarkReceipt,
         NumericRules,
+        ContractPin,
+        ContractReceipt,
+        ContractRuntime,
     )
     for model in models:
         with (destination / f"{model.__name__}.schema.json").open("w", encoding="utf-8") as output:

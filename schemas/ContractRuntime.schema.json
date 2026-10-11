@@ -1,0 +1,22 @@
+{
+  "additionalProperties": false,
+  "description": "Platform-specific reviewed executable path and exact binary bytes.",
+  "properties": {
+    "path": {
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "sha256"
+  ],
+  "title": "ContractRuntime",
+  "type": "object"
+}

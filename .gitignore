@@ -5,3 +5,4 @@ __pycache__/
 .basedpyright/
 reports/runs/
 dist/
+.contract-producer/
