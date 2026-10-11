@@ -1,6 +1,6 @@
 # FC-11 local security boundaries
 
-**Status:** private, provider-neutral policy helpers for the FC-11.1–3 development slice. This file and `src/security.ts` are not connected to the public package entry point, provider adapter, runtime submit path, verifier wrapper, or CI. Local fixtures establish the behavior of injected ports only. They do not establish production security, cross-repository conformance, or FC-11 closure.
+**Status:** private, provider-neutral policy helpers for the FC-11.1–3 development slice. `src/security.ts` is exported from the package and its synthetic fixtures run through the stable simulated security verifier and CI. The helpers are not connected to a provider adapter or runtime submit path. Local fixtures establish the behavior of injected ports only; they do not establish production security, cross-repository conformance, or FC-11 closure.
 
 No accepted upstream SC8 artifact, provider callback specification, encrypted store, secret manager, replay database, or sandbox account is available in this checkout. Do not invent those integrations or claim the local fixtures provide them.
 
@@ -50,6 +50,6 @@ Sanitized evidence should include only mode, provider fixture identity, test res
 
 ## Local module checks
 
-`tests/security-suite.mjs` runs against a compiled isolated copy of `src/security.ts` and uses synthetic addresses, keys, callbacks, DNS answers, and transport responses. It does not invoke a provider, fetch an asset, or contact another repository. A passing run is only a local fixture result.
+`tests/security-suite.mjs` imports the built package entry point and uses synthetic addresses, keys, callbacks, DNS answers, and transport responses. Run it through `node scripts/run-security-tests.mjs`, `npm test`, or the stable command `./scripts/verify-fulfillment --suite security --mode simulated --evidence-dir evidence/FC-11`. The suite does not invoke a provider, fetch an asset, or contact another repository. A passing run is only a local private policy-fixture result; the wrapper records `externalProviderCalls: 0`, keeps release readiness false, and lists the missing security integrations as blockers.
 
-The repository's stable verifier currently has only contract, sandbox, and release suites. FC-02 owns shared package exports, verifier integration, and CI wiring. Keep the issue's future security-verifier acceptance pending until that integration is reviewed and wired.
+The security suite is wired into the package test command, stable verifier, and CI. The wrapper accepts this suite only in simulated mode. Sandbox and release verification remain fail-closed until their selected provider, accepted pins, private fixtures, and cross-repository evidence are available; this local suite does not satisfy those gates or close FC-11.

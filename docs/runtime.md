@@ -13,11 +13,14 @@ npm ci
 npm run build
 npm test
 ./scripts/verify-fulfillment --suite contract --mode simulated --evidence-dir evidence/FC-01
+./scripts/verify-fulfillment --suite security --mode simulated --evidence-dir evidence/FC-11
 ```
 
-`npm test` builds the TypeScript package and runs the local contract fixture suite without network access. `npm ci` installs from the lockfile and may need access to the npm registry unless the locked packages are already cached. The verifier writes `result.json` in the requested evidence directory and emits the same machine-readable result on stdout. A local contract result passes only the `local_private_fixture_contract_suite`; it keeps missing accepted pins and producer/consumer conformance in its blocker list. Missing arguments, unknown suites, a missing build, a wrong Node version, failed checks, and evidence write failures return nonzero with a JSON failure result when stdout remains available.
+`npm test` builds the TypeScript package and runs the local contract, provider-matrix, and security fixture suites without provider calls. `npm ci` installs from the lockfile and may need access to the npm registry unless the locked packages are already cached. The verifier writes `result.json` in the requested evidence directory and emits the same machine-readable result on stdout. A local contract result passes only the `local_private_fixture_contract_suite`; a security result passes only the `local_private_security_policy_suite`. Both retain missing accepted pins and producer/consumer conformance in their blocker lists. Missing arguments, unknown suites, a missing build, a wrong Node version, failed checks, and evidence write failures return nonzero with a JSON failure result when stdout remains available.
 
-`--suite sandbox --mode sandbox` and `--suite release` return failure until the selected sandbox adapter, accepted schema/fixture pins, and conformance evidence exist. The CI workflow runs Node setup, locked install, build, local tests, and only the simulated fixture contract command. It is triggered by `push` and `pull_request`, grants only `contents: read`, pins the checkout and Node setup actions to immutable commit SHAs, and does not use secrets, deploy, publish, upload artifacts, purchase anything, or contact a provider.
+The security command runs only the `local_private_security_policy_suite` in simulated mode. A pass records private policy-fixture results and `externalProviderCalls: 0`; its security assessment remains partial and preserves the missing SC8, encrypted-store, secret-manager, pinned transport, callback-authentication/replay, sandbox, and genuine release blockers. It cannot make sandbox or release readiness true. See [FC-11 security boundaries and limitations](security.md).
+
+`--suite sandbox --mode sandbox` and `--suite release` return failure until the selected sandbox adapter, accepted schema/fixture pins, and conformance evidence exist. The CI workflow runs Node setup, locked install, build, local tests, and the simulated contract, provider-matrix, and security fixture commands. It is triggered by `push` and `pull_request`, grants only `contents: read`, pins the checkout and Node setup actions to immutable commit SHAs, and does not use secrets, deploy, publish, upload artifacts, purchase anything, or contact a provider.
 
 ## Runtime boundary
 

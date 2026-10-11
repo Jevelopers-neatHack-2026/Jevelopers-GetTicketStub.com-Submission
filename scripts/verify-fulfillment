@@ -36,7 +36,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
@@ -52,6 +52,15 @@ const blockers = [
   "accepted upstream schema versions, source revisions, and fixture digests are missing",
   "producer and consumer conformance reports are missing"
 ];
+const securityBlockers = [
+  "accepted shared-contracts SC8 artifact and pin are missing",
+  "encrypted scoped storage, key management, retention execution, and deletion audit are not implemented",
+  "a production server-side secret manager and credential-rotation evidence are unavailable",
+  "DNS-pinned asset transport, TLS peer enforcement, redirect cleanup, and production host policy are injected-port requirements only",
+  "durable callback replay storage and a selected provider's documented authenticity method are unavailable",
+  "sandbox account access, a selected adapter, and genuine private provider fixtures are unavailable",
+  "producer/consumer conformance and genuine release evidence remain missing"
+];
 
 let checks = [];
 let failureReasons = [];
@@ -65,6 +74,7 @@ else if (!allowedModes.has(args.mode)) failureReasons.push("invalid_mode");
 if (args["evidence-dir"] === undefined) failureReasons.push("evidence_dir_required");
 if (process.version !== "v24.15.0") failureReasons.push("runtime_version_mismatch");
 if (args.suite === "provider-matrix" && args.mode !== "simulated") failureReasons.push("provider_matrix_requires_simulated_mode");
+if (args.suite === "security" && args.mode !== "simulated") failureReasons.push("security_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -98,6 +108,21 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("provider_matrix_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "security" && args.mode === "simulated") {
+  if (!catalogAvailable) failureReasons.push("security_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runSecuritySuite } = await import("../tests/security-suite.mjs");
+      checks = await runSecuritySuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_local_security_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("security_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "sandbox") {
   failureReasons.push("sandbox_adapter_and_accepted_contract_pins_unavailable");
 } else if (failureReasons.length === 0 && args.suite === "release") {
@@ -119,7 +144,11 @@ const result = {
     liveModeSupported: false
   },
   scope: status === "passed"
-    ? args.suite === "provider-matrix" ? "local_private_provider_matrix_suite" : "local_private_fixture_contract_suite"
+    ? args.suite === "provider-matrix"
+      ? "local_private_provider_matrix_suite"
+      : args.suite === "security"
+        ? "local_private_security_policy_suite"
+        : "local_private_fixture_contract_suite"
     : "argument_or_prerequisite_check",
   checks,
   failureReasons,
@@ -133,6 +162,7 @@ const result = {
       "quote expiry and callback authenticity policy remain unverified",
       "producer and consumer conformance and release evidence remain missing"
     ] : []),
+    ...(args.suite === "security" ? securityBlockers : []),
     ...(status === "passed" ? [] : failureReasons)
   ],
   contractPins: {
@@ -171,6 +201,28 @@ const result = {
       "producer and consumer conformance and release evidence remain missing"
     ]
   } : null,
+  ...(args.suite === "security" ? {
+    securityAssessment: {
+      schemaVersion: "fulfillment-security-assessment/1",
+      evidenceScope: "private_policy_helpers_and_synthetic_injected_ports_only",
+      completion: "partial",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      fc11_1: "partial_local_helpers; accepted_SC8_encrypted_store_key_lifecycle_and_retention_execution_pending",
+      fc11_2: "partial_local_helpers; production_secret_manager_and_pinned_asset_transport_pending",
+      fc11_3: "partial_local_helpers; provider_callback_authenticity_and_durable_replay_pending",
+      acceptedSharedContractSC8: "missing",
+      encryptedStorage: "not_implemented",
+      secretManager: "not_implemented",
+      pinnedAssetTransport: "injected_port_only",
+      callbackReplayStore: "injected_port_only",
+      providerCallbackVerifier: "not_implemented",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: 0,
+      blockers: securityBlockers
+    }
+  } : {}),
   externalProviderCalls: 0,
   evidenceFile: null
 };
@@ -189,7 +241,7 @@ if (args["evidence-dir"] !== undefined) {
     result.scope = "argument_or_prerequisite_check";
     failureReasons.push("evidence_write_failed");
     result.failureReasons = failureReasons;
-    result.blockers = [...blockers, ...failureReasons];
+    result.blockers = [...blockers, ...(args.suite === "security" ? securityBlockers : []), ...failureReasons];
   }
 }
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

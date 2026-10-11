@@ -6,6 +6,8 @@ Supplier quote normalization, external submission attempts, and status observati
 
 This branch contains a local worker-runtime foundation candidate with deterministic private fixtures. It has no selected production provider adapter, accepted upstream schema pins, cross-repository conformance reports, or live mode. Sandbox and release verification therefore remain blocked; the candidate does not establish completion of FC-01.
 
+The provider-neutral FC-11 security helpers and synthetic policy fixtures are exported and run by the local security verifier. They cover scoped reference access, payload minimization, diagnostics, injected secret and asset ports, tombstone creation, and callback hints. They do not supply production encryption, a secret manager, a pinned network transport, provider callback authentication, persistent replay storage, or accepted upstream SC8; sandbox and release security evidence remain pending. See [security boundary and limits](docs/security.md).
+
 See [runtime design, evidence scope, and exact verification commands](docs/runtime.md).
 
 The [FC-02 provider and environment matrix](docs/provider-matrix.md) records official Prodigi v4 documentation observations separately from local fixtures, account access, selected-product decisions, and implemented support. The simulator remains offline; sandbox and release checks remain blocked until owner evidence and an adapter exist.

@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-
-const modulePath = resolve(process.argv[2] ?? new URL("../dist/security.js", import.meta.url).pathname);
-const security = await import(pathToFileURL(modulePath).href);
+import * as security from "../dist/index.js";
 const scope = Object.freeze({ tenantId: "tenant-security-fixture", projectId: "project-security-fixture" });
 const cases = [];
 
@@ -575,15 +571,19 @@ test("diagnostic redaction removes nested PII, secrets, signed URLs, and raw err
   assert.throws(() => { boundaryError.diagnosticReference = "private-canary"; }, TypeError);
 });
 
-let failures = 0;
-for (const [name, run] of cases) {
-  try {
-    await run();
-    process.stdout.write(`PASSED ${name}\n`);
-  } catch {
-    failures += 1;
-    process.stdout.write(`FAILED ${name}\n`);
+export async function runSecuritySuite() {
+  const checks = [];
+  for (const [id, run] of cases) {
+    try {
+      await run();
+      checks.push({ id, status: "passed" });
+    } catch {
+      checks.push({
+        id,
+        status: "failed",
+        safeMessage: "The local security fixture assertion failed."
+      });
+    }
   }
+  return checks;
 }
-process.stdout.write(`Security fixture suite: ${cases.length - failures}/${cases.length} passed\n`);
-if (failures > 0) process.exitCode = 1;
