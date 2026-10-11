@@ -3,6 +3,7 @@ import { types } from 'node:util';
 
 import { compareOccurrenceIdentity } from '../../discovery/occurrences/identity.mjs';
 import { QuestionPreparationError, deriveQuestionTargetRef, prepareIndependentQuestions } from './prepare.mjs';
+import { hasCredentialLikeText } from './sensitive-content.mjs';
 
 const COMPOSITION_SCHEMA = 'ei-source-identity-composition-internal/v1';
 const OCCURRENCE_SCHEMA = 'ei-occurrence-observation-internal/v1';
@@ -283,6 +284,7 @@ function projectClaim(rawClaim, field, sourceById) {
   const keys = temporal ? new Set(['value', 'precision', 'origin', 'supports']) : new Set(['value', 'origin', 'supports']);
   const record = safeDataRecord(rawClaim, keys);
   const value = safeText(record.value.value, temporal ? MAX_TEMPORAL_BYTES : MAX_VALUE_BYTES);
+  if (hasCredentialLikeText(value)) fail('SENSITIVE_CONTENT');
   const origin = record.origin.value;
   if (origin !== 'sourced') fail('UNSUPPORTED_ORIGIN');
   let precision;

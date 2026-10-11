@@ -8,6 +8,7 @@ import test from 'node:test';
 import { createEvidenceStore } from '../../../src/evidence/store.mjs';
 import { compareOccurrenceIdentity } from '../../../src/discovery/occurrences/identity.mjs';
 import { composeSourceIdentity } from '../../../src/discovery/identity/from-extraction.mjs';
+import { prepareIndependentQuestions } from '../../../src/decisions/questions/prepare.mjs';
 import {
   QuestionPreparationError,
   SourceIdentityQuestionPreparationError,
@@ -20,7 +21,7 @@ function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function eventPage({ city, startDate, status = 'https://schema.org/EventScheduled', name = 'Garden Light Festival' }) {
+function eventPage({ city, startDate, status = 'https://schema.org/EventScheduled', name = 'Garden Light Festival', rawNameJson }) {
   const event = {
     '@type': 'Event',
     name,
@@ -31,7 +32,14 @@ function eventPage({ city, startDate, status = 'https://schema.org/EventSchedule
     eventStatus: status,
     location: { name: `Hall ${city}`, address: { addressLocality: city } }
   };
-  return Buffer.from(`<!doctype html><script type="application/ld+json">${JSON.stringify(event)}</script>`);
+  let json = JSON.stringify(event);
+  if (rawNameJson !== undefined) {
+    const nameToken = JSON.stringify(name);
+    const nameOffset = json.indexOf(nameToken);
+    assert.notEqual(nameOffset, -1);
+    json = `${json.slice(0, nameOffset)}${rawNameJson}${json.slice(nameOffset + nameToken.length)}`;
+  }
+  return Buffer.from(`<!doctype html><script type="application/ld+json">${json}</script>`);
 }
 
 function document(bytes, url) {
@@ -749,15 +757,69 @@ test('rejects a materially oversized sidecar projection without truncating it', 
   });
 });
 
-test('rejects a sensitive source value through the maintained question parser', async (t) => {
+test('rejects an unquoted sensitive source value before question serialization', async (t) => {
   const composition = await compose(t, [
     { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01', name: 'password=abcdefghijklmnop' }), url: 'https://events.example.test/seattle' },
     { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
   ]);
   const pair = composition.occurrenceCandidates.map((candidate) => candidate.candidateId).sort();
   assert.throws(() => prepare(composition, pair), (error) => {
-    assert.ok(error instanceof QuestionPreparationError);
+    assert.ok(error instanceof SourceIdentityQuestionPreparationError);
     assert.equal(error.code, 'SENSITIVE_CONTENT');
     return true;
   });
+});
+
+test('rejects quoted credential assignments after actual composer decoding and preserves safe quoted names', async (t) => {
+  const sensitiveName = 'password="abcdefghijklmnop"';
+  const encodedCases = [
+    { label: 'JSON escaped double quotes', rawNameJson: undefined },
+    { label: 'JSON Unicode-escaped credential label', rawNameJson: '"pass\\u0077ord=\\"abcdefghijklmnop\\""' },
+    { label: 'JSON Unicode-escaped assignment quotes', rawNameJson: '"password=\\u0022abcdefghijklmnop\\u0022"' }
+  ];
+
+  for (const { label, rawNameJson } of encodedCases) {
+    await t.test(label, async (subtest) => {
+      const composition = await compose(subtest, [
+        { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01', name: sensitiveName, rawNameJson }), url: 'https://events.example.test/seattle' },
+        { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+      ]);
+      const left = candidateForCity(composition, 'Seattle');
+      const right = candidateForCity(composition, 'Vancouver');
+      const pair = [left.candidateId, right.candidateId].sort();
+      assert.equal(left.facts.title[0].value, sensitiveName, 'the maintained composer decoded the intended selected claim');
+
+      const rawObservation = {
+        observationRef: 'sensitive-probe',
+        kind: 'claim_evidence_text',
+        sourceRef: 'source-probe',
+        candidateRef: left.candidateId,
+        fieldRef: 'title-probe',
+        language: 'en',
+        text: sensitiveName,
+        claimText: sensitiveName
+      };
+      assert.throws(() => prepareIndependentQuestions([rawObservation]), (error) => {
+        assert.ok(error instanceof QuestionPreparationError);
+        assert.equal(error.code, 'SENSITIVE_CONTENT');
+        return true;
+      });
+      assert.throws(() => prepare(composition, pair), (error) => {
+        assert.ok(error instanceof SourceIdentityQuestionPreparationError);
+        assert.equal(error.code, 'SENSITIVE_CONTENT');
+        return true;
+      });
+    });
+  }
+
+  const safeName = 'Garden "Evening" Festival';
+  const safeComposition = await compose(t, [
+    { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01', name: safeName }), url: 'https://events.example.test/seattle' },
+    { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+  ]);
+  const pair = [candidateForCity(safeComposition, 'Seattle').candidateId, candidateForCity(safeComposition, 'Vancouver').candidateId].sort();
+  const result = prepare(safeComposition, pair);
+  assert.ok(result.sourceIdentityBinding.selectedCandidates.some((candidate) => candidate.facts.some((claim) => claim.value === safeName)));
+  assert.equal(result.plan.readinessStatus, 'blocked');
+  assert.equal(result.plan.executionStatus, 'not_dispatched');
 });

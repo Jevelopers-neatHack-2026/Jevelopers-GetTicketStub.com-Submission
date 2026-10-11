@@ -8,7 +8,8 @@ export type SourceIdentityQuestionPreparationErrorCode =
   | 'UNKNOWN_TARGET_REFERENCE'
   | 'SOURCE_BINDING_FAILED'
   | 'UNSUPPORTED_ORIGIN'
-  | 'RESOURCE_LIMIT_EXCEEDED';
+  | 'RESOURCE_LIMIT_EXCEEDED'
+  | 'SENSITIVE_CONTENT';
 
 export interface SourceIdentityQuestionPreparationOptions {
   readonly candidateIds: readonly [string, string];
