@@ -883,8 +883,13 @@ test('private receipt writes recheck current authorization after SQLite contenti
       return authenticatedRequest?.principal?.tenantId === tenantId && authenticatedRequest.allowPrivate === true;
     },
   });
-  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
-  await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const bootstrapStore = harness.openStore({ lockTimeoutMs: 10_000 });
+  const scope = await bootstrapStore.scopeForAuthenticatedRequest(request('tenant-a'));
+  // Initialize the cold SQLite schema and seed evidence under a separate
+  // bounded setup budget. The receipt race below still uses harness.store's
+  // original two-second lock budget.
+  await bootstrapStore.integritySnapshot(scope);
+  await ingest(bootstrapStore, scope, harness.sourceText, harness.createPermit);
 
   const marker = path.join(harness.directory, 'receipt-held-writer');
   const held = runWorker(harness.directory, 'hold-lock', marker, path.join(harness.directory, 'unused-barrier'));
