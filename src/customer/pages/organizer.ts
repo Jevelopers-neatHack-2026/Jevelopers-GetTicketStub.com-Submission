@@ -2,6 +2,7 @@
 // Organizer mode: a locked design that attendees claim within, plus a client-side CSV guest list parser.
 import { NEATHACK, newStub } from "@/customer/studio/fixtures";
 import type { Edition, EventData, Stub } from "@/customer/studio/types";
+import { flow } from "@/customer/flows/events";
 
 export interface OrganizerDesign {
   v: 1;
@@ -117,3 +118,38 @@ Mei Chen,B04,Night Owls
 Kwame Mensah,B05,Night Owls
 Sofia Lindqvist,C01,Paperclip
 Arjun Mehta,C02,Paperclip`;
+
+/** What a parsed guest list amounts to, as counts only: never a header, a cell, a name or the file's name. */
+export function csvSummary(list: GuestList): { result: "parsed" | "empty" | "no_rows"; row_count: number; column_count: number } {
+  const column_count = Math.min(100, list.headers.length);
+  const row_count = Math.min(1000, list.rows.length);
+  if (list.headers.length === 0) return { result: "empty", row_count, column_count };
+  if (list.rows.length === 0) return { result: "no_rows", row_count, column_count };
+  return { result: "parsed", row_count, column_count };
+}
+
+/** Guests a mapping yields (rows with a name), and rows it drops for having none. */
+export function mappedCounts(list: GuestList, nameColumn: number): { row_count: number; missing_name_count: number } {
+  const named = list.rows.filter((r) => (r[nameColumn] ?? "").trim()).length;
+  return { row_count: Math.min(1000, list.rows.length), missing_name_count: Math.min(1000, list.rows.length - named) };
+}
+
+/** The wizard's steps, in order, as the analytics catalog names them. */
+export const ORGANIZER_STEPS = ["design", "guests", "check", "publish"] as const;
+
+/**
+ * Report the step the wizard settles on when it opens: Design, or Publish when a draft came back from sign-in. Once per
+ * mount: `seen` is the component's ref, which survives Strict Mode's second effect run (and that second run no longer
+ * finds the draft, so without the guard it would wrongly add a Design step).
+ */
+export function reportOpeningStep(seen: { current: boolean }, restored: boolean): void {
+  if (seen.current) return;
+  seen.current = true;
+  flow("organizer_step", restored ? { step: "publish", via: "restore" } : { step: "design", via: "open" });
+}
+
+/** Report a move between steps (Back, Next, the step list). Moving to the step already shown is not a move. */
+export function reportStepMove(from: number, to: number): void {
+  if (from === to || !ORGANIZER_STEPS[to]) return;
+  flow("organizer_step", { step: ORGANIZER_STEPS[to], via: "nav" });
+}
