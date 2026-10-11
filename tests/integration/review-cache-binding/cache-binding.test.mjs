@@ -261,6 +261,31 @@ function interceptFinalBoundRead(onEntry) {
   });
 }
 
+function interceptHistoryDisclosureGuard(onEntry, shouldIntercept = () => true) {
+  const descriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'prepare');
+  let reached = false;
+  let restored = false;
+  Object.defineProperty(DatabaseSync.prototype, 'prepare', {
+    ...descriptor,
+    value(sql, ...args) {
+      if (!reached && shouldIntercept() && String(sql).includes('SELECT phase, operation_id, fence FROM correction_cache_state WHERE event_key = ?')
+        && new Error().stack.includes('guardHistoryDisclosure')) {
+        reached = true;
+        onEntry();
+      }
+      return Reflect.apply(descriptor.value, this, [sql, ...args]);
+    },
+  });
+  return Object.freeze({
+    reached: () => reached,
+    restore() {
+      if (restored) return;
+      restored = true;
+      Object.defineProperty(DatabaseSync.prototype, 'prepare', descriptor);
+    },
+  });
+}
+
 test('composed correction binds exact history provenance, invalidates cache locally, and keeps ACK status separate', async (t) => {
   const f = await fixture(t);
   const seeded = await createSeed(f);
@@ -2074,4 +2099,201 @@ test('unsupported accumulated support references fail before a durable bind barr
     assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count, 0);
     assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase = 'pending_bind'").get().count, 0);
   } finally { history.close(); }
+});
+
+for (const kind of ['correction', 'source_refresh']) {
+  test(`composed ${kind} rechecks private history permission after cache host work and exact retry does not duplicate effects`, async (t) => {
+    let revokeHistoryRead = false;
+    let revokeOnInvalidate = false;
+    let cacheInvalidationReached = false;
+    const historyReadDecisions = [];
+    const f = await fixture(t, {
+      history: {
+        authorizeBoundary(input) {
+          const denied = revokeHistoryRead && input.action === 'private_profile.read';
+          const allowed = !denied && input.request?.serverContextToken === TRUSTED_TOKEN
+            && input.request?.principal?.tenantId === input.tenantId
+            && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+          if (input.action === 'private_profile.read') historyReadDecisions.push(allowed);
+          return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+            eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+        },
+      },
+      cache: {
+        authorizeBoundary(input) {
+          if (revokeOnInvalidate && input.action === 'cache.private_profile.invalidate') {
+            cacheInvalidationReached = true;
+            revokeHistoryRead = true;
+          }
+          const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+            && input.request?.principal?.tenantId === input.tenantId
+            && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+          return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+            eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+        },
+      },
+    });
+    const seeded = await createSeed(f);
+    await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+      { idempotencyKey: `bind-final-${kind}`, profile: cacheProfile() }, f.authRequest);
+    const input = kind === 'correction' ? {
+      eventId: EVENT_ID,
+      baseVersionId: seeded.snapshot.versionId,
+      baseContentHash: seeded.snapshot.contentHash,
+      field: 'event_date',
+      value: { precision: 'date', value: '2027-06-27' },
+      idempotencyKey: `final-disclosure-${kind}`,
+      retentionHandle: f.createPermit(),
+    } : {
+      eventId: EVENT_ID,
+      baseVersionId: seeded.snapshot.versionId,
+      baseContentHash: seeded.snapshot.contentHash,
+      sourceFacts: { event_date: { status: 'sourced', value: { precision: 'date', value: '2027-06-28' },
+        sourceEvidence: [sourceEvidence(`final-disclosure-${kind}`, '2027-06-28')] } },
+      idempotencyKey: `final-disclosure-${kind}`,
+      retentionHandle: f.createPermit(),
+    };
+    const invoke = () => kind === 'correction'
+      ? f.store.applyCorrection(f.scope, input, f.authRequest)
+      : f.store.refreshSources(f.scope, input, f.authRequest);
+
+    revokeOnInvalidate = true;
+    const denied = await invoke().then(() => null, (error) => error);
+    assert.equal(denied?.code, 'REVIEW_DENIED');
+    assert.equal(cacheInvalidationReached, true, 'cache host invalidation ran before final history disclosure');
+    assert.equal(historyReadDecisions.at(-1), false, 'the final history disclosure guard observed revoked permission');
+
+    const historyDb = new DatabaseSync(historyDatabasePath(f.root));
+    const cacheDb = new DatabaseSync(cacheDatabasePath(f.root));
+    try {
+      assert.equal(historyDb.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 2,
+        'the committed history effect remains durable although its result was denied');
+      assert.equal(historyDb.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count, 2);
+      assert.equal(historyDb.prepare("SELECT phase FROM correction_cache_state WHERE kind = ?").get(kind).phase, 'complete');
+      assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+    } finally { historyDb.close(); cacheDb.close(); }
+
+    revokeHistoryRead = false;
+    revokeOnInvalidate = false;
+    const retried = await invoke();
+    assert.equal(retried.replayed, true);
+    assert.equal(retried.snapshot.revision, seeded.snapshot.revision + 1);
+    const afterRetryHistory = new DatabaseSync(historyDatabasePath(f.root));
+    const afterRetryCache = new DatabaseSync(cacheDatabasePath(f.root));
+    try {
+      assert.equal(afterRetryHistory.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 2,
+        'exact retry returns the committed version without adding a duplicate');
+      assert.equal(afterRetryHistory.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count, 2);
+      assert.equal(afterRetryCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1,
+        'the invalidation receipt prevents duplicate cache outbox work');
+    } finally { afterRetryHistory.close(); afterRetryCache.close(); }
+  });
+}
+
+test('abort during final history disclosure rejects createHistory but exact retry replays its committed version', async (t) => {
+  const controller = new AbortController();
+  let abortAtRead = false;
+  let finalReadReached = false;
+  const f = await fixture(t, { history: {
+    authorizeBoundary(input) {
+      if (input.action === 'private_profile.read' && abortAtRead) {
+        finalReadReached = true;
+        controller.abort();
+      }
+      const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+    },
+  } });
+  const history = await historyStoreFor(f);
+  const input = { eventId: EVENT_ID, sourceFacts: initialFacts(), idempotencyKey: 'abort-final-history-disclosure',
+    retentionHandle: f.createPermit() };
+
+  abortAtRead = true;
+  await assert.rejects(history.history.createHistory(history.scope, input, f.authRequest, { signal: controller.signal }),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_ABORTED');
+  assert.equal(finalReadReached, true, 'the genuine signal aborted from the final private read guard');
+  const afterAbort = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(afterAbort.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 1,
+      'the already-committed history version remains available after disclosure cancellation');
+    assert.equal(afterAbort.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count, 1);
+  } finally { afterAbort.close(); }
+
+  abortAtRead = false;
+  const replay = await history.history.createHistory(history.scope, input, f.authRequest);
+  assert.equal(replay.replayed, true);
+  const afterRetry = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(afterRetry.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 1,
+      'the authorized exact retry discloses the existing version without duplicating it');
+    assert.equal(afterRetry.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count, 1);
+  } finally { afterRetry.close(); }
+});
+
+test('composed correction refuses final disclosure when history expires during final SQLite guard work', async (t) => {
+  let afterCacheInvalidation = false;
+  let finalHistoryGuard = false;
+  const f = await fixture(t, {
+    history: {
+      authorizeBoundary(input) {
+        if (input.action === 'private_profile.read' && afterCacheInvalidation) {
+          finalHistoryGuard = true;
+          f.clock.value = EPOCH + 59_950;
+        }
+        const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+          && input.request?.principal?.tenantId === input.tenantId
+          && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+        return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+          eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+      },
+    },
+    cache: {
+      authorizeBoundary(input) {
+        if (input.action === 'cache.private_profile.invalidate') afterCacheInvalidation = true;
+        const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+          && input.request?.principal?.tenantId === input.tenantId
+          && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+        return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+          eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+      },
+    },
+  });
+  const seeded = await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-final-correction-expiry', profile: cacheProfile() }, f.authRequest);
+  const interception = interceptHistoryDisclosureGuard(() => {
+    const deadline = process.hrtime.bigint() + 100_000_000n;
+    while (process.hrtime.bigint() < deadline) { /* Expire the history retention after the final permit is captured. */ }
+  }, () => afterCacheInvalidation);
+  t.after(interception.restore);
+  let result;
+  let error;
+  try {
+    result = await f.store.applyCorrection(f.scope, {
+      eventId: EVENT_ID,
+      baseVersionId: seeded.snapshot.versionId,
+      baseContentHash: seeded.snapshot.contentHash,
+      field: 'event_date',
+      value: { precision: 'date', value: '2027-06-29' },
+      idempotencyKey: 'final-correction-expiry',
+      retentionHandle: f.createPermit(),
+    }, f.authRequest);
+  } catch (caught) { error = caught; }
+  finally { interception.restore(); }
+
+  assert.equal(afterCacheInvalidation, true);
+  assert.equal(finalHistoryGuard, true, 'the final history permit was captured after all cache host work');
+  assert.equal(interception.reached(), true, 'synchronous SQLite work crossed the history expiry boundary');
+  assert.equal(error?.code, 'REVIEW_EXPIRED');
+  assert.equal(result, undefined, 'the expired history result was not disclosed');
+  const historyDb = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(historyDb.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 2,
+      'expiry denies disclosure without undoing the committed correction');
+    assert.equal(historyDb.prepare("SELECT phase FROM correction_cache_state WHERE kind = 'correction'").get().phase,
+      'complete');
+  } finally { historyDb.close(); }
 });

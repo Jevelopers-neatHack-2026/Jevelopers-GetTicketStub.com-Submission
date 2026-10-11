@@ -1001,7 +1001,7 @@ export function createCorrectionHistoryStore(options) {
       expiresAtMs,
       ...details,
     }, expiresAtMs);
-    return withBindingTransaction(info, directory, (database, time) => {
+    const result = await withBindingTransaction(info, directory, (database, time) => {
       if (time.effectiveNow >= expiresAtMs) fail('REVIEW_EXPIRED');
       const state = database.prepare('SELECT phase, operation_id, fence FROM correction_cache_state WHERE event_key = ?').get(eventKey);
       if (state && state.phase !== 'complete') {
@@ -1012,6 +1012,8 @@ export function createCorrectionHistoryStore(options) {
       verify(database, time);
       return value;
     }, signal, () => reauthorizeRequest(info, request, eventId, action, actorId, field), boundary, true);
+    throwIfAborted(signal);
+    return result;
   }
 
   async function withTransactionUnlocked(info, directory, operation, signal, finalBoundary, transactionOptions) {
@@ -1358,11 +1360,11 @@ export function createCorrectionHistoryStore(options) {
       .run(targetVersionId, targetContentHash, context.eventKey, current.operation_hash, operation.operationId);
   }
 
-  async function recordBindingHistoryTarget(bindingOperation, snapshot) {
+  async function recordBindingHistoryTarget(bindingOperation, snapshot, signal = undefined) {
     const { context } = bindingOperation;
     await withBindingTransaction(context.info, context.directory, (database, time) => {
       recordBindingTargetInTransaction(database, bindingOperation, snapshot.versionId, snapshot.contentHash, time.now);
-    }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
+    }, signal, () => reauthorizeRequest(context.info, context.request, context.eventId,
       context.action, context.actorId, context.field), boundaryFor(context.info, context.actorId, context.eventId,
       'review.history.cache_operation_state', context.field, context.request, {
         operationId: bindingOperation.operation.operationId,
@@ -1388,7 +1390,7 @@ export function createCorrectionHistoryStore(options) {
         const state = database.prepare(`SELECT phase, operation_id, fence, base_version_id, base_content_hash,
           target_version_id, target_content_hash FROM correction_cache_state WHERE event_key = ?`).get(eventKey);
         return row && head ? { row, head, state } : null;
-      }, undefined, undefined, { sync: true });
+      }, signal, undefined, { sync: true });
       if (!raw) return null;
       if (raw.head.state !== 'available' || raw.head.expires_at_ms <= nowMs()) fail('REVIEW_EXPIRED');
       const snapshot = await decryptVersion(info, raw.row);
@@ -1407,7 +1409,7 @@ export function createCorrectionHistoryStore(options) {
           phase: operationValue.phase };
       }
       return await guardHistoryDisclosure({ info, directory, eventId, eventKey, actorId, request, action, field,
-        snapshot, value: replay, expiresAtMs: Math.min(raw.head.expires_at_ms, raw.row.expires_at_ms),
+        snapshot, value: replay, signal, expiresAtMs: Math.min(raw.head.expires_at_ms, raw.row.expires_at_ms),
         details: { replayed: true, operation, ...(allowPendingOperation ? {
           bindingOperationId: allowPendingOperation.operationId,
           bindingOperationFence: allowPendingOperation.fence,
@@ -1471,7 +1473,7 @@ export function createCorrectionHistoryStore(options) {
           normalizedInput, indexKey, request, action, field, signal, bindingOperation);
         if (!replay) fail('REVIEW_VERSION_CONFLICT');
         throwIfAborted(signal);
-        if (bindingOperation) await recordBindingHistoryTarget(bindingOperation, replay.snapshot);
+        if (bindingOperation) await recordBindingHistoryTarget(bindingOperation, replay.snapshot, signal);
         throwIfAborted(signal);
         return replay;
       }
@@ -1633,7 +1635,7 @@ export function createCorrectionHistoryStore(options) {
           targetContentHash: snapshot.contentHash,
         } : undefined;
         return await guardHistoryDisclosure({ info, directory, eventId, eventKey, actorId, request, action, field,
-          snapshot, value, expiresAtMs: Math.min(replay.head.expires_at_ms, replay.row.expires_at_ms),
+          snapshot, value, signal, expiresAtMs: Math.min(replay.head.expires_at_ms, replay.row.expires_at_ms),
           details: { operation, replayed: true, ...(pending ? { bindingOperationId: pending.operationId,
             bindingOperationFence: pending.fence, bindingOperationPhase: pending.phase } : {}) },
           allowPendingOperation: pending,
@@ -1659,7 +1661,7 @@ export function createCorrectionHistoryStore(options) {
         targetContentHash: snapshot.contentHash,
       } : undefined;
       return await guardHistoryDisclosure({ info, directory, eventId, eventKey, actorId, request, action, field,
-        snapshot, value: result, expiresAtMs: Date.parse(snapshot.expiresAt),
+        snapshot, value: result, signal, expiresAtMs: Date.parse(snapshot.expiresAt),
         details: { operation, replayed: false, ...(pending ? { bindingOperationId: pending.operationId,
           bindingOperationFence: pending.fence, bindingOperationPhase: pending.phase } : {}) },
         allowPendingOperation: pending,
@@ -1764,6 +1766,7 @@ export function createCorrectionHistoryStore(options) {
         request,
         action: 'initialize_history',
       });
+      throwIfAborted(signal);
       return result;
     } finally {
       indexKey.fill(0);
@@ -1822,7 +1825,8 @@ export function createCorrectionHistoryStore(options) {
         normalizedInput, indexKey, request, 'apply_correction', field, signal, internalBinding);
       throwIfAborted(signal);
       if (replay) {
-        if (internalBinding) await recordBindingHistoryTarget(internalBinding, replay.snapshot);
+        if (internalBinding) await recordBindingHistoryTarget(internalBinding, replay.snapshot, signal);
+        throwIfAborted(signal);
         return replay;
       }
       const base = await loadBase(info, eventId, baseVersionId, input.baseContentHash, indexKey,
@@ -1873,7 +1877,7 @@ export function createCorrectionHistoryStore(options) {
           return stateValue;
         },
       };
-      return await persistVersion({
+      const result = await persistVersion({
         info,
         directory: base.directory,
         eventId,
@@ -1893,6 +1897,8 @@ export function createCorrectionHistoryStore(options) {
         field,
         bindingOperation: internalBinding,
       });
+      throwIfAborted(signal);
+      return result;
     } finally {
       indexKey.fill(0);
     }
@@ -1921,7 +1927,8 @@ export function createCorrectionHistoryStore(options) {
         normalizedInput, indexKey, request, 'refresh_source_facts', undefined, signal, internalBinding);
       throwIfAborted(signal);
       if (replay) {
-        if (internalBinding) await recordBindingHistoryTarget(internalBinding, replay.snapshot);
+        if (internalBinding) await recordBindingHistoryTarget(internalBinding, replay.snapshot, signal);
+        throwIfAborted(signal);
         return replay;
       }
       const base = await loadBase(info, eventId, baseVersionId, input.baseContentHash, indexKey,
@@ -1956,7 +1963,7 @@ export function createCorrectionHistoryStore(options) {
           return next;
         },
       };
-      return await persistVersion({
+      const result = await persistVersion({
         info,
         directory: base.directory,
         eventId,
@@ -1975,6 +1982,8 @@ export function createCorrectionHistoryStore(options) {
         action: 'refresh_source_facts',
         bindingOperation: internalBinding,
       });
+      throwIfAborted(signal);
+      return result;
     } finally {
       indexKey.fill(0);
     }
@@ -2399,10 +2408,35 @@ export function createCorrectionHistoryStore(options) {
   }
 
   async function bindingReadVersion(context, versionIdValue, request = context.request, action = 'read_history_version',
-    pendingOperation = undefined) {
+    pendingOperation = undefined, signal = undefined, completedOperation = undefined) {
     const versionId = validateIdentifier(versionIdValue);
+    let expectedCompletedOperation;
+    if (completedOperation !== undefined) {
+      const expected = ownDataRecord(completedOperation, new Set([
+        'operationId', 'bindingId', 'fence', 'kind', 'phase', 'baseVersionId', 'baseContentHash',
+        'targetVersionId', 'targetContentHash', 'replayed',
+      ]));
+      if (!expected || !validSafeString(expected.operationId, 1, 180) || !Number.isSafeInteger(expected.fence)
+        || expected.fence < 1 || !['correction', 'source_refresh'].includes(expected.kind)
+        || !['pending_correction', 'history_committed', 'cache_invalidating', 'complete'].includes(expected.phase)
+        || !validSafeString(expected.baseVersionId, 1, 180) || !/^[a-f0-9]{64}$/.test(expected.baseContentHash)
+        || !validSafeString(expected.targetVersionId, 1, 180) || !/^[a-f0-9]{64}$/.test(expected.targetContentHash)
+        || expected.targetVersionId !== versionId
+        || (expected.replayed !== undefined && typeof expected.replayed !== 'boolean')) fail('REVIEW_DENIED');
+      expectedCompletedOperation = Object.freeze({
+        operationId: expected.operationId,
+        fence: expected.fence,
+        kind: expected.kind,
+        baseVersionId: expected.baseVersionId,
+        baseContentHash: expected.baseContentHash,
+        targetVersionId: expected.targetVersionId,
+        targetContentHash: expected.targetContentHash,
+      });
+    }
     try {
+      throwIfAborted(signal);
       await reauthorizeRequest(context.info, request, context.eventId, action, context.actorId, context.field);
+      throwIfAborted(signal);
       const raw = await withTransaction(context.info, context.directory, (database, time) => {
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
         if (!head) fail('REVIEW_NOT_FOUND');
@@ -2410,12 +2444,33 @@ export function createCorrectionHistoryStore(options) {
         const selected = rowForVersion(database, context.eventKey, versionId);
         if (!selected) fail('REVIEW_NOT_FOUND');
         if (selected.expires_at_ms <= time.now) fail('REVIEW_EXPIRED');
-        const state = database.prepare(`SELECT phase, operation_id, fence, base_version_id, base_content_hash,
+        const state = database.prepare(`SELECT phase, operation_id, fence, kind, base_version_id, base_content_hash,
           target_version_id, target_content_hash FROM correction_cache_state WHERE event_key = ?`).get(context.eventKey);
-        return { head, row: selected, state };
-      }, undefined, undefined, { sync: true });
+        let receipt;
+        if (expectedCompletedOperation) {
+          receipt = database.prepare(`SELECT operation_id, kind, target_version_id, target_content_hash
+            FROM correction_cache_operations WHERE event_key = ? AND operation_id = ?`)
+            .get(context.eventKey, expectedCompletedOperation.operationId);
+          if (head.version_id !== expectedCompletedOperation.targetVersionId
+            || head.content_hash !== expectedCompletedOperation.targetContentHash
+            || !state || state.phase !== 'complete'
+            || state.operation_id !== expectedCompletedOperation.operationId
+            || state.fence !== expectedCompletedOperation.fence || state.kind !== expectedCompletedOperation.kind
+            || state.base_version_id !== expectedCompletedOperation.baseVersionId
+            || state.base_content_hash !== expectedCompletedOperation.baseContentHash
+            || state.target_version_id !== expectedCompletedOperation.targetVersionId
+            || state.target_content_hash !== expectedCompletedOperation.targetContentHash
+            || !receipt || receipt.operation_id !== expectedCompletedOperation.operationId
+            || receipt.kind !== expectedCompletedOperation.kind
+            || receipt.target_version_id !== expectedCompletedOperation.targetVersionId
+            || receipt.target_content_hash !== expectedCompletedOperation.targetContentHash) fail('REVIEW_VERSION_CONFLICT');
+        }
+        return { head, row: selected, state, receipt };
+      }, signal, undefined, { sync: true });
       const snapshot = await decryptVersion(context.info, raw.row);
+      throwIfAborted(signal);
       await reauthorizeRequest(context.info, request, context.eventId, action, context.actorId, context.field);
+      throwIfAborted(signal);
       let allowPendingOperation;
       if (pendingOperation !== undefined) {
         const pending = ownDataRecord(pendingOperation, new Set([
@@ -2443,18 +2498,24 @@ export function createCorrectionHistoryStore(options) {
             && raw.state.target_content_hash !== pending.targetContentHash)) fail('REVIEW_BUSY');
         allowPendingOperation = { operationId: pending.operationId, fence: pending.fence, phase: pending.phase };
       }
-      return await guardHistoryDisclosure({ info: context.info, directory: context.directory,
+      const value = await guardHistoryDisclosure({ info: context.info, directory: context.directory,
         eventId: context.eventId, eventKey: context.eventKey, actorId: context.actorId, request, action,
         details: allowPendingOperation ? {
           bindingOperationId: allowPendingOperation.operationId,
           bindingOperationFence: allowPendingOperation.fence,
           bindingOperationPhase: allowPendingOperation.phase,
+        } : expectedCompletedOperation ? {
+          bindingOperationId: expectedCompletedOperation.operationId,
+          bindingOperationFence: expectedCompletedOperation.fence,
+          bindingOperationPhase: 'complete',
+          bindingTargetVersionId: expectedCompletedOperation.targetVersionId,
+          bindingTargetContentHash: expectedCompletedOperation.targetContentHash,
         } : {},
-        field: context.field, snapshot, expiresAtMs: Math.min(raw.head.expires_at_ms, raw.row.expires_at_ms),
+        field: context.field, snapshot, signal, expiresAtMs: Math.min(raw.head.expires_at_ms, raw.row.expires_at_ms),
         allowPendingOperation,
         verify(database, time) {
           const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
-          const state = database.prepare(`SELECT phase, operation_id, fence, base_version_id, base_content_hash,
+          const state = database.prepare(`SELECT phase, operation_id, fence, kind, base_version_id, base_content_hash,
             target_version_id, target_content_hash FROM correction_cache_state WHERE event_key = ?`).get(context.eventKey);
           const row = rowForVersion(database, context.eventKey, versionId);
           if (!head || head.state !== 'available' || head.expires_at_ms !== raw.head.expires_at_ms
@@ -2465,14 +2526,44 @@ export function createCorrectionHistoryStore(options) {
               || state.operation_id !== allowPendingOperation.operationId || state.fence !== allowPendingOperation.fence
               || state.base_version_id !== pendingOperation.baseVersionId
               || state.base_content_hash !== pendingOperation.baseContentHash))) fail('REVIEW_VERSION_CONFLICT');
+          if (expectedCompletedOperation) {
+            const receipt = database.prepare(`SELECT operation_id, kind, target_version_id, target_content_hash
+              FROM correction_cache_operations WHERE event_key = ? AND operation_id = ?`)
+              .get(context.eventKey, expectedCompletedOperation.operationId);
+            if (head.version_id !== expectedCompletedOperation.targetVersionId
+              || head.content_hash !== expectedCompletedOperation.targetContentHash
+              || !state || state.phase !== 'complete'
+              || state.operation_id !== expectedCompletedOperation.operationId
+              || state.fence !== expectedCompletedOperation.fence || state.kind !== expectedCompletedOperation.kind
+              || state.base_version_id !== expectedCompletedOperation.baseVersionId
+              || state.base_content_hash !== expectedCompletedOperation.baseContentHash
+              || state.target_version_id !== expectedCompletedOperation.targetVersionId
+              || state.target_content_hash !== expectedCompletedOperation.targetContentHash
+              || !receipt || receipt.operation_id !== expectedCompletedOperation.operationId
+              || receipt.kind !== expectedCompletedOperation.kind
+              || receipt.target_version_id !== expectedCompletedOperation.targetVersionId
+              || receipt.target_content_hash !== expectedCompletedOperation.targetContentHash) fail('REVIEW_VERSION_CONFLICT');
+          }
         } });
+      throwIfAborted(signal);
+      return value;
     } catch (error) {
-      return throwAfterExpiredCleanup(context.info, context.directory, context.eventKey, error, undefined, {
+      return throwAfterExpiredCleanup(context.info, context.directory, context.eventKey, error, signal, {
         beforeBegin: () => reauthorizeRequest(context.info, request, context.eventId, 'purge_correction_history', context.actorId),
         boundary: boundaryFor(context.info, context.actorId, context.eventId, 'review.history.retention_purge', undefined, request,
           { reason: 'expired_binding_version_read' }),
       });
     }
+  }
+
+  async function bindingReadOperationResult(context, operation, request = context.request, action = 'read_history_version',
+    signal = undefined) {
+    const expected = ownDataRecord(operation, new Set([
+      'operationId', 'bindingId', 'fence', 'kind', 'phase', 'baseVersionId', 'baseContentHash',
+      'targetVersionId', 'targetContentHash', 'replayed',
+    ]));
+    if (!expected || !validSafeString(expected.targetVersionId, 1, 180)) fail('REVIEW_DENIED');
+    return bindingReadVersion(context, expected.targetVersionId, request, action, undefined, signal, operation);
   }
 
   async function beginBindingOperation(context, specValue, request, signal) {
@@ -2978,6 +3069,7 @@ export function createCorrectionHistoryStore(options) {
     readHead: bindingReadHead,
     preflightBindHead: bindingPreflightBindHead,
     readVersion: bindingReadVersion,
+    readOperationResult: bindingReadOperationResult,
     validateOperationInput: validateBindingRevisionInput,
     beginOperation: beginBindingOperation,
     applyOperation: bindingApplyHistoryOperation,

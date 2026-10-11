@@ -431,7 +431,7 @@ export function createCorrectionCacheBinding(options) {
           action, ...(kind === 'correction' ? { field: raw.field } : {}),
         }, request, signal);
         if (operation.replayed) {
-          const snapshot = await historyPort.readVersion(historyContext, operation.targetVersionId, request, 'read_history_version');
+          const snapshot = await historyPort.readOperationResult(historyContext, operation, request, action, signal);
           return correctionResult(snapshot, true);
         }
         if (signal.aborted) fail('REVIEW_ABORTED');
@@ -457,7 +457,8 @@ export function createCorrectionCacheBinding(options) {
           }
           await historyPort.finishOperation(historyContext, targetOperation);
         } finally { fence.close(); }
-        return correctionResult(revised.snapshot, revised.replayed);
+        const snapshot = await historyPort.readOperationResult(historyContext, targetOperation, request, action, signal);
+        return correctionResult(snapshot, revised.replayed);
       } finally {
         historyPort.disposeContext(historyContext);
       }
