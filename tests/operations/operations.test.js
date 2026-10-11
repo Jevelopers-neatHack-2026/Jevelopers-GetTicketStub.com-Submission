@@ -16,6 +16,7 @@ import {
   projectTelemetryEvent
 } from '@jevelopers/agent-harness-runtime';
 import { OPERATIONS_STORAGE_CAPABILITY } from '../../src/internal/private-ops-store-capability.js';
+import { runtimeError } from '../../src/internal/errors.js';
 import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } from '../../src/worker/private/config.js';
 import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
@@ -4572,10 +4573,15 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     const controls = [
       ['assertion', 'ASSERTION_FAILURE'],
       ['busy', 'SQLITE_BUSY'],
+      ['runtime-busy', 'SQLITE_BUSY'],
+      ['node-busy', 'SQLITE_BUSY'],
+      ['node-locked', 'SQLITE_BUSY'],
+      ['node-unsupported', 'UNCLASSIFIED_FAILURE'],
+      ['wrapped-runtime-busy', 'ASSERTION_FAILURE'],
       ['parse', 'JSON_PARSE'],
       ['timeout', 'CHILD_TIMEOUT']
     ];
-    const failureCodes = [];
+    const diagnosticsByMode = new Map();
     for (const [mode, expectedCode] of controls) {
       const result = spawnSync(process.execPath, [
         join(ROOT, 'tests/operations/fixtures/failure-diagnostic-child.mjs'), mode
@@ -4606,9 +4612,61 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       const safeBytes = JSON.stringify(diagnostic);
       assert.ok(Buffer.byteLength(safeBytes, 'utf8') <= 2_048, mode);
       assert.doesNotMatch(safeBytes, /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d|file:\/\/|\/Users\//u, mode);
-      failureCodes.push(diagnostic.records[0].failureCode);
+      diagnosticsByMode.set(mode, diagnostic.records[0]);
     }
-    assert.equal(new Set(failureCodes).size, controls.length);
+    assert.equal(diagnosticsByMode.get('runtime-busy').errorClass, 'RuntimeError');
+    assert.equal(diagnosticsByMode.get('runtime-busy').errorCode, 'STORE_BUSY');
+    assert.equal(diagnosticsByMode.get('node-busy').sqlitePrimaryCode, 5);
+    assert.equal(diagnosticsByMode.get('node-locked').sqlitePrimaryCode, 6);
+    assert.equal(diagnosticsByMode.get('node-unsupported').sqlitePrimaryCode, null);
+    assert.deepEqual(diagnosticsByMode.get('wrapped-runtime-busy').nestedStorageCause, {
+      failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError',
+      errorCode: 'STORE_BUSY', sqlitePrimaryCode: null
+    });
+    assert.equal(diagnosticsByMode.get('wrapped-runtime-busy').failureCode, 'ASSERTION_FAILURE');
+
+    const typedBusy = runtimeError({
+      module: 'state', operation: 'write', code: 'STORE_BUSY', retryable: true,
+      safe_message: 'SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d'
+    });
+    const typedDiagnostic = buildSafeFailureDiagnostics({
+      scenario: 'OPS13.C01', phase: 'diagnostic-control', stage: 'node-test-runner',
+      status: 1, error: typedBusy
+    });
+    assert.equal(typedDiagnostic.records[0].failureCode, 'SQLITE_BUSY');
+    assert.equal(typedDiagnostic.records[0].errorClass, 'RuntimeError');
+    assert.equal(typedDiagnostic.records[0].errorCode, 'STORE_BUSY');
+    assert.doesNotMatch(JSON.stringify(typedDiagnostic), /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d/u);
+
+    const temporary = tempDirectory('ah11-diagnostic-node-sqlite-');
+    const blocker = new DatabaseSync(temporary.databasePath, { timeout: 0 });
+    const contender = new DatabaseSync(temporary.databasePath, { timeout: 0 });
+    try {
+      blocker.exec('CREATE TABLE diagnostic_lock (id INTEGER PRIMARY KEY)');
+      blocker.exec('BEGIN IMMEDIATE');
+      let sqliteBusy;
+      try {
+        contender.exec('BEGIN IMMEDIATE');
+      } catch (error) {
+        sqliteBusy = error;
+      }
+      assert.ok(sqliteBusy instanceof Error);
+      assert.equal(sqliteBusy.code, 'ERR_SQLITE_ERROR');
+      assert.equal(sqliteBusy.errcode & 0xff, 5);
+      const sqliteDiagnostic = buildSafeFailureDiagnostics({
+        scenario: 'OPS13.C01', phase: 'diagnostic-control', stage: 'node-test-runner',
+        status: 1, error: sqliteBusy
+      });
+      assert.equal(sqliteDiagnostic.records[0].failureCode, 'SQLITE_BUSY');
+      assert.equal(sqliteDiagnostic.records[0].sqlitePrimaryCode, 5);
+      assert.doesNotMatch(JSON.stringify(sqliteDiagnostic), /\/Users\//u);
+    } finally {
+      try { blocker.exec('ROLLBACK'); } catch {}
+      try { contender.exec('ROLLBACK'); } catch {}
+      contender.close();
+      blocker.close();
+      temporary.cleanup();
+    }
     assert.equal(METRICS.providerCalls, 0);
   });
 });
