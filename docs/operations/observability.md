@@ -135,10 +135,11 @@ so one `generate` attempt per call is expected.
 
 ### `source_fetch` — one per data-source fetch
 
-`source`: `event_page`, `ticketmaster`, `weather_geocode`, `weather_forecast`, `weather_archive`.
+`source`: `event_page`, `ticketmaster`, `weather_geocode`, `weather_forecast`.
 `outcome`: `ok`, `http_error`, `timeout`, `network_error`, `bad_response`, `rate_limited`, `auth_failed`,
-`not_found`, `skipped` (no Ticketmaster key, or no geocoder match so no forecast was fetched), `pending` (date beyond
-the forecast horizon). Plus `upstreamStatus` and `durationMs`. Ticketmaster lookup is measured as one fetch around
+`not_found`, `skipped` (no Ticketmaster key, no geocoder match so no forecast was fetched, or a date more than 92 days
+back, since API Standard has no historical weather), `pending` (date beyond the forecast horizon). `auth_failed` on a
+weather source means Open-Meteo rejected `OPEN_METEO_API_KEY` (401/403). Plus `upstreamStatus` and `durationMs`. Ticketmaster lookup is measured as one fetch around
 the whole Discovery lookup (`src/customer/studio/research/ticketmaster.ts` is not instrumented internally).
 
 ### `source_parse` — one per fetched event page
