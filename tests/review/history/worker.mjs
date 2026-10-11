@@ -16,6 +16,13 @@ const store = createCorrectionHistoryStore({
       && request?.principal?.tenantId === tenantId
       && request?.principal?.actorId === resolvedActor;
   },
+  authorizeBoundary(input) {
+    const allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+      && input.request?.principal?.tenantId === input.tenantId
+      && input.request?.principal?.actorId === input.actorId;
+    return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+      eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
+  },
   resolveKey({ tenantId, purpose, keyId }) {
     const resolvedId = `${purpose}-v1`;
     if (keyId && keyId !== resolvedId) throw new Error('synthetic key resolver failure');

@@ -1,4 +1,6 @@
 import { createCorrectionHistoryStore, ReviewHistoryError } from '../../../src/review/history/store.mjs';
+import type { CorrectionCacheBindingScope, CorrectionCacheBindingStore } from '../../../src/review/history/cache-binding.mjs';
+import type { LookupInput, PrivateLookupResult } from '../../../src/cache/reuse/store.mjs';
 import type {
   CorrectionHistoryStore,
   CorrectionTenantScope,
@@ -19,6 +21,9 @@ const customerOriginFact = { status: 'customer_supplied', value: 'cancelled' } a
 const invalidInitialFacts: ReviewInitialFacts = { event_status: customerOriginFact };
 declare const store: CorrectionHistoryStore<AuthenticatedRequest, RetentionPermit>;
 declare const scope: CorrectionTenantScope;
+declare const composedScope: CorrectionCacheBindingScope;
+declare const composedStore: CorrectionCacheBindingStore<AuthenticatedRequest, RetentionPermit>;
+declare const lookup: LookupInput;
 
 const configured = createCorrectionHistoryStore<AuthenticatedRequest, RetentionPermit>({
   directory,
@@ -26,6 +31,10 @@ const configured = createCorrectionHistoryStore<AuthenticatedRequest, RetentionP
   resolveActor: (value) => value.principal.actorId,
   authorize: ({ tenantId, actorId, request: value }) => value.principal.tenantId === tenantId
     && value.principal.actorId === actorId,
+  authorizeBoundary: ({ tenantId, actorId, eventId, action, field, request: value }) =>
+    value.principal.tenantId === tenantId && value.principal.actorId === actorId
+      ? { authorized: true, tenantId, actorId, eventId, action, field, nowMs: 1_800_000_000_000 }
+      : false,
   resolveKey: ({ purpose }) => ({ keyId: `${purpose}-v1`, key: new Uint8Array(32) }),
   resolveRetention: ({ nowMs, sourceExpiresAtMs }) => ({
     expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
@@ -76,3 +85,14 @@ void forgedScope;
 void invalidStatus;
 void forgedApproval;
 void invalidInitialFacts;
+
+const composedLookup = await composedStore.getPrivateProfile(composedScope, 'event-1', request, lookup);
+if (composedLookup.status === 'unavailable' && composedLookup.reason === 'expired') {
+  // @ts-expect-error composed history expiry returns no private cache reference
+  void composedLookup.profileRef;
+}
+declare const standaloneLookup: PrivateLookupResult;
+if (standaloneLookup.status === 'unavailable' && standaloneLookup.reason === 'expired') {
+  const standaloneExpiredReference: string = standaloneLookup.profileRef;
+  void standaloneExpiredReference;
+}

@@ -10,6 +10,8 @@ import { chmod, lstat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { types as utilTypes } from 'node:util';
 import { isPrivacyBoundary } from '../../privacy/boundary.mjs';
+import { isCorrectionCacheBindingCapability } from '../../review/history/cache-binding-capability.mjs';
+import { beginLocalBoundary, localBoundaryEffectiveNow, monotonicTimestampNs } from '../../private/boundary-guard.mjs';
 
 const ERROR_MESSAGES = Object.freeze({
   REUSE_DENIED: 'reuse access denied',
@@ -24,8 +26,10 @@ const ERROR_MESSAGES = Object.freeze({
 });
 const SCOPES = new WeakMap();
 const LOCAL_QUEUES = new Map();
+const CACHE_BINDING_PORTS = new WeakMap();
 const TRUSTED_ERRORS = new WeakSet();
 const FACT_FIELDS = Object.freeze(['event_name', 'event_date', 'venue']);
+const PRIVATE_FACT_FIELDS_BY_KIND = Object.freeze([...FACT_FIELDS, 'event_status']);
 const PIN_FIELDS = Object.freeze(['schemaVersion', 'extractorVersion', 'questionSetVersion', 'policyHash', 'modelVersion']);
 const IDENTITY_FIELDS = Object.freeze(['occurrenceId', 'entityId', 'editionId']);
 const LINEAGE_FIELDS = new Set([
@@ -168,11 +172,12 @@ function signalAborted(signal) {
 }
 
 function copyFacts(value, publicOnly = false) {
-  const allowed = publicOnly ? new Set(FACT_FIELDS) : new Set(FACT_FIELDS);
+  const fields = publicOnly ? FACT_FIELDS : PRIVATE_FACT_FIELDS_BY_KIND;
+  const allowed = new Set(fields);
   const input = record(value, allowed);
   if (!input || Object.keys(input).length === 0) fail('REUSE_INVALID');
   const output = Object.create(null);
-  for (const field of FACT_FIELDS) {
+  for (const field of fields) {
     if (!Object.hasOwn(input, field)) continue;
     const item = input[field];
     if (publicOnly) {
@@ -197,10 +202,11 @@ function copyFacts(value, publicOnly = false) {
       copy.reason = fact.reason;
     }
     if (fact.supportRefs !== undefined) copy.supportRefs = boundedRefList(fact.supportRefs, 64);
-    if (fact.status === 'conflicting') {
-      if (copy.value !== undefined) fail('REUSE_INVALID');
-      const candidateValues = safeArrayValues(fact.candidates, 16);
-      if (candidateValues.length < 2) fail('REUSE_INVALID');
+    if (fact.status === 'conflicting' || (fact.status === 'customer_supplied' && fact.candidates !== undefined)) {
+      if (fact.status === 'conflicting' && copy.value !== undefined) fail('REUSE_INVALID');
+      const candidateValues = safeArrayValues(fact.candidates, 32);
+      if ((fact.status === 'conflicting' && candidateValues.length < 2)
+        || (fact.status === 'customer_supplied' && candidateValues.length < 1)) fail('REUSE_INVALID');
       const candidates = [];
       for (const candidateValue of candidateValues) {
         const candidate = record(candidateValue, new Set(['status', 'value', 'supportRefs']));
@@ -300,6 +306,8 @@ function safeError(error) {
   try {
     const errcode = Object.getOwnPropertyDescriptor(error, 'errcode')?.value;
     const code = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+    if (code === 'REVIEW_BUSY') return new ScopedReuseError('REUSE_BUSY');
+    if (code === 'REVIEW_ABORTED') return new ScopedReuseError('REUSE_DENIED');
     if (errcode === 5 || errcode === 6 || code === 'ERR_SQLITE_BUSY') return new ScopedReuseError('REUSE_BUSY');
   } catch { /* Return a generic error without consulting caller properties. */ }
   return new ScopedReuseError('REUSE_STORAGE');
@@ -330,7 +338,7 @@ async function withLocalQueue(key, operation) {
 
 export function createScopedReuseStore(options) {
   const config = record(options, new Set([
-    'directory', 'resolveTenant', 'resolveActor', 'authorizeAction', 'authorizeCurrentRequest', 'resolveKey', 'resolveRetention',
+    'directory', 'resolveTenant', 'resolveActor', 'authorizeAction', 'authorizeCurrentRequest', 'authorizeBoundary', 'resolveKey', 'resolveRetention',
     'verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage',
     'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement',
     'now', 'maxEntryBytes', 'maxEntries', 'maxFlights', 'maxPrivateLinks', 'maxObservationsPerEntry', 'maxOutboxEntries',
@@ -340,7 +348,7 @@ export function createScopedReuseStore(options) {
     || typeof config.resolveActor !== 'function' || typeof config.authorizeAction !== 'function'
     || typeof config.authorizeCurrentRequest !== 'function'
     || typeof config.resolveKey !== 'function' || typeof config.resolveRetention !== 'function') fail('REUSE_INVALID');
-  for (const name of ['verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage', 'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement']) {
+  for (const name of ['authorizeBoundary', 'verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage', 'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement']) {
     if (config[name] !== undefined && typeof config[name] !== 'function') fail('REUSE_INVALID');
   }
   const limits = {
@@ -363,12 +371,19 @@ export function createScopedReuseStore(options) {
   }
   const rootDirectory = path.resolve(config.directory);
   const storeAuthority = Object.freeze(Object.create(null));
+  const boundProfilePreflights = new WeakMap();
+  const boundFinalDisclosures = new WeakMap();
 
   function currentTime() {
     let value;
     try { value = limits.now(); } catch { fail('REUSE_STORAGE'); }
     if (!Number.isSafeInteger(value) || value < 0 || value > MAX_TIME) fail('REUSE_STORAGE');
     return value;
+  }
+
+  function boundaryInput(info, request, eventId, action, details = {}, field = null) {
+    return Object.freeze({ request, tenantId: info.tenantId, actorId: info.actorId,
+      eventId, action, field, details: Object.freeze({ ...details }) });
   }
 
   async function authenticatedScope(request) {
@@ -515,7 +530,7 @@ export function createScopedReuseStore(options) {
     } catch { fail('REUSE_INTEGRITY'); }
   }
 
-  async function openStoreDatabase() {
+  async function openStoreDatabase(timeoutMs = limits.lockTimeoutMs) {
     let database;
     try {
       await mkdir(rootDirectory, { recursive: true, mode: 0o700 });
@@ -528,7 +543,8 @@ export function createScopedReuseStore(options) {
         prior = await lstat(databasePath);
         if (prior.isSymbolicLink() || !prior.isFile()) fail('REUSE_STORAGE');
       } catch (error) { if (error?.code !== 'ENOENT') throw error; }
-      database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
+      database = new DatabaseSync(databasePath, { timeout: timeoutMs });
+      if (timeoutMs === 0) database.exec('PRAGMA busy_timeout = 0');
       const opened = await lstat(databasePath);
       if (opened.isSymbolicLink() || !opened.isFile() || (prior && (opened.dev !== prior.dev || opened.ino !== prior.ino))) fail('REUSE_STORAGE');
       database.exec(`
@@ -552,7 +568,8 @@ export function createScopedReuseStore(options) {
             payload_key_id TEXT NOT NULL,
             payload BLOB NOT NULL,
             payload_bytes INTEGER NOT NULL,
-            payload_purged INTEGER NOT NULL DEFAULT 0 CHECK (payload_purged IN (0, 1))
+            payload_purged INTEGER NOT NULL DEFAULT 0 CHECK (payload_purged IN (0, 1)),
+            binding_hash TEXT
           ) STRICT;
           CREATE INDEX IF NOT EXISTS reuse_lookup ON reuse_entries (scope_kind, partition_hash, cache_key_hash, eligible, version DESC);
           CREATE INDEX IF NOT EXISTS reuse_identity ON reuse_entries (scope_kind, partition_hash, identity_hash, eligible);
@@ -611,6 +628,33 @@ export function createScopedReuseStore(options) {
             payload_bytes INTEGER NOT NULL
           ) STRICT;
           CREATE INDEX IF NOT EXISTS reuse_outbox_pending ON reuse_outbox (scope_kind, partition_hash, status, next_attempt_at_ms);
+          CREATE TABLE IF NOT EXISTS reuse_correction_reservations (
+            entry_id TEXT PRIMARY KEY NOT NULL,
+            scope_kind TEXT NOT NULL CHECK (scope_kind = 'tenant_private'),
+            partition_hash TEXT NOT NULL,
+            binding_hash TEXT NOT NULL,
+            outbox_slots INTEGER NOT NULL CHECK (outbox_slots >= 1),
+            payload_key_id TEXT NOT NULL,
+            payload BLOB NOT NULL,
+            payload_bytes INTEGER NOT NULL
+          ) STRICT;
+          CREATE TABLE IF NOT EXISTS reuse_history_invalidation_ops (
+            operation_id TEXT NOT NULL,
+            entry_id TEXT NOT NULL,
+            partition_hash TEXT NOT NULL,
+            binding_hash TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            event_ids TEXT NOT NULL,
+            PRIMARY KEY (operation_id, entry_id)
+          ) STRICT;
+          CREATE TABLE IF NOT EXISTS reuse_bound_writes (
+            operation_id TEXT PRIMARY KEY NOT NULL,
+            partition_hash TEXT NOT NULL,
+            binding_hash TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            entry_id TEXT NOT NULL,
+            version INTEGER NOT NULL
+          ) STRICT;
       `);
       const outboxColumns = database.prepare('PRAGMA table_info(reuse_outbox)').all();
       if (!outboxColumns.some((column) => column.name === 'active_attempt_id')) {
@@ -623,6 +667,10 @@ export function createScopedReuseStore(options) {
       if (!entryColumns.some((column) => column.name === 'payload_purged')) {
         database.exec('ALTER TABLE reuse_entries ADD COLUMN payload_purged INTEGER NOT NULL DEFAULT 0 CHECK (payload_purged IN (0, 1))');
       }
+      if (!entryColumns.some((column) => column.name === 'binding_hash')) {
+        database.exec('ALTER TABLE reuse_entries ADD COLUMN binding_hash TEXT');
+      }
+      database.exec('CREATE INDEX IF NOT EXISTS reuse_binding ON reuse_entries (scope_kind, partition_hash, binding_hash, eligible)');
       await chmod(databasePath, 0o600);
       return database;
     } catch (error) {
@@ -641,10 +689,11 @@ export function createScopedReuseStore(options) {
       let transactionOpen = false;
       try {
         database = await openStoreDatabase();
+        // The injected clock is host code; evaluate it before SQLite owns its writer lock.
+        const now = currentTime();
         database.exec('BEGIN IMMEDIATE');
         transactionOpen = true;
         const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
-        const now = currentTime();
         const previousMax = currentMax ? Number(currentMax.value) : null;
         if (currentMax && (!Number.isSafeInteger(previousMax) || previousMax < 0 || previousMax > MAX_TIME)) fail('REUSE_INTEGRITY');
         const clockRollback = Boolean(currentMax && now < previousMax);
@@ -666,6 +715,126 @@ export function createScopedReuseStore(options) {
     });
   }
 
+  async function withBindingDatabase(gate, operation, signal = undefined, boundary = undefined) {
+    const delays = [2, 4, 8, 12, 20, 30, 40];
+    const startedAt = monotonicTimestampNs();
+    for (let attempt = 0; ; attempt += 1) {
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      try {
+        return await withLocalQueue(rootDirectory, async () => {
+          let database;
+          let transactionOpen = false;
+          try {
+            database = await openStoreDatabase(0);
+            // The synchronous host decision runs after every async/filesystem preparation
+            // and before either paired SQLite writer is acquired.
+            const boundaryToken = boundary
+              ? beginLocalBoundary(config.authorizeBoundary, boundary.input, () => fail('REUSE_DENIED'))
+              : null;
+            const now = boundaryToken?.nowMs ?? currentTime();
+            const effectiveNow = boundaryToken ? localBoundaryEffectiveNow(boundaryToken) : now;
+            if (!Number.isSafeInteger(effectiveNow) || effectiveNow < now || effectiveNow > MAX_TIME
+              || (boundary?.mustBeBeforeMs !== undefined && effectiveNow >= boundary.mustBeBeforeMs)) fail('REUSE_DENIED');
+            if (signalAborted(signal)) fail('REUSE_DENIED');
+            try {
+              return gate(() => {
+                database.exec('BEGIN IMMEDIATE');
+                transactionOpen = true;
+                const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
+                const previousMax = currentMax ? Number(currentMax.value) : null;
+                if (currentMax && (!Number.isSafeInteger(previousMax) || previousMax < 0 || previousMax > MAX_TIME)) fail('REUSE_INTEGRITY');
+                const clockRollback = Boolean(currentMax && now < previousMax);
+                if (clockRollback) fail('REUSE_DENIED');
+                if (!currentMax || now > previousMax) {
+                  database.prepare("INSERT INTO reuse_meta (key, value) VALUES ('clock_max_ms', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+                    .run(String(now));
+                }
+                const result = operation(database, { now, effectiveNow, clockRollback });
+                if (result && typeof result.then === 'function') fail('REUSE_STORAGE');
+                if (signalAborted(signal)) fail('REUSE_DENIED');
+                if (boundaryToken) {
+                  const effectiveCommitNow = localBoundaryEffectiveNow(boundaryToken);
+                  if (!Number.isSafeInteger(effectiveCommitNow) || effectiveCommitNow < now
+                    || effectiveCommitNow > MAX_TIME
+                    || (boundary?.mustBeBeforeMs !== undefined && effectiveCommitNow >= boundary.mustBeBeforeMs)) fail('REUSE_DENIED');
+                }
+                database.exec('COMMIT');
+                transactionOpen = false;
+                return result;
+              }, Object.freeze({ now, effectiveNow, boundaryToken }));
+            } catch (error) {
+              // The private history participant fence may rethrow a cache error after
+              // rolling back its paired transaction. Recreate only the fixed cache
+              // error vocabulary here so the cache module's private trust set retains
+              // the intended denial/capacity semantics.
+              try {
+                if (error && !IS_PROXY(error)) {
+                  const name = Object.getOwnPropertyDescriptor(error, 'name')?.value;
+                  const code = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+                  if (name === 'ScopedReuseError' && typeof code === 'string'
+                    && ['REUSE_DENIED', 'REUSE_INVALID', 'REUSE_NOT_FOUND', 'REUSE_BUSY', 'REUSE_STORAGE',
+                      'REUSE_INTEGRITY', 'REUSE_KEY_UNAVAILABLE', 'REUSE_CAPACITY', 'REUSE_POLICY_UNAVAILABLE'].includes(code)) {
+                    throw new ScopedReuseError(code);
+                  }
+                }
+              } catch (mapped) {
+                if (mapped instanceof ScopedReuseError && TRUSTED_ERRORS.has(mapped)) throw mapped;
+                throw error;
+              }
+              throw error;
+            }
+          } catch (error) {
+            if (transactionOpen) {
+              try { database.exec('ROLLBACK'); } catch { /* Closing the connection also rolls back. */ }
+            }
+            throw safeError(error);
+          } finally {
+            database?.close();
+          }
+        });
+      } catch (error) {
+        const safe = safeError(error);
+        if (safe.code !== 'REUSE_BUSY' || attempt >= delays.length || signalAborted(signal)) throw safe;
+        const elapsed = monotonicTimestampNs() - startedAt;
+        const remaining = limits.lockTimeoutMs - Number((elapsed + 999_999n) / 1_000_000n);
+        if (remaining <= 0) throw safe;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(delays[attempt], remaining)));
+      }
+    }
+  }
+
+  async function withBindingRead(operation) {
+    let database;
+    let transactionOpen = false;
+    try {
+      database = await openStoreDatabase(0);
+      // As with writes, the injected clock must run before entering SQLite.
+      const now = currentTime();
+      database.exec('BEGIN');
+      transactionOpen = true;
+      const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
+      const previousMax = currentMax ? Number(currentMax.value) : null;
+      if (currentMax && (!Number.isSafeInteger(previousMax) || previousMax < 0 || previousMax > MAX_TIME)) fail('REUSE_INTEGRITY');
+      const clockRollback = Boolean(currentMax && now < previousMax);
+      const result = operation(database, { now, clockRollback });
+      if (result && typeof result.then === 'function') fail('REUSE_STORAGE');
+      database.exec('COMMIT');
+      transactionOpen = false;
+      return result;
+    } catch (error) {
+      if (transactionOpen) {
+        try { database.exec('ROLLBACK'); } catch { /* Closing the connection also rolls back. */ }
+      }
+      throw safeError(error);
+    } finally {
+      database?.close();
+    }
+  }
+
+  async function prepareBindingDatabase() {
+    return openStoreDatabase(0);
+  }
+
   function usedPayloadBytes(database) {
     return database.prepare(`
       SELECT
@@ -674,6 +843,7 @@ export function createScopedReuseStore(options) {
         (SELECT COALESCE(SUM(length(payload)), 0) FROM reuse_private_links) +
         (SELECT COALESCE(SUM(length(payload)), 0) FROM reuse_consumer_refs) +
         (SELECT COALESCE(SUM(length(payload)), 0) FROM reuse_flights) +
+        (SELECT COALESCE(SUM(payload_bytes), 0) FROM reuse_correction_reservations) +
         (SELECT COALESCE(SUM(payload_bytes), 0) FROM reuse_outbox) AS total
     `).get().total;
   }
@@ -685,13 +855,15 @@ export function createScopedReuseStore(options) {
       const refs = database.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs WHERE entry_id = ?').get(entry.entry_id).count;
       reserved += Math.max(1, refs);
     }
-    return reserved;
+    const correctionReservations = database.prepare('SELECT COALESCE(SUM(outbox_slots), 0) AS count FROM reuse_correction_reservations').get().count;
+    return reserved + correctionReservations;
   }
 
   function reservedOutboxGrowthBytes(database) {
-    return database.prepare(`SELECT COALESCE(SUM(MAX(0, ? - payload_bytes)), 0) AS bytes
+    const pendingGrowth = database.prepare(`SELECT COALESCE(SUM(MAX(0, ? - payload_bytes)), 0) AS bytes
       FROM reuse_outbox WHERE has_consumer = 1 AND status IN ('pending', 'delivering') AND attempt_count < ?`)
       .get(MAX_INVALIDATION_RECORD_BYTES, limits.maxOutboxAttempts).bytes;
+    return pendingGrowth;
   }
 
   function ensureStorageCapacity(database, newBytes, replacedBytes = 0, additionalReservations = 0, additionalOutboxGrowth = 0, outboxGrowthCredit = 0) {
@@ -766,6 +938,14 @@ export function createScopedReuseStore(options) {
     });
   }
 
+  function validateInitialObservation(observation, expectedHash, now) {
+    if (observation.status !== 'body_changed' || observation.contentHash !== expectedHash
+      || observation.retrievedAtMs > observation.validatedAtMs || observation.validatedAtMs > now + 60_000) {
+      fail('REUSE_POLICY_UNAVAILABLE');
+    }
+    return observation;
+  }
+
   async function resolveLineage(info, request, descriptor) {
     if (typeof config.resolveLineage !== 'function') return validateLineage({ status: 'unknown' });
     let result;
@@ -793,14 +973,25 @@ export function createScopedReuseStore(options) {
     return unseal(info.payloadKey.key, entry.partition_hash, kind, entry.entry_id, entry.payload, entry.payload_key_id);
   }
 
-  async function keyParts(info, scopeKind, index, guard) {
+  async function indexParts(info, scopeKind, index, guard) {
     const keys = await indexInfo(info, scopeKind, guard);
     const identityHash = mac(keys.keyInfo.key, stable(index.identity));
     const contentMac = mac(keys.keyInfo.key, index.contentHash);
     const pinsHash = mac(keys.keyInfo.key, stable(index.pins));
     const cacheKeyHash = mac(keys.keyInfo.key, stable({ identity: index.identity, contentHash: index.contentHash, pins: index.pins }));
+    return { ...keys, identityHash, contentMac, pinsHash, cacheKeyHash };
+  }
+
+  async function keyPartsFromIndex(info, indexKeys, guard) {
+    const keys = indexKeys;
+    const scopeKind = keys.scopeKind;
     const payloadKey = await resolveKey(scopeKind === 'public_profile' ? null : info, 'payload', undefined, guard);
-    return { ...keys, identityHash, contentMac, pinsHash, cacheKeyHash, payloadKey };
+    return { ...keys, payloadKey };
+  }
+
+  async function keyParts(info, scopeKind, index, guard) {
+    const keys = await indexParts(info, scopeKind, index, guard);
+    return keyPartsFromIndex(info, keys, guard);
   }
 
   function insertObservation(database, entryId, partitionHash, payloadKeyId, payloadKey, observation, sequence = null) {
@@ -893,6 +1084,428 @@ export function createScopedReuseStore(options) {
     }
   }
 
+  function assertBoundHistoryEventsFit(consumers, keys, binding, contentHash) {
+    const targets = consumers.length > 0 ? consumers : [null];
+    for (const consumerRef of targets) {
+      const event = {
+        eventId: 'e'.repeat(36),
+        reason: 'history_version_changed',
+        entryRef: 'p'.repeat(36),
+        contentHash,
+        version: Number.MAX_SAFE_INTEGER,
+        consumerRef,
+        createdAtMs: MAX_TIME,
+        bindingId: 'b'.repeat(36),
+        historyOperationId: 'o'.repeat(36),
+        priorHistoryVersionId: binding.historyVersionId,
+        priorHistoryContentHash: binding.historyContentHash,
+        targetHistoryVersionId: 'v'.repeat(36),
+        targetHistoryContentHash: 'h'.repeat(64),
+      };
+      sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'outbox', event.eventId, event, MAX_INVALIDATION_RECORD_BYTES);
+      sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash, 'outbox', event.eventId, {
+        ...event,
+        deliveryAttemptId: 'd'.repeat(36),
+        deliveryAttemptNumber: Number.MAX_SAFE_INTEGER,
+      }, MAX_INVALIDATION_RECORD_BYTES);
+    }
+  }
+
+  function disposeBoundProfilePreflight(preflightToken) {
+    if (!preflightToken || (typeof preflightToken !== 'object' && typeof preflightToken !== 'function')) return;
+    const preflight = boundProfilePreflights.get(preflightToken);
+    if (!preflight) return;
+    boundProfilePreflights.delete(preflightToken);
+    for (const key of [preflight.keys?.keyInfo?.key, preflight.keys?.payloadKey?.key]) {
+      try { key?.fill(0); } catch { /* A cache-owned key copy is best-effort zeroized. */ }
+    }
+    zeroBoundReceiptRows(preflight.replayProof);
+    preflight.replayProof = null;
+    preflight.replayPayload = null;
+    preflight.entryPayload = null;
+    preflight.observation = null;
+    preflight.consumers = null;
+    preflight.lineage = null;
+  }
+
+  function boundProfileSignature(index, input, facts, binding) {
+    return stable({
+      identity: index.identity,
+      contentHash: index.contentHash,
+      pins: index.pins,
+      facts,
+      observation: input.observation,
+      freshnessTtlMs: input.freshnessTtlMs ?? null,
+      expiresAtMs: input.expiresAtMs ?? null,
+      binding,
+    });
+  }
+
+  function boundWriteFingerprint(keys, index, entryPayload, observation, binding, operationId) {
+    return mac(keys.keyInfo.key, stable({
+      operationId,
+      bindingId: binding.bindingId,
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      historyExpiresAtMs: binding.historyExpiresAtMs,
+      identity: index.identity,
+      pins: index.pins,
+      cacheSourceContentHash: index.contentHash,
+      facts: entryPayload.facts,
+      observation,
+      freshnessTtlMs: entryPayload.freshnessTtlMs,
+      retentionPolicy: entryPayload.retentionPolicy,
+    }));
+  }
+
+  function copySqliteRow(row) {
+    if (!row) return null;
+    const copy = { ...row };
+    for (const [name, value] of Object.entries(copy)) {
+      if (value instanceof Uint8Array) copy[name] = Buffer.from(value);
+    }
+    return copy;
+  }
+
+  function zeroBoundReceiptRows(rows) {
+    if (!rows) return;
+    const all = [rows.receipt, rows.entry, rows.reservation, rows.observation,
+      ...(rows.bindingEntries ?? []), ...(rows.bindingReservations ?? []),
+      ...(rows.consumers ?? []), ...(rows.invalidationReceipts ?? [])];
+    for (const row of all) {
+      if (!row || typeof row !== 'object') continue;
+      for (const value of Object.values(row)) {
+        try { if (value instanceof Uint8Array) value.fill(0); } catch { /* Copied ciphertext is best-effort cleared. */ }
+      }
+    }
+  }
+
+  function readBoundReplayRows(database, binding, keys) {
+    const receipt = copySqliteRow(database.prepare(`SELECT * FROM reuse_bound_writes
+      WHERE operation_id = ? AND partition_hash = ?`).get(binding.operationId, keys.partitionHash));
+    const bindingEntries = database.prepare(`SELECT * FROM reuse_entries WHERE scope_kind = 'tenant_private'
+      AND partition_hash = ? AND binding_hash = ? ORDER BY entry_id`)
+      .all(keys.partitionHash, mac(keys.keyInfo.key,
+        `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`))
+      .map(copySqliteRow);
+    const bindingReservations = database.prepare(`SELECT * FROM reuse_correction_reservations
+      WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND binding_hash = ? ORDER BY entry_id`)
+      .all(keys.partitionHash, mac(keys.keyInfo.key,
+        `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`))
+      .map(copySqliteRow);
+    const entry = receipt ? copySqliteRow(database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+      AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(receipt.entry_id, keys.partitionHash)) : null;
+    const reservation = receipt ? copySqliteRow(database.prepare(`SELECT * FROM reuse_correction_reservations
+      WHERE entry_id = ? AND scope_kind = 'tenant_private' AND partition_hash = ?`)
+      .get(receipt.entry_id, keys.partitionHash)) : null;
+    const consumers = receipt ? database.prepare(`SELECT * FROM reuse_consumer_refs WHERE entry_id = ?
+      AND scope_kind = 'tenant_private' AND partition_hash = ? ORDER BY consumer_hash`)
+      .all(receipt.entry_id, keys.partitionHash).map(copySqliteRow) : [];
+    const observation = receipt ? copySqliteRow(database.prepare(`SELECT * FROM reuse_observations
+      WHERE entry_id = ? AND sequence = 1`).get(receipt.entry_id)) : null;
+    const observationCount = receipt ? database.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?')
+      .get(receipt.entry_id).count : 0;
+    const outboxCount = receipt ? database.prepare('SELECT COUNT(*) AS count FROM reuse_outbox WHERE entry_id = ?')
+      .get(receipt.entry_id).count : 0;
+    const invalidationReceipts = database.prepare(`SELECT * FROM reuse_history_invalidation_ops
+      WHERE operation_id = ? AND partition_hash = ? ORDER BY entry_id`)
+      .all(binding.operationId, keys.partitionHash).map(copySqliteRow);
+    const entryCount = database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count;
+    const historicalCap = database.prepare(`SELECT MIN(expires_at_ms) AS expires_at_ms FROM reuse_entries
+      WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND identity_hash = ? AND cache_key_hash = ?`)
+      .get(keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
+    return { receipt, bindingEntries, bindingReservations, entry, reservation, consumers,
+      observation, observationCount, outboxCount, invalidationReceipts, entryCount, historicalCap };
+  }
+
+  function sameSqliteRow(left, right) {
+    if (left === null || right === null) return left === right;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    if (stable(leftKeys) !== stable(rightKeys)) return false;
+    return leftKeys.every((key) => {
+      const a = left[key];
+      const b = right[key];
+      if (a instanceof Uint8Array || b instanceof Uint8Array) {
+        return a instanceof Uint8Array && b instanceof Uint8Array && Buffer.from(a).equals(Buffer.from(b));
+      }
+      return a === b;
+    });
+  }
+
+  function sameBoundReceiptRows(left, right) {
+    if (!sameSqliteRow(left.receipt, right.receipt) || !sameSqliteRow(left.entry, right.entry)
+      || !sameSqliteRow(left.reservation, right.reservation) || !sameSqliteRow(left.observation, right.observation)
+      || left.observationCount !== right.observationCount || left.outboxCount !== right.outboxCount
+      || left.invalidationReceipts.length !== right.invalidationReceipts.length
+      || left.bindingEntries.length !== right.bindingEntries.length
+      || left.bindingReservations.length !== right.bindingReservations.length
+      || left.consumers.length !== right.consumers.length) return false;
+    return left.bindingEntries.every((row, index) => sameSqliteRow(row, right.bindingEntries[index]))
+      && left.bindingReservations.every((row, index) => sameSqliteRow(row, right.bindingReservations[index]))
+      && left.invalidationReceipts.every((row, index) => sameSqliteRow(row, right.invalidationReceipts[index]))
+      && left.consumers.every((row, index) => sameSqliteRow(row, right.consumers[index]));
+  }
+
+  function expectedCorrectionBinding(binding) {
+    return Object.freeze({
+      bindingId: binding.bindingId,
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      operationId: binding.operationId,
+      historyExpiresAtMs: binding.historyExpiresAtMs,
+    });
+  }
+
+  async function verifyBoundReceipt({ info, request, signal, keys, index, facts, binding, rows, now }) {
+    const phase = binding.operationPhase;
+    if (!rows.receipt) {
+      if (phase === 'complete' || rows.bindingEntries.length > 0 || rows.bindingReservations.length > 0
+        || rows.invalidationReceipts.length > 0) fail('REUSE_INTEGRITY');
+      return null;
+    }
+    if (!['pending_bind', 'complete'].includes(phase)
+      || rows.receipt.operation_id !== binding.operationId
+      || rows.receipt.partition_hash !== keys.partitionHash
+      || !/^[a-f0-9]{64}$/.test(rows.receipt.binding_hash ?? '')
+      || rows.receipt.binding_hash !== binding.cacheBindingHash
+      || !/^[a-f0-9]{64}$/.test(rows.receipt.fingerprint ?? '')
+      || !/^[0-9a-f-]{36}$/i.test(rows.receipt.entry_id ?? '')
+      || !Number.isSafeInteger(rows.receipt.version) || rows.receipt.version < 1
+      || rows.bindingEntries.length !== 1 || rows.bindingReservations.length !== 1
+      || rows.invalidationReceipts.length !== 0 || !rows.entry
+      || rows.entry.entry_id !== rows.receipt.entry_id
+      || rows.bindingEntries[0].entry_id !== rows.entry.entry_id
+      || rows.bindingReservations[0].entry_id !== rows.entry.entry_id
+      || !rows.reservation || !rows.observation || rows.observation.sequence !== 1
+      || rows.observationCount !== 1 || rows.outboxCount !== 0) fail('REUSE_INTEGRITY');
+
+    const entry = rows.entry;
+    if (entry && Number.isSafeInteger(entry.expires_at_ms) && entry.expires_at_ms <= now) {
+      fail('REUSE_POLICY_UNAVAILABLE');
+    }
+    if (entry && (entry.eligible !== 1 || entry.payload_purged !== 0)) fail('REUSE_POLICY_UNAVAILABLE');
+    const expectedHash = mac(keys.keyInfo.key,
+      `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
+    if (rows.receipt.binding_hash !== expectedHash || entry.scope_kind !== 'tenant_private'
+      || entry.partition_hash !== keys.partitionHash || entry.version !== rows.receipt.version
+      || entry.binding_hash !== expectedHash || entry.identity_hash !== keys.identityHash
+      || entry.content_hash_mac !== keys.contentMac || entry.pins_hash !== keys.pinsHash
+      || entry.eligible !== 1 || entry.payload_purged !== 0
+      || !Number.isSafeInteger(entry.created_at_ms) || entry.created_at_ms < 0
+      || !Number.isSafeInteger(entry.expires_at_ms) || entry.expires_at_ms <= now
+      || entry.expires_at_ms > MAX_TIME || entry.created_at_ms > entry.expires_at_ms
+      || !string(entry.payload_key_id, 128) || !Number.isSafeInteger(entry.payload_bytes)
+      || !(entry.payload instanceof Uint8Array) || entry.payload_bytes !== entry.payload.byteLength
+      || !Number.isSafeInteger(binding.historyExpiresAtMs) || entry.expires_at_ms > binding.historyExpiresAtMs
+      || rows.reservation.scope_kind !== 'tenant_private' || rows.reservation.partition_hash !== keys.partitionHash
+      || rows.reservation.binding_hash !== expectedHash || rows.reservation.entry_id !== entry.entry_id
+      || !string(rows.reservation.payload_key_id, 128)
+      || !Number.isSafeInteger(rows.reservation.outbox_slots) || rows.reservation.outbox_slots < 1
+      || !(rows.reservation.payload instanceof Uint8Array)
+      || rows.reservation.payload_bytes !== rows.reservation.payload.byteLength
+      || !(rows.observation.payload instanceof Uint8Array) || !string(rows.observation.payload_key_id, 128)
+      || rows.consumers.some((row) => !(row.payload instanceof Uint8Array) || !string(row.payload_key_id, 128))) {
+      fail('REUSE_INTEGRITY');
+    }
+
+    const action = phase === 'complete' ? 'private_profile.read' : 'private_profile.write';
+    const guard = authorizationGuard(info, request, action, signal);
+    const ownedKeys = new Map();
+    const payloadKeyForStored = async (keyId) => {
+      if (keys.payloadKey?.keyId === keyId) return keys.payloadKey;
+      if (ownedKeys.has(keyId)) return ownedKeys.get(keyId);
+      const key = await resolveKey(info, 'payload', keyId, guard);
+      ownedKeys.set(keyId, key);
+      return key;
+    };
+    try {
+      const entryKey = await payloadKeyForStored(entry.payload_key_id);
+      const payloadValue = unseal(entryKey.key, keys.partitionHash, 'entry', entry.entry_id,
+        entry.payload, entry.payload_key_id);
+      const payload = record(payloadValue, new Set([
+        'kind', 'identity', 'pins', 'contentHash', 'facts', 'sourceVersion', 'retrievedAtMs',
+        'initialValidatedAtMs', 'freshnessTtlMs', 'permissions', 'sourceRefs', 'correctionRefs',
+        'correctionBinding', 'lineage', 'consumers', 'retentionPolicy', 'rights', 'version',
+      ]));
+      const retention = record(payload?.retentionPolicy, new Set(['expiresAtMs', 'policyId', 'policyVersion']));
+      const storedBinding = record(payload?.correctionBinding, new Set([
+        'bindingId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash',
+        'operationId', 'historyExpiresAtMs',
+      ]));
+      if (!payload || payload.kind !== 'private' || stable(identity(payload.identity)) !== stable(index.identity)
+        || stable(pins(payload.pins)) !== stable(index.pins) || payload.contentHash !== index.contentHash
+        || stable(copyFacts(payload.facts)) !== stable(facts) || !retention
+        || retention.expiresAtMs !== entry.expires_at_ms || !string(retention.policyId, 128)
+        || !string(retention.policyVersion, 128) || !storedBinding
+        || stable(storedBinding) !== stable(expectedCorrectionBinding(binding))
+        || payload.version !== entry.version || !Number.isSafeInteger(payload.initialValidatedAtMs)
+        || !Number.isSafeInteger(payload.retrievedAtMs) || payload.retrievedAtMs > payload.initialValidatedAtMs
+        || !Number.isSafeInteger(payload.freshnessTtlMs) || payload.freshnessTtlMs < 1
+        || payload.freshnessTtlMs > limits.maxRetentionMs
+        || !Number.isSafeInteger(payload.initialValidatedAtMs + payload.freshnessTtlMs)
+        || payload.initialValidatedAtMs + payload.freshnessTtlMs > entry.expires_at_ms
+        || !Array.isArray(payload.permissions) || !Array.isArray(payload.sourceRefs)
+        || !Array.isArray(payload.correctionRefs) || !Array.isArray(payload.consumers)
+        || payload.rights !== 'not_asserted') fail('REUSE_INTEGRITY');
+      const storedConsumers = boundedRefList(payload.consumers, 64);
+      const storedPermissions = validatePermissions(payload.permissions);
+      const storedLineage = validateLineage(payload.lineage);
+      const storedSourceRefs = boundedRefList(payload.sourceRefs);
+      const storedCorrectionRefs = boundedRefList(payload.correctionRefs);
+      if (stable(storedConsumers) !== stable(payload.consumers)
+        || stable(storedPermissions) !== stable(payload.permissions)
+        || stable(storedLineage) !== stable(payload.lineage)
+        || stable(storedSourceRefs) !== stable(payload.sourceRefs)
+        || stable(storedCorrectionRefs) !== stable(payload.correctionRefs)
+        || rows.consumers.length !== storedConsumers.length
+        || rows.reservation.payload_key_id !== entry.payload_key_id
+        || rows.reservation.outbox_slots !== Math.max(1, storedConsumers.length)) fail('REUSE_INTEGRITY');
+
+      const reservationKey = await payloadKeyForStored(rows.reservation.payload_key_id);
+      const reservation = unseal(reservationKey.key, keys.partitionHash, 'correction_reservation', entry.entry_id,
+        rows.reservation.payload, rows.reservation.payload_key_id);
+      const expectedReservation = {
+        bindingId: binding.bindingId,
+        eventId: binding.eventId,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        operationId: binding.operationId,
+        profileRef: entry.entry_id,
+        bindingHash: expectedHash,
+        identity: index.identity,
+        pins: index.pins,
+        contentHash: index.contentHash,
+        version: entry.version,
+        expiresAtMs: entry.expires_at_ms,
+        outboxSlots: Math.max(1, storedConsumers.length),
+        consumers: storedConsumers,
+      };
+      if (stable(reservation) !== stable(expectedReservation)) fail('REUSE_INTEGRITY');
+
+      const actualConsumers = [];
+      for (const row of rows.consumers) {
+        if (row.scope_kind !== 'tenant_private' || row.partition_hash !== keys.partitionHash
+          || !/^[a-f0-9]{64}$/.test(row.consumer_hash ?? '') || !string(row.payload_key_id, 128)) fail('REUSE_INTEGRITY');
+        const consumerKey = await payloadKeyForStored(row.payload_key_id);
+        const consumer = unseal(consumerKey.key, keys.partitionHash, 'consumer_ref',
+          `${entry.entry_id}:${row.consumer_hash}`, row.payload, row.payload_key_id);
+        const parsed = record(consumer, new Set(['consumerRef']));
+        if (!parsed || !string(parsed.consumerRef, 512)
+          || mac(keys.keyInfo.key, parsed.consumerRef) !== row.consumer_hash) fail('REUSE_INTEGRITY');
+        actualConsumers.push(parsed.consumerRef);
+      }
+      if (new Set(actualConsumers).size !== actualConsumers.length
+        || stable([...actualConsumers].sort()) !== stable([...storedConsumers].sort())) fail('REUSE_INTEGRITY');
+
+      const observationKey = await payloadKeyForStored(rows.observation.payload_key_id);
+      const observationValue = unseal(observationKey.key, keys.partitionHash, 'observation',
+        rows.observation.observation_id, rows.observation.payload, rows.observation.payload_key_id);
+      const observation = record(observationValue, new Set([
+        'status', 'retrievedAtMs', 'validatedAtMs', 'contentHash', 'sourceVersion', 'attemptLineage',
+      ]));
+      if (!observation || observation.status !== 'body_changed'
+        || observation.contentHash !== index.contentHash
+        || observation.retrievedAtMs !== payload.retrievedAtMs
+        || observation.validatedAtMs !== payload.initialValidatedAtMs
+        || observation.sourceVersion !== payload.sourceVersion
+        || rows.observation.entry_id !== entry.entry_id || rows.observation.status !== 'body_changed'
+        || rows.observation.observed_at_ms !== observation.validatedAtMs
+        || !Number.isSafeInteger(observation.validatedAtMs) || observation.retrievedAtMs > observation.validatedAtMs) {
+        fail('REUSE_INTEGRITY');
+      }
+      const observationLineage = validateLineage(observation.attemptLineage);
+      if (stable(observationLineage) !== stable(observation.attemptLineage)) fail('REUSE_INTEGRITY');
+      const fingerprint = boundWriteFingerprint(keys, index, payload, observation, binding, binding.operationId);
+      if (rows.receipt.fingerprint !== fingerprint) fail('REUSE_INTEGRITY');
+      return Object.freeze({ rows, payload: freeze(payload), observation: freeze(observation),
+        expiresAtMs: entry.expires_at_ms, version: entry.version, profileRef: entry.entry_id,
+        bindingHash: expectedHash, freshnessDeadlineMs: payload.initialValidatedAtMs + payload.freshnessTtlMs });
+    } finally {
+      for (const key of ownedKeys.values()) key.key.fill(0);
+    }
+  }
+
+  async function preflightBoundCacheCapacity({ keys, index, entryPayload, observation, consumers, binding, ttlMs }) {
+    const correctionSlots = Math.max(1, consumers.length);
+    const generalSlots = Math.max(1, consumers.length);
+    const additionalSlots = correctionSlots + generalSlots;
+    const read = await withBindingRead((database, time) => {
+      if (time.clockRollback) fail('REUSE_DENIED');
+      const rows = readBoundReplayRows(database, binding, keys);
+      if (rows.receipt || rows.bindingEntries.length > 0 || rows.bindingReservations.length > 0
+        || rows.invalidationReceipts.length > 0 || binding.operationPhase === 'complete') fail('REUSE_BUSY');
+      return { rows, now: time.now };
+    });
+    const effectiveExpiry = Math.min(entryPayload.retentionPolicy.expiresAtMs,
+      binding.historyExpiresAtMs, read.rows.historicalCap ?? MAX_TIME);
+    const freshnessDeadlineMs = observation.validatedAtMs + ttlMs;
+    if (!Number.isSafeInteger(freshnessDeadlineMs) || freshnessDeadlineMs <= read.now
+      || effectiveExpiry <= read.now || effectiveExpiry > binding.historyExpiresAtMs
+      || freshnessDeadlineMs > effectiveExpiry) fail('REUSE_POLICY_UNAVAILABLE');
+    const retentionPolicy = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: effectiveExpiry });
+    const fixedRetention = Object.freeze({ ...retentionPolicy, expiresAtMs: effectiveExpiry });
+
+    // Capacity estimates apply only to a first effect. Existing receipts are
+    // classified and authenticated before this function is reached.
+    const versionedPayload = freeze({ ...entryPayload, retentionPolicy, version: Number.MAX_SAFE_INTEGER });
+    const entry = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+      'entry', 'p'.repeat(36), versionedPayload);
+    let additionalPayloadBytes = 0;
+    for (const consumerRef of consumers) {
+      const consumerHash = mac(keys.keyInfo.key, consumerRef);
+      const consumerPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'consumer_ref', `${'p'.repeat(36)}:${consumerHash}`, { consumerRef });
+      additionalPayloadBytes += consumerPayload.byteLength;
+    }
+    const observationPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+      'observation', 'o'.repeat(36), {
+        status: 'body_changed',
+        retrievedAtMs: observation.retrievedAtMs,
+        validatedAtMs: observation.validatedAtMs,
+        contentHash: index.contentHash,
+        sourceVersion: observation.sourceVersion,
+        attemptLineage: observation.attemptLineage,
+      });
+    additionalPayloadBytes += observationPayload.byteLength;
+    const reservation = {
+      bindingId: binding.bindingId,
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      operationId: binding.operationId,
+      profileRef: 'p'.repeat(36),
+      bindingHash: binding.cacheBindingHash,
+      identity: index.identity,
+      pins: index.pins,
+      contentHash: index.contentHash,
+      version: Number.MAX_SAFE_INTEGER,
+      expiresAtMs: effectiveExpiry,
+      outboxSlots: correctionSlots,
+      consumers,
+    };
+    const reserved = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+      'correction_reservation', reservation.profileRef, reservation);
+    await withBindingRead((database, time) => {
+      if (time.clockRollback || time.now >= effectiveExpiry || time.now >= freshnessDeadlineMs) fail('REUSE_POLICY_UNAVAILABLE');
+      const current = readBoundReplayRows(database, binding, keys);
+      if (current.receipt || current.bindingEntries.length > 0 || current.bindingReservations.length > 0
+        || current.invalidationReceipts.length > 0) fail('REUSE_BUSY');
+      if (current.entryCount >= limits.maxEntries) fail('REUSE_CAPACITY');
+      assertOutboxHeadroom(database, additionalSlots);
+      ensureStorageCapacity(database, entry.byteLength + reserved.byteLength + additionalPayloadBytes, 0, additionalSlots);
+    });
+    return Object.freeze({ retention: fixedRetention, replayProof: null, replayed: false,
+      freshnessDeadlineMs });
+  }
+
   function registeredConsumers(database, entry, payload, keys) {
     const refs = new Set(payload.consumers ?? []);
     const rows = database.prepare('SELECT * FROM reuse_consumer_refs WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?').all(entry.entry_id, entry.scope_kind, entry.partition_hash);
@@ -980,6 +1593,10 @@ export function createScopedReuseStore(options) {
     database.prepare('DELETE FROM reuse_observations WHERE entry_id = ?').run(entry.entry_id);
     database.prepare('DELETE FROM reuse_private_links WHERE public_entry_id = ?').run(entry.entry_id);
     database.prepare('DELETE FROM reuse_consumer_refs WHERE entry_id = ?').run(entry.entry_id);
+    if (entry.scope_kind === 'tenant_private' && entry.partition_hash) {
+      database.prepare(`DELETE FROM reuse_correction_reservations WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).run(entry.entry_id, entry.partition_hash);
+    }
     return transitioned;
   }
 
@@ -1059,24 +1676,136 @@ export function createScopedReuseStore(options) {
     return { status: 'valid', valid: true, validUntilMs: parsed.validUntilMs };
   }
 
+  async function commitBoundProfile({ info, request, input, index, keys, entryPayload, observation, consumers, binding, external }) {
+    if (binding.scopeKind !== 'tenant_private' || typeof external.commitGate !== 'function'
+      || !external.bindingOperation || typeof external.bindingOperation.operationId !== 'string'
+      || !Number.isSafeInteger(external.bindingOperation.fence) || external.bindingOperation.fence < 1) fail('REUSE_DENIED');
+    const bindingHash = mac(keys.keyInfo.key, `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
+    const writeFingerprint = boundWriteFingerprint(keys, index, entryPayload, observation,
+      binding, external.bindingOperation.operationId);
+    const operationId = external.bindingOperation.operationId;
+    const profileRef = randomUUID();
+    const freshnessDeadlineMs = entryPayload.initialValidatedAtMs + entryPayload.freshnessTtlMs;
+    if (!Number.isSafeInteger(freshnessDeadlineMs) || freshnessDeadlineMs <= external.boundProfilePreflight?.nowMs
+      || freshnessDeadlineMs > entryPayload.retentionPolicy.expiresAtMs) fail('REUSE_POLICY_UNAVAILABLE');
+    await authorize(info, request, 'private_profile.write');
+    if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    const boundary = Object.freeze({
+      input: boundaryInput(info, request, binding.eventId, 'cache.private_profile.bind', {
+        operationId,
+        fence: external.bindingOperation.fence,
+        bindingId: binding.bindingId,
+        profileRef,
+        scopeKind: binding.scopeKind,
+        identity: index.identity,
+        pins: index.pins,
+        cacheSourceContentHash: index.contentHash,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        effectiveExpiresAtMs: Math.min(binding.historyExpiresAtMs, entryPayload.retentionPolicy.expiresAtMs),
+        freshnessDeadlineMs,
+      }),
+      mustBeBeforeMs: Math.min(binding.historyExpiresAtMs, entryPayload.retentionPolicy.expiresAtMs, freshnessDeadlineMs),
+    });
+    const result = await withBindingDatabase((commit, time) => external.commitGate(commit, time), (database, time) => {
+      const replay = database.prepare('SELECT * FROM reuse_bound_writes WHERE operation_id = ? AND partition_hash = ?')
+        .get(operationId, keys.partitionHash);
+      if (replay || external.boundProfilePreflight?.replayed) fail('REUSE_BUSY');
+      const currentProof = readBoundReplayRows(database, { ...binding, cacheBindingHash: bindingHash }, keys);
+      if (currentProof.bindingEntries.length > 0 || currentProof.bindingReservations.length > 0
+        || currentProof.invalidationReceipts.length > 0) fail('REUSE_INTEGRITY');
+      if (time.clockRollback || signalAborted(external.signal)) fail('REUSE_DENIED');
+      const entryCount = database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count;
+      if (entryCount >= limits.maxEntries) fail('REUSE_CAPACITY');
+      const historicalCap = database.prepare(`SELECT MIN(expires_at_ms) AS expires_at_ms FROM reuse_entries
+        WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND cache_key_hash = ?`)
+        .get('tenant_private', keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
+      const fixedExpiry = historicalCap === null ? entryPayload.retentionPolicy.expiresAtMs
+        : Math.min(entryPayload.retentionPolicy.expiresAtMs, historicalCap);
+      if (fixedExpiry <= time.effectiveNow || fixedExpiry > binding.historyExpiresAtMs
+        || freshnessDeadlineMs <= time.effectiveNow || freshnessDeadlineMs > fixedExpiry) fail('REUSE_POLICY_UNAVAILABLE');
+      const version = nextVersion(database, 'tenant_private', keys.partitionHash, keys.identityHash);
+      if (!Number.isSafeInteger(version) || version < 1 || version > Number.MAX_SAFE_INTEGER) fail('REUSE_CAPACITY');
+      const fixedRetention = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: fixedExpiry });
+      const versionedPayload = freeze({ ...entryPayload, retentionPolicy: fixedRetention, version });
+      const sealed = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash, 'entry', profileRef, versionedPayload);
+      const targetRefs = consumers.length > 0 ? consumers : [null];
+      const correctionSlots = targetRefs.length;
+      const generalSlots = Math.max(1, consumers.length);
+      assertOutboxHeadroom(database, correctionSlots + generalSlots);
+      const reservationPayload = {
+        bindingId: binding.bindingId,
+        eventId: binding.eventId,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        operationId: binding.operationId,
+        profileRef,
+        bindingHash,
+        identity: index.identity,
+        pins: index.pins,
+        contentHash: index.contentHash,
+        version,
+        expiresAtMs: fixedExpiry,
+        outboxSlots: correctionSlots,
+        consumers,
+      };
+      const reservationSealed = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'correction_reservation', profileRef, reservationPayload);
+      ensureStorageCapacity(database, sealed.byteLength + reservationSealed.byteLength, 0, correctionSlots + generalSlots);
+      database.prepare(`INSERT INTO reuse_entries
+        (entry_id, scope_kind, partition_hash, identity_hash, cache_key_hash, content_hash_mac, pins_hash, version,
+         created_at_ms, expires_at_ms, eligible, payload_key_id, payload, payload_bytes, payload_purged, binding_hash)
+        VALUES (?, 'tenant_private', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 0, ?)`)
+        .run(profileRef, keys.partitionHash, keys.identityHash, keys.cacheKeyHash, keys.contentMac, keys.pinsHash,
+          version, time.now, fixedExpiry, keys.payloadKey.keyId, sealed, sealed.byteLength, bindingHash);
+      database.prepare(`INSERT INTO reuse_correction_reservations
+        (entry_id, scope_kind, partition_hash, binding_hash, outbox_slots, payload_key_id, payload, payload_bytes)
+        VALUES (?, 'tenant_private', ?, ?, ?, ?, ?, ?)`)
+        .run(profileRef, keys.partitionHash, bindingHash, correctionSlots, keys.payloadKey.keyId,
+          reservationSealed, reservationSealed.byteLength);
+      registerConsumers(database, profileRef, 'tenant_private', keys, consumers);
+      insertObservation(database, profileRef, keys.partitionHash, keys.payloadKey.keyId, keys.payloadKey.key,
+        { status: 'body_changed', retrievedAtMs: observation.retrievedAtMs, validatedAtMs: observation.validatedAtMs,
+          contentHash: index.contentHash, sourceVersion: observation.sourceVersion, attemptLineage: observation.attemptLineage });
+      database.prepare(`INSERT INTO reuse_bound_writes (operation_id, partition_hash, binding_hash, fingerprint, entry_id, version)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(operationId, keys.partitionHash, bindingHash, writeFingerprint, profileRef, version);
+      return Object.freeze({ status: 'stored', profileRef, version, freshness: 'fresh',
+        originalLineageStatus: entryPayload.lineage?.status ?? 'unknown', replayed: false, expiresAtMs: fixedExpiry,
+        bindingHash, identity: index.identity, pins: index.pins, cacheSourceContentHash: index.contentHash,
+        scopeKind: 'tenant_private' });
+    }, external.signal, boundary);
+    await authorize(info, request, 'private_profile.write');
+    if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    return result;
+  }
+
   async function storeProfile(info, request, scopeKind, input, publicFacts, external = {}) {
     const index = copyIndex(input);
     const parsedIdentity = index.identity;
     const parsedPins = index.pins;
     const now = currentTime();
     if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    const observation = await verifyObservation(info, request, index.contentHash, input.observation, 'initial');
+    const writeAction = scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write';
+    const preflight = external.boundProfilePreflight;
+    const observation = preflight?.observation
+      ?? await verifyObservation(info, request, index.contentHash, input.observation, 'initial');
+    await authorize(info, request, writeAction);
+    if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    validateInitialObservation(observation, index.contentHash, preflight?.nowMs ?? now);
+    const retention = preflight?.retention ?? await resolveRetention(info, scopeKind, now, input.expiresAtMs ?? null);
     await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
     if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    if (observation.status !== 'body_changed') fail('REUSE_POLICY_UNAVAILABLE');
-    if (observation.retrievedAtMs > observation.validatedAtMs || observation.validatedAtMs > now + 60_000) fail('REUSE_POLICY_UNAVAILABLE');
-    const retention = await resolveRetention(info, scopeKind, now, input.expiresAtMs ?? null);
-    await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
-    if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    const ttlMs = input.freshnessTtlMs ?? limits.defaultFreshnessTtlMs;
-    if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > retention.expiresAtMs - now) fail('REUSE_INVALID');
-    let privateReferences = { permissions: [], sourceRefs: [], correctionRefs: [] };
-    if (typeof config.resolvePrivateProfileReferences === 'function') {
+    const ttlMs = preflight?.ttlMs ?? input.freshnessTtlMs ?? limits.defaultFreshnessTtlMs;
+    const retentionBaseNow = preflight?.nowMs ?? now;
+    const freshnessDeadlineMs = preflight?.freshnessDeadlineMs ?? observation.validatedAtMs + ttlMs;
+    if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > limits.maxRetentionMs
+      || !Number.isSafeInteger(freshnessDeadlineMs) || freshnessDeadlineMs <= retentionBaseNow
+      || freshnessDeadlineMs > retention.expiresAtMs) fail('REUSE_INVALID');
+    let privateReferences = preflight?.privateReferences ?? { permissions: [], sourceRefs: [], correctionRefs: [] };
+    if (!preflight && typeof config.resolvePrivateProfileReferences === 'function') {
       let references;
       try {
         references = await config.resolvePrivateProfileReferences(Object.freeze({
@@ -1100,31 +1829,45 @@ export function createScopedReuseStore(options) {
       if (signalAborted(external.signal)) fail('REUSE_DENIED');
     }
     const permissions = validatePermissions(scopeKind === 'public_profile' ? (external.publicPermissions ?? []) : privateReferences.permissions);
-    const lineage = await resolveLineage(info, request, Object.freeze({
+    const lineage = preflight?.lineage ?? await resolveLineage(info, request, Object.freeze({
       kind: scopeKind,
       identity: parsedIdentity,
       contentHash: index.contentHash,
       version: 1,
       observation: observation.status,
     }));
-    await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
-    if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    const consumers = await resolveConsumers(info, request, Object.freeze({
+    if (!preflight) {
+      await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
+      if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    }
+    const consumers = preflight?.consumers ?? await resolveConsumers(info, request, Object.freeze({
       identity: parsedIdentity,
       contentHash: index.contentHash,
       scopeKind,
       ...(scopeKind === 'public_profile' ? { publicSafeOnly: true } : {}),
     }));
-    await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
-    if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    const writeAction = scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write';
-    const keys = await keyParts(info, scopeKind, index, async () => {
+    if (!preflight) {
+      await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
+      if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    }
+    const keys = preflight?.keys ?? await keyParts(info, scopeKind, index, async () => {
       await authorize(info, request, writeAction);
       if (signalAborted(external.signal)) fail('REUSE_DENIED');
     });
     assertConsumersRevocable(consumers, keys, keys.partitionHash);
     const scoped = { ...keys, scopeKind, index, info };
     const profileRef = randomUUID();
+    const correctionBinding = external.correctionBinding === undefined ? null
+      : record(external.correctionBinding, new Set([
+        'bindingId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash', 'operationId', 'historyExpiresAtMs',
+      ]));
+    if (external.correctionBinding !== undefined && (!correctionBinding || scopeKind !== 'tenant_private'
+      || !string(correctionBinding.bindingId, 128) || !string(correctionBinding.historyVersionId, 180)
+      || !string(correctionBinding.eventId, 180)
+      || !/^[a-f0-9]{64}$/.test(correctionBinding.historyContentHash)
+      || !/^[a-f0-9]{64}$/.test(correctionBinding.historyProjectionHash)
+      || !Number.isSafeInteger(correctionBinding.historyExpiresAtMs)
+      || correctionBinding.operationId !== external.bindingOperation?.operationId)) fail('REUSE_INVALID');
     const entryPayload = freeze({
       kind: scopeKind === 'public_profile' ? 'public' : 'private',
       identity: parsedIdentity,
@@ -1138,6 +1881,7 @@ export function createScopedReuseStore(options) {
       permissions,
       sourceRefs: scopeKind === 'tenant_private' ? privateReferences.sourceRefs : Object.freeze([]),
       correctionRefs: scopeKind === 'tenant_private' ? privateReferences.correctionRefs : Object.freeze([]),
+      ...(correctionBinding ? { correctionBinding } : {}),
       lineage: scopeKind === 'tenant_private' ? lineage : validateLineage({ status: 'unknown' }),
       consumers,
       retentionPolicy: retention,
@@ -1169,9 +1913,13 @@ export function createScopedReuseStore(options) {
       await authorize(info, request, 'public_profile.publish');
       if (signalAborted(external.signal)) fail('REUSE_DENIED');
     }
+    if (correctionBinding) {
+      return commitBoundProfile({ info, request, input, index, keys, entryPayload, observation, consumers,
+        binding: Object.freeze({ ...correctionBinding, scopeKind }), external });
+    }
     const result = await withDatabase((database, time) => {
       if (time.clockRollback || signalAborted(external.signal)) fail('REUSE_DENIED');
-      const existing = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND cache_key_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+      const existing = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND cache_key_hash = ? AND eligible = 1 AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
         .get(scopeKind, keys.partitionHash, keys.cacheKeyHash);
       const duplicateInitialObservation = checkInitialObservationOrder(database, keys, scopeKind, observation);
       if (existing) {
@@ -1205,7 +1953,7 @@ export function createScopedReuseStore(options) {
         }
         return Object.freeze({ status: 'existing', profileRef: existing.entry_id, version: existing.version, freshness: 'body_retrieved_unchanged', originalLineageStatus });
       }
-      const current = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC')
+      const current = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 AND binding_hash IS NULL ORDER BY version DESC')
         .all(scopeKind, keys.partitionHash, keys.identityHash);
       const historicalCap = database.prepare('SELECT MIN(expires_at_ms) AS expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND cache_key_hash = ?')
         .get(scopeKind, keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
@@ -1247,7 +1995,7 @@ export function createScopedReuseStore(options) {
         if (time.clockRollback) return 'clock_rollback';
         const current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
           .get(result.profileRef, scopeKind, keys.partitionHash);
-        const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+        const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
           .get(scopeKind, keys.partitionHash, keys.identityHash);
         if (!current || current.eligible !== 1 || !head || head.entry_id !== current.entry_id) return 'not_current_head';
         if (current.expires_at_ms <= time.now || head.expires_at_ms <= time.now) {
@@ -1275,6 +2023,281 @@ export function createScopedReuseStore(options) {
     copyIndex(input);
     await authorize(info, request, 'private_profile.write');
     return storeProfile(info, request, 'tenant_private', input, facts, { signal: input.signal });
+  }
+
+  async function putBoundPrivateProfile(scope, request, inputValue, bindingValue, operation, commitGate, signal, capability, preflightToken) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const info = scopeInfo(scope);
+    const input = record(inputValue, new Set(['identity', 'contentHash', 'pins', 'facts', 'observation', 'freshnessTtlMs', 'expiresAtMs']));
+    const binding = record(bindingValue, new Set([
+      'bindingId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash', 'historyExpiresAtMs',
+    ]));
+    if (!input || !binding || typeof commitGate !== 'function' || !operation
+      || typeof operation.operationId !== 'string' || !Number.isSafeInteger(operation.fence)
+      || operation.fence < 1 || !string(binding.bindingId, 128) || !string(binding.eventId, 180)
+      || !string(binding.historyVersionId, 180) || !/^[a-f0-9]{64}$/.test(binding.historyContentHash)
+      || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash)
+      || !Number.isSafeInteger(binding.historyExpiresAtMs)) fail('REUSE_INVALID');
+    const facts = copyFacts(input.facts);
+    const index = copyIndex(input);
+    const preflight = preflightToken && boundProfilePreflights.get(preflightToken);
+    const bindingCoordinates = Object.freeze({
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      historyExpiresAtMs: binding.historyExpiresAtMs,
+      operationId: operation.operationId,
+      bindingId: binding.bindingId,
+    });
+    const signature = boundProfileSignature(index, input, facts, bindingCoordinates);
+    if (!preflight || preflight.used || preflight.info !== info || preflight.request !== request
+      || preflight.signature !== signature || stable(preflight.binding) !== stable(bindingCoordinates)) fail('REUSE_INVALID');
+    preflight.used = true;
+    await authorize(info, request, 'private_profile.write');
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    if (preflight.replayed) {
+      const exactBinding = Object.freeze({ ...binding, operationId: operation.operationId,
+        operationPhase: operation.phase, cacheBindingHash: preflight.replayProof.receipt?.binding_hash });
+      const current = await withBindingRead((database, time) => {
+        if (time.clockRollback || signalAborted(signal) || time.now >= preflight.replayPayload.retentionPolicy.expiresAtMs) {
+          fail('REUSE_POLICY_UNAVAILABLE');
+        }
+        const rows = readBoundReplayRows(database, exactBinding, preflight.keys);
+        if (!sameBoundReceiptRows(preflight.replayProof, rows) || !rows.entry
+          || rows.entry.eligible !== 1 || rows.entry.payload_purged !== 0
+          || rows.entry.expires_at_ms !== preflight.replayPayload.retentionPolicy.expiresAtMs) fail('REUSE_BUSY');
+        return { row: rows.entry, now: time.now };
+      });
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const freshnessDeadlineMs = preflight.replayPayload.initialValidatedAtMs + preflight.replayPayload.freshnessTtlMs;
+      return Object.freeze({ status: 'stored', profileRef: current.row.entry_id, version: current.row.version,
+        freshness: current.now >= freshnessDeadlineMs ? 'stale' : 'fresh',
+        originalLineageStatus: preflight.replayPayload.lineage?.status ?? 'unknown', replayed: true,
+        expiresAtMs: current.row.expires_at_ms, bindingHash: current.row.binding_hash,
+        identity: index.identity, pins: index.pins, cacheSourceContentHash: index.contentHash,
+        scopeKind: 'tenant_private' });
+    }
+    return await storeProfile(info, request, 'tenant_private', input, facts, {
+      correctionBinding: Object.freeze({ ...binding, operationId: operation.operationId }),
+      bindingOperation: operation,
+      commitGate,
+      signal,
+      boundProfilePreflight: preflight,
+    });
+  }
+
+  async function validateBoundPrivateProfileInput(scope, request, inputValue, signal, capability, callerFacts, bindingValue) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const info = scopeInfo(scope);
+    const input = record(inputValue, new Set([
+      'identity', 'contentHash', 'pins', 'facts', 'observation', 'freshnessTtlMs', 'expiresAtMs',
+    ]));
+    const binding = record(bindingValue, new Set([
+      'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash', 'historyExpiresAtMs',
+      'operationId', 'bindingId', 'operationPhase',
+    ]));
+    if (!input || !Object.hasOwn(input, 'facts') || !Object.hasOwn(input, 'observation')
+      || !binding || !string(binding.eventId, 180) || !string(binding.historyVersionId, 180)
+      || !/^[a-f0-9]{64}$/.test(binding.historyContentHash ?? '')
+      || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash ?? '')
+      || !string(binding.operationId, 36) || !/^[0-9a-f-]{36}$/i.test(binding.operationId)
+      || !string(binding.bindingId, 36) || !/^[0-9a-f-]{36}$/i.test(binding.bindingId)
+      || !['new', 'pending_bind', 'complete'].includes(binding.operationPhase)
+      || !Number.isSafeInteger(binding.historyExpiresAtMs) || binding.historyExpiresAtMs < 0
+      || binding.historyExpiresAtMs > MAX_TIME) fail('REUSE_INVALID');
+    const index = copyIndex(input);
+    const facts = copyFacts(input.facts);
+    if (callerFacts !== undefined) copyFacts(callerFacts);
+    if (input.freshnessTtlMs !== undefined
+      && (!Number.isSafeInteger(input.freshnessTtlMs) || input.freshnessTtlMs < 1
+        || input.freshnessTtlMs > limits.maxRetentionMs)) fail('REUSE_INVALID');
+    if (input.expiresAtMs !== undefined
+      && (!Number.isSafeInteger(input.expiresAtMs) || input.expiresAtMs < 0 || input.expiresAtMs > MAX_TIME)) {
+      fail('REUSE_INVALID');
+    }
+    let keys;
+    let transferred = false;
+    try {
+      const now = currentTime();
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const guard = authorizationGuard(info, request, 'private_profile.write', signal);
+      keys = await indexParts(info, 'tenant_private', index, guard);
+      const cacheBindingHash = mac(keys.keyInfo.key,
+        `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
+      const exactBinding = Object.freeze({ ...binding, cacheBindingHash });
+      const signatureBinding = Object.freeze({ eventId: binding.eventId, historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash, historyProjectionHash: binding.historyProjectionHash,
+        historyExpiresAtMs: binding.historyExpiresAtMs, operationId: binding.operationId, bindingId: binding.bindingId });
+      const cacheSignature = boundProfileSignature(index, input, facts, signatureBinding);
+
+      if (binding.operationPhase !== 'new') {
+        const candidate = await withBindingRead((database, time) => {
+          if (time.clockRollback) fail('REUSE_DENIED');
+          return { rows: readBoundReplayRows(database, exactBinding, keys), now: time.now };
+        });
+        if (candidate.rows.receipt) {
+          if (binding.operationPhase === 'new') fail('REUSE_BUSY');
+          const receipt = await verifyBoundReceipt({ info, request, signal, keys, index, facts,
+            binding: exactBinding, rows: candidate.rows, now: candidate.now });
+          const confirmed = await withBindingRead((database, time) => {
+            if (time.clockRollback || time.now >= receipt.expiresAtMs) fail('REUSE_POLICY_UNAVAILABLE');
+            const current = readBoundReplayRows(database, exactBinding, keys);
+            if (!sameBoundReceiptRows(candidate.rows, current)) fail('REUSE_BUSY');
+            return current;
+          });
+          const preflightToken = opaque();
+          boundProfilePreflights.set(preflightToken, {
+            info,
+            request,
+            signature: cacheSignature,
+            binding: Object.freeze({ ...signatureBinding }),
+            observation: receipt.observation,
+            entryPayload: receipt.payload,
+            retention: receipt.payload.retentionPolicy,
+            replayProof: confirmed,
+            replayPayload: receipt.payload,
+            replayed: true,
+            ttlMs: receipt.payload.freshnessTtlMs,
+            nowMs: now,
+            privateReferences: null,
+            lineage: receipt.payload.lineage,
+            consumers: receipt.payload.consumers,
+            index,
+            keys,
+            used: false,
+          });
+          transferred = true;
+          return preflightToken;
+        }
+        if (binding.operationPhase === 'complete' || candidate.rows.bindingEntries.length > 0
+          || candidate.rows.bindingReservations.length > 0 || candidate.rows.invalidationReceipts.length > 0) {
+          fail('REUSE_INTEGRITY');
+        }
+      }
+
+      const observation = validateInitialObservation(
+        await verifyObservation(info, request, index.contentHash, input.observation, 'initial'), index.contentHash, now);
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      let retention = await resolveRetention(info, 'tenant_private', now, input.expiresAtMs ?? null);
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const ttlMs = input.freshnessTtlMs ?? limits.defaultFreshnessTtlMs;
+      const freshnessDeadlineMs = observation.validatedAtMs + ttlMs;
+      if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > limits.maxRetentionMs
+        || !Number.isSafeInteger(freshnessDeadlineMs) || freshnessDeadlineMs <= now
+        || freshnessDeadlineMs > retention.expiresAtMs || freshnessDeadlineMs > binding.historyExpiresAtMs) fail('REUSE_INVALID');
+
+      let privateReferences = { permissions: [], sourceRefs: [], correctionRefs: [] };
+      if (typeof config.resolvePrivateProfileReferences === 'function') {
+        let references;
+        try {
+          references = await config.resolvePrivateProfileReferences(Object.freeze({
+            tenantId: info.tenantId,
+            actorId: info.actorId,
+            request,
+            kind: 'tenant_private',
+            identity: index.identity,
+            contentHash: index.contentHash,
+            projection: facts,
+          }));
+        } catch { fail('REUSE_POLICY_UNAVAILABLE'); }
+        const parsed = record(references, new Set(['permissions', 'sourceRefs', 'correctionRefs']));
+        if (!parsed) fail('REUSE_POLICY_UNAVAILABLE');
+        privateReferences = {
+          permissions: validatePermissions(parsed.permissions ?? []),
+          sourceRefs: boundedRefList(parsed.sourceRefs ?? []),
+          correctionRefs: boundedRefList(parsed.correctionRefs ?? []),
+        };
+        await authorize(info, request, 'private_profile.write');
+        if (signalAborted(signal)) fail('REUSE_DENIED');
+      }
+      const lineage = await resolveLineage(info, request, Object.freeze({
+        kind: 'tenant_private', identity: index.identity, contentHash: index.contentHash,
+        version: 1, observation: observation.status,
+      }));
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const consumers = await resolveConsumers(info, request, Object.freeze({
+        identity: index.identity, contentHash: index.contentHash, scopeKind: 'tenant_private',
+      }));
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      keys = await keyPartsFromIndex(info, keys, guard);
+      assertConsumersRevocable(consumers, keys, keys.partitionHash);
+      const permissions = validatePermissions(privateReferences.permissions);
+      const correctionBinding = Object.freeze({
+        bindingId: binding.bindingId,
+        eventId: binding.eventId,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        operationId: binding.operationId,
+        historyExpiresAtMs: binding.historyExpiresAtMs,
+      });
+      const entryPayload = freeze({
+        kind: 'private',
+        identity: index.identity,
+        pins: index.pins,
+        contentHash: index.contentHash,
+        facts,
+        sourceVersion: observation.sourceVersion,
+        retrievedAtMs: observation.retrievedAtMs,
+        initialValidatedAtMs: observation.validatedAtMs,
+        freshnessTtlMs: ttlMs,
+        permissions,
+        sourceRefs: privateReferences.sourceRefs,
+        correctionRefs: privateReferences.correctionRefs,
+        correctionBinding,
+        lineage,
+        consumers,
+        retentionPolicy: retention,
+        rights: 'not_asserted',
+      });
+      if (Buffer.byteLength(stable(entryPayload), 'utf8') > limits.maxEntryBytes) fail('REUSE_CAPACITY');
+      if (binding.operationPhase === 'new') {
+        assertBoundHistoryEventsFit(consumers, keys, exactBinding, index.contentHash);
+      }
+      const capacity = await preflightBoundCacheCapacity({ info, request, signal, keys, index, entryPayload,
+        observation, consumers, binding: exactBinding, ttlMs });
+      retention = capacity.retention;
+      if (!capacity.replayed && binding.operationPhase !== 'new') {
+        assertBoundHistoryEventsFit(consumers, keys, exactBinding, index.contentHash);
+      }
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const preflightToken = opaque();
+      boundProfilePreflights.set(preflightToken, {
+        info,
+        request,
+        signature: cacheSignature,
+        binding: Object.freeze({ ...signatureBinding }),
+        observation,
+        entryPayload,
+        retention,
+        replayProof: capacity.replayProof,
+        replayed: capacity.replayed,
+        ttlMs,
+        freshnessDeadlineMs: capacity.freshnessDeadlineMs,
+        nowMs: now,
+        privateReferences,
+        lineage,
+        consumers,
+        index,
+        keys,
+        used: false,
+      });
+      transferred = true;
+      return preflightToken;
+    } finally {
+      if (!transferred && keys) {
+        try { keys.keyInfo.key.fill(0); } catch { /* Cache-owned key copy. */ }
+        try { keys.payloadKey?.key.fill(0); } catch { /* Cache-owned key copy. */ }
+      }
+    }
   }
 
   async function publishReviewedPublicProfile(scope, request, inputValue) {
@@ -1345,7 +2368,7 @@ export function createScopedReuseStore(options) {
         current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
           .get(row.entry_id, scopeKind, row.partition_hash);
       }
-      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
         .get(scopeKind, row.partition_hash, row.identity_hash);
       const observation = current?.eligible === 1
         ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
@@ -1399,7 +2422,7 @@ export function createScopedReuseStore(options) {
         current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
           .get(row.entry_id, scopeKind, row.partition_hash);
       }
-      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
         .get(scopeKind, row.partition_hash, row.identity_hash);
       const observation = current?.eligible === 1
         ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
@@ -1458,7 +2481,7 @@ export function createScopedReuseStore(options) {
         current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
           .get(row.entry_id, scopeKind, row.partition_hash);
       }
-      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
         .get(scopeKind, row.partition_hash, row.identity_hash);
       const latestObservation = current?.eligible === 1
         ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
@@ -1530,9 +2553,9 @@ export function createScopedReuseStore(options) {
     });
     const candidate = await withDatabase((database, time) => {
       if (time.clockRollback) return { clockRollback: true };
-      const exact = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND cache_key_hash = ? ORDER BY version DESC LIMIT 1')
+      const exact = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND cache_key_hash = ? AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
         .get(scopeKind, keys.partitionHash, keys.cacheKeyHash);
-      const row = exact ?? database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? ORDER BY version DESC LIMIT 1')
+      const row = exact ?? database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND binding_hash IS NULL ORDER BY version DESC LIMIT 1')
         .get(scopeKind, keys.partitionHash, keys.identityHash);
       if (!row) return null;
       if (row.eligible !== 1) return { row, now: time.now, payloadKey: null, invalidated: true, clockRollback: false };
@@ -1669,6 +2692,466 @@ export function createScopedReuseStore(options) {
   async function getPrivateProfile(scope, request, lookup) {
     scopeInfo(scope);
     return lookupProfile(scope, request, 'tenant_private', lookup, 'cache_read');
+  }
+
+  async function loadBoundCandidate(scope, request, bindingValue, use, signal, capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const info = scopeInfo(scope);
+    const binding = record(bindingValue, new Set([
+      'bindingId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash',
+      'operationId', 'profileRef', 'cacheVersion', 'scopeKind', 'cacheBindingHash', 'identity', 'pins',
+      'cacheSourceContentHash', 'cacheExpiresAtMs', 'historyExpiresAtMs', 'expiresAtMs',
+    ]));
+    if (!binding || !string(binding.bindingId, 128) || !string(binding.eventId, 180)
+      || !string(binding.historyVersionId, 180) || !/^[a-f0-9]{64}$/.test(binding.historyContentHash)
+      || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash) || !string(binding.profileRef, 128)
+      || !string(binding.operationId, 128)
+      || !Number.isSafeInteger(binding.cacheVersion) || binding.cacheVersion < 1
+      || binding.scopeKind !== 'tenant_private' || !/^[a-f0-9]{64}$/.test(binding.cacheBindingHash)
+      || !/^[a-f0-9]{64}$/.test(binding.cacheSourceContentHash)
+      || !Number.isSafeInteger(binding.cacheExpiresAtMs) || !Number.isSafeInteger(binding.historyExpiresAtMs)
+      || !Number.isSafeInteger(binding.expiresAtMs)) fail('REUSE_DENIED');
+    const action = 'private_profile.read';
+    const index = copyIndex({ identity: binding.identity, contentHash: binding.cacheSourceContentHash, pins: binding.pins });
+    await authorize(info, request, action, { profileRef: binding.profileRef });
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const guard = async () => {
+      await authorize(info, request, action, { profileRef: binding.profileRef });
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+    };
+    const keys = await keyParts(info, 'tenant_private', index, guard);
+    const expectedBindingHash = mac(keys.keyInfo.key,
+      `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
+    if (expectedBindingHash !== binding.cacheBindingHash) fail('REUSE_DENIED');
+    const raw = await withBindingRead((database, time) => {
+      const row = database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(binding.profileRef, keys.partitionHash);
+      const observation = row?.eligible === 1
+        ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
+        : null;
+      return { row, observation, now: time.now, clockRollback: time.clockRollback };
+    });
+    if (signalAborted(signal) || raw.clockRollback || !raw.row || !raw.observation
+      || raw.row.version !== binding.cacheVersion || raw.row.binding_hash !== binding.cacheBindingHash
+      || raw.row.eligible !== 1 || raw.row.payload_purged === 1 || raw.row.expires_at_ms !== binding.cacheExpiresAtMs
+      || binding.expiresAtMs !== Math.min(binding.cacheExpiresAtMs, binding.historyExpiresAtMs)
+      || raw.now >= binding.expiresAtMs) fail('REUSE_DENIED');
+    const payloadKey = raw.row.payload_key_id === keys.payloadKey.keyId
+      ? keys.payloadKey : await resolveKey(info, 'payload', raw.row.payload_key_id, guard);
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const payload = freeze(unseal(payloadKey.key, raw.row.partition_hash, 'entry', raw.row.entry_id, raw.row.payload, raw.row.payload_key_id));
+    const correctionBinding = record(payload.correctionBinding, new Set([
+      'bindingId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash', 'operationId', 'historyExpiresAtMs',
+    ]));
+    if (!correctionBinding || correctionBinding.bindingId !== binding.bindingId
+      || correctionBinding.eventId !== binding.eventId || correctionBinding.historyVersionId !== binding.historyVersionId
+      || correctionBinding.historyContentHash !== binding.historyContentHash
+      || correctionBinding.historyProjectionHash !== binding.historyProjectionHash
+      || correctionBinding.operationId !== binding.operationId
+      || correctionBinding.historyExpiresAtMs !== binding.historyExpiresAtMs
+      || stable(payload.identity) !== stable(index.identity) || stable(payload.pins) !== stable(index.pins)
+      || payload.contentHash !== binding.cacheSourceContentHash
+      || raw.row.identity_hash !== keys.identityHash || raw.row.content_hash_mac !== keys.contentMac
+      || raw.row.pins_hash !== keys.pinsHash) fail('REUSE_DENIED');
+    const observationKey = raw.observation.payload_key_id === payloadKey.keyId
+      ? payloadKey : await resolveKey(info, 'payload', raw.observation.payload_key_id, guard);
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const observation = freeze(unseal(observationKey.key, raw.row.partition_hash, 'observation', raw.observation.observation_id,
+      raw.observation.payload, raw.observation.payload_key_id));
+    const state = eligibility(raw.row, payload, observation, raw.now, false, true);
+    if (state.status !== 'fresh' && !(state.status === 'stale' && state.reason === 'ttl_expired')) fail('REUSE_DENIED');
+    const permissionState = await maybePermissions(info, request, payload, use, raw.now);
+    if (signalAborted(signal) || !permissionState.valid || (permissionState.validUntilMs !== undefined
+      && permissionState.validUntilMs <= currentTime())) fail('REUSE_DENIED');
+    await guard();
+    const preFinalNow = currentTime();
+    if (preFinalNow >= binding.expiresAtMs || (permissionState.validUntilMs !== undefined
+      && preFinalNow >= permissionState.validUntilMs)) fail('REUSE_DENIED');
+    return Object.freeze({
+      row: raw.row,
+      observationRow: raw.observation,
+      observation,
+      payload,
+      freshnessState: Object.freeze({ ...state }),
+      permissionState: Object.freeze({ ...permissionState }),
+      binding,
+      keys: Object.freeze({ partitionHash: keys.partitionHash, identityHash: keys.identityHash,
+        contentMac: keys.contentMac, pinsHash: keys.pinsHash, payloadKey }),
+      use,
+      signal,
+    });
+  }
+
+  async function prepareBoundReadDatabase(capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    return openStoreDatabase(0);
+  }
+
+  async function prepareBoundFinalDisclosure(scope, request, preflightToken, bindingValue, signal, capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const info = scopeInfo(scope);
+    const binding = record(bindingValue, new Set([
+      'schemaVersion', 'bindingId', 'operationId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash',
+      'profileRef', 'cacheVersion', 'scopeKind', 'cacheBindingHash', 'identity', 'pins', 'cacheSourceContentHash',
+      'cacheExpiresAtMs', 'historyExpiresAtMs', 'expiresAtMs', 'bindingHash', 'referenceHash',
+      'lastInvalidationOperationId', 'lastInvalidationTargetVersionId', 'lastInvalidationTargetHash', 'sealed',
+    ]));
+    const preflight = preflightToken && boundProfilePreflights.get(preflightToken);
+    if (!binding || !preflight || preflight.info !== info || preflight.request !== request
+      || binding.schemaVersion !== 1 || binding.scopeKind !== 'tenant_private' || binding.operationId !== preflight.binding.operationId
+      || binding.bindingId !== preflight.binding.bindingId || binding.eventId !== preflight.binding.eventId
+      || binding.historyVersionId !== preflight.binding.historyVersionId
+      || binding.historyContentHash !== preflight.binding.historyContentHash
+      || binding.historyProjectionHash !== preflight.binding.historyProjectionHash
+      || binding.historyExpiresAtMs !== preflight.binding.historyExpiresAtMs
+      || !string(binding.profileRef, 128) || !Number.isSafeInteger(binding.cacheVersion)
+      || !/^[a-f0-9]{64}$/.test(binding.cacheBindingHash ?? '')
+      || !Number.isSafeInteger(binding.cacheExpiresAtMs) || !Number.isSafeInteger(binding.historyExpiresAtMs)
+      || binding.expiresAtMs !== Math.min(binding.cacheExpiresAtMs, binding.historyExpiresAtMs)) fail('REUSE_DENIED');
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    await authorize(info, request, 'private_profile.read');
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const exactBinding = Object.freeze({ ...preflight.binding, cacheBindingHash: binding.cacheBindingHash,
+      operationPhase: 'complete' });
+    const expectedHash = mac(preflight.keys.keyInfo.key,
+      `event-intelligence:correction-cache-binding:v1:${preflight.keys.partitionHash}:${binding.bindingId}`);
+    if (expectedHash !== binding.cacheBindingHash) fail('REUSE_INTEGRITY');
+    const candidate = await withBindingRead((database, time) => {
+      if (time.clockRollback) fail('REUSE_DENIED');
+      return { rows: readBoundReplayRows(database, exactBinding, preflight.keys), now: time.now };
+    });
+    const facts = preflight.entryPayload?.facts ?? preflight.replayPayload?.facts;
+    const proof = await verifyBoundReceipt({ info, request, signal, keys: preflight.keys,
+      index: preflight.index, facts, binding: exactBinding, rows: candidate.rows, now: candidate.now });
+    if (!proof || proof.profileRef !== binding.profileRef || proof.version !== binding.cacheVersion
+      || proof.expiresAtMs !== binding.cacheExpiresAtMs
+      || binding.expiresAtMs !== Math.min(proof.expiresAtMs, binding.historyExpiresAtMs)
+      || (preflight.replayProof && !sameBoundReceiptRows(preflight.replayProof, candidate.rows))) fail('REUSE_BUSY');
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const database = await openStoreDatabase(0);
+    try {
+      await authorize(info, request, 'private_profile.read');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const token = opaque();
+      boundFinalDisclosures.set(token, {
+        info, request, signal, keys: preflight.keys, binding: Object.freeze({ ...binding }),
+        rows: proof.rows, database, used: false,
+      });
+      return token;
+    } catch (error) {
+      database.close();
+      throw error;
+    }
+  }
+
+  function finalBoundDisclosureCheck(token, effectiveNow, capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) return false;
+    const state = token && boundFinalDisclosures.get(token);
+    if (!state || state.used || signalAborted(state.signal) || !Number.isSafeInteger(effectiveNow)
+      || effectiveNow < 0 || effectiveNow > MAX_TIME) return false;
+    state.used = true;
+    let transactionOpen = false;
+    try {
+      const database = state.database;
+      database.exec('BEGIN IMMEDIATE');
+      transactionOpen = true;
+      const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
+      const previousMax = currentMax ? Number(currentMax.value) : null;
+      if (currentMax && (!Number.isSafeInteger(previousMax) || previousMax < 0 || previousMax > MAX_TIME)) throw new Error('cache clock metadata invalid');
+      if (previousMax !== null && effectiveNow < previousMax) throw new Error('cache clock moved backward');
+      const binding = { ...state.binding, operationPhase: 'complete' };
+      const current = readBoundReplayRows(database, binding, state.keys);
+      const entry = current.entry;
+      if (!sameBoundReceiptRows(state.rows, current) || !entry
+        || entry.entry_id !== binding.profileRef || entry.version !== binding.cacheVersion
+        || entry.binding_hash !== binding.cacheBindingHash || entry.eligible !== 1 || entry.payload_purged !== 0
+        || entry.expires_at_ms !== binding.cacheExpiresAtMs || entry.expires_at_ms <= effectiveNow
+        || binding.expiresAtMs !== Math.min(entry.expires_at_ms, binding.historyExpiresAtMs)
+        || current.outboxCount !== 0 || current.invalidationReceipts.length !== 0
+        || signalAborted(state.signal)) throw new Error('cache binding changed during disclosure');
+      database.exec('COMMIT');
+      transactionOpen = false;
+      return true;
+    } catch {
+      if (transactionOpen) {
+        try { state.database.exec('ROLLBACK'); } catch { /* Closing the handle also rolls back. */ }
+      }
+      return false;
+    }
+  }
+
+  function disposeBoundFinalDisclosure(token, capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const state = token && boundFinalDisclosures.get(token);
+    if (!state) return;
+    boundFinalDisclosures.delete(token);
+    zeroBoundReceiptRows(state.rows);
+    try { state.database.close(); } catch { /* A closed connection is already harmless. */ }
+  }
+
+  function finalBoundRead(database, candidate, now, effectiveNow, capability, boundaryToken) {
+    if (!isCorrectionCacheBindingCapability(capability) || !database || signalAborted(candidate?.signal)
+      || !Number.isSafeInteger(now) || !Number.isSafeInteger(effectiveNow) || effectiveNow < now
+      || !boundaryToken) fail('REUSE_DENIED');
+    const boundaryNow = () => {
+      const current = localBoundaryEffectiveNow(boundaryToken);
+      if (!Number.isSafeInteger(current) || current < effectiveNow || current > MAX_TIME) fail('REUSE_DENIED');
+      return current;
+    };
+    let transactionOpen = false;
+    try {
+      database.exec('BEGIN IMMEDIATE');
+      transactionOpen = true;
+      const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
+      const previousMax = currentMax ? Number(currentMax.value) : null;
+      if (currentMax && (!Number.isSafeInteger(previousMax) || previousMax < 0 || previousMax > MAX_TIME)) fail('REUSE_INTEGRITY');
+      if (previousMax !== null && now < previousMax) fail('REUSE_DENIED');
+      const current = database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`)
+        .get(candidate.row.entry_id, candidate.keys.partitionHash);
+      const latest = database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1')
+        .get(candidate.row.entry_id);
+      const remainsCurrent = (at) => sameStoredEntry(current, candidate.row)
+        && sameStoredObservation(latest, candidate.observationRow)
+        && current?.eligible === 1 && current?.binding_hash === candidate.binding.cacheBindingHash
+        && current?.version === candidate.binding.cacheVersion && current?.payload_purged !== 1
+        && current?.expires_at_ms === candidate.binding.cacheExpiresAtMs
+        && at < candidate.binding.expiresAtMs
+        && (candidate.permissionState.validUntilMs === undefined || at < candidate.permissionState.validUntilMs)
+        && (() => {
+          const currentState = eligibility(current, candidate.payload, candidate.observation, at, false, true);
+          return candidate.freshnessState.status === 'fresh'
+            ? currentState.status === 'fresh'
+            : currentState.status === 'stale' && currentState.reason === 'ttl_expired';
+        })();
+      if (!remainsCurrent(boundaryNow()) || signalAborted(candidate.signal)) fail('REUSE_DENIED');
+      const result = candidate.freshnessState.status === 'fresh'
+        ? Object.freeze({ status: 'hit', profileRef: current.entry_id, version: current.version,
+          facts: candidate.payload.facts, trust: 'tenant_private', permissionStatus: candidate.permissionState.status,
+          retrievedAt: iso(effectiveRetrievedAt(candidate.payload, candidate.observation)),
+          validatedAt: iso(candidate.observation.validatedAtMs), expiresAt: iso(current.expires_at_ms),
+          originalLineageStatus: candidate.payload.lineage?.status ?? 'unknown' })
+        : Object.freeze({ status: 'stale', reason: 'ttl_expired', profileRef: current.entry_id });
+      if (signalAborted(candidate.signal) || !remainsCurrent(boundaryNow())) fail('REUSE_DENIED');
+      database.exec('COMMIT');
+      transactionOpen = false;
+      if (signalAborted(candidate.signal) || !remainsCurrent(boundaryNow())) fail('REUSE_DENIED');
+      return result;
+    } catch (error) {
+      if (transactionOpen) {
+        try { database.exec('ROLLBACK'); } catch { /* Closing the handle also rolls back. */ }
+      }
+      throw safeError(error);
+    }
+  }
+
+  async function invalidateBoundProfile(scope, request, bindingValue, operation, historyGate, signal, capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const info = scopeInfo(scope);
+    const binding = record(bindingValue, new Set([
+      'bindingId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash',
+      'operationId', 'profileRef', 'cacheVersion', 'scopeKind', 'cacheBindingHash', 'identity', 'pins',
+      'cacheSourceContentHash', 'cacheExpiresAtMs', 'historyExpiresAtMs', 'expiresAtMs',
+    ]));
+    if (!binding || !string(binding.bindingId, 128) || !string(binding.eventId, 180)
+      || !string(binding.historyVersionId, 180) || !/^[a-f0-9]{64}$/.test(binding.historyContentHash)
+      || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash) || !string(binding.profileRef, 128)
+      || !string(binding.operationId, 128)
+      || !Number.isSafeInteger(binding.cacheVersion) || binding.cacheVersion < 1
+      || binding.scopeKind !== 'tenant_private' || !/^[a-f0-9]{64}$/.test(binding.cacheBindingHash)
+      || !/^[a-f0-9]{64}$/.test(binding.cacheSourceContentHash)
+      || !Number.isSafeInteger(binding.cacheExpiresAtMs) || !Number.isSafeInteger(binding.historyExpiresAtMs)
+      || !Number.isSafeInteger(binding.expiresAtMs)
+      || binding.expiresAtMs !== Math.min(binding.cacheExpiresAtMs, binding.historyExpiresAtMs)
+      || !operation || !string(operation.operationId, 128) || !Number.isSafeInteger(operation.fence)
+      || operation.fence < 1 || operation.baseVersionId !== binding.historyVersionId
+      || operation.baseContentHash !== binding.historyContentHash
+      || !string(operation.targetVersionId, 180) || !/^[a-f0-9]{64}$/.test(operation.targetContentHash)
+      || typeof historyGate !== 'function') fail('REUSE_DENIED');
+    const action = 'cache.invalidate';
+    await authorize(info, request, action, { profileRef: binding.profileRef });
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const index = copyIndex({ identity: binding.identity, contentHash: binding.cacheSourceContentHash, pins: binding.pins });
+    const guard = async () => {
+      await authorize(info, request, action, { profileRef: binding.profileRef });
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+    };
+    const keys = await keyParts(info, 'tenant_private', index, guard);
+    let retainedProofKey;
+    try {
+    const expectedBindingHash = mac(keys.keyInfo.key,
+      `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
+    if (expectedBindingHash !== binding.cacheBindingHash) fail('REUSE_DENIED');
+    const fingerprint = mac(keys.keyInfo.key, stable({
+      operationId: operation.operationId,
+      profileRef: binding.profileRef,
+      bindingId: binding.bindingId,
+      eventId: binding.eventId,
+      priorVersionId: binding.historyVersionId,
+      priorContentHash: binding.historyContentHash,
+      targetVersionId: operation.targetVersionId,
+      targetContentHash: operation.targetContentHash,
+      cacheVersion: binding.cacheVersion,
+      cacheBindingHash: binding.cacheBindingHash,
+    }));
+    const preflight = await withBindingRead((database) => ({
+      row: database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(binding.profileRef, keys.partitionHash),
+      reservation: database.prepare(`SELECT * FROM reuse_correction_reservations WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(binding.profileRef, keys.partitionHash),
+      receipt: database.prepare(`SELECT binding_hash, fingerprint, event_ids FROM reuse_history_invalidation_ops
+        WHERE operation_id = ? AND entry_id = ? AND partition_hash = ?`)
+        .get(operation.operationId, binding.profileRef, keys.partitionHash),
+    }));
+    if (signalAborted(signal) || !preflight.row
+      || preflight.row.version !== binding.cacheVersion || preflight.row.binding_hash !== binding.cacheBindingHash
+      || preflight.row.expires_at_ms !== binding.cacheExpiresAtMs
+      || preflight.row.identity_hash !== keys.identityHash || preflight.row.content_hash_mac !== keys.contentMac
+      || preflight.row.pins_hash !== keys.pinsHash || preflight.row.scope_kind !== 'tenant_private'
+      || binding.expiresAtMs !== Math.min(preflight.row.expires_at_ms, binding.historyExpiresAtMs)) {
+      fail('REUSE_DENIED');
+    }
+    let reservation;
+    let reservationConsumers;
+    let reservationKey;
+    if (preflight.receipt) {
+      let eventIds;
+      try { eventIds = JSON.parse(preflight.receipt.event_ids); } catch { fail('REUSE_INTEGRITY'); }
+      if (preflight.receipt.binding_hash !== binding.cacheBindingHash
+        || preflight.receipt.fingerprint !== fingerprint || !Array.isArray(eventIds)
+        || eventIds.length < 1 || eventIds.length > 64
+        || eventIds.some((eventId) => !string(eventId, 64) || !/^[0-9a-f-]{36}$/i.test(eventId))
+        || new Set(eventIds).size !== eventIds.length) fail('REUSE_INTEGRITY');
+    } else {
+      if (!preflight.reservation) fail('REUSE_DENIED');
+      reservationKey = preflight.reservation.payload_key_id === keys.payloadKey.keyId
+        ? keys.payloadKey : await resolveKey(info, 'payload', preflight.reservation.payload_key_id, guard);
+      if (reservationKey !== keys.payloadKey) retainedProofKey = reservationKey;
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      reservation = unseal(reservationKey.key, keys.partitionHash, 'correction_reservation', binding.profileRef,
+        preflight.reservation.payload, preflight.reservation.payload_key_id);
+      reservationConsumers = safeArrayValues(reservation.consumers, 64);
+      if (reservation.bindingId !== binding.bindingId || reservation.operationId !== binding.operationId
+        || reservation.eventId !== binding.eventId
+        || reservation.historyVersionId !== binding.historyVersionId
+        || reservation.historyContentHash !== binding.historyContentHash
+        || reservation.historyProjectionHash !== binding.historyProjectionHash
+        || reservation.profileRef !== binding.profileRef
+        || reservation.bindingHash !== binding.cacheBindingHash || reservation.version !== binding.cacheVersion
+        || reservation.contentHash !== binding.cacheSourceContentHash || reservation.expiresAtMs !== binding.cacheExpiresAtMs
+        || reservation.expiresAtMs > binding.historyExpiresAtMs
+        || binding.expiresAtMs !== Math.min(reservation.expiresAtMs, binding.historyExpiresAtMs)
+        || stable(reservation.identity) !== stable(index.identity) || stable(reservation.pins) !== stable(index.pins)
+        || (reservation.outboxSlots !== Math.max(1, reservationConsumers.length))) fail('REUSE_INTEGRITY');
+    }
+    await guard();
+    if (signalAborted(signal)) fail('REUSE_DENIED');
+    const boundary = Object.freeze({
+      input: boundaryInput(info, request, binding.eventId, 'cache.private_profile.invalidate', {
+        operationId: operation.operationId,
+        fence: operation.fence,
+        bindingId: binding.bindingId,
+        profileRef: binding.profileRef,
+        cacheVersion: binding.cacheVersion,
+        cacheBindingHash: binding.cacheBindingHash,
+        priorHistoryVersionId: binding.historyVersionId,
+        priorHistoryContentHash: binding.historyContentHash,
+        targetHistoryVersionId: operation.targetVersionId,
+        targetHistoryContentHash: operation.targetContentHash,
+      }),
+    });
+    const result = await withBindingDatabase((commit, time) => historyGate(commit, time), (database, time) => {
+      const priorReceipt = database.prepare(`SELECT binding_hash, fingerprint, event_ids FROM reuse_history_invalidation_ops
+        WHERE operation_id = ? AND entry_id = ? AND partition_hash = ?`)
+        .get(operation.operationId, binding.profileRef, keys.partitionHash);
+      if (priorReceipt) {
+        if (priorReceipt.binding_hash !== binding.cacheBindingHash || priorReceipt.fingerprint !== fingerprint) fail('REUSE_DENIED');
+        let eventIds;
+        try { eventIds = JSON.parse(priorReceipt.event_ids); } catch { fail('REUSE_INTEGRITY'); }
+        if (!Array.isArray(eventIds) || eventIds.length < 1 || eventIds.length > 64
+          || eventIds.some((eventId) => !string(eventId, 64) || !/^[0-9a-f-]{36}$/i.test(eventId))
+          || new Set(eventIds).size !== eventIds.length) fail('REUSE_INTEGRITY');
+        const current = database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+          AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(binding.profileRef, keys.partitionHash);
+        if (!current || !sameStoredEntry(current, preflight.row) || current.version !== binding.cacheVersion
+          || current.binding_hash !== binding.cacheBindingHash) fail('REUSE_BUSY');
+        for (const eventId of eventIds) {
+          const event = database.prepare('SELECT entry_id, scope_kind, partition_hash FROM reuse_outbox WHERE event_id = ?').get(eventId);
+          if (!event || event.entry_id !== binding.profileRef || event.scope_kind !== 'tenant_private'
+            || event.partition_hash !== keys.partitionHash) fail('REUSE_INTEGRITY');
+        }
+        return Object.freeze({ profileRef: binding.profileRef, locallyIneligible: true,
+          eventIds: Object.freeze(eventIds), replayed: true });
+      }
+      if (!reservation) fail('REUSE_BUSY');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const current = database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(binding.profileRef, keys.partitionHash);
+      const currentReservation = database.prepare(`SELECT * FROM reuse_correction_reservations WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(binding.profileRef, keys.partitionHash);
+      if (!current || !sameStoredEntry(current, preflight.row) || current.version !== binding.cacheVersion
+        || current.binding_hash !== binding.cacheBindingHash || !currentReservation
+        || currentReservation.payload_key_id !== preflight.reservation.payload_key_id
+        || currentReservation.payload_bytes !== preflight.reservation.payload_bytes
+        || !Buffer.from(currentReservation.payload).equals(Buffer.from(preflight.reservation.payload))) fail('REUSE_BUSY');
+      const exactReservation = unseal(reservationKey.key, keys.partitionHash, 'correction_reservation', binding.profileRef,
+        currentReservation.payload, currentReservation.payload_key_id);
+      if (stable(exactReservation) !== stable(reservation)) fail('REUSE_INTEGRITY');
+      database.prepare('DELETE FROM reuse_correction_reservations WHERE entry_id = ?').run(binding.profileRef);
+      if (current.eligible === 1) {
+        const update = database.prepare(`UPDATE reuse_entries SET eligible = 0 WHERE entry_id = ?
+          AND scope_kind = 'tenant_private' AND partition_hash = ? AND binding_hash = ? AND version = ? AND eligible = 1`)
+          .run(binding.profileRef, keys.partitionHash, binding.cacheBindingHash, binding.cacheVersion);
+        if (update.changes !== 1) fail('REUSE_BUSY');
+      } else if (current.eligible !== 0) fail('REUSE_INTEGRITY');
+      const consumers = Object.freeze(reservationConsumers);
+      const targetRefs = consumers.length > 0 ? consumers : [null];
+      if (targetRefs.length !== reservation.outboxSlots) fail('REUSE_INTEGRITY');
+      const proofPayloadKey = reservationKey;
+      if (!proofPayloadKey) fail('REUSE_KEY_UNAVAILABLE');
+      assertOutboxHeadroom(database, targetRefs.length);
+      const prepared = [];
+      for (const consumerRef of targetRefs) {
+        const event = {
+          ...eventPayload(current, { contentHash: reservation.contentHash }, 'history_version_changed', consumerRef, time.now, keys.keyInfo.key),
+          bindingId: binding.bindingId,
+          historyOperationId: operation.operationId,
+          priorHistoryVersionId: binding.historyVersionId,
+          priorHistoryContentHash: binding.historyContentHash,
+          targetHistoryVersionId: operation.targetVersionId,
+          targetHistoryContentHash: operation.targetContentHash,
+        };
+        const sealed = sealBounded(proofPayloadKey.key, proofPayloadKey.keyId, keys.partitionHash,
+          'outbox', event.eventId, event, MAX_INVALIDATION_RECORD_BYTES);
+        prepared.push({ event, consumerRef, sealed });
+      }
+      const eventBytes = prepared.reduce((total, item) => total + item.sealed.byteLength, 0);
+      const retryGrowth = prepared.reduce((total, item) => total + MAX_INVALIDATION_RECORD_BYTES - item.sealed.byteLength, 0);
+      ensureStorageCapacity(database, eventBytes, 0, 0, retryGrowth);
+      for (const { event, consumerRef, sealed } of prepared) {
+        database.prepare(`INSERT INTO reuse_outbox
+          (event_id, entry_id, scope_kind, partition_hash, status, attempt_count, next_attempt_at_ms,
+           has_consumer, payload_key_id, payload, payload_bytes)
+          VALUES (?, ?, 'tenant_private', ?, 'pending', 0, ?, ?, ?, ?, ?)`)
+          .run(event.eventId, binding.profileRef, keys.partitionHash, time.now, consumerRef === null ? 0 : 1,
+            proofPayloadKey.keyId, sealed, sealed.byteLength);
+      }
+      const eventIds = prepared.map(({ event }) => event.eventId);
+      database.prepare(`INSERT INTO reuse_history_invalidation_ops
+        (operation_id, entry_id, partition_hash, binding_hash, fingerprint, event_ids)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(operation.operationId, binding.profileRef, keys.partitionHash, binding.cacheBindingHash,
+          fingerprint, JSON.stringify(eventIds));
+      return Object.freeze({ profileRef: binding.profileRef, locallyIneligible: true,
+        eventIds: Object.freeze(eventIds), replayed: false });
+    }, signal, boundary);
+    await guard();
+    return result;
+    } finally {
+      retainedProofKey?.key.fill(0);
+      keys.payloadKey.key.fill(0);
+      keys.keyInfo.key.fill(0);
+    }
   }
 
   async function getPublicProfile(scope, request, lookup) {
@@ -2104,6 +3587,14 @@ export function createScopedReuseStore(options) {
         deliveryAttemptId,
         attemptNumber: attempt,
         reason: event.reason,
+        ...(event.reason === 'history_version_changed' ? {
+          bindingId: event.bindingId,
+          historyOperationId: event.historyOperationId,
+          priorHistoryVersionId: event.priorHistoryVersionId,
+          priorHistoryContentHash: event.priorHistoryContentHash,
+          targetHistoryVersionId: event.targetHistoryVersionId,
+          targetHistoryContentHash: event.targetHistoryContentHash,
+        } : {}),
       });
       try {
         await dispatchGuard();
@@ -2202,10 +3693,37 @@ export function createScopedReuseStore(options) {
         if (expireEntry(database, scopeKind === 'public_profile' ? null : info, current, payload, time.now, { ...keys, payloadKey: payloadKey ?? keys.payloadKey })) purged += 1;
       });
     }
+    if (scopeKind === 'tenant_private') {
+      await authorize(info, request, action);
+      await withDatabase((database, time) => {
+        database.prepare(`DELETE FROM reuse_correction_reservations
+          WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND entry_id IN (
+            SELECT entry_id FROM reuse_entries
+            WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND expires_at_ms <= ? AND payload_purged = 1
+              AND entry_id IN (SELECT entry_id FROM reuse_correction_reservations
+                WHERE scope_kind = 'tenant_private' AND partition_hash = ?)
+            ORDER BY expires_at_ms, entry_id LIMIT 500
+          )`).run(keys.partitionHash, keys.partitionHash, time.now, keys.partitionHash);
+      });
+    }
     return Object.freeze({ purged, retainedOutboxPending: (await outboxSnapshot(scope, request, scopeKind)).unresolved });
   }
 
-  return Object.freeze({
+  async function bindingContext(scope, request, action, capability) {
+    if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+    const info = scopeInfo(scope);
+    const exactAction = action === 'private_profile.write' || action === 'private_profile.read'
+      || action === 'cache.invalidate' ? action : 'private_profile.read';
+    await authorize(info, request, exactAction);
+    const index = await indexInfo(info, 'tenant_private', authorizationGuard(info, request, exactAction));
+    try {
+      return Object.freeze({ tenantId: info.tenantId, actorId: info.actorId, partitionHash: index.partitionHash });
+    } finally {
+      index.keyInfo.key.fill(0);
+    }
+  }
+
+  const api = Object.freeze({
     scopeForAuthenticatedRequest: publicBoundary(authenticatedScope),
     putPrivateProfile: publicBoundary(putPrivateProfile),
     publishReviewedPublicProfile: publicBoundary(publishReviewedPublicProfile),
@@ -2221,4 +3739,37 @@ export function createScopedReuseStore(options) {
     integritySnapshot: publicBoundary(integritySnapshot),
     purgeExpired: publicBoundary(purgeExpired),
   });
+  CACHE_BINDING_PORTS.set(api, Object.freeze({
+    hasBoundaryGuard: typeof config.authorizeBoundary === 'function',
+    context: bindingContext,
+    validateProfileInput: (scope, request, input, signal, capability, callerFacts, binding) =>
+      validateBoundPrivateProfileInput(scope, request, input, signal, capability, callerFacts, binding),
+    disposePreflight: (token, capability) => {
+      if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+      disposeBoundProfilePreflight(token);
+    },
+    putProfile: (scope, request, input, binding, operation, gate, signal, capability, preflightToken) =>
+      putBoundPrivateProfile(scope, request, input, binding, operation, gate, signal, capability, preflightToken),
+    loadCandidate: (scope, request, binding, use, signal, capability) =>
+      loadBoundCandidate(scope, request, binding, use, signal, capability),
+    prepareReadDatabase: (capability) => prepareBoundReadDatabase(capability),
+    finalRead: (database, candidate, now, effectiveNow, capability, boundaryToken) =>
+      finalBoundRead(database, candidate, now, effectiveNow, capability, boundaryToken),
+    prepareFinalDisclosure: (scope, request, preflight, binding, signal, capability) =>
+      prepareBoundFinalDisclosure(scope, request, preflight, binding, signal, capability),
+    finalDisclosureCheck: (token, effectiveNow, capability) =>
+      finalBoundDisclosureCheck(token, effectiveNow, capability),
+    disposeFinalDisclosure: (token, capability) => disposeBoundFinalDisclosure(token, capability),
+    invalidate: (scope, request, binding, operation, gate, signal, capability) =>
+      invalidateBoundProfile(scope, request, binding, operation, gate, signal, capability),
+    now: currentTime,
+  }));
+  return api;
+}
+
+export function getScopedReuseBindingPort(store, capability) {
+  if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+  const port = CACHE_BINDING_PORTS.get(store);
+  if (!port || !port.hasBoundaryGuard) fail('REUSE_DENIED');
+  return port;
 }

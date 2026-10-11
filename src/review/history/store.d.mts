@@ -1,3 +1,5 @@
+import type { LocalBoundaryGuard } from '../../private/boundary-guard.mjs';
+
 declare const correctionTenantScopeBrand: unique symbol;
 
 /** Opaque capability issued by this private store after its trusted tenant resolver runs. */
@@ -221,6 +223,8 @@ export interface CorrectionHistoryStoreOptions<Request = unknown, RetentionHandl
   readonly resolveActor: (request: Request) => string | Promise<string>;
   /** Must authorize this exact action, tenant, actor, event, and optional field. */
   readonly authorize: (request: CorrectionHistoryAuthorization<Request>) => boolean | Promise<boolean>;
+  /** Required synchronous combined current-request authorization and trusted time boundary. */
+  readonly authorizeBoundary: LocalBoundaryGuard<Request>;
   readonly resolveKey: (request: CorrectionHistoryKeyRequest) => CorrectionHistoryKey | Promise<CorrectionHistoryKey>;
   readonly resolveRetention: (request: CorrectionHistoryRetentionRequest<RetentionHandle>) => CorrectionHistoryRetentionDecision | Promise<CorrectionHistoryRetentionDecision>;
   /** Explicit server-owned allowlist; defaults to the four typed event fields. */
