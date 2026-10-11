@@ -26,7 +26,7 @@ test("observes active sandbox and private IPC in the real Linux browser", async 
 		assert.ok(opened.sandbox.rendererProcesses.length > 0);
 		assert.notEqual(container.ipcNamespace, container.hostNamespaces.ipc);
 		assert.deepEqual(container.interfaces, ["lo"]);
-		const rendererChroots = await observeRendererChroots(opened.browser);
+		const rendererChroots = await observeRendererChroots(opened.browser, page);
 		console.log(
 			JSON.stringify({
 				linuxSecurity: { container, sandbox: opened.sandbox, rendererChroots },
@@ -43,6 +43,19 @@ test("rejects an actual browser when its renderer sandbox is deliberately disabl
 		chromiumSandbox: false,
 	});
 	try {
+		const context = await browser.newContext();
+		const page = await context.newPage();
+		await page.setContent(
+			"<html><body>Fixed unsandboxed negative probe</body></html>",
+		);
+		await assert.rejects(
+			observeRendererChroots(browser, page),
+			(error) =>
+				error instanceof VerificationFailure &&
+				error.code === "SANDBOX_POLICY_FAILURE" &&
+				error.message ===
+					"Renderer filesystem root is not Chromium's deleted proc-fdinfo chroot.",
+		);
 		await assert.rejects(
 			inspectLinuxSandbox(browser),
 			(error) =>

@@ -237,3 +237,46 @@ observe the old/new syscall comparison, successful actual sandboxed rendering,
 live renderer chroot/namespace/seccomp evidence and passing required checks,
 then obtain fresh independent review. Any further AppArmor/kernel/filesystem
 failure remains a blocker requiring its own evidence, not broader permissions.
+
+### Live-root observer diagnosis
+
+Runs `38097026987` and `38097030195` on `ab55c0f` establish the original/derived
+chroot syscall comparison and successful secure browser startup. The original
+render/network/font tests pass. The new strict renderer-root predicate fails;
+its raw root path was intentionally withheld. That failure alone does not
+identify an unsandboxed renderer, a different process selection, or a kernel
+path-rendering difference.
+
+`rendererRootDiagnostic` now reports only finite root shape, filesystem class,
+root identity relative to the container root, directory state and acceptance by
+the existing namespace/seccomp status guard, for at most 16 renderer processes.
+Directory inspection reads only one entry and never reports its name. Raw root
+paths, inode values, process IDs, page URLs and arbitrary error text are not
+printed. These are diagnostic observations; the original strict chroot predicate
+still runs and rejects unknown roots.
+
+Each process is marked `TARGET_PAGE_RENDERER` or `OTHER_RENDERER` using the fixed
+page's root frame and pinned Chromium trace metadata. [SystemInfo enumerates all
+renderer hosts](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/content/browser/devtools/protocol/system_info_handler.cc#L348),
+so its renderer type alone does not associate a process with the calibration
+page. [TracingHandler records a frame token and OS process ID](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/content/browser/devtools/protocol/tracing_handler.cc#L212)
+and emits that page's frame tree in `TracingStartedInBrowser`. The observer uses
+a 64 KiB trace buffer, at most 256 events/64 frames per event, and a five-second
+completion bound; data loss, missing/ambiguous identity or absent target PID fails
+closed. Only matched numeric identity is retained privately; trace messages are
+not saved or logged. Tracing is stopped and its CDP session detached.
+
+[Linux proc readlink uses d_path](https://github.com/torvalds/linux/blob/v6.14/fs/proc/base.c#L1819),
+which appends ` (deleted)` [only for an unlinked dentry](https://github.com/torvalds/linux/blob/v6.14/fs/d_path.c#L285).
+Chromium's helper chroot-and-exit sequence establishes the fdinfo filesystem
+sandbox, but does not itself specify that display suffix. The finite diagnostic
+distinguishes linked/deleted fdinfo shapes from the container root or other roots.
+No alternate shape is accepted until its actual Linux facts and the pinned
+filesystem implementation justify a corrected predicate.
+
+The native unsandboxed negative browser now invokes the direct root observer as
+well as the original sandbox observer. It must fail specifically at the strict
+root predicate; an earlier tracing/identity failure cannot count as that negative
+proof. The secure positive case retains all original checks and reports finite
+diagnostics before a failed predicate. Parent CI must collect these new facts
+before the next correction; local page-binding success is not Linux root proof.

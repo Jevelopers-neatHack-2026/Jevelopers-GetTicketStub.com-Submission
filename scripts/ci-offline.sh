@@ -5,6 +5,7 @@ npm run build
 npm run typecheck
 npm run format:check
 node --test scripts/security/chroot-security.test.mjs
+node --test scripts/security/renderer-observer.test.mjs
 node --test scripts/security/browser-launch-probe.test.mjs
 node scripts/security/launch-diagnostic.mjs
 npm test
