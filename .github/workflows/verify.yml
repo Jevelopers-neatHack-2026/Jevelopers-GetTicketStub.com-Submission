@@ -56,5 +56,6 @@ jobs:
       - run: make verify CASE=content-privacy MODE=mock
       - name: Test EI research candidate compatibility bundle
         run: make verify CASE=research-api MODE=mock
+      - run: make verify CASE=question-preparation MODE=mock
       - run: npm run test:runner
       - run: npm run typecheck
