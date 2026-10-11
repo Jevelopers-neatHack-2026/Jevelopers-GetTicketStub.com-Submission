@@ -236,3 +236,17 @@ test("open operations are bounded and a trace without a closing event is never s
   const body = encodeTrace("0123456789abcdef0123456789abcdef", [], ["ticketstub"]);
   assert.ok(body.length > 0);
 });
+
+test("a busy operation is truncated, not lost: the closing event always exports", async () => {
+  const at = Date.now();
+  const sent = [];
+  const s = neatlogsSink({ config: { apiKey: KEY, endpoint: "https://ingest.neatlogs.com", tags: ["ticketstub"] }, fetchImpl: async (_u, init) => { sent.push(init); return new Response(null, { status: 200 }); } });
+  const op = "op_BBBBBBBBBBBBBBBB";
+  for (let n = 0; n < 70; n++) s.write({ schema: "ticketstub.ops/1", name: "source_fetch", at, environment: "test", mode: "live", operationId: op, fields: { source: "event_page", outcome: "no_match", durationMs: 1 } });
+  await s.write({ schema: "ticketstub.ops/1", name: "api_request", at, environment: "test", mode: "live", operationId: op, fields: { route: "research", status: 200, outcome: "success", durationMs: 5 } });
+  assert.equal(sent.length, 1);
+  assert.equal(s.pendingOperations(), 0);
+  const { spans } = decode(Buffer.from(sent[0].body));
+  assert.equal(spans.filter((x) => x.name === "source.event_page").length, 64);
+  assert.ok(spans.filter((x) => x.name === "source.event_page").every((x) => x.statusCode === 1), "no_match is not an error");
+});

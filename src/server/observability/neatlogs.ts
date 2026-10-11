@@ -168,7 +168,8 @@ export function buildTrace(events: OpsEvent[], tags: string[]): { traceId: strin
       spans.push({ ...base, name: `${str(g.capability) ?? "ai"}.${str(g.phase) ?? "generate"}`, error: err, attributes: attrs });
     } else if (e.name === "source_fetch" || e.name === "source_parse") {
       const tool = e.name === "source_fetch" ? `source.${str(g.source) ?? "unknown"}` : `parse.${str(g.parser) ?? "none"}`;
-      const err = e.name === "source_fetch" && g.outcome !== "ok" && g.outcome !== "skipped" && g.outcome !== "pending" ? str(g.outcome) : undefined;
+      // A source that simply had nothing (no_match, no_data, not_found) or was skipped is not a failure.
+      const err = e.name === "source_fetch" && !["ok", "skipped", "pending", "no_match", "no_data", "not_found"].includes(String(g.outcome)) ? str(g.outcome) : undefined;
       spans.push({ ...base, name: tool, error: err, attributes: [
         ["neatlogs.span.kind", "TOOL"], ["neatlogs.tool.name", tool], ...common,
         ...Object.entries(g).map(([k, v]) => [`ticketstub.${k}`, v] as Attr),
@@ -266,7 +267,8 @@ export function neatlogsSink({ config, fetchImpl, onSent }: NeatlogsSinkOptions)
     write(event: OpsEvent): void | Promise<void> {
       const now = Date.now();
       const p = pending.get(event.operationId) ?? { events: [], first: now };
-      if (p.events.length >= MAX_EVENTS_PER_OPERATION) { stats.dropped++; return; }
+      // The closing event is always kept, so a busy operation is truncated, never lost.
+      if (event.name !== "api_request" && p.events.length >= MAX_EVENTS_PER_OPERATION) { stats.dropped++; return; }
       p.events.push(event);
       pending.set(event.operationId, p);
       prune(now);

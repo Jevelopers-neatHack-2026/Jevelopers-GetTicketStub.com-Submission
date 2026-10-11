@@ -8,6 +8,7 @@
 // The log sink relies on the host's log pipeline for retention (see docs/operations/observability.md). The
 // Neatlogs sink is the only network path, and it is off unless both the setting and the key are present. Tests
 // install the in-memory collector with setOpsSink.
+import { createHash } from "node:crypto";
 import { neatlogsConfig, neatlogsSink } from "./neatlogs";
 import { OPS_ENVIRONMENTS, type OpsEnvironment, type OpsEvent } from "./schema";
 
@@ -52,7 +53,7 @@ const g = globalThis as unknown as { __ticketstubOpsSink?: OpsSink | null; __tic
 function neatlogs(): OpsSink | undefined {
   const config = neatlogsConfig();
   if (!config) return undefined;
-  const id = `${config.endpoint}|${config.tags.join(",")}|${config.apiKey.length}:${config.apiKey.slice(-4)}`;
+  const id = createHash("sha256").update(`${config.endpoint}|${config.tags.join(",")}|${config.apiKey}`).digest("hex").slice(0, 16);
   if (g.__ticketstubNeatlogs?.id !== id) g.__ticketstubNeatlogs = { id, sink: neatlogsSink({ config }) };
   return g.__ticketstubNeatlogs.sink;
 }
@@ -72,7 +73,10 @@ function fanOut(sinks: OpsSink[]): OpsSink {
           failed = e;
         }
       }
-      if (failed !== undefined) throw failed;
+      if (failed !== undefined) {
+        for (const p of pending) p.catch(() => {}); // the caller counts the failure once; no stray rejections
+        throw failed;
+      }
       return pending.length ? Promise.all(pending).then(() => undefined) : undefined;
     },
   };
