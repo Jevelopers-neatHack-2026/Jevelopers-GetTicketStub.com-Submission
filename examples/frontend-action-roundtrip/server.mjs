@@ -7,7 +7,11 @@ import { join } from 'node:path';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
 const port = Number(process.env.CONTROLS_FIXTURE_PORT ?? 4317);
 let dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')), host = await createIntegratedHost(dir);
-const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/javascript'], '/messages.mjs': ['messages.mjs', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript'] };
+const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/javascript'], '/messages.mjs': ['messages.mjs', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript'],
+  '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
+  '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
+  '/inspection-consumer.mjs': ['../../src/controls/inspection-consumer.mjs', 'text/javascript'],
+  '/inspection-inputs.json': ['../../fixtures/controls/inspection-presentation-inputs.json', 'application/json'] };
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
 const server = createServer(async (req, res) => {
@@ -20,6 +24,10 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
+    if (req.method === 'GET' && path === '/__fixture/native-evidence') {
+      const value = host.nativeEvidence(new URL(req.url, 'http://localhost').searchParams.get('action_id'));
+      return json(res, value ?? { code: 'permission' }, value ? 200 : 403);
+    }
     if (req.method === 'GET' && path === '/api/history') return json(res, { ...mode, ...await host.history(), selection: host.selection() });
     if (req.method === 'GET' && path === '/api/artifact') {
       const value = await host.artifact(new URL(req.url, 'http://localhost').searchParams.get('design_version_id'));
@@ -37,7 +45,12 @@ const server = createServer(async (req, res) => {
     if (path === '/api/compare') return json(res, { ...mode, ...await host.compare(payload.design_version_id), counters: host.counts() });
     if (path === '/api/restore') return json(res, { ...mode, ...await host.restore(payload.design_version_id, payload.expected_selection_revision, payload.action_id), counters: host.counts() });
     if (path === '/api/dispatch') return json(res, { ...mode, ...host.adapter.store.dispatch(fixturePrincipal, payload.operation_id), counters: host.counts() });
-    if (path === '/__fixture/reset') { host.close(); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')); host = await createIntegratedHost(dir); }
+    if (path === '/__fixture/reset') {
+      const nativeFormat = payload.native_format ?? 'png';
+      if (!['png', 'jpeg', 'webp'].includes(nativeFormat)) return json(res, { code: 'validation' }, 400);
+      host.close(); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
+      host = await createIntegratedHost(dir, { nativeFormat });
+    }
     else {
       if (payload.revoke) host.policy.can_apply = false;
       if (payload.revoke_read) host.policy.can_read = false;

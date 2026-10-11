@@ -1,4 +1,4 @@
-// Import the actual public ESM path, without a shim, allowJs or skipLibCheck.
+// Strict source ESM consumer only. The actual package export remains a separate failing prerequisite.
 import { ApplyStore, createControlSchema, defaultDraft, hash, controlContractReference,
   assertControlContractBinding, SCHEMA_VERSIONS, type ApplyPayload, type TrustedControlState,
   type TrustedPrincipal, type ControlSchema } from '../../../src/controls/index.mjs';

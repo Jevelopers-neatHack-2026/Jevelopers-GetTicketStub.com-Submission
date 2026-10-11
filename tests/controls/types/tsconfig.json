@@ -8,5 +8,5 @@
     "skipLibCheck": false,
     "types": []
   },
-  "files": ["consumer.mts"]
+  "files": ["consumer.mts", "inspection-consumer.mts"]
 }

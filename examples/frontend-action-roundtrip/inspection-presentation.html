@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inspection presentation fixture</title><link rel="stylesheet" href="/style.css"><script type="module" src="/inspection-presentation.mjs"></script></head>
+<body><main><p class="eyebrow">CREATIVE ENGINE · UI PREPARATION</p><h1>Inspection presentation</h1>
+<aside aria-label="Evidence mode"><strong>LOCAL INPUT FIXTURE</strong><p>Presentation only. Inputs are versioned local examples, separate from the actual native Apply journey. Actual CE09 integration is pending. This page makes no inspection, repair, approval or purchase requests.</p></aside>
+<label for="scenario">Presentation scenario</label><select id="scenario"></select>
+<section aria-label="Inspection result"><h2>Review status</h2>
+<p id="inspection-status" role="status" aria-live="polite" tabindex="-1"></p>
+<p id="inspection-error" role="alert" tabindex="-1" hidden></p>
+<p id="inspection-usage"></p><p id="inspection-hold"></p>
+<dl id="inspection-refs"></dl><p id="inspection-authority"></p><p id="inspection-retry"></p>
+<button type="button" disabled aria-describedby="inspection-unavailable">Inspect saved artwork</button>
+<p id="inspection-unavailable">Actual inspection is unavailable until the qualified producer and shared-store consumer are integrated.</p>
+</section><p><a href="/">Return to actual native Apply fixture</a></p></main></body></html>

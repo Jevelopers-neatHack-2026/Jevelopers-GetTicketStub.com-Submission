@@ -25,9 +25,9 @@ function run(command, argv, cwd, label, env = {}) {
   results.push({ command: label, exit_code: result.status, passed: result.status === 0, ...(Object.keys(counts).length ? { counts } : {}) });
   for (const line of (result.stdout ?? '').split('\n')) if (line.startsWith('# {"controls_probe":')) reviewProbes.push(JSON.parse(line.slice(2)));
 }
-run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs');
+run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs');
 if (runBrowser || args.includes('--types')) run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', '../../tests/controls/types/tsconfig.json'],
-  fixtureDir, 'tsc --strict --module NodeNext (public ESM consumer)');
+  fixtureDir, 'tsc --strict --module NodeNext (source ESM consumer; package export pending)');
 if (runBrowser) run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--reporter=list,json'], fixtureDir,
   'npm test (Playwright Chromium + axe)', { PLAYWRIGHT_JSON_OUTPUT_FILE: join(fixtureDir, 'test-results/browser-results.json') });
 const digest = createHash('sha256');
@@ -62,7 +62,7 @@ const evidence = { evidence_version: 'controls-offline-evidence/2.0', dependency
   contract_status: 'local-consumer-proposal', source_fingerprint_sha256: digest.digest('hex'), source_files: sourceFiles,
   fixture_schema_sha256: hash(createControlSchema(state)), fixture_action_sha256: hash(action(state)),
   checks: results, review_probes: reviewProbes, browser_summary, browser_exercised: runBrowser && results.find(r => r.command === 'npm test (Playwright Chromium + axe)')?.passed === true,
-  types_checked: results.find(r => r.command === 'tsc --strict --module NodeNext (public ESM consumer)')?.passed === true,
+  types_checked: results.find(r => r.command === 'tsc --strict --module NodeNext (source ESM consumer; package export pending)')?.passed === true,
   dependency_files,
   base_revision: '5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74',
   authoritative_contract_revision: 'c4caaccc2ea63b273eeac17ed89af8ac64f6bbde',

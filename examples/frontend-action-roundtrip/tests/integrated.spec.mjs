@@ -9,7 +9,12 @@ test.beforeEach(async ({ page, request }) => {
   await expect(page.getByLabel('Artwork style')).toBeVisible();
 });
 
-test('keyboard draft/followup/locks/axe then explicit artwork Apply reaches actual durable API artifact', async ({ page, request }) => {
+for (const format of ['png', 'jpeg', 'webp']) test(`keyboard draft/followup/locks/axe then explicit native ${format} Apply reaches actual durable API artifact`, async ({ page, request }, testInfo) => {
+  await request.post('/__fixture/reset', { data: { native_format: format } }); await page.goto('/');
+  await expect(page.getByLabel('Artwork style')).toBeVisible();
+  const original = (await (await request.get('/api/history')).json()).selection;
+  const pageErrors = []; page.on('pageerror', error => pageErrors.push(error.message));
+  let sent; page.on('request', req => { if (req.url().endsWith('/api/apply')) sent ??= req.postDataJSON(); });
   const posts = []; page.on('request', req => { if (req.method() === 'POST') posts.push(req.url()); });
   await page.keyboard.press('Tab'); await expect(page.getByLabel('Name size', { exact: true })).toBeFocused();
   await page.keyboard.press('Tab'); await expect(page.getByLabel('Layout', { exact: true })).toBeFocused();
@@ -33,16 +38,53 @@ test('keyboard draft/followup/locks/axe then explicit artwork Apply reaches actu
   await expect(image).toBeVisible();
   await expect.poll(async () => image.evaluate(el => el.complete && el.naturalWidth === 16 && el.naturalHeight === 16)).toBe(true);
   const artifact = await request.get(`/api/artifact?design_version_id=${encodeURIComponent(result.result.design_version.design_version_id)}`);
-  expect(artifact.headers()['content-type']).toBe('image/png');
-  const bytes = await artifact.body(); expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  expect(artifact.headers()['content-type']).toBe(`image/${format}`);
+  const bytes = await artifact.body();
+  if (format === 'png') expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   expect(`sha256:${createHash('sha256').update(bytes).digest('hex')}`).toBe(result.result.design_version.artifact.content_hash);
   const history = await (await request.get('/api/history')).json();
   expect(history.result.items).toHaveLength(2);
   expect(history.result.items.some(item => item.design_hash === result.result.design_version.design_hash)).toBe(true);
   expect(await counters(request)).toMatchObject({ jobs: 1, image_calls: 1, jev_calls: 0, reservations: 1 });
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await page.screenshot({ path: 'test-results/actual-api-roundtrip.png', fullPage: true });
-  await test.info().attach('actual-backend-result.json', { body: JSON.stringify(result, null, 2), contentType: 'application/json' });
+  await page.screenshot({ path: `test-results/actual-api-roundtrip-${format}.png`, fullPage: true });
+  const captured = await captureHandlerExceptions(page);
+  const evidence = await (await request.get(`/__fixture/native-evidence?action_id=${encodeURIComponent(result.action_id)}`)).json();
+  const parentBytes = await (await request.get(`/api/artifact?design_version_id=${encodeURIComponent(original.design_version_id)}`)).body();
+  expect(result.result.design_version.parent_version_id).toBe(original.design_version_id);
+  expect(evidence.captures.at(-1)).toMatchObject({ operation: 'edit', parent: {
+    content_hash: `sha256:${createHash('sha256').update(parentBytes).digest('hex')}`, media_type: `image/${format}`, byte_length: parentBytes.length },
+    output: { content_hash: result.result.design_version.artifact.content_hash, media_type: `image/${format}`, byte_length: bytes.length } });
+  expect(evidence.private_usage_sha256).toBe(evidence.verified_private_usage_sha256);
+  expect(evidence).toMatchObject({ raw_completeness: 'unknown', raw_missing_fields: ['usage.profile_mapping_pending'], mapping_status: 'settled_owner_mapping', billable_attempt_id: result.result.design_version.billable_attempt_id });
+  expect(evidence.attempt_binding_sha256).toMatch(/^sha256:[a-f0-9]{64}$/); expect(evidence.target_binding_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+  expect(JSON.stringify(result)).not.toMatch(/synthetic-offline-token|req-controls-private-synthetic|mock-owner-profile/);
+  const before = await counters(request);
+  const replay = await (await request.post('/api/apply', { data: sent })).json();
+  expect(replay.result).toEqual(result.result); expect(replay.backend_job_id).toBe(result.backend_job_id);
+  await expect(page.getByLabel('Historical artwork version').locator('option')).toHaveCount(2);
+  await page.getByLabel('Historical artwork version').selectOption(original.design_version_id);
+  await page.getByRole('button', { name: 'Compare with current' }).click();
+  await expect(page.locator('#history-result')).toContainText(`Compared exact hashes ${result.result.design_version.artifact.content_hash}`);
+  await page.getByRole('button', { name: 'Restore by selection' }).click();
+  await expect(page.locator('#history-result')).toContainText(original.design_version_id);
+  await expect(page.getByLabel('Artwork style')).toHaveValue('calm');
+  await expect.poll(async () => image.evaluate(el => el.complete && el.naturalWidth === 16 && el.naturalHeight === 16)).toBe(true);
+  expect((await (await request.get('/api/history')).json()).selection.design_version_id).toBe(original.design_version_id);
+  const historicalReplay = await (await request.post('/api/apply', { data: sent })).json();
+  expect(historicalReplay.result).toEqual(result.result); expect(await counters(request)).toEqual(before);
+  await page.route('**/api/apply', route => route.continue({ postData: JSON.stringify({ ...sent, action_id: `stale-${format}` }) }));
+  await page.getByLabel('Artwork style').selectOption('vibrant');
+  const staleResponse = page.waitForResponse('**/api/apply'); await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  const stale = await (await staleResponse).json(); expect(stale.ok).toBe(false); expect(stale.code).toBe('stale_version');
+  await expect(page.getByRole('alert')).toBeFocused(); await expect(page.getByRole('alert')).toContainText('Refresh controls');
+  expect(await counters(request)).toEqual(before);
+  expect(captured.exceptions).toEqual([]); expect(pageErrors).toEqual([]); await captured.session.detach();
+  const pageText = await page.locator('body').innerText(); expect(pageText).not.toMatch(/synthetic-offline-token|req-controls-private-synthetic|mock-owner-profile/);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await testInfo.attach(`actual-native-${format}-result`, { body: JSON.stringify({ result, replay, historicalReplay, stale, evidence, counters: before, exceptions: captured.exceptions, page_errors: pageErrors,
+    fidelity: format === 'png' ? 'Distinct fixture pixels only; no model quality proof' : 'Static valid codec sample; no visual edit quality proof',
+    public_result_sha256: createHash('sha256').update(JSON.stringify(result)).digest('hex'), live_application_calls: 0 }), contentType: 'application/json' });
 });
 
 test('native usage without declared MOCK owner map keeps hold and truthful recovery after one intercepted POST', async ({ page, request }, testInfo) => {
@@ -316,4 +358,43 @@ test('Compare current read revocation keeps selection and typed permission guida
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await testInfo.attach('compare-permission-actual-api-result', { body: JSON.stringify({ result, selection: history.selection, counters: before, exceptions: captured.exceptions }), contentType: 'application/json' });
   await page.screenshot({ path: 'test-results/history-permission-compare.png', fullPage: true });
+});
+
+for (const format of ['png', 'jpeg', 'webp']) test(`native ${format} browser cancel and unknown-usage error retain saved selection and conservative hold`, async ({ page, request }, testInfo) => {
+  await request.post('/__fixture/reset', { data: { native_format: format } }); await page.goto('/');
+  await expect(page.getByLabel('Artwork style')).toBeVisible();
+  const pageErrors = []; page.on('pageerror', error => pageErrors.push(error.message));
+  const captured = await captureHandlerExceptions(page);
+  const original = (await (await request.get('/api/history')).json()).selection;
+  await request.post('/__fixture/state', { data: { block: 'native-post-ack' } });
+  await page.getByLabel('Artwork style').selectOption('vibrant');
+  const cancelledResponse = page.waitForResponse('**/api/apply');
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  await expect.poll(async () => (await counters(request)).transport_acks).toBe(1);
+  await page.getByRole('button', { name: 'Cancel operation' }).click();
+  await request.post('/__fixture/state', { data: { release: true } });
+  const cancelled = await (await cancelledResponse).json(); expect(cancelled.ok).toBe(false);
+  await expect(page.getByRole('alert')).toBeVisible();
+  const cancelledCounts = await counters(request);
+  expect(cancelledCounts).toMatchObject({ image_calls: 0, reservations: 1, holds: 1, releases: 0 });
+  expect((await (await request.get('/api/history')).json()).selection).toEqual(original);
+  await expect(page.locator('#artwork-preview')).toBeHidden();
+  await request.post('/__fixture/reset', { data: { native_format: format } }); await page.goto('/');
+  await expect(page.getByLabel('Artwork style')).toBeVisible();
+  const selected = (await (await request.get('/api/history')).json()).selection;
+  await request.post('/__fixture/state', { data: { map_native_usage: false } });
+  let sent; page.on('request', req => { if (req.url().endsWith('/api/apply')) sent = req.postDataJSON(); });
+  await page.getByLabel('Artwork style').selectOption('vibrant');
+  const failureResponse = page.waitForResponse('**/api/apply'); await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  const failed = await (await failureResponse).json(); expect(failed.ok).toBe(false);
+  await expect(page.getByRole('alert')).toContainText('reservation may remain held'); await expect(page.getByRole('alert')).toBeFocused();
+  const failureCounts = await counters(request); expect(failureCounts).toMatchObject({ image_calls: 1, reservations: 1, holds: 1, releases: 0 });
+  const replay = await (await request.post('/api/apply', { data: sent })).json();
+  expect(replay.backend_job_id).toBe(failed.backend_job_id); expect(replay.ok).toBe(false); expect(await counters(request)).toEqual(failureCounts);
+  const history = await (await request.get('/api/history')).json(); expect(history.result.items).toHaveLength(1); expect(history.selection).toEqual(selected);
+  expect(captured.exceptions).toEqual([]); expect(pageErrors).toEqual([]); await captured.session.detach();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `test-results/native-${format}-unknown-usage.png`, fullPage: true });
+  await testInfo.attach(`actual-native-${format}-cancel-error`, { body: JSON.stringify({ cancelled, cancelledCounts, failed, replay, failureCounts,
+    selected, selection_unchanged: true, exceptions: captured.exceptions, page_errors: pageErrors, live_application_calls: 0 }), contentType: 'application/json' });
 });

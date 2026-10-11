@@ -83,3 +83,4 @@ export class CreativeControlsAdapter {
   lookup(principal: TrustedPrincipal, actionId: string): { operation_id: string; status: string } | null;
   close(): void;
 }
+export * from './inspection-consumer.mjs';

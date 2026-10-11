@@ -306,3 +306,7 @@ that directory under ignored `playwright-report/native-evidence`. One later run
 passed 63/66: unknown-usage responses omitted the already-persisted backend job
 ID. Scoped current-read-authorized identity reporting corrected that behavior,
 and the same exact replay/hold assertions remain required.
+
+## UI consumer preparation after ccc9c74
+
+The next bounded source checkpoint extends actual native browser Apply/history/Restore/Compare/replay and cancellation/unknown-hold behavior to PNG, JPEG and WebP. JPEG/WebP remain static codec samples, with no visual-edit quality claim. A separate versioned, accessible local inspection presentation fixture and pure request-fragment builder prepare future consumption without enabling unqualified CE09. See [inspection consumer preparation](controls/inspection-consumer-preparation.md) for exact evidence boundaries, current-selection versus schema-token semantics, commands, failing public-package prerequisites and required local/external gaps. No old evidence or source approval transfers to this new checkpoint.

@@ -20,7 +20,9 @@ button { border: 1px solid #52696d; background: white; color: #172a30; border-ra
 #apply { background: #173e3c; color: white; border-color: #173e3c; }
 button:disabled, #apply:disabled { color: #526266; background: #edf0eb; border-color: #aebeba; cursor: default; }
 :focus-visible { outline: 3px solid #947200; outline-offset: 3px; }
-#error { color: #8b2424; background: #fff1ed; padding: 14px; border-radius: 6px; line-height: 1.5; }
+#error, #inspection-error { color: #8b2424; background: #fff1ed; padding: 14px; border-radius: 6px; line-height: 1.5; }
 #status { line-height: 1.5; overflow-wrap: anywhere; }
+#inspection-refs dt { font-weight: 600; margin-top: 12px; }
+#inspection-refs dd { margin: 4px 0 0; overflow-wrap: anywhere; line-height: 1.45; }
 footer { color: #526266; font-size: 13px; line-height: 1.5; }
 code { white-space: normal; overflow-wrap: anywhere; }

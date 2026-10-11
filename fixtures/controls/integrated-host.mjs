@@ -9,6 +9,7 @@ import { canonicalHash } from 'creative-engine/contracts';
 import { completeResearchPackage } from '../planning/research-packages.mjs';
 import { CreativeControlsAdapter } from '../../src/controls/integration.mjs';
 import { nativeImagePorts } from './native-image-ports.mjs';
+import { validId } from '../../src/controls/schema.mjs';
 
 export const fixturePrincipal = Object.freeze({ actor_id: 'fixture_actor', tenant_id: 'fixture_tenant', project_id: 'fixture_project' });
 const NOW = Date.parse('2026-10-10T12:30:00.000Z');
@@ -95,6 +96,21 @@ export async function createIntegratedHost(directory, { lockLogo = true, nativeF
     get adapter() { return adapter; },
     schema() { return adapter.projection(fixturePrincipal).schema; },
     counts() { return { ...counters, jobs: adapter.store.counts().jobs }; },
+    nativeEvidence(actionId) {
+      // Loopback test evidence only: hash private attribution, never expose raw IDs/usage.
+      if (policy.can_read === false || !validId(actionId)) return null;
+      const attribution = store.db.prepare('SELECT usage_json,usage_sha256 FROM private_provider_usage_attributions WHERE action_id=?').get(actionId);
+      const job = store.db.prepare('SELECT result_json FROM creative_jobs WHERE action_id=?').get(actionId);
+      if (!attribution || !job?.result_json) return null;
+      const raw = JSON.parse(attribution.usage_json), usage = JSON.parse(job.result_json).usage_evidence;
+      if (!usage) return null;
+      return { evidence_mode: 'mock-private-attribution-fingerprints', captures: structuredClone(native.captures),
+        private_usage_sha256: attribution.usage_sha256, verified_private_usage_sha256: canonicalHash(raw),
+        private_request_id_sha256: canonicalHash(raw.provider_request_id ?? null),
+        raw_completeness: raw.completeness, raw_missing_fields: raw.missing_fields,
+        mapping_status: usage.status, target_binding_sha256: usage.target_binding_sha256,
+        attempt_binding_sha256: usage.attempt_binding_sha256, billable_attempt_id: usage.billable_attempt_id };
+    },
     block(kind) { gateKind = kind; gate = new Promise(resolve => { released = resolve; }); },
     release() { released?.(); gateKind = undefined; gate = null; },
     restartAdapter() { if (adapter.inflight.size) throw new Error('Use process restart for an in-flight operation'); reopenAdapter(); },
