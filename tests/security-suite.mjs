@@ -284,7 +284,12 @@ test("asset retrieval pins exact approved public host addresses and verifies byt
   assert.equal(result.sha256, approvedIdentity.sha256);
   assert.equal(result.byteLength, PNG.byteLength);
   assert.equal(result.finalHost, "assets.example.test");
-  await security.assertRetrievedAssetMatchesApproval({ asset: result, approved: approvedIdentity });
+  const approvedBytes = await security.assertRetrievedAssetMatchesApproval({ asset: result, approved: approvedIdentity });
+  let dispatchedBytes;
+  const consumingTransport = { async dispatch(bytes) { dispatchedBytes = new Uint8Array(bytes); } };
+  await consumingTransport.dispatch(approvedBytes);
+  result.bytes.fill(0);
+  assert.deepEqual([...dispatchedBytes], [...PNG]);
 
   result.bytes[8] = 0x7f;
   await expectSecurityFailure(security.assertRetrievedAssetMatchesApproval({ asset: result, approved: approvedIdentity }), "asset_approval_mismatch");
@@ -400,6 +405,19 @@ test("asset byte count, media declaration, and magic bytes are enforced", async 
     url: "https://assets.example.test/file.png", mode: "simulated", trustedScope: scope,
     policy: ASSET_POLICY, resolver: wrongType.resolver, transport: wrongType.transport
   }), "asset_type_rejected");
+});
+
+test("streamed asset chunks are copied before a producer reuses a Buffer view", async () => {
+  const reusable = Buffer.from(PNG);
+  const ports = assetPorts({ request: (request) => assetResponse(request, {
+    body: (async function* () { yield reusable; reusable.fill(0); })()
+  }) });
+  const result = await security.retrieveApprovedAsset({
+    url: "https://assets.example.test/file.png", mode: "simulated", trustedScope: scope,
+    policy: ASSET_POLICY, resolver: ports.resolver, transport: ports.transport
+  });
+  assert.deepEqual([...result.bytes], [...PNG]);
+  assert.deepEqual([...reusable], new Array(PNG.byteLength).fill(0));
 });
 
 test("asset retrieval times out and aborts its injected ports", async () => {
@@ -569,6 +587,345 @@ test("diagnostic redaction removes nested PII, secrets, signed URLs, and raw err
   assert.equal(Object.isFrozen(boundaryError), true);
   assert.equal(JSON.stringify(boundaryError.toJSON()).includes("private-canary"), false);
   assert.throws(() => { boundaryError.diagnosticReference = "private-canary"; }, TypeError);
+});
+
+test("scoped reference facts and encrypted Buffer views are snapshotted before decrypt", async () => {
+  const mutableScope = { tenantId: "tenant-original", projectId: "project-original" };
+  const backing = Buffer.from([0xde, 1, 2, 3, 0xad]);
+  const ciphertextView = backing.subarray(1, 4);
+  let releaseStore;
+  let storeCall;
+  let decryptCall;
+  const input = {
+    reference: "reference-original",
+    trustedScope: mutableScope,
+    purpose: "approved-purpose",
+    store: {
+      get(reference, trustedScope) {
+        storeCall = { reference, trustedScope };
+        return new Promise((resolve) => { releaseStore = () => resolve({
+          tenantId: "tenant-original", projectId: "project-original", ciphertext: ciphertextView, keyVersion: "key-v1"
+        }); });
+      }
+    },
+    decryptor: {
+      async decrypt(ciphertext, context) {
+        decryptCall = { bytes: [...ciphertext], context };
+        ciphertext[0] = 99;
+        return "decrypted-fixture";
+      }
+    }
+  };
+  const pending = security.resolveEncryptedScopedReference(input);
+  input.reference = "reference-mutated";
+  input.purpose = "purpose-mutated";
+  mutableScope.tenantId = "tenant-mutated";
+  mutableScope.projectId = "project-mutated";
+  releaseStore();
+  assert.equal(await pending, "decrypted-fixture");
+  assert.equal(storeCall.reference, "reference-original");
+  assert.deepEqual(storeCall.trustedScope, { tenantId: "tenant-original", projectId: "project-original" });
+  assert.deepEqual(decryptCall.bytes, [1, 2, 3]);
+  assert.equal(decryptCall.context.purpose, "approved-purpose");
+  assert.deepEqual(decryptCall.context.trustedScope, { tenantId: "tenant-original", projectId: "project-original" });
+  assert.deepEqual([...ciphertextView], [1, 2, 3]);
+});
+
+test("server-secret mode and identifiers stay bound while the source awaits", async () => {
+  let releaseLoad;
+  let sourceRequest;
+  let usedContext;
+  let useCalls = 0;
+  const input = {
+    providerId: "provider-original", secretReference: "sandbox-secret-original", mode: "sandbox",
+    source: { load(request) { sourceRequest = request; return new Promise((resolve) => { releaseLoad = resolve; }); } },
+    async use(context) { useCalls += 1; usedContext = context; return "used"; }
+  };
+  const pending = security.withServerSecret(input);
+  input.providerId = "provider-mutated";
+  input.secretReference = "simulated-secret-mutated";
+  input.mode = "simulated";
+  releaseLoad({ secret: "synthetic-secret", version: "secret-v1", mode: "sandbox" });
+  assert.equal(await pending, "used");
+  assert.deepEqual(sourceRequest, { providerId: "provider-original", secretReference: "sandbox-secret-original", mode: "sandbox" });
+  assert.equal(usedContext.mode, "sandbox");
+  assert.equal(useCalls, 1);
+
+  let releaseWrongLease;
+  let wrongUseCalls = 0;
+  const changedDuringLoad = {
+    providerId: "provider-original", secretReference: "sandbox-secret-original", mode: "sandbox",
+    source: { load() { return new Promise((resolve) => { releaseWrongLease = resolve; }); } },
+    async use() { wrongUseCalls += 1; }
+  };
+  const rejected = security.withServerSecret(changedDuringLoad);
+  changedDuringLoad.mode = "simulated";
+  releaseWrongLease({ secret: "synthetic-secret", version: "secret-v2", mode: "simulated" });
+  await expectSecurityFailure(rejected, "server_secret_unavailable");
+  assert.equal(wrongUseCalls, 0);
+});
+
+test("asset retrieval keeps validated policy, scope, mode and transport method through DNS awaits", async () => {
+  const mutableScope = { tenantId: "tenant-asset-original", projectId: "project-asset-original" };
+  const policy = {
+    allowedHosts: ["assets.example.test"], allowedMimeTypes: ["image/jpeg"], maxBytes: 16, timeoutMs: 1000, maxRedirects: 0
+  };
+  let releaseDNS;
+  let requestObservation;
+  let replacementCalls = 0;
+  const transport = {
+    request(request) {
+      requestObservation = request;
+      return assetResponse(request);
+    }
+  };
+  const input = {
+    url: "https://assets.example.test/design.png", mode: "simulated", trustedScope: mutableScope, policy,
+    resolver: { resolve() { return new Promise((resolve) => { releaseDNS = () => resolve(["93.184.216.34"]); }); } },
+    transport
+  };
+  const pending = security.retrieveApprovedAsset(input);
+  input.mode = "sandbox";
+  mutableScope.tenantId = "tenant-asset-mutated";
+  mutableScope.projectId = "project-asset-mutated";
+  policy.maxBytes = 30 * 1024 * 1024;
+  policy.allowedMimeTypes.push("image/png");
+  policy.allowedHosts.push("evil.example.test");
+  transport.request = async () => { replacementCalls += 1; return assetResponse({ connectTo: ["93.184.216.34"] }); };
+  releaseDNS();
+  await expectSecurityFailure(pending, "asset_type_rejected");
+  assert.equal(requestObservation.maxBytes, 16);
+  assert.equal(requestObservation.mode, "simulated");
+  assert.deepEqual(requestObservation.trustedScope, { tenantId: "tenant-asset-original", projectId: "project-asset-original" });
+  assert.equal(replacementCalls, 0);
+});
+
+test("retention keeps the full validated identity and projects only fingerprint fields", async () => {
+  let releaseFingerprints;
+  const fingerprintGate = new Promise((resolve) => { releaseFingerprints = resolve; });
+  let retained;
+  let replacementCalls = 0;
+  const scopeInput = { tenantId: "tenant-retention-a", projectId: "project-retention-a" };
+  const identities = [];
+  const fingerprinter = {
+    async fingerprint(purpose, identity) {
+      identities.push({ purpose, identity });
+      await fingerprintGate;
+      return { keyVersion: "key-v1", digest: "a".repeat(32), extraSecret: "synthetic-fingerprint-canary" };
+    }
+  };
+  const retentionPort = {
+    async purgePersonalDataAndRetainTombstone(request) { retained = request; }
+  };
+  const input = {
+    reference: "record-original", trustedScope: scopeInput, providerId: "provider-original",
+    authorizationId: "authorization-original", actionId: "action-original", idempotencyKey: "delivery-original",
+    deletedAt: 10, retainUntil: 20, fingerprinter, retentionPort
+  };
+  const pending = security.purgeSensitiveRecord(input);
+  input.reference = "record-mutated";
+  input.providerId = "provider-mutated";
+  input.authorizationId = "authorization-mutated";
+  input.actionId = "action-mutated";
+  input.idempotencyKey = "delivery-mutated";
+  input.deletedAt = 99;
+  input.retainUntil = 0;
+  scopeInput.tenantId = "tenant-mutated";
+  scopeInput.projectId = "project-mutated";
+  fingerprinter.fingerprint = async () => { replacementCalls += 1; throw new Error("must not run"); };
+  retentionPort.purgePersonalDataAndRetainTombstone = async () => { replacementCalls += 1; };
+  releaseFingerprints();
+  const tombstone = await pending;
+  assert.equal(retained.reference, "record-original");
+  assert.deepEqual(retained.trustedScope, { tenantId: "tenant-retention-a", projectId: "project-retention-a" });
+  assert.equal(tombstone.deletedAt, 10);
+  assert.equal(tombstone.retainUntil, 20);
+  assert.equal(Object.hasOwn(tombstone.actionFingerprint, "extraSecret"), false);
+  assert.equal(JSON.stringify(tombstone).includes("synthetic-fingerprint-canary"), false);
+  assert.equal(identities.every(({ identity }) => identity.includes("original")), true);
+  assert.equal(replacementCalls, 0);
+});
+
+test("retention rejects accessor-backed fingerprints before purging", async () => {
+  let getterCalls = 0;
+  let purgeCalls = 0;
+  const fingerprinter = {
+    async fingerprint() {
+      const fingerprint = { digest: "a".repeat(32) };
+      Object.defineProperty(fingerprint, "keyVersion", {
+        enumerable: true,
+        get() { getterCalls += 1; throw new Error("synthetic-fingerprint-canary"); }
+      });
+      return fingerprint;
+    }
+  };
+  await expectSecurityFailure(security.purgeSensitiveRecord({
+    reference: "record-accessor", trustedScope: scope, providerId: "provider-accessor",
+    authorizationId: "authorization-accessor", actionId: "action-accessor", idempotencyKey: "delivery-accessor",
+    deletedAt: 10, retainUntil: 20, fingerprinter,
+    retentionPort: { async purgePersonalDataAndRetainTombstone() { purgeCalls += 1; } }
+  }), "retention_unavailable");
+  assert.equal(getterCalls, 0);
+  assert.equal(purgeCalls, 0);
+});
+
+test("callback verification and parsing use independent exact Buffer snapshots", async () => {
+  const bodyText = JSON.stringify({ eventId: "event-original", providerRequestId: "request-original", email: "private-canary@example.test" });
+  const backing = Buffer.from(`prefix:${bodyText}:suffix`);
+  const body = backing.subarray(7, 7 + Buffer.byteLength(bodyText));
+  const scopeInput = { tenantId: "tenant-callback-original", projectId: "project-callback-original" };
+  const { state, replayStore } = callbackDependencies();
+  let releaseVerify;
+  let verifierRequest;
+  let parserEvent;
+  const input = {
+    providerId: "provider-callback-original", mode: "sandbox", trustedScope: scopeInput,
+    headers: { "X-Provider-Signature": "synthetic-signature" }, rawBody: body,
+    maxBodyBytes: 1024, allowUnverifiedHints: false,
+    verifier: { verify(request) { verifierRequest = request; return new Promise((resolve) => { releaseVerify = resolve; }); } },
+    parseHint(bytes) { parserEvent = JSON.parse(new TextDecoder().decode(bytes)); return parserEvent; },
+    replayStore
+  };
+  const pending = security.ingestProviderCallback(input);
+  body.fill(0x78);
+  input.providerId = "provider-callback-mutated";
+  input.mode = "simulated";
+  scopeInput.tenantId = "tenant-callback-mutated";
+  verifierRequest.rawBody.fill(0x79);
+  releaseVerify(true);
+  const result = await pending;
+  assert.equal(verifierRequest.providerId, "provider-callback-original");
+  assert.equal(verifierRequest.mode, "sandbox");
+  assert.equal(parserEvent.eventId, "event-original");
+  assert.equal(result.hint.providerRequestId, "request-original");
+  assert.equal(result.providerId, "provider-callback-original");
+  assert.deepEqual(result.trustedScope, { tenantId: "tenant-callback-original", projectId: "project-callback-original" });
+  assert.equal(state.claims[0].startsWith("provider-callback-original/tenant-callback-original/"), true);
+});
+
+test("callback verifier mutations cannot change the parser's byte snapshot", async () => {
+  const originalText = JSON.stringify({ eventId: "event-independent", providerRequestId: "request-independent" });
+  const { replayStore } = callbackDependencies();
+  let parserEvent;
+  const result = await security.ingestProviderCallback({
+    providerId: "provider-independent", mode: "simulated", trustedScope: scope, headers: {},
+    rawBody: Buffer.from(`xx${originalText}yy`).subarray(2, 2 + Buffer.byteLength(originalText)),
+    maxBodyBytes: 1024, allowUnverifiedHints: false,
+    verifier: { async verify(request) { request.rawBody.fill(0); return true; } },
+    parseHint(bytes) { parserEvent = JSON.parse(new TextDecoder().decode(bytes)); bytes.fill(0); return parserEvent; },
+    replayStore
+  });
+  assert.equal(parserEvent.eventId, "event-independent");
+  assert.equal(result.hint.eventId, "event-independent");
+});
+
+test("approval validates and returns the exact owned bytes for consumption", async () => {
+  const padded = Buffer.concat([Buffer.from([0xde, 0xad]), Buffer.from(PNG), Buffer.from([0xbe, 0xef])]);
+  const originalView = padded.subarray(2, 2 + PNG.byteLength);
+  assert.equal(originalView.byteOffset > 0, true);
+  assert.equal(originalView.buffer.byteLength > originalView.byteLength, true);
+  const digest = `sha256:${createHash("sha256").update(originalView).digest("hex")}`;
+  const asset = {
+    bytes: originalView, contentType: "image/png", sha256: digest, byteLength: PNG.byteLength,
+    finalHost: "assets.example.test", redirectCount: 0
+  };
+  const approved = { ...approvedIdentity, sha256: digest };
+  const subtle = globalThis.crypto.subtle;
+  const oldOwnDigest = Object.getOwnPropertyDescriptor(subtle, "digest");
+  const originalDigest = subtle.digest.bind(subtle);
+  let releaseDigest;
+  Object.defineProperty(subtle, "digest", {
+    configurable: true,
+    value(algorithm, bytes) {
+      return new Promise((resolve, reject) => {
+        releaseDigest = () => originalDigest(algorithm, bytes).then(resolve, reject);
+      });
+    }
+  });
+  try {
+    const pending = security.assertRetrievedAssetMatchesApproval({ asset, approved });
+    padded.fill(0x78, 2, 2 + PNG.byteLength);
+    releaseDigest();
+    const approvedBytes = await pending;
+    assert.deepEqual([...approvedBytes], [...PNG]);
+    assert.notEqual(approvedBytes.buffer, originalView.buffer);
+    assert.equal(`sha256:${createHash("sha256").update(approvedBytes).digest("hex")}`, digest);
+  } finally {
+    if (oldOwnDigest === undefined) delete subtle.digest;
+    else Object.defineProperty(subtle, "digest", oldOwnDigest);
+  }
+});
+
+test("diagnostics fail closed for forged errors, dynamic keys, accessors and proxies", () => {
+  let invoked = 0;
+  const hostileArray = [];
+  Object.defineProperty(hostileArray, "0", { get() { invoked += 1; throw new Error("synthetic-raw-canary"); }, enumerable: true });
+  hostileArray.length = 1;
+  const redactedArray = security.redactSensitive(hostileArray);
+  assert.equal(invoked, 0);
+  assert.equal(redactedArray, "[REDACTED]");
+
+  const dynamicKey = { "https://assets.example.test/file?signature=synthetic-key-canary": "value" };
+  const redactedKey = JSON.stringify(security.redactSensitive(dynamicKey));
+  assert.equal(redactedKey.includes("synthetic-key-canary"), false);
+  assert.equal(redactedKey.includes("assets.example.test"), false);
+
+  const forged = Object.create(security.SecurityBoundaryError.prototype);
+  forged.code = "asset_timeout";
+  forged.safeMessage = "synthetic-forged-message";
+  forged.diagnosticReference = "https://assets.example.test/?token=synthetic-forged-canary";
+  const diagnostic = security.safeSecurityDiagnostic(forged, "diag-FC11-safe");
+  assert.deepEqual(diagnostic, {
+    code: "internal_failure", diagnosticReference: "diag-FC11-safe", safeMessage: "The security operation failed."
+  });
+  assert.equal(JSON.stringify(diagnostic).includes("synthetic"), false);
+
+  const genuine = new security.SecurityBoundaryError("asset_timeout", "diag-FC11-01");
+  assert.deepEqual(security.safeSecurityDiagnostic(genuine), {
+    code: "asset_timeout", diagnosticReference: "diag-FC11-01", safeMessage: "The asset request exceeded its time limit."
+  });
+  const tokenReference = security.safeSecurityDiagnostic(new Error("synthetic-raw-canary"), "sk-proj-synthetic-token-canary");
+  assert.equal(tokenReference.diagnosticReference, "diag-unavailable");
+  assert.equal(JSON.stringify(tokenReference).includes("synthetic-token-canary"), false);
+
+  const throwingProxy = new Proxy({}, { ownKeys() { throw new Error("synthetic-proxy-raw-canary"); } });
+  assert.equal(security.redactSensitive(throwingProxy), "[REDACTED]");
+  assert.equal(JSON.stringify(security.safeSecurityDiagnostic(throwingProxy, "https://unsafe.example.test/token=canary")).includes("canary"), false);
+});
+
+test("sensitive async entry points reject accessor inputs before invoking ports", async () => {
+  let getterCalls = 0;
+  let portCalls = 0;
+  const secretInput = {
+    providerId: "provider-fixture", secretReference: "key-fixture", source: { async load() { portCalls += 1; } },
+    async use() { portCalls += 1; }
+  };
+  Object.defineProperty(secretInput, "mode", { enumerable: true, get() { getterCalls += 1; return "sandbox"; } });
+  await expectSecurityFailure(security.withServerSecret(secretInput), "server_secret_unavailable");
+
+  const policy = { allowedHosts: ["assets.example.test"], allowedMimeTypes: ["image/png"], timeoutMs: 10, maxRedirects: 0 };
+  Object.defineProperty(policy, "maxBytes", { enumerable: true, get() { getterCalls += 1; return 10; } });
+  await expectSecurityFailure(security.retrieveApprovedAsset({
+    url: "https://assets.example.test/a", mode: "simulated", trustedScope: scope, policy,
+    resolver: { async resolve() { portCalls += 1; return ["93.184.216.34"]; } },
+    transport: { async request() { portCalls += 1; return assetResponse({ connectTo: ["93.184.216.34"] }); } }
+  }), "asset_policy_invalid");
+  const accessorScope = {};
+  Object.defineProperty(accessorScope, "tenantId", { get() { getterCalls += 1; return "tenant-fixture"; } });
+  accessorScope.projectId = "project-fixture";
+  await expectSecurityFailure(security.resolveEncryptedScopedReference({
+    reference: "reference-fixture", trustedScope: accessorScope, purpose: "approved-read",
+    store: { async get() { portCalls += 1; } }, decryptor: { async decrypt() { portCalls += 1; } }
+  }), "invalid_scope");
+  const callbackInput = {
+    providerId: "provider-fixture", mode: "simulated", trustedScope: scope, rawBody: callbackBytes(),
+    maxBodyBytes: 1024, allowUnverifiedHints: true, parseHint() { portCalls += 1; return {}; },
+    replayStore: { async claim() { portCalls += 1; return true; } }
+  };
+  Object.defineProperty(callbackInput, "providerId", { enumerable: true, get() { getterCalls += 1; return "provider-fixture"; } });
+  await expectSecurityFailure(security.ingestProviderCallback(callbackInput), "callback_invalid");
+  assert.equal(getterCalls, 0);
+  assert.equal(portCalls, 0);
 });
 
 export async function runSecuritySuite() {
