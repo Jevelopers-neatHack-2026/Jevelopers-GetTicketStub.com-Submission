@@ -26,6 +26,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -324,42 +325,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -378,6 +348,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -861,6 +1050,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -1160,42 +1350,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -1214,6 +1373,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -1697,6 +2075,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -1996,42 +2375,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -2050,6 +2398,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -2533,6 +3100,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -2840,42 +3408,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -2894,6 +3431,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -3377,6 +4133,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -3711,42 +4468,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -3765,6 +4491,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -4248,6 +5193,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -4582,42 +5528,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -4636,6 +5551,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -5119,6 +6253,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -5453,42 +6588,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -5507,6 +6611,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -5990,6 +7313,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -6324,42 +7648,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -6378,6 +7671,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -6861,6 +8373,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -7195,42 +8708,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -7249,6 +8731,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -7732,6 +9433,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -8066,42 +9768,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -8120,6 +9791,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -8603,6 +10493,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -8937,42 +10828,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -8991,6 +10851,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -9474,6 +11553,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -9808,42 +11888,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -9862,6 +11911,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -10345,6 +12613,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -10679,42 +12948,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -10733,6 +12971,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -11216,6 +13673,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -11550,42 +14008,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -11604,6 +14031,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -12087,6 +14733,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -12421,42 +15068,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -12475,6 +15091,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -12958,6 +15793,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -13292,42 +16128,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -13346,6 +16151,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -13829,6 +16853,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -14163,42 +17188,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -14217,6 +17211,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }
@@ -14700,6 +17913,7 @@
         "reconciliationStatus",
         "reservationLifecycle",
         "identities",
+        "postingMapping",
         "sourceIdentity",
         "usage",
         "money",
@@ -15034,42 +18248,11 @@
           "type": "object",
           "required": [
             "logicalOperationId",
-            "transportAttemptId",
-            "providerAttemptId",
-            "providerRequestId",
-            "billableAttemptId",
             "sourceObservationId",
             "reservationId"
           ],
           "properties": {
             "logicalOperationId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "transportAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerAttemptId": {
-              "minLength": 1,
-              "maxLength": 256,
-              "type": "string"
-            },
-            "providerRequestId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "billableAttemptId": {
               "minLength": 1,
               "maxLength": 256,
               "type": "string"
@@ -15088,6 +18271,225 @@
                 },
                 {
                   "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "postingMapping": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "sourceLineId",
+            "transportAttemptId",
+            "providerAttemptId",
+            "providerRequestId",
+            "billableAttemptId"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "sourceLineId": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "transportAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "providerRequestId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "billableAttemptId": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "known",
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unknown",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "not_applicable",
+                      "type": "string"
+                    }
+                  }
                 }
               ]
             }

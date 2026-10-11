@@ -175,7 +175,7 @@
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateLedgerAppendRequestBoundary",
-      "sha256": "18bde2cf5694a370f2df9c488e944a4cd016c4cc8df794580b6d2f4b4ef8085a"
+      "sha256": "fb77042ccbd5de8ed85b676c203fc6697bf41ef2b46a19401038d3166d6c7227"
     },
     {
       "module": "ledger",
