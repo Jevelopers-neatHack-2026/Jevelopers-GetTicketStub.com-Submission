@@ -22,7 +22,7 @@ Budget wrappers express authorized, denied, partial, and unavailable outcomes, h
 
 The financial ledger API is documented in [ledger.md](./ledger.md). It persists immutable versioned events, binds operational identities independently, records corrections and reversals by reference, and rebuilds deterministic as-of projections with exact decimal arithmetic. Reservation authorization remains a non-financial memo; linked cumulative consumption contributes its full effective amount, including an observed overrun.
 
-The pricing implementation and host-authority boundary are documented in [pricing.md](./pricing.md). Its real issuer adapter remains pending; current operation decisions and evidence resolvers are host-injected ports exercised with synthetic fixtures.
+The pricing implementation and host-authority boundary are documented in [pricing.md](./pricing.md). The manual CFO.ai input mapping and handoff for exports (CI-08X.4) is documented in [cfo-ai-handoff.md](./cfo-ai-handoff.md). Its real issuer adapter remains pending; current operation decisions and evidence resolvers are host-injected ports exercised with synthetic fixtures.
 
 ## Summary and export identity
 
