@@ -5,7 +5,7 @@ This is an executable review brief for MM-02. A checked item needs a source link
 ## Claim review
 
 - [ ] Copy every externally visible factual, capability, measured, comparative, sponsor, forecast, financial, and CTA statement into messaging/claims.json with a stable ID.
-- [ ] Match every sentence, label, visual fragment, and accessible alternative to its exact ledger wording; do not rely on a broad “simulation” claim to cover unrelated text.
+- [ ] Match every sentence, label, visual fragment, HTML text/accessible attribute, and accessible alternative to an exact claim or CTA row and provenance record; reject missing IDs, copy drift, checksum drift, and unlisted tracked files. Do not rely on a broad “simulation” claim to cover unrelated text.
 - [ ] Check source repository, path, immutable revision, evidence reference/classification, provider mode, limitations, and review trigger.
 - [ ] Keep the exact positioning slogan attributed and qualified as positioning; do not convert it into autonomous-completion proof.
 - [ ] Reject unsupported variants such as “fully automated,” “live integration,” and “verified savings.” A synthetic example is acceptable only with a visible concept/simulation label and no claim of live behavior.
@@ -27,7 +27,7 @@ This is an executable review brief for MM-02. A checked item needs a source link
 - [ ] Reject “fully automated” capability wording.
 - [ ] Reject “live integration” wording without live-mode evidence.
 - [ ] Reject “verified savings” without an EVAL-02 comparable and finance-reviewed result.
-- [ ] Accept a synthetic/concept example only when its label and limitations remain visible in the derivative and accessible alternative.
+- [ ] Accept a synthetic/concept example only when its label and limitations remain visible in the derivative and accessible alternative; verify the current exact files and status in `docs/collateral-inventory.json` and `review/provenance.json`.
 - [ ] Reject a CTA with missing target or unavailable/unconfirmed route.
 
 ## Current draft outcome

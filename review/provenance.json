@@ -6,12 +6,13 @@
   "publicationDefault": "blocked",
   "permissionStates": [
     "approved",
-    "pending",
-    "unknown",
-    "revoked",
+    "authorized_internal_candidate_review_only",
+    "authorized_internal_policy_test_only",
     "expired",
+    "pending",
     "rejected",
-    "authorized_internal_policy_test_only"
+    "revoked",
+    "unknown"
   ],
   "requiredRecordFields": [
     "assetId",
@@ -92,9 +93,21 @@
       },
       "lineage": {
         "derivedFrom": [],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-REDACTION-CANARIES-001",
+          "PROV-REDACTION-BEFORE-SVG-001",
+          "PROV-REDACTION-BEFORE-PNG-001",
+          "PROV-REDACTION-AFTER-SVG-001",
+          "PROV-REDACTION-AFTER-PNG-001",
+          "PROV-REDACTION-AFTER-ALT-001",
+          "PROV-VISUAL-BROWSER-001",
+          "PROV-VISUAL-CONTRAST-001",
+          "PROV-VISUAL-ACCESSIBILITY-001",
+          "TEST-VISUAL-REDACTION-001"
+        ],
         "transformations": [
-          "synthetic text fixture authored for policy validation"
+          "synthetic text fixture authored for policy validation",
+          "Distinct controlled SVG/PNG before-after test fixture joined through its own exact paths and checksums; this does not turn the JSON marker fixture itself into a pixel test."
         ]
       },
       "checksum": {
@@ -111,6 +124,2473 @@
         "No actual rendered export was inspected.",
         "The content digest and independent review are pending."
       ]
+    },
+    {
+      "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "kind": "editable_visual_source",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-WORKFLOW-PNG-001",
+          "PROV-DEMO-WORKFLOW-ALT-001",
+          "PROV-PREVIEW-WORKFLOW-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-DEMO-WORKFLOW-PNG-001",
+      "kind": "visual_export",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-DEMO-WORKFLOW-ALT-001",
+      "kind": "accessible_text_alternative",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "DEMO-SCREENSHOT-SET-001",
+      "kind": "synthetic_mockup_source",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-SCREENSHOT-PNG-001",
+          "PROV-DEMO-SCREENSHOT-ALT-001",
+          "PROV-PREVIEW-MOCKUP-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-DEMO-SCREENSHOT-PNG-001",
+      "kind": "visual_export",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SCREENSHOT-SET-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-DEMO-SCREENSHOT-ALT-001",
+      "kind": "accessible_text_alternative",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SCREENSHOT-SET-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "DEMO-DECK-SUPPORT-001",
+      "kind": "static_html_rehearsal_support",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001",
+          "PROV-PREVIEW-DECK-DESKTOP-001",
+          "PROV-PREVIEW-DECK-MOBILE-001",
+          "PROV-PREVIEW-DECK-FULL-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "LAUNCH-X-KEY-VISUAL-001",
+      "kind": "editable_visual_source",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-LAUNCH-X-KEY-PNG-001",
+          "LAUNCH-X-ALT-TEXT-001",
+          "PROV-PREVIEW-X-FEED-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-LAUNCH-X-KEY-PNG-001",
+      "kind": "visual_export",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-key-visual.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-KEY-VISUAL-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "LAUNCH-X-ALT-TEXT-001",
+      "kind": "accessible_text_alternative",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_visual_draft",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Handoff identifies invented event/details and first-party shapes/text; no real person, customer, sponsor trace, or private source is included. This does not establish third-party artwork/brand rights."
+      },
+      "permission": {
+        "status": "unknown",
+        "reference": "Source-owner, brand, privacy/consent and destination rights approval remain pending; public repository visibility does not grant reuse rights.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-KEY-VISUAL-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-REDACTION-BEFORE-SVG-001",
+      "kind": "synthetic_fixture",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-before.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-before.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_test_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Controlled dummy-canary before/after fixture; renderer removes sensitive SVG group, SVG metadata and comments, replaces accessible description, rebuilds PNG from RGB pixels without metadata, and regenerates matching alt text.",
+        "visualPixelReview": "Verified for the controlled 640x180 synthetic canary region by tests/test_visual_collateral.py; this is not generic OCR or real-source redaction approval.",
+        "renderedMetadataAndNotesReview": "Pillow Image.info/byte canary check passed for sanitized PNG; SVG source scan passed for after fixture. Before fixture intentionally retains DUMMY_* canary metadata and is release-excluded.",
+        "releaseExportExists": false,
+        "scope": "Internal negative/positive redaction fixture only; no external source or release export.",
+        "releaseDisposition": "excluded_dirty_negative_fixture"
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-SYNTHETIC-CANARY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "1fa090e3957d392ca114fa298e6904e7195444920961f4af25429555c0c36ac5",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-REDACTION-BEFORE-PNG-001",
+      "kind": "synthetic_fixture",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-before.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-before.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_test_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Controlled dummy-canary before/after fixture; renderer removes sensitive SVG group, SVG metadata and comments, replaces accessible description, rebuilds PNG from RGB pixels without metadata, and regenerates matching alt text.",
+        "visualPixelReview": "Verified for the controlled 640x180 synthetic canary region by tests/test_visual_collateral.py; this is not generic OCR or real-source redaction approval.",
+        "renderedMetadataAndNotesReview": "Pillow Image.info/byte canary check passed for sanitized PNG; SVG source scan passed for after fixture. Before fixture intentionally retains DUMMY_* canary metadata and is release-excluded.",
+        "releaseExportExists": false,
+        "scope": "Internal negative/positive redaction fixture only; no external source or release export.",
+        "releaseDisposition": "excluded_dirty_negative_fixture"
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-SYNTHETIC-CANARY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "93747429f5b72e63c426ac33f976293d4cb3486136e53a9c22d0ab3cf6764325",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-REDACTION-AFTER-SVG-001",
+      "kind": "sanitized_synthetic_fixture",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-after.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-after.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_test_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Controlled dummy-canary before/after fixture; renderer removes sensitive SVG group, SVG metadata and comments, replaces accessible description, rebuilds PNG from RGB pixels without metadata, and regenerates matching alt text.",
+        "visualPixelReview": "Verified for the controlled 640x180 synthetic canary region by tests/test_visual_collateral.py; this is not generic OCR or real-source redaction approval.",
+        "renderedMetadataAndNotesReview": "Pillow Image.info/byte canary check passed for sanitized PNG; SVG source scan passed for after fixture. Before fixture intentionally retains DUMMY_* canary metadata and is release-excluded.",
+        "releaseExportExists": false,
+        "scope": "Internal negative/positive redaction fixture only; no external source or release export."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-SYNTHETIC-CANARY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "c2a8a07b4daa3cb63151c1a5051ba07fcec065b0780ca48c4f5b1c3c55ebec58",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-REDACTION-AFTER-PNG-001",
+      "kind": "sanitized_synthetic_fixture",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-after.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-after.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_test_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Controlled dummy-canary before/after fixture; renderer removes sensitive SVG group, SVG metadata and comments, replaces accessible description, rebuilds PNG from RGB pixels without metadata, and regenerates matching alt text.",
+        "visualPixelReview": "Verified for the controlled 640x180 synthetic canary region by tests/test_visual_collateral.py; this is not generic OCR or real-source redaction approval.",
+        "renderedMetadataAndNotesReview": "Pillow Image.info/byte canary check passed for sanitized PNG; SVG source scan passed for after fixture. Before fixture intentionally retains DUMMY_* canary metadata and is release-excluded.",
+        "releaseExportExists": false,
+        "scope": "Internal negative/positive redaction fixture only; no external source or release export."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-SYNTHETIC-CANARY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "5fe36c9934933874a988c60b4837bdb0c2a8cab95bbc6064cc2267cb7afc42b6",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-REDACTION-AFTER-ALT-001",
+      "kind": "accessible_synthetic_fixture_alternative",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-after-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-after-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_test_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Controlled dummy-canary before/after fixture; renderer removes sensitive SVG group, SVG metadata and comments, replaces accessible description, rebuilds PNG from RGB pixels without metadata, and regenerates matching alt text.",
+        "visualPixelReview": "Verified for the controlled 640x180 synthetic canary region by tests/test_visual_collateral.py; this is not generic OCR or real-source redaction approval.",
+        "renderedMetadataAndNotesReview": "Pillow Image.info/byte canary check passed for sanitized PNG; SVG source scan passed for after fixture. Before fixture intentionally retains DUMMY_* canary metadata and is release-excluded.",
+        "releaseExportExists": false,
+        "scope": "Internal negative/positive redaction fixture only; no external source or release export."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-SYNTHETIC-CANARY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "40b233ce0e5fe2957e03ece9c953034acc1a6f1432e562938cfc0d66df0f11e6",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-REDACTION-CANARIES-001",
+      "kind": "synthetic_fixture",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-canaries.json",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-canaries.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "synthetic_test_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Controlled dummy-canary before/after fixture; renderer removes sensitive SVG group, SVG metadata and comments, replaces accessible description, rebuilds PNG from RGB pixels without metadata, and regenerates matching alt text.",
+        "visualPixelReview": "Verified for the controlled 640x180 synthetic canary region by tests/test_visual_collateral.py; this is not generic OCR or real-source redaction approval.",
+        "renderedMetadataAndNotesReview": "Pillow Image.info/byte canary check passed for sanitized PNG; SVG source scan passed for after fixture. Before fixture intentionally retains DUMMY_* canary metadata and is release-excluded.",
+        "releaseExportExists": false,
+        "scope": "Internal negative/positive redaction fixture only; no external source or release export."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-SYNTHETIC-CANARY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "adcb62d9d5bfb3ee87a511e32649251a0aae346f27d2d729951ddfa750e2fa20",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-MOBILE-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-mobile-390.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/deck-mobile-390.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "266126d53623b4b9207f4a52ad3154d3f02b54bc54ecacc63f5d6b9c6af63882",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-FULL-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-mobile-full.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/deck-mobile-full.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "7a9a6cdf0f440eff58482bef4dc8b63c4944071a867694128172cb8cd4a9002c",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-DECK-DESKTOP-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/deck-presentation-1440.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/deck-presentation-1440.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "77b83b36f26b1d6fcbdaf9826f176545cfcd2f56ca6317fe32a701d39a73d5f3",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-MOCKUP-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/mockup-presentation-720.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/mockup-presentation-720.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SCREENSHOT-SET-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "444a73d443dfc9342c50cb8d3b753609bbbdda974c18adc872b1c35b48c40e7d",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-WORKFLOW-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/workflow-presentation-960.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/workflow-presentation-960.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "660e36ab0e1960a151c2ca441e779ab009a4c48378931e4133501f0d7812f6c4",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-PREVIEW-X-FEED-001",
+      "kind": "internal_render_preview",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/previews/x-feed-390.png",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/previews/x-feed-390.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-KEY-VISUAL-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "5ae620dc2927c968556231bc48de629df3d7f5fb1a21c711f4bdb89be65d5dcd",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-VISUAL-HANDOFF-001",
+      "kind": "verification_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/asset-handoff.json",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/asset-handoff.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-VISUAL-BROWSER-001",
+      "kind": "verification_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/browser-render-evidence.json",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/browser-render-evidence.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "95dae8d05e25fc8aa9df53d2bb16f82838495986d5a5393f30e2914ddc72d308",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-VISUAL-CONTRAST-001",
+      "kind": "accessibility_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/contrast-evidence.json",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/contrast-evidence.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9552e809332821f8851ea2961f00e0818fc4c956da1ebc816c23f434c2f867ae",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-VISUAL-ACCESSIBILITY-001",
+      "kind": "accessibility_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/accessibility-results.json",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/accessibility-results.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "57cd3c4fde010b5b28cde3c188f53882b21a3797e9da2362447bbde713370ef6",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-VISUAL-VERIFICATION-001",
+      "kind": "verification_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/visual/verification.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/visual/verification.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "4ef54ad8d5b226239be5a8ae8b6d7c63c17795ca69d5778feae963a85dbf35f8",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-ACCESSIBILITY-GUIDE-001",
+      "kind": "accessibility_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/accessibility.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/accessibility.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "0742cf31e7e711614a88847a254b20acb2ddfa395cf1a86dfd0932642be324f0",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "kind": "accessibility_evidence",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/accessibility-checklist.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/review/accessibility-checklist.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "d5c089b9d170eb0a24c2823d1e38feeea6eaab2133ee82cd77d91f4547c32df8",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "TOOL-RENDER-COLLATERAL-001",
+      "kind": "renderer_tooling",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "tools/render_collateral.mjs",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/tools/render_collateral.mjs",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "4741c6f71ecc064dc38c63d2c550b5524b8fea6befdb671f5bf48cfefedbe9d6",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "TEST-VISUAL-REDACTION-001",
+      "kind": "validation_test",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "tests/test_visual_collateral.py",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/tests/test_visual_collateral.py",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "05e5d9483fc027ac39bd8a0f256c0031afc67b3de9775d97804a23008e7e0189",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
+    },
+    {
+      "assetId": "TEST-VISUAL-ACCESSIBILITY-001",
+      "kind": "validation_test",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "tests/test_visual_accessibility.py",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/tests/test_visual_accessibility.py",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned UI visual worker session; execution owner tracked by user-assigned marketing-material supervisor.",
+      "toolModel": "First-party code-native SVG/HTML and local Node/Python/Chrome rendering; no image-generation or external media provider is evidenced.",
+      "evidenceClassification": "author_verification_record",
+      "consent": {
+        "status": "not_applicable_internal_record",
+        "subjects": [],
+        "details": "Internal verification, tooling, preview or controlled synthetic-test record; no person, customer, or restricted source content is included."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Assigned repository task permits use in this integrated draft candidate only; no external-use permission is inferred.",
+        "owner": "Source owner and destination rights reviewer are pending; no individual approver is asserted.",
+        "approvedDestinations": [
+          "Internal candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party code-native asset or internal evidence/tooling; no third-party imagery, font binaries, sponsor marks, or logo assets are recorded in this candidate."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep source and every derivative linked by immutable path/checksum; preserve draft/synthetic status, limitations and accessible alternative. Rerender and re-review every changed source, crop or destination."
+      ],
+      "expiry": "No external-use permission granted; reassess before each proposed reuse and at the next rights review.",
+      "reviewTrigger": [
+        "Before any external use or publication.",
+        "Source, text, visual, accessibility alternative, crop, export, brand revision or destination changes.",
+        "Any source-owner rights, privacy or consent update; permission expiry or revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-aware review only within the recorded scope; do not infer a generic redaction guarantee.",
+        "visualPixelReview": "See review/visual/verification.md and pinned author evidence; independent review pending.",
+        "renderedMetadataAndNotesReview": "Current exact file checks only; see visualReview receipt. No general scanner claim.",
+        "releaseExportExists": false,
+        "scope": "No externally released output exists."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Source file or exact verification/tooling record pinned to the integrated visual candidate."
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "e7bf51b4b987d0b941e5dc45cb0203ee5d1aa04e266828fd7a11ebf7f65169b5",
+        "status": "Verified against the current exact file and the pinned source commit containing it."
+      },
+      "reviewer": "Independent candidate reviewer and relevant source-owner rights reviewer; pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "No destination-specific source-owner/brand rights approval.",
+        "Independent exact-revision review is pending.",
+        "Repository task permission is internal candidate scope only; it does not grant external publication."
+      ]
     }
   ],
   "releaseGate": {
@@ -123,6 +2603,110 @@
     ],
     "unknownRights": "Reject or replace with clearly labeled synthetic content.",
     "revokedRights": "Reject/deprecate; stop reuse and retain only non-disclosing decision metadata.",
-    "currentStatus": "BLOCKED: this register covers a synthetic text/JSON canary only; no final visual/media artifact has passed rights and pixel/metadata/notes review."
+    "currentStatus": "BLOCKED: exact synthetic SVG/PNG pixels and scoped metadata are author-checked, with controlled redaction tests; this does not grant rights. Destination-specific rights, independent review and final content/brand approvals remain pending. Audio/video and office exports are not present and are explicitly not applicable until created.",
+    "formatAwareEvidence": "visualReview records exact checked paths, source commit, checksum-bound receipts, actual redaction fixture, tooling and tests; new/changed exports require a new exact-revision review."
+  },
+  "visualReview": {
+    "status": "author_checks_recorded_independent_review_pending",
+    "handoffPath": "review/visual/asset-handoff.json",
+    "handoffCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+    "handoffSha256": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871",
+    "evidenceReferences": [
+      "PROV-VISUAL-BROWSER-001",
+      "PROV-VISUAL-CONTRAST-001",
+      "PROV-VISUAL-ACCESSIBILITY-001",
+      "PROV-VISUAL-VERIFICATION-001",
+      "TEST-VISUAL-REDACTION-001",
+      "TEST-VISUAL-ACCESSIBILITY-001"
+    ],
+    "independentReview": "pending",
+    "brandAndSourceOwnerRights": "pending; no owner approval is inferred",
+    "formats": [
+      {
+        "format": "SVG",
+        "status": "author_check_pass_for_current_sources; controlled synthetic redaction test passes",
+        "paths": [
+          "demo/diagrams/demo-workflow.svg",
+          "demo/screenshots/synthetic-stub-mockup.svg",
+          "launch/assets/x-submission-key-visual.svg",
+          "examples/synthetic/redaction-before.svg",
+          "examples/synthetic/redaction-after.svg"
+        ],
+        "pixelReview": "Native rendered PNGs inspected; controlled before/after fixture proves exact fake-text region removal.",
+        "metadataAndComments": "All SVG metadata inspected; authored assets contain only stated draft/brand-reference metadata; clean after fixture has no metadata/comment. Before fixture intentionally retains a dummy metadata canary and is excluded.",
+        "speakerNotes": "NOT_APPLICABLE: SVG has no speaker-notes container; analogous dummy hidden-comment canary is covered by source-removal test.",
+        "claim": "Scope is this pinned synthetic candidate and exact receipt; no generic redaction/OCR guarantee."
+      },
+      {
+        "format": "PNG",
+        "status": "author_check_pass_for_deliverables_and_previews; controlled synthetic redaction test passes",
+        "paths": [
+          "demo/diagrams/demo-workflow.png",
+          "demo/screenshots/synthetic-stub-mockup.png",
+          "launch/assets/x-submission-key-visual.png",
+          "examples/synthetic/redaction-before.png",
+          "examples/synthetic/redaction-after.png",
+          "review/visual/previews/deck-mobile-390.png",
+          "review/visual/previews/deck-mobile-full.png",
+          "review/visual/previews/deck-presentation-1440.png",
+          "review/visual/previews/mockup-presentation-720.png",
+          "review/visual/previews/workflow-presentation-960.png",
+          "review/visual/previews/x-feed-390.png"
+        ],
+        "pixelReview": "Native exports/previews inspected; exact controlled 640x180 before/after pixel-region test passes.",
+        "metadataAndComments": "Pillow Image.info is empty for all deliverable/preview PNGs and sanitized after fixture; before negative fixture intentionally retains DUMMY_METADATA_CANARY_C3 and is release-excluded.",
+        "speakerNotes": "NOT_APPLICABLE: PNG has no notes container.",
+        "claim": "Scope is exact pinned file set; no generic redaction/OCR guarantee."
+      },
+      {
+        "format": "HTML",
+        "status": "author browser check pass; independent accessibility/content review pending",
+        "paths": [
+          "demo/deck/concept-overview.html"
+        ],
+        "pixelReview": "Rendered desktop/mobile previews were inspected as listed in browser and accessibility receipts.",
+        "metadataAndComments": "Static source/DOM inspected; no HTML comments or speaker-notes container, no external page requests in recorded renders.",
+        "speakerNotes": "NOT_APPLICABLE: static HTML rehearsal page has no slide-notes container.",
+        "claim": "This does not imply a deployed application or browser behavior outside the pinned static page."
+      },
+      {
+        "format": "Markdown accessible alternatives",
+        "status": "author text-equivalence check recorded; independent review pending",
+        "paths": [
+          "demo/diagrams/demo-workflow-alt-text.md",
+          "demo/screenshots/synthetic-stub-alt-text.md",
+          "launch/assets/x-submission-alt-text.md",
+          "examples/synthetic/redaction-after-alt-text.md"
+        ],
+        "pixelReview": "NOT_APPLICABLE: text-only alternatives.",
+        "metadataAndComments": "Text paths and exact copy mappings are checksum-bound; canary scan applies to sanitized fixture alt.",
+        "claim": "Alt text does not grant rights to the image."
+      },
+      {
+        "format": "audio/video",
+        "status": "NOT_APPLICABLE: no audio/video asset is tracked",
+        "paths": [],
+        "requiredBeforeAnyFutureUse": "Video requires captions, transcript, timing, metadata and redaction review; audio requires transcript, metadata and redaction review."
+      },
+      {
+        "format": "office/deck exports",
+        "status": "NOT_APPLICABLE: no PPTX/PDF/slide-export is tracked; current deck support is static HTML",
+        "paths": [],
+        "requiredBeforeAnyFutureUse": "Review notes, embedded media, export metadata, links, text alternatives and exact destination."
+      }
+    ],
+    "reproduction": {
+      "renderCommand": "node tools/render_collateral.mjs",
+      "testCommand": "python3 -m unittest discover -s tests -p test_visual_*.py -v",
+      "browser": "Chrome/154.0.8037.98",
+      "node": "v24.15.0",
+      "python": "Python 3.9.6",
+      "pillow": "11.3.0",
+      "pageViews": 10,
+      "externalPageRequests": 0,
+      "pageErrors": 0,
+      "scope": "Commands and versions from pinned receipts; platform/font changes may change rendered hashes."
+    },
+    "releaseDisposition": "blocked_pending_independent_review_source_owner_rights_and_exact_destination_approval"
   }
 }

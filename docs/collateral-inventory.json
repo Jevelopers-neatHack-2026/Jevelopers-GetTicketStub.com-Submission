@@ -110,23 +110,23 @@
     },
     {
       "path": "demo/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Storyboard, narration, recording checklist, submission narrative and evidence-linked support assets."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Draft conceptual diagram, synthetic mockup and static HTML support only; the required product explainer, story, final video and producer evidence are still absent."
     },
     {
       "path": "launch/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Social/announcement drafts and product descriptions; copy handoff to landing-page-repo, never the primary landing runtime."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Draft X key visual and accessible alternative with repository-documentation CTA; final post, destination and publication approvals are pending."
     },
     {
       "path": "examples/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Approved demonstration outputs with destination-specific permission and attribution records."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Controlled synthetic redaction before/after fixture only; never represent it as a customer/product sample or release the dirty before fixture."
     },
     {
       "path": "review/",
       "pathAvailability": "created_in_candidate",
-      "purpose": "Messaging review, provenance, publication safety, and a synthetic text/JSON canary; visual, accessibility, brand and release records remain proposed."
+      "purpose": "Messaging, provenance, publication safety, accessibility and exact visual evidence; release approvals remain pending."
     }
   ],
   "accountabilityByIssue": {
@@ -534,9 +534,13 @@
     {
       "familyId": "FAM-DEMO-001",
       "family": "Hackathon demo assets",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "DEMO-SCREENSHOT-SET-001",
+        "DEMO-DECK-SUPPORT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
       "usageNeed": "One truthful journey, timed demo narrative and submission story. The official event page checked 2026-10-11 UTC requires a video of at most three minutes covering neatlogs, Entire and cfo.ai (architecture, implementation, runtime, reasoning and result for each), a public code repository and supporting evidence.",
       "v1": true,
@@ -564,7 +568,8 @@
         "integration-evals evidence index; recheck before final demo"
       ],
       "dependencies": [
-        "Approved claims and evidence from MM-02 and upstream owners; no sponsor result is inferred from this plan."
+        "Approved claims and evidence from MM-02 and upstream owners; no sponsor result is inferred from this plan.",
+        "Current diagram/mockup/HTML are draft synthetic support only; the required product explainer, storyboard, narration, and ≤3-minute final video remain uncreated and need producer-owned evidence and approval."
       ],
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
@@ -576,9 +581,12 @@
     {
       "familyId": "FAM-SOCIAL-001",
       "family": "Social posts and cards",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "LAUNCH-X-KEY-VISUAL-001",
+        "LAUNCH-X-ALT-TEXT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "launch/",
       "usageNeed": "The official event page checked 2026-10-11 UTC requires an X quote-post of the official submission post with team, name, project, public repository and demo link. Building-in-public evidence is tagged #neatHack. Reuse the same v1 copy/visual/alt-text records as the announcement family; do not create duplicate source assets or imply other-platform cadence.",
       "v1": true,
@@ -611,9 +619,11 @@
     {
       "familyId": "FAM-EXPLAINER-001",
       "family": "Product explainers and system diagrams",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-WORKFLOW-DIAGRAM-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "messaging/ and demo/",
       "usageNeed": "A truthful product explanation is required by MM-03; a separate workflow/system diagram is conditional on the approved storyboard identifying a useful, evidence-backed scene.",
       "v1": true,
@@ -644,11 +654,13 @@
     {
       "familyId": "FAM-DECK-001",
       "family": "Pitch and demo deck support",
-      "disposition": "deferred",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-DECK-SUPPORT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
-      "usageNeed": "No current official submission requirement or story-confirmed need for a slide deck is recorded. Activate only if the approved MM-03 storyboard or a refreshed official organizer requirement calls for deck support.",
+      "usageNeed": "A single static HTML rehearsal support page exists and reuses the conceptual diagram; no slide deck, final demo, or product screen is represented. Keep it deferred from release unless the approved story or organizer requirement calls for it.",
       "v1": false,
       "plannedAssetIds": [
         "DEMO-DECK-SUPPORT-001"
@@ -668,18 +680,24 @@
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
       "editableSourceLocations": [
-        "demo/"
+        "demo/deck/concept-overview.html"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "review/visual/previews/deck-presentation-1440.png",
+        "review/visual/previews/deck-mobile-390.png",
+        "review/visual/previews/deck-mobile-full.png"
+      ]
     },
     {
       "familyId": "FAM-SCREENSHOT-001",
       "family": "Screenshots and mockups",
-      "disposition": "deferred",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-SCREENSHOT-SET-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
-      "usageNeed": "No approved screenshots or mockups exist. Add only if an MM-03 scene needs one; use a sanitized, authorized source or clearly labeled conceptual mockup, with demonstrated/simulated/planned status visible.",
+      "usageNeed": "A clearly labeled fictional SVG/PNG mockup is present for concept review; it is not a product screenshot. No captured product screenshot is approved. Any real screenshot still requires an MM-03 scene, sanitized owner-authorized source, and exact destination rights/redaction review.",
       "v1": false,
       "plannedAssetIds": [
         "DEMO-SCREENSHOT-SET-001"
@@ -701,18 +719,24 @@
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
       "editableSourceLocations": [
-        "demo/"
+        "demo/screenshots/synthetic-stub-mockup.svg"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "demo/screenshots/synthetic-stub-mockup.png",
+        "demo/screenshots/synthetic-stub-alt-text.md"
+      ]
     },
     {
       "familyId": "FAM-ANNOUNCEMENT-001",
       "family": "Launch and update announcements",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "LAUNCH-X-KEY-VISUAL-001",
+        "LAUNCH-X-ALT-TEXT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "launch/",
-      "usageNeed": "MM-04 requires one reusable announcement set for the official X quote-post use. Include the official post, team, name, project, public repository, demo link and confirmed cutoff. Other launch/update graphics, recaps and feature callouts are deferred until a real use, owner and evidence are recorded.",
+      "usageNeed": "Draft X visual and accessible alternative exist; final announcement copy/post, official post link, submitter, final cutoff, demo link, exact destination and publication approval remain pending.",
       "v1": true,
       "plannedAssetIds": [
         "LAUNCH-X-COPY-001",
@@ -737,9 +761,12 @@
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
       "editableSourceLocations": [
-        "launch/"
+        "launch/assets/x-submission-key-visual.svg"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "launch/assets/x-submission-key-visual.png",
+        "launch/assets/x-submission-alt-text.md"
+      ]
     }
   ],
   "plannedDeliverables": [
@@ -1071,10 +1098,10 @@
     {
       "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
       "type": "workflow diagram support asset",
-      "disposition": "deferred",
+      "disposition": "existing",
       "path": "demo/diagrams/demo-workflow.svg",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Only create if approved storyboard confirms a diagram improves the journey explanation.",
       "destination": "Demo video or deck if selected",
       "requiredForV1": false,
@@ -1082,10 +1109,13 @@
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-SIMULATION-001",
+        "CLAIM-PROCESS-CONCEPT-001"
       ],
       "provenanceReferences": [
-        "Product behavior source must be pinned before depiction"
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-PNG-001",
+        "PROV-DEMO-WORKFLOW-ALT-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -1099,15 +1129,19 @@
       "editableSourceLocations": [
         "demo/diagrams/demo-workflow.svg"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "demo/diagrams/demo-workflow.png",
+        "demo/diagrams/demo-workflow-alt-text.md"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "DEMO-SCREENSHOT-SET-001",
       "type": "screenshot or labeled mockup set",
-      "disposition": "deferred",
-      "path": "demo/screenshots/",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "disposition": "existing",
+      "path": "demo/screenshots/synthetic-stub-mockup.svg",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Only add if an approved scene needs a screenshot/mockup and a sanitized source or clearly conceptual brief is available.",
       "destination": "Demo video or supporting handoff if selected",
       "requiredForV1": false,
@@ -1115,12 +1149,13 @@
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending",
-        "EVAL-03",
-        "EVAL-04"
+        "CLAIM-SIMULATION-001",
+        "CLAIM-PRODUCT-CAPABILITY-001"
       ],
       "provenanceReferences": [
-        "MM-05 source, rights, consent and redaction review, pending"
+        "DEMO-SCREENSHOT-SET-001",
+        "PROV-DEMO-SCREENSHOT-PNG-001",
+        "PROV-DEMO-SCREENSHOT-ALT-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -1134,15 +1169,19 @@
       "editableSourceLocations": [
         "demo/screenshots/"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "demo/screenshots/synthetic-stub-mockup.png",
+        "demo/screenshots/synthetic-stub-alt-text.md"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "DEMO-DECK-SUPPORT-001",
       "type": "pitch/demo deck support",
-      "disposition": "deferred",
-      "path": "demo/deck/",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "disposition": "existing",
+      "path": "demo/deck/concept-overview.html",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "No confirmed deck requirement; activate only when the story or official organizer asks for it.",
       "destination": "Event demo or teammate handoff if selected",
       "requiredForV1": false,
@@ -1150,10 +1189,13 @@
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending if activated"
+        "CLAIM-SIMULATION-001",
+        "CLAIM-PRODUCT-CAPABILITY-001"
       ],
       "provenanceReferences": [
-        "MM-05 asset approval, pending if activated"
+        "DEMO-DECK-SUPPORT-001",
+        "PROV-VISUAL-BROWSER-001",
+        "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -1167,7 +1209,12 @@
       "editableSourceLocations": [
         "demo/deck/"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "review/visual/previews/deck-presentation-1440.png",
+        "review/visual/previews/deck-mobile-390.png",
+        "review/visual/previews/deck-mobile-full.png"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "LAUNCH-X-COPY-001",
@@ -1207,10 +1254,10 @@
     {
       "assetId": "LAUNCH-X-KEY-VISUAL-001",
       "type": "editable X key visual and export variants",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "launch/assets/x-submission-key-visual.svg",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Provide the key visual required by MM-04 after brand, claim, rights and destination review.",
       "destination": "X post; no public post is authorized by this inventory",
       "requiredForV1": true,
@@ -1218,16 +1265,22 @@
       "ownerRole": "Product and frontend — campaign/content owner",
       "reviewerRole": "Product and frontend — destination owner",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-PRODUCT-NAME-001",
+        "CLAIM-KEEPSAKE-CONCEPT-001",
+        "CLAIM-PROCESS-CONCEPT-001",
+        "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
-        "MM-05 rights/redaction, pending; MM-06 brand consumption, pending"
+        "LAUNCH-X-KEY-VISUAL-001",
+        "PROV-LAUNCH-X-KEY-PNG-001",
+        "LAUNCH-X-ALT-TEXT-001"
       ],
       "v1": true,
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
       "familyIds": [
-        "FAM-SOCIAL-001",
         "FAM-ANNOUNCEMENT-001"
       ],
       "dependencies": [
@@ -1237,16 +1290,17 @@
         "launch/assets/x-submission-key-visual.svg"
       ],
       "exportLocations": [
-        "launch/exports/x-submission/ (proposed; format and dimensions require current destination check)"
-      ]
+        "launch/assets/x-submission-key-visual.png"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "LAUNCH-X-ALT-TEXT-001",
       "type": "accessible description for X visual",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "launch/assets/x-submission-alt-text.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Provide accessible text equivalent for the selected visual.",
       "destination": "X post and package manifest",
       "requiredForV1": true,
@@ -1254,17 +1308,21 @@
       "ownerRole": "Product and frontend — campaign/content owner",
       "reviewerRole": "Product and frontend — destination owner",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-PRODUCT-NAME-001",
+        "CLAIM-KEEPSAKE-CONCEPT-001",
+        "CLAIM-PROCESS-CONCEPT-001",
+        "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
-        "MM-08 accessibility review, pending"
+        "LAUNCH-X-ALT-TEXT-001"
       ],
       "v1": true,
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
       "familyIds": [
-        "FAM-SOCIAL-001",
-        "FAM-ANNOUNCEMENT-001"
+        "FAM-SOCIAL-001"
       ],
       "dependencies": [
         "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
@@ -1272,9 +1330,8 @@
       "editableSourceLocations": [
         "launch/assets/x-submission-alt-text.md"
       ],
-      "exportLocations": [
-        "Included with the approved X variant and package manifest; exact destination format to be checked."
-      ]
+      "exportLocations": [],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "LAUNCH-X-CTA-001",
@@ -1314,7 +1371,7 @@
       "assetId": "LAUNCH-UPDATE-RECAP-001",
       "type": "launch/update, recap and feature-callout variants",
       "disposition": "deferred",
-      "path": "launch/",
+      "path": "launch/update-recap.md",
       "pathAvailability": "proposed_not_created",
       "lifecycleState": null,
       "intendedUse": "Produce only after an actual usage, owner and supporting evidence are confirmed.",
@@ -1442,21 +1499,19 @@
     {
       "assetId": "ACCESSIBILITY-GUIDE-001",
       "type": "collateral readability/accessibility guide",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "review/accessibility.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Define measurable size/contrast checks, reading order, plain language and accessible alternatives by format.",
       "destination": "Collateral authors and reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-08",
       "ownerRole": "Product and frontend — content accessibility reviewer",
       "reviewerRole": "Product and frontend — collateral designer",
-      "claimReferences": [
-        "EVAL-03"
-      ],
+      "claimReferences": [],
       "provenanceReferences": [
-        "Format-specific export/review records, pending"
+        "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": true,
       "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
@@ -1468,26 +1523,25 @@
       "editableSourceLocations": [
         "review/accessibility.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "ACCESSIBILITY-CHECKLIST-001",
       "type": "per-export accessibility checklist",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "review/accessibility-checklist.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Record viewing size, contrast, alt text/reading order and captions/transcript checks per export.",
       "destination": "Collateral package and release gate",
       "requiredForV1": true,
       "implementationIssue": "MM-08",
       "ownerRole": "Product and frontend — content accessibility reviewer",
       "reviewerRole": "Product and frontend — collateral designer",
-      "claimReferences": [
-        "EVAL-03"
-      ],
+      "claimReferences": [],
       "provenanceReferences": [
-        "Exact export and review date, to be recorded"
+        "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": true,
       "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
@@ -1499,7 +1553,8 @@
       "editableSourceLocations": [
         "review/accessibility-checklist.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "HANDOFF-GUIDE-001",
@@ -1784,5 +1839,594 @@
     "financeQueryIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
     "cfoBusinessPlanIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3",
     "entireCheckpointIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
-  }
+  },
+  "visualJoin": {
+    "handoffPath": "review/visual/asset-handoff.json",
+    "handoffCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+    "handoffSha256": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871",
+    "claimLedgerPath": "messaging/claims.json",
+    "copyMappingCount": 70,
+    "provenancePath": "review/provenance.json",
+    "provenanceRecordIds": [
+      "DEMO-WORKFLOW-DIAGRAM-001",
+      "PROV-DEMO-WORKFLOW-PNG-001",
+      "PROV-DEMO-WORKFLOW-ALT-001",
+      "DEMO-SCREENSHOT-SET-001",
+      "PROV-DEMO-SCREENSHOT-PNG-001",
+      "PROV-DEMO-SCREENSHOT-ALT-001",
+      "DEMO-DECK-SUPPORT-001",
+      "LAUNCH-X-KEY-VISUAL-001",
+      "PROV-LAUNCH-X-KEY-PNG-001",
+      "LAUNCH-X-ALT-TEXT-001",
+      "PROV-REDACTION-BEFORE-SVG-001",
+      "PROV-REDACTION-BEFORE-PNG-001",
+      "PROV-REDACTION-AFTER-SVG-001",
+      "PROV-REDACTION-AFTER-PNG-001",
+      "PROV-REDACTION-AFTER-ALT-001",
+      "PROV-REDACTION-CANARIES-001",
+      "PROV-PREVIEW-DECK-MOBILE-001",
+      "PROV-PREVIEW-DECK-FULL-001",
+      "PROV-PREVIEW-DECK-DESKTOP-001",
+      "PROV-PREVIEW-MOCKUP-001",
+      "PROV-PREVIEW-WORKFLOW-001",
+      "PROV-PREVIEW-X-FEED-001",
+      "PROV-VISUAL-HANDOFF-001",
+      "PROV-VISUAL-BROWSER-001",
+      "PROV-VISUAL-CONTRAST-001",
+      "PROV-VISUAL-ACCESSIBILITY-001",
+      "PROV-VISUAL-VERIFICATION-001",
+      "PROV-ACCESSIBILITY-GUIDE-001",
+      "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "TOOL-RENDER-COLLATERAL-001",
+      "TEST-VISUAL-REDACTION-001",
+      "TEST-VISUAL-ACCESSIBILITY-001"
+    ],
+    "releaseState": "draft; no publication permission or independent approval is implied",
+    "visualPaths": [
+      "demo/diagrams/demo-workflow.svg",
+      "demo/diagrams/demo-workflow.png",
+      "demo/diagrams/demo-workflow-alt-text.md",
+      "demo/screenshots/synthetic-stub-mockup.svg",
+      "demo/screenshots/synthetic-stub-mockup.png",
+      "demo/screenshots/synthetic-stub-alt-text.md",
+      "demo/deck/concept-overview.html",
+      "launch/assets/x-submission-key-visual.svg",
+      "launch/assets/x-submission-key-visual.png",
+      "launch/assets/x-submission-alt-text.md"
+    ],
+    "note": "No generic screenshots directory or actual product screenshot is claimed. DEMO-SCREENSHOT-SET-001 is explicitly a fictional SVG/PNG mockup."
+  },
+  "trackedFiles": [
+    {
+      "fileId": "DOC-README-001",
+      "path": "README.md",
+      "classification": "repository_navigation",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "c7949fad78a40d1aae4d812f48c057c101df3cee3df6ad96fbe83583bf9272e2"
+    },
+    {
+      "fileId": "DEMO-DECK-SUPPORT-001",
+      "path": "demo/deck/concept-overview.html",
+      "classification": "visual_rehearsal_html",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+      "sha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66"
+    },
+    {
+      "fileId": "PROV-DEMO-WORKFLOW-ALT-001",
+      "path": "demo/diagrams/demo-workflow-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-WORKFLOW-ALT-001",
+      "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1"
+    },
+    {
+      "fileId": "PROV-DEMO-WORKFLOW-PNG-001",
+      "path": "demo/diagrams/demo-workflow.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-WORKFLOW-PNG-001",
+      "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe"
+    },
+    {
+      "fileId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "path": "demo/diagrams/demo-workflow.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971"
+    },
+    {
+      "fileId": "PROV-DEMO-SCREENSHOT-ALT-001",
+      "path": "demo/screenshots/synthetic-stub-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-SCREENSHOT-ALT-001",
+      "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186"
+    },
+    {
+      "fileId": "PROV-DEMO-SCREENSHOT-PNG-001",
+      "path": "demo/screenshots/synthetic-stub-mockup.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-SCREENSHOT-PNG-001",
+      "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578"
+    },
+    {
+      "fileId": "DEMO-SCREENSHOT-SET-001",
+      "path": "demo/screenshots/synthetic-stub-mockup.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+      "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2"
+    },
+    {
+      "fileId": "DOC-ACCEPTANCE-001",
+      "path": "docs/architecture/ACCEPTANCE.md",
+      "classification": "architecture_documentation",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "b4d60d9ce1b4d32fde62461c297b51853a89da7c5a60c690d29fd6fa9f042dc0"
+    },
+    {
+      "fileId": "DOC-OWNERSHIP-001",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "classification": "architecture_documentation",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "721ca07fd6e3dba5892802259de1c92772814d450fafde5e1e4903253429a07e"
+    },
+    {
+      "fileId": "INV-MM01-001",
+      "path": "docs/collateral-inventory.json",
+      "classification": "inventory_registry",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "sha256": null
+    },
+    {
+      "fileId": "NAV-MM01-001",
+      "path": "docs/collateral-organization.md",
+      "classification": "navigation_documentation",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "ee2ac9cb408a5dbe6da45024aff9044c4994c0e887284de1db461789f44fe400"
+    },
+    {
+      "fileId": "PROV-REDACTION-AFTER-ALT-001",
+      "path": "examples/synthetic/redaction-after-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-AFTER-ALT-001",
+      "sha256": "40b233ce0e5fe2957e03ece9c953034acc1a6f1432e562938cfc0d66df0f11e6"
+    },
+    {
+      "fileId": "PROV-REDACTION-AFTER-PNG-001",
+      "path": "examples/synthetic/redaction-after.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-AFTER-PNG-001",
+      "sha256": "5fe36c9934933874a988c60b4837bdb0c2a8cab95bbc6064cc2267cb7afc42b6"
+    },
+    {
+      "fileId": "PROV-REDACTION-AFTER-SVG-001",
+      "path": "examples/synthetic/redaction-after.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-AFTER-SVG-001",
+      "sha256": "c2a8a07b4daa3cb63151c1a5051ba07fcec065b0780ca48c4f5b1c3c55ebec58"
+    },
+    {
+      "fileId": "PROV-REDACTION-BEFORE-PNG-001",
+      "path": "examples/synthetic/redaction-before.png",
+      "classification": "negative_synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-BEFORE-PNG-001",
+      "sha256": "93747429f5b72e63c426ac33f976293d4cb3486136e53a9c22d0ab3cf6764325"
+    },
+    {
+      "fileId": "PROV-REDACTION-BEFORE-SVG-001",
+      "path": "examples/synthetic/redaction-before.svg",
+      "classification": "negative_synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-BEFORE-SVG-001",
+      "sha256": "1fa090e3957d392ca114fa298e6904e7195444920961f4af25429555c0c36ac5"
+    },
+    {
+      "fileId": "PROV-REDACTION-CANARIES-001",
+      "path": "examples/synthetic/redaction-canaries.json",
+      "classification": "negative_synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-CANARIES-001",
+      "sha256": "adcb62d9d5bfb3ee87a511e32649251a0aae346f27d2d729951ddfa750e2fa20"
+    },
+    {
+      "fileId": "LAUNCH-X-ALT-TEXT-001",
+      "path": "launch/assets/x-submission-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+      "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554"
+    },
+    {
+      "fileId": "PROV-LAUNCH-X-KEY-PNG-001",
+      "path": "launch/assets/x-submission-key-visual.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-LAUNCH-X-KEY-PNG-001",
+      "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee"
+    },
+    {
+      "fileId": "LAUNCH-X-KEY-VISUAL-001",
+      "path": "launch/assets/x-submission-key-visual.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699"
+    },
+    {
+      "fileId": "MSG-POSITIONING-001",
+      "path": "messaging/README.md",
+      "classification": "claim_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "4aae81bacb9e4356bca5f2743aff9faea83b447c4759237a5416b19611991182"
+    },
+    {
+      "fileId": "MSG-CLAIMS-001",
+      "path": "messaging/claims.json",
+      "classification": "claim_ledger",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "sha256": null
+    },
+    {
+      "fileId": "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "path": "review/accessibility-checklist.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "sha256": "d5c089b9d170eb0a24c2823d1e38feeea6eaab2133ee82cd77d91f4547c32df8"
+    },
+    {
+      "fileId": "PROV-ACCESSIBILITY-GUIDE-001",
+      "path": "review/accessibility.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-ACCESSIBILITY-GUIDE-001",
+      "sha256": "0742cf31e7e711614a88847a254b20acb2ddfa395cf1a86dfd0932642be324f0"
+    },
+    {
+      "fileId": "PROV-SYNTHETIC-CANARY-001",
+      "path": "review/fixtures/synthetic-canaries.json",
+      "classification": "synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-SYNTHETIC-CANARY-001",
+      "sha256": "b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3"
+    },
+    {
+      "fileId": "MSG-REVIEW-001",
+      "path": "review/messaging-checklist.md",
+      "classification": "review_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "a5f77f756fdd53895c650ee2b17830285ea9815f128e0bc4bc76ef11c42affd0"
+    },
+    {
+      "fileId": "PROV-REGISTER-001",
+      "path": "review/provenance.json",
+      "classification": "provenance_registry",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "sha256": null
+    },
+    {
+      "fileId": "PUB-SAFETY-001",
+      "path": "review/publication-safety.md",
+      "classification": "reuse_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "80b99a91d1821bd87374bda4dab5c5c1abe15993eff53d06d594a8a69aa3ba76"
+    },
+    {
+      "fileId": "PROV-VISUAL-ACCESSIBILITY-001",
+      "path": "review/visual/accessibility-results.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-ACCESSIBILITY-001",
+      "sha256": "57cd3c4fde010b5b28cde3c188f53882b21a3797e9da2362447bbde713370ef6"
+    },
+    {
+      "fileId": "PROV-VISUAL-HANDOFF-001",
+      "path": "review/visual/asset-handoff.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-HANDOFF-001",
+      "sha256": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871"
+    },
+    {
+      "fileId": "PROV-VISUAL-BROWSER-001",
+      "path": "review/visual/browser-render-evidence.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-BROWSER-001",
+      "sha256": "95dae8d05e25fc8aa9df53d2bb16f82838495986d5a5393f30e2914ddc72d308"
+    },
+    {
+      "fileId": "PROV-VISUAL-CONTRAST-001",
+      "path": "review/visual/contrast-evidence.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-CONTRAST-001",
+      "sha256": "9552e809332821f8851ea2961f00e0818fc4c956da1ebc816c23f434c2f867ae"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-MOBILE-001",
+      "path": "review/visual/previews/deck-mobile-390.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-MOBILE-001",
+      "sha256": "266126d53623b4b9207f4a52ad3154d3f02b54bc54ecacc63f5d6b9c6af63882"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-FULL-001",
+      "path": "review/visual/previews/deck-mobile-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-FULL-001",
+      "sha256": "7a9a6cdf0f440eff58482bef4dc8b63c4944071a867694128172cb8cd4a9002c"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-DESKTOP-001",
+      "path": "review/visual/previews/deck-presentation-1440.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-DESKTOP-001",
+      "sha256": "77b83b36f26b1d6fcbdaf9826f176545cfcd2f56ca6317fe32a701d39a73d5f3"
+    },
+    {
+      "fileId": "PROV-PREVIEW-MOCKUP-001",
+      "path": "review/visual/previews/mockup-presentation-720.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-MOCKUP-001",
+      "sha256": "444a73d443dfc9342c50cb8d3b753609bbbdda974c18adc872b1c35b48c40e7d"
+    },
+    {
+      "fileId": "PROV-PREVIEW-WORKFLOW-001",
+      "path": "review/visual/previews/workflow-presentation-960.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-WORKFLOW-001",
+      "sha256": "660e36ab0e1960a151c2ca441e779ab009a4c48378931e4133501f0d7812f6c4"
+    },
+    {
+      "fileId": "PROV-PREVIEW-X-FEED-001",
+      "path": "review/visual/previews/x-feed-390.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-X-FEED-001",
+      "sha256": "5ae620dc2927c968556231bc48de629df3d7f5fb1a21c711f4bdb89be65d5dcd"
+    },
+    {
+      "fileId": "PROV-VISUAL-VERIFICATION-001",
+      "path": "review/visual/verification.md",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-VERIFICATION-001",
+      "sha256": "4ef54ad8d5b226239be5a8ae8b6d7c63c17795ca69d5778feae963a85dbf35f8"
+    },
+    {
+      "fileId": "TEST-COLLATERAL-POLICY-001",
+      "path": "tests/test_collateral_validation.py",
+      "classification": "validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "032b68ea514df44d5327b5affa8f4fb17fbe9cdf9461ca3b68357ae40e72c9c4"
+    },
+    {
+      "fileId": "TEST-VISUAL-ACCESSIBILITY-001",
+      "path": "tests/test_visual_accessibility.py",
+      "classification": "visual_validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "TEST-VISUAL-ACCESSIBILITY-001",
+      "sha256": "e7bf51b4b987d0b941e5dc45cb0203ee5d1aa04e266828fd7a11ebf7f65169b5"
+    },
+    {
+      "fileId": "TEST-VISUAL-REDACTION-001",
+      "path": "tests/test_visual_collateral.py",
+      "classification": "visual_validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "TEST-VISUAL-REDACTION-001",
+      "sha256": "05e5d9483fc027ac39bd8a0f256c0031afc67b3de9775d97804a23008e7e0189"
+    },
+    {
+      "fileId": "TOOL-RENDER-COLLATERAL-001",
+      "path": "tools/render_collateral.mjs",
+      "classification": "visual_tooling",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "TOOL-RENDER-COLLATERAL-001",
+      "sha256": "4741c6f71ecc064dc38c63d2c550b5524b8fea6befdb671f5bf48cfefedbe9d6"
+    },
+    {
+      "fileId": "TOOL-COLLATERAL-VALIDATOR-001",
+      "path": "tools/validate_collateral.py",
+      "classification": "validation_tool",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "2508cf6e6ef5ade0ba837cfe23cf15093c260b5f180f3dd0b1dcef6f647b4f33"
+    }
+  ]
 }

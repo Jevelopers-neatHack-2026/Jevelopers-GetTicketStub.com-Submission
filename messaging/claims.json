@@ -390,23 +390,24 @@
       "state": "mock",
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
-        "path": "review/fixtures/synthetic-canaries.json",
-        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
-        "revisionKind": "sha256_content_digest",
-        "url": null
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg"
       },
-      "evidenceReference": "SYNTHETIC-VISUAL-DERIVATIVE-PENDING",
+      "evidenceReference": "LAUNCH-X-KEY-VISUAL-001;PROV-LAUNCH-X-KEY-VISUAL-001",
       "evidenceClassification": "synthetic_concept",
       "providerMode": "none",
       "reviewDate": null,
       "reviewer": "User-assigned marketing-material supervisor; visual/rights review pending.",
       "reviewStatus": "pending",
       "limitations": [
-        "This is a visual concept label, not proof of a product output or user benefit.",
-        "The source is the text canary only; no visual artifact is asserted to exist in this policy worktree."
+        "This exact phrase appears in the cited draft visual; it is not proof of a product output or user benefit.",
+        "No product behavior, live sponsor integration, or measured savings is demonstrated."
       ],
       "reReviewTrigger": [
-        "Artwork, source, rights, qualifier, or destination changes."
+        "Artwork, source revision, rights, qualifier, or destination changes.",
+        "Product evidence changes or the copy is separated from its concept label."
       ]
     },
     {
@@ -423,21 +424,20 @@
       "state": "mock",
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
-        "path": "review/fixtures/synthetic-canaries.json",
-        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
-        "revisionKind": "sha256_content_digest",
-        "url": null
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
       },
-      "evidenceReference": "SYNTHETIC-VISUAL-DERIVATIVE-PENDING",
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001;PROV-DEMO-WORKFLOW-DIAGRAM-001",
       "evidenceClassification": "synthetic_concept",
       "providerMode": "none",
       "reviewDate": null,
       "reviewer": "User-assigned marketing-material supervisor; product/visual review pending.",
       "reviewStatus": "pending",
       "limitations": [
-        "No such application workflow or implementation is verified by this concept.",
-        "Remove or update the copy if the qualifier is cropped, obscured, or separated.",
-        "The source is the text canary only; no visual artifact is asserted to exist in this policy worktree."
+        "This exact phrase appears in draft conceptual collateral, not a verified application workflow.",
+        "Remove or update the copy if the conceptual/unverified qualifier is cropped, obscured, or separated."
       ],
       "reReviewTrigger": [
         "Artwork, process, implementation evidence, qualifier, or destination changes."
@@ -457,21 +457,20 @@
       "state": "planned",
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
-        "path": "review/fixtures/synthetic-canaries.json",
-        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
-        "revisionKind": "sha256_content_digest",
-        "url": null
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg"
       },
-      "evidenceReference": "COLLATERAL-REVIEW-POLICY",
+      "evidenceReference": "LAUNCH-X-KEY-VISUAL-001;PROV-LAUNCH-X-KEY-VISUAL-001",
       "evidenceClassification": "proposed_collateral_policy",
       "providerMode": "none",
       "reviewDate": null,
       "reviewer": "User-assigned marketing-material supervisor; product review pending.",
       "reviewStatus": "pending",
       "limitations": [
-        "This statement proposes a collateral review rule only.",
-        "It does not establish product behavior or a product-enforced gate.",
-        "The source is the text canary only; no visual artifact is asserted to exist in this policy worktree."
+        "This phrase is a proposed collateral review rule only.",
+        "It does not establish product behavior or a product-enforced gate."
       ],
       "reReviewTrigger": [
         "Policy, artwork, implementation, or destination changes."
@@ -506,6 +505,1990 @@
       ],
       "reReviewTrigger": [
         "Any EVAL or sponsor evidence class changes state, source, or classification."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-001",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft • conceptual workflow • review required",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-002",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "From a memory to a reviewed stub",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-003",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "An intended journey. These are process states, not working product screens.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-004",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "1 Event context",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-005",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Synthetic details only",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-006",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Choose permitted material.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-007",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "2 Design draft",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-008",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Conceptual artwork",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-009",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Check facts",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-010",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "and appearance.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-011",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "3 Human review",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-012",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Approval checkpoint",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-013",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Revise or hold if unclear.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-014",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "4 Handoff",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-015",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Planned; blocked",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-016",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Owner approval required.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-017",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Hold or revise → return to design review",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-018",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "No production or payment action is performed by this walkthrough.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-019",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Synthetic concept only. No product behavior, live sponsor integration,",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-020",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "or measured savings are demonstrated. Brand and content approval pending.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-021",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft conceptual TicketStub workflow",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-022",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Read left to right: synthetic event context, conceptual design, human review, then planned handoff. Human approval is required. Hold or revise returns to design review. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow.svg"
+      },
+      "evidenceReference": "DEMO-WORKFLOW-DIAGRAM-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-023",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft • synthetic artwork • not a product screenshot",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-024",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "A stub concept to review",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-025",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Fictional event. First-party shapes and text only.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-026",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "FICTIONAL EVENT / SYNTHETIC EXAMPLE",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-027",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "The paper moon",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-028",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "A made-up night worth remembering",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-029",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "01",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-030",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "DRAFT",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-031",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "No venue, date, person, barcode, or purchase is represented.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-032",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Review the facts, artwork rights, and intended destination.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-033",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Approval checkpoint: revise or hold before any production.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-034",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "No product behavior or sponsor results are demonstrated.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-035",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft synthetic stub concept; not a product screenshot",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-036",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "A fictional paper moon event on a dark ticket shape with a dotted tear line and draft number 01. This is first-party conceptual artwork, not a product screenshot. Review facts, artwork rights and destination, then revise or hold before production. No product behavior or sponsor results are demonstrated.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-mockup.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-mockup.svg"
+      },
+      "evidenceReference": "DEMO-SCREENSHOT-SET-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-037",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft • synthetic concept • review required",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-key-visual.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg"
+      },
+      "evidenceReference": "LAUNCH-X-KEY-VISUAL-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-038",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "No product or sponsor results verified",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-key-visual.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg"
+      },
+      "evidenceReference": "LAUNCH-X-KEY-VISUAL-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-039",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft TicketStub keepsake concept",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-key-visual.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg"
+      },
+      "evidenceReference": "LAUNCH-X-KEY-VISUAL-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-040",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft synthetic concept requiring review. TicketStub: a keepsake concept. Context leads to design and human review. Approval is required before production. No product or sponsor results are verified. Explore the repository documentation; this is not a live application link.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-key-visual.svg; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-key-visual.svg"
+      },
+      "evidenceReference": "LAUNCH-X-KEY-VISUAL-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-041",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "TicketStub — draft rehearsal overview",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-042",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft rehearsal support • conceptual • approval pending",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-043",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "A keepsake concept with human review",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-044",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Event context: synthetic details only; choose permitted material.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-045",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Design draft: conceptual artwork; check facts and appearance.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-046",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Human review: approval checkpoint; revise or hold if unclear.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-047",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Handoff: planned and blocked; owner approval required.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-048",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Hold or revise returns to design review. No production or payment action is performed.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-049",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Read the workflow text equivalent",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-050",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Static support only. No speech, video, payment, or production action.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-051",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-052",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Workflow text equivalent",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/deck/concept-overview.html; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/deck/concept-overview.html",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/deck/concept-overview.html"
+      },
+      "evidenceReference": "DEMO-DECK-SUPPORT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-053",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "DEMO-WORKFLOW-DIAGRAM-001 — text equivalent",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow-alt-text.md"
+      },
+      "evidenceReference": "PROV-DEMO-WORKFLOW-ALT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-054",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft conceptual workflow. Read left to right:",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow-alt-text.md"
+      },
+      "evidenceReference": "PROV-DEMO-WORKFLOW-ALT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-055",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "1. Event context: use synthetic details or permitted material. 2. Design draft: conceptual artwork; check facts and appearance. 3. Human review: approval checkpoint; revise or hold if unclear. 4. Handoff: planned and blocked pending owner approval.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow-alt-text.md"
+      },
+      "evidenceReference": "PROV-DEMO-WORKFLOW-ALT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-056",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Hold or revise returns to design review. No production or payment action is performed. Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated. Brand and content approval are pending.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/diagrams/demo-workflow-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/diagrams/demo-workflow-alt-text.md"
+      },
+      "evidenceReference": "PROV-DEMO-WORKFLOW-ALT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-057",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft synthetic artwork, not a product screenshot. A fictional event called The paper moon appears on a dark ticket with a dotted tear line and draft number 01. No real event, venue, date, person, barcode or purchase is represented. Review facts, artwork rights and destination; revise or hold before production. No product behavior or sponsor results are demonstrated.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in demo/screenshots/synthetic-stub-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/screenshots/synthetic-stub-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/demo/screenshots/synthetic-stub-alt-text.md"
+      },
+      "evidenceReference": "PROV-DEMO-SCREENSHOT-ALT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-058",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft text alternative — LAUNCH-X-ALT-TEXT-001",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-alt-text.md"
+      },
+      "evidenceReference": "LAUNCH-X-ALT-TEXT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-059",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Draft synthetic concept requiring review. TicketStub: a keepsake concept. Context leads to design and human review. Approval is required before production. No product or sponsor results are verified. Explore the repository documentation.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-alt-text.md"
+      },
+      "evidenceReference": "LAUNCH-X-ALT-TEXT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-060",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "CTA-REPOSITORY-DOCS-001: https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-alt-text.md"
+      },
+      "evidenceReference": "LAUNCH-X-ALT-TEXT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-061",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "This pinned destination is documentation, not a working application. Claim references: CLAIM-SIMULATION-001; CLAIM-PRODUCT-CAPABILITY-001 remains blocked. Destination, content, brand and rights approval remain pending. Copy this first paragraph into the image description field only after approval; the linked post copy supplies the actual documentation URL.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in launch/assets/x-submission-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/launch/assets/x-submission-alt-text.md"
+      },
+      "evidenceReference": "LAUNCH-X-ALT-TEXT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-VISUAL-COPY-062",
+      "kind": "visual_copy_fragment",
+      "allowedWording": "Synthetic redaction test after removal. The central region is blank. Fake identifying and secret-like markers were removed from source and flattened pixels. Metadata, comments and accessible description contain no fake sensitive markers. This tests a procedure; destination-specific privacy approval is still required.",
+      "prohibitedVariants": [
+        "Do not reuse outside the cited draft asset or detach its visible draft/concept status."
+      ],
+      "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible.",
+      "audience": "Internal candidate reviewers and any explicitly approved recipients of this exact draft asset.",
+      "destination": "Exact copy fragment in examples/synthetic/redaction-after-alt-text.md; no other destination is authorized.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "examples/synthetic/redaction-after-alt-text.md",
+        "revision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/90b0865bd6bc4e6198f36b760b2691ff45e12064/examples/synthetic/redaction-after-alt-text.md"
+      },
+      "evidenceReference": "PROV-REDACTION-AFTER-ALT-001; exact copy review pending",
+      "evidenceClassification": "synthetic_visual_draft_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent exact-copy review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is exact text in one pinned draft collateral source, not proof of product behavior, sponsor use, a result, rights, or publication permission.",
+        "The exact copy mapping and source checksum must remain current; cropping or copy drift invalidates this record."
+      ],
+      "reReviewTrigger": [
+        "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
       ]
     }
   ],
@@ -570,6 +2553,68 @@
       "reReviewTrigger": [
         "Product/landing route owner confirms exact target, implementation, and availability."
       ]
+    },
+    {
+      "id": "CTA-REPOSITORY-DOCS-VISUAL-001",
+      "exactText": "Explore the repository docs",
+      "intendedAction": "Open and read public repository documentation.",
+      "destinationClass": "public_repository_documentation",
+      "destinationOwner": "User-assigned marketing-material supervisor",
+      "target": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md",
+      "availability": {
+        "status": "confirmed_for_pinned_documentation_only",
+        "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
+      },
+      "wordingReview": "pending",
+      "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; exact visual CTA review pending.",
+      "reReviewTrigger": [
+        "README target revision or repository visibility changes.",
+        "Copy becomes attached to an application or landing-page transaction.",
+        "The destination/action or availability changes."
+      ]
+    },
+    {
+      "id": "CTA-REPOSITORY-DOCS-ALT-001",
+      "exactText": "Explore the repository documentation.",
+      "intendedAction": "Open and read public repository documentation.",
+      "destinationClass": "public_repository_documentation",
+      "destinationOwner": "User-assigned marketing-material supervisor",
+      "target": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md",
+      "availability": {
+        "status": "confirmed_for_pinned_documentation_only",
+        "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
+      },
+      "wordingReview": "pending",
+      "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; exact visual CTA review pending.",
+      "reReviewTrigger": [
+        "README target revision or repository visibility changes.",
+        "Copy becomes attached to an application or landing-page transaction.",
+        "The destination/action or availability changes."
+      ]
+    },
+    {
+      "id": "CTA-WORKFLOW-TEXT-EQUIVALENT-001",
+      "exactText": "Read the workflow text equivalent",
+      "intendedAction": "Open the local accessible text equivalent for the conceptual workflow.",
+      "destinationClass": "repository_accessible_text_alternative",
+      "destinationOwner": "User-assigned marketing-material supervisor for repository content; independent accessibility review pending.",
+      "target": "demo/diagrams/demo-workflow-alt-text.md",
+      "availability": {
+        "status": "available_in_candidate",
+        "conditions": "The exact Markdown text alternative is tracked in this candidate; its content and release remain draft."
+      },
+      "wordingReview": "pending",
+      "routeReview": "available_static_repository_file",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; exact accessible-action review pending.",
+      "reReviewTrigger": [
+        "The alternative path or content changes.",
+        "The surrounding HTML or destination changes."
+      ]
     }
   ],
   "releasePolicy": {
@@ -585,5 +2630,1271 @@
     "marketingApprovesWording": true,
     "sourceOwnersApproveEvidenceAndRights": true,
     "repositoryDocsCtaDoesNotApproveProductRoute": true
+  },
+  "visualCopy": {
+    "schemaVersion": "1.0",
+    "handoffPath": "review/visual/asset-handoff.json",
+    "handoffCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+    "handoffSha256": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871",
+    "independentReview": "pending",
+    "mappings": [
+      {
+        "mappingId": "COPY-001",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Draft • conceptual workflow • review required",
+        "claimId": "CLAIM-VISUAL-COPY-001",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-002",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "From a memory to a reviewed stub",
+        "claimId": "CLAIM-VISUAL-COPY-002",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-003",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "An intended journey. These are process states, not working product screens.",
+        "claimId": "CLAIM-VISUAL-COPY-003",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-004",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "1 Event context",
+        "claimId": "CLAIM-VISUAL-COPY-004",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-005",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Synthetic details only",
+        "claimId": "CLAIM-VISUAL-COPY-005",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-006",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Choose permitted material.",
+        "claimId": "CLAIM-VISUAL-COPY-006",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-007",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "2 Design draft",
+        "claimId": "CLAIM-VISUAL-COPY-007",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-008",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Conceptual artwork",
+        "claimId": "CLAIM-VISUAL-COPY-008",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-009",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Check facts",
+        "claimId": "CLAIM-VISUAL-COPY-009",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-010",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "and appearance.",
+        "claimId": "CLAIM-VISUAL-COPY-010",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-011",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "3 Human review",
+        "claimId": "CLAIM-VISUAL-COPY-011",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-012",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Approval checkpoint",
+        "claimId": "CLAIM-VISUAL-COPY-012",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-013",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Revise or hold if unclear.",
+        "claimId": "CLAIM-VISUAL-COPY-013",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-014",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "4 Handoff",
+        "claimId": "CLAIM-VISUAL-COPY-014",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-015",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Planned; blocked",
+        "claimId": "CLAIM-VISUAL-COPY-015",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-016",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Owner approval required.",
+        "claimId": "CLAIM-VISUAL-COPY-016",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-017",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Hold or revise → return to design review",
+        "claimId": "CLAIM-VISUAL-COPY-017",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-018",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "No production or payment action is performed by this walkthrough.",
+        "claimId": "CLAIM-VISUAL-COPY-018",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-019",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Synthetic concept only. No product behavior, live sponsor integration,",
+        "claimId": "CLAIM-VISUAL-COPY-019",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-020",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "or measured savings are demonstrated. Brand and content approval pending.",
+        "claimId": "CLAIM-VISUAL-COPY-020",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-021",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-accessible-title",
+        "mappingKind": "block",
+        "exactText": "Draft conceptual TicketStub workflow",
+        "claimId": "CLAIM-VISUAL-COPY-021",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-022",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow.svg",
+        "surface": "svg-accessible-description",
+        "mappingKind": "block",
+        "exactText": "Read left to right: synthetic event context, conceptual design, human review, then planned handoff. Human approval is required. Hold or revise returns to design review. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+        "claimId": "CLAIM-VISUAL-COPY-022",
+        "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-023",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Draft • synthetic artwork • not a product screenshot",
+        "claimId": "CLAIM-VISUAL-COPY-023",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-024",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "A stub concept to review",
+        "claimId": "CLAIM-VISUAL-COPY-024",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-025",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Fictional event. First-party shapes and text only.",
+        "claimId": "CLAIM-VISUAL-COPY-025",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-026",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "FICTIONAL EVENT / SYNTHETIC EXAMPLE",
+        "claimId": "CLAIM-VISUAL-COPY-026",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-027",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "The paper moon",
+        "claimId": "CLAIM-VISUAL-COPY-027",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-028",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "A made-up night worth remembering",
+        "claimId": "CLAIM-VISUAL-COPY-028",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-029",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "01",
+        "claimId": "CLAIM-VISUAL-COPY-029",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-030",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "DRAFT",
+        "claimId": "CLAIM-VISUAL-COPY-030",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-031",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "No venue, date, person, barcode, or purchase is represented.",
+        "claimId": "CLAIM-VISUAL-COPY-031",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-032",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Review the facts, artwork rights, and intended destination.",
+        "claimId": "CLAIM-VISUAL-COPY-032",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-033",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Approval checkpoint: revise or hold before any production.",
+        "claimId": "CLAIM-VISUAL-COPY-033",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-034",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "No product behavior or sponsor results are demonstrated.",
+        "claimId": "CLAIM-VISUAL-COPY-034",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-035",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-accessible-title",
+        "mappingKind": "block",
+        "exactText": "Draft synthetic stub concept; not a product screenshot",
+        "claimId": "CLAIM-VISUAL-COPY-035",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-036",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-mockup.svg",
+        "surface": "svg-accessible-description",
+        "mappingKind": "block",
+        "exactText": "A fictional paper moon event on a dark ticket shape with a dotted tear line and draft number 01. This is first-party conceptual artwork, not a product screenshot. Review facts, artwork rights and destination, then revise or hold before production. No product behavior or sponsor results are demonstrated.",
+        "claimId": "CLAIM-VISUAL-COPY-036",
+        "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-037",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Draft • synthetic concept • review required",
+        "claimId": "CLAIM-VISUAL-COPY-037",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-038",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "TicketStub",
+        "claimId": "CLAIM-PRODUCT-NAME-001",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-039",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "A keepsake concept",
+        "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-040",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Context → design → human review",
+        "claimId": "CLAIM-PROCESS-CONCEPT-001",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-041",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Approval before production",
+        "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-042",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "No product or sponsor results verified",
+        "claimId": "CLAIM-VISUAL-COPY-038",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-043",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-visible-text",
+        "mappingKind": "block",
+        "exactText": "Explore the repository docs",
+        "ctaId": "CTA-REPOSITORY-DOCS-VISUAL-001",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-044",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-accessible-title",
+        "mappingKind": "block",
+        "exactText": "Draft TicketStub keepsake concept",
+        "claimId": "CLAIM-VISUAL-COPY-039",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-045",
+        "assetId": "LAUNCH-X-KEY-VISUAL-001",
+        "path": "launch/assets/x-submission-key-visual.svg",
+        "surface": "svg-accessible-description",
+        "mappingKind": "block",
+        "exactText": "Draft synthetic concept requiring review. TicketStub: a keepsake concept. Context leads to design and human review. Approval is required before production. No product or sponsor results are verified. Explore the repository documentation; this is not a live application link.",
+        "claimId": "CLAIM-VISUAL-COPY-040",
+        "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-046",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-document-title",
+        "mappingKind": "block",
+        "exactText": "TicketStub — draft rehearsal overview",
+        "claimId": "CLAIM-VISUAL-COPY-041",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-047",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Draft rehearsal support • conceptual • approval pending",
+        "claimId": "CLAIM-VISUAL-COPY-042",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-048",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "A keepsake concept with human review",
+        "claimId": "CLAIM-VISUAL-COPY-043",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-049",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+        "claimId": "CLAIM-SIMULATION-001",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-050",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Event context: synthetic details only; choose permitted material.",
+        "claimId": "CLAIM-VISUAL-COPY-044",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-051",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Design draft: conceptual artwork; check facts and appearance.",
+        "claimId": "CLAIM-VISUAL-COPY-045",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-052",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Human review: approval checkpoint; revise or hold if unclear.",
+        "claimId": "CLAIM-VISUAL-COPY-046",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-053",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Handoff: planned and blocked; owner approval required.",
+        "claimId": "CLAIM-VISUAL-COPY-047",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-054",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Hold or revise returns to design review. No production or payment action is performed.",
+        "claimId": "CLAIM-VISUAL-COPY-048",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-055",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Read the workflow text equivalent",
+        "claimId": "CLAIM-VISUAL-COPY-049",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-056",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-visible-text",
+        "mappingKind": "block",
+        "exactText": "Static support only. No speech, video, payment, or production action.",
+        "claimId": "CLAIM-VISUAL-COPY-050",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-057",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-alt",
+        "mappingKind": "block",
+        "exactText": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated.",
+        "claimId": "CLAIM-VISUAL-COPY-051",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-058",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "html-aria",
+        "mappingKind": "block",
+        "exactText": "Workflow text equivalent",
+        "claimId": "CLAIM-VISUAL-COPY-052",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      },
+      {
+        "mappingId": "COPY-059",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "surface": "markdown-heading",
+        "mappingKind": "block",
+        "exactText": "DEMO-WORKFLOW-DIAGRAM-001 — text equivalent",
+        "claimId": "CLAIM-VISUAL-COPY-053",
+        "provenanceRecordId": "PROV-DEMO-WORKFLOW-ALT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-060",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "Draft conceptual workflow. Read left to right:",
+        "claimId": "CLAIM-VISUAL-COPY-054",
+        "provenanceRecordId": "PROV-DEMO-WORKFLOW-ALT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-061",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "1. Event context: use synthetic details or permitted material. 2. Design draft: conceptual artwork; check facts and appearance. 3. Human review: approval checkpoint; revise or hold if unclear. 4. Handoff: planned and blocked pending owner approval.",
+        "claimId": "CLAIM-VISUAL-COPY-055",
+        "provenanceRecordId": "PROV-DEMO-WORKFLOW-ALT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-062",
+        "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+        "path": "demo/diagrams/demo-workflow-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "Hold or revise returns to design review. No production or payment action is performed. Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated. Brand and content approval are pending.",
+        "claimId": "CLAIM-VISUAL-COPY-056",
+        "provenanceRecordId": "PROV-DEMO-WORKFLOW-ALT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "contextQualifierId": "CTX-DEMO-WORKFLOW-001"
+      },
+      {
+        "mappingId": "COPY-063",
+        "assetId": "DEMO-SCREENSHOT-SET-001",
+        "path": "demo/screenshots/synthetic-stub-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "Draft synthetic artwork, not a product screenshot. A fictional event called The paper moon appears on a dark ticket with a dotted tear line and draft number 01. No real event, venue, date, person, barcode or purchase is represented. Review facts, artwork rights and destination; revise or hold before production. No product behavior or sponsor results are demonstrated.",
+        "claimId": "CLAIM-VISUAL-COPY-057",
+        "provenanceRecordId": "PROV-DEMO-SCREENSHOT-ALT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
+        "contextQualifierId": "CTX-DEMO-MOCKUP-001"
+      },
+      {
+        "mappingId": "COPY-064",
+        "assetId": "LAUNCH-X-ALT-TEXT-001",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "surface": "markdown-heading",
+        "mappingKind": "block",
+        "exactText": "Draft text alternative — LAUNCH-X-ALT-TEXT-001",
+        "claimId": "CLAIM-VISUAL-COPY-058",
+        "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-065",
+        "assetId": "LAUNCH-X-ALT-TEXT-001",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "Draft synthetic concept requiring review. TicketStub: a keepsake concept. Context leads to design and human review. Approval is required before production. No product or sponsor results are verified. Explore the repository documentation.",
+        "claimId": "CLAIM-VISUAL-COPY-059",
+        "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-066",
+        "assetId": "LAUNCH-X-ALT-TEXT-001",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "CTA-REPOSITORY-DOCS-001: https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md",
+        "claimId": "CLAIM-VISUAL-COPY-060",
+        "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-067",
+        "assetId": "LAUNCH-X-ALT-TEXT-001",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "This pinned destination is documentation, not a working application. Claim references: CLAIM-SIMULATION-001; CLAIM-PRODUCT-CAPABILITY-001 remains blocked. Destination, content, brand and rights approval remain pending. Copy this first paragraph into the image description field only after approval; the linked post copy supplies the actual documentation URL.",
+        "claimId": "CLAIM-VISUAL-COPY-061",
+        "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-068",
+        "assetId": "PROV-REDACTION-AFTER-ALT-001",
+        "path": "examples/synthetic/redaction-after-alt-text.md",
+        "surface": "markdown-paragraph",
+        "mappingKind": "block",
+        "exactText": "Synthetic redaction test after removal. The central region is blank. Fake identifying and secret-like markers were removed from source and flattened pixels. Metadata, comments and accessible description contain no fake sensitive markers. This tests a procedure; destination-specific privacy approval is still required.",
+        "claimId": "CLAIM-VISUAL-COPY-062",
+        "provenanceRecordId": "PROV-REDACTION-AFTER-ALT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "40b233ce0e5fe2957e03ece9c953034acc1a6f1432e562938cfc0d66df0f11e6",
+        "contextQualifierId": "CTX-REDACTION-AFTER-001"
+      },
+      {
+        "mappingId": "COPY-069",
+        "assetId": "LAUNCH-X-ALT-TEXT-001",
+        "path": "launch/assets/x-submission-alt-text.md",
+        "surface": "cta-action-span",
+        "mappingKind": "span",
+        "exactText": "Explore the repository documentation.",
+        "ctaId": "CTA-REPOSITORY-DOCS-ALT-001",
+        "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "contextQualifierId": "CTX-LAUNCH-X-001"
+      },
+      {
+        "mappingId": "COPY-070",
+        "assetId": "DEMO-DECK-SUPPORT-001",
+        "path": "demo/deck/concept-overview.html",
+        "surface": "cta-action-span",
+        "mappingKind": "span",
+        "exactText": "Read the workflow text equivalent",
+        "ctaId": "CTA-WORKFLOW-TEXT-EQUIVALENT-001",
+        "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+        "sourceCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+        "sourceSha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
+        "contextQualifierId": "CTX-DEMO-HTML-001"
+      }
+    ],
+    "qualifierContexts": [
+      {
+        "qualifierId": "CTX-DEMO-WORKFLOW-001",
+        "relatedAssetIds": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "requiredClaimQualifiers": [
+          {
+            "claimId": "CLAIM-VISUAL-COPY-001",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-002",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-003",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-004",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-005",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-006",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-007",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-008",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-009",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-010",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-011",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-012",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-013",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-014",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-015",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-016",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-017",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-018",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-019",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-020",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-021",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-022",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-053",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-054",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-055",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-056",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          }
+        ],
+        "visibleOrAccessibleQualifierCopyIds": [
+          "COPY-001",
+          "COPY-003",
+          "COPY-019",
+          "COPY-020"
+        ],
+        "contextAssessment": "The exact contextual status fragments are joined to this asset and available text alternative. They remain draft context, not standalone proof; if a ledger requiredQualifier is more specific than these exact visible/accessible words, retain that stricter wording or omit the copy.",
+        "reviewStatus": "pending_independent_exact_copy_review",
+        "releaseDisposition": "blocked"
+      },
+      {
+        "qualifierId": "CTX-DEMO-MOCKUP-001",
+        "relatedAssetIds": [
+          "DEMO-SCREENSHOT-SET-001"
+        ],
+        "requiredClaimQualifiers": [
+          {
+            "claimId": "CLAIM-VISUAL-COPY-023",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-024",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-025",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-026",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-027",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-028",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-029",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-030",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-031",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-032",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-033",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-034",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-035",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-036",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-057",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          }
+        ],
+        "visibleOrAccessibleQualifierCopyIds": [
+          "COPY-023",
+          "COPY-025",
+          "COPY-034"
+        ],
+        "contextAssessment": "The exact contextual status fragments are joined to this asset and available text alternative. They remain draft context, not standalone proof; if a ledger requiredQualifier is more specific than these exact visible/accessible words, retain that stricter wording or omit the copy.",
+        "reviewStatus": "pending_independent_exact_copy_review",
+        "releaseDisposition": "blocked"
+      },
+      {
+        "qualifierId": "CTX-DEMO-HTML-001",
+        "relatedAssetIds": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "requiredClaimQualifiers": [
+          {
+            "claimId": "CLAIM-VISUAL-COPY-041",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-042",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-043",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-044",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-045",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-046",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-047",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-048",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-049",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-050",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-051",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-052",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          }
+        ],
+        "visibleOrAccessibleQualifierCopyIds": [
+          "COPY-047",
+          "COPY-049",
+          "COPY-056"
+        ],
+        "contextAssessment": "The exact contextual status fragments are joined to this asset and available text alternative. They remain draft context, not standalone proof; if a ledger requiredQualifier is more specific than these exact visible/accessible words, retain that stricter wording or omit the copy.",
+        "reviewStatus": "pending_independent_exact_copy_review",
+        "releaseDisposition": "blocked"
+      },
+      {
+        "qualifierId": "CTX-LAUNCH-X-001",
+        "relatedAssetIds": [
+          "LAUNCH-X-KEY-VISUAL-001",
+          "LAUNCH-X-ALT-TEXT-001"
+        ],
+        "requiredClaimQualifiers": [
+          {
+            "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+            "requiredQualifier": "This is a proposed review rule, not a verified product feature."
+          },
+          {
+            "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+            "requiredQualifier": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated."
+          },
+          {
+            "claimId": "CLAIM-PROCESS-CONCEPT-001",
+            "requiredQualifier": "Conceptual only; implementation is unverified."
+          },
+          {
+            "claimId": "CLAIM-PRODUCT-NAME-001",
+            "requiredQualifier": "Project name only; product availability is unverified."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-037",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-038",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-039",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-040",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-058",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-059",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-060",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          },
+          {
+            "claimId": "CLAIM-VISUAL-COPY-061",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          }
+        ],
+        "visibleOrAccessibleQualifierCopyIds": [
+          "COPY-037",
+          "COPY-042",
+          "COPY-065",
+          "COPY-066"
+        ],
+        "contextAssessment": "The exact contextual status fragments are joined to this asset and available text alternative. They remain draft context, not standalone proof; if a ledger requiredQualifier is more specific than these exact visible/accessible words, retain that stricter wording or omit the copy.",
+        "reviewStatus": "pending_independent_exact_copy_review",
+        "releaseDisposition": "blocked"
+      },
+      {
+        "qualifierId": "CTX-REDACTION-AFTER-001",
+        "relatedAssetIds": [
+          "PROV-REDACTION-AFTER-ALT-001"
+        ],
+        "requiredClaimQualifiers": [
+          {
+            "claimId": "CLAIM-VISUAL-COPY-062",
+            "requiredQualifier": "Use only in the cited draft asset; surrounding synthetic/concept status and limitations must remain legible."
+          }
+        ],
+        "visibleOrAccessibleQualifierCopyIds": [
+          "COPY-068"
+        ],
+        "contextAssessment": "Synthetic-only after-test alternative includes the fixture classification and pending privacy-approval statement; this fixture is not releasable collateral.",
+        "reviewStatus": "pending_independent_exact_copy_review",
+        "releaseDisposition": "blocked"
+      }
+    ]
   }
 }

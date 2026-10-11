@@ -1,6 +1,6 @@
 # Messaging policy
 
-This directory holds the exact-copy claim ledger consumed by demo, launch, and landing-page work. The ledger is a draft: product, sponsor, financial, route, rights, and independent review evidence is not complete, so release readiness is blocked.
+This directory holds the exact-copy claim ledger consumed by demo, launch, and landing-page work. The ledger is a draft: product, sponsor, financial, route, rights, and independent review evidence is not complete, so release readiness is blocked. Exact copy mappings bind the current visual handoff, static HTML page, and accessible alternatives to specific claim/CTA IDs, provenance records, checksums, and the source commit that contains each file.
 
 ## What can be said now
 
@@ -11,6 +11,10 @@ This directory holds the exact-copy claim ledger consumed by demo, launch, and l
 - “Explore the repository docs.” may point to the pinned public README. This confirms only a documentation destination; exact copy review is still pending. It does not authorize an application or landing-page transaction CTA.
 
 All other capability, automation, live-integration, sponsor-use, comparative, savings, forecast, purchase, or financial claims are blocked or omitted until their exact evidence and owner review are recorded.
+
+## Current visual candidate
+
+The integrated tree contains a conceptual workflow, fictional ticket mockup, static HTML rehearsal page, and draft X key visual. Their exact SVG/PNG/HTML/alt-text paths and copy are inventoried; no generic screenshot directory or actual product screenshot is claimed. The SVG/PNG assets and all render previews were inspected by the author; a separate controlled synthetic fixture tests pixel, metadata, comment, and accessible-description removal. The text validator checks the receipt/checksum/copy joins but is not a general media scanner. Independent content/accessibility review, source-owner rights, brand, and destination approvals remain pending.
 
 ## Authority and source changes
 
