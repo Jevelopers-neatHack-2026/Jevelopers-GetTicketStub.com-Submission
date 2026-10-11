@@ -31,6 +31,7 @@ import {
   type SourceReference,
   type VersionedReference,
 } from './schemas.js';
+import { bindFinancialDatabaseScope } from '../shared/database-scope.js';
 
 export interface PricingQueryResult {
   readonly rows: readonly Record<string, unknown>[];
@@ -519,7 +520,7 @@ async function revisionRows(
   const result = await client.query(
     "SELECT record_revision, to_char(effective_from AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS effective_from,"
       + " to_char(effective_to AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS effective_to FROM cost_intelligence." + table
-      + ' WHERE ' + scopeSql() + ' AND ' + idColumn + ' = $5 ORDER BY record_revision FOR UPDATE',
+      + ' WHERE ' + scopeSql() + ' AND ' + idColumn + ' = $5 ORDER BY record_revision',
     [...scopeValues(scope), id],
   );
   return [...result.rows];
@@ -729,6 +730,7 @@ async function runInsert<T extends { id: string; revision: number; retrievedAt: 
     client = await args.ports.database.connect();
     await client.query('BEGIN');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, args.scope);
     const idempotencyLock = JSON.stringify([
       ...scopeValues(args.scope), args.scope.actorId, 'pricing-idempotency', args.operation, args.idempotencyKey,
     ]);
@@ -863,7 +865,7 @@ export function validatePricingRuleBoundary(value: unknown): Validation<Register
 async function validatePricingRuleAppend(client: PricingTransactionPort, request: RegisterPricingRuleRequest): Promise<string | null> {
   const rows = await client.query(
     'SELECT rule_payload FROM cost_intelligence.pricing_rule_versions WHERE ' + scopeSql()
-      + ' AND rule_id = $5 ORDER BY record_revision DESC LIMIT 1 FOR UPDATE',
+      + ' AND rule_id = $5 ORDER BY record_revision DESC LIMIT 1',
     [...scopeValues(request.scope), request.rule.id],
   );
   if (rows.rowCount === 1) {
@@ -1033,7 +1035,7 @@ export async function registerRateCard(value: RegisterRateCardRequest, ports: Pr
 async function validateFxRateAppend(client: PricingTransactionPort, scope: TrustedScope, rate: FxRate): Promise<string | null> {
   const identityRows = await client.query(
     'SELECT fx_rate_payload FROM cost_intelligence.pricing_fx_rate_versions WHERE ' + scopeSql()
-      + ' AND fx_rate_id = $5 ORDER BY record_revision DESC LIMIT 1 FOR UPDATE',
+      + ' AND fx_rate_id = $5 ORDER BY record_revision DESC LIMIT 1',
     [...scopeValues(scope), rate.id],
   );
   if (identityRows.rowCount === 1) {
@@ -1100,6 +1102,7 @@ export async function loadPricingCatalog(
   try {
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, scope);
     const params = scopeValues(scope);
     const cards = await client.query(
       'SELECT card_id AS record_id, record_revision, content_hash, published_at::text AS published_at, rate_card_payload'
@@ -1167,6 +1170,7 @@ async function accessPricingEstimateSnapshot(
     client = await args.ports.database.connect();
     await client.query('BEGIN');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, args.scope);
     const idempotencyLock = JSON.stringify([
       ...scopeValues(args.scope), args.scope.actorId, 'pricing-idempotency', 'estimate', args.idempotencyKey,
     ]);

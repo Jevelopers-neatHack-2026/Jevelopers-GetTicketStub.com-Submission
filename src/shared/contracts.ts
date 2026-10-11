@@ -302,12 +302,137 @@ export function success<T>(value: T): ApiResult<T> {
 
 const AUTHORITY_DECISION_MAX_AGE_MS = 60_000;
 const AUTHORITY_DECISION_MAX_TTL_MS = 5 * 60_000;
+const SAFE_AUTHORIZATION_MODULES = new Set([
+  'finance', 'security', 'pricing', 'ledger', 'metering', 'budgets', 'reporting', 'reconciliation', 'integrations',
+]);
+const SAFE_AUTHORIZATION_OPERATION_LABELS = new Set([
+  ...Object.keys(FINANCE_OPERATION_POLICY), 'authorizeFinanceOperation',
+  'estimate', 'registerPricingRule', 'registerRateCard', 'registerFxRate', 'appendLedgerEvent',
+  'rebuildLedgerProjection', 'ingestUsage', 'authorize', 'markDispatched', 'settle', 'release',
+  'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'querySummary',
+  'startReconciliation', 'getReconciliation', 'exportSummary',
+]);
 const PRICING_COMPATIBILITY_OPERATIONS: readonly FinanceOperation[] = [
   'pricing.estimateV2',
   'pricing.registerPricingRuleV2',
   'pricing.registerRateCardV2',
   'pricing.registerFxRateV2',
 ];
+
+type FinanceAuthorizationInput = {
+  readonly module: string;
+  readonly requestOperation: string;
+  readonly operation: FinanceOperation;
+  readonly scope: TrustedScope;
+  readonly requestId: string;
+  readonly clock: Clock;
+  readonly financeAuthority?: FinanceAuthorizationPort | undefined;
+  readonly pricingCompatibility?: (() => Promise<PricingAuthorizationCompatibilityDecision | null>) | undefined;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const allowed = new Set(keys);
+  return Object.keys(value).every(key => allowed.has(key));
+}
+
+function boundedText(value: unknown, maximum: number, allowEmpty = false): value is string {
+  return typeof value === 'string' && value.length <= maximum && (allowEmpty || value.length > 0);
+}
+
+function safeErrorContext(value: unknown): { module: string; operation: string; requestId: string } {
+  try {
+    const input = isRecord(value) ? value : {};
+    const module = typeof input.module === 'string' && SAFE_AUTHORIZATION_MODULES.has(input.module)
+      ? input.module : 'finance';
+    const operation = typeof input.requestOperation === 'string' && SAFE_AUTHORIZATION_OPERATION_LABELS.has(input.requestOperation)
+      ? input.requestOperation : 'authorizeFinanceOperation';
+    const requestId = boundedText(input.requestId, 128) ? input.requestId : 'unavailable';
+    return { module, operation, requestId };
+  } catch {
+    return { module: 'finance', operation: 'authorizeFinanceOperation', requestId: 'unavailable' };
+  }
+}
+
+function isFinanceAuthorizationInput(value: unknown): value is FinanceAuthorizationInput {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'module', 'requestOperation', 'operation', 'scope', 'requestId', 'clock', 'financeAuthority', 'pricingCompatibility',
+  ])) return false;
+  if (!boundedText(value.module, 64) || !/^[a-z][a-z0-9_.-]*$/.test(value.module)
+      || !boundedText(value.requestOperation, 96) || !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(value.requestOperation)
+      || !boundedText(value.requestId, 128)
+      || typeof value.operation !== 'string' || !Object.hasOwn(FINANCE_OPERATION_POLICY, value.operation)
+      || !Value.Check(TrustedScopeSchema, value.scope)
+      || !isRecord(value.clock) || typeof value.clock.now !== 'function') return false;
+  if (value.financeAuthority !== undefined
+      && (!isRecord(value.financeAuthority) || typeof value.financeAuthority.authorizeCurrent !== 'function')) return false;
+  if (value.pricingCompatibility !== undefined && typeof value.pricingCompatibility !== 'function') return false;
+  return true;
+}
+
+type AllowedFinanceAuthorizationDecision = Extract<FinanceAuthorizationDecision, { readonly status: 'allowed' }>;
+type ValidatedDecision = { readonly kind: 'allowed'; readonly decision: AllowedFinanceAuthorizationDecision }
+  | { readonly kind: 'denied' };
+
+function validateFinanceDecision(value: unknown): ValidatedDecision | null {
+  if (!isRecord(value) || !boundedText(value.status, 16)) return null;
+  if (value.status === 'denied') {
+    if (!hasOnlyKeys(value, ['status', 'decisionId', 'operation', 'permission'])
+        || typeof value.operation !== 'string' || !Object.hasOwn(FINANCE_OPERATION_POLICY, value.operation)
+        || !boundedText(value.permission, 64)
+        || (value.decisionId !== undefined && !boundedText(value.decisionId, 200))) return null;
+    return { kind: 'denied' };
+  }
+  if (value.status !== 'allowed' || !hasOnlyKeys(value, [
+    'status', 'decisionId', 'operation', 'permission', 'scope', 'principal', 'verifiedAt', 'expiresAt',
+  ]) || !boundedText(value.decisionId, 200)
+      || typeof value.operation !== 'string' || !Object.hasOwn(FINANCE_OPERATION_POLICY, value.operation)
+      || !boundedText(value.permission, 64)
+      || !Value.Check(TrustedScopeSchema, value.scope)
+      || !boundedText(value.verifiedAt, 64) || !validDateTime(value.verifiedAt)
+      || !boundedText(value.expiresAt, 64) || !validDateTime(value.expiresAt)) return null;
+
+  if (!isRecord(value.principal)) return null;
+  if (value.principal.kind === 'user') {
+    if (!hasOnlyKeys(value.principal, ['kind', 'actorId', 'membershipStatus', 'membershipRevision'])
+        || !boundedText(value.principal.actorId, 128)
+        || !boundedText(value.principal.membershipStatus, 32)
+        || !boundedText(value.principal.membershipRevision, 200, true)) return null;
+  } else if (value.principal.kind === 'service') {
+    if (!hasOnlyKeys(value.principal, ['kind', 'actorId', 'serviceStatus', 'serviceGrantRevision'])
+        || !boundedText(value.principal.actorId, 128)
+        || !boundedText(value.principal.serviceStatus, 32)
+        || !boundedText(value.principal.serviceGrantRevision, 200, true)) return null;
+  } else return null;
+
+  return { kind: 'allowed', decision: value as unknown as AllowedFinanceAuthorizationDecision };
+}
+
+function validatePricingCompatibilityDecision(value: unknown): PricingAuthorizationCompatibilityDecision | null {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'status', 'decisionId', 'operation', 'permission', 'scope', 'actorId', 'verifiedAt', 'expiresAt',
+  ]) || (value.status !== 'allowed' && value.status !== 'denied')
+      || !boundedText(value.decisionId, 200)
+      || typeof value.operation !== 'string' || !Object.hasOwn(FINANCE_OPERATION_POLICY, value.operation)
+      || !boundedText(value.permission, 64)
+      || !Value.Check(TrustedScopeSchema, value.scope)
+      || !boundedText(value.actorId, 128)
+      || !boundedText(value.verifiedAt, 64, value.status === 'denied')
+      || !boundedText(value.expiresAt, 64, value.status === 'denied')) return null;
+  return value as unknown as PricingAuthorizationCompatibilityDecision;
+}
+
+function readTrustedClock(clock: Clock): Date | null {
+  try {
+    const now = clock.now();
+    return now instanceof Date && Number.isFinite(now.getTime()) ? now : null;
+  } catch {
+    return null;
+  }
+}
 
 function currentDecisionTimes(
   verifiedAt: unknown,
@@ -333,86 +458,107 @@ function currentDecisionTimes(
  * The injected port must derive the principal from its trusted host and recheck
  * current membership/revocation and this exact permission on every invocation.
  */
-export async function authorizeFinanceOperation(args: {
-  readonly module: string;
-  readonly requestOperation: string;
-  readonly operation: FinanceOperation;
-  readonly scope: TrustedScope;
-  readonly requestId: string;
-  readonly clock: Clock;
-  readonly financeAuthority?: FinanceAuthorizationPort | undefined;
-  /** Existing v2 pricing bridge only; never use it for another finance operation. */
-  readonly pricingCompatibility?: (() => Promise<PricingAuthorizationCompatibilityDecision | null>) | undefined;
-}): Promise<FinanceAuthorizationResult> {
+export async function authorizeFinanceOperation(args: FinanceAuthorizationInput): Promise<FinanceAuthorizationResult> {
+  const context = safeErrorContext(args);
+  const untrustedInput: unknown = args;
   const reject = (code: ErrorCode, message: string, retryable = false): FinanceAuthorizationResult => ({
     ok: false,
-    error: errorEnvelope(args.module, args.requestOperation, code, args.requestId, message, retryable),
+    error: errorEnvelope(context.module, context.operation, code, context.requestId, message, retryable),
   });
-  if (typeof args.operation !== 'string' || !Object.hasOwn(FINANCE_OPERATION_POLICY, args.operation)) {
-    return reject('FORBIDDEN_SCOPE', 'The requested financial operation is not recognized.');
-  }
-  const policy = FINANCE_OPERATION_POLICY[args.operation];
-  let now: Date;
+
   try {
-    now = args.clock.now();
-    if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error('invalid clock');
+    if (!isFinanceAuthorizationInput(untrustedInput)) {
+      if (isRecord(untrustedInput) && typeof untrustedInput.operation === 'string'
+          && !Object.hasOwn(FINANCE_OPERATION_POLICY, untrustedInput.operation)) {
+        return reject('FORBIDDEN_SCOPE', 'The current principal is not authorized for this financial operation.');
+      }
+      return reject('VALIDATION_ERROR', 'The financial authorization request is invalid.');
+    }
+    const policy = FINANCE_OPERATION_POLICY[args.operation];
+
+    // A configured Finance authority always wins. Malformed or unavailable
+    // decisions fail closed and never fall through to the legacy pricing port.
+    if (args.financeAuthority !== undefined) {
+      let untrustedDecision: unknown;
+      try {
+        untrustedDecision = await args.financeAuthority.authorizeCurrent({
+          requestedScope: args.scope,
+          operation: args.operation,
+          permission: policy.permission,
+          requestId: args.requestId,
+        });
+      } catch {
+        return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
+      }
+      if (untrustedDecision === null) {
+        return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
+      }
+      const validated = validateFinanceDecision(untrustedDecision);
+      if (!validated) {
+        return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
+      }
+      if (validated.kind === 'denied') {
+        const denied = untrustedDecision as Record<string, unknown>;
+        if (denied.operation !== args.operation || denied.permission !== policy.permission) {
+          return reject('FORBIDDEN_SCOPE', 'The current principal is not authorized for this financial operation.');
+        }
+        return reject('FORBIDDEN_SCOPE', 'The current principal is not authorized for this financial operation.');
+      }
+
+      const decision = validated.decision;
+      const principal = decision.principal;
+      if (decision.operation !== args.operation || decision.permission !== policy.permission
+          || !sameScope(decision.scope, args.scope)
+          || principal.actorId !== args.scope.actorId
+          || !policy.principalKinds.some(kind => kind === principal.kind)
+          || (principal.kind === 'user' && (principal.membershipStatus !== 'active' || principal.membershipRevision.length === 0))
+          || (principal.kind === 'service' && (principal.serviceStatus !== 'active' || principal.serviceGrantRevision.length === 0))) {
+        return reject('FORBIDDEN_SCOPE', 'The current financial authorization does not match this scope and operation.');
+      }
+
+      // Authority calls may be asynchronous. Freshness must use the trusted
+      // time at the point the returned decision is checked, never a pre-await snapshot.
+      const now = readTrustedClock(args.clock);
+      if (!now) return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
+      if (!currentDecisionTimes(decision.verifiedAt, decision.expiresAt, now)) {
+        return reject('FORBIDDEN_SCOPE', 'The current financial authorization does not match this scope and operation.');
+      }
+      return { ok: true, decision };
+    }
+
+    if (args.pricingCompatibility !== undefined && PRICING_COMPATIBILITY_OPERATIONS.includes(args.operation)) {
+      let untrustedDecision: unknown;
+      try {
+        untrustedDecision = await args.pricingCompatibility();
+      } catch {
+        return reject('SOURCE_UNAVAILABLE', 'Current pricing authorization is temporarily unavailable.', true);
+      }
+      if (untrustedDecision === null) {
+        return reject('SOURCE_UNAVAILABLE', 'Current pricing authorization is temporarily unavailable.', true);
+      }
+      const decision = validatePricingCompatibilityDecision(untrustedDecision);
+      if (!decision) {
+        return reject('SOURCE_UNAVAILABLE', 'Current pricing authorization is temporarily unavailable.', true);
+      }
+      if (decision.status !== 'allowed' || decision.operation !== args.operation
+          || decision.permission !== policy.permission || !sameScope(decision.scope, args.scope)
+          || decision.actorId !== args.scope.actorId) {
+        return reject('FORBIDDEN_SCOPE', 'Current pricing authorization does not grant this scoped operation.');
+      }
+      const now = readTrustedClock(args.clock);
+      if (!now) return reject('SOURCE_UNAVAILABLE', 'Current pricing authorization is temporarily unavailable.', true);
+      if (!currentDecisionTimes(decision.verifiedAt, decision.expiresAt, now, true, false)) {
+        return reject('FORBIDDEN_SCOPE', 'Current pricing authorization does not grant this scoped operation.');
+      }
+      return { ok: true, decision };
+    }
+
+    return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is not configured.', true);
   } catch {
+    // Runtime authority adapters can violate their TypeScript shape. Keep every
+    // boundary failure within the published generic envelope.
     return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
   }
-
-  if (args.financeAuthority) {
-    let decision: FinanceAuthorizationDecision | null;
-    try {
-      decision = await args.financeAuthority.authorizeCurrent({
-        requestedScope: args.scope,
-        operation: args.operation,
-        permission: policy.permission,
-        requestId: args.requestId,
-      });
-    } catch {
-      return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
-    }
-    if (!decision) return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is temporarily unavailable.', true);
-    if (decision.status !== 'allowed') {
-      return reject('FORBIDDEN_SCOPE', 'The current principal is not authorized for this financial operation.');
-    }
-    const principal = decision.principal;
-    const principalRevision = principal?.kind === 'user' ? principal.membershipRevision
-      : principal?.kind === 'service' ? principal.serviceGrantRevision : null;
-    const principalActive = principal?.kind === 'user' ? principal.membershipStatus === 'active'
-      : principal?.kind === 'service' ? principal.serviceStatus === 'active' : false;
-    if (decision.operation !== args.operation || decision.permission !== policy.permission
-        || !sameScope(decision.scope, args.scope)
-        || !principal || principal.actorId !== args.scope.actorId
-        || !policy.principalKinds.some(kind => kind === principal.kind)
-        || !principalActive || typeof principalRevision !== 'string' || principalRevision.length === 0
-        || principalRevision.length > 200 || typeof decision.decisionId !== 'string' || decision.decisionId.length === 0
-        || decision.decisionId.length > 200
-        || !currentDecisionTimes(decision.verifiedAt, decision.expiresAt, now)) {
-      return reject('FORBIDDEN_SCOPE', 'The current financial authorization does not match this scope and operation.');
-    }
-    return { ok: true, decision };
-  }
-
-  if (args.pricingCompatibility && PRICING_COMPATIBILITY_OPERATIONS.includes(args.operation)) {
-    let decision: PricingAuthorizationCompatibilityDecision | null;
-    try {
-      decision = await args.pricingCompatibility();
-    } catch {
-      return reject('SOURCE_UNAVAILABLE', 'Current pricing authorization is temporarily unavailable.', true);
-    }
-    if (!decision) return reject('SOURCE_UNAVAILABLE', 'Current pricing authorization is temporarily unavailable.', true);
-    if (decision.status !== 'allowed' || decision.operation !== args.operation
-        || decision.permission !== policy.permission || !sameScope(decision.scope, args.scope)
-        || decision.actorId !== args.scope.actorId || typeof decision.decisionId !== 'string'
-        || decision.decisionId.length === 0 || decision.decisionId.length > 200
-        || !currentDecisionTimes(decision.verifiedAt, decision.expiresAt, now, true, false)) {
-      return reject('FORBIDDEN_SCOPE', 'Current pricing authorization does not grant this scoped operation.');
-    }
-    return { ok: true, decision };
-  }
-
-  return reject('SOURCE_UNAVAILABLE', 'Current financial authorization is not configured.', true);
 }
 
 export async function blockedBoundary<TRequest extends RequestBase, TOutput>(args: {
@@ -448,9 +594,14 @@ export async function blockedBoundary<TRequest extends RequestBase, TOutput>(arg
 }
 
 export function sameScope(left: TrustedScope, right: TrustedScope): boolean {
-  return left.tenantId === right.tenantId
-    && left.projectId === right.projectId
-    && left.environment === right.environment
-    && left.billingMode === right.billingMode
-    && left.actorId === right.actorId;
+  try {
+    if (!Value.Check(TrustedScopeSchema, left) || !Value.Check(TrustedScopeSchema, right)) return false;
+    return left.tenantId === right.tenantId
+      && left.projectId === right.projectId
+      && left.environment === right.environment
+      && left.billingMode === right.billingMode
+      && left.actorId === right.actorId;
+  } catch {
+    return false;
+  }
 }

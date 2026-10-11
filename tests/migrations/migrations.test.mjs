@@ -6,9 +6,10 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
-import { assertDisposableMarker, databaseConfigFromEnvironment, DISPOSABLE_MARKER } from '../../scripts/test-db-lifecycle.mjs';
+import { appendLedgerEvent } from '../../dist/index.js';
+import { assertDisposableMarker, databaseConfigFromEnvironment, migratorDatabaseConfigFromEnvironment, runtimeDatabaseConfigFromEnvironment, DISPOSABLE_MARKER } from '../../scripts/test-db-lifecycle.mjs';
 
-const { Client } = pg;
+const { Client, Pool } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
 function hasDestructiveMigrationStatement(sql) {
@@ -128,7 +129,7 @@ async function verifyDurability(prefix) {
     assertDisposableMarker(marker.rows);
     const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 5);
+    assert.equal(Number(health.rows[0].required_migrations_present), 6);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -200,10 +201,11 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     { version: '0003_financial_ledger', status: 'applied' },
     { version: '0004_pricing_catalog', status: 'applied' },
     { version: '0005_pricing_valuation_history', status: 'applied' },
+    { version: '0006_finance_security_roles', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 5, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
+  assert.equal(names.length, 6, 'foundation migration suite must exercise fresh creation and an additive security upgrade');
   for (const prefix of ['CI_TEST_DB', 'CI_TEST_PREVIOUS_DB']) {
     const client = new Client(databaseConfigFromEnvironment(prefix));
     await client.connect();
@@ -222,7 +224,7 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       const requiredLedgerTables = [
         'financial_ledger_events', 'financial_ledger_identity_bindings', 'financial_source_revision_heads',
         'financial_posting_attempt_mappings', 'financial_projection_snapshots', 'financial_projection_amounts',
-        'financial_projection_quantities', 'financial_ledger_quarantine',
+        'financial_projection_quantities', 'financial_ledger_quarantine', 'financial_privacy_quarantine',
       ];
       const ledgerTables = await client.query(
         `SELECT table_name FROM information_schema.tables
@@ -260,7 +262,8 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
         'financial_projection_snapshots_no_truncate', 'financial_projection_amounts_append_only',
         'financial_projection_amounts_no_truncate', 'financial_projection_quantities_append_only',
         'financial_projection_quantities_no_truncate', 'financial_ledger_quarantine_append_only',
-        'financial_ledger_quarantine_no_truncate',
+        'financial_ledger_quarantine_no_truncate', 'financial_privacy_quarantine_append_only',
+        'financial_privacy_quarantine_no_truncate',
       ];
       const ledgerTriggers = await client.query(
         `SELECT t.tgname::text AS trigger_name
@@ -294,9 +297,216 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
       assert.equal(health.rows[0].migrations_ready, true);
       assert.equal(Number(health.rows[0].required_migrations_present), names.length);
+
+      const roleGroups = await client.query(
+        `SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls
+         FROM pg_roles WHERE rolname = ANY($1::text[]) ORDER BY rolname`,
+        [['ci_finance_migrator', 'ci_finance_owner', 'ci_finance_runtime']],
+      );
+      assert.deepEqual(roleGroups.rows.map(row => row.rolname), ['ci_finance_migrator', 'ci_finance_owner', 'ci_finance_runtime']);
+      assert.deepEqual(roleGroups.rows.map(({ rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls }) =>
+        ({ rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls })), [
+        { rolname: 'ci_finance_migrator', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: true },
+        { rolname: 'ci_finance_owner', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false },
+        { rolname: 'ci_finance_runtime', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false },
+      ]);
+      const scopedOwners = await client.query(
+        `SELECT c.relname, owner.rolname AS owner
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles owner ON owner.oid = c.relowner
+         WHERE n.nspname = 'cost_intelligence' AND c.relkind = 'r'
+           AND c.relname LIKE 'financial_%' OR n.nspname = 'cost_intelligence' AND c.relname LIKE 'pricing_%'
+         ORDER BY c.relname`,
+      );
+      assert.ok(scopedOwners.rows.length >= 14);
+      assert.ok(scopedOwners.rows.every(row => row.owner === 'ci_finance_owner'),
+        'runtime ledger and pricing tables are owned by the distinct non-login finance owner');
+      const policyCount = await client.query(
+        `SELECT count(*)::integer AS total FROM pg_policies WHERE schemaname = 'cost_intelligence'
+           AND policyname LIKE '%_scope_policy'`,
+      );
+      assert.equal(policyCount.rows[0].total, 14, 'each scoped runtime table has an explicit RLS policy');
+      const runtimePrivileges = await client.query(
+        `SELECT has_table_privilege('ci_finance_runtime', 'cost_intelligence.financial_ledger_events', 'SELECT') AS can_read,
+                has_table_privilege('ci_finance_runtime', 'cost_intelligence.financial_ledger_events', 'UPDATE') AS can_update,
+                has_table_privilege('ci_finance_runtime', 'cost_intelligence.financial_ledger_events', 'DELETE') AS can_delete,
+                has_table_privilege('ci_finance_runtime', 'cost_intelligence.financial_ledger_events', 'TRUNCATE') AS can_truncate,
+                has_schema_privilege('ci_finance_runtime', 'cost_intelligence', 'CREATE') AS can_ddl,
+                pg_has_role('ci_finance_runtime', 'ci_finance_owner', 'MEMBER') AS is_owner`);
+      assert.deepEqual(runtimePrivileges.rows[0], {
+        can_read: true, can_update: false, can_delete: false, can_truncate: false, can_ddl: false, is_owner: false,
+      });
+      const migrationPrivileges = await client.query(
+        `SELECT has_schema_privilege('ci_finance_migrator', 'cost_intelligence', 'CREATE') AS can_ddl,
+                has_table_privilege('ci_finance_migrator', 'cost_intelligence.financial_ledger_events', 'UPDATE') AS can_mutate_history,
+                pg_has_role('ci_finance_migrator', 'ci_finance_owner', 'MEMBER') AS is_owner_member,
+                pg_has_role('ci_finance_migrator', 'ci_finance_runtime', 'MEMBER') AS is_runtime_member`,
+      );
+      assert.deepEqual(migrationPrivileges.rows[0], {
+        can_ddl: true, can_mutate_history: true, is_owner_member: true, is_runtime_member: false,
+      }, 'migration administration has explicit owner powers without inheriting the service runtime role');
     } finally {
       await client.end();
     }
     await verifyDurability(prefix);
+
+    const runtimeConfig = {
+      ...runtimeDatabaseConfigFromEnvironment(),
+      database: databaseConfigFromEnvironment(prefix).database,
+    };
+    const restricted = new Client(runtimeConfig);
+    await restricted.connect();
+    try {
+      const roleState = await restricted.query(
+        `SELECT role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolbypassrls,
+                pg_has_role(current_user, 'ci_finance_owner', 'MEMBER') AS is_owner
+         FROM pg_roles role WHERE role.rolname = current_user`,
+      );
+      assert.equal(roleState.rows.length, 1);
+      assert.deepEqual(roleState.rows[0], { rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false, is_owner: false });
+      const unboundEvents = await restricted.query('SELECT event_id FROM cost_intelligence.financial_ledger_events LIMIT 10');
+      assert.equal(unboundEvents.rows.length, 0, `${prefix} runtime role cannot read ledger rows without an authority-bound scope`);
+      const unboundPricing = await restricted.query('SELECT rule_id FROM cost_intelligence.pricing_rule_versions LIMIT 10');
+      assert.equal(unboundPricing.rows.length, 0, `${prefix} runtime role cannot read pricing rows without an authority-bound scope`);
+      await assert.rejects(restricted.query('CREATE TABLE cost_intelligence.ci09_migration_forbidden (value text)'), error => error.code === '42501');
+      await assert.rejects(restricted.query('UPDATE cost_intelligence.financial_ledger_events SET amount = amount'), error => error.code === '42501');
+      await assert.rejects(restricted.query('TRUNCATE cost_intelligence.pricing_rate_card_versions'), error => error.code === '42501');
+    } finally {
+      await restricted.end();
+    }
+
+    const migrator = new Client({
+      ...migratorDatabaseConfigFromEnvironment(),
+      database: databaseConfigFromEnvironment(prefix).database,
+    });
+    await migrator.connect();
+    try {
+      const loginState = await migrator.query(
+        `SELECT current_user, role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolbypassrls,
+                pg_has_role(current_user, 'ci_finance_migrator', 'MEMBER') AS is_migrator,
+                pg_has_role(current_user, 'ci_finance_runtime', 'MEMBER') AS is_runtime,
+                has_schema_privilege(current_user, 'cost_intelligence', 'CREATE') AS can_migrate
+         FROM pg_roles role WHERE role.rolname = current_user`,
+      );
+      assert.equal(loginState.rows.length, 1);
+      assert.deepEqual({
+        superuser: loginState.rows[0].rolsuper,
+        createdb: loginState.rows[0].rolcreatedb,
+        createrole: loginState.rows[0].rolcreaterole,
+        bypassrls: loginState.rows[0].rolbypassrls,
+        isMigrator: loginState.rows[0].is_migrator,
+        isRuntime: loginState.rows[0].is_runtime,
+        canMigrate: loginState.rows[0].can_migrate,
+      }, {
+        superuser: false, createdb: false, createrole: false, bypassrls: false,
+        isMigrator: true, isRuntime: false, canMigrate: true,
+      }, `${prefix} migration login is non-superuser and has no runtime service grant`);
+      await migrator.query('SET ROLE ci_finance_migrator');
+      const activeRole = await migrator.query(
+        `SELECT current_user, role.rolbypassrls,
+                has_schema_privilege(current_user, 'cost_intelligence', 'CREATE') AS can_migrate
+         FROM pg_roles role WHERE role.rolname = current_user`,
+      );
+      assert.deepEqual(activeRole.rows[0], { current_user: 'ci_finance_migrator', rolbypassrls: true, can_migrate: true });
+      const probeName = `ci09_migrator_probe_${randomUUID().replaceAll('-', '')}`;
+      await migrator.query(`CREATE TABLE cost_intelligence.${probeName} (probe_id integer)`);
+      await migrator.query(`DROP TABLE cost_intelligence.${probeName}`);
+      await migrator.query('SELECT cost_intelligence.audit_legacy_financial_privacy()');
+    } finally {
+      await migrator.end();
+    }
+  }
+
+  const auditPool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 2 });
+  const scope = {
+    tenantId: `ci09-migration-tenant-${randomUUID()}`, projectId: `ci09-migration-project-${randomUUID()}`,
+    environment: 'test', billingMode: 'simulated', actorId: 'ci09-migration-audit-service',
+  };
+  const now = '2026-10-11T03:30:00.000Z';
+  const eventId = `ci09-migration-event-${randomUUID()}`;
+  const request = {
+    schemaVersion: '1.0.0', requestId: `ci09-migration-request-${randomUUID()}`, idempotencyKey: `ci09-migration-idem-${randomUUID()}`,
+    scope, eventId, correlationId: `ci09-migration-correlation-${randomUUID()}`,
+    producer: { module: 'ci09.migration.test', sourceRevision: 'a'.repeat(40), buildRevision: 'fixture-1' },
+    occurredAt: now, observedAt: now, evidenceMode: 'mocked', verificationStatus: 'verified',
+    eventType: 'expense', classification: 'direct_cost', valuation: 'provider_confirmed', settlementStatus: 'unpaid',
+    reconciliationStatus: 'unmatched', reservationLifecycle: null,
+    identities: { logicalOperationId: `ci09-migration-operation-${randomUUID()}`, sourceObservationId: `ci09-migration-observation-${randomUUID()}`, reservationId: null },
+    postingMapping: {
+      schemaVersion: '1.0.0', sourceLineId: 'migration-line', transportAttemptId: { status: 'unknown' },
+      providerAttemptId: { status: 'unknown' }, providerRequestId: { status: 'unknown' }, billableAttemptId: { status: 'unknown' },
+    },
+    sourceIdentity: {
+      source: 'ci09-migration-fixture', sourceEventId: `source-${eventId}`, sourceObjectId: `object-${eventId}`,
+      revisionSubjectId: 'migration-line', sourceRevision: 'revision-0', revisionSequence: 0,
+      contentHash: `sha256:${'a'.repeat(64)}`,
+    },
+    usage: { completeness: 'complete', missingFields: [], units: [{ name: 'tokens', quantity: '1', scale: 0, relation: 'standalone' }] },
+    money: { amount: '0.05', currency: 'USD', scale: 2 }, sourceRefs: [], dimensions: {}, pricing: null, fxEvidence: null,
+    financialEffect: true, reservationAuthorizationEventId: null, supersedesEventId: null, reversesEventId: null,
+  };
+  try {
+    const appended = await appendLedgerEvent(request, {
+      database: { connect: () => auditPool.connect() },
+      trustedContext: { resolve: async requested => requested },
+      clock: { now: () => new Date(now) },
+      financeAuthority: { authorizeCurrent: async grant => ({
+        status: 'allowed', decisionId: 'ci09-migration-fixture-grant', operation: grant.operation,
+        permission: grant.permission, scope: grant.requestedScope,
+        principal: { kind: 'service', actorId: grant.requestedScope.actorId, serviceStatus: 'active', serviceGrantRevision: 'fixture-1' },
+        verifiedAt: now, expiresAt: '2026-10-11T03:31:00.000Z',
+      }) },
+    });
+    assert.equal(appended.ok, true, appended.ok ? '' : appended.error.code);
+
+    const privateEvidence = [{
+      contract: 'ci09.migration.evidence', schema_version: '1.0.0',
+      id: 'https://evidence.invalid/raw?token=CI09_MIGRATION_PRIVATE_SOURCE_TOKEN', revision: 1,
+      content_hash: `sha256:${'b'.repeat(64)}`,
+    }];
+    await auditPool.query('ALTER TABLE cost_intelligence.financial_ledger_events DISABLE TRIGGER financial_ledger_events_append_only');
+    try {
+      await auditPool.query(
+        `UPDATE cost_intelligence.financial_ledger_events
+         SET source_refs = $1::jsonb, event_payload = jsonb_set(event_payload, '{sourceRefs}', $1::jsonb)
+         WHERE event_id = $2`,
+        [JSON.stringify(privateEvidence), eventId],
+      );
+    } finally {
+      await auditPool.query('ALTER TABLE cost_intelligence.financial_ledger_events ENABLE TRIGGER financial_ledger_events_append_only');
+    }
+    const event = await auditPool.query('SELECT event_hash FROM cost_intelligence.financial_ledger_events WHERE event_id = $1', [eventId]);
+    assert.equal(event.rows.length, 1);
+    const migrator = new Client({ ...migratorDatabaseConfigFromEnvironment(), database: databaseConfigFromEnvironment('CI_TEST_DB').database });
+    await migrator.connect();
+    try {
+      await migrator.query('SET ROLE ci_finance_migrator');
+      await migrator.query('SELECT cost_intelligence.audit_legacy_financial_privacy()');
+    } finally {
+      await migrator.end();
+    }
+    const audited = await auditPool.query(
+      `SELECT record_kind, record_hash, reason_code FROM cost_intelligence.financial_privacy_quarantine
+       WHERE record_hash = $1`, [event.rows[0].event_hash],
+    );
+    assert.deepEqual(audited.rows, [{ record_kind: 'ledger_event', record_hash: event.rows[0].event_hash, reason_code: 'legacy_sensitive_event_data' }]);
+    assert.doesNotMatch(JSON.stringify(audited.rows), /CI09_MIGRATION_PRIVATE_SOURCE_TOKEN/);
+
+    const restricted = new Client(runtimeDatabaseConfigFromEnvironment());
+    await restricted.connect();
+    try {
+      await restricted.query('BEGIN');
+      await restricted.query(
+        `SELECT set_config('cost_intelligence.tenant_id', $1, true), set_config('cost_intelligence.project_id', $2, true),
+                set_config('cost_intelligence.environment', $3, true), set_config('cost_intelligence.billing_mode', $4, true)`,
+        [scope.tenantId, scope.projectId, scope.environment, scope.billingMode],
+      );
+      const hidden = await restricted.query('SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = $1', [eventId]);
+      assert.equal(hidden.rows.length, 0, 'privacy quarantine hides contaminated historical rows while preserving the immutable event');
+      await restricted.query('COMMIT');
+    } finally {
+      await restricted.end();
+    }
+  } finally {
+    await auditPool.end();
   }
 });

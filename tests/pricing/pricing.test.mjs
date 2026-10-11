@@ -24,10 +24,20 @@ import {
   validatePricingRuleV2Boundary,
   validateRateCardV2Boundary,
 } from '../../dist/index.js';
-import { databaseConfigFromEnvironment } from '../../scripts/test-db-lifecycle.mjs';
+import { databaseConfigFromEnvironment, runtimeDatabaseConfigFromEnvironment } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Pool } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
+
+function apiObserverPool(max) {
+  const observer = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: Math.min(max, 6) });
+  const runtime = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max });
+  return {
+    query: (...args) => observer.query(...args),
+    connect: () => runtime.connect(),
+    end: async () => { await Promise.all([observer.end(), runtime.end()]); },
+  };
+}
 const fixturePath = join(root, 'fixtures/pricing/ci03-synthetic-acceptance.json');
 const syntheticSourcePath = join(root, 'fixtures/pricing/synthetic-tariff-source.md');
 const sharedUsagePath = join(root, 'node_modules/@jevelopers/shared-contracts/fixtures/UsageEvent.json');
@@ -126,7 +136,7 @@ test('current finance grants are rechecked before estimate replay, catalog, cont
   assert.ok(process.env.CI_TEST_DB_HOST, 'pricing authorization regression uses the disposable PostgreSQL harness');
   const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
   const sharedEvent = JSON.parse(await readFile(sharedUsagePath, 'utf8')).valid;
-  const pool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 8 });
+  const pool = apiObserverPool(8);
   const suffix = randomUUID();
   const scope = {
     tenantId: randomUUID(), projectId: randomUUID(),
@@ -400,7 +410,7 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
     billingMode: sharedEvent.billing_mode,
     actorId: 'ci03-pricing-fixture',
   };
-  const pool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 12 });
+  const pool = apiObserverPool(12);
   const clock = { value: fixture.selection.published_at };
   const ports = makePorts(pool, scope, clock);
 
@@ -1522,7 +1532,7 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
     assert.equal(Number(counts.rows[0].cards), 14);
     assert.equal(Number(counts.rows[0].fx), 3);
 
-    const reconnectPool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 4 });
+    const reconnectPool = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max: 4 });
     try {
       const reconnectPorts = makePorts(reconnectPool, scope, clock);
       const changedRuleAfterReconnect = await registerPricingRuleV2({

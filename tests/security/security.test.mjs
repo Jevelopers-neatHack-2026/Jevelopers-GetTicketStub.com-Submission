@@ -29,7 +29,7 @@ import {
   settle,
   startReconciliation,
 } from '../../dist/index.js';
-import { databaseConfigFromEnvironment } from '../../scripts/test-db-lifecycle.mjs';
+import { runtimeDatabaseConfigFromEnvironment } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Pool } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -251,6 +251,186 @@ test('operation policy has explicit least-privilege grants, distinct read/action
   assert.equal(futurePricingCompatibilityLookups, 0);
 });
 
+test('authorization freshness is checked after async authority returns and malformed payloads stay generic', async () => {
+  const base = {
+    module: 'ledger', requestOperation: 'appendLedgerEvent', operation: 'ledger.appendLedgerEvent',
+    scope: safeScope(), requestId: 'ci09-post-await-clock',
+  };
+  let clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const clock = { now: () => new Date(clockValue) };
+  const financeDecision = request => allowedDecision(request, {
+    verifiedAt: request.verifiedAt,
+    expiresAt: request.expiresAt,
+  });
+
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const expired = await authorizeFinanceOperation({
+    ...base, clock,
+    financeAuthority: { authorizeCurrent: async request => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:32:00.000Z');
+      return financeDecision({ ...request, verifiedAt: '2026-10-11T03:30:00.000Z', expiresAt: '2026-10-11T03:30:01.000Z' });
+    } },
+  });
+  assert.equal(expired.ok, false);
+  if (!expired.ok) assert.equal(expired.error.code, 'FORBIDDEN_SCOPE');
+
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const stale = await authorizeFinanceOperation({
+    ...base, clock,
+    financeAuthority: { authorizeCurrent: async request => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:30:00.100Z');
+      return financeDecision({ ...request, verifiedAt: '2026-10-11T03:28:59.000Z', expiresAt: '2026-10-11T03:32:00.000Z' });
+    } },
+  });
+  assert.equal(stale.ok, false);
+  if (!stale.ok) assert.equal(stale.error.code, 'FORBIDDEN_SCOPE');
+
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const fresh = await authorizeFinanceOperation({
+    ...base, clock,
+    financeAuthority: { authorizeCurrent: async request => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:30:00.100Z');
+      return financeDecision({ ...request, verifiedAt: '2026-10-11T03:30:00.100Z', expiresAt: '2026-10-11T03:31:00.100Z' });
+    } },
+  });
+  assert.equal(fresh.ok, true, 'a fresh grant timestamped during the await is accepted');
+
+  const pricingPolicy = FINANCE_OPERATION_POLICY['pricing.estimateV2'];
+  const legacyBase = {
+    status: 'allowed', decisionId: 'legacy-ci09-post-await', operation: 'pricing.estimateV2',
+    permission: pricingPolicy.permission, scope: safeScope(), actorId: scope.actorId,
+    verifiedAt: '2026-10-11T03:30:00.100Z', expiresAt: '2026-10-11T03:31:00.100Z',
+  };
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const legacyFresh = await authorizeFinanceOperation({
+    module: 'pricing', requestOperation: 'estimate', operation: 'pricing.estimateV2',
+    scope: safeScope(), requestId: 'ci09-legacy-fresh', clock,
+    pricingCompatibility: async () => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:30:00.100Z');
+      return legacyBase;
+    },
+  });
+  assert.equal(legacyFresh.ok, true, 'the retained pricing bridge accepts a grant issued during its await');
+
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const legacyExpired = await authorizeFinanceOperation({
+    module: 'pricing', requestOperation: 'estimate', operation: 'pricing.estimateV2',
+    scope: safeScope(), requestId: 'ci09-legacy-expired', clock,
+    pricingCompatibility: async () => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:32:00.000Z');
+      return { ...legacyBase, verifiedAt: '2026-10-11T03:30:00.000Z', expiresAt: '2026-10-11T03:30:01.000Z' };
+    },
+  });
+  assert.equal(legacyExpired.ok, false);
+  if (!legacyExpired.ok) assert.equal(legacyExpired.error.code, 'FORBIDDEN_SCOPE');
+
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const legacyStale = await authorizeFinanceOperation({
+    module: 'pricing', requestOperation: 'estimate', operation: 'pricing.estimateV2',
+    scope: safeScope(), requestId: 'ci09-legacy-stale', clock,
+    pricingCompatibility: async () => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:30:00.100Z');
+      return { ...legacyBase, verifiedAt: '2026-10-11T03:28:59.000Z', expiresAt: '2026-10-11T03:32:00.000Z' };
+    },
+  });
+  assert.equal(legacyStale.ok, false);
+  if (!legacyStale.ok) assert.equal(legacyStale.error.code, 'FORBIDDEN_SCOPE');
+
+  let invalidAfterAwait = false;
+  const invalidClock = await authorizeFinanceOperation({
+    ...base, clock: { now: () => invalidAfterAwait ? new Date(Number.NaN) : new Date('2026-10-11T03:30:00.000Z') },
+    financeAuthority: { authorizeCurrent: async request => {
+      await Promise.resolve();
+      invalidAfterAwait = true;
+      return financeDecision(request);
+    } },
+  });
+  assert.equal(invalidClock.ok, false);
+  if (!invalidClock.ok) assert.equal(invalidClock.error.code, 'SOURCE_UNAVAILABLE');
+
+  let legacyInvalidAfterAwait = false;
+  const legacyInvalidClock = await authorizeFinanceOperation({
+    module: 'pricing', requestOperation: 'estimate', operation: 'pricing.estimateV2',
+    scope: safeScope(), requestId: 'ci09-legacy-invalid-clock',
+    clock: { now: () => legacyInvalidAfterAwait ? new Date(Number.NaN) : new Date('2026-10-11T03:30:00.000Z') },
+    pricingCompatibility: async () => {
+      await Promise.resolve();
+      legacyInvalidAfterAwait = true;
+      return legacyBase;
+    },
+  });
+  assert.equal(legacyInvalidClock.ok, false);
+  if (!legacyInvalidClock.ok) assert.equal(legacyInvalidClock.error.code, 'SOURCE_UNAVAILABLE');
+
+  let connects = 0;
+  clockValue = new Date('2026-10-11T03:30:00.000Z');
+  const staleApi = await appendLedgerEvent(ledgerRequest(base.scope, 'ci09-stale-api-no-db'), {
+    database: { connect: async () => { connects++; throw new Error('denied call opened persistence'); } },
+    trustedContext: { resolve: async requested => requested }, clock,
+    financeAuthority: { authorizeCurrent: async request => {
+      await Promise.resolve();
+      clockValue = new Date('2026-10-11T03:32:00.000Z');
+      return financeDecision({ ...request, verifiedAt: '2026-10-11T03:30:00.000Z', expiresAt: '2026-10-11T03:30:01.000Z' });
+    } },
+  });
+  assert.equal(staleApi.ok, false);
+  assert.equal(connects, 0, 'an expired-on-return authorization cannot reach the database');
+
+  const malformedNewDecisions = [
+    null, 'not-a-decision', [],
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), scope: null },
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), scope: [] },
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), principal: null },
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), principal: [] },
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), verifiedAt: 'not-a-time' },
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), decisionId: `CI09_PRIVATE_AUTH_CANARY${'x'.repeat(220)}` },
+    { ...allowedDecision({ operation: base.operation, permission: FINANCE_OPERATION_POLICY[base.operation].permission, requestedScope: base.scope }), privateDetail: 'CI09_PRIVATE_AUTH_CANARY' },
+  ];
+  for (const decision of malformedNewDecisions) {
+    const result = await authorizeFinanceOperation({
+      ...base, clock: { now: () => new Date('2026-10-11T03:30:00.500Z') },
+      financeAuthority: { authorizeCurrent: async () => decision },
+      pricingCompatibility: async () => { throw new Error('configured Finance authority must not fall back'); },
+    });
+    assert.equal(result.ok, false);
+    assert.doesNotMatch(JSON.stringify(result), /CI09_PRIVATE_AUTH_CANARY/);
+    if (!result.ok) assert.match(result.error.code, /^(SOURCE_UNAVAILABLE|FORBIDDEN_SCOPE)$/);
+  }
+
+  for (const decision of [
+    null, 'not-a-pricing-decision', [],
+    { ...legacyBase, scope: null }, { ...legacyBase, scope: [] },
+    { ...legacyBase, verifiedAt: 'not-a-time' }, { ...legacyBase, diagnostic: 'CI09_PRIVATE_AUTH_CANARY' },
+  ]) {
+    const result = await authorizeFinanceOperation({
+      module: 'pricing', requestOperation: 'estimate', operation: 'pricing.estimateV2',
+      scope: safeScope(), requestId: 'ci09-malformed-legacy', clock: { now: () => new Date('2026-10-11T03:30:00.500Z') },
+      pricingCompatibility: async () => decision,
+    });
+    assert.equal(result.ok, false);
+    assert.doesNotMatch(JSON.stringify(result), /CI09_PRIVATE_AUTH_CANARY/);
+    if (!result.ok) assert.match(result.error.code, /^(SOURCE_UNAVAILABLE|FORBIDDEN_SCOPE)$/);
+  }
+
+  const malformedInput = await authorizeFinanceOperation({ ...base, scope: null });
+  assert.equal(malformedInput.ok, false);
+  if (!malformedInput.ok) assert.equal(malformedInput.error.code, 'VALIDATION_ERROR');
+  const missingInput = await authorizeFinanceOperation(null);
+  assert.equal(missingInput.ok, false);
+  assert.doesNotMatch(JSON.stringify(missingInput), /TypeError|CI09_PRIVATE_AUTH_CANARY/);
+  const unsafeContextInput = await authorizeFinanceOperation({
+    ...base, module: 'CI09_PRIVATE_AUTH_CANARY', requestOperation: 'append_CI09_PRIVATE_AUTH_CANARY', scope: null,
+  });
+  assert.equal(unsafeContextInput.ok, false);
+  assert.doesNotMatch(JSON.stringify(unsafeContextInput), /CI09_PRIVATE_AUTH_CANARY/);
+});
+
 test('all exposed APIs request their operation grant before domain access', async () => {
   const pricing = JSON.parse(await readFile(pricingFixturePath, 'utf8'));
   const usage = JSON.parse(await readFile(join(sharedFixtureRoot, 'UsageEvent.json'), 'utf8')).valid;
@@ -414,8 +594,8 @@ test('all exposed APIs request their operation grant before domain access', asyn
 });
 
 test('PostgreSQL ledger reads and writes recheck current grants and preserve tenant isolation', async () => {
-  assert.ok(process.env.CI_TEST_DB_HOST, 'security suite requires its disposable PostgreSQL harness');
-  const pool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 8 });
+  assert.ok(process.env.CI_TEST_DB_RUNTIME_HOST, 'security suite requires its restricted disposable PostgreSQL role');
+  const pool = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max: 8 });
   const clock = { now: () => new Date(now) };
   const tenantA = safeScope({ ...scope, tenantId: `ci09-tenant-a-${randomUUID()}`, projectId: `ci09-project-a-${randomUUID()}`, actorId: 'ci09-ledger-service-a' });
   const tenantB = safeScope({ ...scope, tenantId: `ci09-tenant-b-${randomUUID()}`, projectId: `ci09-project-b-${randomUUID()}`, actorId: 'ci09-ledger-service-b' });
@@ -436,6 +616,17 @@ test('PostgreSQL ledger reads and writes recheck current grants and preserve ten
   });
   try {
     const portsA = portsFor(tenantA);
+    const runtimeGrants = await pool.query(
+      `SELECT current_user,
+              pg_has_role(current_user, 'ci_finance_runtime', 'MEMBER') AS is_runtime_member,
+              has_table_privilege(current_user, 'cost_intelligence.financial_ledger_events', 'SELECT') AS can_select_events,
+              has_table_privilege(current_user, 'cost_intelligence.financial_ledger_events', 'INSERT') AS can_insert_events`,
+    );
+    assert.deepEqual(runtimeGrants.rows[0] && {
+      isRuntimeMember: runtimeGrants.rows[0].is_runtime_member,
+      canSelectEvents: runtimeGrants.rows[0].can_select_events,
+      canInsertEvents: runtimeGrants.rows[0].can_insert_events,
+    }, { isRuntimeMember: true, canSelectEvents: true, canInsertEvents: true }, JSON.stringify(runtimeGrants.rows));
     const event = ledgerRequest(tenantA, `security-${randomUUID()}`);
     const append = await appendLedgerEvent(event, portsA);
     assert.equal(append.ok, true, append.ok ? '' : append.error.code);
@@ -450,6 +641,36 @@ test('PostgreSQL ledger reads and writes recheck current grants and preserve ten
       assert.equal(projectionA.value.eventCount, 1);
       assert.equal(projectionA.value.amounts[0]?.knownSubtotal, '0.37');
     }
+
+    const runtimeRole = await pool.query(
+      `SELECT current_user, role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolbypassrls,
+              pg_has_role(current_user, 'ci_finance_owner', 'MEMBER') AS is_finance_owner
+       FROM pg_roles role WHERE role.rolname = current_user`,
+    );
+    assert.equal(runtimeRole.rows.length, 1);
+    assert.equal(runtimeRole.rows[0].rolsuper, false);
+    assert.equal(runtimeRole.rows[0].rolcreatedb, false);
+    assert.equal(runtimeRole.rows[0].rolcreaterole, false);
+    assert.equal(runtimeRole.rows[0].rolbypassrls, false);
+    assert.equal(runtimeRole.rows[0].is_finance_owner, false, 'the runtime login is not an owner or migration role');
+    const unboundRawRows = await pool.query('SELECT event_id FROM cost_intelligence.financial_ledger_events LIMIT 20');
+    assert.equal(unboundRawRows.rows.length, 0, 'RLS denies raw event rows without a bound authorized transaction scope');
+    await assert.rejects(
+      pool.query('CREATE TABLE cost_intelligence.ci09_runtime_ddl_forbidden (value text)'),
+      error => error.code === '42501',
+    );
+    await assert.rejects(
+      pool.query('UPDATE cost_intelligence.financial_ledger_events SET amount = amount'),
+      error => error.code === '42501',
+    );
+    await assert.rejects(
+      pool.query('DELETE FROM cost_intelligence.financial_ledger_events'),
+      error => error.code === '42501',
+    );
+    await assert.rejects(
+      pool.query('TRUNCATE cost_intelligence.financial_ledger_events'),
+      error => error.code === '42501',
+    );
 
     const foreignBefore = connects;
     const foreignAppend = await appendLedgerEvent(ledgerRequest(tenantB, `foreign-${randomUUID()}`), portsA);

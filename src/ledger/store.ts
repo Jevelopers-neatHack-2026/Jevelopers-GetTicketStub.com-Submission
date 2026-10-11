@@ -19,6 +19,7 @@ import {
   type TrustedScope,
   type Validation,
 } from '../shared/contracts.js';
+import { bindFinancialDatabaseScope } from '../shared/database-scope.js';
 
 const LocalVersion = Type.Literal('1.0.0');
 const UtcTimestamp = Type.String({ format: 'date-time' });
@@ -287,6 +288,63 @@ function validationFailure(module: string, operation: string, requestId: string,
   return { ok: false, error: makeError(module, operation, 'VALIDATION_ERROR', requestId, message) };
 }
 
+// These are finance-measure identifiers, not free-form source labels. New
+// producer units are added only after their meaning and display safety are reviewed.
+const SAFE_LEDGER_UNITS = new Set([
+  'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+  'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
+  'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
+  'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
+  'unit', 'units', 'page', 'pages', 'row', 'rows', 'record', 'records', 'character', 'characters', 'credit', 'credits',
+]);
+
+const SAFE_LEDGER_MISSING_FIELDS = new Set([
+  ...SAFE_LEDGER_UNITS, 'amount', 'currency', 'source_reference', 'provider_reference', 'pricing_reference',
+  'input', 'output', 'reasoning', 'image_count', 'request_count', 'duration',
+]);
+
+const unsafeFinanceText = /(?:https?:\/\/|\b[a-z][a-z0-9+.-]*:\/\/|[\u0000-\u001f]|(?:^|[^a-z0-9])(?:prompt|password|passwd|secret|bearer|private|address|email)(?:$|[^a-z0-9])|(?:^|[^a-z0-9])token(?:$|[^a-z0-9])|(?:^|[^a-z0-9])(?:\d{1,3}\.){3}\d{1,3}(?:$|[^a-z0-9])|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i;
+const unsafeReferenceCharacters = /[?#@]/;
+
+function safeOpaqueMetadata(value: string): boolean {
+  return value.length <= 256 && /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value)
+    && !unsafeReferenceCharacters.test(value) && !unsafeFinanceText.test(value);
+}
+
+function privacySafeLedgerRequest(request: LedgerAppendRequest): boolean {
+  if (request.usage.units.some(unit => !SAFE_LEDGER_UNITS.has(unit.name)
+      || (unit.includedIn !== undefined && !SAFE_LEDGER_UNITS.has(unit.includedIn)))) return false;
+  if (request.usage.missingFields.some(field => !SAFE_LEDGER_MISSING_FIELDS.has(field))) return false;
+
+  const references = [
+    ...request.sourceRefs,
+    ...(request.pricing?.rateCardRef ? [request.pricing.rateCardRef] : []),
+    ...(request.fxEvidence ? [request.fxEvidence.sourceRef] : []),
+  ];
+  const opaqueMetadata = [
+    request.requestId, request.idempotencyKey, request.scope.tenantId, request.scope.projectId, request.scope.actorId,
+    request.eventId, request.correlationId, request.producer.module, request.producer.buildRevision,
+    request.identities.logicalOperationId, request.identities.sourceObservationId,
+    ...(request.identities.reservationId ? [request.identities.reservationId] : []),
+    request.postingMapping.sourceLineId,
+    ...[request.postingMapping.transportAttemptId, request.postingMapping.providerAttemptId,
+      request.postingMapping.providerRequestId, request.postingMapping.billableAttemptId]
+      .flatMap(identity => identity.status === 'known' ? [identity.id] : []),
+    request.sourceIdentity.source, request.sourceIdentity.sourceEventId, request.sourceIdentity.sourceObjectId,
+    request.sourceIdentity.revisionSubjectId, request.sourceIdentity.sourceRevision,
+    ...(request.reservationAuthorizationEventId ? [request.reservationAuthorizationEventId] : []),
+    ...(request.supersedesEventId ? [request.supersedesEventId] : []),
+    ...(request.reversesEventId ? [request.reversesEventId] : []),
+    ...(request.pricing ? [request.pricing.policyVersion, request.pricing.ruleVersion] : []),
+    ...references.flatMap(reference => [reference.contract, reference.schema_version, reference.id]),
+  ];
+  if (!opaqueMetadata.every(safeOpaqueMetadata)) return false;
+
+  // Dimensions are reviewed keys in the v1 schema. Preserve legitimate labels
+  // with ordinary spaces while rejecting source prose that contains private data.
+  return Object.values(request.dimensions).every(value => typeof value !== 'string' || !unsafeFinanceText.test(value));
+}
+
 function hasUtcZ(value: string): boolean {
   return value.endsWith('Z') && Number.isFinite(Date.parse(value));
 }
@@ -350,6 +408,10 @@ export function validateLedgerAppendRequestBoundary(value: unknown): Validation<
   const parsed = validateRequest(LedgerAppendRequestSchema, value, 'ledger', 'appendLedgerEvent');
   if (!parsed.ok) return parsed;
   const request = parsed.value;
+  if (!privacySafeLedgerRequest(request)) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId,
+      'Ledger evidence and financial metadata must use reviewed opaque references and allowlisted measure names.');
+  }
   if (request.postingMapping.sourceLineId !== request.sourceIdentity.revisionSubjectId) {
     return validationFailure('ledger', 'appendLedgerEvent', requestId, 'The versioned posting mapping must identify its source revision subject.');
   }
@@ -633,6 +695,7 @@ async function quarantineUnsupportedPayload(value: unknown, ports: LedgerRuntime
     client = await ports.database.connect();
     await client.query('BEGIN');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, scope);
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`ci02-ledger:${scope.tenantId}:${scope.projectId}:${scope.environment}:${scope.billingMode}`],
@@ -701,6 +764,7 @@ export async function appendLedgerEvent(
     await client.query('BEGIN');
     inTransaction = true;
     await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    await bindFinancialDatabaseScope(client, scope);
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`ci02-ledger:${scope.tenantId}:${scope.projectId}:${scope.environment}:${scope.billingMode}`],
@@ -708,7 +772,7 @@ export async function appendLedgerEvent(
 
     const idempotency = await client.query(
       `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events
-       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND idempotency_key = $5 FOR UPDATE`,
+       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND idempotency_key = $5`,
       [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.idempotencyKey],
     );
     if (idempotency.rows.length) {
@@ -733,7 +797,7 @@ export async function appendLedgerEvent(
        FROM cost_intelligence.financial_ledger_identity_bindings
        WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND (identity_kind, identity_value) IN (
          SELECT * FROM unnest($5::text[], $6::text[])
-       ) ORDER BY identity_kind, identity_value FOR UPDATE`,
+       ) ORDER BY identity_kind, identity_value`,
       [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, bindings.map(item => item.kind), bindings.map(item => item.value)],
     );
     for (const row of lockedBindings.rows) {
@@ -745,7 +809,7 @@ export async function appendLedgerEvent(
       if (fromRow(row, 'identity_kind') === 'source_observation' && fromRow(row, 'first_event_id') !== null) {
         const existing = await client.query(
           `SELECT event_id, event_hash, source_content_hash, source_revision_sequence
-           FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
+           FROM cost_intelligence.financial_ledger_events WHERE event_id = $1`,
           [fromRow(row, 'first_event_id')],
         );
         const prior = existing.rows[0] ?? {};
@@ -759,7 +823,7 @@ export async function appendLedgerEvent(
       if (fromRow(row, 'identity_kind') === 'reservation' && fromRow(row, 'first_event_id') !== null
         && request.eventType === 'reservation_authorized') {
         const existing = await client.query(
-          `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
+          `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events WHERE event_id = $1`,
           [fromRow(row, 'first_event_id')],
         );
         const prior = existing.rows[0] ?? {};
@@ -827,7 +891,7 @@ export async function appendLedgerEvent(
     let economicReversesEventId: string | null = null;
     if (currentSourceEventId !== null) {
       const existing = await client.query(
-        `SELECT * FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
+        `SELECT * FROM cost_intelligence.financial_ledger_events WHERE event_id = $1`,
         [currentSourceEventId],
       );
       predecessor = existing.rows[0] ?? null;
@@ -887,7 +951,7 @@ export async function appendLedgerEvent(
           AND head.source_revision_subject_id = target.source_revision_subject_id
          WHERE target.event_id = $5 AND target.tenant_id = $1 AND target.project_id = $2
            AND target.environment = $3 AND target.billing_mode = $4
-         FOR UPDATE OF target, head`,
+         FOR UPDATE OF head`,
         [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.reversesEventId],
       );
       const target = targetResult.rows[0] ?? null;
@@ -1180,6 +1244,7 @@ export async function rebuildLedgerProjection(
     client = await ports.database.connect();
     await client.query('BEGIN');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, request.scope);
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`ci02-projection:${request.scope.tenantId}:${request.scope.projectId}:${request.scope.environment}:${request.scope.billingMode}:${request.asOf}`],
