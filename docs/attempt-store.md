@@ -136,9 +136,12 @@ first-claim read race, malformed state/reference combinations in initial,
 intermediate, and final history rows, cross-scope privacy, corruption/version
 handling, permissions, and symlink rejection. Its process-contention fixture
 publishes lock readiness through a complete same-directory temporary record
-and an atomic no-clobber link; the parent rejects absent, malformed, or
-schema-invalid readiness before treating a child as the live lock owner. Its
-runtime scenario uses the
+and an atomic no-clobber link. A real child pauses after the final link exists
+but before the temporary name is removed; the parent verifies both names
+contain identical bytes and that readiness names the live lock owner, then
+requires the temporary name to be absent after child completion. The parent
+also rejects absent, malformed, or schema-invalid readiness before treating a
+child as the live lock owner. Its runtime scenario uses the
 deterministic simulator and fixture authorization, budget, and usage ports. It
 makes no provider or external finance calls and does not represent production
 authorization or billing evidence.

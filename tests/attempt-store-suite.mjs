@@ -831,6 +831,8 @@ test("fixture writer-lock readiness publishes only complete records and rejects 
       const publishReleaseFile = join(scenarioRoot, "publish-release");
       const gateReleaseFile = join(scenarioRoot, "owner-release");
       const reachedDirectory = join(scenarioRoot, "publication-reached");
+      const cleanupReachedDirectory = join(scenarioRoot, "cleanup-reached");
+      const cleanupReleaseFile = join(scenarioRoot, "cleanup-release");
       const record = makeAttemptRecord({ idempotencyKey: label + "-key", claimId: label + "-claim" });
       const ownerRun = runAttemptChild({
         directory,
@@ -841,6 +843,11 @@ test("fixture writer-lock readiness publishes only complete records and rejects 
           temporaryFile,
           releaseFile: gateReleaseFile,
           timeoutMs: 5_000,
+          pauseAfterLinkBeforeUnlink: {
+            reachedDirectory: cleanupReachedDirectory,
+            releaseFile: cleanupReleaseFile,
+            timeoutMs: 5_000
+          },
           ...(phase === "empty" ? {
             pauseBeforeWrite: { reachedDirectory, releaseFile: publishReleaseFile, timeoutMs: 5_000 }
           } : {
@@ -883,19 +890,47 @@ test("fixture writer-lock readiness publishes only complete records and rejects 
         await writeFile(publishReleaseFile, "publish\n", { mode: 0o600 });
         const published = await readReadyRecord(readyFile, 5_000);
         evidence.publishedRecord = published.record;
-        evidence.temporaryAfterPublish = await fileEvidence(temporaryFile);
+        await waitForDirectory(cleanupReachedDirectory, 5_000);
+        const temporaryDuringLinkUnlinkWindow = await readFile(temporaryFile);
+        const temporaryDuringLinkUnlinkMetadata = await lstat(temporaryFile);
+        evidence.temporaryDuringLinkUnlinkWindow = {
+          present: true,
+          regularFile: temporaryDuringLinkUnlinkMetadata.isFile(),
+          byteLength: temporaryDuringLinkUnlinkWindow.byteLength,
+          text: temporaryDuringLinkUnlinkWindow.toString("utf8"),
+          sha256: createHash("sha256").update(temporaryDuringLinkUnlinkWindow).digest("hex")
+        };
+        evidence.publishedReadyText = published.text;
         const publishedLock = JSON.parse((await readFile(join(directory, ".attempt-store-v1", ".metering-writer.lock"))).toString("utf8"));
         evidence.publishedLock = publishedLock;
         if (published.record.pid !== publishedLock.pid) issues.push(`${label}: published readiness pid did not match the live lock owner`);
-        if (evidence.temporaryAfterPublish.present !== false) issues.push(`${label}: temporary name remained after successful publication`);
+        if (!temporaryDuringLinkUnlinkMetadata.isFile()) issues.push(`${label}: temporary name was not a regular file after final link publication`);
+        if (!temporaryDuringLinkUnlinkWindow.equals(Buffer.from(published.text, "utf8"))) {
+          issues.push(`${label}: temporary and ready names did not contain identical bytes in the post-link/pre-unlink window`);
+        }
       } catch (error) {
         evidence.operationError = errorDetails(error);
         issues.push(`${label}: publication evidence collection failed (${error?.code ?? error?.message ?? "unknown"})`);
       } finally {
-        await writeFile(publishReleaseFile, "continue\n", { mode: 0o600 }).catch(() => undefined);
-        await readReadyRecord(readyFile, 5_000).catch(() => undefined);
-        await writeFile(gateReleaseFile, "release\n", { mode: 0o600 }).catch(() => undefined);
-        evidence.ownerOutcome = await ownerRun;
+        try {
+          const releasePaths = [publishReleaseFile, cleanupReleaseFile, gateReleaseFile];
+          const releaseValues = ["continue\n", "continue\n", "release\n"];
+          const releaseResults = await Promise.allSettled(releasePaths.map((path, index) => (async () => {
+            await writeFile(path, releaseValues[index], { mode: 0o600 });
+          })()));
+          evidence.gateReleaseResults = releaseResults.map((result, index) => ({
+            gate: ["before-publish", "post-link-before-unlink", "owner-claim"][index],
+            status: result.status,
+            ...(result.status === "rejected" ? { error: errorDetails(result.reason) } : {})
+          }));
+          for (const result of evidence.gateReleaseResults) {
+            if (result.status === "rejected") {
+              issues.push(`${label}: failed to release ${result.gate} gate (${result.error.code ?? result.error.message})`);
+            }
+          }
+        } finally {
+          evidence.ownerOutcome = await ownerRun;
+        }
       }
       const ownerReport = evidence.ownerOutcome.status === "fulfilled" ? parseChildReport(evidence.ownerOutcome.value) : undefined;
       evidence.ownerReport = ownerReport?.value;
@@ -903,6 +938,11 @@ test("fixture writer-lock readiness publishes only complete records and rejects 
       if (evidence.ownerOutcome.status !== "fulfilled" || evidence.ownerOutcome.value.code !== 0 ||
           ownerReport?.error !== undefined || ownerReport?.value?.result?.claimed !== true) {
         issues.push(`${label}: writer did not complete the claim after readiness release`);
+      }
+      evidence.temporaryAfterChildCompletion = await fileEvidence(temporaryFile);
+      if (evidence.ownerOutcome.status === "fulfilled" && evidence.ownerOutcome.value.code === 0 &&
+          evidence.temporaryAfterChildCompletion.present !== false) {
+        issues.push(`${label}: temporary name remained after successful owner child completion acknowledgement`);
       }
       diagnostics.scenarios[label] = evidence;
     }

@@ -119,6 +119,7 @@ async function publishReadyRecord(gate) {
   await pauseAtPublicationBarrier(gate.pauseBeforePublish);
   try {
     await link(temporaryFile, gate.readyFile);
+    await pauseAtPublicationBarrier(gate.pauseAfterLinkBeforeUnlink);
   } finally {
     await unlink(temporaryFile);
   }
