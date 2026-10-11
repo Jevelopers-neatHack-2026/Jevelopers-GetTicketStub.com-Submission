@@ -30,9 +30,9 @@ test('keyboard draft, labelled locked control, follow-up and explicit Apply roun
   await page.keyboard.press('Tab'); await expect(page.getByLabel('Stacked layout emphasis')).toBeFocused();
   await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: 'Apply changes', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status')).toContainText('Apply accepted');
+  await expect(page.locator('#status')).toContainText('Apply accepted');
   await page.getByRole('button', { name: 'Validate handoff' }).click();
-  await expect(page.getByRole('status')).toContainText('Typed handoff ready');
+  await expect(page.locator('#status')).toContainText('Typed handoff ready');
   expect(await counters(request)).toMatchObject({ jobs: 1, jev_calls: 0, image_calls: 0 });
   const after = await new AxeBuilder({ page }).analyze(); expect(after.violations).toEqual([]);
   await page.screenshot({ path: 'test-results/mock-roundtrip.png', fullPage: true });
@@ -47,7 +47,7 @@ test('lost response, Retry and simultaneous duplicates retain one durable operat
   expect(await counters(request)).toMatchObject({ jobs: 1, jev_calls: 0, image_calls: 0 });
   await page.unroute('**/api/apply');
   await page.getByRole('button', { name: 'Retry last Apply' }).click();
-  await expect(page.getByRole('status')).toContainText('Existing operation returned');
+  await expect(page.locator('#status')).toContainText('Existing operation returned');
   const results = await Promise.all([request.post('/api/apply', { data: sent }), request.post('/api/apply', { data: sent })]);
   const bodies = await Promise.all(results.map(r => r.json()));
   expect(bodies.every(r => r.code === 'replayed')).toBe(true);
@@ -67,7 +67,7 @@ test('stale controls reject Apply with focused accessible error; Refresh require
   await expect(page.locator('#versions')).toContainText('design_v2');
   await page.getByLabel('Name size', { exact: true }).selectOption('large');
   await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Apply accepted');
+  await expect(page.locator('#status')).toContainText('Apply accepted');
 });
 
 for (const [name, mutate, message] of [
@@ -88,12 +88,12 @@ for (const [name, mutate, message] of [
 test('permission revoked between Apply and handoff prevents dispatch; cancellation blocks late retry', async ({ page, request }) => {
   await page.getByLabel('Name size', { exact: true }).selectOption('large');
   await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Apply accepted');
+  await expect(page.locator('#status')).toContainText('Apply accepted');
   await request.post('/__fixture/state', { data: { revoke: true } });
   await page.getByRole('button', { name: 'Validate handoff' }).click();
   await expect(page.getByRole('alert')).toContainText('Permission denied');
   await page.getByRole('button', { name: 'Cancel operation' }).click();
-  await expect(page.getByRole('status')).toContainText('Operation cancelled');
+  await expect(page.locator('#status')).toContainText('Operation cancelled');
   // Cancelling does not grant an approval, and retry under revoked authority still fails.
   await page.getByRole('button', { name: 'Retry last Apply' }).click();
   await expect(page.getByRole('alert')).toContainText('Permission denied');
@@ -104,9 +104,9 @@ test('artwork choice is a typed pending operation; paid handoff unavailable', as
   await page.getByLabel('Artwork style').selectOption('vibrant');
   expect(await counters(request)).toMatchObject({ jobs: 0, jev_calls: 0, image_calls: 0 });
   await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Apply accepted');
+  await expect(page.locator('#status')).toContainText('Apply accepted');
   await page.getByRole('button', { name: 'Validate handoff' }).click();
-  await expect(page.getByRole('alert')).toContainText('Handoff unavailable');
+  await expect(page.getByRole('alert')).toContainText('Apply outcome unavailable');
   expect(await counters(request)).toMatchObject({ jobs: 1, jev_calls: 0, image_calls: 0 });
 });
 
@@ -126,7 +126,7 @@ test('stored stacked emphasis survives refresh and a later name-size edit', asyn
   await expect(page.getByLabel('Stacked layout emphasis')).toHaveValue('name');
   await page.getByLabel('Name size', { exact: true }).selectOption('large');
   await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Apply accepted');
+  await expect(page.locator('#status')).toContainText('Apply accepted');
   const response = page.waitForResponse('**/api/dispatch');
   await page.getByRole('button', { name: 'Validate handoff' }).click();
   const handoff = await (await response).json();
@@ -144,7 +144,7 @@ test('follow-up-only browser edit is an explicit composition change and honors l
   await page.getByRole('button', { name: 'Refresh controls' }).click();
   await page.getByLabel('Stacked layout emphasis').selectOption('balanced');
   await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Apply accepted');
+  await expect(page.locator('#status')).toContainText('Apply accepted');
   const response = page.waitForResponse('**/api/dispatch');
   await page.getByRole('button', { name: 'Validate handoff' }).click();
   const handoff = await (await response).json();

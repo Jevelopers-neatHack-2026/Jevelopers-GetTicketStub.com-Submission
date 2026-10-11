@@ -24,7 +24,7 @@ export interface TrustedControlState { tenant_id: string; project_id: string; br
   available_operations: Route[]; values: Record<string, string>; allowed_options: Record<string, string[]>;
   locks?: string[]; logo_asset_id?: string; follow_up_answers: Record<string, string>; follow_up_locks?: string[] }
 export interface CurrentProjection { schema: ControlSchema; can_apply: boolean; supported_schema_versions: readonly ControlSchemaVersion[];
-  permitted_asset_ids: string[]; dispatchable_routes: Route[]; can_acknowledge?: boolean }
+  permitted_asset_ids: string[]; dispatchable_routes: Route[]; can_acknowledge?: boolean; can_read?: boolean }
 export interface ControlOperation { operation_version: 'creative-control-operation/1.0'; kind: 'creative.control.apply';
   logical_operation_id: string; action_id: string; tenant_id: string; project_id: string; actor_id: string; brief_id: string;
   expected_versions: Versions; draft_hash: string; control_schema_hash: string; tasks: { kind: Route; changes: { field: string; value: string; asset_id?: string }[];
@@ -53,5 +53,33 @@ export class ApplyStore {
   cancel(principal: TrustedPrincipal, operationId: string): ApplyResult;
   acknowledge(trustedConsumer: TrustedPrincipal, operationId: string, receipt: { completion_id: string; result_ref: string; applied_versions: Versions }): ApplyResult;
   counts(): { jobs: number; image_calls: 0; jev_calls: 0 };
+  close(): void;
+}
+/** Bounded plain-data snapshot. Rejects getters, custom prototypes and methods. */
+export function snapshotControlJson(value: unknown): unknown;
+export interface CurrentCreativeControlContext {
+  brief: import('../contracts/creative/v1.mjs').CreativeBrief;
+  design: import('../contracts/creative/v1.mjs').DesignVersion;
+  selection: import('../api/v1.mjs').DesignSelection;
+  brief_usable: boolean;
+  composition: { status: 'unavailable'; bridge: 'creative.composition.consume/1' };
+  policy: { can_apply: boolean; can_read?: boolean; available_operations: Route[]; permitted_asset_ids: string[]; logo_asset_id?: string;
+    allowed_options?: Record<string, string[]> };
+  actor: import('../api/v1.mjs').TrustedCreativeActor;
+}
+export interface IntegratedApplyResult {
+  ok: boolean; code: string; operation_id?: string; status?: string; replayed?: boolean;
+  backend_job_id?: string; backend_operation_id?: string; action_id?: string; request_hash?: string;
+  result?: import('../api/v1.mjs').CreativeApiResult; pending_bridge?: string;
+  approval?: false; purchase?: false;
+}
+export class CreativeControlsAdapter {
+  constructor(options: { path: string; ports: import('../api/v1.mjs').CreativeRuntimePorts & { jobs: NonNullable<import('../api/v1.mjs').CreativeRuntimePorts['jobs']>; storage: NonNullable<import('../api/v1.mjs').CreativeRuntimePorts['storage']> };
+    readContext: (principal: TrustedPrincipal) => CurrentCreativeControlContext; now?: () => number });
+  readonly store: ApplyStore;
+  projection(principal: TrustedPrincipal): CurrentProjection;
+  apply(principal: TrustedPrincipal, body: unknown): Promise<IntegratedApplyResult>;
+  cancel(principal: TrustedPrincipal, operationId: string): Promise<IntegratedApplyResult>;
+  lookup(principal: TrustedPrincipal, actionId: string): { operation_id: string; status: string } | null;
   close(): void;
 }

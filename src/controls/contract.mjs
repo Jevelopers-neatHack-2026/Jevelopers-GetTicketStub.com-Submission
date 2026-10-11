@@ -1,4 +1,4 @@
-import { canonical, assertRenderableSchema } from './schema.mjs';
+import { canonical, assertRenderableSchema, snapshotControlJson } from './schema.mjs';
 import { hash } from './actions.mjs';
 
 /** Reference fields for CE-C01's local DesignControlSchema wrapper proposal.
@@ -13,6 +13,7 @@ export function controlContractReference(schema) {
     expected_versions: { ...schema.expected_versions }, control_schema_hash: `sha256:${hash(schema)}` };
 }
 export function assertControlContractBinding(envelope, schema) {
+  envelope = snapshotControlJson(envelope);
   const expected = controlContractReference(schema);
   if (!envelope || Object.keys(expected).some(key => canonical(envelope[key]) !== canonical(expected[key]))) {
     throw new TypeError('Unsupported or mismatched local control contract binding');

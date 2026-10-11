@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { ACTION_VERSIONS, SCHEMA_VERSIONS, canonical, isRecord, validId, equalVersions, activeQuestions } from './schema.mjs';
+import { ACTION_VERSIONS, SCHEMA_VERSIONS, canonical, isRecord, validId, equalVersions, activeQuestions, snapshotControlJson } from './schema.mjs';
 import { assertSupportedRuntime } from './runtime.mjs';
 
 assertSupportedRuntime();
 
 export const hash = value => createHash('sha256').update(canonical(value)).digest('hex');
+const auditHash = value => { try { return hash(value); } catch { return hash(null); } };
 const fields = ['action_version', 'schema_version', 'control_schema_hash', 'action_id', 'tenant_id', 'project_id', 'brief_id', 'expected_versions', 'intent', 'draft', 'draft_hash', 'correlation_id'];
 class Rejection extends Error { constructor(code, current) { super(code); this.code = code; this.current = current; } }
 const reject = (code, current) => { throw new Rejection(code, current); };
@@ -88,10 +89,14 @@ export class ApplyStore {
   }
   close() { this.db.close(); }
   state(ctx, authority = 'can_apply') {
+    try { ctx = snapshotControlJson(ctx); } catch { reject('permission'); }
     trusted(ctx);
     let state;
-    try { state = this.getState(ctx); } catch { reject('unavailable'); }
-    if (state?.[authority] !== true || !state.schema || state.schema.tenant_id !== ctx.tenant_id || state.schema.project_id !== ctx.project_id) reject('permission');
+    try { state = snapshotControlJson(this.getState(snapshotControlJson(ctx))); } catch { reject('unavailable'); }
+    // Older hosts retain their can_apply replay authority unless they explicitly
+    // supply a separate historical-read decision.
+    const allowed = authority === 'can_read' ? state?.can_read ?? state?.can_apply : state?.[authority];
+    if (allowed !== true || !state.schema || state.schema.tenant_id !== ctx.tenant_id || state.schema.project_id !== ctx.project_id) reject('permission');
     return state;
   }
   audit(code, actionHash, operationId) {
@@ -100,14 +105,19 @@ export class ApplyStore {
     return id;
   }
   execute(actionHash, fn) {
+    // A failed nested BEGIN must never roll back or audit into a host-owned
+    // BEGIN/SAVEPOINT. Do not read authority or invoke fn in that situation.
+    if (this.db.isTransaction) return { ok: false, code: 'unavailable', retryable: true, audit_status: 'unavailable' };
+    let owned = false;
     try {
       this.db.exec('BEGIN IMMEDIATE');
+      owned = true;
       const result = fn();
       result.audit_ref = this.audit(result.code, actionHash, result.operation_id);
       this.db.exec('COMMIT');
       return result;
     } catch (e) {
-      try { this.db.exec('ROLLBACK'); } catch { /* no transaction started */ }
+      if (owned && this.db.isTransaction) { try { this.db.exec('ROLLBACK'); } catch { /* owned rollback unavailable */ } }
       const code = e instanceof Rejection ? e.code : 'unavailable';
       const result = { ok: false, code, retryable: code === 'unavailable',
         ...(e instanceof Rejection && e.current ? { current_versions: e.current } : {}) };
@@ -120,10 +130,13 @@ export class ApplyStore {
     let actionHash;
     try { actionHash = hash(body); } catch { actionHash = hash(null); }
     return this.execute(actionHash, () => {
-      const state = this.state(ctx);
+      try { ctx = snapshotControlJson(ctx); } catch { reject('permission'); }
+      try { body = snapshotControlJson(body); } catch { reject('validation'); }
+      trusted(ctx);
       envelope(body);
       if (body.tenant_id !== ctx.tenant_id || body.project_id !== ctx.project_id) reject('permission');
       const prior = this.db.prepare('SELECT * FROM control_jobs WHERE tenant_id=? AND project_id=? AND action_id=?').get(ctx.tenant_id, ctx.project_id, body.action_id);
+      const state = this.state(ctx, prior?.status === 'completed' ? 'can_read' : 'can_apply');
       if (prior) {
         if (prior.actor_id !== ctx.actor_id) reject('permission');
         if (prior.action_hash !== actionHash) reject('action_conflict', state.schema.expected_versions);
@@ -143,7 +156,7 @@ export class ApplyStore {
   }
   /** Recheck just before releasing a handoff. No billable tool or production publication. */
   dispatch(ctx, operationId) {
-    return this.execute(hash({ operation_id: operationId }), () => {
+    return this.execute(auditHash({ operation_id: operationId }), () => {
       const state = this.state(ctx);
       if (!validId(operationId)) reject('validation');
       const job = this.db.prepare('SELECT * FROM control_jobs WHERE operation_id=? AND tenant_id=? AND project_id=? AND actor_id=?').get(operationId, ctx.tenant_id, ctx.project_id, ctx.actor_id);
@@ -161,7 +174,8 @@ export class ApplyStore {
   }
   /** Trusted downstream receipt only. No provider execution, approval or billing authority. */
   acknowledge(ctx, operationId, receipt) {
-    return this.execute(hash({ operation_id: operationId, receipt }), () => {
+    return this.execute(auditHash({ operation_id: operationId, receipt }), () => {
+      try { receipt = snapshotControlJson(receipt); } catch { reject('validation'); }
       const state = this.state(ctx, 'can_acknowledge');
       if (!validId(operationId)) reject('validation');
       const job = this.db.prepare('SELECT * FROM control_jobs WHERE operation_id=? AND tenant_id=? AND project_id=?').get(operationId, ctx.tenant_id, ctx.project_id);
@@ -194,7 +208,8 @@ export class ApplyStore {
     });
   }
   cancel(ctx, operationId) {
-    return this.execute(hash({ operation_id: operationId }), () => {
+    return this.execute(auditHash({ operation_id: operationId }), () => {
+      try { ctx = snapshotControlJson(ctx); } catch { reject('permission'); }
       trusted(ctx);
       if (!validId(operationId)) reject('validation');
       // A revoked actor can withdraw an existing draft-owned handoff, never approve it.
