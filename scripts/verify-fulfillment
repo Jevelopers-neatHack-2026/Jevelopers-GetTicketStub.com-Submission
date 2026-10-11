@@ -7,6 +7,8 @@ let contractOwnership = {};
 let catalogAvailable = false;
 let catalogApiAvailable = false;
 let runtimeMeteringAvailable = false;
+let quoteApiAvailable = false;
+let privateQuoteFormat = null;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -19,6 +21,10 @@ try {
     && typeof catalog.evaluateCatalogSelection === "function"
     && typeof catalog.validateCatalogSnapshotBoundary === "function";
   runtimeMeteringAvailable = typeof catalog.createRuntimeMeteringResolver === "function";
+  quoteApiAvailable = typeof catalog.executePrivateQuote === "function" &&
+    typeof catalog.evaluatePrivateQuoteCurrent === "function" &&
+    typeof catalog.QuoteExecutionError === "function";
+  privateQuoteFormat = catalog.PRIVATE_QUOTE_FORMAT ?? null;
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
 }
@@ -56,7 +62,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
@@ -90,10 +96,17 @@ const catalogBlockers = [
   "print-production #6 has not reviewed or acknowledged the catalog snapshot mapping and expected results",
   "the exact provider SKU/specification, destination, and shipping choice remain owner review inputs"
 ];
+const quoteBlockers = [
+  "shared-contracts #25 canonical FulfillmentQuote mapping and accepted schema pin are pending",
+  "application consumer conformance and expected-result review are pending",
+  "scoped durable quote persistence is not implemented",
+  "no selected provider sandbox adapter, account-tested quote behavior, or live mode is established"
+];
 
 let checks = [];
 let meteringReport = null;
 let mockReport = null;
+let quoteReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -109,6 +122,7 @@ if (args.suite === "security" && args.mode !== "simulated") failureReasons.push(
 if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(args.mode)) failureReasons.push("catalog_suite_requires_simulated_mode");
 if (args.suite === "metering" && args.mode !== "simulated") failureReasons.push("metering_fixture_suite_requires_simulated_mode");
 if (args.suite === "mock" && args.mode !== "simulated") failureReasons.push("mock_suite_requires_simulated_mode");
+if (args.suite === "quote" && args.mode !== "simulated") failureReasons.push("quote_fixture_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -188,6 +202,24 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("mock_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "quote" && args.mode === "simulated") {
+  if (!catalogApiAvailable || !quoteApiAvailable || privateQuoteFormat !== "connector-development-quote/1") {
+    failureReasons.push("quote_build_prerequisite_missing");
+  }
+  try {
+    if (failureReasons.length === 0) {
+      const { runQuoteTests } = await import("./run-quote-tests.mjs");
+      quoteReport = runQuoteTests();
+      checks = quoteReport.results ?? [];
+      if (quoteReport.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_quote_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("quote_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -234,6 +266,8 @@ const result = {
           ? "local_private_catalog_fixture_suite"
         : args.suite === "mock"
           ? "local_private_mock_simulator_suite"
+        : args.suite === "quote"
+          ? "local_private_quote_normalization_suite"
           : args.suite === "metering"
             ? "local_private_metering_fixture_suite"
             : "local_private_fixture_contract_suite"
@@ -244,6 +278,7 @@ const result = {
     ...blockers,
     ...(args.suite === "catalog" ? catalogBlockers : []),
     ...(args.suite === "mock" ? mockBlockers : []),
+    ...(args.suite === "quote" ? quoteBlockers : []),
     ...(args.suite === "provider-matrix" ? [
       "print-production has not selected and approved an actual Prodigi SKU and print specification",
       "destination and shipping method have not been selected or approved",
@@ -285,6 +320,41 @@ const result = {
       liveEnabled: false,
       externalProviderCalls: mockReport?.externalProviderCalls ?? 0,
       blockers: mockBlockers
+    }
+  } : {}),
+  ...(args.suite === "quote" ? {
+    quoteAssessment: {
+      schemaVersion: "fulfillment-quote-assessment/1",
+      evidenceScope: "private_offline_quote_normalization_fixtures_only",
+      completion: "partial_private_quote_normalization",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      privateFormat: privateQuoteFormat,
+      financialEffect: "quote_only",
+      sharedContract25: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#25",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerConformance: {
+        state: "pending",
+        consumerRevision: null,
+        expectedResultsMatch: false
+      },
+      scopedPersistence: "not_implemented",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: quoteReport?.externalProviderCalls ?? 0,
+      orderCalls: quoteReport?.orderCalls ?? 0,
+      blockers: quoteBlockers
     }
   } : {}),
   ...(args.suite === "catalog" ? {
@@ -420,9 +490,11 @@ if (args["evidence-dir"] !== undefined) {
       ...(args.suite === "security" ? securityBlockers : []),
       ...(args.suite === "catalog" ? catalogBlockers : []),
       ...(args.suite === "mock" ? mockBlockers : []),
+      ...(args.suite === "quote" ? quoteBlockers : []),
       ...failureReasons
     ];
     if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
+    if (result.quoteAssessment !== undefined) result.quoteAssessment.localFixtureResult = "failed";
   }
 }
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
