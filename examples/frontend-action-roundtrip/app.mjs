@@ -23,10 +23,10 @@ function result(data) {
     $('status').textContent = operationId ? `Apply did not complete. Existing operation: ${operationId}.` : 'Apply did not complete. Operation reference unavailable. Retry last Apply to recover its identity.';
     error(applyErrorMessage(data)); return;
   }
-  $('status').textContent = data.code === 'cancelled' ? 'Operation cancelled. No approval or purchase was created.' :
+  $('status').textContent = data.acknowledgment_only ? `Existing operation acknowledged: ${operationId}. No approval or purchase was created.` : data.code === 'cancelled' ? 'Operation cancelled. No approval or purchase was created.' :
     `${data.code === 'replayed' ? 'Existing operation returned' : data.code === 'completed' ? 'Artwork revision saved' : data.code === 'ready' ? 'Typed handoff ready' : 'Apply accepted'}: ${operationId}. No approval or purchase was created.`;
   if (data.result?.design_version) refreshHistory();
-  $('draft-state').textContent = data.status === 'completed' ? 'Revision saved. Refresh controls to review the current version before drafting another edit.' : data.code === 'cancelled' ? 'Operation cancelled. Make a new draft selection to Apply again.' : 'Draft submitted. Retry or cancel the existing operation.';
+  $('draft-state').textContent = data.acknowledgment_only ? 'Existing operation acknowledged. Validate handoff to review its current typed handoff.' : data.status === 'completed' ? 'Revision saved. Refresh controls to review the current version before drafting another edit.' : data.code === 'cancelled' ? 'Operation cancelled. Make a new draft selection to Apply again.' : 'Draft submitted. Retry or cancel the existing operation.';
   $('cancel').disabled = data.code === 'cancelled' || data.status === 'completed'; $('handoff').disabled = data.code === 'cancelled' || data.status === 'completed';
   if (data.result?.design_version) { const design = data.result.design_version; $('artifact').hidden = false; $('artifact').textContent = `Saved version ${design.design_version_id} · exact artwork ${design.artifact.content_hash} · backend job ${data.backend_job_id}`;
     $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(design.design_version_id)}`; $('artwork-preview').hidden = false; }
@@ -72,6 +72,7 @@ async function refresh() {
 }
 async function apply(retry = false) {
   if (pending) return;
+  const restoreRetryFocus = retry && document.activeElement === $('retry');
   pending = true; $('apply').disabled = true; $('retry').disabled = true;
   $('fields').disabled = true; $('refresh').disabled = true;
   try {
@@ -85,7 +86,9 @@ async function apply(retry = false) {
     $('cancel').disabled = false;
     result(await api('/api/apply', lastAction));
   } catch { error('Response unavailable. Retry last Apply to recover the same operation identity.'); }
-  finally { pending = false; $('retry').disabled = !lastAction; $('fields').disabled = false; $('refresh').disabled = false; }
+  finally { pending = false; $('retry').disabled = !lastAction; $('fields').disabled = false; $('refresh').disabled = false;
+    if (restoreRetryFocus && $('error').hidden && !$('retry').disabled) $('retry').focus();
+  }
 }
 $('controls').addEventListener('submit', event => { event.preventDefault(); apply(); });
 $('retry').addEventListener('click', () => apply(true));

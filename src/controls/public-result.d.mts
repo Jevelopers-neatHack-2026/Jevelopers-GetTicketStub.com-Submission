@@ -2,7 +2,7 @@
 export interface ArtworkReference { design_version_id: string; artifact: { content_hash: string } }
 export interface SelectionReference { design_version_id: string; revision: number }
 export interface ApplyPresentation {
-  ok: boolean; code?: string; operation_id?: string; status?: string;
+  ok: boolean; acknowledgment_only?: true; code?: string; operation_id?: string; status?: string;
   backend_error: boolean; pending_bridge?: string; backend_job_id?: string;
   result?: { design_version: ArtworkReference };
 }

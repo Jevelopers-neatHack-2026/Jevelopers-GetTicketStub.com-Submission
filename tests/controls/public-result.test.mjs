@@ -106,3 +106,30 @@ test('genuine accepted ready replayed and cancelled local results retain support
     const cancelledReplay = store.apply(principal, payload); assert.equal(cancelledReplay.ok, false); assert.equal(projectApplyResult(cancelledReplay).status, 'cancelled');
   } finally { store.close(); await rm(dir, { recursive: true, force: true }); }
 });
+
+
+test('genuine Apply replay acknowledges ready metadata without claiming a new typed handoff or artwork', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'control-ready-ack-')), state = fixtureState();
+  const store = new ApplyStore(join(dir, 'controls.sqlite'), () => projection(state));
+  try {
+    const payload = action(state), accepted = store.apply(principal, payload);
+    const ready = store.dispatch(principal, accepted.operation_id), before = store.counts();
+    assert.equal(projectApplyResult(ready).ok, true); assert.equal(projectApplyResult(ready).acknowledgment_only, undefined);
+    const replay = store.apply(principal, payload);
+    assert.equal(replay.ok, true); assert.equal(replay.code, 'replayed'); assert.equal(replay.status, 'ready'); assert.equal(replay.replayed, true);
+    assert.equal(replay.operation_id, accepted.operation_id); assert.equal(Object.hasOwn(replay, 'operation'), false);
+    const view = projectApplyResult(replay);
+    assert.equal(view.ok, true); assert.equal(view.acknowledgment_only, true); assert.equal(view.operation_id, accepted.operation_id); assert.equal(view.status, 'ready');
+    assert.equal(view.operation, undefined); assert.equal(view.result, undefined); assert.equal(view.backend_job_id, undefined);
+    assert.deepEqual(store.counts(), before); assert.deepEqual(before, { jobs: 1, image_calls: 0, jev_calls: 0 });
+    // Missing operation is the producer's acknowledgment form; malformed
+    // supplied operation, completion, replay flag or reference stays invalid.
+    for (const override of [{ operation: null }, { operation: {} }, { operation: [] }, { operation: { ...ready.operation, approval: true } },
+      { operation: { ...ready.operation, logical_operation_id: 'op.other' } }, { status: 'completed' }, { replayed: false },
+      { code: 'ready' }, { result: {} }, { operation_id: 'op.access_token:private' }]) {
+      const rejected = projectApplyResult({ ...replay, ...override });
+      assert.equal(rejected.ok, false); assert.equal(rejected.operation_id, undefined); assert.equal(rejected.acknowledgment_only, undefined);
+      assert.equal(applyErrorMessage(rejected), fallback);
+    }
+  } finally { store.close(); await rm(dir, { recursive: true, force: true }); }
+});

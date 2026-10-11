@@ -59,7 +59,7 @@ export function projectApplyResult(input) {
   const data = snapshot(input), operation = validId(data.operation_id) ? data.operation_id : undefined;
   const invalidReference = Object.hasOwn(data, 'operation_id') && !operation;
   const design = artwork(data.result?.design_version);
-  const hasResult = Object.hasOwn(data, 'result'), hasStatus = Object.hasOwn(data, 'status');
+  const hasResult = Object.hasOwn(data, 'result'), hasStatus = Object.hasOwn(data, 'status'), hasOperation = Object.hasOwn(data, 'operation');
   const backendError = data.backend_error !== undefined && data.backend_error !== null && data.backend_error !== false;
   const replayFlag = !Object.hasOwn(data, 'replayed') || typeof data.replayed === 'boolean';
   let supported = false;
@@ -70,7 +70,7 @@ export function projectApplyResult(input) {
     if (data.code === 'cancelled') supported = data.status === 'cancelled' && !hasResult && !Object.hasOwn(data, 'operation');
     if (data.code === 'replayed' && data.replayed === true) supported =
       data.status === 'queued' && !hasResult && !Object.hasOwn(data, 'operation') ||
-      data.status === 'ready' && !hasResult && typedHandoff(data.operation, operation) ||
+      data.status === 'ready' && !hasResult && (!hasOperation || typedHandoff(data.operation, operation)) ||
       data.status === 'completed' && Boolean(design) && validId(data.backend_job_id) && !Object.hasOwn(data, 'operation');
   } else if (!invalidReference && replayFlag && data.ok === false && failureCodes.has(data.code) && !hasResult && !Object.hasOwn(data, 'operation')) {
     supported = !hasStatus || Boolean(operation) && (
@@ -84,6 +84,9 @@ export function projectApplyResult(input) {
   if (!supported) return { ok: false, backend_error: false };
   return {
     ok: data.ok, code: data.code, operation_id: operation,
+    // Apply replay acknowledges stored ready state without releasing a fresh
+    // typed handoff. An explicitly supplied operation must still validate.
+    ...(data.code === 'replayed' && data.status === 'ready' && !hasOperation ? { acknowledgment_only: true } : {}),
     status: operation ? data.status : undefined,
     backend_error: backendError,
     pending_bridge: ['creative.composition.consume/1', 'creative.compound.consume/1'].includes(data.pending_bridge) ? data.pending_bridge : undefined,

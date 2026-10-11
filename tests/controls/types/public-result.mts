@@ -9,3 +9,6 @@ const compared: string | undefined = projectHistoryResult(input, false).result?.
 void [operation, count, historical, restored, compared];
 // @ts-expect-error the projection never declares private upstream message data
 apply.message;
+
+const acknowledgmentOnly: true | undefined = projectApplyResult({}).acknowledgment_only;
+void acknowledgmentOnly;

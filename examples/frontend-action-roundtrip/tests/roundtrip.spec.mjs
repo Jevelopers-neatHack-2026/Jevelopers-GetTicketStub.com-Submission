@@ -152,3 +152,48 @@ test('follow-up-only browser edit is an explicit composition change and honors l
   expect(handoff.operation.tasks[0].follow_up_answers).toEqual({ q01: 'balanced' });
   expect(await counters(request)).toMatchObject({ jobs: 1, jev_calls: 0, image_calls: 0 });
 });
+
+
+test('genuine ready Apply replay acknowledges the same operation without fresh handoff or saved-artwork claims', async ({ page, request }, testInfo) => {
+  const errors = [], posts = [], exceptions = []; page.on('pageerror', e => errors.push(e.message));
+  page.on('request', req => { if (req.method() === 'POST') posts.push({ url: req.url(), body: req.postDataJSON() }); });
+  await page.getByLabel('Name size', { exact: true }).selectOption('large');
+  expect(await counters(request)).toMatchObject({ jobs: 0, image_calls: 0, jev_calls: 0 });
+  const session = await page.context().newCDPSession(page);
+  await session.send('Debugger.enable'); await session.send('Debugger.setPauseOnExceptions', { state: 'all' });
+  session.on('Debugger.paused', async event => { exceptions.push(event.data?.description ?? event.reason); await session.send('Debugger.resume'); });
+  let response = page.waitForResponse('**/api/apply');
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).focus(); await page.keyboard.press('Enter');
+  const accepted = await (await response).json(); await expect(page.locator('#status')).toContainText('Apply accepted');
+  response = page.waitForResponse('**/api/dispatch'); await page.getByRole('button', { name: 'Validate handoff' }).click();
+  const ready = await (await response).json(); expect(ready.operation.logical_operation_id).toBe(accepted.operation_id);
+  await expect(page.locator('#status')).toContainText('Typed handoff ready');
+  const before = await counters(request); expect(before).toMatchObject({ jobs: 1, image_calls: 0, jev_calls: 0 });
+  response = page.waitForResponse('**/api/apply');
+  await page.getByRole('button', { name: 'Retry last Apply' }).focus(); await page.keyboard.press('Enter');
+  const replay = await (await response).json();
+  expect(replay).toMatchObject({ ok: true, code: 'replayed', status: 'ready', replayed: true, operation_id: accepted.operation_id });
+  expect(Object.hasOwn(replay, 'operation')).toBe(false); expect(Object.hasOwn(replay, 'result')).toBe(false);
+  await expect(page.locator('#status')).toHaveText(`Existing operation acknowledged: ${accepted.operation_id}. No approval or purchase was created.`);
+  await expect(page.locator('#draft-state')).toHaveText('Existing operation acknowledged. Validate handoff to review its current typed handoff.');
+  await expect(page.getByRole('alert')).toBeHidden(); await expect(page.locator('#artifact')).toBeHidden(); await expect(page.locator('#artwork-preview')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Retry last Apply' })).toBeFocused();
+  expect(posts.filter(p => p.url.endsWith('/api/apply'))).toHaveLength(2); expect(posts.filter(p => p.url.endsWith('/api/dispatch'))).toHaveLength(1);
+  expect(posts[1].body).toEqual({ operation_id: accepted.operation_id }); expect(posts[2].body).toEqual(posts[0].body);
+  expect(await counters(request)).toEqual(before); expect(exceptions).toEqual([]); await session.detach();
+  // Foundation has no history endpoint. End the Apply/Validate/Retry handler
+  // window before Refresh, and assert its expected unsupported read explicitly.
+  const historyResponse = page.waitForResponse('**/api/history');
+  await page.getByRole('button', { name: 'Refresh controls' }).click();
+  expect((await historyResponse).status()).toBe(404);
+  await expect(page.locator('#status')).toHaveText(`Controls refreshed. Existing operation: ${accepted.operation_id}.`);
+  await expect(page.getByRole('button', { name: 'Validate handoff' })).toBeEnabled(); await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeEnabled();
+  response = page.waitForResponse('**/api/cancel'); await page.getByRole('button', { name: 'Cancel operation' }).click();
+  const cancelled = await (await response).json(); expect(cancelled).toMatchObject({ ok: true, code: 'cancelled', operation_id: accepted.operation_id });
+  expect(posts.at(-1).body).toEqual({ operation_id: accepted.operation_id }); await expect(page.locator('#status')).toContainText('Operation cancelled');
+  expect(await page.locator('body').innerText()).not.toMatch(/Artwork revision saved|Revision saved\./);
+  expect(await counters(request)).toEqual(before); expect(errors).toEqual([]); expect(exceptions).toEqual([]);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: 'test-results/genuine-ready-apply-replay-cancelled.png', fullPage: true });
+  await testInfo.attach('genuine-ready-apply-replay', { body: JSON.stringify({ accepted, ready, replay, cancelled, before, after: await counters(request), posts, errors, exceptions, handler_window: 'Apply/Validate/Retry; foundation Refresh history read explicitly returns404', synthetic_response_injection: false, live_calls: 0 }), contentType: 'application/json' });
+});
