@@ -46,7 +46,7 @@ HMAC-SHA256 with the same key handling as context tokens (`CONTEXT_SECRET`, at l
 | Route | Capability | Notes |
 | --- | --- | --- |
 | `POST /api/approvals` | `stub.approve` on `stub:<id>` (signed-in account only) | body `{ stubId, purpose, expectedVersionId, size? }`; Origin required; 404 for a stub the caller can't see; guest owner 401 |
-| `GET /api/approvals?project=stub:<id>` | `stub.approve` | owner's history, newest first, each with `status`, `revokedAt`, `token` |
+| `GET /api/approvals?project=stub:<id>` | `stub.approve` | owner's history, newest first, each with `status`, `revokedAt`, `token`, and the owner-only `summary` and `drift` (see Review sheet) |
 | `POST /api/approvals/revoke` | `stub.approve` | body `{ stubId, approvalId }`; idempotent; another account's id is 404 |
 | `POST /api/approvals/verify` | none (the signed token is the capability) | body `{ token, expect }`; no cookie, no Origin; 120/min per address |
 
@@ -55,6 +55,17 @@ Errors use `{ error: { code, message } }`: `approval_conflict` (409), `approval_
 ## UI
 
 The Versions panel's "Selected for print" spot shows the approval state of the selected version and an Approve for print / Revoke action (see `VersionsPanel.tsx`). Approving is an explicit button, shows what is being approved, and sends the selected version id so a stale view is refused.
+
+### Review sheet (GT-06B.1)
+
+"Approve for print" opens a paper sheet (`src/customer/studio/approval/ApproveSheet.tsx`) instead of approving at once. It shows the stub front and back (the editor's `StubView`, static), the printed facts exactly as `bindStub` hashes them (event fields and kept facts, each kept fact with its provenance mark), the composition in words, what changed since the last approval, and a line that approving is not an order or a payment. "Approve this version" calls the same approve API with `expectedVersionId`; on `approval_conflict` it shows the catalog message and re-reads.
+
+What changed is computed in `printed.ts` from two owner-only additions to the list and issue responses, never to the token, the record or `/verify`:
+
+- `summary`: the printed lines at issue time, stored in `approval_summaries` (append-only, one row per approval, written in the same transaction as the approval). Null for an approval issued before it existed.
+- `drift`: booleans comparing the approval's version, art, design, facts and composition hashes with the stub the server holds now.
+
+It can say: art changed, a different version with the same art, style, material, finish and size changes (`Finish: Matte → Foil`), and which printed facts were added, removed or changed (`Facts: Date changed`). It cannot say what changed inside the title font and colour, hidden fields, note or guest name (only "Title style, hidden fields or note changed"), art detail beyond "Art changed", or which fact changed for an approval with no stored summary ("Facts changed"). `check-approval.mjs` fails if the sheet's printed lines and `factsHash` ever stop moving together.
 
 ## Limitations (read these)
 
@@ -65,7 +76,7 @@ The Versions panel's "Selected for print" spot shows the approval state of the s
 - **Server-side checks happen only if the stub is on the account's wall** (`wall_stubs`). A stub that exists only as a share or on a device cannot be approved.
 - **Size is chosen by the client** (validated against the material's allowed sizes), since the studio does not store a print size on the stub.
 - **No rights approval.** `asset_rights` is named in `notAuthorizes`; nothing here reviews whether an asset may be used.
-- **The approval UX is minimal.** No side-by-side of the composed front and back, and no "what changed since you approved" diff beyond the status line.
+- **The review sheet shows the studio's own render.** The front and back are the editor's `StubView` of the stub on the device; there is no server-rendered composed preview or hash of it. A device with edits the server has not received yet can show a stub that differs from what the server binds until the next save (the sheet re-reads on every save).
 - **Concurrent tabs:** two simultaneous identical approvals collapse to one (storage lock); a selection change during approval is refused (409). There is no cross-tab live notification.
 - **SQLite on one host.** The append-only guarantee is enforced by triggers in the one database; a Postgres storage would need the same constraints.
 - **Staleness is checked at verify and list time.** Nothing pushes a revocation to a consumer; a consumer that does not call the verify port will not learn of one.

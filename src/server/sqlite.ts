@@ -121,6 +121,7 @@ export class SqliteStorage implements Storage {
       this.run("DELETE FROM accounts WHERE id = ?", accountId);
       // The append-only triggers let these go only now that the account is gone.
       this.run("DELETE FROM approval_revocations WHERE tenant = ?", accountId);
+      this.run("DELETE FROM approval_summaries WHERE tenant = ?", accountId);
       this.run("DELETE FROM approvals WHERE tenant = ?", accountId);
       return [...mine].filter((name) => {
         const like = `%${name}%`;
@@ -393,11 +394,13 @@ export class SqliteStorage implements Storage {
       issuedAt: Number(r.issued_at),
       expiresAt: Number(r.expires_at),
       revokedAt: r.revoked_at === null || r.revoked_at === undefined ? null : Number(r.revoked_at),
+      summary: typeof r.summary === "string" ? r.summary : null,
     };
   }
 
   private static readonly APPROVAL_SELECT =
-    "SELECT a.*, (SELECT revoked_at FROM approval_revocations r WHERE r.approval_id = a.id) AS revoked_at FROM approvals a";
+    "SELECT a.*, (SELECT revoked_at FROM approval_revocations r WHERE r.approval_id = a.id) AS revoked_at, " +
+    "(SELECT summary FROM approval_summaries s WHERE s.approval_id = a.id) AS summary FROM approvals a";
 
   async getWallStub(accountId: string, stubId: string): Promise<Stub | null> {
     const r = this.get("SELECT data FROM wall_stubs WHERE account_id = ? AND stub_id = ? AND deleted = 0", accountId, stubId);
@@ -419,7 +422,8 @@ export class SqliteStorage implements Storage {
         "INSERT INTO approvals (id, tenant, project, purpose, idem_key, record, issued_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         made.id, tenant, stubId, made.purpose, made.idemKey, made.record, made.issuedAt, made.expiresAt,
       );
-      return { row: { id: made.id, tenant, project: stubId, purpose: made.purpose, record: made.record, issuedAt: made.issuedAt, expiresAt: made.expiresAt, revokedAt: null }, created: true };
+      this.run("INSERT INTO approval_summaries (approval_id, tenant, summary) VALUES (?, ?, ?)", made.id, tenant, made.summary);
+      return { row: { id: made.id, tenant, project: stubId, purpose: made.purpose, record: made.record, issuedAt: made.issuedAt, expiresAt: made.expiresAt, revokedAt: null, summary: made.summary }, created: true };
     });
   }
 

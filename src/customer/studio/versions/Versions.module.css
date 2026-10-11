@@ -144,3 +144,7 @@
   font-size: 0.95rem;
   overflow-wrap: anywhere;
 }
+.approval:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 2px;
+}

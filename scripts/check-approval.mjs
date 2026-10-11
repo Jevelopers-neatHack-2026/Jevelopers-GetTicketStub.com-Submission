@@ -7,7 +7,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
-import { APPROVAL_FAILURES, APPROVAL_PURPOSES, NOT_AUTHORIZED, verifyApproval } from "../src/server/approval-token.ts";
+import { APPROVAL_FAILURES, APPROVAL_PURPOSES, NOT_AUTHORIZED, bindStub, verifyApproval } from "../src/server/approval-token.ts";
+import { changesSince, printedLines } from "../src/customer/studio/approval/printed.ts";
 import { runFixture } from "../fixtures/approval/verify.mjs";
 
 const BASE = (process.argv[2] ?? process.env.SMOKE_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -120,6 +121,21 @@ async function main() {
   check("fixtures: a record holds hashes, ids and times only (no art src, note, email or name)", !/data:image|@|note|friends/.test(JSON.stringify(rec)) && rec.mode === "fixture");
   const readme = existsSync(join(FIXTURES, "README.md")) ? readFileSync(join(FIXTURES, "README.md"), "utf8") : "";
   check("fixtures: the README names every reason and says fixture only", APPROVAL_FAILURES.every((r) => readme.includes(r)) && /FIXTURE ONLY/.test(readme));
+
+  const art0 = { hash: "a".repeat(64), source: "ref" };
+  const base = stub("fx-p", "Printed", 1);
+  const variants = {
+    venue: { ...base, event: { ...base.event, venue: "Elsewhere" } },
+    seat: { ...base, event: { ...base.event, seat: "Row 4" } },
+    keptValue: { ...base, event: { ...base.event, facts: [{ ...base.event.facts[0], value: "Other" }] } },
+    keptProvenance: { ...base, event: { ...base.event, facts: [{ ...base.event.facts[0], provenance: "live" }] } },
+    unkept: { ...base, event: { ...base.event, facts: [...base.event.facts, { id: "f2", label: "Weather", value: "Rain", source: "x", provenance: "estimated", confidence: 0.5 }] } },
+    setlist: { ...base, event: { ...base.event, setlist: [{ title: "Not printed in the facts hash" }] } },
+    note: { ...base, personal: { ...base.personal, note: "hi" } },
+  };
+  const sameLines = (a, b) => JSON.stringify(printedLines(a)) === JSON.stringify(printedLines(b));
+  const sameFacts = (a, b) => bindStub(a, "classic", art0).factsHash === bindStub(b, "classic", art0).factsHash;
+  check("review: the sheet's printed lines change exactly when the binding's factsHash does (same source)", Object.entries(variants).every(([, v]) => sameLines(base, v) === sameFacts(base, v)) && !sameFacts(base, variants.venue) && !sameFacts(base, variants.keptProvenance) && sameFacts(base, variants.unkept), Object.entries(variants).map(([k, v]) => `${k}:${sameLines(base, v)}/${sameFacts(base, v)}`).join(" "));
 
   // ---------------------------------------------------------------- the live server
   const A = client("A");
@@ -267,6 +283,35 @@ async function main() {
   const reissue = await approve(A, S1);
   check("revoke: approving the same content again after a revoke is a new approval (the revoked one is not resurrected)", reissue.status === 200 && reissue.json.created === true && reissue.json.approval.id !== re.json.approval.id);
   check("revoke: that new approval verifies and the revoked one still does not", (await verify(reissue.json.token, want({ content: { artHash } }))).json?.ok === true && reasonOf(await verify(re.json.token, want({ content: { artHash } }))) === "revoked");
+
+  // --- the review sheet's owner-only projection (GT-06B.1): what was printed, and what differs now
+  const hist = (await list(A, S1)).json.approvals;
+  const hOld = hist.find((a) => a.approval.id === ap1.id);
+  const hNew = hist.find((a) => a.approval.id === reissue.json.approval.id);
+  const printedOf = (a) => Object.fromEntries((a?.summary?.printed ?? []).map((l) => [l.key, l.value]));
+  check("review: the owner's list carries what each approval printed (title, venue, date, the kept fact with its provenance)", printedOf(hOld).venue === "Harbour Hall" && printedOf(hNew).venue === "A different hall" && printedOf(hNew).title === "Approval smoke" && printedOf(hNew).dateISO === "2026-11-02" && printedOf(hNew)["fact:f1"] === "Lantern" && hNew.summary.printed.find((l) => l.key === "fact:f1")?.provenance === "simulated", JSON.stringify(hNew?.summary));
+  check("review: the issue response carries the same summary and a drift of all false", reissue.json.summary?.printed?.length === hNew.summary.printed.length && Object.values(reissue.json.drift ?? { x: true }).every((v) => v === false));
+  check("review: drift names what differs now (the first approval: facts changed since, art and version did not)", hOld.drift?.facts === true && hOld.drift.art === false && hOld.drift.version === false && Object.values(hNew.drift).every((v) => v === false), JSON.stringify([hOld.drift, hNew.drift]));
+  const diffOld = changesSince({ id: hOld.approval.id, status: hOld.status, binding: hOld.approval.binding, summary: hOld.summary, drift: hOld.drift }, { printed: hNew.summary.printed, composition: hNew.approval.binding.composition });
+  check("review: the diff says which fact changed in plain words, and detects nothing else", diffOld.items.join("|") === "Facts: Venue changed", diffOld.items.join("|"));
+  const diffNone = changesSince({ id: hNew.approval.id, status: "revoked", binding: hNew.approval.binding, summary: hNew.summary, drift: hNew.drift }, { printed: hNew.summary.printed, composition: hNew.approval.binding.composition });
+  const finish = { ...hNew.approval.binding.composition, finish: "foil" };
+  const diffFinish = changesSince({ id: hNew.approval.id, status: "active", binding: hNew.approval.binding, summary: hNew.summary, drift: { ...hNew.drift, composition: true } }, { printed: hNew.summary.printed, composition: finish });
+  check("review: no differences reads as same, a finish change as 'Finish: Matte → Foil', no earlier approval as first", diffNone.same === true && diffFinish.items.join("|") === "Finish: Matte → Foil" && changesSince(undefined, { printed: [], composition: finish }).first === true);
+  const oldRow = { id: "apr_old", status: "stale", binding: hNew.approval.binding, summary: null, drift: { version: false, art: false, design: false, facts: true, composition: false } };
+  check("review: an approval from before summaries (none stored) can only say 'Facts changed'", changesSince(oldRow, { printed: hNew.summary.printed, composition: hNew.approval.binding.composition }).items.join("|") === "Facts changed");
+  const bHist = (await list(B, SB)).json.approvals;
+  check("review: B sees only B's summaries, and A's list never holds B's content", bHist.length === 1 && printedOf(bHist[0]).title === "B's stub" && !JSON.stringify(hist).includes("B's stub") && !JSON.stringify(bHist).includes("Approval smoke"));
+  check("review: the summary never reaches the token or the verifier (no summary, drift, venue or title in any verify answer or token body)", ![ok1.text, revoked.text, staleVerify.text].some((x) => /"summary"|"drift"|Harbour Hall|Approval smoke|Lantern/.test(x)) && [r1.json.token, re.json.token, reissue.json.token].every((tk) => !/summary|drift|Harbour Hall|Lantern/.test(Buffer.from(tk.split(".")[1], "base64url").toString())));
+  const dbS = new DatabaseSync(DB);
+  let updSum = "";
+  try {
+    dbS.prepare("UPDATE approval_summaries SET summary = '{}' WHERE approval_id = ?").run(re.json.approval.id);
+  } catch (e) {
+    updSum = String(e.message);
+  }
+  dbS.close();
+  check("review: a stored summary can't be rewritten (append-only)", /append-only/.test(updSum), updSum);
 
   // --- purchase is separate
   const srcOf = (f) => (existsSync(join(ROOT, f)) ? readFileSync(join(ROOT, f), "utf8") : "");

@@ -98,6 +98,8 @@ export interface ApprovalRow {
   expiresAt: number;
   /** Epoch ms of the revocation row, or null. */
   revokedAt: number | null;
+  /** The owner-only printed-facts summary as JSON (never part of the signed record), or null for an approval issued before it existed. */
+  summary: string | null;
 }
 
 /** What `issueApproval`'s builder returns for a stub it was shown. `idemKey` is the hash of purpose + binding. */
@@ -106,6 +108,8 @@ export interface NewApproval {
   purpose: string;
   idemKey: string;
   record: string;
+  /** Owner-only printed-facts summary as JSON, stored beside the record in the same write. */
+  summary: string;
   issuedAt: number;
   expiresAt: number;
 }

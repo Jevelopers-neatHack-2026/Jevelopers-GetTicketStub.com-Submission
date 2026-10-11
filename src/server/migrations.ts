@@ -179,6 +179,19 @@ const MIGRATIONS: string[] = [
     SELECT RAISE(ABORT, 'revocations are kept while their account exists');
   END;
   `,
+  `
+  -- What was printed when an approval was issued, in words, so the owner's review sheet can say what changed since
+  -- (GT-06B.1). Owner-only: it is never in the signed record or the token and the verifier never reads it. Append-only,
+  -- and it leaves only with its account, like the approval it describes.
+  CREATE TABLE approval_summaries (
+    approval_id TEXT PRIMARY KEY REFERENCES approvals (id),
+    tenant TEXT NOT NULL,
+    summary TEXT NOT NULL
+  );
+  CREATE TRIGGER approval_summaries_no_update BEFORE UPDATE ON approval_summaries BEGIN
+    SELECT RAISE(ABORT, 'approval summaries are append-only');
+  END;
+  `,
 ];
 
 export function migrate(db: DatabaseSync): void {

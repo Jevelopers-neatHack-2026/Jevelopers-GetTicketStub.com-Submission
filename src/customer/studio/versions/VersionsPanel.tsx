@@ -2,13 +2,14 @@
 // The version history (GT-06A): every version with its thumbnail, short id, parent, how it was made and when; pick any two
 // to compare in words and side by side (switchable on the phone); restore one without changing or generating anything.
 // The selected version is the one checkout and the wall use, and it is named at the top so nothing is ambiguous.
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { DesignVersion, Stub } from "../types";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play } from "@/customer/studio/feedback";
 import { api, ApiError, type ApprovalInfo } from "@/customer/account/api";
 import { messageFor } from "@/customer/feedback-messages/messages";
 import { PunchTabs, Tag, Tags, TearLink } from "@/customer/desk/Desk";
+import { ApproveSheet } from "../approval/ApproveSheet";
 import { atVersion } from "../editor/ops";
 import { whenLabel } from "../facts/FactsReview";
 import { artLabel, compareVersions, howMade, listVersions, restoreVersion, selectedSummary, versionHash } from "./versions";
@@ -53,6 +54,8 @@ function PrintApproval({ stub }: { stub: Stub }) {
   const [state, setState] = useState<"loading" | "ready" | "off">("loading");
   const [said, setSaid] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
   const stubId = stub.id;
   const versionId = stub.currentVersionId;
 
@@ -90,7 +93,7 @@ function PrintApproval({ stub }: { stub: Stub }) {
 
   if (state === "loading") return null;
   return (
-    <div className={styles.approval} data-approved={live ? "true" : undefined}>
+    <div ref={box} tabIndex={-1} className={styles.approval} data-approved={live ? "true" : undefined}>
       {state === "off" ? (
         <p className={styles.note}>Sign in and save this stub to your wall to approve it for print.</p>
       ) : live ? (
@@ -109,7 +112,7 @@ function PrintApproval({ stub }: { stub: Stub }) {
         <>
           <p className={styles.note}>Not approved for print yet. Approving covers this exact version, its facts and settings for 7 days. It isn&apos;t an order or a payment.</p>
           <Tags label="Print approval">
-            <Tag disabled={busy} onClick={() => act(() => api.approve(stubId, versionId), "Approved for print.")}>
+            <Tag disabled={busy} onClick={() => setReviewing(true)} aria-haspopup="dialog">
               Approve for print
             </Tag>
           </Tags>
@@ -118,6 +121,16 @@ function PrintApproval({ stub }: { stub: Stub }) {
       <p className={styles.note} role="status" data-announce="change">
         {said}
       </p>
+      <ApproveSheet
+        stub={stub}
+        open={reviewing}
+        onClose={() => setReviewing(false)}
+        onApproved={(done) => {
+          setSaid(done);
+          // The button that opened the sheet turns into "Approved for print", so focus lands on that line instead.
+          void api.approvals(stubId).then(show, () => show(null)).then(() => requestAnimationFrame(() => box.current?.focus({ preventScroll: true })));
+        }}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 // becomes an ApiError the caller can ignore, so the signed-out, local-only app keeps working.
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
+import type { ApprovalDrift, ApprovalSummary, Composition } from "@/customer/studio/approval/printed";
 import { SAVING_OFF_CODE, markSavingOff } from "./saving";
 
 export interface Account {
@@ -68,9 +69,12 @@ export interface GiftInfo {
 }
 /** An artwork approval as the owner sees it (GT-06B). `approval.binding` holds hashes, never content. */
 export interface ApprovalInfo {
-  approval: { id: string; purpose: "print.compose" | "artifact.download"; issuedAt: string; expiresAt: string; binding: { versionId: string } };
+  approval: { id: string; purpose: "print.compose" | "artifact.download"; issuedAt: string; expiresAt: string; binding: { versionId: string; composition: Composition } };
   status: "active" | "revoked" | "expired" | "stale";
   revokedAt: string | null;
+  /** Owner-only extras for the review sheet (GT-06B.1). */
+  summary: ApprovalSummary | null;
+  drift: ApprovalDrift | null;
 }
 export interface OrganizerEventReply {
   eventId: string;

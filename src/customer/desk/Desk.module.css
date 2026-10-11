@@ -670,6 +670,9 @@
   .sheetGrip {
     display: none;
   }
+  .sheetWide {
+    width: min(860px, calc(100vw - var(--nav-w, 0px) - 48px));
+  }
 }
 
 /* ---------- Stamped confirmation ---------- */

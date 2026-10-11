@@ -25,6 +25,7 @@ import {
 import { contextEnvironment, signingMode, tokenSigningKey, type RequestContext } from "./context";
 import { readStoredFile } from "./files";
 import { HttpError } from "./http";
+import { parseSummary, printedSummary, type ApprovalDrift, type ApprovalSummary } from "@/customer/studio/approval/printed";
 import { getStorage } from "./index";
 import type { ApprovalRow, NewApproval } from "./storage";
 
@@ -42,6 +43,10 @@ export interface ApprovalView {
   status: ApprovalStatus;
   revokedAt: string | null;
   token: string;
+  /** Owner-only, never in the token or the verifier: what was printed (null for an approval issued before this existed). */
+  summary: ApprovalSummary | null;
+  /** Owner-only: which parts of the stub differ from this approval right now (null when the stub can't be read). */
+  drift: ApprovalDrift | null;
 }
 
 const unavailable = (message: string) => new HttpError(409, "approval_unavailable", message);
@@ -103,7 +108,7 @@ export async function issueApproval(ctx: RequestContext, stubId: string, purpose
       issuedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + APPROVAL_TTL_MS).toISOString(),
     };
-    return { id: record.id, purpose, idemKey: hashJson({ purpose, binding, membershipRevision: ctx.membershipRevision }), record: canonicalJson(record), issuedAt: now, expiresAt: now + APPROVAL_TTL_MS };
+    return { id: record.id, purpose, idemKey: hashJson({ purpose, binding, membershipRevision: ctx.membershipRevision }), record: canonicalJson(record), summary: JSON.stringify(printedSummary(stub)), issuedAt: now, expiresAt: now + APPROVAL_TTL_MS };
   });
   if (!res) throw new HttpError(404, "not_found", "We couldn't find that.");
   return { view: await viewOf(res.row, key, now), created: res.created };
@@ -128,9 +133,13 @@ async function viewOf(row: ApprovalRow, key: string, now: number): Promise<Appro
   const record = JSON.parse(row.record) as ApprovalRecord;
   const token = signApproval(record, key);
   // The record checked against its own scope: only expiry, revocation and staleness can fail here.
-  const r = verifyApproval(token, key, { tenant: record.tenant.id, project: record.project, purpose: record.purpose }, now, await stateOf(row, record));
+  const state = await stateOf(row, record);
+  const r = verifyApproval(token, key, { tenant: record.tenant.id, project: record.project, purpose: record.purpose }, now, state);
   const status: ApprovalStatus = r.ok ? "active" : (STATUS_OF[r.reason] ?? "stale");
-  return { approval: record, status, revokedAt: row.revokedAt === null ? null : new Date(row.revokedAt).toISOString(), token };
+  const b = record.binding;
+  const c = state.current;
+  const drift: ApprovalDrift | null = c ? { version: c.versionId !== b.versionId, art: c.artHash !== b.artHash, design: c.designHash !== b.designHash, facts: c.factsHash !== b.factsHash, composition: c.compositionHash !== b.compositionHash } : null;
+  return { approval: record, status, revokedAt: row.revokedAt === null ? null : new Date(row.revokedAt).toISOString(), token, summary: parseSummary(row.summary), drift };
 }
 
 /** Every approval for the owner's stub, newest first, each with its current status. */
