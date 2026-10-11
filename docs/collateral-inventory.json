@@ -2417,7 +2417,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "ca5008f178d22efa11ad9301b6cc7867ddfc4099baea9777ced6516844fee0bc"
+      "sha256": "8ec4a394e9789330919d2be50411f35137392576cc0ed3b90b9f42ab707d01f4"
     },
     {
       "fileId": "TEST-VISUAL-ACCESSIBILITY-001",
@@ -2464,7 +2464,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "18fe4b67c46dd7ec77818b1cbedb3f237188189994e85e9c628002e9075282d8"
+      "sha256": "ff306b0a781917540e950a3d5f93c3eed7f67cf1eccbe479a1cece0014837022"
     },
     {
       "fileId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
@@ -2669,6 +2669,6 @@
         "reReviewTrigger": "Official post, event format, demo requirements, X destination or confirmed cutoff changes."
       }
     ],
-    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
+    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Every selected or submission root's intended destinations must also be explicitly approved on each consumed source, export and composition dependency; destination requirements stay scoped to each root's own provenance closure. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
   }
 }

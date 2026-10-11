@@ -283,6 +283,54 @@ def _destination_scope_covered(allowed: Any, approved: Any) -> bool:
     )
 
 
+def _destination_requirements(
+    root_record_ids: list[str] | tuple[str, ...],
+    records_by_id: dict[str, dict[str, Any]],
+    *,
+    include_derivatives: bool,
+    relevant_kinds: set[str] | None = None,
+) -> dict[str, set[str]]:
+    """Propagate each output root's intended destinations through its provenance closure."""
+    required_by_record: dict[str, set[str]] = {}
+    for root_id in root_record_ids:
+        root = records_by_id.get(root_id)
+        destinations = root.get("allowedDestinations") if root else None
+        if (
+            not isinstance(destinations, list)
+            or not destinations
+            or not all(isinstance(item, str) and item for item in destinations)
+        ):
+            continue
+
+        queue = [root_id]
+        seen: set[str] = set()
+        while queue:
+            record_id = queue.pop()
+            if record_id in seen:
+                continue
+            seen.add(record_id)
+            record = records_by_id.get(record_id)
+            if not record or (relevant_kinds is not None and record.get("kind") not in relevant_kinds):
+                continue
+            required_by_record.setdefault(record_id, set()).update(destinations)
+
+            lineage = record.get("lineage", {})
+            related_ids: list[str] = []
+            if isinstance(lineage, dict):
+                parents = lineage.get("derivedFrom", [])
+                if isinstance(parents, list):
+                    related_ids.extend(item for item in parents if isinstance(item, str))
+                if include_derivatives:
+                    derivatives = lineage.get("derivatives", [])
+                    if isinstance(derivatives, list):
+                        related_ids.extend(item for item in derivatives if isinstance(item, str))
+            dependencies = record.get("compositionDependencies", [])
+            if isinstance(dependencies, list):
+                related_ids.extend(item for item in dependencies if isinstance(item, str))
+            queue.extend(related_ids)
+    return required_by_record
+
+
 def _unsafe_positive_copy(text: str) -> list[str]:
     problems: list[str] = []
     for clause in re.split(r"[.;!?]\s*", text):
@@ -1261,6 +1309,11 @@ def selected_collateral_blockers(
         "accessible_text_alternative", "accessible_synthetic_fixture_alternative",
         "static_html_rehearsal_support",
     }
+    destination_requirements = _destination_requirements(
+        selected_asset_ids, record_by_id,
+        include_derivatives=True,
+        relevant_kinds=relevant_kinds,
+    )
     queue = list(required_record_ids)
     seen: set[str] = set()
     while queue:
@@ -1292,6 +1345,14 @@ def selected_collateral_blockers(
         if not _destination_scope_covered(allowed, approved):
             reason = "permission does not cover every allowed destination" if allowed and approved else "selected record has no explicit approved destination"
             blockers.append(f"{record_id}: {reason}")
+        required_destinations = destination_requirements.get(record_id, set())
+        approved_destinations = set(approved) if isinstance(approved, list) else set()
+        missing_destinations = sorted(required_destinations - approved_destinations)
+        if missing_destinations:
+            blockers.append(
+                f"{record_id}: selected source/export permission does not approve intended destination(s): "
+                f"{', '.join(missing_destinations)}"
+            )
     return blockers
 
 
@@ -1399,6 +1460,9 @@ def _submission_provenance_rights_blockers(
 ) -> list[str]:
     """Require destination approval for each required output and every declared source input."""
     blockers: list[str] = []
+    destination_requirements = _destination_requirements(
+        output_record_ids, provenance_by_id, include_derivatives=False,
+    )
     queue = list(output_record_ids)
     seen: set[str] = set()
     while queue:
@@ -1417,6 +1481,14 @@ def _submission_provenance_rights_blockers(
             blockers.append(f"{record_id}: required output/source provenance review lacks reviewer/date")
         if not _destination_scope_covered(record.get("allowedDestinations"), permission.get("approvedDestinations")):
             blockers.append(f"{record_id}: required output/source permission does not cover every allowed destination")
+        approved_destinations = permission.get("approvedDestinations")
+        approved_set = set(approved_destinations) if isinstance(approved_destinations, list) else set()
+        missing_destinations = sorted(destination_requirements.get(record_id, set()) - approved_set)
+        if missing_destinations:
+            blockers.append(
+                f"{record_id}: required output/source permission does not approve intended destination(s): "
+                f"{', '.join(missing_destinations)}"
+            )
         source = record.get("source", {})
         if not isinstance(source, dict) or not source.get("path") or not source.get("revision") or not _pinned_revision(source):
             blockers.append(f"{record_id}: required output/source provenance is not immutably pinned")
