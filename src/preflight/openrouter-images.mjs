@@ -111,7 +111,7 @@ function safeCredentialEvidence(value) {
   }
 }
 
-async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt }) {
+async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt, now }) {
   try {
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
       throw error('credential_unavailable', 'Provider account and project references must be safe opaque IDs.');
@@ -143,7 +143,7 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
     }
     safeCredentialEvidence(resolved.evidence);
     if (typeof resolved.expires_at !== 'string' || !Number.isFinite(Date.parse(resolved.expires_at))
-      || Date.parse(resolved.expires_at) <= Date.now()
+      || Date.parse(resolved.expires_at) <= now()
       || (deadlineAt && Date.parse(resolved.expires_at) < Date.parse(deadlineAt))) {
       throw error('credential_unavailable', 'Scoped credential is expired or will not remain valid through the operation deadline.');
     }
@@ -216,7 +216,10 @@ async function metadataFetch(fetchImpl, url, headers) {
  * exist only if the host passes a trusted `dispatchPort` that performs the one authorized billable request, so
  * this module never sends a paid request by itself. The built-in catalog check is not entitlement.
  */
-export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispatchPort }) {
+export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispatchPort, now = Date.now }) {
+  if (typeof now !== 'function' || !Number.isFinite(now())) {
+    throw error('adapter_unavailable', 'The clock option must be a function returning a finite number of milliseconds.');
+  }
   if (!credentialPort || credentialPort.evidence_mode !== 'live' || typeof credentialPort.resolveCredential !== 'function') {
     throw error('credential_unavailable', 'A trusted account/project-bound credential resolver is required.');
   }
@@ -232,7 +235,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
 
     async inspect({ run_id, cell_id, target, scope }) {
       validateOpenRouterImageTarget(cell_id, target);
-      const token = await resolveCredential(credentialPort, { scope, target }).catch(() => {
+      const token = await resolveCredential(credentialPort, { scope, target, now }).catch(() => {
         throw error('credential_unavailable', 'Read-only account authentication could not be checked.');
       });
       const catalogUrl = openRouterCatalogEndpoint(target.model);
@@ -293,7 +296,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         // Catalog presence and a valid key are not entitlement: only the capability verifier can establish these.
         operation_permission: 'unknown',
         quota: 'unknown',
-        checked_at: new Date().toISOString(),
+        checked_at: new Date(now()).toISOString(),
         evidence: {
           ref: `${run_id}:${cell_id}:openrouter-key-and-catalog`,
           sha256: digest(Buffer.from(JSON.stringify({ key_status: keyStatus, catalog_status: catalogStatus,
@@ -311,11 +314,11 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       validateOpenRouterImageTarget(input.cell_id, input.target);
       if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
         || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
-        || Date.parse(input.deadline_at) <= Date.now()) {
+        || Date.parse(input.deadline_at) <= now()) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
       const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
-        target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at });
+        target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
       const credential = Object.freeze({ token });
       const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
       const prepared = Object.freeze({ prepared: true });
@@ -330,7 +333,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at) {
         throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, and target.');
       }
-      const remaining = Date.parse(state.deadline_at) - Date.now();
+      const remaining = Date.parse(state.deadline_at) - now();
       if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
       return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
         signal: AbortSignal.timeout(Math.min(remaining, 120_000)) });

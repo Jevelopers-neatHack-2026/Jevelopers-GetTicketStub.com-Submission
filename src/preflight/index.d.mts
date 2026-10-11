@@ -374,6 +374,8 @@ export interface OpenRouterImagesAdapterOptions {
   /** Required; no global fetch is used. Called only for GET /api/v1/key and the public image-model endpoint catalog. */
   readonly fetchImpl: (input: string, init: Readonly<Record<string, unknown>>) => Promise<Response>;
   readonly dispatchPort?: OpenRouterImagesDispatchPort;
+  /** Clock in epoch milliseconds for `checked_at`, credential expiry and deadline checks. Defaults to `Date.now`. */
+  readonly now?: () => number;
 }
 
 /**

@@ -11,6 +11,9 @@ import {
 } from '../../src/preflight/index.mjs';
 import { OPENROUTER_FIXTURE_MODEL, accessPlan, createMockAccessFixture, fixtureScope } from '../../fixtures/preflight/access-ports.mjs';
 
+// A fixed, injectable clock: observations, expiries and deadlines never depend on the wall clock.
+let nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+const clock = () => nowMs;
 const digest = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 const TOKEN_CANARY = 'canary-openrouter-token-never-in-evidence';
 const KEY_URL = 'https://openrouter.ai/api/v1/key';
@@ -37,17 +40,17 @@ function credentialPort({ mutate = (value) => value, calls = [] } = {}) {
         binding: { service: 'openrouter', account_ref: input.account_ref, project_ref: input.project_ref,
           target_binding_sha256: digest(JSON.stringify(input.target_binding)) },
         token: TOKEN_CANARY,
-        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        expires_at: new Date(clock() + 60_000).toISOString(),
         evidence: pinned('credential'),
       });
     },
   };
 }
 
-const keyBody = { data: { label: 'sk-or-redacted', limit: 10, limit_remaining: 9.5, usage: 0.5, is_free_tier: false } };
+const keyBody = { data: { label: 'sk-or-redacted', limit: 4417.3, limit_remaining: 7319.04172, usage: 0.86153, is_free_tier: false } };
 const catalogBody = { data: { endpoints: [
   { provider_tag: 'other-provider', supported_parameters: {}, pricing: {} },
-  { provider_tag: 'synthetic-provider', supported_parameters: { aspect_ratio: { type: 'enum', values: ['1:1', 'auto'] } }, pricing: { image: '0.04' } },
+  { provider_tag: 'synthetic-provider', supported_parameters: { aspect_ratio: { type: 'enum', values: ['1:1', 'auto'] } }, pricing: { image: '0.0731942' } },
 ] } };
 
 function interceptedFetch(handlers = {}) {
@@ -115,7 +118,7 @@ test('metadata adapter makes two intercepted non-billable GETs and reports permi
     for (const cellId of ['image_generation', 'image_edit']) {
       const { fetchImpl, requests } = interceptedFetch();
       const port = credentialPort();
-      const observation = await inspect(createOpenRouterImagesAdapter({ credentialPort: port, fetchImpl }), cellId);
+      const observation = await inspect(createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl }), cellId);
       assert.deepEqual(requests.map((request) => request.url), [KEY_URL, CATALOG_URL]);
       for (const { init } of requests) {
         assert.equal(init.method, 'GET');
@@ -134,9 +137,13 @@ test('metadata adapter makes two intercepted non-billable GETs and reports permi
       assert.equal(observation.target.service, 'openrouter');
       assert.equal(observation.target.model, OPENROUTER_FIXTURE_MODEL);
       const serialized = JSON.stringify(observation);
-      for (const secret of [TOKEN_CANARY, 'env-canary-must-never-be-read', 'sk-or-redacted', '9.5', '0.04']) {
+      for (const secret of [TOKEN_CANARY, 'env-canary-must-never-be-read', 'sk-or-redacted', '7319.04172', '0.86153', '4417.3', '0.0731942']) {
         assert.ok(!serialized.includes(secret), `observation leaked ${secret}`);
       }
+      assert.equal(observation.checked_at, new Date(nowMs).toISOString(), 'checked_at comes from the injected clock');
+      const forbiddenKeys = ['limit', 'limit_remaining', 'usage', 'is_free_tier', 'label', 'pricing'];
+      const keysOf = (value) => (value && typeof value === 'object' ? Object.entries(value).flatMap(([key, child]) => [key, ...keysOf(child)]) : []);
+      assert.deepEqual(keysOf(observation).filter((key) => forbiddenKeys.includes(key)), [], 'no balance, usage or pricing field is retained');
       assert.match(observation.evidence.sha256, /^sha256:[a-f0-9]{64}$/);
     }
   } finally {
@@ -159,7 +166,7 @@ test('key and catalog outcomes map to authentication and listing without claimin
   ];
   for (const [name, handlers, expected] of cases) {
     const { fetchImpl } = interceptedFetch(handlers);
-    const observation = await inspect(createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl }));
+    const observation = await inspect(createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort(), fetchImpl }));
     assert.equal(observation.authentication, expected.authentication, name);
     assert.equal(observation.model_listing, expected.model_listing, name);
     assert.equal(observation.operation_permission, 'unknown', name);
@@ -167,7 +174,7 @@ test('key and catalog outcomes map to authentication and listing without claimin
   }
   for (const url of [KEY_URL, CATALOG_URL]) {
     const { fetchImpl } = interceptedFetch({ [url]: 'throw' });
-    await assert.rejects(inspect(createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl })),
+    await assert.rejects(inspect(createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort(), fetchImpl })),
       (error) => error.code === 'access_probe_unavailable' && !String(error.message).includes('secret-detail'));
   }
 });
@@ -176,7 +183,7 @@ test('invalid targets and credentials stop before any request, and construction 
   const wrongTarget = target();
   wrongTarget.endpoint = 'https://api.openai.com/v1/images/generations';
   const { fetchImpl, requests } = interceptedFetch();
-  const adapter = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl });
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort(), fetchImpl });
   await assert.rejects(adapter.inspect({ run_id: 'test:run', cell_id: 'image_generation', target: wrongTarget, scope: fixtureScope }),
     (error) => error.code === 'unsupported_image_configuration');
   for (const [name, mutate] of [
@@ -187,39 +194,47 @@ test('invalid targets and credentials stop before any request, and construction 
     ['wrong target hash', (value) => ({ ...value, binding: { ...value.binding, target_binding_sha256: digest('other') } })],
     ['extra binding field', (value) => ({ ...value, binding: { ...value.binding, grant_ref: 'x' } })],
     ['multi-line token', (value) => ({ ...value, token: 'a\nb' })],
-    ['expired credential', (value) => ({ ...value, expires_at: new Date(Date.now() - 1000).toISOString() })],
+    ['expired credential', (value) => ({ ...value, expires_at: new Date(clock() - 1000).toISOString() })],
     ['unpinned evidence', (value) => ({ ...value, evidence: { ref: 'x' } })],
   ]) {
-    const adapterWithBadPort = createOpenRouterImagesAdapter({ credentialPort: credentialPort({ mutate }), fetchImpl });
+    const adapterWithBadPort = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort({ mutate }), fetchImpl });
     await assert.rejects(inspect(adapterWithBadPort), (error) => error.code === 'credential_unavailable', name);
   }
   assert.equal(requests.length, 0, 'no request is sent before the exact credential binding is verified');
-  assert.throws(() => createOpenRouterImagesAdapter({ credentialPort: credentialPort() }), (error) => error.code === 'adapter_unavailable');
-  assert.throws(() => createOpenRouterImagesAdapter({ credentialPort: { ...credentialPort(), evidence_mode: 'mock' }, fetchImpl }),
+  assert.throws(() => createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort() }), (error) => error.code === 'adapter_unavailable');
+  assert.throws(() => createOpenRouterImagesAdapter({ now: clock, credentialPort: { ...credentialPort(), evidence_mode: 'mock' }, fetchImpl }),
     (error) => error.code === 'credential_unavailable');
-  assert.throws(() => createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl, dispatchPort: {} }),
+  assert.throws(() => createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort(), fetchImpl, dispatchPort: {} }),
     (error) => error.code === 'adapter_unavailable');
 });
 
 const GRANT = 'grant:test:1';
-const deadline = (offsetMs = 120_000) => new Date(Date.now() + offsetMs).toISOString();
+const deadline = (offsetMs = 120_000) => new Date(clock() + offsetMs).toISOString();
 const billable = (cellId = 'image_generation', overrides = {}) => ({ run_id: 'test:run', cell_id: cellId, target: target(cellId),
   configuration: target(cellId).configuration, scope: fixtureScope, grant_ref: GRANT, deadline_at: deadline(), ...overrides });
 // A credential port that honors grant_ref like a real resolver would, with per-test mutation of the answer.
 function grantCredentialPort({ mutate = (value) => value, calls = [] } = {}) {
   return credentialPort({ calls, mutate: (value) => mutate({ ...value,
     binding: { ...value.binding, ...(calls.at(-1)?.grant_ref ? { grant_ref: calls.at(-1).grant_ref } : {}) },
-    expires_at: new Date(Date.now() + 600_000).toISOString() }) });
+    expires_at: new Date(clock() + 600_000).toISOString() }) });
 }
+
+test('the clock option must be a function returning a finite number', () => {
+  const { fetchImpl } = interceptedFetch();
+  for (const now of [5, 'now', null, () => NaN, () => 'x', () => Infinity]) {
+    assert.throws(() => createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl, now }), (error) => error.code === 'adapter_unavailable', String(now));
+  }
+  assert.doesNotThrow(() => createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl }));
+});
 
 test('billable dispatch exists only through a trusted host port and re-checks the OpenRouter pin', async () => {
   const { fetchImpl, requests } = interceptedFetch();
-  const bare = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl });
+  const bare = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort(), fetchImpl });
   assert.equal(bare.prepare, undefined);
   await assert.rejects(bare.dispatch({ cell_id: 'image_generation', target: target() }), (error) => error.code === 'adapter_unavailable');
   const seen = [];
   const calls = [];
-  const composed = createOpenRouterImagesAdapter({ credentialPort: grantCredentialPort({ calls }), fetchImpl, dispatchPort: {
+  const composed = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }), fetchImpl, dispatchPort: {
     async prepare(input) { seen.push(['prepare', input.cell_id, input.credential.token]); return { host_prepared: input.cell_id }; },
     async dispatch(input) { seen.push(['dispatch', input.cell_id, input.credential.token, input.prepared, input.signal instanceof AbortSignal]); return { host: 'result' }; },
   } });
@@ -251,7 +266,7 @@ test('billable dispatch exists only through a trusted host port and re-checks th
   assert.equal(seen.length, before + 1, 'only the one valid prepare ran after the rejections');
   assert.equal(requests.length, 0, 'the metadata adapter never sends a paid request');
   // A port without prepare still gets a credential-bound prepare step.
-  const noPrepare = createOpenRouterImagesAdapter({ credentialPort: grantCredentialPort(), fetchImpl, dispatchPort: {
+  const noPrepare = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl, dispatchPort: {
     async dispatch(input) { return { token_seen: input.credential.token === TOKEN_CANARY, prepared: input.prepared }; } } });
   assert.deepEqual(await noPrepare.dispatch({ ...ok, prepared: await noPrepare.prepare(ok) }), { token_seen: true, prepared: undefined });
 });
@@ -260,15 +275,15 @@ test('billable prepare resolves a grant-bound credential through the deadline, o
   const { fetchImpl } = interceptedFetch();
   const hostCalls = [];
   const dispatchPort = { async prepare() { hostCalls.push('prepare'); return {}; }, async dispatch() { hostCalls.push('dispatch'); return {}; } };
-  const adapterFor = (mutate) => createOpenRouterImagesAdapter({ credentialPort: grantCredentialPort({ mutate }), fetchImpl, dispatchPort });
+  const adapterFor = (mutate) => createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ mutate }), fetchImpl, dispatchPort });
   const bound = (value) => ({ ...value, binding: { ...value.binding } });
   const cases = [
     ['mismatched grant in the binding', adapterFor((value) => ({ ...bound(value), binding: { ...value.binding, grant_ref: 'grant:other' } })), billable()],
     ['binding without any grant', adapterFor((value) => { const copy = bound(value); delete copy.binding.grant_ref; return copy; }), billable()],
-    ['expiry before the deadline', adapterFor((value) => ({ ...value, expires_at: new Date(Date.now() + 30_000).toISOString() })),
+    ['expiry before the deadline', adapterFor((value) => ({ ...value, expires_at: new Date(clock() + 30_000).toISOString() })),
       billable('image_generation', { deadline_at: deadline(90_000) })],
-    ['already expired', adapterFor((value) => ({ ...value, expires_at: new Date(Date.now() - 1000).toISOString() })), billable()],
-    ['wrong purpose refused by the resolver', createOpenRouterImagesAdapter({ fetchImpl, dispatchPort, credentialPort: {
+    ['already expired', adapterFor((value) => ({ ...value, expires_at: new Date(clock() - 1000).toISOString() })), billable()],
+    ['wrong purpose refused by the resolver', createOpenRouterImagesAdapter({ now: clock, fetchImpl, dispatchPort, credentialPort: {
       evidence_mode: 'live', async resolveCredential(input) { return { decision: input.purpose === 'read_only_account_check' ? 'resolved' : 'denied' }; } } }), billable()],
     ['wrong account', adapterFor((value) => ({ ...value, binding: { ...value.binding, account_ref: 'other-account' } })), billable()],
     ['missing grant reference', adapterFor((value) => value), billable('image_generation', { grant_ref: undefined })],
@@ -286,10 +301,10 @@ test('billable prepare resolves a grant-bound credential through the deadline, o
   assert.deepEqual(hostCalls, ['prepare']);
   // The deadline can also pass between prepare and dispatch.
   const soon = deadline(50);
-  const late = adapterFor((value) => ({ ...value, expires_at: new Date(Date.now() + 600_000).toISOString() }));
+  const late = adapterFor((value) => ({ ...value, expires_at: new Date(clock() + 600_000).toISOString() }));
   const input = billable('image_generation', { deadline_at: soon });
   const prepared = await late.prepare(input);
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  nowMs += 80; // the injected clock passes the deadline between prepare and dispatch
   await assert.rejects(late.dispatch({ ...input, prepared }), (error) => error.code === 'preflight_deadline_passed');
   assert.deepEqual(hostCalls, ['prepare', 'prepare']);
 });
@@ -297,7 +312,7 @@ test('billable prepare resolves a grant-bound credential through the deadline, o
 test('model_listing is tag presence unless the target pins the catalog entry hash; a different live entry is unknown', async () => {
   const run = async (mutateTarget, handlers) => {
     const { fetchImpl } = interceptedFetch(handlers);
-    const adapter = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl });
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialPort(), fetchImpl });
     const pinned = target();
     mutateTarget(pinned);
     return adapter.inspect({ run_id: 'test:run', cell_id: 'image_generation', target: pinned, scope: fixtureScope });
