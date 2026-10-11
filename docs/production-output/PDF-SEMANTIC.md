@@ -9,6 +9,11 @@ is still required.
 
 ## Identity and output evidence
 
+The later [complete paint identity policy](PDF-PAINT.md) supersedes policy-2
+output acceptance with policy-3 and semantic-2/paint-1. The original semantic
+mechanisms and findings below remain historical context; all literal, font and
+geometry checks still execute under the new policy.
+
 The output policy is now `private-output-2`, with explicit
 `private-pdf-semantic-1_chromium-156_pdf-lib-1.17.1_fontkit-2.0.4` identity.
 The final-file parser revision is `private-output-inspector-2_pdf-semantic-1` plus

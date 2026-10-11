@@ -81,7 +81,7 @@ Images use its ICCBased space; DefaultRGB binds vector RGB to the same profile.
 Gray image spaces are permitted. PDF/X, CMYK and arbitrary ICC profiles are
 unsupported; no conversion or certification is asserted.
 
-The parent-authorized policy-2 semantic inspector now reconstructs exact strings
+The parent-authorized policy-3 semantic inspector now reconstructs exact strings
 from bounded PDF cluster/CMap bytes and validates the painted licensed glyphs,
 instructions, geometry, colors, spaces, source raster and hash binding. Literal
 strings are unchanged. PDF.js results remain separate known-lossy corroboration.
@@ -126,8 +126,10 @@ Rows stage complete bytes and publish through the existing SQLite engine.
 `verifyPrivateArchive` requires trusted detached hashes, the current artifact,
 lineage digest, output policy and specification; it rejects missing/extra/tampered
 files and reinspects their bytes. `retrievePrivateArchive` checks opaque storage
-scope/access plus current permissions. These functions never launch a browser,
-create an attempt or emit usage. Read-only repeat status/verification is tested.
+scope/access plus current permissions. Cold PDF inspection can launch a sandboxed
+source-reference browser; see [complete paint identity](PDF-PAINT.md). These
+functions create no production attempt or usage observation. Read-only repeat
+status/verification is tested.
 
 ## Verification and holds
 

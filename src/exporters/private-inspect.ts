@@ -171,7 +171,7 @@ export async function inspectOutputFiles(options: {
 				svgDigest: digest(artifact.svg),
 				fileDigest: digest(file.bytes),
 				parserRevision:
-					"private-output-inspector-2_pdf-semantic-1_sax-1.6.1_pngjs-7.0.0_pdf-lib-1.17.1_pdfjs-6.4.299",
+					"private-output-inspector-3_pdf-semantic-2_paint-1_sax-1.6.1_pngjs-7.0.0_pdf-lib-1.17.1_pdfjs-6.4.299",
 				checks: ["dimensions", "content", "fonts", "container", "profile"].map(
 					(name) => ({
 						name,

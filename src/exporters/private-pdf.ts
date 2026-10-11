@@ -32,8 +32,8 @@ export async function normalizePdf(
 	const epoch = new Date("2000-01-01T00:00:00Z");
 	doc.setCreationDate(epoch);
 	doc.setModificationDate(epoch);
-	doc.setCreator("private-output-2");
-	doc.setProducer("pinned-chromium_private-output-2");
+	doc.setCreator("private-output-3");
+	doc.setProducer("pinned-chromium_private-output-3");
 	bindPdfSrgb(doc);
 	return doc.save({ useObjectStreams: false });
 }
