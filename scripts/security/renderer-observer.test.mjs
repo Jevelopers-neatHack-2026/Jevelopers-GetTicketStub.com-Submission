@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./page-renderer.test.mjs";
 import { test } from "node:test";
 import { rootCategory } from "./renderer-root-diagnostic.mjs";
 import { frameProcessIds, identifyPageRenderer } from "./page-renderer.mjs";
