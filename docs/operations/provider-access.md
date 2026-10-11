@@ -45,6 +45,21 @@ Edit input must match the pinned asset digest and pass bounded PNG structure, ch
 
 The documented model candidate is not a selected owner-approved target. The fixture's prompt, account IDs, evidence, Finance authority, reservation, and provider responses are test-only. No provider call, account inspection, JEV request, or Neatlogs write/read was made for this implementation.
 
+## OpenRouter Images adapter
+
+`createOpenRouterImagesProvider` is a second image provider path, selected by the host, not a replacement for the direct adapter. See [OpenRouter Images adapter](../providers/openrouter-images.md) for the sourced API facts, the profile, and the unsupported list. The eight-cell CE-A01 matrix above still names the direct Images endpoints; it has not been extended to OpenRouter, so it neither verifies nor blocks the OpenRouter path.
+
+| Capability | Implemented offline | Verified account access |
+| --- | --- | --- |
+| Generation (`POST https://openrouter.ai/api/v1/images`, no references) | Yes: intercepted-transport wire contract, capability and authority fences, output and usage validation, API/C03/CE08/CE11 integration. | **No.** No account, key, credits, model, provider tag, or entitlement exists or has been checked. |
+| Reference-guided edit (parent first, then manifest references as data URLs; separate capability) | Yes, with the same offline coverage. It is image-to-image guided by references: no mask, and no documented parent preservation. | **No.** Edit entitlement and the per-model reference maximum must be verified separately from generation. |
+| Parentless concepts (authorized references only) | Yes, through the edit capability. | **No.** |
+| Masked or inpainting edit | Rejected before credential resolution. Direct OpenAI remains the only masked route (CE-07). | Not applicable. |
+
+The host variable `CREATIVE_ENGINE_OPENROUTER_API_KEY` is a placeholder for the key the trusted host injects through the credential port. The adapter reads no environment, and there is no fallback to `OPENAI_*`, `OPENROUTER_API_KEY` or the customer app's `TICKETSTUB_ART_OPENROUTER_API_KEY`; reusing those requires an explicit owner decision (G1). Model discovery (`GET /api/v1/images/models`) is a catalog only and cannot satisfy the capability verifier. Account-wide provider settings merge with request routing and must be checked outside this repository (G2). OpenRouter's reported `cost` is retained as provider-reported and unsettled (G4); a transport-started attempt whose outcome is not observed keeps its C03 hold.
+
+The live gate is fail closed: `make check TARGET=openrouter-image-adapter MODE=live` exits 2, reports `provider_dispatches: 0` and `provider_credentials_read: false`, and lists the open gates G1-G6.
+
 ## Run and verify
 
 The public ESM and strict type entrypoint is `creative-engine/preflight`. The deterministic checks are:

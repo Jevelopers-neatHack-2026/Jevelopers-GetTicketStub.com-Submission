@@ -19,6 +19,7 @@ import { createCreativeBriefStore } from "../planning/index.mjs";
 import { initializeCreativeBriefDatabase } from "../planning/store.mjs";
 import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 import { applyCreativeConceptEvent, inspectCreativeConceptImageBytes } from "../generation/concepts.mjs";
+import { imageProviderRoute } from "../models/image-routes.mjs";
 
 const STORAGE_VERSION = 10;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
@@ -137,6 +138,18 @@ function reference(value, field, max = 256) {
     reject("invalid_request", field);
   }
   return value;
+}
+
+/** A routed model id such as "author/slug" additionally allows "/"; every other identifier rule still applies. */
+function modelReference(value, field, max = 256) {
+  if (typeof value === "string" && value.includes("/")) {
+    if (value.length > max || !/^[A-Za-z0-9][A-Za-z0-9_.:-]*(?:\/[A-Za-z0-9][A-Za-z0-9_.:-]*)+$/.test(value)) {
+      reject("invalid_request", field);
+    }
+    reference(value.replaceAll("/", "."), field, max);
+    return value;
+  }
+  return reference(value, field, max);
 }
 
 function hash(value, field) {
@@ -600,6 +613,66 @@ function readStoredObjectSync(objectRoot, contentHash) {
   }
 }
 
+const PRIVATE_ATTRIBUTION_TRIGGERS = Object.freeze({
+  private_provider_attributions: `
+    CREATE TRIGGER private_provider_attributions_no_update
+      BEFORE UPDATE ON private_provider_attributions BEGIN SELECT RAISE(ABORT,'private provider attribution is immutable'); END;
+    CREATE TRIGGER private_provider_attributions_no_delete
+      BEFORE DELETE ON private_provider_attributions BEGIN SELECT RAISE(ABORT,'private provider attribution is immutable'); END;`,
+  private_provider_usage_attributions: `
+    CREATE TRIGGER private_provider_usage_attributions_no_update
+      BEFORE UPDATE ON private_provider_usage_attributions BEGIN SELECT RAISE(ABORT,'private provider usage attribution is immutable'); END;
+    CREATE TRIGGER private_provider_usage_attributions_no_delete
+      BEFORE DELETE ON private_provider_usage_attributions BEGIN SELECT RAISE(ABORT,'private provider usage attribution is immutable'); END;`,
+});
+
+/**
+ * Databases created before the OpenRouter route was added constrain private attribution rows to
+ * provider_name='openai'. Rebuild only those tables, in one transaction, with the explicit native
+ * image provider allowlist. The rows, keys, foreign keys and immutability triggers are preserved and
+ * the rebuild is idempotent, so user_version is unchanged.
+ */
+const PRIVATE_MIGRATION_DIAGNOSTICS = new WeakMap();
+
+/** Internal accessor for tests and operators: a sanitized SQLite cause (no SQL text, paths, or values). */
+export function readPrivateStoreMigrationDiagnostic(error) {
+  return error !== null && typeof error === "object" ? PRIVATE_MIGRATION_DIAGNOSTICS.get(error) : undefined;
+}
+
+function widenPrivateAttributionProviderChecks(db) {
+  const legacy = "CHECK(provider_name='openai')";
+  const widened = "CHECK(provider_name IN ('openai','openrouter'))";
+  const staleTables = () => db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='table' AND name IN
+    ('private_provider_attributions','private_provider_usage_attributions')`).all()
+    .filter((table) => typeof table.sql === "string" && table.sql.includes(legacy));
+  if (staleTables().length === 0) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    // Re-read inside the write transaction: a concurrent opener may already have rebuilt the tables.
+    const stale = staleTables();
+    for (const { name, sql } of stale) {
+      db.exec(`ALTER TABLE ${name} RENAME TO ${name}_widen_old`);
+      db.exec(sql.replace(legacy, widened));
+      db.exec(`INSERT INTO ${name} SELECT * FROM ${name}_widen_old`);
+      db.exec(`DROP TABLE ${name}_widen_old`);
+      db.exec(PRIVATE_ATTRIBUTION_TRIGGERS[name]);
+    }
+    db.exec("COMMIT");
+  } catch (cause) {
+    const diagnostic = Object.freeze({
+      sqlite_errcode: Number.isInteger(cause?.errcode) ? cause.errcode : undefined,
+      sqlite_errstr: typeof cause?.errstr === "string" ? cause.errstr.slice(0, 120) : undefined,
+      error_name: typeof cause?.name === "string" ? cause.name.slice(0, 64) : undefined,
+    });
+    if (db.isTransaction) db.exec("ROLLBACK");
+    db.close();
+    try { reject("migration_failed", "storage_version"); } catch (error) {
+      PRIVATE_MIGRATION_DIAGNOSTICS.set(error, diagnostic);
+      throw error;
+    }
+  }
+}
+
 function makeSchema(db) {
   const version = db.prepare("PRAGMA user_version").get().user_version;
   if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, STORAGE_VERSION].includes(version)) {
@@ -822,7 +895,7 @@ function makeSchema(db) {
       actor_id TEXT NOT NULL,
       request_hash TEXT NOT NULL,
       operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
-      provider_name TEXT NOT NULL CHECK(provider_name='openai'),
+      provider_name TEXT NOT NULL CHECK(provider_name IN ('openai','openrouter')),
       provider_model TEXT NOT NULL,
       reservation_ref TEXT NOT NULL,
       billable_attempt_id TEXT NOT NULL,
@@ -848,7 +921,7 @@ function makeSchema(db) {
       actor_id TEXT NOT NULL,
       request_hash TEXT NOT NULL,
       operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
-      provider_name TEXT NOT NULL CHECK(provider_name='openai'),
+      provider_name TEXT NOT NULL CHECK(provider_name IN ('openai','openrouter')),
       provider_model TEXT NOT NULL,
       reservation_ref TEXT NOT NULL,
       billable_attempt_id TEXT NOT NULL,
@@ -1085,7 +1158,7 @@ function makeSchema(db) {
         tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
         actor_id TEXT NOT NULL, request_hash TEXT NOT NULL,
         operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
-        provider_name TEXT NOT NULL CHECK(provider_name='openai'), provider_model TEXT NOT NULL,
+        provider_name TEXT NOT NULL CHECK(provider_name IN ('openai','openrouter')), provider_model TEXT NOT NULL,
         reservation_ref TEXT NOT NULL, billable_attempt_id TEXT NOT NULL, transport_attempt_id TEXT NOT NULL,
         dispatch_intent_ref TEXT NOT NULL, provider_request_id TEXT NOT NULL, provider_request_ref TEXT NOT NULL,
         captured_at TEXT NOT NULL,
@@ -1108,7 +1181,7 @@ function makeSchema(db) {
         tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
         actor_id TEXT NOT NULL, request_hash TEXT NOT NULL,
         operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
-        provider_name TEXT NOT NULL CHECK(provider_name='openai'), provider_model TEXT NOT NULL,
+        provider_name TEXT NOT NULL CHECK(provider_name IN ('openai','openrouter')), provider_model TEXT NOT NULL,
         reservation_ref TEXT NOT NULL, billable_attempt_id TEXT NOT NULL, transport_attempt_id TEXT NOT NULL,
         dispatch_intent_ref TEXT NOT NULL, target_binding_sha256 TEXT NOT NULL, usage_sha256 TEXT NOT NULL,
         usage_json TEXT NOT NULL, captured_at TEXT NOT NULL,
@@ -1135,6 +1208,7 @@ function makeSchema(db) {
       reject("migration_failed", "storage_version");
     }
   }
+  widenPrivateAttributionProviderChecks(db);
   db.exec(`PRAGMA user_version=${STORAGE_VERSION};`);
 }
 
@@ -1518,10 +1592,10 @@ export class CreativeVersionStore {
     const job_id = reference(input.job_id, "job_id");
     const action_id = reference(input.action_id, "action_id");
     const request_hash = hash(input.request_hash, "request_hash");
-    if (!['generate', 'edit', 'concepts.create'].includes(input.operation) || input.provider !== "openai") {
+    if (!['generate', 'edit', 'concepts.create'].includes(input.operation) || !imageProviderRoute(input.provider)) {
       reject("invalid_request", "provider_attribution.operation");
     }
-    const provider_model = reference(input.model, "provider_attribution.model", 256);
+    const provider_model = modelReference(input.model, "provider_attribution.model", 256);
     const reservation_ref = reference(input.reservation_ref, "reservation_ref");
     const billable_attempt_id = reference(input.billable_attempt_id, "billable_attempt_id");
     const transport_attempt_id = reference(input.transport_attempt_id, "transport_attempt_id");
@@ -1548,7 +1622,7 @@ export class CreativeVersionStore {
         .get(tenant_id, project_id, job_id, transport_attempt_id);
       if (!dispatch || dispatch.billable_attempt_id !== billable_attempt_id ||
           dispatch.reservation_ref !== reservation_ref || dispatch.dispatch_intent_ref !== dispatch_intent_ref ||
-          dispatch.provider_name !== "openai" || dispatch.provider_model !== provider_model) {
+          dispatch.provider_name !== input.provider || dispatch.provider_model !== provider_model) {
         reject("integrity_error", "provider_attribution.dispatch");
       }
       const existing = this.db.prepare(`SELECT * FROM private_provider_attributions
@@ -1592,10 +1666,10 @@ export class CreativeVersionStore {
     const job_id = reference(input.job_id, "job_id");
     const action_id = reference(input.action_id, "action_id");
     const request_hash = hash(input.request_hash, "request_hash");
-    if (!["generate", "edit", "concepts.create"].includes(input.operation) || input.provider !== "openai") {
+    if (!["generate", "edit", "concepts.create"].includes(input.operation) || !imageProviderRoute(input.provider)) {
       reject("invalid_request", "provider_usage_attribution.operation");
     }
-    const provider_model = reference(input.model, "provider_usage_attribution.model", 256);
+    const provider_model = modelReference(input.model, "provider_usage_attribution.model", 256);
     const reservation_ref = reference(input.reservation_ref, "reservation_ref");
     const billable_attempt_id = reference(input.billable_attempt_id, "billable_attempt_id");
     const transport_attempt_id = reference(input.transport_attempt_id, "transport_attempt_id");
@@ -1604,6 +1678,8 @@ export class CreativeVersionStore {
     const usage = snapshotJson(input.usage, "invalid_request", "provider_usage_attribution.usage");
     const allowed = new Set(["completeness", "input_tokens", "output_tokens", "total_tokens",
       "input_tokens_details", "output_tokens_details", "provider_request_id", "transport_attempt_id", "missing_fields"]);
+    // OpenRouter adds a provider-reported USD cost, labeled unsettled. Direct OpenAI usage keeps its exact allowlist.
+    if (input.provider === "openrouter") for (const key of ["cost", "cost_details", "is_byok"]) allowed.add(key);
     if (Object.keys(usage).some((key) => !allowed.has(key)) ||
         !["complete", "partial", "incomplete", "unknown"].includes(usage.completeness) ||
         usage.transport_attempt_id !== transport_attempt_id) {
@@ -1624,6 +1700,21 @@ export class CreativeVersionStore {
     if (usage.provider_request_id !== undefined &&
         !/^provider-request-[a-f0-9]{64}$/.test(usage.provider_request_id)) {
       reject("invalid_request", "provider_usage_attribution.provider_request_id");
+    }
+    const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
+    if (usage.cost !== undefined && (!isRecord(usage.cost) || Object.keys(usage.cost).length !== 3 ||
+        typeof usage.cost.amount !== "string" || !DECIMAL.test(usage.cost.amount) || usage.cost.currency !== "USD" ||
+        usage.cost.provenance !== "provider_reported_unsettled")) {
+      reject("invalid_request", "provider_usage_attribution.cost");
+    }
+    if (usage.cost_details !== undefined && (!isRecord(usage.cost_details) ||
+        Object.entries(usage.cost_details).some(([name, amount]) => ![
+          "upstream_inference_cost", "upstream_inference_prompt_cost", "upstream_inference_completions_cost"].includes(name) ||
+          typeof amount !== "string" || !DECIMAL.test(amount)))) {
+      reject("invalid_request", "provider_usage_attribution.cost_details");
+    }
+    if (usage.is_byok !== undefined && typeof usage.is_byok !== "boolean") {
+      reject("invalid_request", "provider_usage_attribution.is_byok");
     }
     if (!Array.isArray(usage.missing_fields) || usage.missing_fields.length > 64 ||
         usage.missing_fields.some((field) => typeof field !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(field))) {
@@ -1647,7 +1738,7 @@ export class CreativeVersionStore {
         .get(tenant_id, project_id, job_id, transport_attempt_id);
       if (!dispatch || dispatch.billable_attempt_id !== billable_attempt_id ||
           dispatch.reservation_ref !== reservation_ref || dispatch.dispatch_intent_ref !== dispatch_intent_ref ||
-          dispatch.provider_name !== "openai" || dispatch.provider_model !== provider_model) {
+          dispatch.provider_name !== input.provider || dispatch.provider_model !== provider_model) {
         reject("integrity_error", "provider_usage_attribution.dispatch");
       }
       const existing = this.db.prepare(`SELECT * FROM private_provider_usage_attributions
@@ -1695,10 +1786,10 @@ export class CreativeVersionStore {
     const job_id = reference(input.job_id, "job_id");
     const action_id = reference(input.action_id, "action_id");
     const request_hash = hash(input.request_hash, "request_hash");
-    if (!["generate", "edit", "concepts.create"].includes(input.operation) || input.provider !== "openai") {
+    if (!["generate", "edit", "concepts.create"].includes(input.operation) || !imageProviderRoute(input.provider)) {
       reject("invalid_request", "provider_attribution_pending.operation");
     }
-    const provider_model = reference(input.model, "provider_attribution_pending.model", 256);
+    const provider_model = modelReference(input.model, "provider_attribution_pending.model", 256);
     const reservation_ref = reference(input.reservation_ref, "reservation_ref");
     const billable_attempt_id = reference(input.billable_attempt_id, "billable_attempt_id");
     const transport_attempt_id = reference(input.transport_attempt_id, "transport_attempt_id");
@@ -1770,7 +1861,7 @@ export class CreativeVersionStore {
         FROM creative_dispatch_intents WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
         .get(tenant_id, project_id, job_id, transport_attempt_id);
       if (!dispatch || dispatch.billable_attempt_id !== billable_attempt_id || dispatch.reservation_ref !== reservation_ref ||
-          dispatch.dispatch_intent_ref !== dispatch_intent_ref || dispatch.provider_name !== "openai" ||
+          dispatch.dispatch_intent_ref !== dispatch_intent_ref || dispatch.provider_name !== input.provider ||
           dispatch.provider_model !== provider_model) reject("integrity_error", "provider_attribution_pending.dispatch");
       const existing = this.db.prepare(`SELECT payload_sha256 FROM private_provider_attribution_pending
         WHERE tenant_id=? AND project_id=? AND pending_ref=?`).get(tenant_id, project_id, pending_ref);
@@ -2110,7 +2201,7 @@ export class CreativeVersionStore {
           AND billable_attempt_id=? AND reservation_ref=? AND dispatch_intent_ref=?`)
         .get(scope.tenant_id, scope.project_id, brief_id, action_id, job_id, transport_attempt_id,
           billable_attempt_id, reservation_ref, dispatch_intent_ref);
-      const dispatch = this.db.prepare(`SELECT billable_attempt_id,reservation_ref,dispatch_intent_ref,target_binding_sha256,
+      const dispatch = this.db.prepare(`SELECT billable_attempt_id,reservation_ref,dispatch_intent_ref,provider_name,target_binding_sha256,
         target_binding_json,rendered_prompt_sha256 FROM creative_dispatch_intents
         WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
         .get(scope.tenant_id, scope.project_id, job_id, transport_attempt_id);
@@ -2128,7 +2219,9 @@ export class CreativeVersionStore {
           durableTarget.prompt_sha256 !== dispatch.rendered_prompt_sha256 ||
           durableTarget.billable_attempt_id !== billable_attempt_id ||
           durableTarget.tenant_id !== scope.tenant_id || durableTarget.project_id !== scope.project_id ||
-          durableTarget.operation_kind !== "image_edit") reject("integrity_error", "concept.dispatch_target");
+          dispatch.provider_name !== durableTarget.service ||
+          durableTarget.operation_kind !== imageProviderRoute(durableTarget.service)?.edit_binding_operation_kind ||
+          durableTarget.endpoint !== imageProviderRoute(durableTarget.service)?.edit_endpoint) reject("integrity_error", "concept.dispatch_target");
       const prior = this.db.prepare(`SELECT * FROM creative_concept_response_stages_v1
         WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND concept_id=?`)
         .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id);
@@ -2188,9 +2281,10 @@ export class CreativeVersionStore {
     }
     const target_binding_sha256 = hash(input.target_binding_sha256, "target_binding_sha256");
     const rendered_prompt_sha256 = hash(input.rendered_prompt_sha256, "rendered_prompt_sha256");
-    if (providerTargetHash(target_binding) !== target_binding_sha256 || !isRecord(target_binding) ||
-        target_binding.service !== "openai" || target_binding.endpoint !== "https://api.openai.com/v1/images/edits" ||
-        target_binding.operation !== "edit" || target_binding.operation_kind !== "image_edit" ||
+    const nativeRoute = isRecord(target_binding) ? imageProviderRoute(target_binding.service) : undefined;
+    if (providerTargetHash(target_binding) !== target_binding_sha256 || !isRecord(target_binding) || !nativeRoute ||
+        target_binding.endpoint !== nativeRoute.edit_endpoint ||
+        target_binding.operation !== "edit" || target_binding.operation_kind !== nativeRoute.edit_binding_operation_kind ||
         target_binding.sdk_name !== "native-fetch" || target_binding.prompt_sha256 !== rendered_prompt_sha256 ||
         target_binding.tenant_id !== scope.tenant_id || target_binding.project_id !== scope.project_id ||
         target_binding.billable_attempt_id !== billable_attempt_id ||
@@ -2215,7 +2309,7 @@ export class CreativeVersionStore {
           !dispatch || dispatch.billable_attempt_id !== billable_attempt_id || dispatch.reservation_ref !== reservation_ref ||
           dispatch.dispatch_intent_ref !== dispatch_intent_ref) reject("cancelled", "concept.dispatch_binding.authority");
       if (!dispatch || dispatch.billable_attempt_id !== billable_attempt_id || dispatch.reservation_ref !== reservation_ref ||
-          dispatch.dispatch_intent_ref !== dispatch_intent_ref || dispatch.provider_name !== "openai" ||
+          dispatch.dispatch_intent_ref !== dispatch_intent_ref || dispatch.provider_name !== target_binding.service ||
           dispatch.provider_model !== target_binding.model) reject("integrity_error", "concept.dispatch_target");
       const prior = this.db.prepare(`SELECT target_binding_sha256,target_binding_json,rendered_prompt_sha256
         FROM creative_concept_dispatch_bindings_v1
