@@ -61,9 +61,15 @@ function remainingUntil(deadlineAt, now) {
   return remaining;
 }
 
+function nativeAbortSignalState(value) {
+  try {
+    const aborted = nativeAbortSignalAborted?.call(value);
+    return typeof aborted === 'boolean' ? aborted : undefined;
+  } catch { return undefined; }
+}
+
 function isNativeAbortSignal(value) {
-  try { return typeof nativeAbortSignalAborted?.call(value) === 'boolean'; }
-  catch { return false; }
+  return nativeAbortSignalState(value) !== undefined;
 }
 
 function runnerCancellationSignal(input) {
@@ -84,15 +90,24 @@ function runnerCancellationSignal(input) {
 }
 
 function boundedTransportSignal(deadlineAt, callerSignal, now) {
-  if (!isNativeAbortSignal(callerSignal)) {
+  const callerAbortedBeforeComposition = nativeAbortSignalState(callerSignal);
+  if (callerAbortedBeforeComposition === undefined) {
     throw error('invalid_abort_signal', 'A native runner cancellation signal is required for billable dispatch.');
+  }
+  if (callerAbortedBeforeComposition) {
+    throw error('preflight_deadline_passed', 'Cancellation or the approved operation deadline stopped dispatch.');
   }
   const remaining = remainingUntil(deadlineAt, now);
   const deadlineSignal = AbortSignal.timeout(Math.min(Math.max(1, Math.ceil(remaining)), BILLABLE_TIMEOUT_MAX_MS));
   let signal;
   try { signal = AbortSignal.any([callerSignal, deadlineSignal]); }
   catch { throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.'); }
-  if (signal.aborted) {
+  const callerAbortedAfterComposition = nativeAbortSignalState(callerSignal);
+  const transportAborted = nativeAbortSignalState(signal);
+  if (callerAbortedAfterComposition === undefined || transportAborted === undefined) {
+    throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.');
+  }
+  if (callerAbortedAfterComposition || transportAborted) {
     throw error('preflight_deadline_passed', 'Cancellation or the approved operation deadline stopped dispatch.');
   }
   return signal;

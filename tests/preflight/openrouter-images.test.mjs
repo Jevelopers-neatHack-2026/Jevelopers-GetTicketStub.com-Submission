@@ -446,6 +446,56 @@ test('billable dispatch requires a native runner signal and combines it with the
   assert.equal(hostSignals[1].aborted, true, 'cancellation through the native caller target reaches the host');
 });
 
+test('native cancellation state wins over a shadowed aborted property before host dispatch', async () => {
+  const hostSignals = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async dispatch(input) { hostSignals.push(input.signal); return { host: 'result' }; } } });
+  const input = billable();
+  const cancelledPrepared = await adapter.prepare(input);
+  const cancelled = new AbortController();
+  cancelled.abort();
+  Object.defineProperty(cancelled.signal, 'aborted', { value: false });
+  const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+  assert.equal(cancelled.signal.aborted, false, 'the caller-visible property is shadowed');
+  assert.equal(nativeAborted.call(cancelled.signal), true, 'the native cancellation slot remains set');
+  await assert.rejects(adapter.dispatch(dispatchInput(input, cancelledPrepared, cancelled.signal)),
+    (error) => error.code === 'preflight_deadline_passed');
+  assert.deepEqual(hostSignals, [], 'a shadowed pre-cancelled native signal never reaches the host');
+
+  const active = new AbortController();
+  Object.defineProperty(active.signal, 'aborted', { value: false });
+  assert.equal(nativeAborted.call(active.signal), false, 'the native active state is preserved with an own property');
+  const activePrepared = await adapter.prepare(input);
+  assert.deepEqual(await adapter.dispatch(dispatchInput(input, activePrepared, active.signal)), { host: 'result' });
+  assert.equal(hostSignals.length, 1, 'an active native signal with the same own-property shadow remains dispatchable');
+  active.abort();
+  assert.equal(nativeAborted.call(hostSignals[0]), true, 'the composed native signal still observes later caller cancellation');
+});
+
+test('dispatch rechecks the native cancellation slot after signal composition', async () => {
+  const caller = new AbortController();
+  let cancelDuringClockRead = false;
+  const hostSignals = [];
+  const adapter = createOpenRouterImagesAdapter({ now: () => {
+    if (cancelDuringClockRead) {
+      cancelDuringClockRead = false;
+      caller.abort();
+    }
+    return clock();
+  }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+  dispatchPort: { async dispatch(input) { hostSignals.push(input.signal); return { host: 'result' }; } } });
+  const input = billable();
+  const prepared = await adapter.prepare(input);
+  Object.defineProperty(caller.signal, 'aborted', { value: false });
+  const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+  assert.equal(nativeAborted.call(caller.signal), false);
+  cancelDuringClockRead = true;
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, caller.signal)),
+    (error) => error.code === 'preflight_deadline_passed');
+  assert.equal(nativeAborted.call(caller.signal), true, 'the native signal aborts after the pre-composition check');
+  assert.deepEqual(hostSignals, [], 'cancellation during signal construction stops dispatch before the host');
+});
+
 test('prepare rechecks finite clock and deadline after credential and host preparation awaits', async () => {
   const { fetchImpl } = interceptedFetch();
   const hostCalls = [];
