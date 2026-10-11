@@ -271,6 +271,11 @@ export function createOperationsWorker(input) {
   }
 
   function spawnClaim(claim) {
+    // The absolute monotonic deadline starts before spawn, so runner startup does
+    // not receive a fresh maxJobRuntimeMs window. The parent timer remains the
+    // outer enforcement boundary for a child that stops responding.
+    const runtimeDeadlineNs = process.hrtime.bigint()
+      + BigInt(config.maxJobRuntimeMs) * 1_000_000n;
     const argv = [
       RUNNER_PATH,
       databasePath,
@@ -281,7 +286,8 @@ export function createOperationsWorker(input) {
       String(config.busyTimeoutMs),
       String(config.maxStoreBytes),
       String(config.maxWalBytes),
-      String(config.minFreeDiskBytes)
+      String(config.minFreeDiskBytes),
+      runtimeDeadlineNs.toString()
     ];
     if (argv.reduce((total, item) => total + Buffer.byteLength(item, 'utf8'), 0) > 4096) {
       lastSafeErrorCode = 'OPS_CHILD_ARGUMENTS_TOO_LARGE';
