@@ -10,7 +10,7 @@ python3 evals/project_results.py \
   --output /tmp/projected-results.json
 ```
 
-Exit code `3` means the input was structurally projected and the report was written. It is a nonzero status because promotion is always blocked. Exit code `2` means malformed or out-of-bounds input and writes one fixed-code JSON error to stderr. Omitting `--output` writes the report to stdout. Input paths and values are never copied into error messages.
+Exit code `3` means the input was structurally projected and the report was written. It is a nonzero status because promotion is always blocked. Exit code `2` means malformed or out-of-bounds input, including invalid or missing CLI arguments, and writes one fixed-code JSON error to stderr without echoing arguments, input paths, or values. `--help` prints normal usage and exits `0`. Omitting `--output` writes the report to stdout. Input paths and values are never copied into error messages.
 
 ## Input contract
 

@@ -431,6 +431,54 @@ class ProjectResultsTests(unittest.TestCase):
         self.assertEqual(process.stderr, "")
         self.assertEqual(json.loads(process.stdout)["promotion_status"], "blocked")
 
+    def test_cli_argument_errors_are_fixed_code_and_help_remains_available(self) -> None:
+        malformed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--input",
+                str(FIXTURE),
+                "--unexpected",
+                "ROOT_PRIVATE_CANARY",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(malformed.returncode, 2)
+        self.assertEqual(malformed.stdout, "")
+        self.assertEqual(
+            json.loads(malformed.stderr),
+            {"code": "invalid_cli_arguments", "status": "malformed"},
+        )
+        self.assertNotIn("ROOT_PRIVATE_CANARY", malformed.stderr)
+        self.assertNotIn("--unexpected", malformed.stderr)
+
+        missing = subprocess.run(
+            [sys.executable, str(SCRIPT), "--output", "/private/ROOT_PRIVATE_CANARY.json"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertEqual(missing.stdout, "")
+        self.assertEqual(
+            json.loads(missing.stderr),
+            {"code": "invalid_cli_arguments", "status": "malformed"},
+        )
+        self.assertNotIn("ROOT_PRIVATE_CANARY", missing.stderr)
+
+        help_process = subprocess.run(
+            [sys.executable, str(SCRIPT), "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(help_process.returncode, 0)
+        self.assertEqual(help_process.stderr, "")
+        self.assertIn("usage:", help_process.stdout)
+        self.assertIn("--input", help_process.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

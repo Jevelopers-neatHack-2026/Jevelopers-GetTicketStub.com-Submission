@@ -86,6 +86,14 @@ class InputProblem(Exception):
         self.line = line
 
 
+class _SafeArgumentParser(argparse.ArgumentParser):
+    """Keep argparse's diagnostics from copying untrusted arguments to stderr."""
+
+    def error(self, message: str) -> None:
+        del message
+        raise InputProblem("invalid_cli_arguments")
+
+
 def _parse_int_literal(value: str) -> int:
     digits = value[1:] if value.startswith("-") else value
     if len(digits) > MAX_INT_DIGITS:
@@ -1226,11 +1234,16 @@ def _write_output(path: Path, content: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, required=True, help="synthetic normalized-result JSONL")
-    parser.add_argument("--output", type=Path, default=None, help="report path; omit to write the report to stdout")
-    args = parser.parse_args(argv)
     try:
+        parser = _SafeArgumentParser(description=__doc__)
+        parser.add_argument("--input", type=Path, required=True, help="synthetic normalized-result JSONL")
+        parser.add_argument("--output", type=Path, default=None, help="report path; omit to write the report to stdout")
+        try:
+            args = parser.parse_args(argv)
+        except SystemExit as exit_error:
+            if exit_error.code == 0:
+                return 0
+            raise InputProblem("invalid_cli_arguments") from None
         raw = _read_input(args.input)
         report = project_bytes(raw)
         content = json.dumps(report, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
