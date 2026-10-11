@@ -53,7 +53,7 @@ const put = (o, v, ...path) => {
 };
 
 /** [name, schema version, mutation]. Every one must verify as { ok: false, reason: "unknown" } once correctly signed. */
-export const MALFORMED = [
+export const MALFORMED_BASE = [
   // ---- /1: the seven from the Finance receipt, plus the rest of the shape ----
   ["v1 missing account actor id", 1, (c) => drop(c, "actor", "id")],
   ["v1 empty account actor id", 1, (c) => put(c, "", "actor", "id")],
@@ -114,6 +114,60 @@ export const MALFORMED = [
     c.capabilities = [...c.capabilities, "finance.read"];
   }],
   ["v2 finance grant not in the grant list", 2, (c) => put(c, [...c.capabilities, "finance.command.delete_everything"], "capabilities")],
+];
+
+// GT-V2-FIN-003: every enum-valued field, set to a value of the wrong type. Each valid member is wrapped in an array
+// (which String() would have turned back into the member), then an object, null, a number and a boolean.
+const WRONG_TYPES = [
+  ["as an array", (v) => [v]],
+  ["as an object", (v) => ({ value: v })],
+  ["as null", () => null],
+  ["as a number", () => 7],
+  ["as a boolean", () => true],
+];
+// [label, schema version, path, a valid member]. `schema` is covered separately: a wrong-typed schema is unsupported_version.
+const ENUM_FIELDS = [
+  ["v1 environment", 1, ["environment"], "development"],
+  ["v1 mode", 1, ["mode"], "fixture"],
+  ["v1 project.kind", 1, ["project", "kind"], "stub"],
+  ["v1 actor.kind", 1, ["actor", "kind"], "account"],
+  ["v1 role", 1, ["role"], "owner"],
+  ["v2 environment", 2, ["environment"], "development"],
+  ["v2 economicMode", 2, ["economicMode"], "sandbox"],
+  ["v2 evidenceMode", 2, ["evidenceMode"], "fixture"],
+  ["v2 project.kind", 2, ["project", "kind"], "event"],
+  ["v2 actor.kind", 2, ["actor", "kind"], "account"],
+  ["v2 role", 2, ["role"], "captain"],
+];
+/** The retained rows first, in their original order, then the wrong-type negatives. */
+export const MALFORMED_WRONG_TYPE = ENUM_FIELDS.flatMap(([label, version, path, valid]) =>
+  WRONG_TYPES.map(([how, wrap]) => [`${label} ${how}`, version, (c) => put(c, wrap(valid), ...path)]),
+);
+export const MALFORMED = [...MALFORMED_BASE, ...MALFORMED_WRONG_TYPE];
+
+/** `schema` of the wrong type: not a known version at all, so unsupported_version rather than unknown. [name, version, ctx]. */
+export const WRONG_TYPE_SCHEMAS = [1, 2].flatMap((version) =>
+  WRONG_TYPES.map(([how, wrap]) => [`v${version} schema ${how}`, version, wrap(version === 1 ? CONTEXT_SCHEMA : CONTEXT_SCHEMA_V2)]),
+);
+export function wrongTypeSchemaContexts() {
+  return WRONG_TYPE_SCHEMAS.map(([name, version, schema]) => ({ name, ctx: { ...structuredClone(version === 1 ? v1Base() : v2Base()), schema } }));
+}
+
+// GT-V2-FIN-002: identifier length at Finance's 128 limit, after the kind prefix. `actor.id` and `tenant.id` are the same
+// string by construction, so the actor case is the tenant case too (the adapter checks each field on its own, and the
+// unit tests build a context where only the tenant is long). `account:` is 8 characters, `event:` is 6.
+export const FINANCE_ID_MAX = 128;
+const fill = (n) => "a".repeat(n);
+const accountCtx = (raw) => v2Base({ actor: { kind: "account", id: `account:${raw}` }, tenant: { id: `account:${raw}` } });
+const eventCtx = (raw) => v2Base({ project: { kind: "event", id: raw, ref: `event:${raw}` } });
+/** [fixture name, description, ctx, field(s) that are too long, or null when it must be accepted] */
+export const BOUNDARY = [
+  ["boundary-actor-128", "Account actor and tenant are exactly 128 characters after the kind prefix (120 raw): accepted, and a valid TrustedScope.", accountCtx(fill(120)), null],
+  ["boundary-actor-129", "Account actor and tenant are 129 characters after the prefix (121 raw): the producer accepts it, the Finance adapter refuses identifier_too_long.", accountCtx(fill(121)), ["tenantId", "actorId"]],
+  ["boundary-actor-raw-128", "The reviewer's case: a 128-character raw account id is 136 prefixed. Valid /2, refused by the Finance adapter.", accountCtx(fill(128)), ["tenantId", "actorId"]],
+  ["boundary-project-128", "Event project ref is exactly 128 characters (122 raw id): accepted, and a valid TrustedScope.", eventCtx(fill(122)), null],
+  ["boundary-project-129", "Event project ref is 129 characters (123 raw id): refused identifier_too_long.", eventCtx(fill(123)), ["projectId"]],
+  ["boundary-project-raw-128", "The reviewer's case: a 128-character raw event id is a 134-character ref. Refused identifier_too_long.", eventCtx(fill(128)), ["projectId"]],
 ];
 
 /** The malformed contexts, ready to sign: [{ name, schema, ctx }]. */

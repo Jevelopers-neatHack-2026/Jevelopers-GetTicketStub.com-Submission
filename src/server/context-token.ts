@@ -100,6 +100,8 @@ const EVIDENCE = ["fixture", "synthetic", "live"];
 const ENVIRONMENTS = ["development", "preview", "live"];
 
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v !== "";
+/** An enum member. A value must BE a string first: an array or object that would stringify to a member is not one. */
+const oneOf = (list: readonly string[], v: unknown): v is string => typeof v === "string" && list.includes(v);
 
 /** (environment, economicMode) pairs a verifier accepts. Mirrors modesConsistent in context-modes.ts and verify.mjs. */
 function modesConsistent(environment: string, economicMode: string): boolean {
@@ -108,7 +110,7 @@ function modesConsistent(environment: string, economicMode: string): boolean {
 
 /** Fields both versions share: tenant, role, capabilities, revision, revoked and the two times. */
 function shapedCommon(v: Record<string, unknown>): boolean {
-  if (!isObj(v.tenant) || !nonEmpty(v.tenant.id) || typeof v.role !== "string" || !ROLES.includes(v.role as Role)) return false;
+  if (!isObj(v.tenant) || !nonEmpty(v.tenant.id) || !oneOf(ROLES, v.role)) return false;
   if (!Array.isArray(v.capabilities) || !v.capabilities.every((c) => typeof c === "string")) return false;
   if (!Number.isInteger(v.membershipRevision) || typeof v.revoked !== "boolean") return false;
   return typeof v.issuedAt === "string" && typeof v.expiresAt === "string" && !Number.isNaN(Date.parse(v.issuedAt)) && !Number.isNaN(Date.parse(v.expiresAt));
@@ -116,10 +118,10 @@ function shapedCommon(v: Record<string, unknown>): boolean {
 
 function shapedV1(v: unknown): v is RequestContext {
   if (!isObj(v) || !isObj(v.actor) || !shapedCommon(v)) return false;
-  if (typeof v.actor.kind !== "string" || !["account", "guest", "anonymous"].includes(v.actor.kind)) return false;
+  if (!oneOf(["account", "guest", "anonymous"], v.actor.kind)) return false;
   if (v.actor.kind !== "anonymous" && !nonEmpty(v.actor.id)) return false;
-  if (!ENVIRONMENTS.includes(String(v.environment)) || !["fixture", "sandbox", "live"].includes(String(v.mode))) return false;
-  return v.project === undefined || (isObj(v.project) && typeof v.project.id === "string" && PROJECT_ID_RE.test(v.project.id) && ["stub", "event"].includes(String(v.project.kind)));
+  if (!oneOf(ENVIRONMENTS, v.environment) || !oneOf(["fixture", "sandbox", "live"], v.mode)) return false;
+  return v.project === undefined || (isObj(v.project) && typeof v.project.id === "string" && PROJECT_ID_RE.test(v.project.id) && oneOf(["stub", "event"], v.project.kind));
 }
 
 /** Finance grants are explicit strings. An unknown `finance.*` string, or any at all for a non-account actor, is malformed. */
@@ -136,8 +138,8 @@ function shapedV2(v: unknown): v is ContextV2 {
   const id = v.actor.id;
   const idOk = kind === "anonymous" ? id === "anonymous:0" : typeof id === "string" && id.startsWith(`${kind}:`) && RAW_ID_RE.test(id.slice(kind.length + 1));
   if (!idOk || (v.tenant as { id: unknown }).id !== id) return false;
-  if (!ENVIRONMENTS.includes(String(v.environment)) || !ECONOMIC.includes(String(v.economicMode)) || !EVIDENCE.includes(String(v.evidenceMode))) return false;
-  if (!modesConsistent(String(v.environment), String(v.economicMode))) return false;
+  if (!oneOf(ENVIRONMENTS, v.environment) || !oneOf(ECONOMIC, v.economicMode) || !oneOf(EVIDENCE, v.evidenceMode)) return false;
+  if (!modesConsistent(v.environment, v.economicMode)) return false;
   if (!financeCapsOk(v.capabilities as string[], kind)) return false;
   const p = v.project;
   return p === undefined || (isObj(p) && typeof p.id === "string" && PROJECT_ID_RE.test(p.id) && (p.kind === "stub" || p.kind === "event") && p.ref === `${p.kind}:${p.id}`);

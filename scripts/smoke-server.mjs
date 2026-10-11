@@ -624,7 +624,7 @@ async function gt08(anon) {
 
   // --- Fixtures: the same code the server runs, and the standalone reference verifier, agree on every outcome.
   const keyFile = JSON.parse(readFileSync(join(FIXTURES, "fixture-key.json"), "utf8"));
-  const fxFiles = readdirSync(FIXTURES).filter((n) => n.endsWith(".json") && !["fixture-key.json", "index.json"].includes(n));
+  const fxFiles = readdirSync(FIXTURES).filter((n) => n.endsWith(".json") && !["fixture-key.json", "index.json", "finance-trusted-scope.schema.json"].includes(n));
   const wanted = ["owner", "captain", "staff", "guest", "unknown", "malformed", "forged", "stale", "revoked", "expired", "unsupported-version", "cross-project-a", "cross-project-b", "tenant-a-owner", "tenant-b-owner"];
   check("fixtures: every required case is published", wanted.every((n) => fxFiles.includes(`${n}.json`)) && /fixture only|never production/i.test(keyFile.warning));
   let fxBad = [];

@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CAPABILITY_MATRIX, FINANCE_CAPS, financeCapsFor, signContext, toContextV2, verifyWithKey } from "../src/server/context-token.ts";
 import { ECONOMIC_MODES, EVIDENCE_MODES, ENVIRONMENTS, ModeMappingError, PAID_PROVIDER_KEYS, modesConsistent, resolveModes } from "../src/server/context-modes.ts";
-import { FINANCE_CAPS as OFFLINE_FINANCE_CAPS, authorizes, authorizesFinance, toFinanceScope, verifyContext } from "../fixtures/context/verify.mjs";
-import { AUDIENCE, MALFORMED, NOW, malformedContexts, v1Base, v2Base } from "../fixtures/context/corpus.mjs";
+import { FINANCE_CAPS as OFFLINE_FINANCE_CAPS, authorizes, authorizesFinance, FINANCE_SCOPE_ADAPTER, toFinanceScope, verifyContext } from "../fixtures/context/verify.mjs";
+import { AUDIENCE, BOUNDARY, FINANCE_ID_MAX, MALFORMED, MALFORMED_BASE, MALFORMED_WRONG_TYPE, NOW, malformedContexts, v1Base, v2Base, wrongTypeSchemaContexts } from "../fixtures/context/corpus.mjs";
+import { checkVendored, loadConsumer } from "../fixtures/context/finance-scope-check.mjs";
 
 // GT-FIN-001..003: explicit finance grants, injective ids, separate mode axes, verifier parity.
 // Pure: the server code under test is context-token.ts and context-modes.ts, run directly.
@@ -94,8 +95,8 @@ test("ids are injective: an account and a guest with the same raw id are differe
     assert.deepEqual(a, b);
   }
   // projects too: the same id as a stub and as an event is two refs
-  assert.notEqual(toFinanceScope(v2Base({ project: { kind: "stub", id: "p1", ref: "stub:p1" } })).projectId, toFinanceScope(v2Base({ project: { kind: "event", id: "p1", ref: "event:p1" } })).projectId);
-  assert.notEqual(toFinanceScope(acct).actorId, toFinanceScope(guest).actorId);
+  assert.notEqual(toFinanceScope(v2Base({ project: { kind: "stub", id: "p1", ref: "stub:p1" } })).scope.projectId, toFinanceScope(v2Base({ project: { kind: "event", id: "p1", ref: "event:p1" } })).scope.projectId);
+  assert.notEqual(toFinanceScope(acct).scope.actorId, toFinanceScope(guest).scope.actorId);
 });
 
 test("mode mapping: environment, economic and evidence are separate, and each follows its own input", () => {
@@ -132,19 +133,112 @@ test("the issuer and both verifiers accept exactly the same (environment, econom
   }
 });
 
-test("finance scope mapping: paid_test stays an actual expense whatever the environment or evidence; unsupported contexts have no mapping", () => {
+const FIVE = ["actorId", "billingMode", "environment", "projectId", "tenantId"];
+const REFUSED = (reason, fields) => ({ ok: false, schema: FINANCE_SCOPE_ADAPTER, reason, ...(fields ? { fields } : {}) });
+
+test("finance scope adapter: a versioned result whose scope is exactly the five TrustedScope fields, evidence beside it", () => {
+  const r = toFinanceScope(v2Base({ environment: "preview", economicMode: "paid_test", evidenceMode: "fixture" }));
+  assert.equal(r.ok, true);
+  assert.equal(r.schema, "ticketstub.finance-scope-adapter/1");
+  assert.deepEqual(Object.keys(r.scope).sort(), FIVE);
+  assert.equal("evidenceMode" in r.scope, false);
+  assert.equal(r.evidenceMode, "mocked");
+  assert.ok(checkVendored(r.scope));
+  // GT-V2-FIN-001 negative control: the old shape (evidenceMode inside the scope) is rejected by the consumer schema
+  assert.equal(checkVendored({ ...r.scope, evidenceMode: r.evidenceMode }), false);
+});
+
+test("finance scope mapping: paid_test stays an actual expense whatever the environment or evidence; unsupported contexts are refused", () => {
   const s = (over) => toFinanceScope(v2Base(over));
   const paid = s({ environment: "preview", economicMode: "paid_test", evidenceMode: "fixture" });
-  assert.equal(paid.billingMode, "live");
-  assert.equal(paid.environment, "test");
+  assert.equal(paid.scope.billingMode, "live");
+  assert.equal(paid.scope.environment, "test");
   assert.equal(paid.evidenceMode, "mocked");
-  assert.equal(s({ economicMode: "sandbox" }).billingMode, "sandbox");
-  assert.equal(s({ economicMode: "none" }).billingMode, "simulated");
-  assert.notEqual(s({ economicMode: "paid_test" }).billingMode, s({ economicMode: "sandbox" }).billingMode);
-  assert.equal(toFinanceScope(v1Base()), null);
-  assert.equal(s({ economicMode: "unheard-of" }), null);
-  assert.equal(s({}).projectId, "event:evt_fx_1");
-  assert.equal(toFinanceScope(v2Base({ project: undefined })).projectId, "platform");
+  assert.equal(s({ economicMode: "sandbox" }).scope.billingMode, "sandbox");
+  assert.equal(s({ economicMode: "none" }).scope.billingMode, "simulated");
+  assert.notEqual(s({ economicMode: "paid_test" }).scope.billingMode, s({ economicMode: "sandbox" }).scope.billingMode);
+  assert.deepEqual(toFinanceScope(v1Base()), REFUSED("unsupported_context"));
+  assert.deepEqual(s({ economicMode: "unheard-of" }), REFUSED("unsupported_context"));
+  assert.deepEqual(toFinanceScope(null), REFUSED("unsupported_context"));
+  assert.equal(s({}).scope.projectId, "event:evt_fx_1");
+  assert.equal(toFinanceScope(v2Base({ project: undefined })).scope.projectId, "platform");
+});
+
+// ---- GT-V2-FIN-002: the 128-character policy ----
+
+test("finance scope adapter length policy: 128 accepted, 129 and the 128-raw case refused, never truncated, for actor, tenant and project", () => {
+  const long = (n) => "a".repeat(n);
+  const acct = (n) => v2Base({ actor: { kind: "account", id: `account:${long(n)}` }, tenant: { id: `account:${long(n)}` } });
+  const evt = (n) => v2Base({ project: { kind: "event", id: long(n), ref: `event:${long(n)}` } });
+  const ok = toFinanceScope(acct(120));
+  assert.equal(ok.ok, true);
+  assert.equal(ok.scope.actorId.length, FINANCE_ID_MAX);
+  assert.equal(ok.scope.tenantId, `account:${long(120)}`); // kind kept, nothing cut
+  assert.deepEqual(toFinanceScope(acct(121)), REFUSED("identifier_too_long", ["tenantId", "actorId"]));
+  assert.deepEqual(toFinanceScope(acct(128)), REFUSED("identifier_too_long", ["tenantId", "actorId"]));
+  assert.equal(toFinanceScope(evt(122)).scope.projectId.length, FINANCE_ID_MAX);
+  assert.deepEqual(toFinanceScope(evt(123)), REFUSED("identifier_too_long", ["projectId"]));
+  assert.deepEqual(toFinanceScope(evt(128)), REFUSED("identifier_too_long", ["projectId"]));
+  // guests (6-character prefix) and stubs (5) have their own boundaries
+  const guest = (n) => v2Base({ actor: { kind: "guest", id: `guest:${long(n)}` }, tenant: { id: `guest:${long(n)}` }, capabilities: [] });
+  assert.equal(toFinanceScope(guest(122)).ok, true);
+  assert.equal(toFinanceScope(guest(123)).ok, false);
+  const stub = (n) => v2Base({ project: { kind: "stub", id: long(n), ref: `stub:${long(n)}` } });
+  assert.equal(toFinanceScope(stub(123)).ok, true);
+  assert.equal(toFinanceScope(stub(124)).ok, false);
+  // each field is checked on its own: a long tenant alone, a long actor alone
+  const base = v2Base();
+  assert.deepEqual(toFinanceScope({ ...base, tenant: { id: long(129) } }), REFUSED("identifier_too_long", ["tenantId"]));
+  assert.deepEqual(toFinanceScope({ ...base, actor: { ...base.actor, id: long(129) } }), REFUSED("identifier_too_long", ["actorId"]));
+  // the verifiers do not cap raw ids: they still accept all of these (the adapter is where Finance's bound lives)
+  for (const c of [acct(120), acct(121), acct(128), evt(122), evt(123), evt(128)]) {
+    const [a, b] = both(sign(c));
+    assert.equal(a.ok, true);
+    assert.deepEqual(a, b);
+  }
+  // negative control: the unguarded prefixed id the reviewer saw is rejected by the consumer schema
+  assert.equal(checkVendored({ ...ok.scope, actorId: `account:${long(128)}` }), false);
+});
+
+test("every adapter scope over the published and boundary fixtures passes the TrustedScope schema (vendored always; the consumer's TypeBox when FINANCE_CONSUMER_DIR is set)", async () => {
+  const dir = process.env.FINANCE_CONSUMER_DIR;
+  const consumer = dir ? await loadConsumer(dir) : null; // set but unloadable throws: skipping is failure
+  if (consumer) assert.equal(consumer.drift, false, "vendored finance-trusted-scope.schema.json differs from the consumer's TrustedScopeSchema");
+  const key = JSON.parse(readFileSync(join(DIR, "fixture-key.json"), "utf8")).key;
+  const rows = [];
+  for (const f of readdirSync(join(DIR, "v2")).filter((n) => n.endsWith(".json") && n !== "malformed-shapes.json")) rows.push(JSON.parse(readFileSync(join(DIR, "v2", f), "utf8")));
+  for (const f of readdirSync(DIR).filter((n) => n.endsWith(".json") && !["fixture-key.json", "index.json", "finance-trusted-scope.schema.json"].includes(n))) rows.push(JSON.parse(readFileSync(join(DIR, f), "utf8")));
+  let accepted = 0;
+  let refused = 0;
+  let v1 = 0;
+  for (const fx of rows) {
+    const v = verifyContext(fx.token, key, { now: Date.parse(fx.verifyAt) });
+    if (!v.ok) continue; // expired, forged, revoked...: no context, nothing to map
+    const r = toFinanceScope(v.ctx);
+    if (fx.expect.financeAdapter) assert.deepEqual(r, fx.expect.financeAdapter, fx.fixture);
+    if (r.ok) {
+      accepted++;
+      assert.deepEqual(Object.keys(r.scope).sort(), FIVE, fx.fixture);
+      assert.ok(checkVendored(r.scope), `vendored schema: ${fx.fixture}`);
+      if (consumer) assert.equal(consumer.check(r.scope), true, `consumer TypeBox: ${fx.fixture}`);
+      assert.ok(["mocked", "sandbox", "live"].includes(r.evidenceMode), fx.fixture);
+    } else if (v.ctx.schema === "ticketstub.context/2") {
+      refused++;
+      assert.equal(r.reason, "identifier_too_long", fx.fixture);
+      assert.equal("scope" in r, false, `a refusal carries no scope: ${fx.fixture}`);
+      // the naive mapping the reviewer ran (kind-prefixed ids, no length check) is what the consumer would have rejected
+      const naive = { tenantId: v.ctx.tenant.id, projectId: v.ctx.project ? v.ctx.project.ref : "platform", environment: "development", billingMode: "sandbox", actorId: v.ctx.actor.id };
+      assert.equal(checkVendored(naive), false, fx.fixture);
+      if (consumer) assert.equal(consumer.check(naive), false, `consumer TypeBox rejects the naive scope: ${fx.fixture}`);
+    } else {
+      v1++;
+      assert.equal(r.reason, "unsupported_context", fx.fixture);
+    }
+  }
+  assert.equal(refused, BOUNDARY.filter((b) => b[3]).length);
+  assert.ok(BOUNDARY.some((b) => !b[3]) && accepted >= 10, `${accepted} accepted`);
+  assert.ok(v1 >= 1);
+  console.log(`# trusted-scope: ${accepted} accepted, ${refused} refused, ${v1} /1 refused unsupported_context; consumer TypeBox ${consumer ? "ran" : "not configured (vendored schema only)"}`);
 });
 
 // ---- GT-FIN-003: parity ----
@@ -152,7 +246,9 @@ test("finance scope mapping: paid_test stays an actual expense whatever the envi
 test("every malformed shape is refused as unknown, identically, by the server verifier and the offline verifier", () => {
   const cases = malformedContexts();
   assert.equal(cases.length, MALFORMED.length);
-  assert.ok(cases.length >= 35);
+  assert.equal(MALFORMED_BASE.length, 40); // the original rows, retained and first, with their reasons
+  assert.equal(MALFORMED_WRONG_TYPE.length, 55); // GT-V2-FIN-003: 11 enum fields x array, object, null, number, boolean
+  assert.deepEqual(cases.slice(0, 40).map((c) => c.name), MALFORMED_BASE.map((r) => r[0]));
   for (const { name, ctx } of cases) {
     const [server, offline] = both(sign(ctx));
     assert.deepEqual(server, { ok: false, reason: "unknown" }, `server: ${name}`);
@@ -161,6 +257,30 @@ test("every malformed shape is refused as unknown, identically, by the server ve
   // the seven the Finance receipt named are in the corpus
   for (const needle of ["v1 missing account actor id", "v1 missing environment", "v1 unknown environment", "v1 missing mode", "v1 unknown mode", "v1 malformed project kind", "v1 malformed project id", "v1 missing issuedAt"]) {
     assert.ok(cases.some((c) => c.name === needle), needle);
+  }
+});
+
+test("an enum field of the wrong type is refused by both verifiers, as the value itself and never as its string form", () => {
+  for (const { name, ctx } of malformedContexts().slice(40)) {
+    const [server, offline] = both(sign(ctx));
+    assert.deepEqual(server, { ok: false, reason: "unknown" }, `server: ${name}`);
+    assert.deepEqual(offline, server, `offline: ${name}`);
+  }
+  // the six the reviewer signed with the fixture key: one-element arrays that String() turned back into a member
+  const six = [[1, ["environment"], ["development"]], [1, ["mode"], ["fixture"]], [1, ["project", "kind"], ["stub"]], [2, ["environment"], ["development"]], [2, ["economicMode"], ["sandbox"]], [2, ["evidenceMode"], ["fixture"]]];
+  for (const [v, path, val] of six) {
+    const c = structuredClone(v === 1 ? v1Base() : v2Base());
+    const last = path.pop();
+    path.reduce((x, k) => x[k], c)[last] = val;
+    const [server, offline] = both(sign(c));
+    assert.deepEqual(server, { ok: false, reason: "unknown" }, `/${v} ${last}`);
+    assert.deepEqual(offline, server);
+  }
+  // `schema` of the wrong type is not a version we know
+  for (const { name, ctx } of wrongTypeSchemaContexts()) {
+    const [server, offline] = both(sign(ctx));
+    assert.deepEqual(server, { ok: false, reason: "unsupported_version" }, `server: ${name}`);
+    assert.deepEqual(offline, server, `offline: ${name}`);
   }
 });
 
@@ -213,7 +333,7 @@ test("garbage that is not a token gets the same answer from both verifiers", () 
 test("every published /2 fixture and malformed shape gets its expected outcome from both verifiers", () => {
   const key = JSON.parse(readFileSync(join(DIR, "fixture-key.json"), "utf8")).key;
   const files = readdirSync(join(DIR, "v2")).filter((n) => n.endsWith(".json") && n !== "malformed-shapes.json");
-  assert.ok(files.length >= 17, `${files.length} /2 fixtures`);
+  assert.ok(files.length >= 24, `${files.length} /2 fixtures`);
   const seen = new Set();
   for (const f of files) {
     const fx = JSON.parse(readFileSync(join(DIR, "v2", f), "utf8"));
@@ -228,7 +348,7 @@ test("every published /2 fixture and malformed shape gets its expected outcome f
       for (const c of fx.expect.grants?.allow ?? []) assert.ok(server.ctx.capabilities.includes(c), `${fx.fixture} allows ${c}`);
       for (const c of fx.expect.grants?.deny ?? []) assert.ok(!server.ctx.capabilities.includes(c), `${fx.fixture} denies ${c}`);
       if (fx.expect.modes) assert.deepEqual({ environment: server.ctx.environment, economicMode: server.ctx.economicMode, evidenceMode: server.ctx.evidenceMode }, fx.expect.modes, fx.fixture);
-      if (fx.expect.financeScope) assert.deepEqual(toFinanceScope(server.ctx), fx.expect.financeScope, fx.fixture);
+      if (fx.expect.financeAdapter) assert.deepEqual(toFinanceScope(server.ctx), fx.expect.financeAdapter, fx.fixture);
     } else {
       assert.equal(server.reason, fx.expect.reason, fx.fixture);
     }
@@ -237,6 +357,7 @@ test("every published /2 fixture and malformed shape gets its expected outcome f
   for (const r of ["ok", "revoked", "stale", "wrong_audience"]) assert.ok(seen.has(r), r);
   const shapes = JSON.parse(readFileSync(join(DIR, "v2", "malformed-shapes.json"), "utf8")).cases;
   assert.equal(shapes.length, MALFORMED.length);
+  assert.deepEqual(shapes.map((c) => c.name), MALFORMED.map((r) => r[0]));
   for (const c of shapes) {
     const now = Date.parse(c.verifyAt);
     assert.deepEqual(verifyWithKey(c.token, key, now), { ok: false, reason: "unknown" }, c.name);
@@ -252,8 +373,8 @@ test("the finance fixtures cover read, export and command, each allowed and deni
   assert.ok(can("finance-read-allowed", "finance.read") && !can("finance-read-denied", "finance.read"));
   assert.ok(can("finance-export-allowed", "finance.export") && !can("finance-export-denied", "finance.export"));
   assert.ok(can("finance-command-allowed", "finance.command.budget_change") && !can("finance-command-denied", "finance.command.budget_change"));
-  assert.equal(toFinanceScope(ctx("economic-paid-test")).billingMode, "live");
-  assert.equal(toFinanceScope(ctx("economic-sandbox")).billingMode, "sandbox");
+  assert.equal(toFinanceScope(ctx("economic-paid-test")).scope.billingMode, "live");
+  assert.equal(toFinanceScope(ctx("economic-sandbox")).scope.billingMode, "sandbox");
   assert.equal(ctx("economic-paid-test").evidenceMode, "fixture"); // fixture evidence, real expense
   assert.notEqual(ctx("injective-account").tenant.id, ctx("injective-guest").tenant.id);
 });

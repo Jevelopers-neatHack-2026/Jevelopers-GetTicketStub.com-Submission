@@ -6,7 +6,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONTEXT_SCHEMA, capabilitiesFor, signContext, toContextV2 } from "../../src/server/context-token.ts";
-import { AUDIENCE, malformedContexts } from "./corpus.mjs";
+import { AUDIENCE, BOUNDARY, malformedContexts } from "./corpus.mjs";
+import { FINANCE_SCOPE_ADAPTER } from "./verify.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const FIXTURE_KEY = "FIXTURE-ONLY-NEVER-PRODUCTION--ticketstub-context-key-v1";
@@ -137,17 +138,25 @@ const asGuest = ctx2({ kind: "guest", raw: same, role: "none", revision: 0 });
 add2("injective-account", `Raw id ${same} as an account: actor and tenant are account:${same}.`, signContext(asAccount, FIXTURE_KEY, "fx0000000000000000000013"), ok2(asAccount, { grants: grants([], [FIN.read]) }), live2(1));
 add2("injective-guest", `The same raw id ${same} as a guest: actor and tenant are guest:${same}. Never equal to the account's.`, signContext(asGuest, FIXTURE_KEY, null), ok2(asGuest, { grants: grants([], [FIN.read]) }));
 
-// Mode mapping: three independent axes. financeScope is the PROPOSED cost-intelligence TrustedScope mapping (verify.mjs toFinanceScope).
+// Mode mapping: three independent axes. financeAdapter is the PROPOSED versioned cost-intelligence TrustedScope adapter result (verify.mjs toFinanceScope): the five-field scope, plus evidenceMode beside it.
 const staffModes = (environment, economicMode, evidenceMode) => ctx2({ raw: "acc_FIXTURE_staff1", role: "staff", staff: true, revision: 1, environment, economicMode, evidenceMode });
-const scope = (c) => ({ tenantId: c.tenant.id, projectId: "platform", actorId: c.actor.id });
+const adapter = (c, environment, billingMode, evidenceMode) => ({ ok: true, schema: FINANCE_SCOPE_ADAPTER, scope: { tenantId: c.tenant.id, projectId: "platform", environment, billingMode, actorId: c.actor.id }, evidenceMode });
 const sandbox = staffModes("development", "sandbox", "synthetic");
-add2("economic-sandbox", "development / sandbox / synthetic: provider sandboxes, no real money. Finance billingMode sandbox.", signContext(sandbox, FIXTURE_KEY, "fx0000000000000000000012"), ok2(sandbox, { financeScope: { ...scope(sandbox), environment: "development", billingMode: "sandbox", evidenceMode: "sandbox" } }), live2(1));
+add2("economic-sandbox", "development / sandbox / synthetic: provider sandboxes, no real money. Finance billingMode sandbox.", signContext(sandbox, FIXTURE_KEY, "fx0000000000000000000012"), ok2(sandbox, { financeAdapter: adapter(sandbox, "development", "sandbox", "sandbox") }), live2(1));
 const none = staffModes("development", "none", "synthetic");
-add2("economic-none", "development / none / synthetic: nothing is billable. Finance has no none, so it maps to billingMode simulated.", signContext(none, FIXTURE_KEY, "fx0000000000000000000012"), ok2(none, { financeScope: { ...scope(none), environment: "development", billingMode: "simulated", evidenceMode: "sandbox" } }), live2(1));
+add2("economic-none", "development / none / synthetic: nothing is billable. Finance has no none, so it maps to billingMode simulated.", signContext(none, FIXTURE_KEY, "fx0000000000000000000012"), ok2(none, { financeAdapter: adapter(none, "development", "simulated", "sandbox") }), live2(1));
 const paidTest = staffModes("preview", "paid_test", "fixture");
-add2("economic-paid-test", "preview / paid_test / fixture: a test deploy that spent real money, backed by fixture evidence. paid_test maps to billingMode live, so it stays an actual expense whatever the environment name or the evidence says.", signContext(paidTest, FIXTURE_KEY, "fx0000000000000000000012"), ok2(paidTest, { financeScope: { ...scope(paidTest), environment: "test", billingMode: "live", evidenceMode: "mocked" } }), live2(1));
+add2("economic-paid-test", "preview / paid_test / fixture: a test deploy that spent real money, backed by fixture evidence. paid_test maps to billingMode live, so it stays an actual expense whatever the environment name or the evidence says.", signContext(paidTest, FIXTURE_KEY, "fx0000000000000000000012"), ok2(paidTest, { financeAdapter: adapter(paidTest, "test", "live", "mocked") }), live2(1));
 const liveCtx = staffModes("live", "live", "live");
-add2("economic-live", "live / live / live: production. Shows the mapping only: this token is signed with the fixture key, so no live deployment would accept it.", signContext(liveCtx, FIXTURE_KEY, "fx0000000000000000000012"), ok2(liveCtx, { financeScope: { ...scope(liveCtx), environment: "production", billingMode: "live", evidenceMode: "live" } }), live2(1));
+add2("economic-live", "live / live / live: production. Shows the mapping only: this token is signed with the fixture key, so no live deployment would accept it.", signContext(liveCtx, FIXTURE_KEY, "fx0000000000000000000012"), ok2(liveCtx, { financeAdapter: adapter(liveCtx, "production", "live", "live") }), live2(1));
+
+// Finance identifier bounds: kind-prefixed ids at, over and far over 128 characters. Valid /2 tokens either way; the adapter decides.
+for (const [name, description, c, tooLong] of BOUNDARY) {
+  const expect = tooLong
+    ? { ok: true, role: c.role, tenant: c.tenant.id, project: c.project, financeAdapter: { ok: false, schema: FINANCE_SCOPE_ADAPTER, reason: "identifier_too_long", fields: tooLong } }
+    : { ok: true, role: c.role, tenant: c.tenant.id, project: c.project, financeAdapter: { ok: true, schema: FINANCE_SCOPE_ADAPTER, scope: { tenantId: c.tenant.id, projectId: c.project.ref, environment: "development", billingMode: "sandbox", actorId: c.actor.id }, evidenceMode: "mocked" } };
+  add2(name, description, signContext(c, FIXTURE_KEY, SID2), expect, live2(c.membershipRevision));
+}
 
 // Audience, current membership, revocation, version.
 add2("wrong-audience", "A valid token minted for ticketstub.finance, checked by a verifier that is another host.", signContext(cap, FIXTURE_KEY, SID2), { ok: false, reason: "wrong_audience" }, live2(2), { audience: "some-other-host" });

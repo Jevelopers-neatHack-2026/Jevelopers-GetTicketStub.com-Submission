@@ -7,7 +7,7 @@
 import { randomBytes } from "node:crypto";
 import { signContext } from "../src/server/context-token.ts";
 import { FINANCE_CAPS, verifyContext, toFinanceScope, authorizesFinance } from "../fixtures/context/verify.mjs";
-import { MALFORMED, malformedContexts, v1Base, v2Base } from "../fixtures/context/corpus.mjs";
+import { BOUNDARY, MALFORMED, malformedContexts, v1Base, v2Base, wrongTypeSchemaContexts } from "../fixtures/context/corpus.mjs";
 
 const BASE = process.argv[2];
 const SECRET = process.env.CONTEXT_SECRET;
@@ -84,7 +84,13 @@ async function main() {
   await Y.signIn(`fin-y-${run}@example.com`);
   await S.signIn(STAFF);
   await W.signIn(`fin-w-${run}@example.com`);
-  const verify = (token, extra = {}) => anon.api("POST", "/api/context/verify", { token, ...extra });
+  // The port is rate limited per address (120 a minute), and the corpus is larger than that: rotate the caller.
+  let verifier = client();
+  let sent = 0;
+  const verify = (token, extra = {}) => {
+    if (++sent % 90 === 0) verifier = client();
+    return verifier.api("POST", "/api/context/verify", { token, ...extra });
+  };
 
   // --- versions: /1 stays the default, /2 is asked for
   const d = await anon.api("GET", "/api/context");
@@ -130,8 +136,8 @@ async function main() {
   check("verify: the right audience passes, another host is wrong_audience (401)", (await verify(evCtx.json.token, { audience: "ticketstub.finance" })).status === 200 && (await verify(evCtx.json.token, { audience: "another-host" })).json?.reason === "wrong_audience");
   check("verify: a non-string audience is a 400", (await verify(evCtx.json.token, { audience: 7 })).status === 400);
   check("verify: authorizesFinance accepts the issued token for its project and denies a command", authorizesFinance(back.ctx, { tenant: e.tenant.id, project: { kind: "event", id: ev.eventId }, capability: "finance.read" }) && !authorizesFinance(back.ctx, { tenant: e.tenant.id, project: { kind: "event", id: ev.eventId }, capability: "finance.command.budget_change" }));
-  const scope = toFinanceScope(back.ctx);
-  check("verify: the issued context maps to a finance scope (none/preview/synthetic -> simulated/test/sandbox)", scope?.billingMode === "simulated" && scope.environment === "test" && scope.evidenceMode === "sandbox" && scope.projectId === `event:${ev.eventId}`);
+  const mapped = toFinanceScope(back.ctx);
+  check("verify: the issued context maps to a versioned adapter result (none/preview/synthetic -> simulated/test/sandbox), evidence beside a five-field scope", mapped.ok === true && mapped.schema === "ticketstub.finance-scope-adapter/1" && mapped.scope.billingMode === "simulated" && mapped.scope.environment === "test" && mapped.evidenceMode === "sandbox" && mapped.scope.projectId === `event:${ev.eventId}` && Object.keys(mapped.scope).length === 5 && !("evidenceMode" in mapped.scope));
 
   // --- current membership and revocation, through the live port
   const wEvent = (await W.api("POST", "/api/organizer/events", { title: "W event", stub: stub(`wev-${run}`, "W event"), guests: [{ name: "G" }] })).json;
@@ -156,7 +162,40 @@ async function main() {
     const offline = verifyContext(token, SECRET, { now: Date.now() });
     if (!(server.status === 401 && server.json?.reason === "unknown" && offline.ok === false && offline.reason === server.json.reason)) bad.push(`${name}: server ${server.status} ${server.json?.reason}, offline ${offline.reason}`);
   }
-  check(`parity: all ${corpus.length} malformed shapes (the seven GT-FIN-003 shapes, and the /2 ones) are unknown from the server and from verify.mjs`, bad.length === 0 && corpus.length === MALFORMED.length, bad.join(" | "));
+  check(`parity: all ${corpus.length} malformed shapes (the seven GT-FIN-003 shapes, the /2 ones, and the wrong-typed enums) are unknown from the server and from verify.mjs`, bad.length === 0 && corpus.length === MALFORMED.length, bad.join(" | "));
+  // GT-V2-FIN-003: wrong-typed enums are in the corpus above; a wrong-typed `schema` is unsupported_version from both.
+  const schemaBad = [];
+  for (const { name, ctx } of wrongTypeSchemaContexts()) {
+    const token = signContext(ctx, SECRET, null);
+    const server = await verify(token);
+    const offline = verifyContext(token, SECRET, { now: Date.now() });
+    if (!(server.status === 401 && server.json?.reason === "unsupported_version" && offline.ok === false && offline.reason === "unsupported_version")) schemaBad.push(`${name}: server ${server.status} ${server.json?.reason}, offline ${offline.reason}`);
+  }
+  check("parity: a wrong-typed schema (array, object, null, number, boolean; /1 and /2) is unsupported_version from the server and from verify.mjs", schemaBad.length === 0, schemaBad.join(" | "));
+  // GT-V2-FIN-002: the length boundary through the port. An account token needs a live session, so the same prefixed
+  // lengths are carried by a guest (6-character prefix, same total length) under the server's own modes. The server
+  // verifies all of them; the adapter then accepts exactly the ones that fit Finance's 128.
+  const boundaryBad = [];
+  for (const [name, , bctx, tooLong] of BOUNDARY) {
+    const gid = bctx.actor.id.length > 40 ? `guest:${"a".repeat(Math.min(bctx.actor.id.length - 6, 128))}` : "guest:fxboundary0000001";
+    const g = {
+      ...bctx,
+      actor: { kind: "guest", id: gid },
+      tenant: { id: gid },
+      role: "none",
+      capabilities: bctx.capabilities.filter((c) => !c.startsWith("finance.")),
+      environment: "preview",
+      economicMode: "none",
+      evidenceMode: "synthetic",
+      issuedAt: new Date(Date.now()).toISOString(),
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    };
+    const server = await verify(signContext(g, SECRET, null));
+    const r = server.json?.ok ? toFinanceScope(server.json.context) : undefined;
+    const fits = g.actor.id.length <= 128 && (g.project?.ref.length ?? 0) <= 128;
+    if (!(server.status === 200 && r && r.ok === fits && r.ok === !tooLong && (r.ok ? r.scope.actorId.length <= 128 && r.scope.projectId.length <= 128 : r.reason === "identifier_too_long" && !("scope" in r)))) boundaryBad.push(`${name}: ${server.status} ${JSON.stringify(r)}`);
+  }
+  check(`boundary: ${BOUNDARY.length} prefixed-id lengths (128, 129, 128 raw; actor and project) verify through the port, and the adapter accepts exactly the ones that fit`, boundaryBad.length === 0, boundaryBad.join(" | "));
   const now = Date.now();
   const fresh = (over) => ({ ...v2Base(), issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 300_000).toISOString(), ...over });
   const other = [

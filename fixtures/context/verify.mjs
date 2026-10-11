@@ -1,6 +1,7 @@
 // Reference verifier for ticketstub.context/1 and /2 tokens. No dependencies: copy this file into a consumer.
 //   node fixtures/context/verify.mjs        checks every fixture in this folder (and v2/) against its expected outcome
 // verifyContext(token, key, { now, state, audience }) -> { ok: true, ctx } | { ok: false, reason }
+// toFinanceScope(ctx) -> versioned adapter result for cost-intelligence's TrustedScope (see its comment).
 // reason is one of: unknown | forged | stale | revoked | expired | unsupported_version | wrong_audience
 // Without `state` it proves signature, version, shape and expiry only. Stale and revoked need the issuer's current
 // answer: { membershipRevision, sessionLive, projectMember? } for the token's account (see README.md).
@@ -10,6 +11,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 const SCHEMA_V1 = "ticketstub.context/1";
 const SCHEMA_V2 = "ticketstub.context/2";
@@ -30,12 +32,14 @@ export const FINANCE_CAPS = [
 const ID_RE = /^[\w.:-]{1,128}$/;
 const isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 const nonEmpty = (v) => typeof v === "string" && v !== "";
+// An enum member. A value must BE a string first: an array or object that would stringify to a member is not one.
+const oneOf = (list, v) => typeof v === "string" && list.includes(v);
 const dec = (s) => Buffer.from(s, "base64url");
 
 const modesConsistent = (environment, economic) => (environment === "live" ? economic !== "paid_test" : economic !== "live");
 
 function shapedCommon(c) {
-  if (!isObj(c.tenant) || !nonEmpty(c.tenant.id) || typeof c.role !== "string" || !ROLES.includes(c.role)) return false;
+  if (!isObj(c.tenant) || !nonEmpty(c.tenant.id) || !oneOf(ROLES, c.role)) return false;
   if (!Array.isArray(c.capabilities) || !c.capabilities.every((x) => typeof x === "string")) return false;
   if (!Number.isInteger(c.membershipRevision) || typeof c.revoked !== "boolean") return false;
   return typeof c.issuedAt === "string" && typeof c.expiresAt === "string" && !Number.isNaN(Date.parse(c.issuedAt)) && !Number.isNaN(Date.parse(c.expiresAt));
@@ -43,10 +47,10 @@ function shapedCommon(c) {
 
 function shapedV1(c) {
   if (!isObj(c.actor) || !shapedCommon(c)) return false;
-  if (typeof c.actor.kind !== "string" || !["account", "guest", "anonymous"].includes(c.actor.kind)) return false;
+  if (!oneOf(["account", "guest", "anonymous"], c.actor.kind)) return false;
   if (c.actor.kind !== "anonymous" && !nonEmpty(c.actor.id)) return false;
-  if (!ENVIRONMENTS.includes(String(c.environment)) || !MODES_V1.includes(String(c.mode))) return false;
-  return c.project === undefined || (isObj(c.project) && typeof c.project.id === "string" && ID_RE.test(c.project.id) && ["stub", "event"].includes(String(c.project.kind)));
+  if (!oneOf(ENVIRONMENTS, c.environment) || !oneOf(MODES_V1, c.mode)) return false;
+  return c.project === undefined || (isObj(c.project) && typeof c.project.id === "string" && ID_RE.test(c.project.id) && oneOf(["stub", "event"], c.project.kind));
 }
 
 function shapedV2(c) {
@@ -57,8 +61,8 @@ function shapedV2(c) {
   const id = c.actor.id;
   const idOk = kind === "anonymous" ? id === "anonymous:0" : typeof id === "string" && id.startsWith(`${kind}:`) && ID_RE.test(id.slice(kind.length + 1));
   if (!idOk || c.tenant.id !== id) return false;
-  if (!ENVIRONMENTS.includes(String(c.environment)) || !ECONOMIC.includes(String(c.economicMode)) || !EVIDENCE.includes(String(c.evidenceMode))) return false;
-  if (!modesConsistent(String(c.environment), String(c.economicMode))) return false;
+  if (!oneOf(ENVIRONMENTS, c.environment) || !oneOf(ECONOMIC, c.economicMode) || !oneOf(EVIDENCE, c.evidenceMode)) return false;
+  if (!modesConsistent(c.environment, c.economicMode)) return false;
   const fin = c.capabilities.filter((x) => x.startsWith("finance."));
   if (fin.length > 0 && (kind !== "account" || !fin.every((x) => FINANCE_CAPS.includes(x)))) return false;
   const p = c.project;
@@ -112,26 +116,43 @@ export function authorizesFinance(ctx, { tenant, project, capability, expect }) 
   return true;
 }
 
+export const FINANCE_SCOPE_ADAPTER = "ticketstub.finance-scope-adapter/1";
+/** Finance's TrustedScope bounds tenantId, projectId and actorId to 128 characters each (maxLength 128). */
+export const FINANCE_ID_MAX = 128;
+
 /**
- * A PROPOSED mapping of a /2 context onto cost-intelligence's TrustedScope vocabulary (environment, billingMode,
- * evidenceMode). Finance owns its enums and has not accepted this table. Injective: tenantId and actorId keep their
- * kind prefix and projectId is the kind-prefixed ref, so two kinds can never collide. paid_test becomes billingMode
- * "live": it is real money, and stays an actual expense whatever the evidence says. Returns null for a context that
- * has no honest mapping, which a consumer must treat as a denial.
+ * A PROPOSED adapter from a /2 context to cost-intelligence's TrustedScope. Finance owns its enums and has not
+ * accepted this table. It returns a versioned result, never a bare scope:
+ *   { ok: true,  schema: "ticketstub.finance-scope-adapter/1", scope, evidenceMode }
+ *   { ok: false, schema: "ticketstub.finance-scope-adapter/1", reason, fields? }
+ * `scope` has exactly the five fields TrustedScope permits (tenantId, projectId, environment, billingMode,
+ * actorId; the consumer schema is additionalProperties:false) and is safe to pass on as is. `evidenceMode`
+ * (mocked | sandbox | live) is NOT part of TrustedScope, so it travels beside the scope, with its provenance, and the
+ * consumer decides where to record it. Injective: tenantId and actorId keep their kind prefix and projectId is the
+ * kind-prefixed ref, so two kinds can never collide. paid_test becomes billingMode "live": it is real money, and
+ * stays an actual expense whatever the evidence says.
+ * Length policy: the producer accepts raw ids of up to 128 characters, and the kind prefix then adds 5 to 8, so a mapped
+ * id can pass 128. The adapter never truncates, drops the kind or invents an id: any mapped id over FINANCE_ID_MAX is
+ * refused { reason: "identifier_too_long", fields: [...] }. A context with no honest mapping is refused
+ * { reason: "unsupported_context" }. A consumer must treat every refusal as a denial.
  */
 export function toFinanceScope(ctx) {
-  if (ctx.schema !== SCHEMA_V2) return null;
+  const refuse = (reason, fields) => ({ ok: false, schema: FINANCE_SCOPE_ADAPTER, reason, ...(fields ? { fields } : {}) });
+  if (!isObj(ctx) || ctx.schema !== SCHEMA_V2) return refuse("unsupported_context");
   const environment = { development: "development", preview: "test", live: "production" }[ctx.environment];
   const billingMode = { none: "simulated", sandbox: "sandbox", paid_test: "live", live: "live" }[ctx.economicMode];
   const evidenceMode = { fixture: "mocked", synthetic: "sandbox", live: "live" }[ctx.evidenceMode];
-  if (!environment || !billingMode || !evidenceMode) return null;
-  return { tenantId: ctx.tenant.id, projectId: ctx.project ? ctx.project.ref : "platform", environment, billingMode, evidenceMode, actorId: ctx.actor.id };
+  if (!environment || !billingMode || !evidenceMode) return refuse("unsupported_context");
+  const scope = { tenantId: ctx.tenant.id, projectId: ctx.project ? ctx.project.ref : "platform", environment, billingMode, actorId: ctx.actor.id };
+  const tooLong = ["tenantId", "projectId", "actorId"].filter((k) => typeof scope[k] !== "string" || scope[k].length < 1 || scope[k].length > FINANCE_ID_MAX);
+  if (tooLong.length > 0) return refuse("identifier_too_long", tooLong);
+  return { ok: true, schema: FINANCE_SCOPE_ADAPTER, scope, evidenceMode };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const here = dirname(fileURLToPath(import.meta.url));
   const key = JSON.parse(readFileSync(join(here, "fixture-key.json"), "utf8")).key;
-  const skip = ["fixture-key.json", "index.json"];
+  const skip = ["fixture-key.json", "index.json", "finance-trusted-scope.schema.json"];
   const files = [
     ...readdirSync(here).filter((n) => n.endsWith(".json") && !skip.includes(n)).map((n) => join(here, n)),
     ...(existsSync(join(here, "v2")) ? readdirSync(join(here, "v2")).filter((n) => n.endsWith(".json") && n !== "malformed-shapes.json").map((n) => join(here, "v2", n)) : []),
@@ -149,10 +170,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       ok = fx.expect.grants.allow.every((c) => r.ctx.capabilities.includes(c)) && fx.expect.grants.deny.every((c) => !r.ctx.capabilities.includes(c));
     }
     if (ok && r.ok && fx.expect.modes) ok = ["environment", "economicMode", "evidenceMode"].every((k) => r.ctx[k] === fx.expect.modes[k]);
-    if (ok && r.ok && fx.expect.financeScope) {
-      const got = toFinanceScope(r.ctx);
-      ok = got !== null && Object.keys(fx.expect.financeScope).length === Object.keys(got).length && Object.entries(fx.expect.financeScope).every(([k, v]) => got[k] === v);
-    }
+    if (ok && r.ok && fx.expect.financeAdapter) ok = isDeepStrictEqual(toFinanceScope(r.ctx), fx.expect.financeAdapter);
     report(ok, `${fx.fixture}: ${r.ok ? `ok role=${r.ctx.role}` : r.reason}`);
   }
   const shapes = join(here, "v2", "malformed-shapes.json");

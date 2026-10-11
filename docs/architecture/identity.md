@@ -169,14 +169,14 @@ Never one word for all three. They are derived in `src/server/context-modes.ts`.
 
 The key-presence rule is a heuristic that leans toward over-reporting: a key being configured does not prove a call was made, but a paid test must never read as `none`.
 
-Proposed mapping onto cost-intelligence's `TrustedScope` (`toFinanceScope` in `verify.mjs`; Finance owns its enums and has not accepted this):
+Proposed mapping onto cost-intelligence's `TrustedScope` (`toFinanceScope` in `verify.mjs`; Finance owns its enums and has not accepted this). The result is versioned, `ticketstub.finance-scope-adapter/1`: `{ ok: true, scope, evidenceMode }` where `scope` holds exactly the five fields `TrustedScope` permits and `evidenceMode` sits beside it, or `{ ok: false, reason }`. A mapped id over Finance's 128 characters is refused `identifier_too_long` (never truncated, never unprefixed, never replaced); the producer does not cap raw ids at issue, so `/1` stays as it is.
 
 | Studio | Finance field | Maps to |
 | --- | --- | --- |
 | `environment` `development` / `preview` / `live` | `environment` | `development` / `test` / `production` |
 | `economicMode` `none` / `sandbox` / `paid_test` / `live` | `billingMode` | `simulated` / `sandbox` / `live` / `live` |
-| `evidenceMode` `fixture` / `synthetic` / `live` | `evidenceMode` | `mocked` / `sandbox` / `live` |
-| `tenant.id`, `project.ref` (or `platform`), `actor.id` | `tenantId`, `projectId`, `actorId` | unchanged, kind-prefixed |
+| `tenant.id`, `project.ref` (or `platform`), `actor.id` | `tenantId`, `projectId`, `actorId` | unchanged, kind-prefixed, at most 128 characters or the mapping is refused |
+| `evidenceMode` `fixture` / `synthetic` / `live` | beside `scope`, not inside it | `mocked` / `sandbox` / `live` |
 
 ### Finance grants (GT-FIN-001)
 
@@ -329,7 +329,7 @@ Before the server stored shares, `/s/<payload>` carried the whole stub, base64ur
 | --- | --- | --- | --- |
 | **GT-FIN-001** explicit finance grants, or an action-verification port, with positive and negative fixtures | `CAPABILITY_MATRIX.finance`, `financeCapsFor`, `authorizesFinance`, fixtures `v2/finance-*` | Read, export and command grants as capabilities, per role and scope. Allowed and denied fixtures for each. No role-name authority. | Owner approval of the matrix. **No service principal model**: there is no `service` actor, so a worker, recovery job or service call has no grant path (not supported). **No separately authenticated action-verification port**: the port says whether a token is good, not whether an action is allowed. Nobody holds `finance.command.*` per project. |
 | **GT-FIN-002** trusted mapping for environment, economic mode, evidence mode, audience; injective project kind and ID; a paid test is expense; deny unsupported | `context-modes.ts`, `toContextV2`, `audience`, `project.ref`, `toFinanceScope`, fixtures `v2/economic-*`, `wrong-audience`, `injective-*` | Three axes, `paid_test` stays `billingMode: live`, injective actor, tenant and project refs, one configured audience, refusal of inconsistent mappings (unit-tested; `503` on issue). | Owner review of the mapping, and Finance acceptance of the vocabulary. Per-consumer audiences (one string only). `paid_test` is inferred from key presence unless stated, which is a heuristic. The `503` refusal is covered by unit tests but not by an HTTP test. No live issuer evidence. |
-| **GT-FIN-003** align the offline verifier with server shape validation; add the seven negatives | `shapedV1`, `shapedV2`, `verify.mjs`, `fixtures/context/corpus.mjs`, `v2/malformed-shapes.json`, the unit test, the `finance-context` suite | The seven shapes, plus 33 more, are `unknown` offline and from the server, with identical reasons. Current membership, session, revision, audience and modes are re-checked live. | Push revocation. A `/2` `stale` over HTTP is covered offline only. Consumers must configure the issuer endpoint and key themselves; nothing from a token chooses them. |
+| **GT-FIN-003** align the offline verifier with server shape validation; add the seven negatives | `shapedV1`, `shapedV2`, `verify.mjs`, `fixtures/context/corpus.mjs`, `v2/malformed-shapes.json`, the unit test, the `finance-context` suite | The seven shapes, plus 33 more, plus 55 wrong-type enum values (array, object, null, number, boolean; both verifiers require a string before any enum check), are `unknown` offline and from the server, with identical reasons. Current membership, session, revision, audience and modes are re-checked live. | Push revocation. A `/2` `stale` over HTTP is covered offline only. Consumers must configure the issuer endpoint and key themselves; nothing from a token chooses them. |
 | Trusted selected-project context | `GET /api/context?v=2&project=`, `derive()` in `context.ts` | Server-derived selection, `404` for a project the caller does not hold, re-checked at verify. | Dashboard integration. |
 | Approved read/command port | Not in this repository | Not supported. The host issues and verifies identity. Query, export and command behaviour belongs to cost-intelligence (#8) and the dashboard bridge (team-dashboard #11, and the admin-mount request). | The port itself. |
 

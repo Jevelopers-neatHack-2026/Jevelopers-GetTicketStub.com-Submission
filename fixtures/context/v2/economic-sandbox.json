@@ -17,12 +17,16 @@
       "economicMode": "sandbox",
       "evidenceMode": "synthetic"
     },
-    "financeScope": {
-      "tenantId": "account:acc_FIXTURE_staff1",
-      "projectId": "platform",
-      "actorId": "account:acc_FIXTURE_staff1",
-      "environment": "development",
-      "billingMode": "sandbox",
+    "financeAdapter": {
+      "ok": true,
+      "schema": "ticketstub.finance-scope-adapter/1",
+      "scope": {
+        "tenantId": "account:acc_FIXTURE_staff1",
+        "projectId": "platform",
+        "environment": "development",
+        "billingMode": "sandbox",
+        "actorId": "account:acc_FIXTURE_staff1"
+      },
       "evidenceMode": "sandbox"
     }
   }

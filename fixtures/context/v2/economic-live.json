@@ -17,12 +17,16 @@
       "economicMode": "live",
       "evidenceMode": "live"
     },
-    "financeScope": {
-      "tenantId": "account:acc_FIXTURE_staff1",
-      "projectId": "platform",
-      "actorId": "account:acc_FIXTURE_staff1",
-      "environment": "production",
-      "billingMode": "live",
+    "financeAdapter": {
+      "ok": true,
+      "schema": "ticketstub.finance-scope-adapter/1",
+      "scope": {
+        "tenantId": "account:acc_FIXTURE_staff1",
+        "projectId": "platform",
+        "environment": "production",
+        "billingMode": "live",
+        "actorId": "account:acc_FIXTURE_staff1"
+      },
       "evidenceMode": "live"
     }
   }
