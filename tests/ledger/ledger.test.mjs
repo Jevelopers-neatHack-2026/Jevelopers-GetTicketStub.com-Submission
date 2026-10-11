@@ -132,6 +132,19 @@ function makePorts(pool, scope, clock) {
     database: { connect: () => pool.connect() },
     trustedContext: { resolve: async () => ({ ...scope }) },
     clock: { now: () => new Date(clock.value) },
+    // Synthetic service authority for isolated PostgreSQL regressions; this is not a production trust root.
+    financeAuthority: { authorizeCurrent: async request => JSON.stringify(request.requestedScope) !== JSON.stringify(scope)
+      ? { status: 'denied', decisionId: 'synthetic-ledger-foreign-scope', operation: request.operation, permission: request.permission }
+      : ({
+        status: 'allowed', decisionId: `synthetic-ledger-grant:${request.operation}`,
+        operation: request.operation, permission: request.permission, scope: request.requestedScope,
+        principal: {
+          kind: 'service', actorId: request.requestedScope.actorId, serviceStatus: 'active',
+          serviceGrantRevision: 'synthetic-ledger-fixture-1',
+        },
+        verifiedAt: new Date(clock.value).toISOString(),
+        expiresAt: new Date(new Date(clock.value).getTime() + 60_000).toISOString(),
+      }) },
   };
 }
 
@@ -1595,7 +1608,10 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
     let forbiddenConnects = 0;
     const forbiddenPorts = {
       ...makePorts(pool, forbiddenScope, clock),
-      trustedContext: { resolve: async () => null },
+      financeAuthority: { authorizeCurrent: async request => ({
+        status: 'denied', decisionId: 'synthetic-revoked-grant',
+        operation: request.operation, permission: request.permission,
+      }) },
       database: { connect: async () => { forbiddenConnects++; return pool.connect(); } },
     };
     const forbiddenPayload = makeRequest(forbiddenScope, { eventId: 'forbidden-quarantine-event' });

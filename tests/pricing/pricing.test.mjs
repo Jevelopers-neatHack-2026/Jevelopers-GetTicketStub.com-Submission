@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,11 +115,126 @@ function makePorts(pool, scope, clock, overrides = {}) {
     trustedContext: overrides.trustedContext ?? { resolve: async () => ({ ...scope }) },
     clock: { now: () => new Date(clock.value) },
     ...(actionAuthority ? { actionAuthority } : {}),
+    ...(overrides.financeAuthority ? { financeAuthority: overrides.financeAuthority } : {}),
     boundEvidenceAuthority,
     ...(overrides.contractTimeAuthority ? { contractTimeAuthority: overrides.contractTimeAuthority } : {}),
     ...(overrides.dimensionEvidenceAuthority ? { dimensionEvidenceAuthority: overrides.dimensionEvidenceAuthority } : {}),
   };
 }
+
+test('current finance grants are rechecked before estimate replay, catalog, contract-time, dimension, bound evidence, and persistence', async () => {
+  assert.ok(process.env.CI_TEST_DB_HOST, 'pricing authorization regression uses the disposable PostgreSQL harness');
+  const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
+  const sharedEvent = JSON.parse(await readFile(sharedUsagePath, 'utf8')).valid;
+  const pool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 8 });
+  const suffix = randomUUID();
+  const scope = {
+    tenantId: randomUUID(), projectId: randomUUID(),
+    environment: 'test', billingMode: 'simulated', actorId: `ci09-pricing-user-${suffix}`,
+  };
+  const clock = { value: fixture.selection.published_at };
+  const trace = [];
+  const financeAuthority = {
+    authorizeCurrent: async request => {
+      trace.push(`authorize:${request.operation}:${request.permission}`);
+      return {
+        status: 'allowed', decisionId: `synthetic-current:${request.operation}:${trace.length}`,
+        operation: request.operation, permission: request.permission, scope: request.requestedScope,
+        principal: { kind: 'user', actorId: request.requestedScope.actorId, membershipStatus: 'active', membershipRevision: `synthetic-membership:${suffix}` },
+        verifiedAt: new Date(clock.value).toISOString(),
+        expiresAt: new Date(new Date(clock.value).getTime() + 60_000).toISOString(),
+      };
+    },
+  };
+  const ports = makePorts(pool, scope, clock, {
+    actionAuthority: null,
+    financeAuthority,
+    database: { connect: async () => { trace.push('database.connect'); return pool.connect(); } },
+  });
+  const contractTimeRef = sourceReference('ContractTimeEvidence', `contract-time-${suffix}`, 'sha256:' + 'c'.repeat(64));
+  const dimensionRef = sourceReference('PricingUsageDimensionEvidence', `dimensions-${suffix}`, 'sha256:' + 'd'.repeat(64));
+  try {
+    const rule = { ...structuredClone(fixture.pricing_rule), id: `ci09-rule-${suffix}` };
+    const ruleWrite = await registerPricingRuleV2({
+      schemaVersion: '2.0.0', requestId: `ci09-rule-${suffix}`, idempotencyKey: `ci09-rule-idem-${suffix}`, scope, rule,
+    }, ports);
+    assert.equal(ruleWrite.ok, true, ruleWrite.ok ? '' : ruleWrite.error.safe_message);
+    const rateCard = { ...structuredClone(fixture.rate_card), id: `ci09-card-${suffix}`, contextTier: 'standard', pricingRuleRef: ruleWrite.value.reference };
+    const cardWrite = await registerRateCardV2({
+      schemaVersion: '2.0.0', requestId: `ci09-card-${suffix}`, idempotencyKey: `ci09-card-idem-${suffix}`, scope, rateCard,
+    }, ports);
+    assert.equal(cardWrite.ok, true, cardWrite.ok ? '' : cardWrite.error.safe_message);
+
+    const event = makeEvent(sharedEvent, scope, fixture.selection.event_time, {
+      contextTier: 'standard', sourceRefs: [{ kind: 'evidence', id: dimensionRef.id, content_hash: dimensionRef.content_hash }],
+    });
+    const request = requestBase(scope, event, `ci09-estimate-${suffix}`, {
+      policy: 'contract_time', contractTimeEvidenceRef: contractTimeRef, dimensionsEvidenceRef: dimensionRef, contextTier: 'standard',
+    });
+    ports.contractTimeAuthority = {
+      resolve: async (requestedScope, referenceValue) => {
+        assert.equal(trace.at(-1), 'authorize:pricing.estimateV2:pricing.estimate');
+        trace.push('resolve.contractTime');
+        return { verified: true, reference: referenceValue, effectiveAt: fixture.selection.event_time };
+      },
+    };
+    ports.dimensionEvidenceAuthority = {
+      resolve: async ({ reference: referenceValue, usageEvent }) => {
+        assert.equal(trace.at(-1), 'authorize:pricing.estimateV2:pricing.estimate');
+        trace.push('resolve.dimensions');
+        return {
+          verified: true, scope, actorId: scope.actorId, usageEventId: usageEvent.usage_event_id,
+          reference: referenceValue,
+          dimensions: {
+            contextTier: request.selection.contextTier, serviceTier: request.selection.serviceTier,
+            reasoningMode: request.selection.reasoningMode, toolClass: request.selection.toolClass,
+          },
+        };
+      },
+    };
+    ports.boundEvidenceAuthority = {
+      resolve: async ({ evidenceReference, ruleReference, rateCardReference, effectiveAt, currency }) => {
+        assert.equal(trace.at(-1), 'authorize:pricing.estimateV2:pricing.estimate');
+        trace.push('resolve.bound');
+        return {
+          verified: true, scope, actorId: scope.actorId, ruleReference, rateCardReference,
+          evidenceReference, effectiveAt, currency, policy: 'maximum_marginal_rate',
+        };
+      },
+    };
+    const estimateResult = await estimateV2(request, ports);
+    assert.equal(estimateResult.ok, true, estimateResult.ok ? '' : estimateResult.error.safe_message);
+    assert.ok(trace.includes('resolve.contractTime'));
+    assert.ok(trace.includes('resolve.dimensions'));
+    assert.ok(trace.includes('resolve.bound'));
+    const estimateAuthorizations = trace.filter(value => value === 'authorize:pricing.estimateV2:pricing.estimate').length;
+    assert.ok(estimateAuthorizations >= 6, 'entry, replay, catalog, each evidence lookup, and snapshot persistence each reauthorize');
+    for (const evidenceStep of ['resolve.contractTime', 'resolve.dimensions', 'resolve.bound']) {
+      const index = trace.indexOf(evidenceStep);
+      assert.equal(trace[index - 1], 'authorize:pricing.estimateV2:pricing.estimate', `${evidenceStep} immediately follows a current grant decision`);
+    }
+    const estimateDbConnects = trace.flatMap((value, index) => value === 'database.connect' ? [{ index, previous: trace[index - 1] }] : [])
+      .filter(item => item.previous === 'authorize:pricing.estimateV2:pricing.estimate');
+    assert.ok(estimateDbConnects.length >= 3, 'estimate replay, catalog, and immutable snapshot operations each follow a fresh estimate grant');
+
+    let staleDecisionConnections = 0;
+    const staleCompatibilityPorts = makePorts(pool, scope, clock, {
+      actionAuthority: { authorize: async ({ scope: requestedScope, action }) => ({
+        decisionId: 'stale-compatibility-decision', action, scope: requestedScope, actorId: requestedScope.actorId,
+        allowed: true,
+        issuedAt: new Date(new Date(clock.value).getTime() - 61_000).toISOString(),
+        expiresAt: new Date(new Date(clock.value).getTime() + 60_000).toISOString(),
+      }) },
+      database: { connect: async () => { staleDecisionConnections++; throw new Error('stale compatibility authority reached database'); } },
+    });
+    const staleCompatibilityResult = await estimateV2(request, staleCompatibilityPorts);
+    assert.equal(staleCompatibilityResult.ok, false);
+    if (!staleCompatibilityResult.ok) assert.equal(staleCompatibilityResult.error.code, 'FORBIDDEN_SCOPE');
+    assert.equal(staleDecisionConnections, 0, 'the legacy v2 compatibility bridge rejects a stale cached action grant before any read');
+  } finally {
+    await pool.end().catch(() => {});
+  }
+});
 
 function requestBase(scope, event, requestId, selection = {}) {
   const usageEvent = structuredClone(event);
@@ -147,6 +262,34 @@ function requestBase(scope, event, requestId, selection = {}) {
     },
   };
 }
+
+test('catalog sources reject credentialed, signed-query, and fragment URLs without echoing secrets', async () => {
+  const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
+  const secretMarker = 'PRIVATE_SIGNED_SOURCE_CANARY';
+  const scope = {
+    tenantId: 'ci09-tenant-a', projectId: 'ci09-project-a', environment: 'test',
+    billingMode: 'simulated', actorId: 'ci09-pricing-actor',
+  };
+  const base = { schemaVersion: '2.0.0', requestId: 'ci09-unsafe-source', idempotencyKey: 'ci09-unsafe-source-idem', scope };
+  const unsafeUrls = [
+    `https://user:${secretMarker}@rates.example.invalid/provider`,
+    `https://rates.example.invalid/provider?signature=${secretMarker}`,
+    `https://rates.example.invalid/provider#${secretMarker}`,
+  ];
+  const validators = [
+    ['rule', validatePricingRuleV2Boundary, pricingRule => ({ ...base, rule: { ...fixture.pricing_rule, sourceUrl: pricingRule } })],
+    ['rate card', validateRateCardV2Boundary, rateCard => ({ ...base, rateCard: { ...fixture.rate_card, sourceUrl: rateCard } })],
+    ['FX rate', validateFxRateV2Boundary, fxRate => ({ ...base, fxRate: { ...fixture.fx_rate, sourceUrl: fxRate } })],
+  ];
+  for (const [label, validate, requestForUrl] of validators) {
+    for (const unsafeUrl of unsafeUrls) {
+      const result = validate(requestForUrl(unsafeUrl));
+      assert.equal(result.ok, false, `${label} must reject credentials, signed query strings, and fragments`);
+      assert.equal(result.error.code, 'VALIDATION_ERROR');
+      assert.equal(JSON.stringify(result.error).includes(secretMarker), false, `${label} error must not echo source credentials`);
+    }
+  }
+});
 
 async function callEstimate(request, ports) {
   const result = await estimateV2(request, ports);

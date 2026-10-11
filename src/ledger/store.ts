@@ -1,6 +1,7 @@
 import { Type, type Static, type TSchema } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import {
+  authorizeFinanceOperation,
   CurrencySchema,
   DecimalAmountSchema,
   NonNegativeDecimalAmountSchema,
@@ -12,6 +13,8 @@ import {
   type ApiResult,
   type Clock,
   type ErrorEnvelope,
+  type FinanceAuthorizationPort,
+  type FinanceOperation,
   type TrustedContextPort,
   type TrustedScope,
   type Validation,
@@ -268,6 +271,8 @@ export interface LedgerRuntimePorts {
   readonly database: LedgerDatabasePort;
   readonly trustedContext: TrustedContextPort;
   readonly clock: Clock;
+  /** Current operation-scoped host authority; missing configuration denies writes and reads. */
+  readonly financeAuthority?: FinanceAuthorizationPort;
 }
 
 type LedgerScope = Pick<TrustedScope, 'tenantId' | 'projectId' | 'environment' | 'billingMode'>;
@@ -501,16 +506,14 @@ async function trustedScope(
   request: { requestId: string; scope: TrustedScope },
   ports: LedgerRuntimePorts,
   operation: string,
+  authorityOperation: FinanceOperation,
 ): Promise<ErrorEnvelope | null> {
-  try {
-    const resolved = await ports.trustedContext.resolve(request.scope);
-    if (!resolved || !sameScope(resolved, request.scope)) {
-      return makeError('ledger', operation, 'FORBIDDEN_SCOPE', request.requestId, 'The requested financial scope is not authorized.');
-    }
-    return null;
-  } catch {
-    return makeError('ledger', operation, 'SOURCE_UNAVAILABLE', request.requestId, 'Trusted financial scope is temporarily unavailable.');
-  }
+  const authorization = await authorizeFinanceOperation({
+    module: 'ledger', requestOperation: operation, operation: authorityOperation,
+    scope: request.scope, requestId: request.requestId, clock: ports.clock,
+    financeAuthority: ports.financeAuthority,
+  });
+  return authorization.ok ? null : authorization.error;
 }
 
 function conflictResult(request: LedgerAppendRequest, status: 'conflict' | 'stale_revision', existingId: string | null = null): ApiResult<LedgerAppendReceipt> {
@@ -605,14 +608,10 @@ async function quarantineUnsupportedPayload(value: unknown, ports: LedgerRuntime
     return failure(makeError('ledger', 'appendLedgerEvent', 'VALIDATION_ERROR', 'unsupported', 'The unsupported record has no valid trusted scope for quarantine.'));
   }
   const scope = candidate.scope as TrustedScope;
-  try {
-    const resolved = await ports.trustedContext.resolve(scope);
-    if (!resolved || !sameScope(resolved, scope)) {
-      return failure(makeError('ledger', 'appendLedgerEvent', 'FORBIDDEN_SCOPE', 'unsupported', 'The requested financial scope is not authorized.'));
-    }
-  } catch {
-    return failure(makeError('ledger', 'appendLedgerEvent', 'SOURCE_UNAVAILABLE', 'unsupported', 'Trusted financial scope is temporarily unavailable.'));
-  }
+  const authorizationError = await trustedScope({
+    requestId: getRequestId(value), scope,
+  }, ports, 'appendLedgerEvent', 'ledger.appendLedgerEvent');
+  if (authorizationError) return failure(authorizationError);
   let payloadHash: string;
   try {
     payloadHash = await hashValue(value);
@@ -680,7 +679,7 @@ export async function appendLedgerEvent(
   const validated = validateLedgerAppendRequestBoundary(value);
   if (!validated.ok) return failure(validated.error);
   const request = validated.value;
-  const authorizationError = await trustedScope(request, ports, 'appendLedgerEvent');
+  const authorizationError = await trustedScope(request, ports, 'appendLedgerEvent', 'ledger.appendLedgerEvent');
   if (authorizationError) return failure(authorizationError);
   let now: Date;
   try {
@@ -1173,7 +1172,7 @@ export async function rebuildLedgerProjection(
   const validated = validateLedgerProjectionRequestBoundary(value);
   if (!validated.ok) return failure(validated.error);
   const request = validated.value;
-  const authorizationError = await trustedScope(request, ports, 'rebuildLedgerProjection');
+  const authorizationError = await trustedScope(request, ports, 'rebuildLedgerProjection', 'ledger.rebuildLedgerProjection');
   if (authorizationError) return failure(authorizationError);
   let client: LedgerTransactionPort | undefined;
   let inTransaction = false;

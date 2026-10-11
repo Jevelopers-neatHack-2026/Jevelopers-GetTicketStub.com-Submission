@@ -8,18 +8,19 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const integrationApi = await import('../../dist/integrations/index.js');
 
 test('package root and every declared subpath resolve to ESM modules and declarations', async () => {
   const modules = [
-    ['@jevelopers/cost-intelligence', ['ingestUsage', 'estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'EstimateRequestSchema', 'EstimateResultSchema', 'EstimateRequestV2Schema', 'EstimateResultV2Schema', 'RateCardSchema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'validateUsageObservationBoundary', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary', 'authorize', 'markDispatched', 'settle', 'release', 'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'querySummary', 'startReconciliation', 'getReconciliation', 'exportSummary', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary', 'validateFinancialSummaryPageBoundary', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary', 'validateExportRequestBoundary']],
-    ['@jevelopers/cost-intelligence/contracts', ['ErrorEnvelopeSchema', 'TrustedScopeSchema']],
+    ['@jevelopers/cost-intelligence', ['FINANCE_OPERATION_POLICY', 'authorizeFinanceOperation', 'ingestUsage', 'estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'EstimateRequestSchema', 'EstimateResultSchema', 'EstimateRequestV2Schema', 'EstimateResultV2Schema', 'RateCardSchema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'validateUsageObservationBoundary', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary', 'authorize', 'markDispatched', 'settle', 'release', 'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'querySummary', 'startReconciliation', 'getReconciliation', 'exportSummary', 'projectSafeFinancialSummary', 'safeCsvCell', 'serializeSafeFinancialSummaryCsv', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary', 'validateFinancialSummaryPageBoundary', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary', 'validateExportRequestBoundary']],
+    ['@jevelopers/cost-intelligence/contracts', ['ErrorEnvelopeSchema', 'TrustedScopeSchema', 'FINANCE_OPERATION_POLICY', 'authorizeFinanceOperation']],
     ['@jevelopers/cost-intelligence/metering', ['ingestUsage', 'UsageObservationSchema', 'validateUsageObservationBoundary']],
     ['@jevelopers/cost-intelligence/pricing', ['estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'RateCardSchema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'FxRateV2Schema', 'EstimateRequestSchema', 'EstimateRequestV2Schema', 'EstimateResultSchema', 'EstimateResultV2Schema', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary']],
     ['@jevelopers/cost-intelligence/budgets', ['authorize', 'markDispatched', 'settle', 'BudgetChangeRequestSchema', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary']],
     ['@jevelopers/cost-intelligence/ledger', ['ingestFinancial', 'FinancialEventSchema', 'appendLedgerEvent', 'rebuildLedgerProjection', 'LedgerEventTypeSchema', 'LedgerClassificationSchema', 'LedgerAppendRequestSchema', 'LedgerAppendReceiptSchema', 'LedgerProjectionRequestSchema', 'LedgerProjectionSchema', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary']],
     ['@jevelopers/cost-intelligence/reporting', ['querySummary', 'FinancialSummaryPageSchema', 'validateFinancialSummaryPageBoundary']],
     ['@jevelopers/cost-intelligence/reconciliation', ['startReconciliation', 'getReconciliation']],
-    ['@jevelopers/cost-intelligence/integrations', ['exportSummary', 'ExportManifestSchema', 'validateExportRequestBoundary']],
+    ['@jevelopers/cost-intelligence/integrations', ['exportSummary', 'projectSafeFinancialSummary', 'safeCsvCell', 'serializeSafeFinancialSummaryCsv', 'ExportManifestSchema', 'validateExportRequestBoundary']],
   ];
   for (const [specifier, names] of modules) {
     const imported = await import(specifier);
@@ -36,6 +37,35 @@ test('package root and every declared subpath resolve to ESM modules and declara
     await access(join(root, target.types));
     await access(join(root, target.import));
   }
+});
+
+test('financial exports contain only the safe allowlist and neutralize CSV formulas', async () => {
+  const fixture = JSON.parse(await readFile(join(root, 'node_modules/@jevelopers/shared-contracts/fixtures/FinancialSummary.json'), 'utf8')).valid;
+  const canary = 'PRIVATE_EXPORT_CANARY_SECRET';
+  const summary = structuredClone(fixture);
+  summary.tenant_id = canary;
+  summary.project_id = `${canary}-PROJECT`;
+  summary.event_id = `${canary}-EVENT`;
+  summary.prompt = canary;
+  summary.address = canary;
+  summary.metrics[canary] = structuredClone(summary.metrics.expense);
+  summary.source_refs = [{ contract: 'Private', schema_version: '1.0.0', id: canary, revision: 1, content_hash: `sha256:${'a'.repeat(64)}` }];
+  summary.financial_event_refs = [{ kind: 'private', reference: { contract: 'Private', schema_version: '1.0.0', id: canary, revision: 1, content_hash: `sha256:${'b'.repeat(64)}` } }];
+
+  const projection = integrationApi.projectSafeFinancialSummary(summary);
+  const serialized = JSON.stringify(projection);
+  assert.equal(serialized.includes(canary), false, 'projection drops tenant, project, evidence, and private source fields');
+  assert.equal(Object.hasOwn(projection, 'source_refs'), false);
+  assert.equal(Object.hasOwn(projection, 'tenant_id'), false);
+  assert.deepEqual(projection.metrics.map(metric => metric.metric), ['expense'], 'unreviewed dynamic metric labels cannot become export fields');
+  const csv = integrationApi.serializeSafeFinancialSummaryCsv(summary);
+  assert.equal(csv.includes(canary), false);
+  assert.match(csv, /period_start,|"period_start","period_end"/);
+
+  for (const value of ['=1+1', '+1', '-1', '@SUM(A1:A2)', '\t=1+1', '\r=1+1']) {
+    assert.equal(integrationApi.safeCsvCell(value).startsWith('"\''), true, `formula-like cell was not neutralized: ${JSON.stringify(value)}`);
+  }
+  assert.equal(integrationApi.safeCsvCell('plain,"quoted"'), '"plain,""quoted"""');
 });
 
 test('packed tarball installs into a clean consumer, imports every subpath, and typechecks declarations', async () => {
@@ -83,7 +113,7 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
     }));
     await writeFile(join(consumer, 'consumer.mts'), [
       "import { ingestUsage as rootIngest, estimate, estimateV2, registerPricingRuleV2, registerRateCardV2, registerFxRateV2, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, validateUsageObservationBoundary, validateEstimateRequestBoundary, validateEstimateRequestV2Boundary, validatePricingRuleV2Boundary, validateRateCardV2Boundary, validateFxRateV2Boundary, validateReservationRequestBoundary, validateSettleReservationCommandBoundary, validateReleaseReservationCommandBoundary, validateReservationCommandBoundary, validateReservationSnapshotBoundary, validateFinancialSummaryPageBoundary, validateLedgerAppendRequestBoundary, validateLedgerProjectionRequestBoundary, validateExportRequestBoundary, RateCardSchema, RateCardV2Schema, PricingRuleV2Schema, EstimateRequestSchema, EstimateRequestV2Schema, EstimateResultSchema, EstimateResultV2Schema } from '@jevelopers/cost-intelligence';",
-      "import type { ApiResult, Validation, RuntimePorts, PricingRuntimePorts, LedgerRuntimePorts, IngestionReceipt, EstimateResult, EstimateResultV2, CatalogWriteReceiptV2, PricingRuleV2, RateCard, RateCardV2, FxRateV2, RegisterPricingRuleRequestV2, RegisterRateCardRequestV2, RegisterFxRateRequestV2, AuthorizationDecision, ReservationSnapshot, BudgetChangeReceipt, PostingReceipt, LedgerAppendReceipt, LedgerAppendRequest, LedgerProjectionRequest, LedgerProjection, FinancialSummaryPage, ReconciliationRun, ReconciliationResult, ExportManifest, UsageObservation, EstimateRequest, EstimateRequestV2, ReservationRequest, SettleReservationCommand, ReleaseReservationCommand, ReservationCommand, ExportRequest } from '@jevelopers/cost-intelligence';",
+      "import type { ApiResult, Validation, RuntimePorts, PricingRuntimePorts, LedgerRuntimePorts, FinanceAuthorizationPort, FinanceAuthorizationDecision, FinanceOperation, FinancePermission, IngestionReceipt, EstimateResult, EstimateResultV2, CatalogWriteReceiptV2, PricingRuleV2, RateCard, RateCardV2, FxRateV2, RegisterPricingRuleRequestV2, RegisterRateCardRequestV2, RegisterFxRateRequestV2, AuthorizationDecision, ReservationSnapshot, BudgetChangeReceipt, PostingReceipt, LedgerAppendReceipt, LedgerAppendRequest, LedgerProjectionRequest, LedgerProjection, FinancialSummaryPage, ReconciliationRun, ReconciliationResult, ExportManifest, UsageObservation, EstimateRequest, EstimateRequestV2, ReservationRequest, SettleReservationCommand, ReleaseReservationCommand, ReservationCommand, ExportRequest } from '@jevelopers/cost-intelligence';",
       "type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? ((<T>() => T extends B ? 1 : 2) extends (<T>() => T extends A ? 1 : 2) ? true : false) : false;",
       'type NotAny<T> = 0 extends (1 & T) ? false : true;',
       'type Check<T extends true> = T;',
@@ -128,7 +158,8 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       '  Check<Equal<ReturnType<typeof validateLedgerProjectionRequestBoundary>, Validation<LedgerProjectionRequest>>>,',
       '  Check<Equal<ReturnType<typeof validateExportRequestBoundary>, Validation<ExportRequest>>>,',
       '];',
-      'declare const runtimePorts: RuntimePorts; declare const pricingPorts: PricingRuntimePorts; declare const ledgerPorts: LedgerRuntimePorts;',
+      "declare const runtimePorts: RuntimePorts; declare const pricingPorts: PricingRuntimePorts; declare const ledgerPorts: LedgerRuntimePorts;",
+      "const financeAuthority: FinanceAuthorizationPort | undefined = runtimePorts.financeAuthority; const financeOperation: FinanceOperation = 'ledger.appendLedgerEvent'; const financePermission: FinancePermission = 'ledger.event.append'; void [financeAuthority, financeOperation, financePermission];",
       "const originalSelection: EstimateRequest['selection'] = { policy: 'event_time', effectiveAt: '2026-10-11T03:30:00.000Z', requestedCurrency: 'USD', rateCardRef: null };",
       'async function consumeTypedResults() {',
       '  const a = await rootIngest(undefined as never, runtimePorts); const aa: ApiResult<IngestionReceipt> = a; if (aa.ok) { const v: IngestionReceipt["status"] = aa.value.status; void v; }',

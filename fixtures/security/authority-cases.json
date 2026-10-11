@@ -1,0 +1,105 @@
+{
+  "fixture_version": "ci09-authority-fixture/1",
+  "mode": "synthetic_only",
+  "production_trust_root": false,
+  "contexts": {
+    "finance_reader_a": {
+      "principal_kind": "user",
+      "actor_id": "ci09-reader-a",
+      "tenant_id": "ci09-tenant-a",
+      "project_id": "ci09-project-a",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "membership_status": "active",
+      "membership_revision": "membership-a-1",
+      "permissions": [
+        "pricing.estimate",
+        "pricing.evidence.resolve",
+        "finance.summary.read",
+        "finance.reconciliation.read",
+        "finance.summary.export",
+        "ledger.snapshot.read"
+      ]
+    },
+    "finance_operator_a": {
+      "principal_kind": "user",
+      "actor_id": "ci09-operator-a",
+      "tenant_id": "ci09-tenant-a",
+      "project_id": "ci09-project-a",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "membership_status": "active",
+      "membership_revision": "membership-a-2",
+      "permissions": [
+        "pricing.estimate",
+        "pricing.rule.register",
+        "pricing.rate-card.register",
+        "pricing.fx-rate.register",
+        "pricing.evidence.resolve",
+        "budget.reservation.authorize",
+        "budget.reservation.settle",
+        "budget.reservation.release",
+        "budget.policy.change",
+        "expense.adjust",
+        "finance.summary.read",
+        "finance.reconciliation.start",
+        "finance.reconciliation.read",
+        "finance.summary.export"
+      ]
+    },
+    "ledger_service_a": {
+      "principal_kind": "service",
+      "actor_id": "ci09-ledger-service-a",
+      "tenant_id": "ci09-tenant-a",
+      "project_id": "ci09-project-a",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "service_status": "active",
+      "service_grant_revision": "service-grant-a-1",
+      "permissions": [
+        "usage.ingest",
+        "ledger.financial.ingest",
+        "ledger.event.append",
+        "ledger.projection.rebuild",
+        "budget.reservation.dispatch"
+      ]
+    },
+    "ledger_service_b": {
+      "principal_kind": "service",
+      "actor_id": "ci09-ledger-service-b",
+      "tenant_id": "ci09-tenant-b",
+      "project_id": "ci09-project-b",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "service_status": "active",
+      "service_grant_revision": "service-grant-b-1",
+      "permissions": [
+        "ledger.event.append",
+        "ledger.projection.rebuild"
+      ]
+    },
+    "application_owner_without_finance": {
+      "principal_kind": "user",
+      "actor_id": "ci09-app-owner",
+      "tenant_id": "ci09-tenant-a",
+      "project_id": "ci09-project-a",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "membership_status": "active",
+      "membership_revision": "membership-a-owner-1",
+      "application_role": "owner",
+      "permissions": []
+    },
+    "revoked_finance_reader": {
+      "principal_kind": "user",
+      "actor_id": "ci09-revoked-reader",
+      "tenant_id": "ci09-tenant-a",
+      "project_id": "ci09-project-a",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "membership_status": "revoked",
+      "membership_revision": "membership-a-revoked-2",
+      "permissions": ["finance.summary.read"]
+    }
+  }
+}
