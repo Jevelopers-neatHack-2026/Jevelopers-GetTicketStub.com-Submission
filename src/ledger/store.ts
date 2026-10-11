@@ -284,6 +284,26 @@ function makeError(module: string, operation: string, code: ErrorEnvelope['code'
   return errorEnvelope(module, operation, code, requestId, message);
 }
 
+async function legacyFinancialScopeError(
+  client: LedgerTransactionPort,
+  scope: TrustedScope,
+  operation: string,
+  requestId: string,
+): Promise<ErrorEnvelope | null> {
+  const quarantined = await client.query(
+    `SELECT 1 AS restricted
+     FROM cost_intelligence.financial_privacy_quarantine
+     WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4
+     LIMIT 1`,
+    [scope.tenantId, scope.projectId, scope.environment, scope.billingMode],
+  );
+  if (quarantined.rows.length === 0) return null;
+  return makeError(
+    'ledger', operation, 'SOURCE_UNAVAILABLE', requestId,
+    'Ledger history in this scope is restricted pending financial review.',
+  );
+}
+
 function validationFailure(module: string, operation: string, requestId: string, message: string): Validation<never> {
   return { ok: false, error: makeError(module, operation, 'VALIDATION_ERROR', requestId, message) };
 }
@@ -700,6 +720,14 @@ async function quarantineUnsupportedPayload(value: unknown, ports: LedgerRuntime
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`ci02-ledger:${scope.tenantId}:${scope.projectId}:${scope.environment}:${scope.billingMode}`],
     );
+    const legacyHistoryError = await legacyFinancialScopeError(
+      client, scope, 'appendLedgerEvent', getRequestId(value),
+    );
+    if (legacyHistoryError) {
+      await rollback(client);
+      inTransaction = false;
+      return failure(legacyHistoryError);
+    }
     await client.query(
       `INSERT INTO cost_intelligence.financial_ledger_quarantine
         (diagnostic_ref, tenant_id, project_id, environment, billing_mode, unsupported_schema_version, reason_code, payload_sha256)
@@ -769,6 +797,13 @@ export async function appendLedgerEvent(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`ci02-ledger:${scope.tenantId}:${scope.projectId}:${scope.environment}:${scope.billingMode}`],
     );
+
+    const legacyHistoryError = await legacyFinancialScopeError(client, scope, 'appendLedgerEvent', request.requestId);
+    if (legacyHistoryError) {
+      await rollback(client);
+      inTransaction = false;
+      return failure(legacyHistoryError);
+    }
 
     const idempotency = await client.query(
       `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events
@@ -1247,8 +1282,20 @@ export async function rebuildLedgerProjection(
     await bindFinancialDatabaseScope(client, request.scope);
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`ci02-ledger:${request.scope.tenantId}:${request.scope.projectId}:${request.scope.environment}:${request.scope.billingMode}`],
+    );
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`ci02-projection:${request.scope.tenantId}:${request.scope.projectId}:${request.scope.environment}:${request.scope.billingMode}:${request.asOf}`],
     );
+    const legacyHistoryError = await legacyFinancialScopeError(
+      client, request.scope, 'rebuildLedgerProjection', request.requestId,
+    );
+    if (legacyHistoryError) {
+      await rollback(client);
+      inTransaction = false;
+      return failure(legacyHistoryError);
+    }
     const events = await client.query(
       `SELECT e.event_id, e.event_hash, e.event_type, e.classification, e.currency, e.amount::text AS amount,
               e.quantity_completeness, e.quantity_units

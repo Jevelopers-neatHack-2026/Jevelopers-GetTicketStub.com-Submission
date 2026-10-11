@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
-import { appendLedgerEvent } from '../../dist/index.js';
+import { appendLedgerEvent, rebuildLedgerProjection } from '../../dist/index.js';
 import { assertDisposableMarker, databaseConfigFromEnvironment, migratorDatabaseConfigFromEnvironment, runtimeDatabaseConfigFromEnvironment, DISPOSABLE_MARKER } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Client, Pool } = pg;
@@ -141,6 +141,311 @@ async function verifyDurability(prefix) {
   });
   assert.equal(child.status, 0, `fresh worker could not see the durable record and health view: ${(child.stderr || child.stdout || 'no output').slice(0, 1000)}`);
   assert.match(child.stdout, /durable database health and record verified/);
+}
+
+const legacyFixtureTime = '2026-10-11T03:30:00.000Z';
+const legacyFixtureAsOf = '2026-10-11T04:00:00.000Z';
+const legacyPrivacyMarker = 'CI09_FIX2_PROMPT_ADDRESS_TOKEN_CANARY';
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+  }
+  return value;
+}
+
+function contentAddress(value) {
+  return `sha256:${createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex')}`;
+}
+
+function legacyScope(label, overrides = {}) {
+  const suffix = randomUUID();
+  return {
+    tenantId: overrides.tenantId ?? `ci09-legacy-tenant-${suffix}`,
+    projectId: overrides.projectId ?? `ci09-legacy-project-${suffix}`,
+    environment: overrides.environment ?? 'test',
+    billingMode: overrides.billingMode ?? 'simulated',
+    actorId: overrides.actorId ?? `ci09-legacy-actor-${label}-${suffix}`,
+  };
+}
+
+function legacyRequest(scope, options = {}) {
+  const eventId = options.eventId ?? `ci09-legacy-event-${randomUUID()}`;
+  const eventType = options.eventType ?? 'expense';
+  const amount = Object.hasOwn(options, 'amount') ? options.amount : '0.05';
+  const sequence = options.revisionSequence ?? 0;
+  const sourceObjectId = options.sourceObjectId ?? `ci09-legacy-object-${eventId}`;
+  const revisionSubjectId = options.revisionSubjectId ?? `ci09-legacy-line-${eventId}`;
+  const logicalOperationId = options.logicalOperationId ?? `ci09-legacy-operation-${eventId}`;
+  const memoEvent = ['usage_observation', 'reservation_authorized', 'dispatch', 'reservation_release'].includes(eventType);
+  const sourceRef = {
+    contract: 'ci09.legacy.synthetic', schema_version: '1.0.0', id: `ci09-legacy-proof-${eventId}`,
+    revision: 1, content_hash: contentAddress({ evidence: eventId }),
+  };
+  const sourceRefs = options.sourceRefs ?? (['correction', 'reversal', 'adjustment'].includes(eventType) ? [sourceRef] : []);
+  const usage = options.usage ?? {
+    completeness: 'complete', missingFields: [],
+    units: [{ name: 'token', quantity: '1', scale: 0, relation: 'standalone' }],
+  };
+  return {
+    schemaVersion: '1.0.0', requestId: `ci09-legacy-request-${eventId}`,
+    idempotencyKey: `ci09-legacy-idempotency-${eventId}`, scope, eventId,
+    correlationId: `ci09-legacy-correlation-${eventId}`,
+    producer: { module: 'ci09.legacy.tokenization', sourceRevision: 'b'.repeat(40), buildRevision: 'legacy-fixture-1' },
+    occurredAt: legacyFixtureTime, observedAt: legacyFixtureTime, evidenceMode: 'mocked', verificationStatus: 'verified',
+    eventType,
+    classification: options.classification ?? (eventType === 'usage_observation' ? 'usage_memo' : memoEvent ? 'reservation_memo' : 'direct_cost'),
+    valuation: options.valuation ?? (amount === null ? 'unknown' : 'provider_confirmed'),
+    settlementStatus: options.settlementStatus ?? 'unpaid', reconciliationStatus: 'unmatched',
+    reservationLifecycle: Object.hasOwn(options, 'reservationLifecycle') ? options.reservationLifecycle : null,
+    identities: {
+      logicalOperationId, sourceObservationId: options.sourceObservationId ?? `ci09-legacy-observation-${eventId}`,
+      reservationId: Object.hasOwn(options, 'reservationId') ? options.reservationId : null,
+    },
+    postingMapping: {
+      schemaVersion: '1.0.0', sourceLineId: revisionSubjectId,
+      transportAttemptId: { status: 'unknown' }, providerAttemptId: { status: 'unknown' },
+      providerRequestId: { status: 'unknown' }, billableAttemptId: { status: 'unknown' },
+    },
+    sourceIdentity: {
+      source: 'ci09-legacy-tokenization', sourceEventId: `ci09-legacy-source-event-${eventId}`,
+      sourceObjectId, revisionSubjectId, sourceRevision: `legacy-revision-${sequence}`,
+      revisionSequence: sequence, contentHash: contentAddress({ source: eventId, sequence }),
+    },
+    usage, money: { amount, currency: options.currency ?? 'USD', scale: options.scale ?? (amount === null ? 2 : amount.split('.')[1]?.length ?? 0) },
+    sourceRefs, dimensions: options.dimensions ?? { feature: 'legacy usage metering', model: 'tokenization-runner' },
+    pricing: null, fxEvidence: null, financialEffect: Object.hasOwn(options, 'financialEffect') ? options.financialEffect : !memoEvent,
+    reservationAuthorizationEventId: options.reservationAuthorizationEventId ?? null,
+    supersedesEventId: options.supersedesEventId ?? null, reversesEventId: options.reversesEventId ?? null,
+  };
+}
+
+function legacyPorts(pool) {
+  return {
+    database: { connect: () => pool.connect() },
+    trustedContext: { resolve: async requested => requested },
+    clock: { now: () => new Date(legacyFixtureTime) },
+    financeAuthority: { authorizeCurrent: async request => ({
+      status: 'allowed', decisionId: `ci09-legacy-fixture:${request.operation}`,
+      operation: request.operation, permission: request.permission, scope: request.requestedScope,
+      principal: {
+        kind: 'service', actorId: request.requestedScope.actorId, serviceStatus: 'active',
+        serviceGrantRevision: 'ci09-legacy-fixture-1',
+      },
+      verifiedAt: legacyFixtureTime, expiresAt: '2026-10-11T03:35:00.000Z',
+    }) },
+  };
+}
+
+async function appendLegacyEvent(pool, request) {
+  const result = await appendLedgerEvent(request, legacyPorts(pool));
+  assert.equal(result.ok, true, result.ok ? '' : `legacy fixture append: ${result.error.code}`);
+  assert.equal(result.value.status, 'accepted');
+  return result.value;
+}
+
+async function projectLegacyScope(pool, scope, asOf = legacyFixtureAsOf) {
+  return rebuildLedgerProjection({
+    schemaVersion: '1.0.0', requestId: `ci09-legacy-projection-${randomUUID()}`, scope, asOf,
+  }, legacyPorts(pool));
+}
+
+async function createPre0006Database() {
+  const base = databaseConfigFromEnvironment('CI_TEST_DB');
+  const name = `ci09_legacy_${randomUUID().replaceAll('-', '')}`;
+  const admin = new Client({ ...base, database: 'postgres' });
+  await admin.connect();
+  try {
+    await admin.query(`CREATE DATABASE "${name}"`);
+  } finally {
+    await admin.end();
+  }
+  return { name, base, config: { ...base, database: name } };
+}
+
+async function installDisposableMarker(client) {
+  await client.query('CREATE SCHEMA ci_test');
+  await client.query('CREATE TABLE ci_test.disposable_database_marker (marker text PRIMARY KEY)');
+  await client.query('INSERT INTO ci_test.disposable_database_marker(marker) VALUES ($1)', [DISPOSABLE_MARKER]);
+}
+
+async function applyMigrationsThrough0005(client, names) {
+  await client.query('CREATE SCHEMA IF NOT EXISTS cost_intelligence');
+  await client.query(`CREATE TABLE IF NOT EXISTS cost_intelligence.schema_migrations (
+    version text PRIMARY KEY, checksum_sha256 char(64) NOT NULL, applied_at timestamptz NOT NULL DEFAULT now()
+  )`);
+  for (const name of names.slice(0, 5)) {
+    const sql = await readFile(join(root, 'migrations', name), 'utf8');
+    const version = name.replace(/\.sql$/, '');
+    const checksum = createHash('sha256').update(sql).digest('hex');
+    await client.query('BEGIN');
+    try {
+      await client.query(sql);
+      await client.query(
+        'INSERT INTO cost_intelligence.schema_migrations(version, checksum_sha256) VALUES ($1, $2)',
+        [version, checksum],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    }
+  }
+}
+
+async function contaminateLegacyEvent(client, eventId, mutate) {
+  await client.query('ALTER TABLE cost_intelligence.financial_ledger_events DISABLE TRIGGER financial_ledger_events_append_only');
+  try {
+    const current = await client.query(
+      'SELECT event_payload FROM cost_intelligence.financial_ledger_events WHERE event_id = $1', [eventId],
+    );
+    assert.equal(current.rows.length, 1);
+    const persisted = current.rows[0].event_payload;
+    const request = JSON.parse(JSON.stringify(persisted));
+    const ingestedAt = request.ingestedAt;
+    delete request.ingestedAt;
+    mutate(request);
+    const payload = { ...request, ingestedAt };
+    const eventHash = contentAddress(request);
+    await client.query(
+      `UPDATE cost_intelligence.financial_ledger_events
+       SET source_refs = $1::jsonb, quantity_units = $2::jsonb, dimensions = $3::jsonb,
+           event_hash = $4, event_payload = $5::jsonb
+       WHERE event_id = $6`,
+      [JSON.stringify(request.sourceRefs), JSON.stringify(request.usage.units), JSON.stringify(request.dimensions),
+        eventHash, JSON.stringify(payload), eventId],
+    );
+    return { eventHash, payload };
+  } finally {
+    await client.query('ALTER TABLE cost_intelligence.financial_ledger_events ENABLE TRIGGER financial_ledger_events_append_only');
+  }
+}
+
+async function insertSnapshotWithSensitiveLabel(client, scope, sourceSnapshot) {
+  const effective = await client.query(
+    `SELECT e.event_id, e.event_hash
+     FROM cost_intelligence.financial_ledger_events e
+     WHERE e.tenant_id = $1 AND e.project_id = $2 AND e.environment = $3 AND e.billing_mode = $4
+       AND e.ingested_at <= $5 AND e.financial_effect
+       AND NOT EXISTS (
+         SELECT 1 FROM cost_intelligence.financial_ledger_events successor
+         WHERE successor.supersedes_event_id = e.event_id AND successor.ingested_at <= $5
+       )
+     ORDER BY e.event_id`,
+    [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, sourceSnapshot.asOf],
+  );
+  const eventEvidence = effective.rows.map(row => ({ eventId: row.event_id, eventHash: row.event_hash }));
+  let marked = false;
+  const quantities = sourceSnapshot.quantities.map(item => {
+    if (!marked && item.unitName !== null) {
+      marked = true;
+      return { ...item, unitName: legacyPrivacyMarker };
+    }
+    return { ...item };
+  });
+  assert.equal(marked, true, 'legacy label fixture must include a materialized measure name');
+  const content = {
+    schemaVersion: '1.0.0', scope, asOf: sourceSnapshot.asOf, eventEvidence,
+    eventCount: eventEvidence.length, amounts: sourceSnapshot.amounts, quantities,
+  };
+  const snapshotHash = contentAddress(content);
+  await client.query(
+    `INSERT INTO cost_intelligence.financial_projection_snapshots
+      (snapshot_id, tenant_id, project_id, environment, billing_mode, as_of, event_count, projection_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [snapshotHash, scope.tenantId, scope.projectId, scope.environment, scope.billingMode,
+      sourceSnapshot.asOf, eventEvidence.length, snapshotHash],
+  );
+  for (const item of sourceSnapshot.amounts) {
+    await client.query(
+      `INSERT INTO cost_intelligence.financial_projection_amounts
+        (snapshot_id, event_type, classification, currency, event_count, known_amount_count,
+         unknown_amount_count, known_subtotal, total_amount, amount_completeness)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [snapshotHash, item.eventType, item.classification, item.currency, item.eventCount, item.knownAmountCount,
+        item.unknownAmountCount, item.knownSubtotal, item.totalAmount, item.completeness],
+    );
+  }
+  for (const item of quantities) {
+    await client.query(
+      `INSERT INTO cost_intelligence.financial_projection_quantities
+        (snapshot_id, event_type, classification, currency, unit_name, relation, observation_count,
+         known_quantity_count, unknown_quantity_count, incomplete_observation_count, known_subtotal,
+         total_quantity, quantity_completeness)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [snapshotHash, item.eventType, item.classification, item.currency, item.unitName, item.relation,
+        item.observationCount, item.knownQuantityCount, item.unknownQuantityCount, item.incompleteObservationCount,
+        item.knownSubtotal, item.totalQuantity, item.completeness],
+    );
+  }
+  return snapshotHash;
+}
+
+async function apply0006ToLegacyDatabase(client, name) {
+  const sql = await readFile(join(root, 'migrations', name), 'utf8');
+  const version = name.replace(/\.sql$/, '');
+  const checksum = createHash('sha256').update(sql).digest('hex');
+  await client.query('BEGIN');
+  try {
+    await client.query(sql);
+    await client.query(
+      'INSERT INTO cost_intelligence.schema_migrations(version, checksum_sha256) VALUES ($1, $2)',
+      [version, checksum],
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  }
+}
+
+async function captureLegacyFinancialRows(client) {
+  const tables = [
+    'financial_ledger_events', 'financial_ledger_identity_bindings', 'financial_source_revision_heads',
+    'financial_posting_attempt_mappings', 'financial_ledger_quarantine', 'financial_projection_snapshots',
+    'financial_projection_amounts', 'financial_projection_quantities',
+  ];
+  const captured = {};
+  for (const table of tables) {
+    const result = await client.query(
+      `SELECT COALESCE(jsonb_agg(item ORDER BY item::text), '[]'::jsonb)::text AS rows
+       FROM (SELECT to_jsonb(source_row) AS item FROM cost_intelligence.${table} source_row) records`,
+    );
+    captured[table] = result.rows[0].rows;
+  }
+  return captured;
+}
+
+async function bindRawFinanceScope(client, scope) {
+  await client.query(
+    `SELECT set_config('cost_intelligence.tenant_id', $1, true),
+            set_config('cost_intelligence.project_id', $2, true),
+            set_config('cost_intelligence.environment', $3, true),
+            set_config('cost_intelligence.billing_mode', $4, true)`,
+    [scope.tenantId, scope.projectId, scope.environment, scope.billingMode],
+  );
+}
+
+function assertLegacyUnavailable(result, label) {
+  assert.equal(result.ok, false, `${label} must not return an apparently complete snapshot or append receipt`);
+  if (result.ok) return null;
+  assert.equal(result.error.code, 'SOURCE_UNAVAILABLE', `${label} must fail closed with the typed unavailable status`);
+  assert.match(result.error.diagnostic_ref, /^ci1:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
+  assert.equal(result.error.safe_message, 'Ledger history in this scope is restricted pending financial review.');
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(legacyPrivacyMarker));
+  return result.error.diagnostic_ref;
+}
+
+async function dropTestDatabase(name, base) {
+  const admin = new Client({ ...base, database: 'postgres' });
+  await admin.connect();
+  try {
+    await admin.query('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()', [name]);
+    await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
+  } finally {
+    await admin.end();
+  }
 }
 
 test('fresh and previous foundation schemas apply checksummed upgrades, survive reconnect, and expose health', async () => {
@@ -508,5 +813,775 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     }
   } finally {
     await auditPool.end();
+  }
+});
+
+test('legacy financial privacy upgrade preserves immutable economics and fails affected scopes closed', async () => {
+  const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
+  assert.equal(names.length, 6);
+  const { name, base, config } = await createPre0006Database();
+  let admin;
+  let seedPool;
+  let runtimePool;
+  let raceMigrator;
+  try {
+    admin = new Client(config);
+    await admin.connect();
+    await installDisposableMarker(admin);
+    await applyMigrationsThrough0005(admin, names);
+    // The current API includes the post-0006 gate. This disposable-only empty
+    // shim lets it seed genuine 0001-0005 rows; it is dropped before upgrade.
+    await admin.query(
+      'CREATE TABLE cost_intelligence.financial_privacy_quarantine (' +
+      'record_kind text, record_hash text, tenant_id text, project_id text, environment text, billing_mode text)',
+    );
+    seedPool = new Pool({ ...config, max: 12 });
+
+    const cleanScope = legacyScope('clean-conservation');
+    const known = legacyRequest(cleanScope, { amount: '0.75', usage: {
+      completeness: 'complete', missingFields: [],
+      units: [{ name: 'token', quantity: '10', scale: 0, relation: 'standalone' }],
+    } });
+    const unknown = legacyRequest(cleanScope, { amount: null, valuation: 'unknown' });
+    const incomplete = legacyRequest(cleanScope, { amount: '0.05', usage: {
+      completeness: 'incomplete', missingFields: ['tokens'],
+      units: [{ name: 'token', quantity: null, scale: 0, relation: 'standalone' }],
+    } });
+    const sameScopeClean = legacyRequest(cleanScope, { amount: '0.25', usage: {
+      completeness: 'complete', missingFields: [],
+      units: [{ name: 'token', quantity: '2', scale: 0, relation: 'standalone' }],
+    } });
+    for (const request of [known, unknown, incomplete, sameScopeClean]) await appendLegacyEvent(seedPool, request);
+    const cleanBeforeUpgrade = await projectLegacyScope(seedPool, cleanScope);
+    assert.equal(cleanBeforeUpgrade.ok, true);
+    const cleanUsd = cleanBeforeUpgrade.value.amounts.find(item => item.eventType === 'expense' && item.currency === 'USD');
+    assert.deepEqual({
+      eventCount: cleanUsd.eventCount, knownAmountCount: cleanUsd.knownAmountCount,
+      unknownAmountCount: cleanUsd.unknownAmountCount, knownSubtotal: cleanUsd.knownSubtotal,
+      totalAmount: cleanUsd.totalAmount, completeness: cleanUsd.completeness,
+    }, {
+      eventCount: 4, knownAmountCount: 3, unknownAmountCount: 1, knownSubtotal: '1.05',
+      totalAmount: null, completeness: 'partial',
+    }, 'the clean legacy scope retains known subtotal and unknown-amount completeness');
+    const cleanToken = cleanBeforeUpgrade.value.quantities.find(item => item.eventType === 'expense' && item.currency === 'USD' && item.unitName === 'token');
+    assert.deepEqual({
+      observationCount: cleanToken.observationCount, knownQuantityCount: cleanToken.knownQuantityCount,
+      unknownQuantityCount: cleanToken.unknownQuantityCount, incompleteObservationCount: cleanToken.incompleteObservationCount,
+      knownSubtotal: cleanToken.knownSubtotal, totalQuantity: cleanToken.totalQuantity, completeness: cleanToken.completeness,
+    }, {
+      observationCount: 4, knownQuantityCount: 3, unknownQuantityCount: 1, incompleteObservationCount: 1,
+      knownSubtotal: '13', totalQuantity: null, completeness: 'incomplete',
+    }, 'the clean legacy scope retains incomplete quantity and token measure facts');
+
+    const cleanOtherCurrencyScope = legacyScope('clean-other-currency');
+    await appendLegacyEvent(seedPool, legacyRequest(cleanOtherCurrencyScope, { amount: '3.00', currency: 'EUR' }));
+    const cleanOtherCurrencyBefore = await projectLegacyScope(seedPool, cleanOtherCurrencyScope);
+    assert.equal(cleanOtherCurrencyBefore.ok, true);
+    assert.equal(cleanOtherCurrencyBefore.value.amounts[0].totalAmount, '3');
+    const cleanOtherTenantScope = legacyScope('clean-other-tenant');
+    await appendLegacyEvent(seedPool, legacyRequest(cleanOtherTenantScope, { amount: '7.00' }));
+    const cleanOtherTenantBefore = await projectLegacyScope(seedPool, cleanOtherTenantScope);
+    assert.equal(cleanOtherTenantBefore.ok, true);
+    assert.equal(cleanOtherTenantBefore.value.amounts[0].totalAmount, '7');
+
+    const affectedConservationScope = legacyScope('affected-mixed-completeness');
+    const affectedKnown = legacyRequest(affectedConservationScope, { amount: '0.75', usage: {
+      completeness: 'complete', missingFields: [],
+      units: [{ name: 'token', quantity: '10', scale: 0, relation: 'standalone' }],
+    } });
+    const affectedUnknown = legacyRequest(affectedConservationScope, { amount: null, valuation: 'unknown' });
+    const affectedIncomplete = legacyRequest(affectedConservationScope, { amount: '0.05', usage: {
+      completeness: 'incomplete', missingFields: ['tokens'],
+      units: [{ name: 'token', quantity: null, scale: 0, relation: 'standalone' }],
+    } });
+    const affectedClean = legacyRequest(affectedConservationScope, { amount: '0.25', usage: {
+      completeness: 'complete', missingFields: [],
+      units: [{ name: 'token', quantity: '2', scale: 0, relation: 'standalone' }],
+    } });
+    for (const request of [affectedKnown, affectedUnknown, affectedIncomplete, affectedClean]) {
+      await appendLegacyEvent(seedPool, request);
+    }
+    const affectedCleanOracle = await projectLegacyScope(seedPool, affectedConservationScope);
+    assert.equal(affectedCleanOracle.ok, true);
+    const affectedSensitive = await contaminateLegacyEvent(admin, affectedClean.eventId, request => {
+      request.sourceRefs = [{
+        contract: 'ci09.legacy.source', schema_version: '1.0.0',
+        id: 'https://private.invalid/mixed-completeness?token=' + legacyPrivacyMarker,
+        revision: 1, content_hash: contentAddress({ confidential: true }),
+      }];
+    });
+    const affectedBeforeUpgrade = await projectLegacyScope(seedPool, affectedConservationScope);
+    assert.equal(affectedBeforeUpgrade.ok, true);
+    assert.deepEqual(affectedBeforeUpgrade.value.amounts, affectedCleanOracle.value.amounts,
+      'adding only private source metadata must preserve the complete known/unknown money oracle before audit');
+    assert.deepEqual(affectedBeforeUpgrade.value.quantities, affectedCleanOracle.value.quantities,
+      'adding only private source metadata must preserve the complete/incomplete quantity oracle before audit');
+    const affectedConservation = {
+      scope: affectedConservationScope, snapshotId: affectedBeforeUpgrade.value.snapshotId,
+      sensitiveHash: affectedSensitive.eventHash, sensitiveRequest: affectedClean,
+      safeAppend: legacyRequest(affectedConservationScope),
+    };
+
+    async function appendCorrectionPair(scope, label, contaminateAncestor) {
+      const logicalOperationId = 'ci09-' + label + '-logical-operation-' + randomUUID();
+      const sourceObjectId = 'ci09-' + label + '-source-object-' + randomUUID();
+      const revisionSubjectId = 'ci09-' + label + '-source-line';
+      const root = legacyRequest(scope, {
+        eventType: 'expense', amount: '1.00', logicalOperationId, sourceObjectId, revisionSubjectId,
+        revisionSequence: 0,
+      });
+      await appendLegacyEvent(seedPool, root);
+      const correction = legacyRequest(scope, {
+        eventType: 'correction', amount: '1.20', logicalOperationId, sourceObjectId, revisionSubjectId,
+        revisionSequence: 1, supersedesEventId: root.eventId,
+      });
+      await appendLegacyEvent(seedPool, correction);
+      const sensitive = contaminateAncestor ? root : correction;
+      const contaminated = await contaminateLegacyEvent(admin, sensitive.eventId, request => {
+        request.sourceRefs = [{
+          contract: 'ci09.legacy.source', schema_version: '1.0.0',
+          id: 'https://private.invalid/ledger/raw?token=' + legacyPrivacyMarker + '&prompt=source',
+          revision: 1, content_hash: contentAddress({ confidential: true }),
+        }];
+      });
+      const projection = await projectLegacyScope(seedPool, scope);
+      assert.equal(projection.ok, true, 'the pre-0006 snapshot must use the source event hash containing its legacy metadata');
+      const sensitiveHash = contaminated.eventHash;
+      const nextCorrection = legacyRequest(scope, {
+        eventType: 'correction', amount: '1.30', logicalOperationId, sourceObjectId, revisionSubjectId,
+        revisionSequence: 2, supersedesEventId: correction.eventId,
+      });
+      return { scope, sensitiveHash, sensitiveRequest: sensitive, safeAppend: legacyRequest(scope),
+        correctionRequest: nextCorrection };
+    }
+
+    const effectiveCorrectionScope = legacyScope('effective-correction-only');
+    const effectiveCorrection = await appendCorrectionPair(effectiveCorrectionScope, 'effective-correction', false);
+    const ancestorScope = legacyScope('ancestor-only');
+    const ancestorCorrection = await appendCorrectionPair(ancestorScope, 'ancestor', true);
+
+    const reversalScope = legacyScope('deep-mixed-reversal-only');
+    const reversalOperation = 'ci09-deep-reversal-logical-' + randomUUID();
+    const chargeObject = 'ci09-deep-charge-object-' + randomUUID();
+    const chargeLine = 'ci09-deep-charge-line';
+    const charge = legacyRequest(reversalScope, {
+      eventType: 'charge', amount: '1.00', logicalOperationId: reversalOperation,
+      sourceObjectId: chargeObject, revisionSubjectId: chargeLine, revisionSequence: 0,
+    });
+    await appendLegacyEvent(seedPool, charge);
+    const chargeCorrection = legacyRequest(reversalScope, {
+      eventType: 'correction', amount: '1.20', logicalOperationId: reversalOperation,
+      sourceObjectId: chargeObject, revisionSubjectId: chargeLine, revisionSequence: 1,
+      supersedesEventId: charge.eventId,
+    });
+    await appendLegacyEvent(seedPool, chargeCorrection);
+    const reversalObject = 'ci09-deep-reversal-object-' + randomUUID();
+    const reversalLine = 'ci09-deep-reversal-line';
+    const partialReversal = legacyRequest(reversalScope, {
+      eventType: 'reversal', amount: '-0.40', logicalOperationId: reversalOperation,
+      sourceObjectId: reversalObject, revisionSubjectId: reversalLine, revisionSequence: 0,
+      reversesEventId: chargeCorrection.eventId,
+    });
+    await appendLegacyEvent(seedPool, partialReversal);
+    const correctedReversal = legacyRequest(reversalScope, {
+      eventType: 'correction', amount: '-0.30', logicalOperationId: reversalOperation,
+      sourceObjectId: reversalObject, revisionSubjectId: reversalLine, revisionSequence: 1,
+      supersedesEventId: partialReversal.eventId,
+    });
+    await appendLegacyEvent(seedPool, correctedReversal);
+    const reversalOfReversal = legacyRequest(reversalScope, {
+      eventType: 'reversal', amount: '0.10', logicalOperationId: reversalOperation,
+      sourceObjectId: 'ci09-deep-reversal-inverse-' + randomUUID(), revisionSubjectId: 'ci09-deep-inverse-line',
+      revisionSequence: 0, reversesEventId: correctedReversal.eventId,
+    });
+    await appendLegacyEvent(seedPool, reversalOfReversal);
+    const deepSensitive = await contaminateLegacyEvent(admin, reversalOfReversal.eventId, request => {
+      request.sourceRefs = [{
+        contract: 'ci09.legacy.source', schema_version: '1.0.0',
+        id: 'https://private.invalid/reversal?token=' + legacyPrivacyMarker + '&address=192.0.2.44',
+        revision: 1, content_hash: contentAddress({ confidential: true }),
+      }];
+    });
+    const deepBeforeUpgrade = await projectLegacyScope(seedPool, reversalScope);
+    assert.equal(deepBeforeUpgrade.ok, true,
+      'the pre-0006 mixed-sign snapshot must use the sensitive reversal source hash');
+    const deepCorrectionTotal = deepBeforeUpgrade.value.amounts.find(item => item.eventType === 'correction' && item.currency === 'USD');
+    const deepReversalTotal = deepBeforeUpgrade.value.amounts.find(item => item.eventType === 'reversal' && item.currency === 'USD');
+    assert.deepEqual({
+      correctionEvents: deepCorrectionTotal.eventCount, correctionSubtotal: deepCorrectionTotal.knownSubtotal,
+      reversalEvents: deepReversalTotal.eventCount, reversalSubtotal: deepReversalTotal.knownSubtotal,
+    }, { correctionEvents: 2, correctionSubtotal: '0.9', reversalEvents: 1, reversalSubtotal: '0.1' },
+    'the pre-upgrade mixed-sign correction/reversal chain retains its exact current economic oracle');
+    const newReversal = legacyRequest(reversalScope, {
+      eventType: 'reversal', amount: '-0.01', logicalOperationId: reversalOperation,
+      sourceObjectId: 'ci09-denied-reversal-' + randomUUID(), revisionSubjectId: 'ci09-denied-reversal-line',
+      revisionSequence: 0, reversesEventId: reversalOfReversal.eventId,
+    });
+    const deepAffected = {
+      scope: reversalScope, sensitiveHash: deepSensitive.eventHash, sensitiveRequest: reversalOfReversal,
+      safeAppend: legacyRequest(reversalScope), reversalRequest: newReversal,
+    };
+
+    const labelOnlyScope = legacyScope('snapshot-label-only');
+    const labelOnlyRequest = legacyRequest(labelOnlyScope, { amount: '4.00' });
+    await appendLegacyEvent(seedPool, labelOnlyRequest);
+    const labelOnlyProjection = await projectLegacyScope(seedPool, labelOnlyScope);
+    assert.equal(labelOnlyProjection.ok, true);
+    const labelOnlySnapshot = await insertSnapshotWithSensitiveLabel(admin, labelOnlyScope, labelOnlyProjection.value);
+    const labelAffected = {
+      scope: labelOnlyScope, snapshotId: labelOnlySnapshot,
+      sensitiveRequest: labelOnlyRequest, safeAppend: legacyRequest(labelOnlyScope),
+    };
+
+    const bothScope = legacyScope('event-and-snapshot-label');
+    const bothRequest = legacyRequest(bothScope, { amount: '5.00' });
+    await appendLegacyEvent(seedPool, bothRequest);
+    const bothEvent = await contaminateLegacyEvent(admin, bothRequest.eventId, request => {
+      request.dimensions.feature = 'prompt address canary ' + legacyPrivacyMarker;
+    });
+    const bothProjection = await projectLegacyScope(seedPool, bothScope);
+    assert.equal(bothProjection.ok, true,
+      'the pre-0006 source-event snapshot must reflect the event hash containing legacy metadata');
+    const bothSnapshot = await insertSnapshotWithSensitiveLabel(admin, bothScope, bothProjection.value);
+    const bothAffected = {
+      scope: bothScope, snapshotId: bothSnapshot, sensitiveHash: bothEvent.eventHash,
+      sensitiveRequest: bothRequest, safeAppend: legacyRequest(bothScope),
+    };
+
+    const reservationScope = legacyScope('reservation-lineage');
+    const reservationId = 'ci09-legacy-reservation-' + randomUUID();
+    const reservationOperation = 'ci09-legacy-reservation-operation-' + randomUUID();
+    const reservationObject = 'ci09-legacy-reservation-source-' + randomUUID();
+    const authorizationRequest = legacyRequest(reservationScope, {
+      eventType: 'reservation_authorized', classification: 'reservation_memo', amount: '0.10',
+      financialEffect: false, reservationLifecycle: 'held', logicalOperationId: reservationOperation,
+      reservationId, sourceObjectId: reservationObject, revisionSubjectId: 'authorization-line',
+    });
+    await appendLegacyEvent(seedPool, authorizationRequest);
+    const dispatchRequest = legacyRequest(reservationScope, {
+      eventType: 'dispatch', classification: 'reservation_memo', amount: '0.10',
+      financialEffect: false, reservationLifecycle: 'dispatched', logicalOperationId: reservationOperation,
+      reservationId, reservationAuthorizationEventId: authorizationRequest.eventId,
+      sourceObjectId: reservationObject, revisionSubjectId: 'dispatch-line',
+    });
+    await appendLegacyEvent(seedPool, dispatchRequest);
+    const reservationSensitive = await contaminateLegacyEvent(admin, authorizationRequest.eventId, request => {
+      request.sourceRefs = [{
+        contract: 'ci09.legacy.authorization', schema_version: '1.0.0',
+        id: 'https://private.invalid/authorization?token=' + legacyPrivacyMarker,
+        revision: 1, content_hash: contentAddress({ confidential: true }),
+      }];
+    });
+    const reservationBeforeUpgrade = await projectLegacyScope(seedPool, reservationScope);
+    assert.equal(reservationBeforeUpgrade.ok, true,
+      'the pre-0006 reservation snapshot must reflect the sensitive authorization event hash');
+    const nextDispatch = legacyRequest(reservationScope, {
+      eventType: 'dispatch', classification: 'reservation_memo', amount: '0.10',
+      financialEffect: false, reservationLifecycle: 'dispatched', logicalOperationId: reservationOperation,
+      reservationId, reservationAuthorizationEventId: authorizationRequest.eventId,
+      sourceObjectId: reservationObject, revisionSubjectId: 'dispatch-retry-line',
+    });
+    const reservationAffected = {
+      scope: reservationScope, sensitiveHash: reservationSensitive.eventHash,
+      sensitiveRequest: authorizationRequest, safeAppend: legacyRequest(reservationScope),
+      reservationRequest: nextDispatch,
+    };
+
+    const auditRaceScope = legacyScope('legacy-audit-race');
+    const auditRaceRequest = legacyRequest(auditRaceScope, { amount: '0.44' });
+    await appendLegacyEvent(seedPool, auditRaceRequest);
+
+    const affectedEventHashes = [
+      effectiveCorrection.sensitiveHash, ancestorCorrection.sensitiveHash, deepAffected.sensitiveHash,
+      bothAffected.sensitiveHash, reservationAffected.sensitiveHash, affectedConservation.sensitiveHash,
+    ];
+    assert.ok(affectedEventHashes.every(value => typeof value === 'string'));
+
+    const boundaryBase = legacyScope('scope-boundary-base');
+    const boundaryScopes = [
+      boundaryBase,
+      { ...boundaryBase, tenantId: boundaryBase.tenantId + '-foreign-tenant' },
+      { ...boundaryBase, projectId: boundaryBase.projectId + '-foreign-project' },
+      { ...boundaryBase, environment: 'development' },
+      { ...boundaryBase, billingMode: 'sandbox' },
+    ];
+    const boundaryEvents = [];
+    for (const scope of boundaryScopes) {
+      const request = legacyRequest(scope);
+      await appendLegacyEvent(seedPool, request);
+      boundaryEvents.push({ scope, eventId: request.eventId });
+    }
+
+    // Keep the legacy snapshots built before audit, as a prior deployed
+    // handler could have produced them from these clean source facts.
+    const beforeUpgradeRows = await captureLegacyFinancialRows(admin);
+    await admin.query('DROP TABLE cost_intelligence.financial_privacy_quarantine');
+    await apply0006ToLegacyDatabase(admin, names[5]);
+    const migrationRow = await admin.query(
+      'SELECT checksum_sha256 FROM cost_intelligence.schema_migrations WHERE version = $1',
+      [names[5].replace(/\.sql$/, '')],
+    );
+    assert.equal(migrationRow.rows[0].checksum_sha256.trim(), createHash('sha256')
+      .update(await readFile(join(root, 'migrations', names[5]), 'utf8')).digest('hex'));
+    assert.deepEqual(await captureLegacyFinancialRows(admin), beforeUpgradeRows,
+      'the additive migration must preserve all event, binding, head, mapping, snapshot, amount, and quantity row bytes');
+
+    const migratorConfig = { ...migratorDatabaseConfigFromEnvironment(), database: name };
+    const migrator = new Client(migratorConfig);
+    await migrator.connect();
+    let auditAfterFirstRun;
+    let auditAfterSecondRun;
+    try {
+      const login = await migrator.query(
+        'SELECT current_user, role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolbypassrls ' +
+        'FROM pg_roles role WHERE role.rolname = current_user',
+      );
+      assert.equal(login.rows.length, 1);
+      assert.deepEqual(login.rows[0], {
+        current_user: login.rows[0].current_user, rolsuper: false, rolcreatedb: false,
+        rolcreaterole: false, rolbypassrls: false,
+      });
+      await migrator.query('SET ROLE ci_finance_migrator');
+      assert.equal((await migrator.query('SELECT current_user')).rows[0].current_user, 'ci_finance_migrator');
+      const ownership = await migrator.query(
+        'SELECT pg_get_userbyid(p.proowner) AS audit_owner FROM pg_proc p ' +
+        'JOIN pg_namespace n ON n.oid = p.pronamespace ' +
+        'WHERE n.nspname = $1 AND p.proname = $2',
+        ['cost_intelligence', 'audit_legacy_financial_privacy'],
+      );
+      assert.deepEqual(ownership.rows, [{ audit_owner: 'ci_finance_migrator' }]);
+      await migrator.query('SELECT cost_intelligence.audit_legacy_financial_privacy()');
+      auditAfterFirstRun = await admin.query(
+        'SELECT record_kind, record_hash, tenant_id, project_id, environment, billing_mode, reason_code ' +
+        'FROM cost_intelligence.financial_privacy_quarantine ORDER BY record_kind, record_hash',
+      );
+      await migrator.query('SELECT cost_intelligence.audit_legacy_financial_privacy()');
+      auditAfterSecondRun = await admin.query(
+        'SELECT record_kind, record_hash, tenant_id, project_id, environment, billing_mode, reason_code ' +
+        'FROM cost_intelligence.financial_privacy_quarantine ORDER BY record_kind, record_hash',
+      );
+    } finally {
+      await migrator.end();
+    }
+    assert.deepEqual(auditAfterSecondRun.rows, auditAfterFirstRun.rows,
+      'repeated legacy audit must be idempotent and append no duplicate records');
+    const expectedAudit = [
+      { record_kind: 'ledger_event', record_hash: affectedConservation.sensitiveHash,
+        tenant_id: affectedConservation.scope.tenantId, project_id: affectedConservation.scope.projectId,
+        environment: affectedConservation.scope.environment, billing_mode: affectedConservation.scope.billingMode,
+        reason_code: 'legacy_sensitive_event_data' },
+      { record_kind: 'ledger_event', record_hash: effectiveCorrection.sensitiveHash,
+        tenant_id: effectiveCorrection.scope.tenantId, project_id: effectiveCorrection.scope.projectId,
+        environment: effectiveCorrection.scope.environment, billing_mode: effectiveCorrection.scope.billingMode,
+        reason_code: 'legacy_sensitive_event_data' },
+      { record_kind: 'ledger_event', record_hash: ancestorCorrection.sensitiveHash,
+        tenant_id: ancestorCorrection.scope.tenantId, project_id: ancestorCorrection.scope.projectId,
+        environment: ancestorCorrection.scope.environment, billing_mode: ancestorCorrection.scope.billingMode,
+        reason_code: 'legacy_sensitive_event_data' },
+      { record_kind: 'ledger_event', record_hash: deepAffected.sensitiveHash,
+        tenant_id: deepAffected.scope.tenantId, project_id: deepAffected.scope.projectId,
+        environment: deepAffected.scope.environment, billing_mode: deepAffected.scope.billingMode,
+        reason_code: 'legacy_sensitive_event_data' },
+      { record_kind: 'projection_snapshot', record_hash: labelAffected.snapshotId,
+        tenant_id: labelAffected.scope.tenantId, project_id: labelAffected.scope.projectId,
+        environment: labelAffected.scope.environment, billing_mode: labelAffected.scope.billingMode,
+        reason_code: 'legacy_sensitive_projection_label' },
+      { record_kind: 'ledger_event', record_hash: bothAffected.sensitiveHash,
+        tenant_id: bothAffected.scope.tenantId, project_id: bothAffected.scope.projectId,
+        environment: bothAffected.scope.environment, billing_mode: bothAffected.scope.billingMode,
+        reason_code: 'legacy_sensitive_event_data' },
+      { record_kind: 'projection_snapshot', record_hash: bothAffected.snapshotId,
+        tenant_id: bothAffected.scope.tenantId, project_id: bothAffected.scope.projectId,
+        environment: bothAffected.scope.environment, billing_mode: bothAffected.scope.billingMode,
+        reason_code: 'legacy_sensitive_projection_label' },
+      { record_kind: 'ledger_event', record_hash: reservationAffected.sensitiveHash,
+        tenant_id: reservationAffected.scope.tenantId, project_id: reservationAffected.scope.projectId,
+        environment: reservationAffected.scope.environment, billing_mode: reservationAffected.scope.billingMode,
+        reason_code: 'legacy_sensitive_event_data' },
+    ].sort((left, right) => left.record_kind.localeCompare(right.record_kind) || left.record_hash.localeCompare(right.record_hash));
+    const cleanEventIds = [
+      known.eventId, unknown.eventId, incomplete.eventId, sameScopeClean.eventId,
+      affectedKnown.eventId, affectedUnknown.eventId, affectedIncomplete.eventId,
+    ];
+    const cleanEventHashes = await admin.query(
+      'SELECT event_hash FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[]) ORDER BY event_id',
+      [cleanEventIds],
+    );
+    const cleanHashes = cleanEventHashes.rows.map(row => row.event_hash);
+    assert.deepEqual(auditAfterSecondRun.rows, expectedAudit,
+      'audit must catch effective correction, ancestor, deep reversal, reservation authorization, label-only, and combined cases');
+    assert.doesNotMatch(JSON.stringify(auditAfterSecondRun.rows), new RegExp(legacyPrivacyMarker));
+    const cleanQuarantine = await admin.query(
+      'SELECT record_hash FROM cost_intelligence.financial_privacy_quarantine WHERE record_hash = ANY($1::text[])',
+      [cleanHashes],
+    );
+    assert.deepEqual(cleanQuarantine.rows, [],
+      'reviewed unit token, tokenization values, incomplete markers, and clean same-scope facts are not false positives');
+    const boundaryQuarantine = await admin.query(
+      'SELECT tenant_id, project_id, environment, billing_mode FROM cost_intelligence.financial_privacy_quarantine ' +
+      'WHERE tenant_id = ANY($1::text[]) OR project_id = ANY($2::text[])',
+      [boundaryScopes.map(scope => scope.tenantId), boundaryScopes.map(scope => scope.projectId)],
+    );
+    assert.deepEqual(boundaryQuarantine.rows, [], 'clean facts at every scope boundary stay unquarantined');
+
+    const runtimeConfig = { ...runtimeDatabaseConfigFromEnvironment(), database: name };
+    runtimePool = new Pool({ ...runtimeConfig, max: 10 });
+    const runtimePorts = legacyPorts(runtimePool);
+    const cleanAfterUpgrade = await projectLegacyScope(runtimePool, cleanScope);
+    assert.equal(cleanAfterUpgrade.ok, true);
+    assert.deepEqual(cleanAfterUpgrade.value, cleanBeforeUpgrade.value,
+      'a clean same-scope as-of replay after upgrade retains the exact pre-upgrade amount, quantity, evidence, and hash');
+    const otherCurrencyAfter = await projectLegacyScope(runtimePool, cleanOtherCurrencyScope);
+    assert.equal(otherCurrencyAfter.ok, true);
+    assert.deepEqual(otherCurrencyAfter.value, cleanOtherCurrencyBefore.value);
+    const otherTenantAfter = await projectLegacyScope(runtimePool, cleanOtherTenantScope);
+    assert.equal(otherTenantAfter.ok, true);
+    assert.deepEqual(otherTenantAfter.value, cleanOtherTenantBefore.value);
+    assert.doesNotMatch(JSON.stringify([
+      cleanAfterUpgrade, otherCurrencyAfter, otherTenantAfter,
+    ]), new RegExp(legacyPrivacyMarker));
+
+    const raceContamination = await contaminateLegacyEvent(admin, auditRaceRequest.eventId, request => {
+      request.sourceRefs = [{
+        contract: 'ci09.legacy.audit-race', schema_version: '1.0.0',
+        id: 'https://private.invalid/audit-race?token=' + legacyPrivacyMarker,
+        revision: 1, content_hash: contentAddress({ confidential: true }),
+      }];
+    });
+    const auditRaceProjection = await projectLegacyScope(runtimePool, auditRaceScope);
+    assert.equal(auditRaceProjection.ok, true,
+      'a controlled pre-audit import retains its exact source hash in the existing snapshot');
+    const raceRowsBeforeAudit = await captureLegacyFinancialRows(admin);
+    const raceLockKey = 'ci02-ledger:' + auditRaceScope.tenantId + ':' + auditRaceScope.projectId + ':' +
+      auditRaceScope.environment + ':' + auditRaceScope.billingMode;
+    raceMigrator = new Client({ ...migratorDatabaseConfigFromEnvironment(), database: name });
+    await raceMigrator.connect();
+    await raceMigrator.query('SET ROLE ci_finance_migrator');
+    await raceMigrator.query('BEGIN');
+    await raceMigrator.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [raceLockKey],
+    );
+    let raceCompleted = false;
+    const racingProjection = rebuildLedgerProjection({
+      schemaVersion: '1.0.0', requestId: 'ci09-audit-race-projection',
+      scope: auditRaceScope, asOf: legacyFixtureAsOf,
+    }, runtimePorts).then(result => {
+      raceCompleted = true;
+      return result;
+    });
+    await new Promise(resolve => setTimeout(resolve, 75));
+    assert.equal(raceCompleted, false, 'projection must wait for an in-flight scope privacy audit');
+    await raceMigrator.query('SELECT cost_intelligence.audit_legacy_financial_privacy()');
+    await raceMigrator.query('COMMIT');
+    const raceResult = await racingProjection;
+    assertLegacyUnavailable(raceResult, 'projection concurrent with a newly detected legacy marker');
+    assert.deepEqual(await captureLegacyFinancialRows(admin), raceRowsBeforeAudit,
+      'the audit/replay race cannot create a replacement snapshot or mutate source history');
+    const raceQuarantine = await admin.query(
+      'SELECT record_kind, record_hash FROM cost_intelligence.financial_privacy_quarantine WHERE record_hash = $1',
+      [raceContamination.eventHash],
+    );
+    assert.deepEqual(raceQuarantine.rows, [{ record_kind: 'ledger_event', record_hash: raceContamination.eventHash }]);
+    await raceMigrator.end();
+    raceMigrator = undefined;
+    const auditRaceAffected = {
+      scope: auditRaceScope, sensitiveHash: raceContamination.eventHash,
+      sensitiveRequest: auditRaceRequest, safeAppend: legacyRequest(auditRaceScope),
+    };
+
+    const rowsBeforeDeniedCalls = await captureLegacyFinancialRows(admin);
+    const privacyBeforeDeniedCalls = await admin.query(
+      'SELECT record_kind, record_hash, tenant_id, project_id, environment, billing_mode, reason_code ' +
+      'FROM cost_intelligence.financial_privacy_quarantine ORDER BY record_kind, record_hash',
+    );
+    const affected = [
+      { ...affectedConservation, label: 'mixed known, unknown, and incomplete economics' },
+      { ...effectiveCorrection, label: 'effective correction' },
+      { ...ancestorCorrection, label: 'correction ancestor' },
+      { ...deepAffected, label: 'deep reversal' },
+      { ...labelAffected, label: 'snapshot label' },
+      { ...bothAffected, label: 'event and snapshot' },
+      { ...reservationAffected, label: 'reservation authorization' },
+      { ...auditRaceAffected, label: 'concurrent audit and replay' },
+    ];
+    const asOfVariants = [
+      '2026-10-11T04:00:00Z', '2026-10-11T04:00:00.0Z',
+      '2026-10-11T04:00:00.000000Z',
+    ];
+    for (const item of affected) {
+      const projectionRequest = {
+        schemaVersion: '1.0.0', requestId: 'ci09-repeat-' + item.label.replaceAll(' ', '-') + '-' + randomUUID(),
+        scope: item.scope, asOf: asOfVariants[0],
+      };
+      assertLegacyUnavailable(await rebuildLedgerProjection(projectionRequest, runtimePorts), item.label + ' as-of replay');
+      assertLegacyUnavailable(await rebuildLedgerProjection(projectionRequest, runtimePorts), item.label + ' repeated as-of replay');
+      for (const asOf of asOfVariants.slice(1)) {
+        assertLegacyUnavailable(await rebuildLedgerProjection({
+          ...projectionRequest, requestId: projectionRequest.requestId + '-' + asOf.slice(-2), asOf,
+        }, runtimePorts), item.label + ' equivalent as-of spelling');
+      }
+    }
+    const reconnectPool = new Pool({ ...runtimeConfig, max: 4 });
+    try {
+      assertLegacyUnavailable(await projectLegacyScope(reconnectPool, effectiveCorrection.scope),
+        'reconnected affected-scope replay');
+    } finally {
+      await reconnectPool.end();
+    }
+    const concurrentResults = await Promise.all(Array.from({ length: 8 }, (_, index) => rebuildLedgerProjection({
+      schemaVersion: '1.0.0', requestId: 'ci09-concurrent-replay-' + index, scope: deepAffected.scope,
+      asOf: asOfVariants[index % asOfVariants.length],
+    }, runtimePorts)));
+    concurrentResults.forEach((result, index) => assertLegacyUnavailable(result, 'concurrent replay ' + index));
+
+    for (const item of affected) {
+      if (item.sensitiveRequest) {
+        assertLegacyUnavailable(await appendLedgerEvent(item.sensitiveRequest, runtimePorts), item.label + ' exact idempotent retry');
+      }
+      assertLegacyUnavailable(await appendLedgerEvent(item.safeAppend, runtimePorts), item.label + ' safe append');
+      if (item.correctionRequest) {
+        assertLegacyUnavailable(await appendLedgerEvent(item.correctionRequest, runtimePorts), item.label + ' correction and source-head mutation');
+      }
+      if (item.reversalRequest) {
+        assertLegacyUnavailable(await appendLedgerEvent(item.reversalRequest, runtimePorts), item.label + ' reversal lineage mutation');
+      }
+      if (item.reservationRequest) {
+        assertLegacyUnavailable(await appendLedgerEvent(item.reservationRequest, runtimePorts), item.label + ' reservation authorization lookup');
+      }
+      if (item === affected[0]) {
+        const unsupported = { ...legacyRequest(item.scope), schemaVersion: '9.9.9' };
+        assertLegacyUnavailable(await appendLedgerEvent(unsupported, runtimePorts),
+          'unsupported-payload quarantine in an affected scope');
+      }
+    }
+    assert.deepEqual(await captureLegacyFinancialRows(admin), rowsBeforeDeniedCalls,
+      'all unavailable retries, corrections, reversals, reservation lookups, and concurrent rebuilds must leave immutable rows unchanged');
+    const privacyAfterDeniedCalls = await admin.query(
+      'SELECT record_kind, record_hash, tenant_id, project_id, environment, billing_mode, reason_code ' +
+      'FROM cost_intelligence.financial_privacy_quarantine ORDER BY record_kind, record_hash',
+    );
+    assert.deepEqual(privacyAfterDeniedCalls.rows, privacyBeforeDeniedCalls.rows);
+
+    const single = await runtimePool.connect();
+    try {
+      await single.query('BEGIN');
+      await bindRawFinanceScope(single, effectiveCorrection.scope);
+      const hiddenSensitiveEvent = await single.query(
+        'SELECT event_payload::text FROM cost_intelligence.financial_ledger_events WHERE event_id = $1',
+        [effectiveCorrection.sensitiveRequest.eventId],
+      );
+      assert.equal(hiddenSensitiveEvent.rows.length, 0);
+      assert.doesNotMatch(JSON.stringify(hiddenSensitiveEvent.rows), new RegExp(legacyPrivacyMarker));
+      await bindRawFinanceScope(single, affectedConservation.scope);
+      const hiddenAffectedHistory = await single.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events ' +
+        'WHERE event_id = ANY($1::text[]) ORDER BY event_id',
+        [[affectedKnown.eventId, affectedUnknown.eventId, affectedIncomplete.eventId, affectedClean.eventId]],
+      );
+      assert.deepEqual(hiddenAffectedHistory.rows, [],
+        'one quarantined source event hides all same-scope source rows from the restricted runtime role');
+      const hiddenAffectedSnapshots = await single.query(
+        'SELECT snapshot_id FROM cost_intelligence.financial_projection_snapshots ' +
+        'WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4',
+        [affectedConservation.scope.tenantId, affectedConservation.scope.projectId,
+          affectedConservation.scope.environment, affectedConservation.scope.billingMode],
+      );
+      assert.deepEqual(hiddenAffectedSnapshots.rows, [],
+        'source-event quarantine hides preexisting aggregate snapshots for the entire affected scope');
+      await bindRawFinanceScope(single, labelAffected.scope);
+      const hiddenSensitiveSnapshot = await single.query(
+        'SELECT snapshot_id FROM cost_intelligence.financial_projection_snapshots WHERE snapshot_id = $1',
+        [labelAffected.snapshotId],
+      );
+      assert.equal(hiddenSensitiveSnapshot.rows.length, 0);
+      await single.query('COMMIT');
+    } finally {
+      single.release();
+    }
+
+    const boundaryIds = boundaryEvents.map(item => item.eventId);
+    const boundaryClient = await runtimePool.connect();
+    try {
+      await boundaryClient.query('BEGIN');
+      await bindRawFinanceScope(boundaryClient, boundaryBase);
+      const ownRows = await boundaryClient.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[]) ORDER BY event_id',
+        [boundaryIds],
+      );
+      assert.deepEqual(ownRows.rows.map(row => row.event_id), [boundaryEvents[0].eventId]);
+      const foreignHeadUpdate = await boundaryClient.query(
+        'UPDATE cost_intelligence.financial_source_revision_heads SET current_revision_sequence = 1 ' +
+        'WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4',
+        [boundaryScopes[1].tenantId, boundaryScopes[1].projectId, boundaryScopes[1].environment, boundaryScopes[1].billingMode],
+      );
+      assert.equal(foreignHeadUpdate.rowCount, 0, 'a bound tenant cannot update another tenant source head');
+      await boundaryClient.query('COMMIT');
+
+      await boundaryClient.query('BEGIN');
+      await boundaryClient.query(
+        "SELECT set_config('cost_intelligence.tenant_id', $1, true)",
+        [boundaryBase.tenantId],
+      );
+      const partialRows = await boundaryClient.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])',
+        [boundaryIds],
+      );
+      assert.equal(partialRows.rows.length, 0, 'partial context denies all scoped rows');
+      await boundaryClient.query('COMMIT');
+      const unboundRows = await boundaryClient.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])',
+        [boundaryIds],
+      );
+      assert.equal(unboundRows.rows.length, 0, 'transaction-local scope does not leak after commit');
+
+      for (const foreign of boundaryScopes.slice(1)) {
+        await boundaryClient.query('BEGIN');
+        await bindRawFinanceScope(boundaryClient, boundaryBase);
+        await assert.rejects(boundaryClient.query(
+          'INSERT INTO cost_intelligence.financial_source_revision_heads ' +
+          '(tenant_id, project_id, environment, billing_mode, source_name, source_object_id, source_revision_subject_id, ' +
+          'current_revision_sequence, current_event_id) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)',
+          [foreign.tenantId, foreign.projectId, foreign.environment, foreign.billingMode,
+            'ci09-denied-boundary', 'ci09-denied-object-' + randomUUID(), 'ci09-denied-line'],
+        ), error => error.code === '42501');
+        await boundaryClient.query('ROLLBACK');
+      }
+
+      await boundaryClient.query('BEGIN');
+      await bindRawFinanceScope(boundaryClient, boundaryBase);
+      await boundaryClient.query('SELECT 1 / 0').catch(() => {});
+      await boundaryClient.query('ROLLBACK');
+      await boundaryClient.query('BEGIN');
+      await bindRawFinanceScope(boundaryClient, boundaryScopes[2]);
+      const afterRollbackRows = await boundaryClient.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[]) ORDER BY event_id',
+        [boundaryIds],
+      );
+      assert.deepEqual(afterRollbackRows.rows.map(row => row.event_id), [boundaryEvents[2].eventId],
+        'a failed request rollback cannot leak the prior tenant and project context');
+      await boundaryClient.query('COMMIT');
+
+      await boundaryClient.query('BEGIN');
+      await bindRawFinanceScope(boundaryClient, boundaryBase);
+      const beforeRebind = await boundaryClient.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])',
+        [boundaryIds],
+      );
+      assert.deepEqual(beforeRebind.rows.map(row => row.event_id), [boundaryEvents[0].eventId]);
+      await bindRawFinanceScope(boundaryClient, boundaryScopes[1]);
+      const afterTrustedRebind = await boundaryClient.query(
+        'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])',
+        [boundaryIds],
+      );
+      assert.deepEqual(afterTrustedRebind.rows.map(row => row.event_id), [boundaryEvents[1].eventId],
+        'the trusted backend SQL credential can explicitly rebind transaction-local scope');
+      await boundaryClient.query('COMMIT');
+    } finally {
+      boundaryClient.release();
+    }
+
+    const concurrentScopeReads = await Promise.all([boundaryScopes[0], boundaryScopes[3]].map(async (scope, index) => {
+      const connection = await runtimePool.connect();
+      try {
+        await connection.query('BEGIN');
+        await bindRawFinanceScope(connection, scope);
+        await connection.query('SELECT pg_sleep(0.05)');
+        const result = await connection.query(
+          'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])',
+          [boundaryIds],
+        );
+        await connection.query('COMMIT');
+        return result.rows.map(row => row.event_id);
+      } finally {
+        connection.release();
+      }
+    }));
+    assert.deepEqual(concurrentScopeReads, [[boundaryEvents[0].eventId], [boundaryEvents[3].eventId]],
+      'concurrent pooled requests remain isolated across environment scope');
+
+    const deniedScope = boundaryScopes[1];
+    let connectionAttempts = 0;
+    const deniedPorts = {
+      ...runtimePorts,
+      database: { connect: async () => { connectionAttempts++; return runtimePool.connect(); } },
+      financeAuthority: { authorizeCurrent: async request => ({
+        status: 'denied', decisionId: 'ci09-synthetic-scope-boundary-denial',
+        operation: request.operation, permission: request.permission,
+      }) },
+    };
+    const foreignApiRequest = legacyRequest(deniedScope);
+    const foreignAppend = await appendLedgerEvent(foreignApiRequest, deniedPorts);
+    assert.equal(foreignAppend.ok, false);
+    if (!foreignAppend.ok) assert.equal(foreignAppend.error.code, 'FORBIDDEN_SCOPE');
+    assert.equal(connectionAttempts, 0, 'foreign API scope is denied before database connection or row lookup');
+
+    const runtime = new Client(runtimeConfig);
+    await runtime.connect();
+    try {
+      const role = await runtime.query(
+        'SELECT current_user, role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolbypassrls, ' +
+        "pg_has_role(current_user, 'ci_finance_owner', 'MEMBER') AS is_owner " +
+        'FROM pg_roles role WHERE role.rolname = current_user',
+      );
+      assert.equal(role.rows.length, 1);
+      assert.deepEqual({
+        superuser: role.rows[0].rolsuper, createdb: role.rows[0].rolcreatedb,
+        createrole: role.rows[0].rolcreaterole, bypassrls: role.rows[0].rolbypassrls, owner: role.rows[0].is_owner,
+      }, { superuser: false, createdb: false, createrole: false, bypassrls: false, owner: false });
+      for (const statement of [
+        'CREATE TABLE cost_intelligence.ci09_runtime_ddl_denied (value integer)',
+        'UPDATE cost_intelligence.financial_ledger_events SET amount = amount',
+        'DELETE FROM cost_intelligence.financial_ledger_events',
+        'TRUNCATE cost_intelligence.financial_projection_snapshots',
+        'ALTER TABLE cost_intelligence.financial_ledger_events DISABLE TRIGGER ALL',
+        'ALTER TABLE cost_intelligence.financial_ledger_events DISABLE ROW LEVEL SECURITY',
+        'SELECT cost_intelligence.audit_legacy_financial_privacy()',
+        'SET ROLE ci_finance_owner',
+        'SET ROLE ci_finance_migrator',
+      ]) {
+        await assert.rejects(runtime.query(statement), error => error.code === '42501');
+      }
+    } finally {
+      await runtime.end();
+    }
+
+    const safeWriteScope = legacyScope('clean-write-and-validation');
+    const safeRequest = legacyRequest(safeWriteScope, { amount: '0.31' });
+    const accepted = await appendLedgerEvent(safeRequest, runtimePorts);
+    assert.equal(accepted.ok, true);
+    if (accepted.ok) assert.equal(accepted.value.status, 'accepted');
+    assert.doesNotMatch(JSON.stringify(accepted), new RegExp(legacyPrivacyMarker));
+    const duplicate = await appendLedgerEvent(safeRequest, runtimePorts);
+    assert.equal(duplicate.ok, true);
+    if (duplicate.ok) assert.equal(duplicate.value.status, 'duplicate');
+    const unsafeLink = legacyRequest(safeWriteScope, {
+      sourceRefs: [{
+        contract: 'ci09.legacy.source', schema_version: '1.0.0',
+        id: 'https://private.invalid/ledger?token=' + legacyPrivacyMarker,
+        revision: 1, content_hash: contentAddress({ confidential: true }),
+      }],
+    });
+    const unsafeLinkResult = await appendLedgerEvent(unsafeLink, runtimePorts);
+    assert.equal(unsafeLinkResult.ok, false);
+    if (!unsafeLinkResult.ok) assert.equal(unsafeLinkResult.error.code, 'VALIDATION_ERROR');
+    assert.doesNotMatch(JSON.stringify(unsafeLinkResult), new RegExp(legacyPrivacyMarker));
+    const unsafeLabel = legacyRequest(safeWriteScope);
+    unsafeLabel.usage.units[0].name = 'prompt address ' + legacyPrivacyMarker;
+    const unsafeLabelResult = await appendLedgerEvent(unsafeLabel, runtimePorts);
+    assert.equal(unsafeLabelResult.ok, false);
+    if (!unsafeLabelResult.ok) assert.equal(unsafeLabelResult.error.code, 'VALIDATION_ERROR');
+    assert.doesNotMatch(JSON.stringify(unsafeLabelResult), new RegExp(legacyPrivacyMarker));
+    const safeWriteRows = await admin.query(
+      'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])',
+      [[safeRequest.eventId, unsafeLink.eventId, unsafeLabel.eventId]],
+    );
+    assert.deepEqual(safeWriteRows.rows.map(row => row.event_id), [safeRequest.eventId],
+      'safe reviewed facts persist, duplicates remain idempotent, and unsafe evidence or measure labels are rejected before persistence');
+  } finally {
+    await raceMigrator?.end().catch(() => {});
+    await runtimePool?.end();
+    await seedPool?.end();
+    await admin?.end();
+    await dropTestDatabase(name, base);
   }
 });

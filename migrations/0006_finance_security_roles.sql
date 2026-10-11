@@ -54,6 +54,9 @@ CREATE TABLE cost_intelligence.financial_privacy_quarantine (
   PRIMARY KEY (record_kind, record_hash, reason_code)
 );
 
+CREATE INDEX financial_privacy_quarantine_scope_idx
+  ON cost_intelligence.financial_privacy_quarantine (tenant_id, project_id, environment, billing_mode);
+
 CREATE FUNCTION cost_intelligence.reject_financial_privacy_quarantine_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -70,20 +73,103 @@ CREATE TRIGGER financial_privacy_quarantine_no_truncate
   BEFORE TRUNCATE ON cost_intelligence.financial_privacy_quarantine
   FOR EACH STATEMENT EXECUTE FUNCTION cost_intelligence.reject_financial_privacy_quarantine_mutation();
 
+CREATE FUNCTION cost_intelligence.financial_jsonb_has_sensitive_text(payload jsonb)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $sensitive$
+  WITH RECURSIVE json_nodes(node, path) AS (
+    SELECT payload, ARRAY[]::text[]
+    UNION ALL
+    SELECT child.node, child.path
+    FROM json_nodes parent
+    CROSS JOIN LATERAL (
+      SELECT object_value.value AS node, parent.path || object_value.key AS path
+      FROM jsonb_each(CASE WHEN jsonb_typeof(parent.node) = 'object' THEN parent.node ELSE '{}'::jsonb END) object_value
+      UNION ALL
+      SELECT array_value.value AS node, parent.path || array_value.ordinality::text AS path
+      FROM jsonb_array_elements(CASE WHEN jsonb_typeof(parent.node) = 'array' THEN parent.node ELSE '[]'::jsonb END)
+        WITH ORDINALITY array_value(value, ordinality)
+    ) child
+  )
+  SELECT COALESCE(bool_or(
+    jsonb_typeof(node) = 'string'
+    AND NOT (
+      (cardinality(path) = 4 AND path[1] = 'usage' AND path[2] = 'units'
+        AND path[4] IN ('name', 'includedIn')
+        AND node #>> '{}' = ANY(ARRAY[
+          'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+          'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
+          'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
+          'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
+          'unit', 'units', 'page', 'pages', 'row', 'rows', 'record', 'records', 'character', 'characters', 'credit', 'credits'
+        ]::text[]))
+      OR (cardinality(path) = 3 AND path[1] = 'usage' AND path[2] = 'missingFields'
+        AND node #>> '{}' = ANY(ARRAY[
+          'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+          'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
+          'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
+          'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
+          'unit', 'units', 'page', 'pages', 'row', 'rows', 'record', 'records', 'character', 'characters', 'credit', 'credits',
+          'amount', 'currency', 'source_reference', 'provider_reference', 'pricing_reference', 'input', 'output',
+          'reasoning', 'image_count', 'request_count', 'duration'
+        ]::text[]))
+    )
+    AND (node #>> '{}') ~* '(https?://|[?#@]|(^|[^[:alnum:]])(prompt|password|passwd|secret|authorization|bearer|private|address|email|token)([^[:alnum:]]|$)|(^|[^[:alnum:]])([0-9]{1,3}\.){3}[0-9]{1,3}([^[:alnum:]]|$))'
+  ), false)
+  FROM json_nodes
+$sensitive$;
+
 CREATE FUNCTION cost_intelligence.audit_legacy_financial_privacy()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, cost_intelligence
 AS $audit$
+DECLARE
+  affected_scope record;
 BEGIN
+  -- Serialize a controlled legacy import/audit with the same scope lock used
+  -- by ledger append and projection handlers. Acquire every affected scope in
+  -- stable order before writing any quarantine marker.
+  FOR affected_scope IN
+    SELECT candidate.tenant_id, candidate.project_id, candidate.environment, candidate.billing_mode
+    FROM (
+      SELECT event.tenant_id, event.project_id, event.environment, event.billing_mode
+      FROM cost_intelligence.financial_ledger_events event
+      WHERE cost_intelligence.financial_jsonb_has_sensitive_text(event.event_payload)
+         OR cost_intelligence.financial_jsonb_has_sensitive_text(event.source_refs)
+      UNION
+      SELECT snapshot.tenant_id, snapshot.project_id, snapshot.environment, snapshot.billing_mode
+      FROM cost_intelligence.financial_projection_snapshots snapshot
+      JOIN cost_intelligence.financial_projection_quantities quantity USING (snapshot_id)
+      WHERE quantity.unit_name IS NOT NULL
+        AND (quantity.unit_name ~* '(https?://|[?#@[:space:]]|prompt|password|passwd|secret|authorization|bearer|private|address|email|(^|[^[:alnum:]])token([^[:alnum:]]))'
+          OR quantity.unit_name !~ '^[a-z][a-z0-9_]{0,63}$')
+        AND quantity.unit_name NOT IN (
+          'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+          'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
+          'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
+          'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
+          'unit', 'units', 'page', 'pages', 'row', 'rows', 'record', 'records', 'character', 'characters', 'credit', 'credits'
+        )
+    ) candidate
+    ORDER BY candidate.tenant_id, candidate.project_id, candidate.environment, candidate.billing_mode
+  LOOP
+    PERFORM pg_advisory_xact_lock(hashtextextended(
+      'ci02-ledger:' || affected_scope.tenant_id || ':' || affected_scope.project_id || ':' ||
+      affected_scope.environment || ':' || affected_scope.billing_mode, 0
+    ));
+  END LOOP;
+
   INSERT INTO cost_intelligence.financial_privacy_quarantine
     (record_kind, record_hash, tenant_id, project_id, environment, billing_mode, reason_code)
   SELECT 'ledger_event', event.event_hash, event.tenant_id, event.project_id, event.environment, event.billing_mode,
          'legacy_sensitive_event_data'
   FROM cost_intelligence.financial_ledger_events event
-  WHERE event.event_payload::text ~* '(https?://|[?#@]|prompt|password|passwd|secret|authorization|bearer|private|address|email|(^|[^[:alnum:]])token([^[:alnum:]]))'
-     OR event.source_refs::text ~* '(https?://|[?#@]|prompt|password|passwd|secret|authorization|bearer|private|address|email|(^|[^[:alnum:]])token([^[:alnum:]]))'
+  WHERE cost_intelligence.financial_jsonb_has_sensitive_text(event.event_payload)
+     OR cost_intelligence.financial_jsonb_has_sensitive_text(event.source_refs)
   ON CONFLICT DO NOTHING;
 
   INSERT INTO cost_intelligence.financial_privacy_quarantine
@@ -95,12 +181,20 @@ BEGIN
   WHERE quantity.unit_name IS NOT NULL
     AND (quantity.unit_name ~* '(https?://|[?#@[:space:]]|prompt|password|passwd|secret|authorization|bearer|private|address|email|(^|[^[:alnum:]])token([^[:alnum:]]))'
       OR quantity.unit_name !~ '^[a-z][a-z0-9_]{0,63}$')
+    AND quantity.unit_name NOT IN (
+      'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+      'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
+      'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
+      'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
+      'unit', 'units', 'page', 'pages', 'row', 'rows', 'record', 'records', 'character', 'characters', 'credit', 'credits'
+    )
   ON CONFLICT DO NOTHING;
 END
 $audit$;
 
 REVOKE ALL ON FUNCTION cost_intelligence.finance_scope_matches(text, text, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION cost_intelligence.audit_legacy_financial_privacy() FROM PUBLIC;
+REVOKE ALL ON FUNCTION cost_intelligence.financial_jsonb_has_sensitive_text(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cost_intelligence.finance_scope_matches(text, text, text, text) TO ci_finance_runtime;
 
 SELECT cost_intelligence.audit_legacy_financial_privacy();
@@ -121,6 +215,7 @@ ALTER TABLE cost_intelligence.pricing_fx_rate_versions OWNER TO ci_finance_owner
 ALTER TABLE cost_intelligence.pricing_operation_idempotency OWNER TO ci_finance_owner;
 ALTER TABLE cost_intelligence.pricing_estimate_snapshots OWNER TO ci_finance_owner;
 ALTER FUNCTION cost_intelligence.audit_legacy_financial_privacy() OWNER TO ci_finance_migrator;
+ALTER FUNCTION cost_intelligence.financial_jsonb_has_sensitive_text(jsonb) OWNER TO ci_finance_migrator;
 GRANT EXECUTE ON FUNCTION cost_intelligence.audit_legacy_financial_privacy() TO ci_finance_migrator;
 
 GRANT USAGE ON SCHEMA cost_intelligence TO ci_finance_runtime;
@@ -151,13 +246,19 @@ CREATE POLICY financial_ledger_events_scope_policy ON cost_intelligence.financia
   USING (cost_intelligence.finance_scope_matches(tenant_id, project_id, environment, billing_mode)
     AND NOT EXISTS (
       SELECT 1 FROM cost_intelligence.financial_privacy_quarantine quarantine
-      WHERE quarantine.record_kind = 'ledger_event' AND quarantine.record_hash = financial_ledger_events.event_hash
-        AND quarantine.tenant_id = financial_ledger_events.tenant_id
+      WHERE quarantine.tenant_id = financial_ledger_events.tenant_id
         AND quarantine.project_id = financial_ledger_events.project_id
         AND quarantine.environment = financial_ledger_events.environment
         AND quarantine.billing_mode = financial_ledger_events.billing_mode
     ))
-  WITH CHECK (cost_intelligence.finance_scope_matches(tenant_id, project_id, environment, billing_mode));
+  WITH CHECK (cost_intelligence.finance_scope_matches(tenant_id, project_id, environment, billing_mode)
+    AND NOT EXISTS (
+      SELECT 1 FROM cost_intelligence.financial_privacy_quarantine quarantine
+      WHERE quarantine.tenant_id = financial_ledger_events.tenant_id
+        AND quarantine.project_id = financial_ledger_events.project_id
+        AND quarantine.environment = financial_ledger_events.environment
+        AND quarantine.billing_mode = financial_ledger_events.billing_mode
+    ));
 
 CREATE POLICY financial_ledger_identity_bindings_scope_policy ON cost_intelligence.financial_ledger_identity_bindings
   FOR ALL TO ci_finance_runtime
@@ -185,13 +286,19 @@ CREATE POLICY financial_projection_snapshots_scope_policy ON cost_intelligence.f
   USING (cost_intelligence.finance_scope_matches(tenant_id, project_id, environment, billing_mode)
     AND NOT EXISTS (
       SELECT 1 FROM cost_intelligence.financial_privacy_quarantine quarantine
-      WHERE quarantine.record_kind = 'projection_snapshot' AND quarantine.record_hash = financial_projection_snapshots.snapshot_id
-        AND quarantine.tenant_id = financial_projection_snapshots.tenant_id
+      WHERE quarantine.tenant_id = financial_projection_snapshots.tenant_id
         AND quarantine.project_id = financial_projection_snapshots.project_id
         AND quarantine.environment = financial_projection_snapshots.environment
         AND quarantine.billing_mode = financial_projection_snapshots.billing_mode
     ))
-  WITH CHECK (cost_intelligence.finance_scope_matches(tenant_id, project_id, environment, billing_mode));
+  WITH CHECK (cost_intelligence.finance_scope_matches(tenant_id, project_id, environment, billing_mode)
+    AND NOT EXISTS (
+      SELECT 1 FROM cost_intelligence.financial_privacy_quarantine quarantine
+      WHERE quarantine.tenant_id = financial_projection_snapshots.tenant_id
+        AND quarantine.project_id = financial_projection_snapshots.project_id
+        AND quarantine.environment = financial_projection_snapshots.environment
+        AND quarantine.billing_mode = financial_projection_snapshots.billing_mode
+    ));
 CREATE POLICY financial_projection_amounts_scope_policy ON cost_intelligence.financial_projection_amounts
   FOR ALL TO ci_finance_runtime
   USING (EXISTS (
