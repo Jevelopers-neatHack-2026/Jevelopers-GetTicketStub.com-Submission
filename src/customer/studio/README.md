@@ -4,7 +4,7 @@ The customer-facing studio. Give it an event link, watch the agent research the 
 
 The studio is always cream paper. There is no dark stage: printing, the finish picker, the tear and a lifted stub all stay on the desk.
 
-Design docs, wireframes and the coverage matrix are in `docs/studio/` (PR "Add ticket studio design docs"). Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
+Design docs, wireframes and the coverage matrix are not on `main`; they are in `docs/studio/` on the [`docs/studio-design`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/tree/docs/studio-design/docs/studio) branch. Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
 
 ## Run it
 
@@ -15,14 +15,30 @@ npm run build && npm start
 ```
 
 The deployment defaults to demo mode with external research/provider requests
-disabled, even when keys exist. See the root README for runtime versions,
-Plus Launch settings, and the separately authorized `TICKETSTUB_RUNTIME_MODE=live`
-development mode. The following optional keys apply only in live mode:
+disabled, even when keys exist. Live calls need both
+`TICKETSTUB_RUNTIME_MODE=live` (set at build and start; separately authorized
+development only) and credentials for the provider each capability selects.
+Runtime versions, Plus Launch settings and the full provider reference are in
+[Preview runtime, deployment and provider configuration](../../../docs/operations/preview-runtime.md).
+
+Each capability picks its provider independently (`TICKETSTUB_RESEARCH_PROVIDER`,
+`TICKETSTUB_AGENT_PROVIDER`, `TICKETSTUB_ART_PROVIDER`). With the default direct
+providers, in live mode:
 
 | Variable | Used for | Without it |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | One research call per event to pull extra facts from the page; free-text agent replies | Facts come from the page's schema.org data and Open-Meteo only; the agent uses rule-based replies |
+| `ANTHROPIC_API_KEY` | One research call per event to pull extra facts from the page; free-text agent replies (`claude-sonnet-5-5`) | Facts come from the page's schema.org data and Open-Meteo only; the agent uses rule-based replies |
 | `OPENAI_API_KEY` | Generated, text-free art (`gpt-image-1`) | Procedural art, labelled "Sample art" |
+
+When a capability's provider is set to `openrouter`, it needs its own model and
+key instead, with no shared `OPENROUTER_API_KEY` and no fallback to another key
+or to simulated output:
+
+| Capability | Model setting | Key setting |
+|---|---|---|
+| Research | `TICKETSTUB_RESEARCH_MODEL` | `TICKETSTUB_RESEARCH_OPENROUTER_API_KEY` |
+| Agent | `TICKETSTUB_AGENT_MODEL` | `TICKETSTUB_AGENT_OPENROUTER_API_KEY` |
+| Art (OpenAI image models only) | `TICKETSTUB_ART_MODEL` | `TICKETSTUB_ART_OPENROUTER_API_KEY` |
 
 ## Routes
 
@@ -45,7 +61,7 @@ development mode. The following optional keys apply only in live mode:
 
 Every fact carries a `source` and a `provenance` label, shown in the UI.
 
-- **Live:** fetching and parsing the event page (schema.org JSON-LD, then title), and weather from Open-Meteo. Art and agent replies are live only when the keys above are set.
+- **Live (live mode only):** fetching and parsing the event page (schema.org JSON-LD, then title), and weather from Open-Meteo. Art and agent replies are live only when the selected provider is also configured (see above). In demo mode, arbitrary event links are not fetched and art and agent replies are always simulated.
 - **Simulated:** demo fixtures (neatHack 2026, The Pale Hours, Harbour FC), sign-in on the claim page, wallet passes, and QR codes (placeholders that don't scan).
 - **Sandbox:** all prices, quotes, payments, shipping and refunds. Nothing is charged.
 - **Pending:** facts that aren't known yet, such as neatHack winners and team count.
