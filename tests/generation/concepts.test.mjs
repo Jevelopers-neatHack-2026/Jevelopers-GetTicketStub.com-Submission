@@ -23,9 +23,9 @@ import { corruptPngCrc } from "../../fixtures/models/png.mjs";
 const HASH = (value) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 let eventSequence = 0;
 
-function expectCode(code, callback) {
+function expectCode(code, callback, label = "") {
   assert.throws(callback, (error) => {
-    assert.equal(error?.code, code, `expected ${code}, received ${error?.code ?? error?.name ?? "unknown error"}`);
+    assert.equal(error?.code, code, `${label ? `${label}: ` : ""}expected ${code}, received ${error?.code ?? error?.name ?? "unknown error"}`);
     return true;
   });
 }
@@ -1282,7 +1282,6 @@ test("OpenRouter concept snapshots require an edit capability that admits both r
     ["not an object", "edit"],
     ["null", null],
   ]) {
-    expectCode("unsupported_concept_route", () => createCreativeConceptBatchProposal(openRouterConceptInput(capabilities)));
-    assert.ok(name);
+    expectCode("unsupported_concept_route", () => createCreativeConceptBatchProposal(openRouterConceptInput(capabilities)), name);
   }
 });

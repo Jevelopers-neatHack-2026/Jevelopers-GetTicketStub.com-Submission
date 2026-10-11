@@ -102,6 +102,8 @@ import {
   normalizeOpenRouterImageUsage,
   type OpenRouterImageAuthorizationRequest,
   type OpenRouterImageCapabilities,
+  type OpenRouterImageInputTokenDetails,
+  type OpenRouterImageOutputTokenDetails,
   type OpenRouterImageProviderOptions,
   type OpenRouterImagesOutput,
 } from "creative-engine/models";
@@ -165,6 +167,19 @@ export function consumeOpenRouterError(error: unknown): string | undefined {
   }
   return normalizeOpenRouterImageUsage({ prompt_tokens: 1 }, { transport_attempt_id: "transport-01" }).transport_attempt_id;
 }
+
+// Token details declare exactly the documented OpenRouter keys: no text_tokens and no open index signature.
+const orInputDetails: OpenRouterImageInputTokenDetails = { audio_tokens: 0, cache_write_tokens: 1, cached_tokens: 2, file_tokens: 3, video_tokens: 4 };
+const orOutputDetails: OpenRouterImageOutputTokenDetails = { audio_tokens: 0, image_tokens: 1, reasoning_tokens: 2 };
+// @ts-expect-error text_tokens is an OpenAI-only detail key
+const orInputText: OpenRouterImageInputTokenDetails = { text_tokens: 1 };
+// @ts-expect-error image_tokens is not a documented prompt detail
+const orInputImage: OpenRouterImageInputTokenDetails = { image_tokens: 1 };
+// @ts-expect-error cached_tokens is not a documented completion detail
+const orOutputCached: OpenRouterImageOutputTokenDetails = { cached_tokens: 1 };
+// @ts-expect-error undeclared keys are rejected (no index signature)
+const orOutputOther: OpenRouterImageOutputTokenDetails = { mystery_tokens: 1 };
+void [orInputDetails, orOutputDetails, orInputText, orInputImage, orOutputCached, orOutputOther];
 
 // ---- Runtime port and attribution types admit both allowlisted native providers ----
 import type {

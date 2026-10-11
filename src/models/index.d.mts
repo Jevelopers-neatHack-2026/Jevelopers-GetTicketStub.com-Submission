@@ -27,18 +27,22 @@ export interface OpenAIImageTokenDetails {
   readonly image_tokens?: number;
 }
 
-/** Raw allowlisted provider counters. The owner-reviewed operation profile maps these to C03. */
-export interface OpenAIImageUsage extends UsageRecord {
+/** Fields shared by every raw image usage observation; each provider declares its own token-detail shapes. */
+interface ImageUsageBase extends UsageRecord {
   readonly [providerField: string]: unknown;
   readonly completeness: "unknown";
   readonly input_tokens?: number;
   readonly output_tokens?: number;
   readonly total_tokens?: number;
-  readonly input_tokens_details?: OpenAIImageTokenDetails;
-  readonly output_tokens_details?: OpenAIImageTokenDetails;
   readonly provider_request_id?: string;
   readonly transport_attempt_id?: string;
   readonly missing_fields: readonly string[];
+}
+
+/** Raw allowlisted provider counters. The owner-reviewed operation profile maps these to C03. */
+export interface OpenAIImageUsage extends ImageUsageBase {
+  readonly input_tokens_details?: OpenAIImageTokenDetails;
+  readonly output_tokens_details?: OpenAIImageTokenDetails;
 }
 
 export type OpenAIImagesInput = ProviderInput & { readonly reservation_ref: string };
@@ -303,24 +307,27 @@ export interface OpenRouterImageCostObservation {
   readonly provenance: "provider_reported_unsettled";
 }
 
-/** Documented OpenRouter prompt token details, normalized as `input_tokens_details`. */
-export interface OpenRouterImageInputTokenDetails extends OpenAIImageTokenDetails {
+/**
+ * Documented OpenRouter prompt token details, normalized as `input_tokens_details`. Exactly the documented keys: no
+ * `text_tokens` and no index signature (a type alias, so it stays assignable to the generic `ProviderOutput` usage record).
+ */
+export type OpenRouterImageInputTokenDetails = Readonly<{
   readonly audio_tokens?: number;
   readonly cache_write_tokens?: number;
   readonly cached_tokens?: number;
   readonly file_tokens?: number;
   readonly video_tokens?: number;
-}
+}>;
 
 /** Documented OpenRouter completion token details, normalized as `output_tokens_details`. */
-export interface OpenRouterImageOutputTokenDetails extends OpenAIImageTokenDetails {
+export type OpenRouterImageOutputTokenDetails = Readonly<{
   readonly audio_tokens?: number;
   readonly image_tokens?: number;
   readonly reasoning_tokens?: number;
-}
+}>;
 
 /** Raw allowlisted counters. A missing usage or cost is listed in `missing_fields`, never zero. */
-export interface OpenRouterImageUsage extends OpenAIImageUsage {
+export interface OpenRouterImageUsage extends ImageUsageBase {
   readonly input_tokens_details?: OpenRouterImageInputTokenDetails;
   readonly output_tokens_details?: OpenRouterImageOutputTokenDetails;
   readonly cost?: OpenRouterImageCostObservation;
