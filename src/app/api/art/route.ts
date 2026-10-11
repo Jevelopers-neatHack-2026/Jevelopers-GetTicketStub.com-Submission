@@ -20,6 +20,7 @@ function freshSeed(): number {
 }
 
 async function openAiImage(prompt: string): Promise<string | undefined> {
+  if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") return undefined;
   const key = process.env.OPENAI_API_KEY;
   if (!key) return undefined;
   try {

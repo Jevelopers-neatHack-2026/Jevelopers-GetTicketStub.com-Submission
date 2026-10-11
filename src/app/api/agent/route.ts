@@ -5,6 +5,7 @@ import type { EventData } from "@/customer/studio/types";
 // otherwise 204 and the client uses its rule-based, clearly labelled simulated agent.
 
 export async function POST(req: Request) {
+  if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") return new NextResponse(null, { status: 204 });
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return new NextResponse(null, { status: 204 });
 

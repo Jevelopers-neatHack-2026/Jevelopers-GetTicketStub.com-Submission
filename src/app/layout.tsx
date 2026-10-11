@@ -34,7 +34,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${interTight.variable}`}>
-      <body>{children}</body>
+      <body>
+        {process.env.TICKETSTUB_RUNTIME_MODE !== "live" && (
+          <aside className="preview-notice">Demo preview · Sample events and art · Sandbox checkout</aside>
+        )}
+        {children}
+      </body>
     </html>
   );
 }

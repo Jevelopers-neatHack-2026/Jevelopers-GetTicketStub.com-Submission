@@ -1,13 +1,20 @@
 {
-  "name": "storefront",
+  "name": "getticketstub-com",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start --hostname 0.0.0.0",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "smoke:production": "node scripts/smoke-production.mjs"
   },
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "npm": ">=11.16.0 <12"
+  },
+  "packageManager": "npm@11.16.0",
   "dependencies": {
     "next": "16.4.0",
     "react": "19.3.0",

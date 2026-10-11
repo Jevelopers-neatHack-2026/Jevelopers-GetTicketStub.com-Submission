@@ -343,8 +343,15 @@ export async function POST(req: Request) {
   const fixture = matchFixture(raw);
   if (fixture) {
     const e = clone(fixture);
+    if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
+      e.facts = e.facts.map((fact) => ({
+        ...fact,
+        provenance: fact.provenance === "pending" ? "pending" : "simulated",
+        source: fact.source.includes("(demo)") ? fact.source : `${fact.source} (demo)`,
+      }));
+    }
     if (url) e.sourceUrl = url.toString();
-    if (fixture === NEATHACK && url) {
+    if (fixture === NEATHACK && url && process.env.TICKETSTUB_RUNTIME_MODE === "live") {
       // Enrich: confirm the page is reachable and record its live title.
       try {
         const html = await fetchPage(url.toString());
@@ -358,6 +365,10 @@ export async function POST(req: Request) {
   }
 
   if (!url) return readError();
+
+  if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
+    return NextResponse.json({ error: "This preview uses demo events. Try neatHack, The Pale Hours, or Harbour FC." }, { status: 422 });
+  }
 
   try {
     const html = await fetchPage(url.toString());
