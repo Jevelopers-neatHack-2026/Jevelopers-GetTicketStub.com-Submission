@@ -506,6 +506,13 @@ export function inspectModel(
 			(target.node.kind !== "artwork" &&
 				layout.slots.some((s) => s.id === target.node.slot && s.required));
 		if (!required) continue;
+		if (target.node.opacity === 0 || target.node.blend !== "normal")
+			add(
+				"REQUIRED_CONTENT_VISIBILITY",
+				`nodes.${target.node.id}.visibility`,
+				target.node.opacity,
+				"positive opacity and supported normal foreground paint",
+			);
 		for (const cover of paintBounds) {
 			if (
 				cover.node.order <= target.node.order ||

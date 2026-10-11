@@ -105,3 +105,31 @@ test("allows backgrounds below content and disjoint later paint", async () => {
 	assert.equal(report.modelReady, true);
 	assert.ok(!report.findings.some((f) => f.code === "CONTENT_OCCLUSION"));
 });
+
+for (const patch of [{ opacity: 0 }, { blend: "screen" as const }])
+	test(`blocks unsupported required-logo visibility even with opacity warnings approved: ${JSON.stringify(patch)}`, async () => {
+		const f = await fixtureArtifact();
+		const artifact = await composeArtifact(
+			{
+				...f.input,
+				nodes: f.input.nodes.map((n) =>
+					n.kind === "overlay" ? { ...n, ...patch } : n,
+				),
+			},
+			{ ...f.layout, allowedWarnings: ["LAYER_OPACITY"] },
+			f.fonts,
+			f.ports,
+			1000,
+		);
+
+		const report = inspectModel(artifact, f.constraints);
+
+		assert.equal(report.modelReady, false);
+		assert.ok(
+			report.findings.some(
+				(f) =>
+					f.code === "REQUIRED_CONTENT_VISIBILITY" &&
+					f.path === "nodes.logo.visibility",
+			),
+		);
+	});
