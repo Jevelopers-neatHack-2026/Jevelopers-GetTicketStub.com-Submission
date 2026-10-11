@@ -19,8 +19,8 @@ The helper in `src/internal/independent-tests.ts` exposes:
 - `durabilityProcessEvidence`: required process artifacts, including concurrent
   claims/publication, killed transactions, uncertain publication, denial,
   cancellation with a full outbox and abandoned-byte cleanup.
-- `durabilityExpectedTests`: exact current manifest counts (45/68/36). The
-  dispatcher adds the independent canary to each manifest and requires 46/69/37.
+- `durabilityExpectedTests`: exact current manifest counts (79/102/58). The
+  dispatcher adds the independent canary to each manifest and requires 80/103/59.
   An intentional test addition must update the corresponding expected count.
 
 The durability dispatcher now uses those manifests, exact counts and the

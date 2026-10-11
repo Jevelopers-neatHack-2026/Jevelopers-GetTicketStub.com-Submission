@@ -10,9 +10,9 @@ import { independentTestEnvironment } from "../../src/internal/independent-tests
 import { fixture } from "../fixtures/durability/fixture.js";
 
 const expected = {
-	"artifact-storage": 58,
-	"restart-recovery": 81,
-	"metering-traces": 37,
+	"artifact-storage": 80,
+	"restart-recovery": 103,
+	"metering-traces": 59,
 } as const;
 const localSchema = z.object({
 	state: z.literal("passed-private-mechanisms"),
@@ -61,7 +61,7 @@ for (const suite of [
 		assert.equal(local.tests, expected[suite]);
 		assert.equal(local.passed, expected[suite]);
 		assert.equal(local.expectedTests, expected[suite]);
-		assert.equal(local.artifacts.length, 23);
+		assert.equal(local.artifacts.length, 25);
 		const killed = z
 			.object({
 				killedSignal: z.literal("SIGKILL"),

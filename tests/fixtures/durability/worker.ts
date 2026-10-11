@@ -13,6 +13,7 @@ import {
 import { DurableBatchEngine } from "../../../src/jobs/durable-batch.js";
 import { ObservationOutbox } from "../../../src/telemetry/observations.js";
 import { file, plan, scope } from "./fixture.js";
+import { seedRecovery } from "./recovery-budget.js";
 
 const [path, mode, time = "1000", stageArg] = process.argv.slice(2);
 if (!path || !mode) throw new Error("fixture arguments required");
@@ -32,6 +33,29 @@ const park = (value: unknown): never => {
 };
 const main = () => {
 	switch (mode) {
+		case "recovery-seed-uncertain":
+		case "recovery-seed-interrupted": {
+			const committed = mode === "recovery-seed-uncertain";
+			const { seeded, healthy } = seedRecovery(
+				db,
+				committed,
+				committed ? 4 : 12,
+			);
+			return park({
+				healthy: healthy.id,
+				seeded: seeded.map(({ job, claim, publication }) => ({
+					job: job.id,
+					operation: claim.operation,
+					attempt: claim.attempt,
+					stage: claim.stage,
+					publication: publication?.id ?? null,
+				})),
+			});
+		}
+		case "recovery-step": {
+			const claim = jobs.claim(scope);
+			return park({ job: claim?.job ?? null });
+		}
 		case "storage-race": {
 			const bytes = Buffer.from("opaque");
 			const operation = store.bind(

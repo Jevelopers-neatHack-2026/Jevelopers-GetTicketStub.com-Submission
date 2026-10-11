@@ -40,6 +40,8 @@ export const durabilityProcessEvidence = [
 	"job-gc-stage.json",
 	"job-gc-fail.json",
 	"job-gc-cancel.json",
+	"recovery-budget-committed.json",
+	"recovery-budget-interrupted.json",
 ] as const;
 
 export const durabilityTestFiles = {
@@ -49,6 +51,8 @@ export const durabilityTestFiles = {
 		"unit/durability-admission.test.js",
 		"unit/durability-cleanup.test.js",
 		"integration/durability-process.test.js",
+		"unit/durability-recovery-budget.test.js",
+		"integration/durability-recovery-process.test.js",
 	],
 	"restart-recovery": [
 		"unit/durability-jobs.test.js",
@@ -59,19 +63,23 @@ export const durabilityTestFiles = {
 		"unit/durability-batch-boundary.test.js",
 		"unit/durability-admission.test.js",
 		"integration/durability-process.test.js",
+		"unit/durability-recovery-budget.test.js",
+		"integration/durability-recovery-process.test.js",
 	],
 	"metering-traces": [
 		"unit/durability-telemetry.test.js",
 		"unit/durability-publication.test.js",
 		"unit/durability-cancellation.test.js",
 		"integration/durability-process.test.js",
+		"unit/durability-recovery-budget.test.js",
+		"integration/durability-recovery-process.test.js",
 	],
 } as const;
 
 export const durabilityExpectedTests = {
-	"artifact-storage": 57,
-	"restart-recovery": 80,
-	"metering-traces": 36,
+	"artifact-storage": 79,
+	"restart-recovery": 102,
+	"metering-traces": 58,
 } as const;
 
 type EvidenceRequirement =

@@ -71,6 +71,15 @@ export type Measurements = {
 	readonly durationMs?: number;
 };
 
+export function eventCapacity(db: DurabilityDatabase): number {
+	db.requireTransaction();
+	const count = db.sql
+		.prepare("SELECT COUNT(*) AS n FROM outbox WHERE status!='delivered'")
+		.get();
+	check(typeof count?.["n"] === "number", "INTEGRITY");
+	return db.limits.maxPendingEvents - count["n"];
+}
+
 export function observe(
 	db: DurabilityDatabase,
 	operation: Id,
@@ -81,13 +90,7 @@ export function observe(
 	measurements: Measurements = {},
 ): Id {
 	db.requireTransaction();
-	const count = db.sql
-		.prepare("SELECT COUNT(*) AS n FROM outbox WHERE status!='delivered'")
-		.get();
-	check(
-		typeof count?.["n"] === "number" && count["n"] < db.limits.maxPendingEvents,
-		"LIMIT",
-	);
+	check(eventCapacity(db) > 0, "LIMIT");
 	const id = newId();
 	db.sql
 		.prepare(
