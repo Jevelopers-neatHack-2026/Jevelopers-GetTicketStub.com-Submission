@@ -3,7 +3,7 @@
   "packageVersion": "v0.1.0-rehearsal",
   "releaseClass": "draft_rehearsal_only",
   "lifecycleState": "draft_rehearsal_only",
-  "candidateSourceCommitAtGeneration": "0fa098de9c445f8d5c7334c936b07cd8e022b1de",
+  "candidateSourceCommitAtGeneration": "df5ab96c62ca7409539480f7a442b4a7a5f3a7e3",
   "manifestGenerationTime": "Not self-certified; if needed, record the execution time in the separate release review record after this manifest is committed.",
   "contentAddresses": {
     "algorithm": "SHA-256",
@@ -2734,7 +2734,7 @@
       "renderReceipt": {
         "path": "review/visual/browser-render-evidence.json",
         "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275",
-        "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+        "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "status": "matches_exact_output_sha256",
         "outputHashMatchesReceipt": true
       },
@@ -3544,7 +3544,7 @@
       "renderReceipt": {
         "path": "review/visual/browser-render-evidence.json",
         "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275",
-        "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+        "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "status": "matches_exact_output_sha256",
         "outputHashMatchesReceipt": true
       },
@@ -3976,7 +3976,7 @@
         "exists": true,
         "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
         "sizeBytes": 1964,
-        "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+        "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "blobObjectId": "ca1e61173e032c3e4532fae167928cc614dd3ea5",
         "tracked": true,
         "workingTreeClean": true,
@@ -3996,7 +3996,7 @@
       "source": {
         "path": "demo/deck/concept-overview.html",
         "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
-        "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+        "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "sourcePinStatus": "pinned",
         "fileRole": "same-file-source"
       },
@@ -4813,7 +4813,7 @@
       "renderReceipt": {
         "path": "review/visual/browser-render-evidence.json",
         "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275",
-        "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+        "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
         "status": "matches_exact_output_sha256",
         "outputHashMatchesReceipt": true
       },
@@ -7610,7 +7610,7 @@
     {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "d3b8d07e73f10f8056648c31872e86d345439d682cd4f9ad8735727e02505f0c",
+      "sha256": "7ac01607dda5da1485e262f84663cea8fc392cdafdb85df3eb7f97c03546a5a2",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7644,7 +7644,7 @@
     {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "7d818cad26ec86ae985f407b363f864a01163ac5dec630099a97cadb745d5f22",
+      "sha256": "0711e3c2a190bd2e177c7e36a677bcc34f216154247c329b38a9a53b5ca88b0b",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7708,7 +7708,7 @@
       "path": "review/accessibility-checklist.md",
       "exists": true,
       "sha256": "bb205339ef9d8a72d528740171c2dda9b3f4583e134923e2094daa33120af1b5",
-      "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+      "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "md",
@@ -7721,7 +7721,7 @@
       "path": "review/accessibility.md",
       "exists": true,
       "sha256": "ddfc6296a810ccc6c0b3add73803b228ee3664b3e48af485b348642a6cf075e7",
-      "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+      "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "md",
@@ -7747,7 +7747,7 @@
       "path": "review/visual/browser-render-evidence.json",
       "exists": true,
       "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275",
-      "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+      "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "json",
@@ -7760,7 +7760,7 @@
       "path": "tools/render_collateral.mjs",
       "exists": true,
       "sha256": "6cb251aa3f10167ab39aab5eb492e386a9831b64146e63a6ff3642ea54ee59a5",
-      "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+      "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "mjs",
@@ -7826,7 +7826,7 @@
     "docs/collateral-inventory.json": {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "d3b8d07e73f10f8056648c31872e86d345439d682cd4f9ad8735727e02505f0c",
+      "sha256": "7ac01607dda5da1485e262f84663cea8fc392cdafdb85df3eb7f97c03546a5a2",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7860,7 +7860,7 @@
     "review/provenance.json": {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "7d818cad26ec86ae985f407b363f864a01163ac5dec630099a97cadb745d5f22",
+      "sha256": "0711e3c2a190bd2e177c7e36a677bcc34f216154247c329b38a9a53b5ca88b0b",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7950,7 +7950,7 @@
       "path": "review/visual/browser-render-evidence.json",
       "exists": true,
       "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275",
-      "sourceCommitId": "88c20d82f4b839af2d19b3e9c4fd62c29127a36d",
+      "sourceCommitId": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "json",

@@ -31,7 +31,7 @@ The repository holds maintained policy and navigation documents and a **draft sy
 > [!IMPORTANT]
 > **None of this is a product screenshot or product evidence, and none of it is approved for publication.** The rehearsal is an internal concept rehearsal; it does not replace the required final product demo, which is still absent at `demo/exports/v1-demo.mp4`. No application workflow, provider connection, sponsor integration, product result or licence is implied. Repository visibility (public) does not grant permission to publish any individual file.
 
-Collateral package readiness and external submission readiness are separate decisions, and both are `BLOCKED` until their exact asset and evidence criteria pass ([release checklist](review/release-checklist.md), [review record](review/releases/v0.1.0-rehearsal.md)). Author checks are recorded; independent content and accessibility review, source-owner rights, brand approval and destination approval are pending.
+Collateral package readiness and external submission readiness are separate decisions, and both are `BLOCKED` until their exact asset and evidence criteria pass ([release checklist](review/release-checklist.md), [review record](review/releases/v0.1.0-rehearsal.md)). Author checks are recorded. The scoped independent review of the `235697a` rehearsal is complete for that exact tree only. The README banners added afterwards have only a bounded delta review of their bytes; no independent approval of the banners, and no source-owner rights, brand approval, public-use or destination approval, has been given. Those remain pending.
 
 Work is tracked under [MM-EPIC #1](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/1). MM-01 inventory ([#4](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4)), MM-05 provenance ([#6](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6)) and MM-08 accessibility ([#8](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/8)) are closed. Messaging (MM-02 [#5](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5)), the demo set (MM-03 [#9](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9)), announcements (MM-04 [#10](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10)), brand consumption (MM-06 [#7](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7)), packaging (MM-07 [#11](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/11)) and the v1 gate (MM-09 [#3](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/3)) are open.
 
@@ -51,14 +51,14 @@ Work is tracked under [MM-EPIC #1](https://github.com/Jevelopers-neatHack-2026/m
 | [`examples/`](examples/synthetic/) | Controlled synthetic redaction fixtures (before/after, canaries); test fixtures only |
 | [`launch/`](launch/) | Draft announcement copy, deliverable briefs, X key visual and its text alternative |
 | [`messaging/`](messaging/README.md) | Messaging policy and the exact-copy claim ledger |
-| [`release/`](release/v0.1.0-rehearsal/manifest.json) | Frozen `v0.1.0-rehearsal` internal package: manifest, package spec, asset copies and manifest history. Do not edit in place; issue a new version. |
+| [`release/`](release/v0.1.0-rehearsal/manifest.json) | Draft `v0.1.0-rehearsal` internal package: current manifest, package spec, immutable r02 asset copies and retained historical draft manifests under `history/`. A draft manifest may be refreshed only by the documented build and bind workflow ([handoff](docs/collateral-handoff.md#receiver-verification)), which archives the prior manifest unchanged. Do not edit package bytes in place; an approved or non-draft release needs a new version. |
 | [`review/`](review/publication-safety.md) | Publication safety, provenance, accessibility, messaging and release checklists; visual, browser, contrast and rehearsal receipts |
 | [`tests/`](tests/) | Python `unittest` suites for validation, packaging, narrative handoff and visual evidence |
 | [`tools/`](tools/) | `validate_collateral.py`, `package_collateral.py`, and the render recipes `render_collateral.mjs`, `render_rehearsal.py`, `render_rehearsal.mjs` |
 
 ## Checks
 
-Run from the repository root. There is no CI workflow; these run locally and make no network or paid-provider calls. The tests need Pillow, and the rehearsal test and package validator need `ffprobe`. The render receipts record Python 3.9.6 and Pillow 11.3.0 ([handoff](docs/collateral-handoff.md#receiver-verification)).
+Run from the repository root. There is no CI workflow; these run locally and make no network or paid-provider calls. The tests need Pillow, and the rehearsal test and package validator need `ffprobe`. The recorded environment, Python 3.9.6 with Pillow 11.3.0, is required for package validation as well as rendering ([handoff](docs/collateral-handoff.md#receiver-verification)); on the maintainer's machine that is `/usr/bin/python3`, and other interpreters may lack Pillow or differ.
 
 ```sh
 python3 tools/validate_collateral.py --mode draft            # claims, provenance pins, copy joins, tracked-file inventory
@@ -66,7 +66,7 @@ python3 -m unittest discover -s tests                        # all suites (sever
 python3 -m unittest discover -s tests -p 'test_visual_*.py'  # visual and accessibility evidence only (fast)
 ```
 
-Package integrity (`package_collateral.py validate`) is checked from the delivery commit the frozen manifest was generated from, in an isolated worktree; on later commits it reports binding errors by design ([receiver verification](docs/collateral-handoff.md#receiver-verification)).
+The scoped independent review of the rehearsal covers the historical delivery at commit `235697a`, which stays reproducible from its own recorded source snapshot; it fails package validation against the current, changed inventory and provenance by design, and that expected rejection is not a valid current candidate. Package integrity (`package_collateral.py validate`) must pass on the current refreshed delivery commit, using the recorded Python 3.9.6 environment, so a stale current package is a defect to refresh rather than an excuse. The current delivery is produced by the draft refresh workflow in the [handoff](docs/collateral-handoff.md#receiver-verification).
 
 Readiness modes are expected to exit non-zero and report `BLOCKED` today:
 
