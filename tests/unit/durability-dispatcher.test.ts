@@ -10,8 +10,8 @@ import { independentTestEnvironment } from "../../src/internal/independent-tests
 import { fixture } from "../fixtures/durability/fixture.js";
 
 const expected = {
-	"artifact-storage": 46,
-	"restart-recovery": 69,
+	"artifact-storage": 58,
+	"restart-recovery": 81,
 	"metering-traces": 37,
 } as const;
 const localSchema = z.object({

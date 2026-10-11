@@ -46,6 +46,7 @@ export const durabilityTestFiles = {
 	"artifact-storage": [
 		"unit/durability-storage.test.js",
 		"unit/durability-batch-boundary.test.js",
+		"unit/durability-admission.test.js",
 		"unit/durability-cleanup.test.js",
 		"integration/durability-process.test.js",
 	],
@@ -56,6 +57,7 @@ export const durabilityTestFiles = {
 		"unit/durability-cancellation.test.js",
 		"unit/durability-cleanup.test.js",
 		"unit/durability-batch-boundary.test.js",
+		"unit/durability-admission.test.js",
 		"integration/durability-process.test.js",
 	],
 	"metering-traces": [
@@ -67,8 +69,8 @@ export const durabilityTestFiles = {
 } as const;
 
 export const durabilityExpectedTests = {
-	"artifact-storage": 45,
-	"restart-recovery": 68,
+	"artifact-storage": 57,
+	"restart-recovery": 80,
 	"metering-traces": 36,
 } as const;
 

@@ -157,6 +157,15 @@ export class DurableBatchEngine {
 		);
 		const planDigest = hash(planBytes);
 		return this.db.transaction(() => {
+			check(
+				this.db.sql
+					.prepare(
+						"SELECT 1 FROM operations o WHERE o.scope=? AND o.key=? AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.operation=o.id)",
+					)
+					.get(scopeKey(scope), identity(["private-batch", plan.key])) ===
+					undefined,
+				"IDEMPOTENCY_CONFLICT",
+			);
 			const operation = this.store.bindInTransaction(
 				scope,
 				"private-batch",

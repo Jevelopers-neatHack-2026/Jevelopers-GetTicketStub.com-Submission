@@ -86,6 +86,11 @@ duplicate row IDs and retains equal content under distinct row IDs. Raw row IDs
 are hashed in storage and traces. Private plan framing is not a wire contract.
 Version 1 database metadata and exact immutable limit settings are required on
 restart; unsupported versions/settings fail, without guessing migrations.
+First admission requires a new batch operation. A general-storage binding with
+the same scope/key is rejected with IDEMPOTENCY_CONFLICT, even with identical
+plan bytes and no stages. Existing stages, publications, denial and terminal
+storage remain untouched; no job, row or event is added. Repeating an already
+admitted job with the same plan remains idempotent in every lifecycle state.
 
 Claims are serialized across processes. Per-row fences, attempt IDs, stage IDs
 and lease deadlines guard completion and renewal. Storage itself also checks
