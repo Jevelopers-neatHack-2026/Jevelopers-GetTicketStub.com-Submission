@@ -2669,15 +2669,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact CTA wording review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-REPOSITORY-DOCS-002",
@@ -2690,15 +2692,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact CTA wording review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-PRODUCT-TRANSACTION-001",
@@ -2730,15 +2734,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact visual CTA review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-REPOSITORY-DOCS-ALT-001",
@@ -2751,15 +2757,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact visual CTA review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-WORKFLOW-TEXT-EQUIVALENT-001",
@@ -2769,17 +2777,19 @@
       "destinationOwner": "User-assigned marketing-material supervisor for repository content; independent accessibility review pending.",
       "target": "demo/diagrams/demo-workflow-alt-text.md",
       "availability": {
-        "status": "available_in_candidate",
-        "conditions": "The exact Markdown text alternative is tracked in this candidate; its content and release remain draft."
+        "status": "confirmed_local_repository_file_only",
+        "conditions": "The exact tracked Markdown text alternative is approved as a repository documentation target for this static action only; content/accessibility review and downstream release remain pending."
       },
-      "wordingReview": "pending",
-      "routeReview": "available_static_repository_file",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact accessible-action review pending.",
+      "wordingReview": "approved",
+      "routeReview": "confirmed_static_repository_file_only",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "The alternative path or content changes.",
         "The surrounding HTML or destination changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     }
   ],
   "releasePolicy": {

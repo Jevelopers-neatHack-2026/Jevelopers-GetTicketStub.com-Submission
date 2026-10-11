@@ -380,6 +380,132 @@ class PackagePolicyTests(unittest.TestCase):
                 package.source_snapshot_errors(root, cached, current),
             )
 
+    def test_recorded_source_pins_validate_across_merge_and_rebuild_from_generation_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            version = "v0.0.0-merge-pin-test"
+            source_path = root / "source.txt"
+            source_path.write_text("base bytes\n", encoding="utf-8")
+            spec_path = root / "release" / version / "package-spec.json"
+            spec_path.parent.mkdir(parents=True)
+            spec_path.write_text(
+                package.json.dumps({
+                    "packageVersion": version,
+                    "releaseClass": "draft_rehearsal_only",
+                    "assetRevision": "r01",
+                    "assets": [],
+                    "supportRecords": ["source.txt"],
+                    "internalDestination": "repository-internal-review",
+                }, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+
+            def git(*args: str) -> str:
+                result = subprocess.run(
+                    ["git", "-C", str(root), *args], check=True, capture_output=True, text=True
+                )
+                return result.stdout.strip()
+
+            def commit(message: str) -> str:
+                git("add", "-A")
+                git("commit", "-qm", message)
+                return git("rev-parse", "HEAD")
+
+            base_commit = commit("base source")
+            git("checkout", "-b", "package-head")
+            source_path.write_text("same final bytes\n", encoding="utf-8")
+            package_pin = commit("package branch source")
+            (root / "generation-marker.txt").write_text("recorded generation snapshot\n", encoding="utf-8")
+            generation_commit = commit("record package generation snapshot")
+            head_manifest = package.build_manifest(root, version=version)
+            support = head_manifest["supportFiles"][0]
+            self.assertEqual("source.txt", support["path"])
+            self.assertEqual(package_pin, support["sourceCommitId"])
+            self.assertEqual([], package.recompute_manifest_readiness(root, head_manifest)[1])
+
+            pin_manifest = {
+                "packageVersion": version,
+                "releaseClass": "other",
+                "candidateSourceCommitAtGeneration": generation_commit,
+                "assets": [],
+                "captionSidecars": [],
+                "supportFiles": [package.json.loads(package.json.dumps(support))],
+                "policyInputHashes": {},
+                "rehearsalEvidenceFiles": [],
+                "scenes": {"scenes": []},
+            }
+            self.assertEqual([], package.validate_manifest_files(root, pin_manifest))
+
+            git("checkout", "-b", "main-parent", base_commit)
+            source_path.write_text("same final bytes\n", encoding="utf-8")
+            main_pin = commit("main branch records same source bytes")
+            git("merge", "--no-ff", "package-head", "-m", "merge package branch with identical source tree")
+            merge_commit = git("rev-parse", "HEAD")
+            self.assertEqual("same final bytes\n", source_path.read_text(encoding="utf-8"))
+            self.assertEqual(main_pin, package.committed_source(root, "source.txt", package.sha256_file(source_path))["commitId"])
+            self.assertNotEqual(package_pin, main_pin)
+
+            rebuilt = package.build_manifest(root, version=version, source_snapshot_commit=generation_commit)
+            self.assertEqual(package.json.dumps(head_manifest, sort_keys=True), package.json.dumps(rebuilt, sort_keys=True))
+            self.assertEqual([], package.manifest_snapshot_errors(head_manifest, rebuilt))
+            self.assertEqual([], package.validate_manifest_files(root, pin_manifest))
+            self.assertEqual([], package.recompute_manifest_readiness(root, head_manifest)[1])
+
+            git("checkout", "--orphan", "unrelated-history")
+            git("rm", "-rf", ".")
+            source_path.write_text("same final bytes\n", encoding="utf-8")
+            git("add", "source.txt")
+            git("commit", "-qm", "unrelated source with identical bytes")
+            unreachable_pin = git("rev-parse", "HEAD")
+            git("checkout", "--detach", merge_commit)
+
+            invalid_cases = {
+                "malformed option-like revision": "--output=/tmp/package-pin-test",
+                "missing commit": "f" * 40,
+                "non-commit object": git("rev-parse", f"{package_pin}:source.txt"),
+                "reachable after generation only": main_pin,
+                "unreachable matching-blob commit": unreachable_pin,
+                "wrong source bytes": base_commit,
+            }
+            for label, source_revision in invalid_cases.items():
+                with self.subTest(source_pin=label):
+                    changed = package.json.loads(package.json.dumps(pin_manifest))
+                    changed["supportFiles"][0]["sourceCommitId"] = source_revision
+                    errors = package.validate_manifest_files(root, changed)
+                    self.assertTrue(any("recorded source" in error or "exact checksum-bound" in error for error in errors), errors)
+
+            changed_path = package.json.loads(package.json.dumps(pin_manifest))
+            changed_path["supportFiles"][0]["path"] = "missing-source.txt"
+            errors = package.validate_manifest_files(root, changed_path)
+            self.assertTrue(any("missing" in error for error in errors), errors)
+
+            changed_hash = package.json.loads(package.json.dumps(pin_manifest))
+            changed_hash["supportFiles"][0]["sha256"] = "0" * 64
+            errors = package.validate_manifest_files(root, changed_hash)
+            self.assertTrue(any("SHA-256" in error or "checksum" in error for error in errors), errors)
+
+            source_path.write_text("modified after delivery\n", encoding="utf-8")
+            try:
+                errors = package.validate_manifest_files(root, pin_manifest)
+                self.assertTrue(any("SHA-256" in error or "bytes differ" in error for error in errors), errors)
+            finally:
+                source_path.write_text("same final bytes\n", encoding="utf-8")
+            self.assertEqual(merge_commit, git("rev-parse", "HEAD"))
+
+    def test_rebuild_rejects_option_like_generation_revision_before_git_use(self) -> None:
+        forged = {
+            "packageVersion": package.DEFAULT_VERSION,
+            "candidateSourceCommitAtGeneration": "--output=/tmp/package-rebuild-must-not-write",
+        }
+        with patch.object(package, "git", side_effect=AssertionError("invalid revision must be rejected before Git runs")) as git_call:
+            current, errors = package.recompute_manifest_readiness(Path("."), forged)
+        self.assertEqual({}, current)
+        self.assertTrue(any("generation source commit is malformed" in error for error in errors), errors)
+        git_call.assert_not_called()
+
     def test_source_snapshot_binds_declared_absence_at_generation_commit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

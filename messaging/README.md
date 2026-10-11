@@ -8,7 +8,7 @@ This directory holds the exact-copy claim ledger consumed by demo, launch, and l
 - Product name and visual concept wording may appear only in the synthetic-concept context and with the qualifications in claims.json.
 - A safe draft sentence for current concept material is “Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.”
 - “No product or sponsor results verified.” is a status warning, not a result or endorsement claim.
-- “Explore the repository docs.” may point to the pinned public README. This confirms only a documentation destination; exact copy review is still pending. “Read the workflow text equivalent” points to a tracked local Markdown alternative, but its wording and route review are also pending. Neither confirms an application or landing-page transaction CTA.
+- The five documentation/text-alternative CTAs listed in `claims.json` have exact wording and repository targets reviewed by the user-assigned accountable marketing-material supervisor on 2026-10-11 ([decision receipt](https://github.com/Jevelopers-neatHack-2026/marketing-material/pull/14#issuecomment-6105269875)). This is limited to those words and repository destinations. It does not approve the text alternative’s content/accessibility, brand or rights, product behavior, or release, and it confirms no application or landing-page transaction route.
 
 All other capability, automation, live-integration, sponsor-use, comparative, savings, forecast, purchase, or financial claims are blocked or omitted until their exact evidence and owner review are recorded.
 

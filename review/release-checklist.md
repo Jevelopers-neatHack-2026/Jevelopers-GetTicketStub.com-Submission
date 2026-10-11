@@ -17,7 +17,7 @@ Use this checklist against the exact manifest and bytes that would be handed off
 - [ ] Reproduce from the committed inputs without a paid call; record renderer and environment versions and preserve previous package bytes.
 - [ ] Record the assigned accountable receiver, role, review date, and exact scoped decision. For this internal handoff, the user-assigned root supervisor is an AI session; record it accurately and do not imply human, rights, brand, product, or submission approval. The separate Astra model receiver dry-run remains pending and does not replace owner approval.
 
-Until every applicable line passes, `collateralPackageReadiness.decision` remains `BLOCKED`. Current source and inventory/provenance joins do not themselves establish readiness: asset-specific rights, exact wording/CTA review, brand/source-owner approval, accessibility and the independent model receiver dry-run remain pending, and the rehearsal remains draft-only.
+Until every applicable line passes, `collateralPackageReadiness.decision` remains `BLOCKED`. Current source and inventory/provenance joins do not themselves establish readiness: asset-specific rights, selected non-CTA copy review, brand/source-owner approval, accessibility and the independent model receiver dry-run remain pending. Five repository-documentation/text-alternative CTAs have only the scope-limited wording and repository-target review recorded in claims.json; that does not approve their content/accessibility or the draft rehearsal for release.
 
 ## External submission decision
 

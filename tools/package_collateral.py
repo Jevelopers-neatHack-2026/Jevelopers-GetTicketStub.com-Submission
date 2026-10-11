@@ -9,6 +9,7 @@ It does not post, upload, call a paid provider, or grant rights.
 from __future__ import annotations
 
 import argparse
+import contextvars
 import hashlib
 import html
 import json
@@ -77,6 +78,10 @@ EXPECTED_POLICY_SELECTABLE_ASSET_IDS = {
     "LAUNCH-X-KEY-VISUAL-001",
     "LAUNCH-X-ALT-TEXT-001",
 }
+
+_SOURCE_SNAPSHOT_REVISION: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "package_source_snapshot_revision", default=None
+)
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -150,7 +155,9 @@ def committed_source(root: Path, relative: str, current_hash: Optional[str]) -> 
     result["tracked"] = True
     status = git(root, "status", "--porcelain", "--", relative)
     result["workingTreeClean"] = status == ""
-    commit = git(root, "log", "-1", "--format=%H", "--", relative)
+    source_revision = _SOURCE_SNAPSHOT_REVISION.get()
+    history_args = [source_revision] if source_revision else []
+    commit = git(root, "log", "-1", "--format=%H", *history_args, "--", relative)
     if not commit or not HEX40.fullmatch(commit) or status:
         result["status"] = "tracked_but_modified_or_uncommitted"
         return result
@@ -561,7 +568,7 @@ def _load_context(root: Path, version: str) -> Dict[str, Any]:
             documents[key] = read_json(path)
         else:
             documents[key] = path.read_text(encoding="utf-8") if path.is_file() else None
-    documents["gitHead"] = repo_head(root)
+    documents["gitHead"] = _SOURCE_SNAPSHOT_REVISION.get() or repo_head(root)
     documents["claimById"] = {
         row.get("id"): row
         for row in (documents.get("claims") or {}).get("claims", [])
@@ -1635,7 +1642,45 @@ def _input_hashes(root: Path, spec: Dict[str, Any]) -> Dict[str, Any]:
     return {path: _support_file(root, path) for path in paths}
 
 
-def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materialized: bool = False) -> Dict[str, Any]:
+def build_manifest(
+    root: Path = ROOT,
+    version: str = DEFAULT_VERSION,
+    materialized: bool = False,
+    source_snapshot_commit: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build from current bytes, optionally selecting source pins from a recorded snapshot.
+
+    Receivers rebuild the manifest from its generation snapshot even when they
+    validate a later merge commit. That keeps immutable source IDs stable when
+    Git's history simplification chooses a different last-path commit after merge.
+    """
+    if source_snapshot_commit is not None:
+        if not isinstance(source_snapshot_commit, str) or not HEX40.fullmatch(source_snapshot_commit):
+            raise ValueError("recorded generation source commit is malformed")
+        if git(root, "rev-parse", f"{source_snapshot_commit}^{{commit}}") != source_snapshot_commit:
+            raise ValueError("recorded generation source commit does not identify an existing commit")
+        current_head = repo_head(root)
+        if not current_head:
+            raise ValueError("current delivery commit is unavailable")
+        try:
+            ancestry = subprocess.run(
+                ["git", "-C", str(root), "merge-base", "--is-ancestor", source_snapshot_commit, current_head],
+                check=False,
+                capture_output=True,
+                timeout=15,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ValueError("recorded generation source commit ancestry check failed closed") from exc
+        if ancestry.returncode != 0:
+            raise ValueError("recorded generation source commit is not an ancestor of the current delivery commit")
+    token = _SOURCE_SNAPSHOT_REVISION.set(source_snapshot_commit)
+    try:
+        return _build_manifest(root=root, version=version, materialized=materialized)
+    finally:
+        _SOURCE_SNAPSHOT_REVISION.reset(token)
+
+
+def _build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materialized: bool = False) -> Dict[str, Any]:
     context = _load_context(root, version)
     spec = context["spec"]
     source_discovery = _source_discovery_snapshot(root, spec)
@@ -2085,6 +2130,98 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
         manifest.get("packageVersion") == DEFAULT_VERSION
         and manifest.get("releaseClass") == "draft_rehearsal_only"
     )
+    generation_commit = manifest.get("candidateSourceCommitAtGeneration")
+    head_commit = repo_head(root)
+    source_tree_cache: Dict[str, Optional[Dict[str, Tuple[str, str]]]] = {}
+    source_blob_sha_cache: Dict[str, Optional[str]] = {}
+    ancestry_cache: Dict[Tuple[str, str], bool] = {}
+    source_pin_cache: Dict[Tuple[str, Optional[str], Optional[str], Optional[str], Optional[str]], Optional[str]] = {}
+
+    def tree_for(revision: str) -> Optional[Dict[str, Tuple[str, str]]]:
+        if revision not in source_tree_cache:
+            tree, error = git_tree_entries(root, revision)
+            source_tree_cache[revision] = None if error else tree
+        return source_tree_cache[revision]
+
+    def blob_sha(tree: Dict[str, Tuple[str, str]], relative: str) -> Optional[str]:
+        entry = tree.get(relative)
+        if entry is None or entry[0] not in {"100644", "100755"}:
+            return None
+        object_id = entry[1]
+        if object_id not in source_blob_sha_cache:
+            contents = git_bytes(root, "cat-file", "blob", object_id)
+            source_blob_sha_cache[object_id] = sha256_bytes(contents) if contents is not None else None
+        return source_blob_sha_cache[object_id]
+
+    def is_ancestor(ancestor: str, descendant: str) -> bool:
+        key = (ancestor, descendant)
+        if key not in ancestry_cache:
+            try:
+                checked = subprocess.run(
+                    ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant],
+                    check=False,
+                    capture_output=True,
+                    timeout=15,
+                )
+                ancestry_cache[key] = checked.returncode == 0
+            except (OSError, subprocess.TimeoutExpired):
+                ancestry_cache[key] = False
+        return ancestry_cache[key]
+
+    def recorded_source_pin_error(relative: str, expected_sha: Any, expected_commit: Any) -> Optional[str]:
+        cache_key = (relative, expected_sha if isinstance(expected_sha, str) else None,
+                     expected_commit if isinstance(expected_commit, str) else None,
+                     generation_commit if isinstance(generation_commit, str) else None, head_commit)
+        if cache_key in source_pin_cache:
+            return source_pin_cache[cache_key]
+        if not isinstance(expected_sha, str) or not SHA256.fullmatch(expected_sha):
+            error = "exact source checksum is missing or malformed"
+        elif not isinstance(expected_commit, str) or not HEX40.fullmatch(expected_commit):
+            error = "recorded source commit is missing or malformed"
+        elif not isinstance(generation_commit, str) or not HEX40.fullmatch(generation_commit):
+            error = "recorded generation snapshot is missing or malformed"
+        elif not isinstance(head_commit, str) or not HEX40.fullmatch(head_commit):
+            error = "current delivery commit is missing or malformed"
+        elif git(root, "rev-parse", f"{expected_commit}^{{commit}}") != expected_commit:
+            error = "recorded source revision does not identify an existing commit"
+        elif not is_ancestor(expected_commit, generation_commit):
+            error = "recorded source commit is not an ancestor of the generation snapshot"
+        elif not is_ancestor(generation_commit, head_commit):
+            error = "generation snapshot is not an ancestor of the current delivery commit"
+        else:
+            try:
+                safe_path(root, relative)
+            except ValueError as exc:
+                error = str(exc)
+            else:
+                try:
+                    current_path = safe_path(root, relative)
+                except ValueError as exc:
+                    error = str(exc)
+                else:
+                    current_sha = sha256_file(current_path) if current_path.is_file() else None
+                    worktree_status = git(root, "status", "--porcelain", "--", relative)
+                    if current_sha != expected_sha:
+                        error = "current source bytes differ from the recorded checksum"
+                    elif git(root, "ls-files", "--error-unmatch", "--", relative) is None:
+                        error = "current source path is not tracked"
+                    elif worktree_status != "":
+                        error = "current source path is modified or staged"
+                    else:
+                        expected_tree = tree_for(expected_commit)
+                        generation_tree = tree_for(generation_commit)
+                        head_tree = tree_for(head_commit)
+                        if expected_tree is None or generation_tree is None or head_tree is None:
+                            error = "source commit, generation, or delivery tree is unavailable"
+                        elif any(relative not in tree for tree in (expected_tree, generation_tree, head_tree)):
+                            error = "recorded path is absent from the source, generation, or delivery commit"
+                        elif any(blob_sha(tree, relative) != expected_sha for tree in (expected_tree, generation_tree, head_tree)):
+                            error = "recorded path does not contain the exact checksum-bound regular-file bytes"
+                        else:
+                            error = None
+        source_pin_cache[cache_key] = error
+        return error
+
     if requires_copy_provenance:
         try:
             release_context = _load_context(root, DEFAULT_VERSION)
@@ -2129,9 +2266,9 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
         current_sha = sha256_file(path)
         if current_sha != expected_sha:
             errors.append(f"{label} {relative}: source SHA-256 differs from manifest")
-        commit = committed_source(root, relative, current_sha)
-        if commit.get("status") != "pinned" or commit.get("commitId") != expected_commit:
-            errors.append(f"{label} {relative}: source commit is missing, stale, or does not contain the exact bytes")
+        pin_error = recorded_source_pin_error(relative, expected_sha, expected_commit)
+        if pin_error:
+            errors.append(f"{label} {relative}: {pin_error}")
 
     def verify_bound_input(support: Dict[str, Any], label: str) -> None:
         relative = support.get("path")
@@ -2253,9 +2390,9 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
             if not path.is_file() or sha256_file(path) != record.get("sha256"):
                 errors.append(f"{relative}: caption sidecar changed or is missing")
             else:
-                commit = committed_source(root, relative, sha256_file(path))
-                if commit.get("status") != "pinned" or commit.get("commitId") != record.get("sourceCommitId"):
-                    errors.append(f"{relative}: caption source commit is missing, stale, or does not contain the exact bytes")
+                pin_error = recorded_source_pin_error(relative, record.get("sha256"), record.get("sourceCommitId"))
+                if pin_error:
+                    errors.append(f"{relative}: {pin_error}")
             package = record.get("packageCopy", {})
             if package.get("path"):
                 try:
@@ -2755,7 +2892,12 @@ def recompute_manifest_readiness(root: Path, manifest: Dict[str, Any]) -> Tuple[
     if not isinstance(version, str) or not version:
         return {}, ["manifest packageVersion is missing; current readiness cannot be recomputed"]
     try:
-        current = build_manifest(root, version=version, materialized=False)
+        current = build_manifest(
+            root,
+            version=version,
+            materialized=False,
+            source_snapshot_commit=manifest.get("candidateSourceCommitAtGeneration"),
+        )
     except Exception as exc:
         return {}, [f"current readiness recomputation failed closed: {exc}"]
     return current, (
