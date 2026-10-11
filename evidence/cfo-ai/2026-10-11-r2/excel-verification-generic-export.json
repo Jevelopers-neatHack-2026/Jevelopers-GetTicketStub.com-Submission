@@ -1,0 +1,462 @@
+{
+ "workbook": "cfo-native-export-generic.xlsx",
+ "workbook_sha256": "969941bac6f07d9678bb04238f0d5167baab9956f5e320bb33b77841be809416",
+ "engine": "Microsoft Excel for Mac 16.113.4",
+ "method": "AppleScript edit + calculate full + save copy; openpyxl read-back",
+ "full_recalculation": {
+  "cells_compared": 1841,
+  "differences": [],
+  "error_cells": []
+ },
+ "cases": {
+  "baseline": {
+   "edits": [],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 1302.8100000000002,
+    "03 TS Monthly operating profit bootstrap": 702.8100000000002,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 616.011,
+    "03 TS Six month funding bootstrap": 616.011,
+    "03 TS Ramp funding bootstrap": 2416.011,
+    "03 TS Break-even orders bootstrap": 93,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 1416.011,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": 702.8100000000002,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": 702.8100000000002,
+    "error_cells": []
+   }
+  },
+  "zero paid conversion": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B7",
+     "number",
+     0
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 0,
+    "03 TS AI cost per paid order": null,
+    "03 TS Digital contribution per order": null,
+    "03 TS Monthly contribution": -308.99,
+    "03 TS Monthly operating profit bootstrap": -908.99,
+    "03 TS Monthly burn bootstrap": 908.99,
+    "03 TS Launch reserve": 572.0976666666667,
+    "03 TS Six month funding bootstrap": 6026.037666666667,
+    "03 TS Ramp funding bootstrap": 7826.037666666667,
+    "03 TS Break-even orders bootstrap": null,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 6826.037666666667,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": -908.99,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": -908.99,
+    "error_cells": []
+   }
+  },
+  "zero traffic": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B5",
+     "number",
+     0
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 0,
+    "03 TS AI cost per paid order": null,
+    "03 TS Digital contribution per order": null,
+    "03 TS Monthly contribution": 0,
+    "03 TS Monthly operating profit bootstrap": -600,
+    "03 TS Monthly burn bootstrap": 600,
+    "03 TS Launch reserve": 500,
+    "03 TS Six month funding bootstrap": 4100,
+    "03 TS Ramp funding bootstrap": 5900,
+    "03 TS Break-even orders bootstrap": null,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 4900,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": -600,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": -600,
+    "error_cells": []
+   }
+  },
+  "paid conversion 1%": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B7",
+     "number",
+     0.01
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 100,
+    "03 TS AI cost per paid order": 3.0899,
+    "03 TS Digital contribution per order": 4.969100000000001,
+    "03 TS Monthly contribution": 496.9100000000001,
+    "03 TS Monthly operating profit bootstrap": -103.08999999999992,
+    "03 TS Monthly burn bootstrap": 103.08999999999992,
+    "03 TS Launch reserve": 594.0543333333334,
+    "03 TS Six month funding bootstrap": 1212.594333333333,
+    "03 TS Ramp funding bootstrap": 3012.594333333333,
+    "03 TS Break-even orders bootstrap": 121,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 2012.594333333333,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": -103.08999999999992,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": -103.08999999999992,
+    "error_cells": []
+   }
+  },
+  "traffic 20,000": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B5",
+     "number",
+     20000
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 400,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 2605.6200000000003,
+    "03 TS Monthly operating profit bootstrap": 2005.6200000000003,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 732.0219999999999,
+    "03 TS Six month funding bootstrap": 732.0219999999999,
+    "03 TS Ramp funding bootstrap": 2532.022,
+    "03 TS Break-even orders bootstrap": 93,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 1532.022,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": 2005.6200000000003,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": 2005.6200000000003,
+    "error_cells": []
+   }
+  },
+  "start rate 20%": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B6",
+     "number",
+     0.2
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 3.0899,
+    "03 TS Digital contribution per order": 4.969100000000001,
+    "03 TS Monthly contribution": 993.8200000000002,
+    "03 TS Monthly operating profit bootstrap": 393.82000000000016,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 688.1086666666666,
+    "03 TS Six month funding bootstrap": 688.1086666666666,
+    "03 TS Ramp funding bootstrap": 2488.1086666666665,
+    "03 TS Break-even orders bootstrap": 121,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 1488.1086666666665,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": 393.82000000000016,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -462.6873999999999,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 4481.737500000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": 393.82000000000016,
+    "error_cells": []
+   }
+  },
+  "chats 8": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B10",
+     "number",
+     8
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.7357500000000001,
+    "03 TS Digital contribution per order": 6.323250000000001,
+    "03 TS Monthly contribution": 1264.65,
+    "03 TS Monthly operating profit bootstrap": 664.6500000000001,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 624.915,
+    "03 TS Six month funding bootstrap": 624.915,
+    "03 TS Ramp funding bootstrap": 2424.915,
+    "03 TS Break-even orders bootstrap": 95,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 1424.915,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": 664.6500000000001,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 400,
+    "07 Dec-2026 bootstrap cash": -800,
+    "05 baseline sensitivity profit": 664.6500000000001,
+    "error_cells": []
+   }
+  },
+  "marketing 600": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B32",
+     "number",
+     600
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 1302.8100000000002,
+    "03 TS Monthly operating profit bootstrap": 402.8100000000002,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 616.011,
+    "03 TS Six month funding bootstrap": 616.011,
+    "03 TS Ramp funding bootstrap": 3316.011,
+    "03 TS Break-even orders bootstrap": 139,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 2316.011,
+    "03 TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Hypothetical opening cash": 1000,
+    "04 Base TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Base TS Monthly operating profit bootstrap": 402.8100000000002,
+    "04 Conservative TS Hypothetical opening cash": 1000,
+    "04 Conservative TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 1000,
+    "04 Growth TS Launch status": "Opening cash covers reserve only; ramp unfunded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 100,
+    "07 Dec-2026 bootstrap cash": -1700,
+    "05 baseline sensitivity profit": 402.8100000000002,
+    "error_cells": []
+   }
+  },
+  "opening cash 10,000 (ramp covered)": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B34",
+     "number",
+     10000
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 1302.8100000000002,
+    "03 TS Monthly operating profit bootstrap": 702.8100000000002,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 616.011,
+    "03 TS Six month funding bootstrap": 616.011,
+    "03 TS Ramp funding bootstrap": 2416.011,
+    "03 TS Break-even orders bootstrap": 93,
+    "03 TS Launch funding gap": 0,
+    "03 TS Ramp funding gap bootstrap": 0,
+    "03 TS Launch status": "Reserve funded; ramp funded",
+    "04 Base TS Hypothetical opening cash": 10000,
+    "04 Base TS Launch status": "Reserve funded; ramp funded",
+    "04 Base TS Monthly operating profit bootstrap": 702.8100000000002,
+    "04 Conservative TS Hypothetical opening cash": 10000,
+    "04 Conservative TS Launch status": "Reserve funded; ramp funded",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 10000,
+    "04 Growth TS Launch status": "Reserve funded; ramp funded",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": 9400,
+    "07 Dec-2026 bootstrap cash": 8200,
+    "05 baseline sensitivity profit": 702.8100000000002,
+    "error_cells": []
+   }
+  },
+  "opening cash explicit 0": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B34",
+     "number",
+     0
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 1302.8100000000002,
+    "03 TS Monthly operating profit bootstrap": 702.8100000000002,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 616.011,
+    "03 TS Six month funding bootstrap": 616.011,
+    "03 TS Ramp funding bootstrap": 2416.011,
+    "03 TS Break-even orders bootstrap": 93,
+    "03 TS Launch funding gap": 616.011,
+    "03 TS Ramp funding gap bootstrap": 2416.011,
+    "03 TS Launch status": "UNFUNDED LAUNCH",
+    "04 Base TS Hypothetical opening cash": 0,
+    "04 Base TS Launch status": "UNFUNDED LAUNCH",
+    "04 Base TS Monthly operating profit bootstrap": 702.8100000000002,
+    "04 Conservative TS Hypothetical opening cash": 0,
+    "04 Conservative TS Launch status": "UNFUNDED LAUNCH",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 0,
+    "04 Growth TS Launch status": "UNFUNDED LAUNCH",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": -600,
+    "07 Dec-2026 bootstrap cash": -1800,
+    "05 baseline sensitivity profit": 702.8100000000002,
+    "error_cells": []
+   }
+  },
+  "opening cash blank": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B34",
+     "clear",
+     null
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 1302.8100000000002,
+    "03 TS Monthly operating profit bootstrap": 702.8100000000002,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 616.011,
+    "03 TS Six month funding bootstrap": 616.011,
+    "03 TS Ramp funding bootstrap": 2416.011,
+    "03 TS Break-even orders bootstrap": 93,
+    "03 TS Launch funding gap": null,
+    "03 TS Ramp funding gap bootstrap": null,
+    "03 TS Launch status": "Opening cash unknown",
+    "04 Base TS Hypothetical opening cash": null,
+    "04 Base TS Launch status": "Opening cash unknown",
+    "04 Base TS Monthly operating profit bootstrap": 702.8100000000002,
+    "04 Conservative TS Hypothetical opening cash": 0,
+    "04 Conservative TS Launch status": "UNFUNDED LAUNCH",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": 0,
+    "04 Growth TS Launch status": "UNFUNDED LAUNCH",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": null,
+    "07 Dec-2026 bootstrap cash": null,
+    "05 baseline sensitivity profit": 702.8100000000002,
+    "error_cells": []
+   }
+  },
+  "opening cash empty string": {
+   "edits": [
+    [
+     "01 \u2014 Editable assumptions \u2014 USD",
+     "B34",
+     "formula",
+     "=\"\""
+    ]
+   ],
+   "outputs": {
+    "03 TS Digital orders": 200,
+    "03 TS AI cost per paid order": 1.54495,
+    "03 TS Digital contribution per order": 6.514050000000001,
+    "03 TS Monthly contribution": 1302.8100000000002,
+    "03 TS Monthly operating profit bootstrap": 702.8100000000002,
+    "03 TS Monthly burn bootstrap": 0,
+    "03 TS Launch reserve": 616.011,
+    "03 TS Six month funding bootstrap": 616.011,
+    "03 TS Ramp funding bootstrap": 2416.011,
+    "03 TS Break-even orders bootstrap": 93,
+    "03 TS Launch funding gap": null,
+    "03 TS Ramp funding gap bootstrap": null,
+    "03 TS Launch status": "Opening cash unknown",
+    "04 Base TS Hypothetical opening cash": null,
+    "04 Base TS Launch status": "Opening cash unknown",
+    "04 Base TS Monthly operating profit bootstrap": 702.8100000000002,
+    "04 Conservative TS Hypothetical opening cash": null,
+    "04 Conservative TS Launch status": "Opening cash unknown",
+    "04 Conservative TS Monthly operating profit bootstrap": -161.11739999999995,
+    "04 Growth TS Hypothetical opening cash": null,
+    "04 Growth TS Launch status": "Opening cash unknown",
+    "04 Growth TS Monthly operating profit bootstrap": 5070.368750000001,
+    "07 Oct-2026 bootstrap cash": null,
+    "07 Dec-2026 bootstrap cash": null,
+    "05 baseline sensitivity profit": 702.8100000000002,
+    "error_cells": []
+   }
+  }
+ }
+}

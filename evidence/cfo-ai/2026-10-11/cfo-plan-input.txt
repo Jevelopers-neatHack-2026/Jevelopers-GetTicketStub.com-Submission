@@ -1,0 +1,153 @@
+# TicketStub — Jevelopers / neatHack business plan
+
+Prepared 2026-10-11. Currency: USD. Planning model, not a record of actual sales. User authorized reasonable guesses for opening cash and founder pay; neither is measured. Use $1,000 hypothetical opening cash and $0 cash founder pay for the bootstrap illustration, with $0/$5,000 cash and $3,000 monthly founder-pay sensitivities. No private balance or personal financial information is included.
+
+## Product, customer and commercial strategy
+
+TicketStub turns an event link and personal memories into a researched, editable commemorative ticket design. The studio supports styles, artwork remix, fact review, personal details, sharing, a wall, matching sets, gifting and organizer flows. Target customers are concert, sports and theatre attendees who want a keepsake, and gift buyers. Event organizers are a later distribution channel; no signed partnerships, validated demand, market size or organizer revenue is claimed.
+
+The proposed launch is a $9 digital keepsake sold per design, not a subscription and not an admission ticket. Start with one event/fan community, demonstrate the editing journey, and test willingness to pay through organizer referrals and customer sharing. Track visits, studio starts, paid conversion, per-attempt usage, revisions, refunds and repeat purchases. Digital delivery itself still needs production acceptance. Compete on event-specific provenance and personalization against generic design tools, screenshots and commodity print shops; differentiation and demand remain hypotheses.
+
+Sandbox tiers in source are Digital $9, Card $29, Print $49, Framed $89. Physical carts add $6 estimated shipping; foil +$6 and holo +$9 are sandbox upsells, omitted from revenue forecasts because supplier support/cost is unknown. These are starting price hypotheses, not validated live prices. No organizer discount or subscription revenue is assumed.
+
+Current main is a demo prototype: external calls disabled by default; checkout, payments, shipping, refunds, wallet passes and sign-in are simulated/sandbox. Browser storage and payload share links are not production persistence. The separate PR #20 has proposed identity/persistence changes but is not treated as accepted main functionality. Payment provider implementation, live production controls and supplier SKU validation remain gates. Creative-engine has local injected interfaces and synthetic checks; fulfillment-connectors has no live Prodigi adapter, accepted SKU or supplier quote. Cost-intelligence's synthetic tariff is not a current vendor quote. No working CFO API sync is claimed or needed for this plan.
+
+## Evidence classes and rates
+
+Measured actual project costs/revenue: UNKNOWN; no invoices, production order receipts or reconciled usage totals were supplied. Prototype sandbox orders are not actual revenue. Forecasts start only after a hypothetical launch. Before launch, modeled sales are zero and operating cash still burns. Expected prizes are $0 cash in every scenario; promotional credits are separate noncash subsidies and never reduce sustainable unit cost. No credit balance or cash balance is inferred from account access.
+
+Current vendor rates checked 2026-10-11 UTC through unauthenticated official catalog endpoints:
+
+- OpenRouter text catalog: `anthropic/claude-sonnet-5.5` research and `openai/gpt-6.1-sol` chat each list $2 per million input and $10 per million output tokens. Cache rates are listed but no caching benefit is assumed. GPT long-context overrides are irrelevant to the assumed 3,000-token chat input. Research does not invoke paid search tools.
+- OpenRouter dedicated image endpoint for `openai/gpt-image-2`: text input $5/M tokens, image input $8/M tokens, image output $30/M tokens. These are token rates, not a flat image price. App requests one output with provider defaults, so quality/size and actual billed image tokens remain unknown. Budget 150 text-input + 4,000 image-output tokens per generation = $0.12075 (estimate). Image-input tokens are zero for current text-only generation; a true image edit would add billed input tokens. Each extra 4,000 image-input tokens adds $0.032 before the funding allowance.
+- Stripe US standard domestic-card benchmark: 2.9% + $0.30 per successful transaction. US entity/domestic cards are planning assumptions; processor, jurisdiction, taxes, cross-border/FX fees and dispute fees remain unconfirmed. This benchmark does not establish a Stripe integration.
+- OpenRouter FAQ initially omitted dynamic fee values in its text rendering. A later independent check of the official HTML verified card-funded credits at 5.5% with a $0.80 minimum. Retain a 6% inference-funding allowance as a conservative ESTIMATE, distinct from the published vendor fee; sensitivity 0–10%. The minimum fee can exceed this allowance on small top-ups (e.g. $0.80 on $10 = 8%). Credit deposits are prepaid cash, not inference expense a second time.
+
+Estimates, not vendor quotes: all traffic/conversion, tokens/request, generation/revision counts, fixed expenses, marketing, support, refund allowances, printing, shipping, packing, launch contingency, payout timing, opening cash and founder pay. Unknowns include actual usage, tax jurisdiction, legal/entity costs, insurance, paid event-data licenses, labor burden, supplier prices, SKU/specifications, commercial weather terms and all production bills. Do not silently set unknowns to measured zero.
+
+## AI cost and funnel formulas
+
+Research/start: one call, 4,000 input + 600 output = $0.014. Chat call: 3,000 input + 300 output = $0.009. Source route output caps are 600 research / 300 chat; assumed inputs are not measured. Image generation includes initial artwork and all subsequent regenerations. Conservative 4 = 1 initial + 3 revisions; Base 2 = 1 initial + 1 revision; Growth 1.5 = 1 initial + 0.5 expected revision. Chats/start 8 / 4 / 3 respectively. No automatic retry is implemented in the app; any future separately billed retry must count as another attempt.
+
+Visits/month 5,000 / 10,000 / 25,000. Studio-start rate 10% of visits in all cases. Paid conversion is 1% / 2% / 4% of visits, so 50 / 200 / 1,000 orders and 500 / 1,000 / 2,500 studio starts. These are post-launch hypotheses, not a traction claim. One design/order and one charge/order; basket effects excluded. Charge every studio start, including abandoned sessions, at its scenario's full average usage (a cautious simplifying assumption).
+
+AI/start = (0.014 + chats×0.009 + generations×0.12075)×1.06.
+AI/order = AI/start×studio-start-rate/paid-conversion.
+Orders = visits×paid-conversion. Monthly AI = visits×start-rate×AI/start.
+Digital contribution/order = $9 − ($9×2.9%+$0.30) − $9×2% refund allowance − $0.20 variable operations − AI/order.
+The $0.20 includes $0.15 support cash allowance, $0.03 storage/egress/delivery and $0.02 email; human founder time is not included here. Original payment fees are retained in refund cases. The allowance reduces net contribution/cash, not the count of booked orders.
+Operating profit = orders×contribution/order − fixed overhead − marketing. These are simplified cash operating results before income tax, depreciation, founder pay and unpriced launch/legal costs, not GAAP statements.
+Base fixed-traffic break-even conversion is approximately 1.128% of 10,000 visits, holding 1,000 charged studio starts and $600 overhead/marketing constant. This differs from scaling traffic at constant conversion.
+
+Break-even orders = ceiling((fixed+marketing)/contribution/order), holding conversion, usage, channel mix and costs constant. Fixed-traffic conversion sensitivity must instead charge the same studio spend across fewer/more purchases. Neither break-even formula guarantees attainable demand.
+
+Monthly fixed overhead estimates by Conservative / Base / Growth:
+
+| Category | Conservative | Base | Growth |
+| --- | ---: | ---: | ---: |
+| Hosting/compute | 40 | 80 | 250 |
+| Database, backup, storage base | 15 | 30 | 100 |
+| Transactional email base | 10 | 20 | 50 |
+| Monitoring, traces, security tools | 20 | 50 | 150 |
+| Domain/admin/accounting | 15 | 20 | 50 |
+| Data/API licensing contingency | 20 | 40 | 150 |
+| Development AI/tooling allowance | 30 | 60 | 150 |
+| Total fixed | 150 | 300 | 900 |
+| Marketing (separate) | 100 | 300 | 1,500 |
+
+These are all-in budget buckets, not verified host or email vendor prices. Variable delivery and email cover usage above base provisions; reconcile against invoices to avoid double counting. CFO.ai is used under existing canceled trial access ending 2026-10-25 per user; no renewal is authorized or assumed. Any future CFO subscription would need explicit approval and incremental budget.
+
+## Physical economics and launch gates
+
+Exclude all physical revenue from all three forecasts. Conditional single-item matte order: add $6 customer shipping to item price; supplier printing Card/Print/Framed $5/$12/$35, actual shipping $6/$8/$12, packing $1/$2/$3 (all estimates). Deduct payment fees on total receipt, 5% total-receipt refund/reprint allowance, $0.50 variable support/delivery and Base AI/order. Shipping charged and shipping paid appear separately. A 25% increase in printing+shipping+packing reduces contribution by $3/$5.50/$12.50 respectively. Supplier tax, duties and remote destinations can add more.
+
+Validate SKU, finish, dimensions, print asset quality, destination, shipping method, quotes, lead times, tax, defects/refunds, sandbox order/reconciliation and production authorization before taking real physical payment. Foil/holo support is not assumed. For a hypothetical 100 Card orders/month, supplier print+shipping+packing is $1,200; a 14-day prepayment/payout timing gap requires $560 working capital, plus a $175 (5% receipts) reprint/refund reserve. This $735 physical cash buffer is separate from the digital model and is not proof of supplier terms.
+
+## Cash, runway and risks
+
+Opening cash: unknown; use hypothetical $1,000 for bootstrap review, alternatives $0/$5,000. Founder pay: $0 cash bootstrap assumption, plus $3,000/month sensitivity (payroll burden unknown). $0 salary does not mean free labor or a viable full-time income. With Base 200 orders, $702.81 monthly surplus before founder pay becomes a $2,297.19 deficit after $3,000 pay.
+
+Launch reserve = $500 one-off contingency + 7/30 of monthly variable costs (estimated seven-day payout float). Runway = max(0, opening cash − reserve)/monthly burn for a cash-burning scenario. When steady state is cash-positive, report that fact without claiming infinite runway: reserve, ramp-up, taxes and adverse events still require cash. Six-month cash need = reserve + six months of positive burn, with/without founder pay. Prelaunch Base fixed+marketing burn is $600/month, or $3,600 including founder pay; each prelaunch month adds this amount to funding needs. No prizes or credits fund this reserve. Upfront inference deposits may require extra float beyond consumed costs, depending on purchase size.
+
+A 3-month Base prelaunch plus 6-month Base postlaunch at $3,000 founder pay requires approximately $25,199.15 (3×$3,600 + $616.01 launch/float reserve + 6×$2,297.19), before taxes and unknown legal costs. Bootstrap Base needs $2,416.01 for 3 prelaunch months plus its launch reserve, even though steady-state postlaunch contribution is positive.
+
+Key risks: conversion below assumptions; free-user abuse; more image revisions; image default token costs; seasonality; rights/licensing and event fact errors; refund/dispute losses; unpaid labor; unvalidated fulfillment quality; missing production identity, payments, persistence and recovery controls. Use free procedural previews, paid generation gates or bounded quotas, usage receipts and per-project budgets as proposed mitigations (not all implemented). Do not claim free tiers support commercial production. Recheck rates, sampled bills, physical quotes and pricing before launch.
+
+Validation sequence: review this price/cost hypothesis; measure a small authorized design cohort including abandoned attempts; test willingness to pay and conversion; qualify digital production delivery/payment controls; independently validate supplier/SKU and quote each destination before physical sales. No paid experiments or changes in service billing are authorized by this plan.
+
+## Sources and implementation pins
+
+All observed 2026-10-11 unless otherwise stated. URLs are references, not authority to connect accounts.
+
+- Official requirement: https://neatlogs.com/hackathon — use CFO.ai to plan pricing, costs, revenue and runway; include business plan and supporting repository evidence; demo must cover CFO.ai.
+- Tracker: https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27 — account access only; plan incomplete at task start. PR #20: https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20 (implementation not accepted as main).
+- Main product at `660cc5e0c92e0e338fe6d75db445c737c8fdfc10`: https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/README.md ; `src/customer/studio/types.ts`, `src/customer/pages/commerce.ts`, `src/server/ai/providers.ts`, `src/app/api/research/route.ts`, `src/app/api/agent/route.ts` at the same SHA establish sandbox prices, shipping and output caps. Older nested studio README is superseded by root runtime-mode guidance.
+- Finance `d5a51894e8987cef078583ef63692f38eb265593`: https://github.com/Jevelopers-neatHack-2026/cost-intelligence/blob/d5a51894e8987cef078583ef63692f38eb265593/README.md ; docs/api/pricing-source-evidence-2026-10-11.md keeps synthetic rates separate.
+- Fulfillment `a710358e93370681eadd2615e1dd4fdc0cd6cc12`: https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/blob/a710358e93370681eadd2615e1dd4fdc0cd6cc12/docs/provider-matrix.md (supplier docs originally checked 2026-10-10).
+- Creative `5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74`: https://github.com/Jevelopers-neatHack-2026/creative-engine/blob/5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74/README.md
+- Harness `c3a4960ee40b9bba46a0072255c2122a3bd75b55`: inspected repository revision; no runtime or financial measurement claimed.
+- Integration evidence baseline `ff1f6d2df816ebbff34742f51be728fcb5c28cb5`: https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/ff1f6d2df816ebbff34742f51be728fcb5c28cb5/planning/acceptance-checklist.md — SPN-03 requires actual CFO.ai business plan, generic export insufficient.
+- Public text rates: https://openrouter.ai/api/v1/models
+- Public image metadata: https://openrouter.ai/api/v1/images/models
+- Public image rates: https://openrouter.ai/api/v1/images/models/openai/gpt-image-2/endpoints
+- Credit fees: https://openrouter.ai/docs/faq (5.5%, $0.80 minimum independently verified from official HTML; see vendor-credit-fee.json).
+- US card fee benchmark: https://stripe.com/us/pricing
+- Supplier quote mechanism (no selected quote): https://www.prodigi.com/print-api/docs/reference/
+
+Reproduce all scenario, physical and runway results with `python3 model.py`; see calculated-tables.md and monthly-scenarios.csv. Keep source rate snapshots and hashes with this evidence. Actual CFO.ai saved content must be separately verified; this local input alone does not complete SPN-03.
+
+
+# Recomputed planning tables
+
+All amounts USD; all sales hypothetical.
+
+
+| Scenario | Orders/mo | Revenue | AI/order including abandonment | Contribution/order | Operating profit | Profit with $3k founder pay | Break-even orders | Break-even incl founder |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Conservative | 50.00 | 450.00 | 6.03 | 2.03 | -148.62 | -3,148.62 | 124 | 1603 |
+| Base | 200.00 | 1,800.00 | 1.54 | 6.51 | 702.81 | -2,297.19 | 93 | 553 |
+| Growth | 1,000.00 | 9,000.00 | 0.59 | 7.47 | 5,070.37 | 2,070.37 | 322 | 723 |
+
+
+## One-factor digital sensitivities vs Base
+
+
+| Change | Orders | AI/order | Profit |
+| --- | --- | --- | --- |
+| Conversion 1% | 100.00 | 3.09 | -103.09 |
+| Conversion 3% | 300.00 | 1.03 | 1,508.71 |
+| Half traffic | 100.00 | 1.54 | 51.41 |
+| Double traffic | 400.00 | 1.54 | 2,005.62 |
+| 4 images/start | 200.00 | 2.82 | 446.82 |
+| 8 chats/start | 200.00 | 1.74 | 664.65 |
+| 20% start rate | 200.00 | 3.09 | 393.82 |
+| Funding allowance 0% | 200.00 | 1.46 | 720.30 |
+| Funding allowance 10% | 200.00 | 1.60 | 691.15 |
+| Image output 2k tokens | 200.00 | 0.91 | 830.01 |
+| Image output 8k tokens | 200.00 | 2.82 | 448.41 |
+
+
+## Conditional physical economics (not included in revenue forecast)
+
+
+| Tier | Item price | Receipt incl $6 shipping | Print | Actual shipping estimate | Packing | Contribution | Margin % | Contribution at +25% fulfillment |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Card | 29 | 35 | 5 | 6 | 1 | 17.89 | 51.11 | 14.89 |
+| Print | 49 | 55 | 12 | 8 | 2 | 26.31 | 47.84 | 20.81 |
+| Framed | 89 | 95 | 35 | 12 | 3 | 35.15 | 37.00 | 22.65 |
+
+
+## Runway after launch reserve (months)
+
+
+| Scenario | Hypothetical opening cash | Launch + 7-day variable-cost reserve | Launch reserve funded | Runway no founder pay | Runway with founder pay | 6mo cash need no pay | 6mo need with pay |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Conservative | 0 | 581.34 | No - unfunded launch | 0.00 | 0.00 | 1,473.06 | 19,473.06 |
+| Conservative | 1000 | 581.34 | Yes | 2.82 | 0.13 | 1,473.06 | 19,473.06 |
+| Conservative | 5000 | 581.34 | Yes | 29.73 | 1.40 | 1,473.06 | 19,473.06 |
+| Base | 0 | 616.01 | No - unfunded launch | Cash-positive at steady state; reserve still required | 0.00 | 616.01 | 14,399.15 |
+| Base | 1000 | 616.01 | Yes | Cash-positive at steady state; reserve still required | 0.17 | 616.01 | 14,399.15 |
+| Base | 5000 | 616.01 | Yes | Cash-positive at steady state; reserve still required | 1.91 | 616.01 | 14,399.15 |
+| Growth | 0 | 856.91 | No - unfunded launch | Cash-positive at steady state; reserve still required | Cash-positive at steady state; reserve still required | 856.91 | 856.91 |
+| Growth | 1000 | 856.91 | Yes | Cash-positive at steady state; reserve still required | Cash-positive at steady state; reserve still required | 856.91 | 856.91 |
+| Growth | 5000 | 856.91 | Yes | Cash-positive at steady state; reserve still required | Cash-positive at steady state; reserve still required | 856.91 | 856.91 |
