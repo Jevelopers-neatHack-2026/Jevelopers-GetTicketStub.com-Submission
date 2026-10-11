@@ -112,6 +112,16 @@ The app keeps accounts, walls, orders and shares in one SQLite file, and art in 
 - **Writable, no volume.** Leave them unset and the defaults under `./data` work, but the data resets on each deploy. The startup line and `/api/health` (`"persistence": "default-path"`) say so. It is fine for a preview and wrong for anything people rely on.
 - **Not writable.** The server runs device-only. `/api/health` reports `"storage": "unavailable"`, every route that needs storage answers 503 `storage_unavailable` ("Saving is off on this preview."), art falls back to procedural with no OpenAI call, and the app hides sign-in and shows "Saving off · this device only". Stubs, shares (as encoded links) and sandbox orders keep working on the device. `npm run verify:product -- --suite degraded --mode fixture --evidence-dir out/evidence` proves this against a build.
 
+### Backup and restore
+
+The database runs in WAL mode, so committed rows can sit in `ticketstub.sqlite-wal` for a long time. Copying `ticketstub.sqlite` on its own, or the three files one after another, is not a backup. Use the app instead:
+
+1. Sign in as staff (an `ADMIN_EMAILS` address) and, from a page on the same site, run `fetch("/api/admin/backup", { method: "POST" }).then((r) => r.json())`. The server takes a consistent snapshot with `VACUUM INTO` on a second connection (no downtime, the app keeps writing), then copies the art and re-hashes every file. Output goes to `backups/<id>/` next to the database (`/private/backups/<id>/` on Plus Launch): `ticketstub.sqlite`, `files/` and `manifest.json`. The response is the manifest: row counts per table and file hashes, never row contents. `ok` is false if the integrity check failed or the snapshot references art that isn't on disk. `GET /api/admin/backup` lists finished backups. Anyone who isn't staff gets a 404.
+2. Download the backup folder's files from the host's File Manager (Private Storage). GoDaddy limits each download to under 25 MB; the manifest's `downloadable` says whether every file fits. Keep downloads off GitHub and out of shared folders: they hold customer data.
+3. Restore into a new, empty folder, never over a live one: `node scripts/restore-backup.mjs <backup folder> <new folder>`. It checks every hash against the manifest, runs `integrity_check`, compares row counts and prints the command to start an isolated demo-mode server on the copy with no mail or provider keys.
+
+Nothing deletes backups. Prune `/private/backups` by hand, and only after the newest one has been restored and checked.
+
 ### Verifying it (`verify:product`)
 
 ```
