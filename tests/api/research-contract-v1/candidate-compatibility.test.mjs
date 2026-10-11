@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { candidateRoot, artifactPath, assertExecutionComplete, assertPinnedBytes, readPinnedSource, runCandidateCompatibility, verifySchemaClosure } from './run-candidate-compatibility.mjs';
-import { evaluateFixture } from './candidate-harness.mjs';
+import { evaluateFixture, fixturePayload } from './candidate-harness.mjs';
+import { researchContentHash } from '../../contracts/research-contract-v1/candidate-upstream/tooling/research-creative.mjs';
 
 test('the pinned EI candidate runs every required offline fixture without skipped rows', async () => {
   const actual = await runCandidateCompatibility();
@@ -75,4 +78,37 @@ test('synthetic unknown, timeout, cancellation, abstain and unavailable outcomes
     assert.equal(row.matched, true);
   }
   assert.ok(actual.selected_candidate.accepted_schema_versions.length === 0);
+});
+
+test('parent reference mutations detect a removed pinned record-reference comparison', async () => {
+  const helperPath = path.join(candidateRoot, 'tooling/research-creative.mjs');
+  const helperSource = await readFile(helperPath, 'utf8');
+  const comparison = ' || !recordReference(v.parent_ref, old.value, { id: old.value.package_id, revision: old.value.package_version, content_hash: old.value.package_hash })';
+  assert.equal(helperSource.split(comparison).length - 1, 1, 'pinned parent comparison anchor must occur exactly once');
+
+  const mutantPath = path.join(candidateRoot, 'tooling', `research-creative-mutant-${process.pid}-${randomUUID()}.mjs`);
+  await writeFile(mutantPath, helperSource.replace(comparison, ''), 'utf8');
+  try {
+    const mutatedHelper = await import(pathToFileURL(mutantPath).href);
+    const manifest = JSON.parse(await readFile(path.join(candidateRoot, 'fixtures/EventIntelligencePackage.json'), 'utf8'));
+    const fixture = manifest.cases.find(row => row.id === 'parent-linked-new-version');
+    assert.ok(fixture, 'required pinned parent fixture must exist');
+
+    for (const mutation of ['stale-digest', 'wrong-revision']) {
+      const payload = fixturePayload(manifest, fixture);
+      const context = structuredClone(fixture.context);
+      const ref = payload.parent_ref;
+      if (mutation === 'stale-digest') ref.content_hash = `sha256:${'f'.repeat(64)}`;
+      else ref.revision += 1;
+      context.references.parent_ref = structuredClone(ref);
+      payload.package_hash = researchContentHash(payload, 'package_hash');
+
+      const correct = evaluateFixture('EventIntelligencePackage', manifest, fixture, { payload: structuredClone(payload), context: structuredClone(context) });
+      assert.ok(!correct.ok && correct.errors.some(error => error.code === 'STALE_REVISION' && error.path === '/parent_ref'), `${mutation} must reach the parent binding check`);
+      const withoutParentBinding = mutatedHelper.checkResearchCreative('EventIntelligencePackage', payload, context);
+      assert.equal(withoutParentBinding.ok, true, `${mutation} must expose removal of the parent recordReference comparison`);
+    }
+  } finally {
+    await rm(mutantPath, { force: true });
+  }
 });

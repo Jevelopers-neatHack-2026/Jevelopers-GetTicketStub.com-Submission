@@ -7322,19 +7322,19 @@
       "id": "EventIntelligencePackage/parent_ref/stale-digest",
       "expected": {
         "ok": false,
-        "code": "REFERENCE_MISMATCH",
-        "path": "/package_hash"
+        "code": "STALE_REVISION",
+        "path": "/parent_ref"
       },
       "actual": {
         "ok": false,
         "errors": [
           {
-            "code": "REFERENCE_MISMATCH",
-            "path": "/package_hash"
+            "code": "STALE_REVISION",
+            "path": "/parent_ref"
           }
         ]
       },
-      "input_sha256": "sha256:9081c25acd6da489d98bbbbbd999f78bb14277d0872571df1cac522592511f07",
+      "input_sha256": "sha256:d82fd7658242197e5fe278b0647ea11953996b78c30cf971521f84375250f22e",
       "matched": true
     },
     {
@@ -7354,7 +7354,7 @@
           }
         ]
       },
-      "input_sha256": "sha256:ae35157697ba2092194a51f3a82795a0eb801e38a52a8af879e9737a0cbaf046",
+      "input_sha256": "sha256:df431e7a79e67eb9ed7a758e2d3cdfc7934f5ef3e429ac25385b7a47778f5476",
       "matched": true
     },
     {
@@ -7385,7 +7385,7 @@
           }
         ]
       },
-      "input_sha256": "sha256:185b07ea22105503e9f225fe2d0931ff09b123cda6eacc5d486893023e28440b",
+      "input_sha256": "sha256:50e90e1812535a8afb18d0cfdf48fc66eacf8875405bddc910e8bc10803c9a02",
       "matched": true
     },
     {
@@ -7393,19 +7393,19 @@
       "id": "EventIntelligencePackage/parent_ref/wrong-revision",
       "expected": {
         "ok": false,
-        "code": "REFERENCE_MISMATCH",
-        "path": "/package_hash"
+        "code": "STALE_REVISION",
+        "path": "/parent_ref"
       },
       "actual": {
         "ok": false,
         "errors": [
           {
-            "code": "REFERENCE_MISMATCH",
-            "path": "/package_hash"
+            "code": "STALE_REVISION",
+            "path": "/parent_ref"
           }
         ]
       },
-      "input_sha256": "sha256:392707608450bb834080e1acb60fed7a6f534c036848ee5255d3e1b0b605cff3",
+      "input_sha256": "sha256:005b7e96151c2a843e0006298163822119906f5ff2ed723f76a76d0a765c7d5d",
       "matched": true
     },
     {

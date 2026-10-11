@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as candidateValidators from '../../contracts/research-contract-v1/candidate-upstream/generated/validators.mjs';
+import { researchContentHash } from '../../contracts/research-contract-v1/candidate-upstream/tooling/research-creative.mjs';
 import {
   assertFixture,
   canonicalFixtureDigest,
@@ -199,7 +200,7 @@ async function verifyTransitiveInputs(pins, rowsByPath) {
 async function runResearchReferenceSupplement() {
   const bindings = [
     { contract: 'ResearchAnswerReceipt', fixture: 'semantic-positive', field: 'package_ref', expected: { 'stale-digest': ['INVALID_RECEIPT', '/package_ref'], 'wrong-contract': ['INVALID_RECEIPT', '/package_ref'], 'wrong-version': ['INVALID_PAYLOAD', '/package_ref/schema_version'], 'wrong-revision': ['INVALID_RECEIPT', '/package_ref'] } },
-    { contract: 'EventIntelligencePackage', fixture: 'parent-linked-new-version', field: 'parent_ref', expected: { 'stale-digest': ['REFERENCE_MISMATCH', '/package_hash'], 'wrong-contract': ['REFERENCE_MISMATCH', '/parent_ref'], 'wrong-version': ['INVALID_PAYLOAD', '/parent_ref/schema_version'], 'wrong-revision': ['REFERENCE_MISMATCH', '/package_hash'] } },
+    { contract: 'EventIntelligencePackage', fixture: 'parent-linked-new-version', field: 'parent_ref', expected: { 'stale-digest': ['STALE_REVISION', '/parent_ref'], 'wrong-contract': ['REFERENCE_MISMATCH', '/parent_ref'], 'wrong-version': ['INVALID_PAYLOAD', '/parent_ref/schema_version'], 'wrong-revision': ['STALE_REVISION', '/parent_ref'] } },
     { contract: 'ResearchCorrectionRequest', fixture: 'semantic-positive', field: 'expected_package_ref', expected: { 'stale-digest': ['STALE_REVISION', '/expected_package_ref'], 'wrong-contract': ['REFERENCE_MISMATCH', '/expected_package_ref'], 'wrong-version': ['INVALID_PAYLOAD', '/expected_package_ref/schema_version'], 'wrong-revision': ['STALE_REVISION', '/expected_package_ref'] } },
     { contract: 'ResearchCorrectionReceipt', fixture: 'externally-accepted-new-version', field: 'new_package_ref', expected: { 'stale-digest': ['INVALID_RECEIPT', '/new_package_ref'], 'wrong-contract': ['REFERENCE_MISMATCH', '/new_package_ref'], 'wrong-version': ['INVALID_PAYLOAD', '/new_package_ref/schema_version'], 'wrong-revision': ['INVALID_RECEIPT', '/new_package_ref'] } }
   ];
@@ -231,6 +232,9 @@ async function runResearchReferenceSupplement() {
       if (mutation === 'wrong-revision') ref.revision += 1;
       context.references[binding.field] = structuredClone(ref);
       if (binding.field === 'expected_package_ref') context.correction_authority.expected_package_ref = structuredClone(ref);
+      if (binding.contract === 'EventIntelligencePackage' && binding.field === 'parent_ref') {
+        payload.package_hash = researchContentHash(payload, 'package_hash');
+      }
       const result = evaluateFixture(binding.contract, manifest, fixture, { payload, context });
       const [code, errorPath] = binding.expected[mutation];
       const expected = { ok: false, code, path: errorPath };
