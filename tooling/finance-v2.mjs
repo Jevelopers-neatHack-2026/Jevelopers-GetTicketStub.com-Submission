@@ -60,6 +60,7 @@ function boundary(contract, input, context) {
     if (!checked.ok || !partition(supplied, context).ok || (supplied.currency !== undefined && supplied.currency !== context.currency)) return fail('INVALID_TRUST_CONTEXT', '/' + key);
     const snapshot = supplied.contract === 'BudgetReservation' ? supplied : supplied.reservation;
     if (snapshot && (!partition(snapshot, context).ok || ['held', 'consumed', 'dispatch_cap', 'requested_capacity', 'retained_exposure', 'released_capacity', 'overrun'].some(field => snapshot[field] !== null && snapshot[field].currency !== context.currency))) return fail('INVALID_TRUST_CONTEXT', '/' + key);
+    if (snapshot && !terminalFinality(snapshot, context).ok) return fail('INVALID_TRUST_CONTEXT', '/' + key);
   }
   if (parsed.value.policy_version !== context.policy_version) return fail('POLICY_MISMATCH', '/policy_version');
   for (const [path, ref] of references(parsed.value)) {
@@ -105,6 +106,23 @@ function observation(value, context) {
       !validatePrimitive('UtcTime', observed.observed_at).ok || Date.parse(observed.observed_at) > Date.parse(context.now)) return fail('INVALID_TRUST_CONTEXT', '/consumption_observation');
   return ok(observed);
 }
+function terminalFinality(value, context) {
+  if (!closed(value)) return ok(value);
+  if (uncertain(value.execution_state)) return fail('UNCERTAIN_EXECUTION', '/lifecycle');
+  if (value.usage_completeness !== 'complete' && !(value.lifecycle !== 'consumed' && value.execution_state === 'not_dispatched' &&
+      zero(value.consumed) && resolved(context, value, value.resolution_ref))) return fail('UNKNOWN_USAGE', '/usage_completeness');
+  return ok(value);
+}
+function queryDisposition(snapshot) {
+  switch (snapshot.lifecycle) {
+    case 'held': return snapshot.settlement_intent === 'partial' ? 'partially_consumed' : snapshot.decision;
+    case 'consumed': return 'consumed';
+    case 'released': return 'released';
+    case 'expired': return 'expired';
+    case 'uncertain_in_flight': return 'held_for_reconciliation';
+    default: return null;
+  }
+}
 function facts(value, context, historical = false) {
   if (value.producer.module !== 'cost-intelligence' || !same(value.authority_ref, context.authority_ref)) return fail('SCOPE_MISMATCH', '/authority_ref');
   const initial = originalRequest(context); if (!initial.ok) return initial;
@@ -113,6 +131,7 @@ function facts(value, context, historical = false) {
   if (value.grant_request_ref.id !== request.request_id || value.grant_request_ref.content_hash !== hashManifest(request) || !same(value.requested_capacity, request.requested) ||
       value.expires_at !== request.expires_at || value.idempotency_key !== request.idempotency_key || value.grant_revision !== context.grant_revision || value.revision < value.grant_revision ||
       value.decision !== context.grant_decision) return fail('INVALID_TRUST_CONTEXT', '/grant_request_ref');
+  const finality = terminalFinality(value, context); if (!finality.ok) return finality;
   if (!granted(value)) {
     if ([value.held, value.consumed, value.overrun, value.dispatch_cap, value.retained_exposure, value.released_capacity].some(item => item !== null) || value.dispatch_acknowledgement_ref !== null ||
         value.settlement_intent !== 'none' || value.consumption_evidence_ref !== null || value.correction_ref !== null || value.exception_refs.length || value.settlement_ref !== null) return fail('INVALID_PAYLOAD', '/held');
@@ -148,7 +167,6 @@ function facts(value, context, historical = false) {
   if (value.settlement_intent === 'final' && (value.lifecycle !== 'consumed' || value.usage_completeness !== 'complete' || uncertain(value.execution_state) || value.settlement_ref === null)) return fail('UNCERTAIN_EXECUTION', '/settlement_intent');
   if (value.lifecycle === 'consumed' && value.settlement_intent !== 'final') return fail('INVALID_TRANSITION', '/lifecycle');
   if (value.settlement_intent === 'partial' && (closed(value) || value.settlement_ref !== null)) return fail('INVALID_TRANSITION', '/settlement_intent');
-  if (uncertain(value.execution_state) && closed(value)) return fail('UNCERTAIN_EXECUTION', '/lifecycle');
   if (value.execution_state === 'uncertain' && value.lifecycle !== 'uncertain_in_flight') return fail('UNCERTAIN_EXECUTION', '/lifecycle');
   return ok(value);
 }
@@ -221,7 +239,8 @@ function eligible(value, context) {
   if (!granted(old.value)) return fail('INVALID_TRANSITION', '/reservation_id');
   if (value.contract === 'ReleaseRequest' || value.settlement_intent === 'final') {
     if (uncertain(context.execution_state) || (uncertain(old.value.execution_state) && !resolved(context, old.value, value.resolution_ref))) return fail('UNCERTAIN_EXECUTION', value.contract === 'ReleaseRequest' ? '/reason' : '/settlement_intent');
-    if (context.usage_completeness !== 'complete' && !(value.contract === 'ReleaseRequest' && context.execution_state === 'not_dispatched')) return fail('UNKNOWN_USAGE', '/usage_ref');
+    if (context.usage_completeness !== 'complete' && !(value.contract === 'ReleaseRequest' && context.execution_state === 'not_dispatched' &&
+        resolved(context, old.value, value.resolution_ref))) return fail('UNKNOWN_USAGE', '/usage_ref');
   }
   if (value.contract === 'ReleaseRequest') {
     if (closed(old.value)) return fail('INVALID_TRANSITION', '/reason');
@@ -258,6 +277,14 @@ export function checkFinanceResult(input, context) {
   const failures = ['denied', 'unknown', 'unavailable'];
   if (['denied', 'unavailable'].includes(value.disposition) && value.error === null) return fail('INVALID_PAYLOAD', '/error');
   if (!failures.includes(value.disposition) && (value.reservation === null || value.error !== null)) return fail('INVALID_PAYLOAD', '/reservation');
+  if (value.contract === 'QueryResult' && value.reservation !== null) {
+    const scoped = partition(value.reservation, context); if (!scoped.ok) return scoped;
+    if (!object(context.current_reservation) || !same(value.reservation, context.current_reservation)) return fail('INVALID_TRUST_CONTEXT', '/current_reservation');
+    if (!failures.includes(value.disposition) && (value.reservation.execution_state !== context.execution_state ||
+        value.reservation.usage_completeness !== context.usage_completeness)) return fail('INVALID_TRUST_CONTEXT', '/execution_state');
+    const disposition = value.disposition === 'duplicate' ? context.previous_result?.disposition : value.disposition;
+    if (!failures.includes(disposition) && disposition !== 'duplicate' && disposition !== queryDisposition(value.reservation)) return fail('INVALID_RECEIPT', '/disposition');
+  }
   if (failures.includes(value.disposition)) {
     if (value.reservation !== null && (!context.prior || !same(value.reservation, context.prior))) return fail('INVALID_RECEIPT', '/reservation');
     return parsed;
@@ -280,8 +307,10 @@ export function checkFinanceResult(input, context) {
         value.reservation.settlement_intent !== old.value.settlement_intent || !same(value.reservation.exception_refs, old.value.exception_refs) ||
         !same(value.reservation.correction_ref, old.value.correction_ref)) return fail('INVALID_RECEIPT', '/reservation');
     const heldContext = { ...subcontext };
-    if (context.prior_observation === undefined) delete heldContext.consumption_observation;
-    else heldContext.consumption_observation = context.prior_observation;
+    if (command.contract !== 'QueryRequest') {
+      if (context.prior_observation === undefined) delete heldContext.consumption_observation;
+      else heldContext.consumption_observation = context.prior_observation;
+    }
     const checked = checkFinanceReservation(value.reservation, heldContext); return checked.ok ? parsed : checked;
   }
   const transition = eligible(command, context); if (!transition.ok) return transition;
@@ -307,6 +336,7 @@ export function checkFinanceResult(input, context) {
 export function checkFinanceDispatch(input, context) {
   const parsed = checkFinanceReservation(input, context); if (!parsed.ok) return parsed;
   const value = parsed.value;
+  if (value.decision === 'partially_granted') return fail('UNSUPPORTED_CASE', '/decision');
   if (!granted(value) || closed(value) || context.dispatch_state !== 'eligible' || value.execution_state !== 'not_dispatched' || value.settlement_intent !== 'none' || Date.parse(value.expires_at) <= Date.parse(context.now) ||
       !money(context.requested_dispatch, context.currency) || zero(context.requested_dispatch) || zero(value.dispatch_cap)) return fail('INVALID_TRANSITION', '/dispatch_cap');
   if (value.usage_completeness !== 'complete') return fail('UNKNOWN_USAGE', '/usage_completeness');

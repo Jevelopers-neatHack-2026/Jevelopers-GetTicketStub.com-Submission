@@ -40,6 +40,7 @@ export type FinanceContext = Omit<OperationContext, 'references'> & {
 export declare function checkFinanceReservation(value: unknown, context: FinanceContext): OperationResult<FinanceReservation>;
 export declare function checkFinanceCommand(value: unknown, context: FinanceContext): OperationResult<FinanceCommand>;
 export declare function checkFinanceResult(value: unknown, context: FinanceContext): OperationResult<FinanceResult>;
+/** Partial grants return UNSUPPORTED_CASE at /decision until a reviewed allowed-work/replan interface exists; a cap acknowledgement alone never authorizes work. */
 export declare function checkFinanceDispatch(value: unknown, context: FinanceContext): OperationResult<FinanceReservation>;
 export declare function checkFinanceOperation(contract: 'BudgetReservation', value: unknown, context: FinanceContext): OperationResult<FinanceReservation>;
 export declare function checkFinanceOperation(contract: FinanceCommand['contract'], value: unknown, context: FinanceContext): OperationResult<FinanceCommand>;

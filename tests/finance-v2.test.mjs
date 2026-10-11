@@ -70,15 +70,15 @@ test('partial consumption conserves 0.40 exposure while in-flight usage remains 
   assert.equal(current.value.reservation.released_capacity.amount, '0.000000');
   assert.equal(current.value.reservation.unreported_exposure, 'unknown');
 });
-test('partial grant permits dispatch only after exact scoped cap acknowledgement', () => {
+test('partial grant cap acknowledgement reports capacity without authorizing unsupported replan dispatch', () => {
   const pending = examples.scenarios.partialGrant;
   const pendingContext = { ...structuredClone(pending.context), references: Object.fromEntries(Object.entries(pending.context.references).filter(([key]) => key.startsWith('reservation/')).map(([key, value]) => [key.slice(12), value])), requested_dispatch: { amount: '0.000400', currency: 'USD', scale: 6 } };
-  assertFixture(checkFinanceDispatch(pending.value.reservation, pendingContext), { ok: false, code: 'INVALID_TRANSITION', path: '/dispatch_cap' });
+  assertFixture(checkFinanceDispatch(pending.value.reservation, pendingContext), { ok: false, code: 'UNSUPPORTED_CASE', path: '/decision' });
   const accepted = examples.scenarios.acknowledged;
   const context = { ...structuredClone(accepted.context), requested_dispatch: { amount: '0.000400', currency: 'USD', scale: 6 } };
-  assert.equal(checkFinanceDispatch(accepted.value, context).ok, true);
+  assertFixture(checkFinanceDispatch(accepted.value, context), { ok: false, code: 'UNSUPPORTED_CASE', path: '/decision' });
   context.requested_dispatch.amount = '0.000600';
-  assertFixture(checkFinanceDispatch(accepted.value, context), { ok: false, code: 'INVALID_MONEY', path: '/dispatch_cap' });
+  assertFixture(checkFinanceDispatch(accepted.value, context), { ok: false, code: 'UNSUPPORTED_CASE', path: '/decision' });
 });
 test('canonical parser distinguishes retained 1.0.0 decoding from v2-only execution', async () => {
   const old = await readJson('fixtures/BudgetReservation.json');

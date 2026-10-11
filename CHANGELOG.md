@@ -2,6 +2,8 @@
 
 ## 0.7.1 (unreleased)
 
+Finance delta candidate: FC-003 binds query outcomes to the independently supplied current reservation; FC-004 enforces terminal exposure/finality across reusable snapshots, context and result routes. Finished execution or lease expiry cannot erase incomplete usage. Evidence-linked undispatched zero-cost release and complete finality remain supported. GAP-002 returns UNSUPPORTED_CASE at /decision for partial dispatch until a reviewed allowed-work/replan interface exists; monetary partial grants and holds remain reportable. Existing wire/schema/fixture bytes and FC-001/002 controls are retained. The original REQUEST_CHANGES history, reporting GAP-001 and all consumer/adoption obligations remain pending; this candidate requires fresh full independent and finance-owner review.
+
 SC-CI-001 makes native consumer observation settle on deadline, connection failure, socket closure/error and child exit. Pending and subsequently queued commands fail explicitly; graceful disconnect fences the current event queue; failure cleanup kills and reaps the driver with a bounded cleanup wait. The 60-second observation deadline is unchanged. Source/archive bindings and canonical execution requirements remain enforced. Failure history and the local inspector permission block are retained in [the CI finding receipt](compatibility/ci-findings.json); exact-candidate Linux CI and independent review remain pending. No schema or fixture encoding, Finance behavior, accepted consumer pin or adoption status changes.
 
 ## 0.7.0 (unreleased)

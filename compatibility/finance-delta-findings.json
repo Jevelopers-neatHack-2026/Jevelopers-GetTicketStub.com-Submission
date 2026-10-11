@@ -11,22 +11,26 @@
     "counterexamples": 7
   },
   "verified_probe_sha256": "a21deaeed94f3ff005bb206fca0356bd4f7504412ef881cbe325edc12a262ef6",
-  "status": "queued_separate_bounded_finance_delta_repair",
+  "status": "candidate_repairs_pending_full_independent_and_finance_owner_review",
+  "repair_starting_checkpoint": "08217739a612f218a51a2828d6e2119062e65279",
   "findings": [
     {
       "id": "FC-003",
       "behavior": "QueryResult successful disposition can contradict current reservation lifecycle/consumption",
-      "status": "unresolved_delta"
+      "status": "locally_repaired_candidate_review_pending",
+      "candidate_behavior": "Every successful query disposition and duplicate binds the current snapshot and truthful lifecycle/settlement outcome; contradictory dispositions reject."
     },
     {
       "id": "FC-004",
       "behavior": "Reusable reservation/query routes permit terminal release without complete finality/exposure evidence",
-      "status": "unresolved_delta"
+      "status": "locally_repaired_candidate_review_pending",
+      "candidate_behavior": "Reusable terminal snapshots, contextual snapshots and nested/direct result routes enforce complete finality or independently fenced undispatched zero-cost release; finished execution alone is insufficient."
     },
     {
       "id": "GAP-002",
       "behavior": "Partial dispatch cap acknowledgement lacks versioned allowed-work/replan binding",
-      "status": "unresolved_delta"
+      "status": "unsafe_dispatch_locally_blocked_interface_still_unsupported_review_pending",
+      "candidate_behavior": "Partial dispatch returns UNSUPPORTED_CASE at /decision; partial monetary grant reporting and retained holds remain supported. A versioned allowed-work/replan interface has not been supplied or invented."
     }
   ],
   "locally_fixed_reviewed_v2": [
