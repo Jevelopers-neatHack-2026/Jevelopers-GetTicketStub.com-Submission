@@ -182,7 +182,10 @@ export function checkComposition(input, context) {
   if (input.template_ref.id !== template.value.template_id || input.template_ref.revision !== template.value.revision || input.template_ref.content_hash !== template.value.content_hash) return productionIssue('HASH_MISMATCH');
   if (input.facts_ref.contract !== 'EventIntelligencePackage' || !context.facts || context.facts.reference?.contract !== 'EventIntelligencePackage') return productionIssue('FACTS_UNSUPPORTED');
   const facts = checkProductionFacts(context.facts.package, context.scope);
-  if (!facts.ok || !equal(input.facts_ref, context.facts.reference) || input.facts_ref.id !== facts.value.package_id || input.facts_ref.revision !== facts.value.package_version || input.facts_ref.content_hash !== facts.value.package_hash) return productionIssue('FACTS_UNSUPPORTED');
+  if (!facts.ok) return productionIssue('FACTS_UNSUPPORTED');
+  try { canonicalJson(context.facts.reference); }
+  catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  if (!equal(input.facts_ref, context.facts.reference) || input.facts_ref.id !== facts.value.package_id || input.facts_ref.revision !== facts.value.package_version || input.facts_ref.content_hash !== facts.value.package_hash) return productionIssue('FACTS_UNSUPPORTED');
   if (context.expected_resolved_layout_commitment !== input.resolved_layout_commitment || !equal(input.policy_refs, context.expected_policy_refs) || !equal(input.font_refs, context.expected_font_refs) || !equal(input.runtime_ref, context.expected_runtime_ref)) return productionIssue('POLICY_MISMATCH');
   if (!equal(input.spec_ref, template.value.spec_ref) || !equal(input.capability_ref, template.value.capability_ref) || !equal(input.policy_refs.layout, template.value.layout_policy_ref) || !equal(input.policy_refs.formatting, template.value.formatting_policy_ref) || !equal(input.font_refs, template.value.font_refs)) return productionIssue('POLICY_MISMATCH');
   const rowFields = policy.value.fields.filter(field => field.source_policy === 'row_display');

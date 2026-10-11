@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.9.5 (unreleased development candidate)
+
+The independent whole-PR review of d96e6cf verified the previous clock and expectation repairs and reproduced a residual SC-CHK-021 exception on noncanonical facts references. Composition now canonical-checks the independently supplied facts reference after facts validation and before equality. Cycles, hidden properties and symbol properties return INVALID_TRUST_CONTEXT through composition and eligibility; invalid facts still retain FACTS_UNSUPPORTED precedence. Six regression cases cover both public routes. The unsupported preview bridge and external Finance, owner, consumer and release gates remain open; fresh exact-candidate review is required.
+
 ## 0.9.4 (unreleased development candidate)
 
 The independent review of d129ea0 verified the purpose/preview safety repairs and found residual SC-CHK-018 clock coercion and SC-CHK-021 noncanonical reference/binding expectations. Eligibility validates strict UtcTime before Date.parse, after composition checks to retain facts-error precedence. Composition canonical-checks supplied reference expectations before equality; generic approval canonical-checks the expected binding before schema/comparison so standalone, host and eligibility callers return typed context failures. Missing/foreign lookup behavior and generic approval purposes remain supported. The unsupported preview bridge and all external acceptance gates remain unchanged.

@@ -41,6 +41,15 @@ test('SC-CHK-021 refuses hidden approval-binding properties', () => {
   const result = checkProductionApproval(input.context.current_approval, input.context);
   assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
 });
+for (const route of ['composition', 'eligibility']) for (const recipe of ['cycle', 'hidden', 'symbol']) test('SC-CHK-021 refuses noncanonical facts reference / ' + route + ' / ' + recipe, () => {
+  const input = hydrate(seed.valid), context = input.context.composition_context, reference = context.facts.reference;
+  if (recipe === 'cycle') reference.extra = reference;
+  else if (recipe === 'hidden') Object.defineProperty(reference, 'synthetic_extra', { value: 1, enumerable: false });
+  else reference[Symbol('synthetic_extra')] = 1;
+  const result = route === 'composition' ? checkComposition(input.context.composition, context) : checkProductionBundleEligibility(input.bundle, input.context);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
+});
 
 for (const purpose of ['design_preview', 'asset_display', 'asset_reproduce', 'asset_modify', 'asset_publish']) test('SC-CHK-019 refuses non-production purpose ' + purpose, () => {
   const input = copy(seed.valid);
