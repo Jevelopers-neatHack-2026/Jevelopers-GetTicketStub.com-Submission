@@ -5,15 +5,20 @@ signal a process group and do not invoke npm, Make, Node, a fixture, or CI.
 """
 from __future__ import annotations
 
+import ast
+import errno
 import hashlib
-import io
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
+import posixpath
 import tempfile
 import threading
+import types
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
 
 
@@ -119,6 +124,301 @@ def custody_sidecar(directory: Path, token: str, *, group_id: int | None = None,
             "groupAbsent": group_absent,
         }],
     }
+
+
+class FakePublicationFileSystem:
+    def __init__(self, *, fail_at: str | None = None, cleanup_fails: bool = False):
+        self.fail_at = fail_at
+        self.cleanup_fails = cleanup_fails
+        self.files: dict[str, bytearray] = {}
+        self.open_calls: list[tuple[str, int, int | None]] = []
+        self.write_calls: list[bytes] = []
+        self.close_calls: list[int] = []
+        self.rename_calls: list[tuple[str, str]] = []
+        self.unlink_calls: list[str] = []
+        self.events: list[tuple[object, ...]] = []
+        self.temp_fd = 71
+        self.directory_fd = 72
+        self.temp_path: str | None = None
+        self.target_path: str | None = None
+        self.primary_write_error = OSError("synthetic primary write failure")
+        self.close_error = OSError("synthetic close failure")
+        self.rename_error = OSError("synthetic rename failure")
+        self.cleanup_error = OSError("synthetic cleanup failure")
+        self.acquisition_error = FileExistsError(errno.EEXIST, "synthetic existing sentinel")
+        self.sentinel = b"preexisting-sentinel"
+
+    def open(self, path, flags: int, mode: int | None = None) -> int:
+        path_text = str(path)
+        self.open_calls.append((path_text, flags, mode))
+        self.events.append(("open", path_text, flags, mode))
+        if flags & os.O_CREAT:
+            if not flags & os.O_EXCL:
+                raise AssertionError("temporary creation did not request exclusive acquisition")
+            if mode != 0o600:
+                raise AssertionError("temporary creation did not request private mode")
+            self.temp_path = path_text
+            if self.fail_at == "acquire":
+                self.files[path_text] = bytearray(self.sentinel)
+                raise self.acquisition_error
+            self.files[path_text] = bytearray()
+            return self.temp_fd
+        if flags == os.O_RDONLY:
+            self.target_path = path_text
+            return self.directory_fd
+        raise AssertionError("unexpected fake open flags")
+
+    def fchmod(self, descriptor: int, mode: int) -> None:
+        self.events.append(("fchmod", descriptor, mode))
+
+    def write(self, descriptor: int, data) -> int:
+        if descriptor != self.temp_fd or self.temp_path is None:
+            raise AssertionError("write used an unowned fake descriptor")
+        chunk = bytes(data)
+        self.write_calls.append(chunk)
+        self.events.append(("write", descriptor, len(chunk)))
+        if self.fail_at in {"write", "write_close_cleanup"} and len(self.write_calls) == 2:
+            raise self.primary_write_error
+        if self.fail_at == "zero_progress":
+            return 0
+        if self.fail_at == "invalid_progress":
+            return len(chunk) + 1
+        written = max(1, len(chunk) // 2)
+        self.files[self.temp_path].extend(chunk[:written])
+        return written
+
+    def fsync(self, descriptor: int) -> None:
+        self.events.append(("fsync", descriptor))
+        if self.fail_at == "fsync":
+            raise OSError("synthetic fsync failure")
+
+    def close(self, descriptor: int) -> None:
+        self.close_calls.append(descriptor)
+        self.events.append(("close", descriptor))
+        if self.fail_at in {"close", "write_close_cleanup"} and descriptor == self.temp_fd:
+            raise self.close_error
+
+    def replace(self, source, destination) -> None:
+        source_text = str(source)
+        destination_text = str(destination)
+        self.rename_calls.append((source_text, destination_text))
+        self.events.append(("replace", source_text, destination_text))
+        if self.fail_at in {"rename", "rename_cleanup"}:
+            raise self.rename_error
+        self.files[destination_text] = self.files.pop(source_text)
+
+    def unlink(self, path: Path) -> None:
+        path_text = str(path)
+        self.unlink_calls.append(path_text)
+        self.events.append(("unlink", path_text))
+        if self.cleanup_fails or self.fail_at in {"write_close_cleanup", "rename_cleanup"}:
+            raise self.cleanup_error
+        self.files.pop(path_text, None)
+
+    def embedded_os(self):
+        return types.SimpleNamespace(
+            O_WRONLY=os.O_WRONLY,
+            O_CREAT=os.O_CREAT,
+            O_EXCL=os.O_EXCL,
+            O_RDONLY=os.O_RDONLY,
+            getpid=lambda: 12_345,
+            open=self.open,
+            fchmod=self.fchmod,
+            write=self.write,
+            fsync=self.fsync,
+            close=self.close,
+            replace=self.replace,
+            unlink=lambda path: self.unlink(Path(path)),
+            path=posixpath,
+        )
+
+
+@contextmanager
+def patched_owner_filesystem(fake: FakePublicationFileSystem):
+    with (
+        patch.object(OWNER.os, "open", side_effect=fake.open),
+        patch.object(OWNER.os, "fchmod", side_effect=fake.fchmod),
+        patch.object(OWNER.os, "write", side_effect=fake.write),
+        patch.object(OWNER.os, "fsync", side_effect=fake.fsync),
+        patch.object(OWNER.os, "close", side_effect=fake.close),
+        patch.object(OWNER.os, "replace", side_effect=fake.replace),
+        patch.object(Path, "unlink", autospec=True, side_effect=fake.unlink),
+        patch.object(OWNER.os, "getpid", return_value=12_345),
+        patch.object(OWNER.uuid, "uuid4", return_value="deterministic-token"),
+    ):
+        yield
+
+
+def extract_watchdog_atomic_write(file_system: FakePublicationFileSystem):
+    source = OWNER._watchdog_source()
+    module = ast.parse(source)
+    function = next(
+        node for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "atomic_write"
+    )
+    function_module = ast.Module(body=[function], type_ignores=[])
+    namespace = {
+        "json": json,
+        "os": file_system.embedded_os(),
+        "uuid": types.SimpleNamespace(uuid4=lambda: "deterministic-token"),
+    }
+    exec(compile(function_module, "<embedded-watchdog-atomic-write>", "exec"), namespace)
+    return namespace["atomic_write"]
+
+
+class AtomicPublisherTests(unittest.TestCase):
+    def assert_no_post_acquisition_calls(self, fake: FakePublicationFileSystem) -> None:
+        self.assertEqual(fake.write_calls, [])
+        self.assertEqual(fake.close_calls, [])
+        self.assertEqual(fake.rename_calls, [])
+        self.assertEqual(fake.unlink_calls, [])
+        self.assertIsNotNone(fake.temp_path)
+        self.assertEqual(fake.files[fake.temp_path], bytearray(fake.sentinel))
+
+    def test_python_publishers_never_remove_eexist_sentinels(self) -> None:
+        target = Path("/private/ops-owner/marker.json")
+        source = Path("/private/ops-owner/input.tap")
+        publishers = (
+            ("write_new", lambda: OWNER.write_new(target, b"marker", 0o600)),
+            ("atomic_write_json", lambda: OWNER.atomic_write_json(target, {"ok": True})),
+            ("copy_fixed_tap", lambda: OWNER.copy_fixed_tap(source, target)),
+        )
+        for name, publish in publishers:
+            with self.subTest(publisher=name):
+                fake = FakePublicationFileSystem(fail_at="acquire")
+                with patched_owner_filesystem(fake), patch.object(
+                    OWNER, "read_bounded", return_value=b"fixed tap"
+                ):
+                    if name == "write_new":
+                        with self.assertRaises(OWNER.OwnerFailure):
+                            publish()
+                    else:
+                        self.assertFalse(publish())
+                self.assert_no_post_acquisition_calls(fake)
+
+    def test_python_write_new_bounds_progress_and_preserves_primary_failure(self) -> None:
+        payload = b"bounded synthetic payload"
+        successful = FakePublicationFileSystem()
+        with patched_owner_filesystem(successful):
+            OWNER.write_new(Path("/private/ops-owner/complete.json"), payload, 0o600)
+        self.assertGreater(len(successful.write_calls), 1)
+        self.assertEqual(successful.files[successful.temp_path], bytearray(payload))
+        self.assertEqual(successful.close_calls, [successful.temp_fd])
+        self.assertLess(
+            max(index for index, event in enumerate(successful.events) if event[0] == "write"),
+            successful.events.index(("close", successful.temp_fd)),
+        )
+
+        for fail_at in ("zero_progress", "invalid_progress"):
+            with self.subTest(fail_at=fail_at):
+                fake = FakePublicationFileSystem(fail_at=fail_at)
+                with patched_owner_filesystem(fake):
+                    with self.assertRaises(OWNER.OwnerFailure) as caught:
+                        OWNER.write_new(Path("/private/ops-owner/partial.json"), payload, 0o600)
+                self.assertEqual(len(fake.write_calls), 1)
+                self.assertEqual(fake.close_calls, [fake.temp_fd])
+                self.assertEqual(fake.unlink_calls, [fake.temp_path])
+                self.assertIsInstance(caught.exception.__cause__, OSError)
+
+        close_failure = FakePublicationFileSystem(fail_at="close", cleanup_fails=True)
+        with patched_owner_filesystem(close_failure):
+            with self.assertRaises(OWNER.OwnerFailure) as caught:
+                OWNER.write_new(Path("/private/ops-owner/close-failure.json"), payload, 0o600)
+        self.assertIs(caught.exception.__cause__, close_failure.close_error)
+        self.assertEqual(close_failure.close_calls, [close_failure.temp_fd])
+        self.assertEqual(close_failure.unlink_calls, [close_failure.temp_path])
+        self.assertIn(close_failure.temp_path, close_failure.files,
+                      "cleanup failure retains the acquired partial file without replacing close failure")
+
+        combined = FakePublicationFileSystem(fail_at="write_close_cleanup")
+        with patched_owner_filesystem(combined):
+            with self.assertRaises(OWNER.OwnerFailure) as caught:
+                OWNER.write_new(Path("/private/ops-owner/partial.json"), payload, 0o600)
+        self.assertIs(caught.exception.__cause__, combined.primary_write_error)
+        self.assertEqual(combined.close_calls, [combined.temp_fd])
+        self.assertEqual(combined.unlink_calls, [combined.temp_path])
+        self.assertEqual(combined.files[combined.temp_path], bytearray(payload[:len(payload) // 2]))
+
+    def test_atomic_json_and_tap_copy_cleanup_only_acquired_temporaries(self) -> None:
+        target = Path("/private/ops-owner/published.json")
+        source = Path("/private/ops-owner/input.tap")
+        for name, publish in (
+            ("atomic_write_json", lambda: OWNER.atomic_write_json(target, {"groups": [1, 2]})),
+            ("copy_fixed_tap", lambda: OWNER.copy_fixed_tap(source, target)),
+        ):
+            with self.subTest(publisher=name):
+                fake = FakePublicationFileSystem()
+                with patched_owner_filesystem(fake), patch.object(
+                    OWNER, "read_bounded", return_value=b"small fake tap"
+                ):
+                    self.assertTrue(publish())
+                self.assertGreater(len(fake.write_calls), 1)
+                self.assertEqual(len(fake.rename_calls), 1)
+                self.assertNotIn(fake.temp_path, fake.files)
+                expected = (b"small fake tap" if name == "copy_fixed_tap"
+                            else b'{"groups":[1,2]}\n')
+                self.assertEqual(fake.files[str(target)], bytearray(expected))
+                self.assertEqual(fake.close_calls.count(fake.temp_fd), 1)
+                self.assertLess(
+                    fake.events.index(("close", fake.temp_fd)),
+                    fake.events.index(("replace", fake.temp_path, str(target))),
+                )
+
+        for name, publish in (
+            ("atomic_write_json", lambda: OWNER.atomic_write_json(target, {"groups": [1, 2]})),
+            ("copy_fixed_tap", lambda: OWNER.copy_fixed_tap(source, target)),
+        ):
+            with self.subTest(partial_write=name):
+                fake = FakePublicationFileSystem(fail_at="write")
+                with patched_owner_filesystem(fake), patch.object(
+                    OWNER, "read_bounded", return_value=b"small fake tap"
+                ):
+                    self.assertFalse(publish())
+                self.assertEqual(len(fake.write_calls), 2)
+                self.assertEqual(fake.close_calls, [fake.temp_fd])
+                self.assertEqual(fake.unlink_calls, [fake.temp_path],
+                                 "the writer that acquired the temp cleans it exactly once")
+                self.assertNotIn(fake.temp_path, fake.files)
+                self.assertEqual(fake.rename_calls, [])
+
+        for name, publish in (
+            ("atomic_write_json", lambda: OWNER.atomic_write_json(target, {"groups": [1, 2]})),
+            ("copy_fixed_tap", lambda: OWNER.copy_fixed_tap(source, target)),
+        ):
+            with self.subTest(rename_cleanup=name):
+                fake = FakePublicationFileSystem(fail_at="rename_cleanup")
+                with patched_owner_filesystem(fake), patch.object(
+                    OWNER, "read_bounded", return_value=b"small fake tap"
+                ):
+                    self.assertFalse(publish())
+                self.assertEqual(len(fake.rename_calls), 1)
+                self.assertEqual(fake.unlink_calls, [fake.temp_path])
+                self.assertIn(fake.temp_path, fake.files)
+                self.assertEqual(fake.close_calls.count(fake.temp_fd), 1)
+
+    def test_embedded_watchdog_publisher_uses_exclusive_acquisition_and_fake_filesystem(self) -> None:
+        collision = FakePublicationFileSystem(fail_at="acquire")
+        publish_collision = extract_watchdog_atomic_write(collision)
+        self.assertFalse(publish_collision("/private/watchdog/ready.json", {"ready": True}))
+        self.assert_no_post_acquisition_calls(collision)
+
+        success = FakePublicationFileSystem()
+        publish_success = extract_watchdog_atomic_write(success)
+        self.assertTrue(publish_success("/private/watchdog/ready.json", {"ready": True}))
+        self.assertGreater(len(success.write_calls), 1)
+        self.assertEqual(success.close_calls.count(success.temp_fd), 1)
+        self.assertEqual(success.rename_calls, [(success.temp_path, "/private/watchdog/ready.json")])
+        self.assertNotIn(success.temp_path, success.files)
+        self.assertIn("/private/watchdog/ready.json", success.files)
+        self.assertEqual(json.loads(success.files["/private/watchdog/ready.json"]), {"ready": True})
+
+        failed = FakePublicationFileSystem(fail_at="write_close_cleanup", cleanup_fails=True)
+        publish_failed = extract_watchdog_atomic_write(failed)
+        self.assertFalse(publish_failed("/private/watchdog/ready.json", {"ready": True}))
+        self.assertEqual(failed.close_calls.count(failed.temp_fd), 1)
+        self.assertEqual(failed.rename_calls, [])
+        self.assertEqual(failed.unlink_calls, [failed.temp_path])
+        self.assertIn(failed.temp_path, failed.files)
 
 
 def valid_watchdog_result(pid: int, target_pgid: int | None,

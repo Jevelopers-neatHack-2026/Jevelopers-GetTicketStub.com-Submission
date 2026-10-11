@@ -538,7 +538,59 @@ function ci1TemporaryCustodyPath(custody) {
   return `${registryPath}.temp-custody.${process.pid}.${directoryTag}.json`;
 }
 
-function writeCi1TemporaryCustody(custody) {
+function publishCi1JsonAtomically(targetPath, temporaryPath, bytes, fileOps = {}) {
+  const acquire = fileOps.openSync ?? openSync;
+  const write = fileOps.writeSync ?? writeSync;
+  const close = fileOps.closeSync ?? closeSync;
+  const rename = fileOps.renameSync ?? renameSync;
+  const remove = fileOps.rmSync ?? rmSync;
+  let descriptor = null;
+  let descriptorAcquired = false;
+  let temporaryAcquired = false;
+  let failed = false;
+  try {
+    descriptor = acquire(temporaryPath, 'wx', 0o600);
+    temporaryAcquired = true;
+    if (!Number.isSafeInteger(descriptor) || descriptor < 0) {
+      throw new TypeError('CI1 custody marker acquisition returned an invalid descriptor.');
+    }
+    descriptorAcquired = true;
+    let offset = 0;
+    let writeCalls = 0;
+    while (offset < bytes.byteLength) {
+      if (writeCalls >= bytes.byteLength) throw new RangeError('CI1 custody marker write exceeded its progress bound.');
+      const written = write(descriptor, bytes, offset, bytes.byteLength - offset, null);
+      writeCalls += 1;
+      if (!Number.isSafeInteger(written) || written <= 0 || written > bytes.byteLength - offset) {
+        throw new RangeError('CI1 custody marker write returned invalid progress.');
+      }
+      offset += written;
+    }
+  } catch {
+    failed = true;
+  }
+  if (descriptorAcquired) {
+    try { close(descriptor); } catch { failed = true; }
+  }
+  if (failed) {
+    if (temporaryAcquired) {
+      try { remove(temporaryPath, { force: true }); } catch {}
+    }
+    return false;
+  }
+  try {
+    rename(temporaryPath, targetPath);
+    temporaryAcquired = false;
+    return true;
+  } catch {
+    if (temporaryAcquired) {
+      try { remove(temporaryPath, { force: true }); } catch {}
+    }
+    return false;
+  }
+}
+
+function writeCi1TemporaryCustody(custody, fileOps = {}) {
   if (!custody) return true;
   const sidecarPath = custody.sidecarPath ?? ci1TemporaryCustodyPath(custody);
   if (!sidecarPath) return false;
@@ -564,15 +616,9 @@ function writeCi1TemporaryCustody(custody) {
     launches
   })}\n`, 'utf8');
   if (bytes.byteLength > CI1_TEMP_CUSTODY_MAX_BYTES) return false;
-  const temporaryPath = `${sidecarPath}.${randomUUID()}.tmp`;
-  try {
-    writeFileSync(temporaryPath, bytes, { flag: 'wx', mode: 0o600 });
-    renameSync(temporaryPath, sidecarPath);
-    return true;
-  } catch {
-    try { rmSync(temporaryPath, { force: true }); } catch {}
-    return false;
-  }
+  const makeUuid = fileOps.randomUUID ?? randomUUID;
+  const temporaryPath = `${sidecarPath}.${makeUuid()}.tmp`;
+  return publishCi1JsonAtomically(sidecarPath, temporaryPath, bytes, fileOps);
 }
 
 function markCi1OwnedGroupSpawnAttempt(custody, launchToken, persist = writeCi1TemporaryCustody) {
@@ -1403,16 +1449,12 @@ function readCi1OwnedGroupRegistry(registryPath) {
   }
 }
 
-function writeCi1OwnedGroupRegistry(registryPath, registry) {
-  const temporaryPath = `${registryPath}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    writeFileSync(temporaryPath, JSON.stringify(registry), { flag: 'w', mode: 0o600 });
-    renameSync(temporaryPath, registryPath);
-    return true;
-  } catch {
-    try { rmSync(temporaryPath, { force: true }); } catch {}
-    return false;
-  }
+function writeCi1OwnedGroupRegistry(registryPath, registry, fileOps = {}) {
+  const makeUuid = fileOps.randomUUID ?? randomUUID;
+  const temporaryPath = `${registryPath}.${process.pid}.${makeUuid()}.tmp`;
+  let bytes;
+  try { bytes = Buffer.from(JSON.stringify(registry), 'utf8'); } catch { return false; }
+  return publishCi1JsonAtomically(registryPath, temporaryPath, bytes, fileOps);
 }
 
 function beginCi1OwnedGroupLaunch(launchToken, custody = null) {
@@ -3344,6 +3386,192 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       path: '/private/ops-c02/ack.json',
       value: { schema: 'ops-owned-group-watchdog-target-ack.v1', pid: 812_348, groupId: 812_347, verified: true }
     });
+
+    function runFakeCi1Publication(kind, { failAt = null, cleanupFails = false } = {}) {
+      const targetPath = `/private/ops-ci1/${kind}.json`;
+      const temporaryPath = kind === 'registry'
+        ? `${targetPath}.${process.pid}.deterministic-token.tmp`
+        : `${targetPath}.deterministic-token.tmp`;
+      const files = new Map();
+      const primaryFailure = new Error('SYNTHETIC_PRIVATE_CI1_PRIMARY');
+      const closeFailure = new Error('SYNTHETIC_PRIVATE_CI1_CLOSE');
+      const acquisitionFailure = Object.assign(new Error('SYNTHETIC_PRIVATE_CI1_EEXIST'), { code: 'EEXIST' });
+      const fakeFaults = [];
+      const fakeCheck = (condition, label) => {
+        if (!condition) {
+          fakeFaults.push(label);
+          throw new Error(`fake filesystem control failed: ${label}`);
+        }
+      };
+      let acquiredDescriptor = null;
+      let writeCalls = 0;
+      let closeCalls = 0;
+      let renameCalls = 0;
+      let removeCalls = 0;
+      let finalVisibleDuringWrite = false;
+      let closed = false;
+      let result;
+      const fileOps = {
+        randomUUID: () => 'deterministic-token',
+        openSync(path, flags, mode) {
+          fakeCheck(path === temporaryPath, 'temporary path');
+          fakeCheck(flags === 'wx', 'exclusive open flag');
+          fakeCheck(mode === 0o600, 'private temporary mode');
+          if (failAt === 'acquire') {
+            files.set(path, Buffer.from('preexisting-sentinel'));
+            throw acquisitionFailure;
+          }
+          files.set(path, Buffer.alloc(0));
+          acquiredDescriptor = 91;
+          return acquiredDescriptor;
+        },
+        writeSync(descriptor, bytes, offset, length, position) {
+          fakeCheck(descriptor === acquiredDescriptor, 'owned descriptor');
+          fakeCheck(position === null, 'current file position');
+          writeCalls += 1;
+          finalVisibleDuringWrite ||= files.has(targetPath);
+          if ((failAt === 'write' || failAt === 'write-close-cleanup') && writeCalls === 2) {
+            throw primaryFailure;
+          }
+          if (failAt === 'zero-progress') return 0;
+          if (failAt === 'invalid-progress') return length + 1;
+          const written = Math.max(1, Math.floor(length / 2));
+          files.set(temporaryPath, Buffer.concat([
+            files.get(temporaryPath), Buffer.from(bytes).subarray(offset, offset + written)
+          ]));
+          return written;
+        },
+        closeSync(descriptor) {
+          fakeCheck(descriptor === acquiredDescriptor, 'closed acquired descriptor');
+          closeCalls += 1;
+          if (failAt === 'close' || failAt === 'write-close-cleanup') throw closeFailure;
+          closed = true;
+        },
+        renameSync(from, to) {
+          renameCalls += 1;
+          fakeCheck(from === temporaryPath, 'renamed acquired temporary');
+          fakeCheck(to === targetPath, 'final publication path');
+          fakeCheck(closed, 'publication after descriptor close');
+          fakeCheck(!finalVisibleDuringWrite, 'final path stays absent during temp writes');
+          if (failAt === 'rename' || failAt === 'rename-cleanup') throw primaryFailure;
+          files.set(to, files.get(from));
+          files.delete(from);
+        },
+        rmSync(path, options) {
+          removeCalls += 1;
+          fakeCheck(path === temporaryPath, 'removed acquired temporary');
+          fakeCheck(options?.force === true, 'forced temporary cleanup');
+          if (cleanupFails || failAt === 'write-close-cleanup' || failAt === 'rename-cleanup') {
+            throw new Error('SYNTHETIC_PRIVATE_CI1_CLEANUP');
+          }
+          files.delete(path);
+        }
+      };
+      if (kind === 'custody') {
+        const custody = {
+          directory: '/private/ops-ci1/custody-dir', sidecarPath: targetPath,
+          launches: new Map([['fixed-token', {
+            launchToken: 'fixed-token', status: 'launch_intent', spawnAttempted: false,
+            directPid: null, groupId: null, registryRegistered: false,
+            registryCleared: false, groupAbsent: false
+          }]])
+        };
+        result = writeCi1TemporaryCustody(custody, fileOps);
+      } else {
+        result = writeCi1OwnedGroupRegistry(targetPath, {
+          schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+        }, fileOps);
+      }
+      return {
+        targetPath, temporaryPath, files, result, writeCalls, closeCalls, renameCalls,
+        removeCalls, finalVisibleDuringWrite, fakeFaults
+      };
+    }
+
+    for (const publisher of ['custody', 'registry']) {
+      const complete = runFakeCi1Publication(publisher);
+      assert.deepEqual(complete.fakeFaults, []);
+      assert.equal(complete.result, true, `${publisher} publication succeeds after bounded short writes`);
+      assert.ok(complete.writeCalls > 1);
+      assert.equal(complete.closeCalls, 1);
+      assert.equal(complete.renameCalls, 1);
+      assert.equal(complete.finalVisibleDuringWrite, false);
+      assert.equal(complete.files.has(complete.temporaryPath), false);
+      const publishedValue = JSON.parse(complete.files.get(complete.targetPath).toString('utf8'));
+      if (publisher === 'custody') {
+        assert.deepEqual(publishedValue, {
+          schema: CI1_TEMP_CUSTODY_SCHEMA,
+          ownerPid: process.pid,
+          directory: '/private/ops-ci1/custody-dir',
+          launches: [{
+            launchToken: 'fixed-token', status: 'launch_intent', spawnAttempted: false,
+            directPid: null, groupId: null, registryRegistered: false,
+            registryCleared: false, groupAbsent: false
+          }]
+        });
+      } else {
+        assert.deepEqual(publishedValue, {
+          schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+        });
+      }
+
+      const collision = runFakeCi1Publication(publisher, { failAt: 'acquire' });
+      assert.deepEqual(collision.fakeFaults, []);
+      assert.equal(collision.result, false);
+      assert.equal(collision.files.get(collision.temporaryPath).toString('utf8'), 'preexisting-sentinel');
+      assert.equal(collision.writeCalls, 0);
+      assert.equal(collision.closeCalls, 0);
+      assert.equal(collision.renameCalls, 0);
+      assert.equal(collision.removeCalls, 0, 'failed exclusive acquisition never unlinks the sentinel');
+
+      const partial = runFakeCi1Publication(publisher, { failAt: 'write' });
+      assert.deepEqual(partial.fakeFaults, []);
+      assert.equal(partial.result, false);
+      assert.equal(partial.closeCalls, 1, 'an acquired descriptor is closed once after partial write failure');
+      assert.equal(partial.renameCalls, 0);
+      assert.equal(partial.removeCalls, 1);
+      assert.equal(partial.files.has(partial.temporaryPath), false,
+        'only the temp this publisher acquired is removed after partial write failure');
+
+      const closeFailure = runFakeCi1Publication(publisher, { failAt: 'close' });
+      assert.deepEqual(closeFailure.fakeFaults, []);
+      assert.equal(closeFailure.result, false);
+      assert.equal(closeFailure.closeCalls, 1);
+      assert.equal(closeFailure.renameCalls, 0, 'a failed close prevents publication');
+      assert.equal(closeFailure.removeCalls, 1);
+      assert.equal(closeFailure.files.has(closeFailure.temporaryPath), false);
+
+      for (const failAt of ['zero-progress', 'invalid-progress']) {
+        const invalidProgress = runFakeCi1Publication(publisher, { failAt });
+        assert.deepEqual(invalidProgress.fakeFaults, []);
+        assert.equal(invalidProgress.result, false, `${failAt} fails closed`);
+        assert.equal(invalidProgress.writeCalls, 1, `${failAt} stops without a retry loop`);
+        assert.equal(invalidProgress.closeCalls, 1);
+        assert.equal(invalidProgress.renameCalls, 0);
+        assert.equal(invalidProgress.removeCalls, 1);
+      }
+
+      const combined = runFakeCi1Publication(publisher, {
+        failAt: 'write-close-cleanup', cleanupFails: true
+      });
+      assert.deepEqual(combined.fakeFaults, []);
+      assert.equal(combined.result, false, 'write, close and cleanup failures remain fail-closed');
+      assert.equal(combined.closeCalls, 1);
+      assert.equal(combined.renameCalls, 0);
+      assert.equal(combined.removeCalls, 1);
+      assert.equal(combined.files.has(combined.temporaryPath), true,
+        'failed cleanup retains the acquired temporary for existing custody reconciliation');
+
+      const renameCleanup = runFakeCi1Publication(publisher, {
+        failAt: 'rename-cleanup', cleanupFails: true
+      });
+      assert.deepEqual(renameCleanup.fakeFaults, []);
+      assert.equal(renameCleanup.result, false, 'rename remains failed when cleanup also fails');
+      assert.equal(renameCleanup.closeCalls, 1);
+      assert.equal(renameCleanup.renameCalls, 1);
+      assert.equal(renameCleanup.removeCalls, 1);
+      assert.equal(renameCleanup.files.has(renameCleanup.temporaryPath), true);
+    }
 
     const diagnosticState = {
       c02ControlReadFailureLines: '', c02ControlReadFailureCount: 0,

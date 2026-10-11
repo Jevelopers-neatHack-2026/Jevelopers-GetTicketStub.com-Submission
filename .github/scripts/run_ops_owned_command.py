@@ -223,21 +223,43 @@ def write_new(path: Path, data: bytes, mode: int) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    descriptor = None
+    descriptor_acquired = False
+    temporary_acquired = False
+    primary_error: Exception | None = None
     try:
         descriptor = os.open(path, flags, mode)
+        temporary_acquired = True
+        if type(descriptor) is not int or descriptor < 0:
+            raise OSError("invalid_descriptor")
+        descriptor_acquired = True
+        os.fchmod(descriptor, mode)
+        view = memoryview(data)
+        write_calls = 0
+        while view:
+            if write_calls >= len(data):
+                raise OSError("write_progress_limit")
+            written = os.write(descriptor, view)
+            write_calls += 1
+            if type(written) is not int or written <= 0 or written > len(view):
+                raise OSError("invalid_write_progress")
+            view = view[written:]
+        os.fsync(descriptor)
+    except Exception as exc:
+        primary_error = exc
+    if descriptor_acquired:
         try:
-            os.fchmod(descriptor, mode)
-            view = memoryview(data)
-            while view:
-                written = os.write(descriptor, view)
-                if written <= 0:
-                    raise OSError("short_write")
-                view = view[written:]
-            os.fsync(descriptor)
-        finally:
             os.close(descriptor)
-    except OSError as exc:
-        raise OwnerFailure("write_new") from exc
+        except Exception as exc:
+            if primary_error is None:
+                primary_error = exc
+    if primary_error is not None:
+        if temporary_acquired:
+            try:
+                path.unlink()
+            except Exception:
+                pass
+        raise OwnerFailure("write_new") from primary_error
 
 
 def atomic_write_json(path: Path, value: object, mode: int = 0o600) -> bool:
@@ -245,9 +267,12 @@ def atomic_write_json(path: Path, value: object, mode: int = 0o600) -> bool:
     data = (json.dumps(value, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
     if len(data) > REGISTRY_MAX_BYTES:
         return False
+    temporary_acquired = False
     try:
         write_new(temporary, data, mode)
+        temporary_acquired = True
         os.replace(temporary, path)
+        temporary_acquired = False
         try:
             directory_fd = os.open(path.parent, os.O_RDONLY)
             try:
@@ -257,17 +282,12 @@ def atomic_write_json(path: Path, value: object, mode: int = 0o600) -> bool:
         except OSError:
             return False
         return True
-    except OwnerFailure:
-        try:
-            temporary.unlink()
-        except OSError:
-            pass
-        return False
-    except OSError:
-        try:
-            temporary.unlink()
-        except OSError:
-            pass
+    except (OwnerFailure, OSError):
+        if temporary_acquired:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
         return False
 
 
@@ -763,27 +783,52 @@ deadline = time.monotonic() + limit_ms / 1000
 REGISTRY_SCHEMA = "ops-ci1-owned-groups.v1"
 def atomic_write(path, value):
     temporary = path + "." + str(os.getpid()) + "." + str(uuid.uuid4()) + ".tmp"
+    fd = None
+    descriptor_acquired = False
+    temporary_acquired = False
+    failed = False
     try:
         data = (json.dumps(value, separators=(",", ":"), sort_keys=True) + "\n").encode()
         fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            os.fchmod(fd, 0o600)
-            view = memoryview(data)
-            while view:
-                written = os.write(fd, view)
-                if written <= 0: raise OSError("short_write")
-                view = view[written:]
-            os.fsync(fd)
-        finally: os.close(fd)
+        temporary_acquired = True
+        if type(fd) is not int or fd < 0: raise OSError("invalid_descriptor")
+        descriptor_acquired = True
+        os.fchmod(fd, 0o600)
+        view = memoryview(data)
+        write_calls = 0
+        while view:
+            if write_calls >= len(data): raise OSError("write_progress_limit")
+            written = os.write(fd, view)
+            write_calls += 1
+            if type(written) is not int or written <= 0 or written > len(view):
+                raise OSError("invalid_write_progress")
+            view = view[written:]
+        os.fsync(fd)
+    except OSError:
+        failed = True
+    if descriptor_acquired:
+        try: os.close(fd)
+        except Exception: failed = True
+    if failed:
+        if temporary_acquired:
+            try: os.unlink(temporary)
+            except OSError: pass
+        return False
+    try:
         os.replace(temporary, path)
+        temporary_acquired = False
+    except OSError:
+        if temporary_acquired:
+            try: os.unlink(temporary)
+            except OSError: pass
+        return False
+    try:
         directory_fd = os.open(os.path.dirname(path), os.O_RDONLY)
         try: os.fsync(directory_fd)
         finally: os.close(directory_fd)
-        return True
     except OSError:
-        try: os.unlink(temporary)
-        except OSError: pass
         return False
+    return True
 def read_json(path, maximum):
     try:
         info = os.lstat(path)
@@ -1047,15 +1092,19 @@ def copy_fixed_tap(source: Path, target: Path) -> bool:
     except OwnerFailure:
         return False
     temporary = target.with_name(f".{target.name}.{uuid.uuid4()}.tmp")
+    temporary_acquired = False
     try:
         write_new(temporary, data, 0o600)
+        temporary_acquired = True
         os.replace(temporary, target)
+        temporary_acquired = False
         return True
     except (OwnerFailure, OSError):
-        try:
-            temporary.unlink()
-        except OSError:
-            pass
+        if temporary_acquired:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
         return False
 
 
