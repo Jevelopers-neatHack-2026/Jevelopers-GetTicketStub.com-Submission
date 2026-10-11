@@ -457,7 +457,10 @@ test('the host dispatch signal combines the runner cancellation signal with the 
   // The deadline still aborts the host-facing signal (a 1 ms remaining deadline on a fixed clock that the signal timer outlives).
   const short = billable('image_generation', { deadline_at: new Date(clock() + 5).toISOString() });
   await adapter.dispatch({ ...short, prepared: await adapter.prepare(short), metering: { signal: new AbortController().signal } });
+  // AbortSignal.timeout timers are unref'd, so a ref'd timer keeps the loop alive while the abort event is awaited.
+  const keepAlive = setTimeout(() => {}, 5_000);
   await new Promise((resolve) => seen[2].addEventListener('abort', resolve, { once: true }));
+  clearTimeout(keepAlive);
   assert.equal(seen[2].aborted, true);
 });
 
