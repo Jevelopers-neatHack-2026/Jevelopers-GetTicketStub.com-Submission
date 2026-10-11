@@ -2,16 +2,18 @@ import assert from 'node:assert/strict';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
 import { EvidenceStoreError } from '../../../../src/evidence/store.mjs';
 import { composeSourceIdentity, SourceIdentityCompositionError } from '../../../../src/discovery/identity/from-extraction.mjs';
 import { discoverAssetCandidates } from '../../../../src/brand-research/assets.mjs';
+import { extractDeterministically } from '../../../../src/extraction/index.mjs';
+import { parseAndValidateUrl } from '../../../../src/security/url-policy.mjs';
 import { createHarness, EPOCH, request } from '../../pdf-evidence/store-harness.mjs';
 
 const TENANT = 'tenant-asset-source';
@@ -19,6 +21,15 @@ const SOURCE_URL = 'https://events.example.com/calendar/index.html?campaign=autu
 const FETCHED_AT = '2026-10-10T15:00:00.000Z';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const FIXTURES = new URL('../fixtures/', import.meta.url);
+const PINNED_SELECTOR_ONE_COMMIT = 'e5ed7270581c8fc033b22e9252361c0139050bc7';
+const PINNED_SELECTOR_ONE_FILES = Object.freeze({
+  'src/evidence/store.mjs': 'ce407ab2b93c11474cf549da001e247ead100d8103e309af4e10a0a19502dde3',
+  'src/extraction/index.mjs': 'da0bca674ccb87bf7c5af84910b5d607c93fda12f02c2ccc5e3e7b5783a235bc',
+  'src/extraction/html.mjs': 'c7dc3bd91fafa34161e828396f3ea133f2c8887564e8a34c02f2364f92038569',
+  'src/extraction/jsonld.mjs': '9706f11c502a1dd2079793ca5ebaf583479ea329bdada5e46700c6b42e40750c',
+  'src/extraction/xhtml.mjs': 'b54f16a21d5228f7d0825e495e6bd5b327a89f8cc4c582e90b15372aa0f43588',
+  'src/extraction/source.mjs': '4a0942a8222c8785a8b2ad9f8b7c2daab387ef96a1fe75e6c7a1ab8ea7e8b40d',
+});
 
 function documentFrom(html, overrides = {}) {
   return {
@@ -78,6 +89,12 @@ function readDatabase(directory, tenantId = TENANT) {
   }
 }
 
+function readDatabaseIfPresent(directory, tenantId = TENANT) {
+  const databasePath = path.join(directory, tenantHash(tenantId), 'evidence.sqlite');
+  if (!existsSync(databasePath)) return { manifest: null, evidenceCount: 0, factCount: 0, bundleCount: 0 };
+  return readDatabase(directory, tenantId);
+}
+
 function readEvidenceBytes(directory, evidenceId, tenantId = TENANT) {
   const database = new DatabaseSync(path.join(directory, tenantHash(tenantId), 'evidence.sqlite'));
   try {
@@ -127,6 +144,93 @@ function replaceSealed(directory, evidenceId, sealed) {
 
 function sourceInput(doc, permit) {
   return { document: doc, retentionHandle: permit };
+}
+
+function createPinnedSelectorOneOptions(directory) {
+  const permits = new WeakMap();
+  const keys = { payload: 'payload-v1', fact: 'fact-v1', 'source-index': 'source-index-v1' };
+  const createPermit = (tenantId = TENANT, durationMs = 60_000) => {
+    const permit = Object.freeze(Object.create(null));
+    permits.set(permit, { tenantId, expiresAtMs: EPOCH + durationMs });
+    return permit;
+  };
+  return {
+    createPermit,
+    options: {
+      directory,
+      resolveTenant: (authenticatedRequest) => authenticatedRequest?.principal?.tenantId,
+      async resolveKey({ tenantId, purpose, keyId }) {
+        const selectedId = keyId ?? keys[purpose];
+        return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:${selectedId}:synthetic`).digest() };
+      },
+      resolveRetention({ tenantId, kind, nowMs, sourceExpiresAtMs, retentionHandle }) {
+        if (kind === 'evidence') {
+          const permit = permits.get(retentionHandle);
+          if (!permit || permit.tenantId !== tenantId) throw new Error('synthetic invalid selector-one retention permit');
+          return {
+            expiresAtMs: Math.min(permit.expiresAtMs, nowMs + 60_000, sourceExpiresAtMs ?? Number.POSITIVE_INFINITY),
+            policyId: 'synthetic-selector-one-retention',
+            policyVersion: '1',
+            accessPolicy: 'tenant_private',
+          };
+        }
+        return {
+          expiresAtMs: sourceExpiresAtMs ?? nowMs + 30_000,
+          policyId: 'synthetic-selector-one-retention',
+          policyVersion: '1',
+          accessPolicy: 'tenant_private',
+        };
+      },
+      authorizePrivateAccess: ({ tenantId, request: authRequest }) => authRequest?.principal?.tenantId === tenantId && authRequest.allowPrivate === true,
+      authorizePrivateAccessCurrent: ({ tenantId, request: authRequest }) => authRequest?.principal?.tenantId === tenantId && authRequest.allowPrivate === true,
+      consumePrivatePayload: ({ source, positions }) => {
+        const result = {
+          sourceHash: source.contentHash,
+          sourceUrl: source.sourceUrl,
+          positions: positions.map((position) => ({ locator: position.locator, text: position.content.toString('utf8') })),
+        };
+        if (source.derivedPdf !== undefined) result.derivedPdf = source.derivedPdf;
+        return result;
+      },
+      now: () => EPOCH,
+      maxSourceBytes: 5 * 1024 * 1024,
+      maxPositionBytes: 64 * 1024,
+      maxPositionCount: 128,
+      maxStoredPayloadBytes: 512 * 1024,
+      maxRetentionMs: 60_000,
+      lockTimeoutMs: 5_000,
+    },
+  };
+}
+
+async function loadPinnedSelectorOneStore(t) {
+  const parserDirectory = await mkdtemp(path.join(ROOT, 'src/extraction/.legacy-selector-one-'));
+  t.after(() => rm(parserDirectory, { recursive: true, force: true }));
+  for (const sourcePath of Object.keys(PINNED_SELECTOR_ONE_FILES).filter((file) => file.startsWith('src/extraction/'))) {
+    const relativePath = sourcePath.slice('src/extraction/'.length);
+    const extracted = spawnSync('git', ['show', `${PINNED_SELECTOR_ONE_COMMIT}:${sourcePath}`], {
+      cwd: ROOT,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    assert.equal(extracted.status, 0, `pinned selector-one parser source exists: ${sourcePath}`);
+    assert.equal(digest(extracted.stdout), PINNED_SELECTOR_ONE_FILES[sourcePath], `pinned selector-one parser bytes match: ${sourcePath}`);
+    await writeFile(path.join(parserDirectory, relativePath), extracted.stdout, { flag: 'wx', mode: 0o600 });
+  }
+
+  const oldStore = spawnSync('git', ['show', `${PINNED_SELECTOR_ONE_COMMIT}:src/evidence/store.mjs`], {
+    cwd: ROOT,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(oldStore.status, 0, 'pinned selector-one store source exists');
+  assert.equal(digest(oldStore.stdout), PINNED_SELECTOR_ONE_FILES['src/evidence/store.mjs'], 'pinned selector-one store bytes match');
+  const importSpecifier = "from '../extraction/index.mjs';";
+  const oldStoreSource = oldStore.stdout.toString('utf8');
+  assert.ok(oldStoreSource.includes(importSpecifier));
+  const parserImport = `from '../extraction/${path.basename(parserDirectory)}/index.mjs';`;
+  const modulePath = path.join(ROOT, 'src/evidence', `.legacy-selector-one-store-${process.pid}-${Date.now()}.mjs`);
+  await writeFile(modulePath, oldStoreSource.replace(importSpecifier, parserImport), { flag: 'wx', mode: 0o600 });
+  t.after(() => rm(modulePath, { force: true }));
+  return import(pathToFileURL(modulePath).href);
 }
 
 function waitFor(promise, timeoutMs, label) {
@@ -297,6 +401,238 @@ test('production HTML, XHTML, and standalone JSON-LD asset forms persist exact l
       assert.ok(associations.every((association) => association.kind === 'entity-source-claim'));
     }
   }
+});
+
+test('fatal XHTML parser failures reject before empty discovery without writing any evidence', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request(TENANT));
+  const emptyDatabase = readDatabaseIfPresent(harness.directory);
+  assert.equal(emptyDatabase.evidenceCount, 0);
+  assert.equal(emptyDatabase.factCount, 0);
+  assert.equal(emptyDatabase.bundleCount, 0);
+
+  const fatalCases = [
+    {
+      name: 'malformed XML',
+      source: '<html xmlns="http://www.w3.org/1999/xhtml"><body><img src="https://diagnostic-secret.invalid/malformed.png"></body></html>',
+      diagnostic: 'MALFORMED_XHTML',
+      marker: 'diagnostic-secret.invalid',
+    },
+    {
+      name: 'unsupported internal DTD',
+      source: '<!DOCTYPE html [<!ENTITY private "diagnostic-secret">]><html xmlns="http://www.w3.org/1999/xhtml"><body><img src="/dtd.png" /></body></html>',
+      diagnostic: 'XHTML_DTD_UNSUPPORTED',
+      marker: 'diagnostic-secret',
+    },
+  ];
+  for (const item of fatalCases) {
+    const doc = documentFrom(item.source, { contentType: 'application/xhtml+xml; charset=utf-8' });
+    const extraction = await extractDeterministically(doc);
+    assert.equal(extraction.status, 'NO_ANSWER', item.name);
+    assert.equal(extraction.termination, null, item.name);
+    assert.ok(extraction.diagnostics.some((diagnostic) => diagnostic.code === item.diagnostic), item.name);
+    assert.equal(JSON.stringify(extraction.diagnostics).includes(item.marker), false, `${item.name} diagnostics must not echo source text`);
+
+    const result = await harness.store.ingestAssetSourceEvidence(
+      scope, sourceInput(doc, harness.createPermit(TENANT)), request(TENANT),
+    );
+    assert.deepEqual(result, { outcome: 'rejected', code: 'SOURCE_UNSUPPORTED_OR_MALFORMED' }, item.name);
+    assert.equal(JSON.stringify(result).includes(item.marker), false, item.name);
+    assert.deepEqual(readDatabaseIfPresent(harness.directory), emptyDatabase, `${item.name} must not write evidence, facts, or a bundle prefix`);
+  }
+
+  const empty = documentFrom(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Valid empty source</p></body></html>',
+    { contentType: 'application/xhtml+xml; charset=utf-8' },
+  );
+  const emptyExtraction = await extractDeterministically(empty);
+  assert.equal(emptyExtraction.status, 'PARTIAL');
+  assert.deepEqual(emptyExtraction.assetSources, []);
+  const noCandidates = await harness.store.ingestAssetSourceEvidence(
+    scope, sourceInput(empty, harness.createPermit(TENANT)), request(TENANT),
+  );
+  assert.deepEqual(noCandidates, { outcome: 'no-candidates', code: 'NO_STATIC_ASSET_CANDIDATES' });
+  assert.deepEqual(readDatabaseIfPresent(harness.directory), emptyDatabase);
+
+  const validAsset = documentFrom(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><img src="/valid.png" /></body></html>',
+    { contentType: 'application/xhtml+xml; charset=utf-8' },
+  );
+  const validStored = await harness.store.ingestAssetSourceEvidence(
+    scope, sourceInput(validAsset, harness.createPermit(TENANT)), request(TENANT),
+  );
+  assert.equal(validStored.outcome, 'stored');
+
+  const recovered = documentFrom('<html><body><img src="/recovered.png"><p>Recovered page</body>', {
+    contentType: 'text/html; charset=utf-8',
+  });
+  const recoveredExtraction = await extractDeterministically(recovered);
+  assert.ok(recoveredExtraction.diagnostics.some((diagnostic) => diagnostic.code === 'HTML_RECOVERED_PARSE_ERROR'));
+  assert.ok(recoveredExtraction.assetSources.some((asset) => asset.candidate.normalizedValue === '/recovered.png'));
+  const recoveredStored = await harness.store.ingestAssetSourceEvidence(
+    scope, sourceInput(recovered, harness.createPermit(TENANT)), request(TENANT),
+  );
+  assert.equal(recoveredStored.outcome, 'stored', 'ordinary recoverable HTML parser behavior remains usable');
+});
+
+test('asset URL quarantine checks original policy syntax across HTML, XHTML, JSON-LD, and protocol-relative values', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request(TENANT));
+  const denied = [
+    { name: 'HTML hexadecimal host', raw: 'http://0x08080808/logo.png', type: 'text/html; charset=utf-8', form: 'html-img-src' },
+    { name: 'XHTML integer host', raw: 'http://134744072/logo.png', type: 'application/xhtml+xml; charset=utf-8', form: 'html-img-src' },
+    { name: 'JSON-LD octal host', raw: 'http://010.010.010.010/logo.png', type: 'application/ld+json', form: 'jsonld-image' },
+    { name: 'HTML protocol-relative hexadecimal host', raw: '//0x08080808/logo.png', type: 'text/html; charset=utf-8', form: 'html-img-src', protocolRelative: true },
+    { name: 'XHTML protocol-relative non-canonical port', raw: '//cdn.example.com:0443/logo.png', type: 'application/xhtml+xml; charset=utf-8', form: 'html-img-src', protocolRelative: true },
+    { name: 'JSON-LD protocol-relative backslash', raw: '//cdn.example.com\\logo.png', type: 'application/ld+json', form: 'jsonld-image', protocolRelative: true },
+    { name: 'HTML tab inside scheme', raw: 'h\tttp://0x08080808/logo.png', type: 'text/html; charset=utf-8', form: 'html-img-src' },
+    { name: 'XHTML tab inside protocol-relative authority', raw: '/\t/0x08080808/logo.png', type: 'application/xhtml+xml; charset=utf-8', form: 'html-img-src', protocolRelative: true },
+    { name: 'XHTML newline inside path', raw: 'http://0x08080808/\nlogo.png', type: 'application/xhtml+xml; charset=utf-8', form: 'html-img-src' },
+    { name: 'JSON-LD escaped C0 before scheme', raw: '\u0001http://0x08080808/logo.png', type: 'application/ld+json', form: 'jsonld-image' },
+    { name: 'JSON-LD DEL before scheme', raw: '\u007fhttp://0x08080808/logo.png', type: 'application/ld+json', form: 'jsonld-image' },
+    { name: 'JSON-LD escaped tab inside scheme', raw: 'h\tttp://0x08080808/logo.png', type: 'application/ld+json', form: 'jsonld-image' },
+    { name: 'HTML entity-decoded tab inside scheme', raw: 'h\tttp://0x08080808/logo.png', sourceRaw: 'h&#9;ttp://0x08080808/logo.png', type: 'text/html; charset=utf-8', form: 'html-img-src' },
+    { name: 'HTML non-canonical port', raw: 'https://cdn.example.com:0443/logo.png', type: 'text/html; charset=utf-8', form: 'html-img-src' },
+    { name: 'XHTML backslash separator', raw: 'https://cdn.example.com\\logo.png', type: 'application/xhtml+xml; charset=utf-8', form: 'html-img-src' },
+  ];
+  const accepted = {
+    name: 'valid protocol-relative host',
+    raw: '//cdn.example.com/logo.png',
+    type: 'application/ld+json',
+    form: 'jsonld-image',
+    protocolRelative: true,
+  };
+  const allCases = [...denied, accepted];
+  const records = [];
+
+  for (const [index, item] of allCases.entries()) {
+    const policyInput = item.protocolRelative ? `https:${item.raw}` : item.raw;
+    if (item === accepted) {
+      assert.equal(parseAndValidateUrl(policyInput).url.hostname, 'cdn.example.com');
+    } else {
+      assert.throws(() => parseAndValidateUrl(policyInput), (error) => error.code === 'POLICY_DENIED', item.name);
+    }
+
+    const sourceValue = item.sourceRaw ?? item.raw;
+    const bytes = item.type === 'application/ld+json'
+      ? Buffer.from(JSON.stringify({ '@context': 'https://schema.org', '@type': 'Event', name: 'Policy fixture', image: item.raw }))
+      : Buffer.from(item.type.startsWith('application/xhtml+xml')
+        ? `<html xmlns="http://www.w3.org/1999/xhtml"><body><img src="${sourceValue}" /></body></html>`
+        : `<html><body><img src="${sourceValue}"></body></html>`);
+    const doc = documentFrom(bytes, {
+      contentType: item.type,
+      url: `https://events.example.com/policy-fixtures/${index}.html`,
+    });
+    const extraction = await extractDeterministically(doc);
+    const extractedAsset = extraction.assetSources.find((entry) => entry.sourceForm === item.form);
+    assert.ok(extractedAsset, item.name);
+    assert.equal(extractedAsset.urlPolicyValue, item.raw, `${item.name} keeps parser-decoded pre-normalization syntax`);
+    if (item.raw.includes('\t') || item.raw.includes('\n')) {
+      assert.notEqual(extractedAsset.candidate.normalizedValue, item.raw, `${item.name} demonstrates the parser's existing whitespace normalization`);
+    }
+    assert.equal(Object.getOwnPropertyDescriptor(extractedAsset, 'urlPolicyValue').enumerable, false, item.name);
+    assert.equal(JSON.stringify(extractedAsset).includes('urlPolicyValue'), false, `${item.name} does not serialize the internal policy value`);
+    const discovered = await discoverAssetCandidates({
+      store: harness.store,
+      scope,
+      document: doc,
+      retentionHandle: harness.createPermit(TENANT),
+      request: request(TENANT),
+    });
+    assert.equal(discovered.outcome, 'stored', item.name);
+    assert.equal(discovered.sourceHash, digest(bytes), item.name);
+    const candidate = discovered.candidates.find((entry) => entry.sourceForm === item.form);
+    assert.ok(candidate, item.name);
+    if (item === accepted) {
+      assert.equal(candidate.quarantineReason, null);
+      assert.equal(candidate.normalizedSuggestion, 'https://cdn.example.com/logo.png');
+      assert.equal(candidate.fetchSuggestion, 'https://cdn.example.com/logo.png');
+    } else {
+      assert.equal(candidate.quarantineReason, 'url_policy_denied', item.name);
+      assert.equal(candidate.normalizedSuggestion, null, item.name);
+      assert.equal(candidate.fetchSuggestion, null, item.name);
+      assert.equal(JSON.stringify(discovered).includes(item.raw), false, `${item.name} must not leak the rejected URL`);
+    }
+    records.push({ item, bytes, evidenceId: discovered.metadata.evidenceId, sourceHash: discovered.sourceHash, candidate });
+  }
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request(TENANT));
+  for (const record of records) {
+    const evidence = await reopened.lookupEvidence(reopenedScope, record.evidenceId);
+    const selected = await reopened.materializeSelected(reopenedScope, { evidence: [evidence], facts: [] }, request(TENANT));
+    const reopenedCandidate = selected.evidence[0].source.assetSource.candidates.find((entry) => entry.sourceForm === record.item.form);
+    assert.equal(selected.evidence[0].source.contentHash, record.sourceHash, record.item.name);
+    assert.equal(reopenedCandidate.quarantineReason, record.candidate.quarantineReason, record.item.name);
+    assert.equal(reopenedCandidate.normalizedSuggestion, record.candidate.normalizedSuggestion, record.item.name);
+    assert.equal(reopenedCandidate.fetchSuggestion, record.candidate.fetchSuggestion, record.item.name);
+    const privateRead = await reopened.withPrivatePayload(reopenedScope, evidence, request(TENANT));
+    assert.equal(privateRead.sourceHash, digest(record.bytes), record.item.name);
+    const excerpt = privateRead.positions.find((position) => position.locator.startByte === reopenedCandidate.locator.startByte
+      && position.locator.endByte === reopenedCandidate.locator.endByte);
+    assert.ok(excerpt, record.item.name);
+    assert.equal(record.bytes.subarray(excerpt.locator.startByte, excerpt.locator.endByte).toString('utf8'), excerpt.text, record.item.name);
+    assert.equal(excerpt.contentHash, reopenedCandidate.excerptHash, record.item.name);
+  }
+});
+
+test('selector 2 keeps selector 1 encrypted asset records readable without rewriting them', async (t) => {
+  const harness = await createHarness(t);
+  const requestValue = request(TENANT);
+  const doc = documentFrom('<html><body><img src="http://0x08080808/logo.png"></body></html>', {
+    url: 'https://events.example.com/selector-profile/history.html',
+  });
+  const legacyModule = await loadPinnedSelectorOneStore(t);
+  const legacyHarness = createPinnedSelectorOneOptions(harness.directory);
+  const legacyStore = legacyModule.createEvidenceStore(legacyHarness.options);
+  const legacyScope = await legacyStore.scopeForAuthenticatedRequest(requestValue);
+  const legacyWritten = await legacyStore.ingestAssetSourceEvidence(
+    legacyScope, sourceInput(doc, legacyHarness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(legacyWritten.outcome, 'stored');
+  assert.equal(legacyWritten.created, true);
+  const legacyId = legacyWritten.metadata.evidenceId;
+  const legacySealed = readEvidenceBytes(harness.directory, legacyId);
+  const beforeCurrentWrite = readDatabase(harness.directory);
+  assert.equal(beforeCurrentWrite.manifest.records[legacyId].representation, 'asset-source-excerpt');
+  assert.equal(beforeCurrentWrite.manifest.records[legacyId].version, 1);
+
+  const currentBeforeWrite = harness.openStore();
+  const currentScopeBeforeWrite = await currentBeforeWrite.scopeForAuthenticatedRequest(requestValue);
+  const legacyHandle = await currentBeforeWrite.lookupEvidence(currentScopeBeforeWrite, legacyId);
+  const legacyView = await currentBeforeWrite.materializeSelected(
+    currentScopeBeforeWrite, { evidence: [legacyHandle], facts: [] }, requestValue,
+  );
+  const legacyCandidate = legacyView.evidence[0].source.assetSource.candidates[0];
+  assert.equal(legacyView.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/1');
+  assert.equal(legacyCandidate.fetchSuggestion, 'http://8.8.8.8/logo.png');
+
+  const currentWritten = await currentBeforeWrite.ingestAssetSourceEvidence(
+    currentScopeBeforeWrite, sourceInput(doc, harness.createPermit(TENANT)), requestValue,
+  );
+  assert.equal(currentWritten.outcome, 'stored');
+  assert.equal(currentWritten.created, true);
+  assert.equal(currentWritten.metadata.version, 2);
+  assert.notEqual(currentWritten.metadata.evidenceId, legacyId);
+  assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed, 'selector-one ciphertext remains byte-identical');
+
+  const currentAfterRestart = harness.openStore();
+  const currentScopeAfterRestart = await currentAfterRestart.scopeForAuthenticatedRequest(requestValue);
+  const oldAfterRestart = await currentAfterRestart.lookupEvidence(currentScopeAfterRestart, legacyId);
+  const newAfterRestart = await currentAfterRestart.lookupEvidence(currentScopeAfterRestart, currentWritten.metadata.evidenceId);
+  const oldReadback = await currentAfterRestart.materializeSelected(
+    currentScopeAfterRestart, { evidence: [oldAfterRestart], facts: [] }, requestValue,
+  );
+  const newReadback = await currentAfterRestart.materializeSelected(
+    currentScopeAfterRestart, { evidence: [newAfterRestart], facts: [] }, requestValue,
+  );
+  assert.equal(oldReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/1');
+  assert.equal(oldReadback.evidence[0].source.assetSource.candidates[0].fetchSuggestion, 'http://8.8.8.8/logo.png');
+  assert.equal(newReadback.evidence[0].source.assetSource.selectorVersion, 'ei-asset-source-selector/2');
+  assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].quarantineReason, 'url_policy_denied');
+  assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].normalizedSuggestion, null);
+  assert.equal(newReadback.evidence[0].source.assetSource.candidates[0].fetchSuggestion, null);
+  assert.deepEqual(readEvidenceBytes(harness.directory, legacyId), legacySealed);
 });
 
 test('source-family identity coexists with raw source composition in either ingestion order and survives replay/restart', async (t) => {

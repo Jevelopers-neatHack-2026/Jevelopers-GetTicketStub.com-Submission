@@ -108,7 +108,7 @@ function createLegacyOptions(directory) {
       consumePrivatePayload: ({ source, positions }) => ({
         sourceHash: source.contentHash,
         sourceUrl: source.sourceUrl,
-        derivedPdf: source.derivedPdf,
+        ...(source.derivedPdf === undefined ? {} : { derivedPdf: source.derivedPdf }),
         positions: positions.map((position) => ({ locator: position.locator, text: position.content.toString('utf8') })),
       }),
       now: () => EPOCH,

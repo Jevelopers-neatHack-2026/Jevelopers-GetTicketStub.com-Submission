@@ -232,7 +232,7 @@ export interface StoredAssetSourceCandidate {
 
 export interface AssetSourceProvenance {
   readonly bindingVersion: 1;
-  readonly selectorVersion: 'ei-asset-source-selector/1';
+  readonly selectorVersion: 'ei-asset-source-selector/1' | 'ei-asset-source-selector/2';
   readonly extractorVersion: string;
   readonly sourceUrl: string;
   readonly sourceKind: 'external';

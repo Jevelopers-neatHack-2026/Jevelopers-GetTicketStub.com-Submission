@@ -292,11 +292,12 @@ export async function collectHtmlEvidence({
           pageMetadata.push(pageCandidate);
           if (field === "image") {
             if (assetSources.length < limits.maxAssetSources) {
-              assetSources.push(Object.freeze({
-                candidate: pageCandidate,
-                sourceForm: "open-graph-image",
-                association: Object.freeze({ kind: "unassigned-page" }),
-              }));
+              assetSources.push(makeHtmlAssetSource(
+                pageCandidate,
+                "open-graph-image",
+                content,
+                Object.freeze({ kind: "unassigned-page" }),
+              ));
             } else if (!assetSourcesTruncated) {
               addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
               assetSourcesTruncated = true;
@@ -345,11 +346,12 @@ export async function collectHtmlEvidence({
           suggestionOnly: true,
         });
         if (candidate && assetSources.length < limits.maxAssetSources) {
-          assetSources.push(Object.freeze({
-            candidate: Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(src, document.url) }),
-            sourceForm: "html-img-src",
-            association: Object.freeze({ kind: "unassigned-page" }),
-          }));
+          assetSources.push(makeHtmlAssetSource(
+            Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(src, document.url) }),
+            "html-img-src",
+            src,
+            Object.freeze({ kind: "unassigned-page" }),
+          ));
         } else if (candidate && !assetSourcesTruncated) {
           addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
           assetSourcesTruncated = true;
@@ -380,11 +382,12 @@ export async function collectHtmlEvidence({
           suggestionOnly: true,
         });
         if (candidate && assetSources.length < limits.maxAssetSources) {
-          assetSources.push(Object.freeze({
-            candidate: Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(href, document.url) }),
-            sourceForm: "html-icon-link",
-            association: Object.freeze({ kind: "unassigned-page" }),
-          }));
+          assetSources.push(makeHtmlAssetSource(
+            Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(href, document.url) }),
+            "html-icon-link",
+            href,
+            Object.freeze({ kind: "unassigned-page" }),
+          ));
         } else if (candidate && !assetSourcesTruncated) {
           addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
           assetSourcesTruncated = true;
@@ -509,6 +512,12 @@ function makeHtmlAttributeCandidate({
     property,
     suggestionOnly,
   });
+}
+
+function makeHtmlAssetSource(candidate, sourceForm, urlPolicyValue, association) {
+  const source = { candidate, sourceForm, association };
+  Object.defineProperty(source, "urlPolicyValue", { value: urlPolicyValue, enumerable: false });
+  return Object.freeze(source);
 }
 
 function makeHtmlTextCandidate({

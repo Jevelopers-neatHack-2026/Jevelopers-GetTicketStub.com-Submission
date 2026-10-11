@@ -1,5 +1,5 @@
 import { collectHtmlEvidence, declaredCharsetFromHtmlDocument, parseHtmlDocument } from "./html.mjs";
-import { extractJsonLdEntities } from "./jsonld.mjs";
+import { decodedJsonLdScalarValue, extractJsonLdEntities } from "./jsonld.mjs";
 import { parseXhtmlDocument, xhtmlXmlDeclarationEncodingFromBytes } from "./xhtml.mjs";
 import {
   createByteOffsetMap,
@@ -570,6 +570,12 @@ function jsonLdAssetCandidateShape(candidate, entityKind, entityPointer) {
   return shape ? { ...shape, nestedOrganizer } : null;
 }
 
+function freezeAssetSource(candidate, sourceForm, association, urlPolicyValue) {
+  const source = { candidate, sourceForm, association };
+  Object.defineProperty(source, "urlPolicyValue", { value: urlPolicyValue, enumerable: false });
+  return Object.freeze(source);
+}
+
 function appendJsonLdAssetSources(state, entities, entityKind, knownOrganizationAssetLocators = new Set()) {
   for (const entity of entities) {
     for (const candidate of entity.candidates) {
@@ -587,10 +593,10 @@ function appendJsonLdAssetSources(state, entities, entityKind, knownOrganization
         }
         return;
       }
-      state.assetSources.push(Object.freeze({
+      state.assetSources.push(freezeAssetSource(
         candidate,
-        sourceForm: family === "logo" ? "jsonld-logo" : "jsonld-image",
-        association: nestedOrganizer
+        family === "logo" ? "jsonld-logo" : "jsonld-image",
+        nestedOrganizer
           ? Object.freeze({
             kind: "nested-entity-source-claim",
             parentEntityKind: "event",
@@ -607,7 +613,8 @@ function appendJsonLdAssetSources(state, entities, entityKind, knownOrganization
             entityPointer: entity.jsonPointer,
             assetPointer: candidate.source?.jsonPointer ?? "",
           }),
-      }));
+        decodedJsonLdScalarValue(candidate),
+      ));
     }
   }
 }

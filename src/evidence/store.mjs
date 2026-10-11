@@ -73,7 +73,7 @@ const PDF_DERIVED_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const ASSET_SOURCE_EXCERPT_REPRESENTATION = 'asset-source-excerpt';
 const ASSET_SOURCE_BUNDLE_VERSION = 3;
 const ASSET_SOURCE_BINDING_VERSION = 1;
-const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/1';
+const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/2';
 const ASSET_SOURCE_MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const ASSET_SOURCE_MAX_POSITIONS = 64;
 const ASSET_SOURCE_MAX_EXCERPT_BYTES = 8 * 1024;
@@ -93,12 +93,20 @@ const ASSET_SOURCE_LIMITATIONS = Object.freeze([
 // readable historical pair here; never reparse or rewrite a sealed bundle.
 // Keep historical identifiers literal so a current writer bump cannot make
 // its existing records unreadable by changing a shared "current" constant.
-const ASSET_SOURCE_READ_PROFILES = new Map([['ei-asset-source-selector/1\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
-  selectorVersion: 'ei-asset-source-selector/1',
-  extractorVersion: 'ei-deterministic-extraction/1.3.0',
-  completeness: 'static-selected-forms-only',
-  limitations: ASSET_SOURCE_LIMITATIONS,
-})]]);
+const ASSET_SOURCE_READ_PROFILES = new Map([
+  ['ei-asset-source-selector/1\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
+    selectorVersion: 'ei-asset-source-selector/1',
+    extractorVersion: 'ei-deterministic-extraction/1.3.0',
+    completeness: 'static-selected-forms-only',
+    limitations: ASSET_SOURCE_LIMITATIONS,
+  })],
+  ['ei-asset-source-selector/2\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
+    selectorVersion: 'ei-asset-source-selector/2',
+    extractorVersion: 'ei-deterministic-extraction/1.3.0',
+    completeness: 'static-selected-forms-only',
+    limitations: ASSET_SOURCE_LIMITATIONS,
+  })],
+]);
 const ASSET_SOURCE_FORMS = new Set([
   'html-img-src', 'html-icon-link', 'open-graph-image', 'jsonld-image', 'jsonld-logo',
 ]);
@@ -708,9 +716,39 @@ function assetUrlObservation(value, responseUrl) {
   if (typeof value !== 'string' || value.trim() === '' || value.length > 8_192 || !isWellFormed(value)) {
     return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'invalid_or_empty' };
   }
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'url_policy_denied' };
+  }
+  const rawValue = value.trim();
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(rawValue)?.[1]?.toLowerCase() ?? null;
+  if (scheme !== null && scheme !== 'http' && scheme !== 'https') {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'unsupported_scheme' };
+  }
+  if (rawValue.includes('\\')) {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'url_policy_denied' };
+  }
+  let policyInput = null;
+  if (scheme !== null) {
+    policyInput = rawValue;
+  } else if (rawValue.startsWith('//')) {
+    try {
+      policyInput = `${new URL(responseUrl).protocol}${rawValue}`;
+    } catch {
+      return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'unresolvable_url' };
+    }
+  }
+  if (policyInput !== null) {
+    try {
+      // Check the original decoded authority before WHATWG URL parsing can
+      // canonicalize alternate numeric hosts or non-canonical ports.
+      parseAndValidateUrl(policyInput);
+    } catch {
+      return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'url_policy_denied' };
+    }
+  }
   let observed;
   try {
-    observed = new URL(value.trim(), responseUrl);
+    observed = new URL(rawValue, responseUrl);
   } catch {
     return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'unresolvable_url' };
   }
@@ -2180,6 +2218,12 @@ export function createEvidenceStore(options) {
       if (['INVALID_INPUT', 'UNSUPPORTED_MEDIA', 'UNSUPPORTED_ENCODING', 'MALFORMED_ENCODING'].includes(extraction.status)) {
         return Object.freeze({ outcome: 'rejected', code: 'SOURCE_UNSUPPORTED_OR_MALFORMED' });
       }
+      const parserDiagnostics = safeArray(extraction.diagnostics, 128);
+      if (!parserDiagnostics) fail('EVIDENCE_INTEGRITY');
+      if (parserDiagnostics.some((diagnostic) => ['MALFORMED_XHTML', 'XHTML_DTD_UNSUPPORTED', 'HTML_PARSER_FAILURE']
+        .includes(diagnostic?.code))) {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_UNSUPPORTED_OR_MALFORMED' });
+      }
       const jsonLdBlocks = safeArray(extraction.jsonLdBlocks, 32);
       if (!jsonLdBlocks) fail('EVIDENCE_INTEGRITY');
       if (jsonLdBlocks.some((block) => block?.status === 'malformed')) {
@@ -2195,12 +2239,13 @@ export function createEvidenceStore(options) {
       if (!currentProfile || currentProfile.extractorVersion !== DETERMINISTIC_EXTRACTION_VERSION) fail('EVIDENCE_INTEGRITY');
 
       const ordered = assetInputs.map((item) => {
-        const asset = ownDataRecord(item, new Set(['candidate', 'sourceForm', 'association']));
+        const asset = ownDataRecord(item, new Set(['candidate', 'sourceForm', 'association', 'urlPolicyValue']));
         const candidate = ownDataRecord(asset?.candidate, new Set([
           'field', 'rawValue', 'normalizedValue', 'source', 'suggestionOnly', 'urlSuggestion', 'property',
         ]));
         const candidateSource = ownDataRecord(candidate?.source, new Set(['kind', 'locator', 'jsonPointer', 'property']));
-        if (!asset || !candidate || !candidateSource || !ASSET_SOURCE_FORMS.has(asset.sourceForm)
+        if (!asset || !candidate || !candidateSource || typeof asset.urlPolicyValue !== 'string'
+          || !ASSET_SOURCE_FORMS.has(asset.sourceForm)
           || typeof candidate.field !== 'string' || candidate.field.length < 1 || candidate.field.length > 160
           || !validAssetAssociation(asset.association, asset.sourceForm)
           || !['asset-source', 'open-graph', 'jsonld'].includes(candidateSource.kind)) fail('EVIDENCE_INTEGRITY');
@@ -2215,7 +2260,7 @@ export function createEvidenceStore(options) {
           fail('EVIDENCE_INTEGRITY');
         }
         const normalized = typeof candidate.normalizedValue === 'string' ? candidate.normalizedValue : null;
-        const observation = assetUrlObservation(normalized, sourceUrl);
+        const observation = assetUrlObservation(asset.urlPolicyValue, sourceUrl);
         const relationHint = typeof candidate.property === 'string' ? candidate.property
           : typeof candidateSource.property === 'string' ? candidateSource.property : null;
         const sortPointer = typeof candidateSource.jsonPointer === 'string' ? candidateSource.jsonPointer : '';
