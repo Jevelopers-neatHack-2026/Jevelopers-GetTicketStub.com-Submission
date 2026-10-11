@@ -164,11 +164,12 @@ function validateDescriptorBinding(capabilities, supported) {
   // Generation sends no references, so a generation-capable profile cannot satisfy a required minimum.
   if (references && capabilities.generation && references.min >= 1) reject();
   if (references && capabilities.edit !== false) {
-    // Fail closed on min > 1: the adapter's smallest edit is the parent alone (1 image) and it sends the declared
-    // references only when the caller supplies them, so it cannot promise to satisfy a larger required minimum.
-    // Such a profile must declare edit:false.
-    // One parent is the smallest edit request, and the declared maximum may not exceed what the provider accepts.
-    if (references.max < 1 || references.min > 1 || capabilities.edit.max_input_references > references.max) reject();
+    // Only inherently contradictory declarations are refused here. A required minimum above one is valid for an
+    // edit-only profile (a parentless concept sends exactly its authorized references), so the per-operation count is
+    // checked against [min, min(max, edit.max_input_references)] when the operation runs, before any port is touched.
+    // No edit request could satisfy a maximum below the required minimum or an upper bound below one reference.
+    if (references.max < 1 || capabilities.edit.max_input_references > references.max ||
+        capabilities.edit.max_input_references < references.min) reject();
   }
 }
 
@@ -439,6 +440,15 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
     }
     const nodeVersion = process.versions.node;
     const maxReferences = profileCapabilities.edit === false ? 0 : profileCapabilities.edit.max_input_references;
+    const minReferences = supported.input_references?.min ?? 0;
+    // The actual number of input_references an operation would send must lie in this range (generation sends 0).
+    const requireReferenceCount = (count) => {
+      if (!Number.isSafeInteger(count) || count < minReferences || count > maxReferences) {
+        fail("unsupported_operation", "The reference count is outside the explicit OpenRouter profile range.", {
+          outcome: "failed", field: "input_references",
+        });
+      }
+    };
     const routing = deepFreeze({ only: [provider_tag], allow_fallbacks: false });
 
     const requireOperation = (operation) => {
@@ -458,7 +468,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       endpointFor: () => ENDPOINT,
       preflight(input, operation, conceptMode) {
         requireOperation(operation);
-        if (operation === "generate") return;
+        if (operation === "generate") return requireReferenceCount(0);
         if (input.plan.steps.some((step) => isRecord(step?.parameters) && step.parameters.mask_source_ref !== undefined)) {
           fail("unsupported_operation", "OpenRouter has no documented mask or inpainting parameter.", {
             outcome: "failed", field: "plan.steps.parameters.mask_source_ref",
@@ -466,11 +476,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
         }
         const referenceCount = conceptMode ? input.concept_reference_manifest.references.length
           : 1 + (input.image_reference_manifest?.references.length ?? 0);
-        if (referenceCount > maxReferences) {
-          fail("unsupported_operation", "The reference count exceeds the explicit OpenRouter profile maximum.", {
-            outcome: "failed", field: "input_references",
-          });
-        }
+        requireReferenceCount(referenceCount);
       },
       validateConfiguration: () => pinnedConfiguration,
       bindingExtras: (operation, attempt) => ({
@@ -536,11 +542,8 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       inspectConceptReferences(args) {
         return guardedAsync(async () => {
           requireOperation("edit");
-          if (Array.isArray(args?.references) && args.references.length > maxReferences) {
-            fail("unsupported_operation", "The reference count exceeds the explicit OpenRouter profile maximum.", {
-              outcome: "failed", field: "input_references",
-            });
-          }
+          // Concept references are sent without a parent, so their exact count is the input_references count.
+          if (Array.isArray(args?.references)) requireReferenceCount(args.references.length);
           return inspectConceptReferenceBytes(assetPort, args);
         });
       },
