@@ -31,6 +31,8 @@ jobs:
         run: npm run test:contracts
       - name: Verify package exports
         run: npm run test:exports
+      - name: Verify PostgreSQL financial ledger behavior
+        run: npm run test:ledger -- --offline
       - name: Verify disposable PostgreSQL migration lifecycle
         run: npm run test:migrations -- --offline
       - name: Verify offline API boundary behavior

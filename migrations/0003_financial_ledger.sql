@@ -30,6 +30,8 @@ CREATE TABLE cost_intelligence.financial_ledger_events (
   reservation_lifecycle text CHECK (reservation_lifecycle IS NULL OR reservation_lifecycle IN (
     'held', 'dispatched', 'outcome_unknown', 'partially_settled', 'settled', 'released', 'expired', 'held_for_reconciliation'
   )),
+  reservation_id text CHECK (reservation_id IS NULL OR length(reservation_id) BETWEEN 1 AND 256),
+  reservation_authorization_event_id text REFERENCES cost_intelligence.financial_ledger_events(event_id) ON DELETE RESTRICT,
   logical_operation_id text NOT NULL CHECK (length(logical_operation_id) BETWEEN 1 AND 256),
   transport_attempt_id text NOT NULL CHECK (length(transport_attempt_id) BETWEEN 1 AND 256),
   provider_attempt_id text NOT NULL CHECK (length(provider_attempt_id) BETWEEN 1 AND 256),
@@ -39,6 +41,7 @@ CREATE TABLE cost_intelligence.financial_ledger_events (
   source_name text NOT NULL CHECK (length(source_name) BETWEEN 1 AND 120),
   source_event_id text NOT NULL CHECK (length(source_event_id) BETWEEN 1 AND 256),
   source_object_id text NOT NULL CHECK (length(source_object_id) BETWEEN 1 AND 256),
+  source_revision_subject_id text NOT NULL CHECK (length(source_revision_subject_id) BETWEEN 1 AND 256),
   source_revision text NOT NULL CHECK (length(source_revision) BETWEEN 1 AND 128),
   source_revision_sequence bigint NOT NULL CHECK (source_revision_sequence >= 0),
   source_content_hash text NOT NULL CHECK (source_content_hash ~ '^sha256:[a-f0-9]{64}$'),
@@ -72,9 +75,18 @@ CREATE TABLE cost_intelligence.financial_ledger_events (
   CONSTRAINT financial_ledger_reservation_memo_ck CHECK (
     event_type NOT IN ('reservation_authorized', 'dispatch', 'reservation_release') OR NOT financial_effect
   ),
-  CONSTRAINT financial_ledger_unique_idempotency UNIQUE (tenant_id, project_id, idempotency_key),
-  CONSTRAINT financial_ledger_unique_source_event UNIQUE (tenant_id, project_id, source_name, source_event_id),
-  CONSTRAINT financial_ledger_unique_source_observation UNIQUE (tenant_id, project_id, source_observation_id)
+  CONSTRAINT financial_ledger_reservation_link_ck CHECK (
+    (reservation_id IS NULL AND reservation_authorization_event_id IS NULL)
+    OR (reservation_id IS NOT NULL AND event_type = 'reservation_authorized' AND reservation_authorization_event_id IS NULL)
+    OR (reservation_id IS NOT NULL AND event_type <> 'reservation_authorized' AND reservation_authorization_event_id IS NOT NULL)
+  ),
+  CONSTRAINT financial_ledger_reservation_command_ck CHECK (
+    event_type NOT IN ('reservation_authorized', 'dispatch', 'reservation_release') OR reservation_id IS NOT NULL
+  ),
+  CONSTRAINT financial_ledger_consumption_nonnegative_ck CHECK (event_type <> 'consumption' OR amount IS NULL OR amount >= 0),
+  CONSTRAINT financial_ledger_unique_idempotency UNIQUE (tenant_id, project_id, environment, billing_mode, idempotency_key),
+  CONSTRAINT financial_ledger_unique_source_event UNIQUE (tenant_id, project_id, environment, billing_mode, source_name, source_event_id),
+  CONSTRAINT financial_ledger_unique_source_observation UNIQUE (tenant_id, project_id, environment, billing_mode, source_observation_id)
 );
 
 CREATE INDEX financial_ledger_projection_scan_idx
@@ -86,6 +98,9 @@ CREATE INDEX financial_ledger_supersedes_idx
 CREATE INDEX financial_ledger_reversal_idx
   ON cost_intelligence.financial_ledger_events (reverses_event_id)
   WHERE reverses_event_id IS NOT NULL;
+CREATE INDEX financial_ledger_reservation_authorization_idx
+  ON cost_intelligence.financial_ledger_events (reservation_authorization_event_id)
+  WHERE reservation_authorization_event_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION cost_intelligence.reject_ledger_audit_mutation()
 RETURNS trigger
@@ -103,14 +118,16 @@ CREATE TRIGGER financial_ledger_events_append_only
 CREATE TABLE cost_intelligence.financial_ledger_identity_bindings (
   tenant_id text NOT NULL,
   project_id text NOT NULL,
+  environment text NOT NULL CHECK (environment IN ('development', 'test', 'production')),
+  billing_mode text NOT NULL CHECK (billing_mode IN ('live', 'sandbox', 'simulated')),
   identity_kind text NOT NULL CHECK (identity_kind IN (
-    'logical_operation', 'transport_attempt', 'provider_attempt', 'provider_request', 'billable_attempt', 'source_observation'
+    'logical_operation', 'transport_attempt', 'provider_attempt', 'provider_request', 'billable_attempt', 'source_observation', 'reservation'
   )),
   identity_value text NOT NULL CHECK (length(identity_value) BETWEEN 1 AND 256),
   logical_operation_id text NOT NULL,
   first_event_id text REFERENCES cost_intelligence.financial_ledger_events(event_id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, project_id, identity_kind, identity_value)
+  PRIMARY KEY (tenant_id, project_id, environment, billing_mode, identity_kind, identity_value)
 );
 
 CREATE OR REPLACE FUNCTION cost_intelligence.guard_identity_binding()
@@ -118,10 +135,18 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF TG_OP = 'DELETE' OR OLD.first_event_id IS NOT NULL OR NEW.first_event_id IS NULL THEN
-    RAISE EXCEPTION 'financial identity bindings are immutable after first event assignment' USING ERRCODE = '55000';
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'financial identity bindings cannot be deleted' USING ERRCODE = '55000';
   END IF;
-  RETURN NEW;
+  IF OLD.first_event_id IS NULL AND NEW.first_event_id IS NOT NULL
+     AND ROW(NEW.tenant_id, NEW.project_id, NEW.environment, NEW.billing_mode, NEW.identity_kind,
+             NEW.identity_value, NEW.logical_operation_id, NEW.created_at)
+         IS NOT DISTINCT FROM
+         ROW(OLD.tenant_id, OLD.project_id, OLD.environment, OLD.billing_mode, OLD.identity_kind,
+             OLD.identity_value, OLD.logical_operation_id, OLD.created_at) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'financial identity bindings allow only one first-event assignment' USING ERRCODE = '55000';
 END;
 $$;
 
@@ -132,22 +157,27 @@ CREATE TRIGGER financial_ledger_identity_binding_immutable
 CREATE TABLE cost_intelligence.financial_source_revision_heads (
   tenant_id text NOT NULL,
   project_id text NOT NULL,
+  environment text NOT NULL CHECK (environment IN ('development', 'test', 'production')),
+  billing_mode text NOT NULL CHECK (billing_mode IN ('live', 'sandbox', 'simulated')),
   source_name text NOT NULL,
   source_object_id text NOT NULL,
+  source_revision_subject_id text NOT NULL,
   current_revision_sequence bigint,
   current_event_id text REFERENCES cost_intelligence.financial_ledger_events(event_id) ON DELETE RESTRICT,
-  PRIMARY KEY (tenant_id, project_id, source_name, source_object_id),
+  PRIMARY KEY (tenant_id, project_id, environment, billing_mode, source_name, source_object_id, source_revision_subject_id),
   CHECK ((current_revision_sequence IS NULL) = (current_event_id IS NULL))
 );
 
 CREATE TABLE cost_intelligence.financial_billable_attempt_heads (
   tenant_id text NOT NULL,
   project_id text NOT NULL,
+  environment text NOT NULL CHECK (environment IN ('development', 'test', 'production')),
+  billing_mode text NOT NULL CHECK (billing_mode IN ('live', 'sandbox', 'simulated')),
   billable_attempt_id text NOT NULL,
   logical_operation_id text NOT NULL,
   current_event_id text REFERENCES cost_intelligence.financial_ledger_events(event_id) ON DELETE RESTRICT,
   current_effect_hash text CHECK (current_effect_hash IS NULL OR current_effect_hash ~ '^sha256:[a-f0-9]{64}$'),
-  PRIMARY KEY (tenant_id, project_id, billable_attempt_id),
+  PRIMARY KEY (tenant_id, project_id, environment, billing_mode, billable_attempt_id),
   CHECK ((current_event_id IS NULL) = (current_effect_hash IS NULL))
 );
 
@@ -191,10 +221,12 @@ CREATE TABLE cost_intelligence.financial_projection_quantities (
   observation_count integer NOT NULL CHECK (observation_count > 0),
   known_quantity_count integer NOT NULL CHECK (known_quantity_count >= 0),
   unknown_quantity_count integer NOT NULL CHECK (unknown_quantity_count >= 0),
+  incomplete_observation_count integer NOT NULL CHECK (incomplete_observation_count BETWEEN 0 AND observation_count),
   known_subtotal numeric(58, 18),
   total_quantity numeric(58, 18),
   quantity_completeness text NOT NULL CHECK (quantity_completeness IN ('unknown', 'incomplete', 'complete')),
-  PRIMARY KEY (snapshot_id, event_type, classification, currency, unit_name, relation),
+  CONSTRAINT financial_projection_quantities_key UNIQUE NULLS NOT DISTINCT
+    (snapshot_id, event_type, classification, currency, unit_name, relation),
   CHECK ((unknown_quantity_count = 0 AND quantity_completeness = 'complete' AND total_quantity IS NOT NULL)
       OR (unknown_quantity_count > 0 AND total_quantity IS NULL AND quantity_completeness <> 'complete')),
   CHECK ((known_quantity_count = 0) = (known_subtotal IS NULL))

@@ -1,6 +1,6 @@
 # API foundation
 
-The public package exposes typed schemas and ESM functions for metering, pricing, budget authorization and lifecycle, accounting, reporting, reconciliation, and export. The current functions validate request shape and scope, then return typed unavailable errors. They do not persist transactions, authorize spend, calculate charges, or send data to external services.
+The public package exposes typed schemas and ESM functions for metering, pricing, budget authorization and lifecycle, financial ledger, reporting, reconciliation, and export. Most application-facing leaves currently validate request shape and scope, then return typed unavailable errors. The ledger append and projection APIs are implemented as PostgreSQL-backed operations through injected host ports. They do not authorize budget capacity, calculate provider charges, or send data to external services.
 
 ## Version and error behavior
 
@@ -19,6 +19,8 @@ Finance API request/response objects use camel case. Nested shared contracts ret
 The usage observation wrapper contains the shared `UsageEvent` plus evidence mode, verification status, and source provenance. The generated event preserves logical-operation, transport-attempt, provider request/attempt, billable-attempt, and source-observation identities. Unknown completeness stays explicit, with `usage_units: null`; it is never converted to zero. An unknown financial-event valuation likewise requires `amount: null`; estimated or provider-confirmed valuation requires an exact decimal amount.
 
 Budget wrappers express authorized, denied, partial, and unavailable outcomes, held and available amounts, estimate completeness/subtotal, a bounded conservative authorization amount, rate-card and policy references, attempt binding, expiry eligibility, and explicit partial-consent/replan requirements. Lifecycle commands distinguish dispatch, cumulative partial/final settlement, and release proof. Settlement carries observed-overrun evidence without rewriting the original hold. Expense adjustments link to an original posting and content-hashed source evidence. The budget policy decision recorded for this boundary rejects a limit reduction below effective consumed spend plus active unconsumed commitments, preserves the existing limit when denied, and emits the near-limit alert at 80% committed. Execution behavior remains unavailable.
+
+The financial ledger API is documented in [ledger.md](./ledger.md). It persists immutable versioned events, binds operational identities independently, records corrections and reversals by reference, and rebuilds deterministic as-of projections with exact decimal arithmetic. Reservation authorization remains a non-financial memo; linked cumulative consumption contributes its full effective amount, including an observed overrun.
 
 ## Summary and export identity
 

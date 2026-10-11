@@ -49,3 +49,4 @@ export async function ingestFinancial(request: FinancialEvent, ports: RuntimePor
 }
 
 export { PostingReceiptSchema };
+export * from './store.js';

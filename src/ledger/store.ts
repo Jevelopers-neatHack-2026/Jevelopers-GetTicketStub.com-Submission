@@ -49,7 +49,7 @@ export const LedgerClassificationSchema = Type.Union([
 ]);
 export type LedgerClassification = Static<typeof LedgerClassificationSchema>;
 
-export const LedgerAppendRequestSchema = Type.Object({
+const LedgerAppendRequestBaseSchema = Type.Object({
   schemaVersion: LocalVersion,
   requestId: Type.String({ minLength: 1, maxLength: 128 }),
   idempotencyKey: Type.String({ minLength: 1, maxLength: 200 }),
@@ -82,11 +82,13 @@ export const LedgerAppendRequestSchema = Type.Object({
     providerRequestId: Type.Union([Identifier, Type.Null()]),
     billableAttemptId: Identifier,
     sourceObservationId: Identifier,
+    reservationId: Type.Union([Identifier, Type.Null()]),
   }, { additionalProperties: false }),
   sourceIdentity: Type.Object({
     source: Type.String({ minLength: 1, maxLength: 120 }),
     sourceEventId: Identifier,
     sourceObjectId: Identifier,
+    revisionSubjectId: Identifier,
     sourceRevision: Type.String({ minLength: 1, maxLength: 128 }),
     revisionSequence: Type.Integer({ minimum: 0, maximum: 2147483647 }),
     contentHash: Sha256Reference,
@@ -132,9 +134,47 @@ export const LedgerAppendRequestSchema = Type.Object({
     effectiveAt: UtcTimestamp,
   }, { additionalProperties: false }), Type.Null()]),
   financialEffect: Type.Boolean(),
+  reservationAuthorizationEventId: Type.Union([Identifier, Type.Null()]),
   supersedesEventId: Type.Union([Identifier, Type.Null()]),
   reversesEventId: Type.Union([Identifier, Type.Null()]),
 }, { additionalProperties: false });
+
+function eventVariant<const EventType extends LedgerEventType, const Effect extends boolean>(
+  eventType: EventType,
+  financialEffect: Effect,
+  reservationLifecycle?: TSchema,
+) {
+  return Type.Object({
+    ...LedgerAppendRequestBaseSchema.properties,
+    eventType: Type.Literal(eventType),
+    financialEffect: Type.Literal(financialEffect),
+    ...(reservationLifecycle ? { reservationLifecycle } : {}),
+  }, { additionalProperties: false });
+}
+
+/** Versioned discriminated event union. Observation/reservation facts cannot post recognized money. */
+export const LedgerAppendRequestSchema = Type.Union([
+  eventVariant('usage_observation', false, Type.Null()),
+  eventVariant('reservation_authorized', false, Type.Literal('held')),
+  eventVariant('dispatch', false, Type.Literal('dispatched')),
+  eventVariant('reservation_release', false, Type.Union([
+    Type.Literal('released'), Type.Literal('expired'),
+  ])),
+  eventVariant('charge', true),
+  eventVariant('consumption', true),
+  eventVariant('expense', true),
+  eventVariant('revenue', true),
+  eventVariant('refund', true),
+  eventVariant('credit', true),
+  eventVariant('discount', true),
+  eventVariant('fee', true),
+  eventVariant('tax', true),
+  eventVariant('reimbursement', true),
+  eventVariant('cash_movement', true),
+  eventVariant('reversal', true),
+  eventVariant('adjustment', true),
+  eventVariant('correction', true),
+]);
 export type LedgerAppendRequest = Static<typeof LedgerAppendRequestSchema>;
 
 export const LedgerAppendReceiptSchema = Type.Object({
@@ -217,7 +257,7 @@ export interface LedgerRuntimePorts {
 }
 
 type LedgerScope = Pick<TrustedScope, 'tenantId' | 'projectId' | 'environment' | 'billingMode'>;
-type BindingKind = 'logical_operation' | 'transport_attempt' | 'provider_attempt' | 'provider_request' | 'billable_attempt' | 'source_observation';
+type BindingKind = 'logical_operation' | 'transport_attempt' | 'provider_attempt' | 'provider_request' | 'billable_attempt' | 'source_observation' | 'reservation';
 type Binding = { kind: BindingKind; value: string };
 
 function makeError(module: string, operation: string, code: ErrorEnvelope['code'], requestId: string, message: string): ErrorEnvelope {
@@ -314,8 +354,9 @@ export function validateLedgerAppendRequestBoundary(value: unknown): Validation<
   if (memoEvent && request.financialEffect) {
     return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Observation and reservation lifecycle records cannot post recognized financial effects.');
   }
-  if (request.eventType === 'correction' ? request.supersedesEventId === null : request.supersedesEventId !== null) {
-    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Only a correction may supersede a prior event, and every correction must name it.');
+  if (request.eventType === 'correction' && request.supersedesEventId === null
+    || !['correction', 'consumption'].includes(request.eventType) && request.supersedesEventId !== null) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Only a correction or cumulative consumption revision may supersede a prior event; every correction must name it.');
   }
   if (request.eventType === 'reversal' ? request.reversesEventId === null : request.reversesEventId !== null) {
     return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Every reversal must name its original event; other event types cannot use reversal lineage.');
@@ -325,6 +366,33 @@ export function validateLedgerAppendRequestBoundary(value: unknown): Validation<
   }
   if (request.eventType === 'correction' && !request.financialEffect) {
     return validationFailure('ledger', 'appendLedgerEvent', requestId, 'A financial correction must participate in the effective projection.');
+  }
+  if (['correction', 'adjustment', 'reversal'].includes(request.eventType) && request.sourceRefs.length === 0) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Corrections, reversals, and adjustments require content-addressed source evidence.');
+  }
+  if (request.eventType === 'reservation_authorized' && request.classification !== 'reservation_memo'
+    || request.eventType === 'dispatch' && request.classification !== 'reservation_memo'
+    || request.eventType === 'reservation_release' && request.classification !== 'reservation_memo'
+    || request.eventType === 'usage_observation' && request.classification !== 'usage_memo') {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Observation and reservation events must use their memo classification.');
+  }
+  const reservationId = request.identities.reservationId;
+  const reservationEventId = request.reservationAuthorizationEventId;
+  if (request.eventType === 'reservation_authorized') {
+    if (reservationId === null || reservationEventId !== null) {
+      return validationFailure('ledger', 'appendLedgerEvent', requestId, 'A reservation authorization needs its reservation identity and cannot point to another authorization.');
+    }
+  } else if (['dispatch', 'reservation_release'].includes(request.eventType) && reservationId === null) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Reservation dispatch and release events require a reservation identity.');
+  }
+  if (request.eventType !== 'reservation_authorized' && (reservationId === null) !== (reservationEventId === null)) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Reservation activity must retain both the reservation identity and its authorization event link.');
+  }
+  if (request.eventType === 'consumption' && request.money.amount !== null && parseScaledDecimal(request.money.amount) < 0n) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Cumulative consumption cannot be negative; append a linked reversal or correction instead.');
+  }
+  if (request.eventType === 'consumption' && !new Set<string>(['partially_settled', 'settled', 'outcome_unknown', 'held_for_reconciliation']).has(request.reservationLifecycle as string)) {
+    return validationFailure('ledger', 'appendLedgerEvent', requestId, 'Consumption must preserve its partial, final, or unresolved reservation lifecycle.');
   }
   if (request.fxEvidence !== null && request.fxEvidence.sourceRef.content_hash.length !== 71) {
     return validationFailure('ledger', 'appendLedgerEvent', requestId, 'FX evidence needs a content-addressed source reference.');
@@ -351,6 +419,7 @@ function bindingsFor(request: LedgerAppendRequest): Binding[] {
     { kind: 'source_observation', value: ids.sourceObservationId },
   ];
   if (ids.providerRequestId !== null) bindings.push({ kind: 'provider_request', value: ids.providerRequestId });
+  if (ids.reservationId !== null) bindings.push({ kind: 'reservation', value: ids.reservationId });
   return bindings.sort((left, right) => `${left.kind}\0${left.value}`.localeCompare(`${right.kind}\0${right.value}`));
 }
 
@@ -395,15 +464,31 @@ function exactEffectFingerprint(request: LedgerAppendRequest): unknown {
   return {
     tenantId: request.scope.tenantId,
     projectId: request.scope.projectId,
+    environment: request.scope.environment,
+    billingMode: request.scope.billingMode,
+    evidenceMode: request.evidenceMode,
+    verificationStatus: request.verificationStatus,
+    occurredAt: request.occurredAt,
     logicalOperationId: request.identities.logicalOperationId,
     billableAttemptId: request.identities.billableAttemptId,
+    reservationId: request.identities.reservationId,
+    reservationAuthorizationEventId: request.reservationAuthorizationEventId,
+    eventType: request.eventType,
+    financialEffect: request.financialEffect,
+    reservationLifecycle: request.reservationLifecycle,
     classification: request.classification,
     valuation: request.valuation,
+    settlementStatus: request.settlementStatus,
+    reconciliationStatus: request.reconciliationStatus,
     amount: request.money.amount,
     currency: request.money.currency,
     scale: request.money.scale,
     usage: request.usage,
     pricing: request.pricing,
+    fxEvidence: request.fxEvidence,
+    sourceIdentity: request.sourceIdentity,
+    sourceRefs: request.sourceRefs,
+    dimensions: request.dimensions,
   };
 }
 
@@ -426,7 +511,12 @@ export async function appendLedgerEvent(
   const request = validated.value;
   const authorizationError = await trustedScope(request, ports, 'appendLedgerEvent');
   if (authorizationError) return failure(authorizationError);
-  const now = ports.clock.now();
+  let now: Date;
+  try {
+    now = ports.clock.now();
+  } catch {
+    return failure(makeError('ledger', 'appendLedgerEvent', 'SOURCE_UNAVAILABLE', request.requestId, 'Trusted ledger clock is unavailable.'));
+  }
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     return failure(makeError('ledger', 'appendLedgerEvent', 'SOURCE_UNAVAILABLE', request.requestId, 'Trusted ledger clock is unavailable.'));
   }
@@ -444,8 +534,8 @@ export async function appendLedgerEvent(
 
     const idempotency = await client.query(
       `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events
-       WHERE tenant_id = $1 AND project_id = $2 AND idempotency_key = $3 FOR UPDATE`,
-      [scope.tenantId, scope.projectId, request.idempotencyKey],
+       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND idempotency_key = $5 FOR UPDATE`,
+      [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.idempotencyKey],
     );
     if (idempotency.rows.length) {
       await rollback(client);
@@ -459,18 +549,18 @@ export async function appendLedgerEvent(
     for (const binding of bindings) {
       await client.query(
         `INSERT INTO cost_intelligence.financial_ledger_identity_bindings
-          (tenant_id, project_id, identity_kind, identity_value, logical_operation_id)
-         VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-        [scope.tenantId, scope.projectId, binding.kind, binding.value, request.identities.logicalOperationId],
+          (tenant_id, project_id, environment, billing_mode, identity_kind, identity_value, logical_operation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+        [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, binding.kind, binding.value, request.identities.logicalOperationId],
       );
     }
     const lockedBindings = await client.query(
       `SELECT identity_kind, identity_value, logical_operation_id, first_event_id
        FROM cost_intelligence.financial_ledger_identity_bindings
-       WHERE tenant_id = $1 AND project_id = $2 AND (identity_kind, identity_value) IN (
-         SELECT * FROM unnest($3::text[], $4::text[])
+       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND (identity_kind, identity_value) IN (
+         SELECT * FROM unnest($5::text[], $6::text[])
        ) ORDER BY identity_kind, identity_value FOR UPDATE`,
-      [scope.tenantId, scope.projectId, bindings.map(item => item.kind), bindings.map(item => item.value)],
+      [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, bindings.map(item => item.kind), bindings.map(item => item.value)],
     );
     for (const row of lockedBindings.rows) {
       if (fromRow(row, 'logical_operation_id') !== request.identities.logicalOperationId) {
@@ -480,30 +570,67 @@ export async function appendLedgerEvent(
       }
       if (fromRow(row, 'identity_kind') === 'source_observation' && fromRow(row, 'first_event_id') !== null) {
         const existing = await client.query(
-          `SELECT event_id, source_content_hash, billable_attempt_id, source_revision_sequence
+          `SELECT event_id, event_hash, source_content_hash, billable_attempt_id, source_revision_sequence
            FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
           [fromRow(row, 'first_event_id')],
         );
         const prior = existing.rows[0] ?? {};
-        const duplicate = fromRow(prior, 'source_content_hash') === request.sourceIdentity.contentHash
+        const duplicate = fromRow(prior, 'event_hash') === eventHash
+          && fromRow(prior, 'source_content_hash') === request.sourceIdentity.contentHash
           && fromRow(prior, 'billable_attempt_id') === request.identities.billableAttemptId
           && Number(prior.source_revision_sequence) === request.sourceIdentity.revisionSequence;
         await rollback(client);
         inTransaction = false;
         return { ok: true, value: receipt(request, duplicate ? 'duplicate' : 'conflict', fromRow(prior, 'event_id'), null) };
       }
+      if (fromRow(row, 'identity_kind') === 'reservation' && fromRow(row, 'first_event_id') !== null
+        && request.eventType === 'reservation_authorized') {
+        const existing = await client.query(
+          `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
+          [fromRow(row, 'first_event_id')],
+        );
+        const prior = existing.rows[0] ?? {};
+        const duplicate = fromRow(prior, 'event_hash') === eventHash;
+        await rollback(client);
+        inTransaction = false;
+        return { ok: true, value: receipt(request, duplicate ? 'duplicate' : 'conflict', fromRow(prior, 'event_id'), null) };
+      }
+    }
+
+    if (request.reservationAuthorizationEventId !== null) {
+      const authorization = await client.query(
+        `SELECT tenant_id, project_id, environment, billing_mode, event_type, reservation_id, logical_operation_id, currency
+         FROM cost_intelligence.financial_ledger_events WHERE event_id = $1`,
+        [request.reservationAuthorizationEventId],
+      );
+      const authorizationRow = authorization.rows[0] ?? {};
+      if (fromRow(authorizationRow, 'tenant_id') !== scope.tenantId
+        || fromRow(authorizationRow, 'project_id') !== scope.projectId
+        || fromRow(authorizationRow, 'environment') !== scope.environment
+        || fromRow(authorizationRow, 'billing_mode') !== scope.billingMode
+        || fromRow(authorizationRow, 'event_type') !== 'reservation_authorized'
+        || fromRow(authorizationRow, 'reservation_id') !== request.identities.reservationId
+        || fromRow(authorizationRow, 'logical_operation_id') !== request.identities.logicalOperationId
+        || fromRow(authorizationRow, 'currency')?.trim() !== request.money.currency) {
+        await rollback(client);
+        inTransaction = false;
+        return conflictResult(request, 'conflict', request.reservationAuthorizationEventId);
+      }
     }
 
     await client.query(
       `INSERT INTO cost_intelligence.financial_source_revision_heads
-        (tenant_id, project_id, source_name, source_object_id)
-       VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-      [scope.tenantId, scope.projectId, request.sourceIdentity.source, request.sourceIdentity.sourceObjectId],
+          (tenant_id, project_id, environment, billing_mode, source_name, source_object_id, source_revision_subject_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+      [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.sourceIdentity.source,
+        request.sourceIdentity.sourceObjectId, request.sourceIdentity.revisionSubjectId],
     );
     const sourceHead = await client.query(
       `SELECT current_revision_sequence, current_event_id FROM cost_intelligence.financial_source_revision_heads
-       WHERE tenant_id = $1 AND project_id = $2 AND source_name = $3 AND source_object_id = $4 FOR UPDATE`,
-      [scope.tenantId, scope.projectId, request.sourceIdentity.source, request.sourceIdentity.sourceObjectId],
+       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4
+         AND source_name = $5 AND source_object_id = $6 AND source_revision_subject_id = $7 FOR UPDATE`,
+      [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.sourceIdentity.source,
+        request.sourceIdentity.sourceObjectId, request.sourceIdentity.revisionSubjectId],
     );
     const currentSource = sourceHead.rows[0] ?? {};
     const currentSourceEventId = fromRow(currentSource, 'current_event_id');
@@ -525,15 +652,16 @@ export async function appendLedgerEvent(
     if (request.financialEffect) {
       await client.query(
         `INSERT INTO cost_intelligence.financial_billable_attempt_heads
-          (tenant_id, project_id, billable_attempt_id, logical_operation_id)
-         VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-        [scope.tenantId, scope.projectId, request.identities.billableAttemptId, request.identities.logicalOperationId],
+          (tenant_id, project_id, environment, billing_mode, billable_attempt_id, logical_operation_id)
+         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+        [scope.tenantId, scope.projectId, scope.environment, scope.billingMode,
+          request.identities.billableAttemptId, request.identities.logicalOperationId],
       );
       const billableHead = await client.query(
         `SELECT logical_operation_id, current_event_id, current_effect_hash
          FROM cost_intelligence.financial_billable_attempt_heads
-         WHERE tenant_id = $1 AND project_id = $2 AND billable_attempt_id = $3 FOR UPDATE`,
-        [scope.tenantId, scope.projectId, request.identities.billableAttemptId],
+         WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND billable_attempt_id = $5 FOR UPDATE`,
+        [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.identities.billableAttemptId],
       );
       const current = billableHead.rows[0] ?? {};
       if (fromRow(current, 'logical_operation_id') !== request.identities.logicalOperationId) {
@@ -546,7 +674,7 @@ export async function appendLedgerEvent(
       if (existingBillableEventId !== null) {
         if (request.eventType === 'correction' && request.supersedesEventId === existingBillableEventId) {
           const original = await client.query(
-            `SELECT classification, currency, logical_operation_id, billable_attempt_id
+            `SELECT classification, currency, logical_operation_id, billable_attempt_id, reservation_id, reservation_authorization_event_id
              FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
             [existingBillableEventId],
           );
@@ -554,7 +682,31 @@ export async function appendLedgerEvent(
           if (fromRow(originalRow, 'classification') !== request.classification
             || fromRow(originalRow, 'currency')?.trim() !== request.money.currency
             || fromRow(originalRow, 'logical_operation_id') !== request.identities.logicalOperationId
-            || fromRow(originalRow, 'billable_attempt_id') !== request.identities.billableAttemptId) {
+            || fromRow(originalRow, 'billable_attempt_id') !== request.identities.billableAttemptId
+            || fromRow(originalRow, 'reservation_id') !== request.identities.reservationId
+            || fromRow(originalRow, 'reservation_authorization_event_id') !== request.reservationAuthorizationEventId) {
+            await rollback(client);
+            inTransaction = false;
+            return conflictResult(request, 'conflict', existingBillableEventId);
+          }
+        } else if (request.eventType === 'consumption' && request.supersedesEventId === existingBillableEventId) {
+          const original = await client.query(
+            `SELECT event_type, classification, currency, amount::text AS amount, logical_operation_id,
+                    billable_attempt_id, reservation_id, reservation_authorization_event_id
+             FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
+            [existingBillableEventId],
+          );
+          const originalRow = original.rows[0] ?? {};
+          const previousAmount = fromRow(originalRow, 'amount');
+          const nextAmount = request.money.amount;
+          if (fromRow(originalRow, 'event_type') !== 'consumption'
+            || fromRow(originalRow, 'classification') !== request.classification
+            || fromRow(originalRow, 'currency')?.trim() !== request.money.currency
+            || fromRow(originalRow, 'logical_operation_id') !== request.identities.logicalOperationId
+            || fromRow(originalRow, 'billable_attempt_id') !== request.identities.billableAttemptId
+            || fromRow(originalRow, 'reservation_id') !== request.identities.reservationId
+            || fromRow(originalRow, 'reservation_authorization_event_id') !== request.reservationAuthorizationEventId
+            || previousAmount !== null && nextAmount !== null && parseScaledDecimal(nextAmount) < parseScaledDecimal(previousAmount)) {
             await rollback(client);
             inTransaction = false;
             return conflictResult(request, 'conflict', existingBillableEventId);
@@ -569,13 +721,14 @@ export async function appendLedgerEvent(
 
     if (request.eventType === 'reversal' && request.reversesEventId !== null) {
       const target = await client.query(
-        `SELECT tenant_id, project_id, currency, amount::text AS amount, classification
+        `SELECT tenant_id, project_id, environment, billing_mode, currency, amount::text AS amount, classification
          FROM cost_intelligence.financial_ledger_events WHERE event_id = $1 FOR UPDATE`,
         [request.reversesEventId],
       );
       const targetRow = target.rows[0];
       const amount = request.money.amount;
       if (!targetRow || fromRow(targetRow, 'tenant_id') !== scope.tenantId || fromRow(targetRow, 'project_id') !== scope.projectId
+        || fromRow(targetRow, 'environment') !== scope.environment || fromRow(targetRow, 'billing_mode') !== scope.billingMode
         || fromRow(targetRow, 'currency')?.trim() !== request.money.currency || amount === null || fromRow(targetRow, 'amount') === null) {
         await rollback(client);
         inTransaction = false;
@@ -585,8 +738,8 @@ export async function appendLedgerEvent(
       const reversalAmount = parseScaledDecimal(amount);
       const previouslyReversed = await client.query(
         `SELECT amount::text AS amount FROM cost_intelligence.financial_ledger_events
-         WHERE reverses_event_id = $1 AND tenant_id = $2 AND project_id = $3`,
-        [request.reversesEventId, scope.tenantId, scope.projectId],
+         WHERE reverses_event_id = $1 AND tenant_id = $2 AND project_id = $3 AND environment = $4 AND billing_mode = $5`,
+        [request.reversesEventId, scope.tenantId, scope.projectId, scope.environment, scope.billingMode],
       );
       const reversedTotal = previouslyReversed.rows.reduce((sum, row) => sum + parseScaledDecimal(asString(row.amount)), 0n) + reversalAmount;
       if (fromRow(targetRow, 'classification') !== request.classification
@@ -605,52 +758,59 @@ export async function appendLedgerEvent(
         producer_source_revision, producer_build_revision, occurred_at, observed_at, ingested_at,
         environment, billing_mode, evidence_mode, verification_status, event_type, classification,
         valuation, settlement_status, reconciliation_status, reservation_lifecycle,
+        reservation_id, reservation_authorization_event_id,
         logical_operation_id, transport_attempt_id, provider_attempt_id, provider_request_id,
-        billable_attempt_id, source_observation_id, source_name, source_event_id, source_object_id,
+        billable_attempt_id, source_observation_id, source_name, source_event_id, source_object_id, source_revision_subject_id,
         source_revision, source_revision_sequence, source_content_hash, quantity_completeness, quantity_units,
         amount, currency, amount_scale, source_refs, dimensions, pricing, fx_evidence, financial_effect,
         idempotency_key, supersedes_event_id, reverses_event_id, event_hash, event_payload
       ) VALUES (
         $1, '1.0.0', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
-        $33, $34::jsonb, $35, $36, $37, $38::jsonb, $39::jsonb, $40::jsonb, $41::jsonb, $42,
-        $43, $44, $45, $46, $47::jsonb
+        $33, $34, $35, $36, $37::jsonb, $38, $39, $40, $41::jsonb, $42::jsonb, $43::jsonb, $44::jsonb,
+        $45, $46, $47, $48, $49, $50::jsonb
       )`,
       [
         request.eventId, scope.tenantId, scope.projectId, request.correlationId, request.producer.module,
         request.producer.sourceRevision, request.producer.buildRevision, request.occurredAt, request.observedAt, ingestedAt,
         scope.environment, scope.billingMode, request.evidenceMode, request.verificationStatus, request.eventType, request.classification,
         request.valuation, request.settlementStatus, request.reconciliationStatus, request.reservationLifecycle,
+        request.identities.reservationId, request.reservationAuthorizationEventId,
         request.identities.logicalOperationId, request.identities.transportAttemptId, request.identities.providerAttemptId,
         request.identities.providerRequestId, request.identities.billableAttemptId, request.identities.sourceObservationId,
         request.sourceIdentity.source, request.sourceIdentity.sourceEventId, request.sourceIdentity.sourceObjectId,
+        request.sourceIdentity.revisionSubjectId,
         request.sourceIdentity.sourceRevision, request.sourceIdentity.revisionSequence, request.sourceIdentity.contentHash,
         request.usage.completeness, JSON.stringify(request.usage.units), request.money.amount, request.money.currency,
-        request.money.scale, JSON.stringify(request.sourceRefs), JSON.stringify(request.dimensions), JSON.stringify(request.pricing),
-        JSON.stringify(request.fxEvidence), request.financialEffect, request.idempotencyKey, request.supersedesEventId,
+        request.money.scale, JSON.stringify(request.sourceRefs), JSON.stringify(request.dimensions),
+        request.pricing === null ? null : JSON.stringify(request.pricing),
+        request.fxEvidence === null ? null : JSON.stringify(request.fxEvidence), request.financialEffect, request.idempotencyKey, request.supersedesEventId,
         request.reversesEventId, eventHash, JSON.stringify(persistedPayload),
       ],
     );
 
     for (const binding of bindings) {
       await client.query(
-        `UPDATE cost_intelligence.financial_ledger_identity_bindings SET first_event_id = $5
-         WHERE tenant_id = $1 AND project_id = $2 AND identity_kind = $3 AND identity_value = $4 AND first_event_id IS NULL`,
-        [scope.tenantId, scope.projectId, binding.kind, binding.value, request.eventId],
+        `UPDATE cost_intelligence.financial_ledger_identity_bindings SET first_event_id = $7
+         WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4
+           AND identity_kind = $5 AND identity_value = $6 AND first_event_id IS NULL`,
+        [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, binding.kind, binding.value, request.eventId],
       );
     }
     await client.query(
       `UPDATE cost_intelligence.financial_source_revision_heads
-       SET current_revision_sequence = $5, current_event_id = $6
-       WHERE tenant_id = $1 AND project_id = $2 AND source_name = $3 AND source_object_id = $4`,
-      [scope.tenantId, scope.projectId, request.sourceIdentity.source, request.sourceIdentity.sourceObjectId, request.sourceIdentity.revisionSequence, request.eventId],
+       SET current_revision_sequence = $8, current_event_id = $9
+       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4
+         AND source_name = $5 AND source_object_id = $6 AND source_revision_subject_id = $7`,
+      [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.sourceIdentity.source,
+        request.sourceIdentity.sourceObjectId, request.sourceIdentity.revisionSubjectId, request.sourceIdentity.revisionSequence, request.eventId],
     );
     if (request.financialEffect) {
       await client.query(
         `UPDATE cost_intelligence.financial_billable_attempt_heads
-         SET current_event_id = $4, current_effect_hash = $5
-         WHERE tenant_id = $1 AND project_id = $2 AND billable_attempt_id = $3`,
-        [scope.tenantId, scope.projectId, request.identities.billableAttemptId, request.eventId, effectHash],
+         SET current_event_id = $6, current_effect_hash = $7
+         WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND billable_attempt_id = $5`,
+        [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.identities.billableAttemptId, request.eventId, effectHash],
       );
     }
     await client.query('COMMIT');
@@ -659,7 +819,29 @@ export async function appendLedgerEvent(
   } catch (error) {
     if (client && inTransaction) await rollback(client);
     const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
-    if (code === '23505' || code === '23503' || code === '23514') {
+    if (code === '23505' && client) {
+      try {
+        const existing = await client.query(
+          `SELECT event_id, event_hash FROM cost_intelligence.financial_ledger_events
+           WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4
+             AND (idempotency_key = $5 OR event_id = $6 OR source_observation_id = $7
+               OR (source_name = $8 AND source_event_id = $9))
+           ORDER BY CASE WHEN idempotency_key = $5 THEN 0 WHEN event_id = $6 THEN 1
+             WHEN source_observation_id = $7 THEN 2 ELSE 3 END LIMIT 1`,
+          [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.idempotencyKey,
+            request.eventId, request.identities.sourceObservationId, request.sourceIdentity.source, request.sourceIdentity.sourceEventId],
+        );
+        const row = existing.rows[0];
+        if (row) {
+          const existingId = fromRow(row, 'event_id');
+          return { ok: true, value: receipt(request, fromRow(row, 'event_hash') === eventHash ? 'duplicate' : 'conflict', existingId, null) };
+        }
+      } catch {
+        return conflictResult(request, 'conflict');
+      }
+      return conflictResult(request, 'conflict');
+    }
+    if (code === '23503' || code === '23514') {
       return conflictResult(request, 'conflict');
     }
     return failure(makeError('ledger', 'appendLedgerEvent', 'SOURCE_UNAVAILABLE', request.requestId, 'Ledger persistence is temporarily unavailable.'));
@@ -748,7 +930,8 @@ function computeProjectionRows(rows: readonly Record<string, unknown>[]): {
     }
   }
   const amountRows = [...amounts.values()].map(item => {
-    const completeness = item.unknownAmountCount === 0 ? 'complete' : item.knownAmountCount === 0 ? 'unknown' : 'partial';
+    const completeness: Static<typeof ProjectionAmountSchema>['completeness'] = item.unknownAmountCount === 0
+      ? 'complete' : item.knownAmountCount === 0 ? 'unknown' : 'partial';
     return {
       eventType: item.eventType, classification: item.classification, currency: item.currency,
       eventCount: item.eventCount, knownAmountCount: item.knownAmountCount, unknownAmountCount: item.unknownAmountCount,
@@ -757,7 +940,7 @@ function computeProjectionRows(rows: readonly Record<string, unknown>[]): {
     };
   }).sort((left, right) => keyFor(left.eventType, left.classification, left.currency).localeCompare(keyFor(right.eventType, right.classification, right.currency)));
   const quantityRows = [...quantities.values()].map(item => {
-    const completeness = item.unknownQuantityCount === 0 && item.incompleteObservationCount === 0
+    const completeness: Static<typeof ProjectionQuantitySchema>['completeness'] = item.unknownQuantityCount === 0 && item.incompleteObservationCount === 0
       ? 'complete' : item.knownQuantityCount === 0 && item.incompleteObservationCount === 0 ? 'unknown' : 'incomplete';
     return {
       eventType: item.eventType, classification: item.classification, currency: item.currency,
@@ -787,7 +970,7 @@ export async function rebuildLedgerProjection(
   let inTransaction = false;
   try {
     client = await ports.database.connect();
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
     inTransaction = true;
     const events = await client.query(
       `SELECT e.event_id, e.event_hash, e.event_type, e.classification, e.currency, e.amount::text AS amount,

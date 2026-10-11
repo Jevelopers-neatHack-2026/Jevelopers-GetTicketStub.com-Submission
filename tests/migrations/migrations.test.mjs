@@ -26,7 +26,7 @@ async function verifyDurability(prefix) {
     assertDisposableMarker(marker.rows);
     const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 2);
+    assert.equal(Number(health.rows[0].required_migrations_present), 3);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -55,10 +55,11 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
   assert.deepEqual(previousMigrations.map(({ version, status }) => ({ version, status })), [
     { version: '0001_foundation', status: 'already_applied' },
     { version: '0002_foundation_health', status: 'applied' },
+    { version: '0003_financial_ledger', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 2, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
+  assert.equal(names.length, 3, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
   for (const prefix of ['CI_TEST_DB', 'CI_TEST_PREVIOUS_DB']) {
     const client = new Client(databaseConfigFromEnvironment(prefix));
     await client.connect();

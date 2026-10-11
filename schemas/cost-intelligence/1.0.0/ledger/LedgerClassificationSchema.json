@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/ledger/LedgerClassificationSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "anyOf": [
+    {
+      "const": "sale",
+      "type": "string"
+    },
+    {
+      "const": "discount",
+      "type": "string"
+    },
+    {
+      "const": "sale_refund",
+      "type": "string"
+    },
+    {
+      "const": "pass_through_tax",
+      "type": "string"
+    },
+    {
+      "const": "supplier_credit",
+      "type": "string"
+    },
+    {
+      "const": "supplier_expense",
+      "type": "string"
+    },
+    {
+      "const": "reimbursement",
+      "type": "string"
+    },
+    {
+      "const": "payout_transfer",
+      "type": "string"
+    },
+    {
+      "const": "direct_cost",
+      "type": "string"
+    },
+    {
+      "const": "operating_expense",
+      "type": "string"
+    },
+    {
+      "const": "operating_revenue",
+      "type": "string"
+    },
+    {
+      "const": "award_grant",
+      "type": "string"
+    },
+    {
+      "const": "capital_funding",
+      "type": "string"
+    },
+    {
+      "const": "sponsorship",
+      "type": "string"
+    },
+    {
+      "const": "in_kind_support",
+      "type": "string"
+    },
+    {
+      "const": "payable_labor",
+      "type": "string"
+    },
+    {
+      "const": "reservation_memo",
+      "type": "string"
+    },
+    {
+      "const": "usage_memo",
+      "type": "string"
+    }
+  ]
+}
