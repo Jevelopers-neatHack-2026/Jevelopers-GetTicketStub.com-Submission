@@ -1,5 +1,6 @@
 // Node 24 cryptographic identifiers and idempotency fingerprints.
 import { createHash, randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { DurableJsonStore, type DurableJson } from "./metering-store.js";
 import type {
   BudgetClient,
@@ -156,7 +157,7 @@ export interface StoredAttemptSummary {
 }
 
 export interface MeteringSnapshot {
-  readonly schemaVersion: "private-connector-metering-state/1";
+  readonly schemaVersion: "private-connector-metering-state/2";
   readonly revision: number;
   readonly attempts: readonly StoredAttemptSummary[];
   readonly outbox: readonly {
@@ -214,11 +215,20 @@ interface MutableOutboxEvent {
 }
 
 interface MutableState {
-  schemaVersion: "private-connector-metering-state/1";
+  schemaVersion: "private-connector-metering-state/2";
+  context: MeteringStoreContext;
   revision: number;
   nextSequence: number;
   attempts: MutableAttempt[];
   outbox: MutableOutboxEvent[];
+}
+
+interface MeteringStoreContext {
+  readonly providerId: string;
+  readonly mode: ProviderMode;
+  readonly billingMode: ProviderMode;
+  readonly evidenceMode: EvidenceMode;
+  readonly scope: TrustedScope;
 }
 
 interface NormalizedObservation {
@@ -238,13 +248,22 @@ interface NormalizedObservation {
   effect: MeteringObservationInput["effect"];
 }
 
-const INITIAL_STATE: MutableState = {
-  schemaVersion: "private-connector-metering-state/1",
-  revision: 0,
-  nextSequence: 1,
-  attempts: [],
-  outbox: []
-};
+function initialState(context: MeteringStoreContext): MutableState {
+  return {
+    schemaVersion: "private-connector-metering-state/2",
+    context: {
+      providerId: context.providerId,
+      mode: context.mode,
+      billingMode: context.billingMode,
+      evidenceMode: context.evidenceMode,
+      scope: { tenantId: context.scope.tenantId, projectId: context.scope.projectId }
+    },
+    revision: 0,
+    nextSequence: 1,
+    attempts: [],
+    outbox: []
+  };
+}
 
 const SHAPE_USAGE: SharedShape = "fulfillment_usage";
 const SHAPE_BUDGET: SharedShape = "budget_reservation";
@@ -257,6 +276,47 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   } catch {
     return false;
   }
+}
+
+function normalizeStoreContext(value: unknown): MeteringStoreContext | undefined {
+  if (!isRecord(value) || !requireToken(value.providerId) ||
+      (value.mode !== "simulated" && value.mode !== "sandbox") ||
+      (value.billingMode !== "simulated" && value.billingMode !== "sandbox") ||
+      !["private_fixture", "provider_sandbox_account", "unknown"].includes(String(value.evidenceMode)) ||
+      !isRecord(value.scope) || !requireToken(value.scope.tenantId) || !requireToken(value.scope.projectId)) return undefined;
+  return {
+    providerId: value.providerId,
+    mode: value.mode,
+    billingMode: value.billingMode,
+    evidenceMode: value.evidenceMode as EvidenceMode,
+    scope: { tenantId: value.scope.tenantId, projectId: value.scope.projectId }
+  };
+}
+
+function sameStoreContext(left: MeteringStoreContext, right: MeteringStoreContext): boolean {
+  return stableStringify(left) === stableStringify(right);
+}
+
+function attemptMatchesContext(value: Record<string, unknown>, context: MeteringStoreContext): boolean {
+  return value.providerId === context.providerId && value.mode === context.mode &&
+    value.billingMode === context.billingMode && value.evidenceMode === context.evidenceMode &&
+    isRecord(value.scope) && value.scope.tenantId === context.scope.tenantId &&
+    value.scope.projectId === context.scope.projectId;
+}
+
+function candidateMatchesContext(value: unknown, context: MeteringStoreContext): boolean {
+  return isRecord(value) && value.provider_id === context.providerId && value.mode === context.mode &&
+    value.billing_mode === context.billingMode && value.evidence_mode === context.evidenceMode &&
+    isRecord(value.trusted_scope) && value.trusted_scope.tenantId === context.scope.tenantId &&
+    value.trusted_scope.projectId === context.scope.projectId;
+}
+
+function reservationMatchesContext(value: unknown, context: MeteringStoreContext): boolean {
+  if (!isRecord(value) || value.provider_id !== context.providerId || value.mode !== context.mode ||
+      value.billing_mode !== context.billingMode || value.evidence_mode !== context.evidenceMode) return false;
+  if (value.trusted_scope === undefined) return true;
+  return isRecord(value.trusted_scope) && value.trusted_scope.tenantId === context.scope.tenantId &&
+    value.trusted_scope.projectId === context.scope.projectId;
 }
 
 function cloneData(value: unknown, seen = new WeakSet<object>()): unknown {
@@ -382,15 +442,17 @@ function safeStoreError(error: unknown): MeteringFailure {
   return "storage_unavailable";
 }
 
-function validateState(value: DurableJson): MutableState | undefined {
-  if (!isRecord(value) || value.schemaVersion !== "private-connector-metering-state/1" ||
+function validateState(value: DurableJson, expectedContext?: MeteringStoreContext): MutableState | undefined {
+  if (!isRecord(value) || value.schemaVersion !== "private-connector-metering-state/2" ||
       !Number.isSafeInteger(value.revision) || (value.revision as number) < 0 ||
       !Number.isSafeInteger(value.nextSequence) || (value.nextSequence as number) < 1 ||
       !Array.isArray(value.attempts) || !Array.isArray(value.outbox)) return undefined;
+  const context = normalizeStoreContext(value.context);
+  if (context === undefined || (expectedContext !== undefined && !sameStoreContext(context, expectedContext))) return undefined;
   const attemptIds = new Set<string>();
   const attemptKeys = new Set<string>();
   for (const candidate of value.attempts) {
-    if (!isRecord(candidate) || !requireToken(candidate.attemptId) || !requireToken(candidate.clientAttemptKey, 256) ||
+    if (!isRecord(candidate) || !attemptMatchesContext(candidate, context) || !requireToken(candidate.attemptId) || !requireToken(candidate.clientAttemptKey, 256) ||
         !/^[a-f0-9]{64}$/.test(String(candidate.fingerprint)) || !requireToken(candidate.providerId) ||
         (candidate.operation !== "submit" && candidate.operation !== "cancel") ||
         !requireToken(candidate.logicalOperationId) || !requireToken(candidate.reservationRequestId) ||
@@ -400,8 +462,8 @@ function validateState(value: DurableJson): MutableState | undefined {
         !isRecord(candidate.scope) || !requireToken(candidate.scope.tenantId) || !requireToken(candidate.scope.projectId) ||
         !Array.isArray(candidate.sourceRefs) || safeRefs(candidate.sourceRefs) === undefined ||
         normalizeMoney(candidate.quoteAmount) === undefined || normalizeMoney(candidate.reservationAmount) === undefined ||
-        !isRecord(candidate.reservationCandidate) ||
-        !(candidate.reservationEnvelope === null || isRecord(candidate.reservationEnvelope)) ||
+        !reservationMatchesContext(candidate.reservationCandidate, context) ||
+        !(candidate.reservationEnvelope === null || reservationMatchesContext(candidate.reservationEnvelope, context)) ||
         !Array.isArray(candidate.reservationReceipts) ||
         !["not_requested", "requesting", "unknown", "reserved", "denied", "released"].includes(String(candidate.reservationState)) ||
         !["accounting_pending", "reservation_pending", "reservation_unknown", "denied", "ready", "dispatch_intent", "dispatching", "unknown", "provider_accepted", "not_dispatched"].includes(String(candidate.phase)) ||
@@ -423,14 +485,15 @@ function validateState(value: DurableJson): MutableState | undefined {
   const sequences = new Set<number>();
   let maxSequence = 0;
   for (const candidate of value.outbox) {
-    if (!isRecord(candidate) || !Number.isSafeInteger(candidate.sequence) || (candidate.sequence as number) < 1 ||
+    if (!isRecord(candidate) || !candidateMatchesContext(candidate.candidate, context) ||
+        !Number.isSafeInteger(candidate.sequence) || (candidate.sequence as number) < 1 ||
         !requireToken(candidate.eventId) || !requireToken(candidate.observationId) || !requireToken(candidate.eventType) ||
         !(candidate.sourceEventKey === null || requireToken(candidate.sourceEventKey, 256)) ||
         !/^[a-f0-9]{64}$/.test(String(candidate.fingerprint)) ||
         !(candidate.attemptId === null || requireToken(candidate.attemptId)) ||
         !isRecord(candidate.candidate) || candidate.candidate.event_id !== candidate.eventId ||
         candidate.candidate.observation_id !== candidate.observationId ||
-        !(candidate.canonicalEnvelope === null || isRecord(candidate.canonicalEnvelope)) ||
+        !(candidate.canonicalEnvelope === null || candidateMatchesContext(candidate.canonicalEnvelope, context)) ||
         !Array.isArray(candidate.receipts) ||
         (candidate.deliveryState !== "pending" && candidate.deliveryState !== "delivered") ||
         !Number.isSafeInteger(candidate.deliveryAttempts) || (candidate.deliveryAttempts as number) < 0 ||
@@ -512,12 +575,68 @@ function observationFingerprint(input: NormalizedObservation): string {
   return fingerprint(stable);
 }
 
+type ReservationFact =
+  | { readonly state: "reserved"; readonly reference: string }
+  | { readonly state: "denied" | "released" | "unknown"; readonly reference: null };
+
+interface ReservationMerge {
+  readonly attempt: MutableAttempt;
+  readonly conflict: boolean;
+}
+
+function phaseHasEffectProgress(phase: MutableAttempt["phase"]): boolean {
+  return phase === "dispatch_intent" || phase === "dispatching" || phase === "unknown" ||
+    phase === "provider_accepted" || phase === "not_dispatched";
+}
+
+function mergeReservationFact(
+  stored: MutableAttempt,
+  fact: ReservationFact,
+  updatedAt: string
+): ReservationMerge {
+  if (fact.state === "unknown") return { attempt: stored, conflict: false };
+
+  const sameFact = stored.reservationState === fact.state && stored.reservationReference === fact.reference;
+  if (sameFact) return { attempt: stored, conflict: false };
+
+  // A finance-confirmed release is the one permitted reservation change after
+  // a provider has definitively not dispatched. Keep that attempt terminal;
+  // a later distinct key may be considered only after this exact confirmation.
+  if (stored.phase === "not_dispatched" && stored.reservationState === "reserved" && fact.state === "released") {
+    return {
+      attempt: { ...stored, reservationState: "released", reservationReference: null, updatedAt },
+      conflict: false
+    };
+  }
+
+  const currentIsKnown = stored.reservationState === "reserved" || stored.reservationState === "denied" ||
+    stored.reservationState === "released";
+  const incomingIsKnown = fact.state === "reserved" || fact.state === "denied" || fact.state === "released";
+  const conflict = currentIsKnown || stored.reservationState === "not_requested";
+  const reservationState = conflict ? "unknown" : fact.state;
+  const reservationReference = conflict ? null : fact.reference;
+  const phase = phaseHasEffectProgress(stored.phase)
+    ? stored.phase
+    : conflict || reservationState === "unknown"
+      ? "reservation_unknown"
+      : reservationState === "reserved"
+        ? "ready"
+        : "denied";
+
+  return {
+    attempt: { ...stored, reservationState, reservationReference, phase, updatedAt },
+    conflict: conflict || !incomingIsKnown
+  };
+}
+
 export class FulfillmentMetering {
   private readonly store: DurableJsonStore;
   private readonly idFactory: NonNullable<MeteringDependencies["idFactory"]>;
+  private readonly context: MeteringStoreContext;
 
-  private constructor(private readonly dependencies: MeteringDependencies, store: DurableJsonStore) {
+  private constructor(private readonly dependencies: MeteringDependencies, store: DurableJsonStore, context: MeteringStoreContext) {
     this.store = store;
+    this.context = deepFreeze(context);
     this.idFactory = dependencies.idFactory ?? (() => randomUUID());
   }
 
@@ -532,17 +651,28 @@ export class FulfillmentMetering {
     let scope: TrustedScope;
     try { scope = deepFreeze(cloneData(dependencies.scope)) as TrustedScope; }
     catch { throw new TypeError("invalid_metering_configuration"); }
-    const safeDependencies: MeteringDependencies = { ...dependencies, scope };
-    const store = await DurableJsonStore.open(safeDependencies.directory, INITIAL_STATE as unknown as DurableJson);
-    const instance = new FulfillmentMetering(safeDependencies, store);
+    const context = normalizeStoreContext({
+      providerId: dependencies.providerId,
+      mode: dependencies.mode,
+      billingMode: dependencies.billingMode,
+      evidenceMode: dependencies.evidenceMode,
+      scope
+    });
+    if (context === undefined) throw new TypeError("invalid_metering_configuration");
+    const safeDependencies: MeteringDependencies = { ...dependencies, scope: context.scope };
+    const store = await DurableJsonStore.open(safeDependencies.directory, initialState(context) as unknown as DurableJson);
+    const instance = new FulfillmentMetering(safeDependencies, store, context);
     instance.checkClock();
+    await instance.readState();
     return instance;
   }
 
   isConfiguredFor(providerId: string, mode: ProviderMode, scope: TrustedScope): boolean {
-    return providerId === this.dependencies.providerId && mode === this.dependencies.mode &&
-      scope !== null && typeof scope === "object" &&
-      scope.tenantId === this.dependencies.scope.tenantId && scope.projectId === this.dependencies.scope.projectId;
+    try {
+      return providerId === this.context.providerId && mode === this.context.mode &&
+        scope !== null && typeof scope === "object" &&
+        scope.tenantId === this.context.scope.tenantId && scope.projectId === this.context.scope.projectId;
+    } catch { return false; }
   }
 
   async snapshot(): Promise<MeteringSnapshot> {
@@ -738,14 +868,18 @@ export class FulfillmentMetering {
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     const attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    if (attempt.reservationState === "reserved" && attempt.reservationReference !== null && attempt.phase !== "not_dispatched") {
-      if (attempt.phase === "reservation_unknown" || attempt.phase === "reservation_pending") {
-        await this.updateAttempt(attemptId, (stored) => ({ ...stored, phase: "ready", updatedAt: this.nowUtc() ?? stored.updatedAt }));
-      }
+    if (attempt.phase === "ready" && attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
       return { status: "ready", attemptId, reservationReference: attempt.reservationReference };
     }
-    if ((attempt.reservationState === "denied" || attempt.reservationState === "released") && attempt.phase !== "not_dispatched") {
-      return { status: "denied", attemptId, reason: "budget_denied" };
+    if (attempt.phase === "denied") return { status: "denied", attemptId, reason: "budget_denied" };
+    if (attempt.phase === "dispatch_intent" || attempt.phase === "dispatching" || attempt.phase === "unknown") {
+      return { status: "blocked", attemptId, reason: "attempt_outcome_unknown" };
+    }
+    if (attempt.phase === "provider_accepted" || attempt.phase === "not_dispatched") {
+      if (attempt.phase === "provider_accepted") return { status: "blocked", attemptId, reason: "attempt_not_ready" };
+      if (attempt.reservationState === "denied" || attempt.reservationState === "released") {
+        return { status: "denied", attemptId, reason: "budget_denied" };
+      }
     }
     if (attempt.reservationState !== "requesting" && attempt.reservationState !== "unknown" &&
         !(attempt.phase === "not_dispatched" && attempt.reservationState === "reserved")) {
@@ -760,28 +894,12 @@ export class FulfillmentMetering {
     if (status === undefined) return { status: "blocked", attemptId, reason: "budget_unknown" };
     const updatedAt = this.nowUtc();
     if (updatedAt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    if (status.state === "unknown") return { status: "blocked", attemptId, reason: "budget_unknown" };
     try {
-      await this.updateAttempt(attemptId, (stored) => {
-        const phase = stored.phase === "not_dispatched"
-          ? "not_dispatched"
-          : status.state === "reserved"
-            ? (stored.phase === "dispatching" || stored.phase === "unknown" ? stored.phase : "ready")
-            : (stored.phase === "dispatching" || stored.phase === "unknown" || stored.phase === "provider_accepted" ? stored.phase : "not_dispatched");
-        return {
-          ...stored,
-          reservationState: status.state,
-          reservationReference: status.reference,
-          phase,
-          updatedAt
-        };
-      });
+      const merged = await this.applyReservationFact(attemptId, attempt.reservationRequestId, status, updatedAt);
+      if (merged === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
+      if (merged.conflict) return { status: "blocked", attemptId, reason: "budget_unknown" };
+      return this.reservationResult(merged.attempt);
     } catch (error) { return { status: "blocked", attemptId, reason: safeStoreError(error) }; }
-    return status.state === "reserved" && attempt.phase !== "not_dispatched"
-      ? { status: "ready", attemptId, reservationReference: status.reference }
-      : status.state === "reserved"
-        ? { status: "blocked", attemptId, reason: "attempt_not_ready" }
-      : { status: "denied", attemptId, reason: "budget_denied" };
   }
 
   async dispatchPreparedAttempt(attemptId: string, dispatch: DispatchPort): Promise<MeteringResult> {
@@ -994,33 +1112,101 @@ export class FulfillmentMetering {
     return { delivered, pending, failures };
   }
 
+  private async applyReservationFact(
+    attemptId: string,
+    expectedRequestId: string,
+    fact: ReservationFact,
+    updatedAt: string
+  ): Promise<{ readonly attempt: MutableAttempt; readonly conflict: boolean } | undefined> {
+    return this.mutateState((state) => {
+      const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
+      if (index < 0) return { state, result: undefined };
+      const stored = state.attempts[index]!;
+      if (stored.reservationRequestId !== expectedRequestId) {
+        return { state, result: { attempt: stored, conflict: true } };
+      }
+      const merged = mergeReservationFact(stored, fact, updatedAt);
+      if (merged.attempt !== stored) state.attempts[index] = merged.attempt;
+      return { state, result: merged };
+    });
+  }
+
+  private reservationResult(attempt: MutableAttempt): MeteringResult {
+    if (attempt.phase === "ready" && attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
+      return { status: "ready", attemptId: attempt.attemptId, reservationReference: attempt.reservationReference };
+    }
+    if (attempt.phase === "denied") return { status: "denied", attemptId: attempt.attemptId, reason: "budget_denied" };
+    if (attempt.phase === "dispatch_intent" || attempt.phase === "dispatching" || attempt.phase === "unknown") {
+      return { status: "blocked", attemptId: attempt.attemptId, reason: "attempt_outcome_unknown" };
+    }
+    if (attempt.phase === "not_dispatched" && (attempt.reservationState === "denied" || attempt.reservationState === "released")) {
+      return { status: "denied", attemptId: attempt.attemptId, reason: "budget_denied" };
+    }
+    if (attempt.phase === "provider_accepted" || attempt.phase === "not_dispatched") {
+      return { status: "blocked", attemptId: attempt.attemptId, reason: "attempt_not_ready" };
+    }
+    if (attempt.reservationState === "denied" || attempt.reservationState === "released") {
+      return { status: "denied", attemptId: attempt.attemptId, reason: "budget_denied" };
+    }
+    return { status: "blocked", attemptId: attempt.attemptId, reason: "budget_unknown" };
+  }
+
   private async advancePreparation(attemptId: string): Promise<MeteringResult> {
     let read = await this.safeReadState();
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     let attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
-    if (attempt.phase === "ready" && attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
-      return { status: "ready", attemptId, reservationReference: attempt.reservationReference };
-    }
-    if (attempt.phase === "denied") return { status: "denied", attemptId, reason: "budget_denied" };
-    if (attempt.phase === "dispatching" || attempt.phase === "unknown") return { status: "blocked", attemptId, reason: "attempt_outcome_unknown" };
+    const terminal = this.preparationResult(attempt);
+    if (terminal !== undefined) return terminal;
     const accounting = await this.replayPending();
     read = await this.safeReadState();
     if (read.state === undefined) return { status: "blocked", attemptId, reason: read.reason };
     attempt = read.state.attempts.find((item) => item.attemptId === attemptId);
     if (attempt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
+    const afterReplay = this.preparationResult(attempt);
+    if (afterReplay !== undefined) return afterReplay;
     if (accounting.pending > 0 || read.state.outbox.some((event) => event.attemptId === attemptId && event.deliveryState === "pending")) {
       return { status: "blocked", attemptId, reason: "usage_sink_unavailable" };
     }
     if (attempt.reservationState === "requesting" || attempt.reservationState === "unknown") return this.reconcileReservation(attemptId);
     if (attempt.reservationState === "reserved" && attempt.reservationReference !== null) {
-      const ready = await this.updateAttempt(attemptId, (stored) => ({ ...stored, phase: "ready", updatedAt: this.nowUtc() ?? stored.updatedAt }));
-      return ready.reservationReference === null
-        ? { status: "blocked", attemptId, reason: "budget_unknown" }
-        : { status: "ready", attemptId, reservationReference: ready.reservationReference };
+      const updatedAt = this.nowUtc();
+      if (updatedAt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
+      const ready = await this.mutateState((state) => {
+        const index = state.attempts.findIndex((item) => item.attemptId === attemptId);
+        if (index < 0) return { state, result: undefined };
+        const stored = state.attempts[index]!;
+        if (stored.phase !== "reservation_pending" && stored.phase !== "reservation_unknown" && stored.phase !== "accounting_pending") {
+          return { state, result: stored };
+        }
+        const updated = { ...stored, phase: "ready" as const, updatedAt };
+        state.attempts[index] = updated;
+        return { state, result: updated };
+      });
+      if (ready === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
+      const terminalAfterUpdate = this.preparationResult(ready);
+      if (terminalAfterUpdate !== undefined) return terminalAfterUpdate;
+      return { status: "blocked", attemptId, reason: "budget_unknown" };
     }
     if (attempt.reservationState === "denied" || attempt.reservationState === "released") return { status: "denied", attemptId, reason: "budget_denied" };
     return this.requestReservation(attemptId);
+  }
+
+  private preparationResult(attempt: MutableAttempt): MeteringResult | undefined {
+    const attemptId = attempt.attemptId;
+    if (attempt.phase === "ready") {
+      return attempt.reservationState === "reserved" && attempt.reservationReference !== null
+        ? { status: "ready", attemptId, reservationReference: attempt.reservationReference }
+        : { status: "blocked", attemptId, reason: "budget_unknown" };
+    }
+    if (attempt.phase === "denied") return { status: "denied", attemptId, reason: "budget_denied" };
+    if (attempt.phase === "dispatch_intent" || attempt.phase === "dispatching" || attempt.phase === "unknown") {
+      return { status: "blocked", attemptId, reason: "attempt_outcome_unknown" };
+    }
+    if (attempt.phase === "provider_accepted" || attempt.phase === "not_dispatched") {
+      return { status: "blocked", attemptId, reason: "attempt_not_ready" };
+    }
+    return undefined;
   }
 
   private async requestReservation(attemptId: string): Promise<MeteringResult> {
@@ -1087,11 +1273,12 @@ export class FulfillmentMetering {
     const afterPersist = await this.safeReadState();
     if (afterPersist.state === undefined) return { status: "blocked", attemptId, reason: afterPersist.reason };
     attempt = afterPersist.state.attempts.find((item) => item.attemptId === attemptId);
-    if (attempt === undefined || attempt.reservationState !== "requesting" || attempt.reservationEnvelope === null) {
-      return { status: "blocked", attemptId, reason: "reservation_unavailable" };
+    if (attempt === undefined) return { status: "blocked", attemptId, reason: "reservation_unavailable" };
+    if (attempt.reservationState !== "requesting" || attempt.reservationEnvelope === null || attempt.phase !== "reservation_pending") {
+      return this.reservationResult(attempt);
     }
     let raw: unknown;
-    let reservationState: MutableAttempt["reservationState"] = "unknown";
+    let reservationState: "unknown" | "denied" | "reserved" = "unknown";
     let reference: string | null = null;
     try {
       raw = cloneData(await this.dependencies.budgetClient.authorize({
@@ -1108,15 +1295,13 @@ export class FulfillmentMetering {
     const finishedAt = this.nowUtc();
     if (finishedAt === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
     try {
-      const updated = await this.updateAttempt(attemptId, (stored) => {
-        const phase = reservationState === "reserved" ? "ready" : reservationState === "denied" ? "denied" : "reservation_unknown";
-        return { ...stored, reservationState, reservationReference: reference, phase, updatedAt: finishedAt };
-      });
-      return reservationState === "reserved" && updated.reservationReference !== null
-        ? { status: "ready", attemptId, reservationReference: updated.reservationReference }
-        : reservationState === "denied"
-          ? { status: "denied", attemptId, reason: "budget_denied" }
-          : { status: "blocked", attemptId, reason: "budget_unknown" };
+      const fact: ReservationFact = reservationState === "reserved"
+        ? { state: "reserved", reference: reference as string }
+        : { state: reservationState, reference: null };
+      const merged = await this.applyReservationFact(attemptId, attempt.reservationRequestId, fact, finishedAt);
+      if (merged === undefined) return { status: "blocked", attemptId, reason: "invalid_input" };
+      if (merged.conflict) return { status: "blocked", attemptId, reason: "budget_unknown" };
+      return this.reservationResult(merged.attempt);
     } catch (error) { return { status: "blocked", attemptId, reason: safeStoreError(error) }; }
   }
 
@@ -1343,7 +1528,8 @@ export class FulfillmentMetering {
   }
 
   private canStartAnother(attempt: MutableAttempt): boolean {
-    return attempt.phase === "not_dispatched" && (attempt.reservationState === "denied" || attempt.reservationState === "released");
+    return (attempt.phase === "not_dispatched" || attempt.phase === "denied") &&
+      (attempt.reservationState === "denied" || attempt.reservationState === "released");
   }
 
   private parseReservationResolution(value: unknown):
@@ -1382,7 +1568,7 @@ export class FulfillmentMetering {
 
   private async readState(): Promise<MutableState> {
     const raw = await this.store.read();
-    const state = validateState(raw);
+    const state = validateState(raw, this.context);
     if (state === undefined) throw new Error("corrupt_state");
     return state;
   }
@@ -1394,9 +1580,10 @@ export class FulfillmentMetering {
 
   private async mutateState<T>(mutate: (state: MutableState) => { readonly state: MutableState; readonly result: T }): Promise<T> {
     return this.store.update((raw) => {
-      const current = validateState(raw);
+      const current = validateState(raw, this.context);
       if (current === undefined) throw new Error("corrupt_state");
       const next = mutate(current);
+      if (!sameStoreContext(next.state.context, this.context)) throw new Error("context_mutation");
       next.state.revision += 1;
       return { state: next.state as unknown as DurableJson, result: next.result };
     });
@@ -1433,5 +1620,20 @@ export class FulfillmentMetering {
 export function createRuntimeMeteringResolver(
   dependencies: Omit<MeteringDependencies, "scope">
 ): RuntimeMeteringResolver {
-  return async (scope) => FulfillmentMetering.open({ ...dependencies, scope });
+  return async (scope) => {
+    const context = normalizeStoreContext({
+      providerId: dependencies.providerId,
+      mode: dependencies.mode,
+      billingMode: dependencies.billingMode,
+      evidenceMode: dependencies.evidenceMode,
+      scope
+    });
+    if (context === undefined) throw new TypeError("invalid_metering_configuration");
+    const partition = fingerprint(context);
+    return FulfillmentMetering.open({
+      ...dependencies,
+      directory: join(dependencies.directory, `scope-${partition}`),
+      scope: context.scope
+    });
+  };
 }

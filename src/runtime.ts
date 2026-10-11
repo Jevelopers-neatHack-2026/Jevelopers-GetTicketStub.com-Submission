@@ -49,6 +49,7 @@ const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/;
 
 interface ExecuteHooks<T> {
   readonly beforeTransport?: (transportCalled: boolean) => void | Promise<void>;
+  readonly assertPreDispatch?: (transportCalled: boolean) => void;
   readonly onSuccess?: (value: T, sideEffectState: AttemptEffectState) => Promise<void>;
   readonly onFailure?: (sideEffectState: AttemptEffectState) => Promise<void>;
   readonly meteringAttempt?: {
@@ -227,6 +228,9 @@ export class FulfillmentConnectorRuntime {
       throw this.failure("submit", staleQuote ? "stale_quote" : "invalid_input", "not_dispatched");
     }
     this.assertQuoteCurrent(command.quote);
+    // Refuse an already mismatched transport before claiming authorization or
+    // requesting a financial reservation. execute() rechecks after awaits.
+    this.assertRuntimeMode("submit");
 
     const budgetRequest: BudgetRequest = {
       amountMinor: command.amountMinor,
@@ -387,7 +391,7 @@ export class FulfillmentConnectorRuntime {
           ],
           quoteAmount: quoteAmountEvidence(command.quote.totalMinor, command.quote.currency)
         },
-        beforeTransport: (transportCalled) => this.assertQuoteCurrent(
+        assertPreDispatch: (transportCalled) => this.assertQuoteCurrent(
           command.quote,
           transportCalled ? "possible" : "not_dispatched"
         ),
@@ -607,6 +611,8 @@ export class FulfillmentConnectorRuntime {
             throw this.failure(operation, "invalid_input", transportCalled ? "possible" : "not_dispatched");
           }
           await hooks.beforeTransport?.(transportCalled);
+          this.assertRuntimeMode(operation);
+          hooks.assertPreDispatch?.(transportCalled);
           const transportAttemptId = this.newReference();
           lastTransportAttemptId = transportAttemptId;
           if (metering !== undefined) {
@@ -626,6 +632,10 @@ export class FulfillmentConnectorRuntime {
               effect: operationEffect
             }, true, transportCalled ? "possible" : "not_dispatched");
           }
+          // Metering validation and delivery are asynchronous boundaries. Recheck
+          // mutable mode and immutable quote facts immediately before transport.
+          this.assertRuntimeMode(operation);
+          hooks.assertPreDispatch?.(transportCalled);
           transportCalled = true;
           return this.dependencies.transport.request<R>(requestSnapshot);
         }

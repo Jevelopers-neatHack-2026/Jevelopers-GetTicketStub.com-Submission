@@ -91,6 +91,7 @@ function createHarness(directory, options = {}) {
       if (this.fail || (this.acceptedThenThrow && state.sinkDedup.get(eventId) === 1)) {
         throw new Error("fixture raw supplier credential must never be persisted");
       }
+      await options.sinkRecordHook?.(copy, state);
     }
   };
   const budget = {
@@ -140,6 +141,189 @@ function billableInput(clientAttemptKey, overrides = {}) {
     quoteAmount: money("11.5000", "USD", "provider_confirmed"),
     reservationAmount: money("12.0000", "USD", "estimated"),
     ...overrides
+  };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+async function withTimeout(promise, label, timeoutMs = 15_000) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), timeoutMs);
+      })
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
+async function waitForSignal(signal, operation, label) {
+  await withTimeout(Promise.race([
+      signal.promise,
+      operation.then((result) => { throw new Error(`${label} not reached: ${JSON.stringify(result)}`); })
+    ]), label, 15_000);
+}
+
+function createRuntimeHarness(directory, options = {}) {
+  const meterHarness = createHarness(directory, options);
+  const runtimeContracts = {
+    binding(shape) {
+      return {
+        shape,
+        ...CONTRACT_OWNERSHIP[shape],
+        state: "development_fixture",
+        schemaVersion: "1.0.0",
+        fixtureDigest: "sha256:private-fixture-only"
+      };
+    },
+    async validateInbound(request) {
+      return {
+        ok: true,
+        value: request.envelope.command,
+        receipts: request.requiredShapes.map((shape) => ({
+          shape,
+          schemaVersion: "1.0.0",
+          tenantId: request.trustedScope.tenantId,
+          projectId: request.trustedScope.projectId
+        }))
+      };
+    },
+    async validateOutbound(request) {
+      return {
+        ok: true,
+        value: request.value,
+        receipts: request.requiredShapes.map((shape) => ({
+          shape,
+          schemaVersion: "1.0.0",
+          tenantId: request.trustedScope.tenantId,
+          projectId: request.trustedScope.projectId
+        }))
+      };
+    }
+  };
+  const attempts = new Map();
+  const attemptKey = (record) => `${record.providerId}/${record.tenantId}/${record.projectId}/${record.idempotencyKey}`;
+  const persistence = {
+    async getSubmitAttempt(providerId, trustedScope, key) {
+      return attempts.get(`${providerId}/${trustedScope.tenantId}/${trustedScope.projectId}/${key}`);
+    },
+    async claimSubmitAttempt(record) {
+      const key = attemptKey(record);
+      const existing = attempts.get(key);
+      if (existing !== undefined) return { claimed: false, existing };
+      attempts.set(key, record);
+      return { claimed: true };
+    },
+    async saveSubmitAttempt(record) {
+      const key = attemptKey(record);
+      if (!attempts.has(key)) throw new Error("attempt_missing");
+      attempts.set(key, record);
+    }
+  };
+  let authorizationSequence = 0;
+  const operations = Object.fromEntries([
+    "discover_capabilities", "quote", "preflight", "submit", "status", "shipment", "cancel"
+  ].map((operation) => [operation, {
+    supported: true,
+    sideEffect: operation === "submit" || operation === "cancel" ? "external" : "none",
+    mayCharge: operation === "submit",
+    idempotency: operation === "submit" ? "connector_attempt_store" : operation === "cancel" ? "provider_key" : "not_applicable"
+  }]));
+  const adapter = {
+    descriptor: {
+      providerId: "fixture-provider",
+      apiVersion: "private-fixture-api/1",
+      productLimits: {},
+      operations,
+      supportedModes: ["simulated"]
+    },
+    async quote() { return { status: "unsupported" }; },
+    async preflight() { return { status: "unsupported" }; },
+    async validateBeforeSubmit() { return { status: "supported", value: { valid: true, issues: [] } }; },
+    async submit(command, context) {
+      await context.transport.request({ operation: "submit", method: "POST", path: "/private-fixture/orders", body: command });
+      return { status: "supported", value: { providerRequestId: "supplier-request-runtime-1", acceptedAt: "2026-10-10T14:00:00.000Z" } };
+    },
+    async getStatus() { return { status: "unsupported" }; },
+    async observeShipment() { return { status: "unsupported" }; },
+    async cancel() { return { status: "unsupported" }; }
+  };
+  let transportMode = "simulated";
+  let transportCalls = 0;
+  let budgetCalls = 0;
+  const transport = {
+    get mode() { return transportMode; },
+    set mode(value) { transportMode = value; },
+    async request() { transportCalls += 1; return { fixture: true }; }
+  };
+  const budgetClient = {
+    async authorize(check) {
+      budgetCalls += 1;
+      if (options.runtimeBudgetBehavior !== undefined) return options.runtimeBudgetBehavior(check, meterHarness.state);
+      return { authorized: true, reference: `runtime-reservation-${budgetCalls}` };
+    }
+  };
+  const meteringResolver = createRuntimeMeteringResolver({
+    ...meterHarness.dependencies,
+    contracts: runtimeContracts,
+    usageSink: meterHarness.sink,
+    budgetClient
+  });
+  const runtime = new FulfillmentConnectorRuntime(adapter, {
+    contracts: runtimeContracts,
+    transport,
+    clock: meterHarness.clock,
+    persistence,
+    authorizationVerifier: {
+      async verifyAndClaim() {
+        authorizationSequence += 1;
+        return {
+          status: "claimed",
+          authorizationId: `runtime-auth-${authorizationSequence}`,
+          actionId: `runtime-action-${authorizationSequence}`,
+          claimReference: `runtime-claim-${authorizationSequence}`
+        };
+      }
+    },
+    budgetClient,
+    usageSink: meterHarness.sink,
+    metering: meteringResolver
+  });
+  function command(key, expiresAt = new Date(baseEpoch + 60 * 60 * 1000).toISOString()) {
+    return {
+      productionBundle: { fixture: "bundle" },
+      productionBundleDigest: "sha256:fixture-bundle",
+      quote: {
+        quoteId: "quote-runtime-1",
+        currency: "USD",
+        totalMinor: 1250,
+        expiresAt,
+        productionBundleDigest: "sha256:fixture-bundle",
+        termsFingerprint: "sha256:fixture-terms"
+      },
+      authorizationEnvelope: { fixture: "authorization" },
+      amountMinor: 1250,
+      currency: "USD",
+      idempotencyKey: key,
+      requestFingerprint: `sha256:${key}`
+    };
+  }
+  return {
+    runtime,
+    state: meterHarness.state,
+    sink: meterHarness.sink,
+    attempts,
+    command,
+    meteringResolver,
+    transport,
+    get transportCalls() { return transportCalls; },
+    get budgetCalls() { return budgetCalls; }
   };
 }
 
@@ -619,20 +803,377 @@ await test("abrupt process exit after temp-file fsync preserves old state and ne
 });
 
 await test("corrupt durable state fails closed rather than being reset", async () => {
-  const directory = await newTempDir();
-  try {
-    await writeFile(resolve(directory, "metering-state.json"), JSON.stringify({
+  const fixtures = [
+    {
       schemaVersion: "private-connector-metering-state/1",
+      revision: 2,
+      nextSequence: 1,
+      attempts: [],
+      outbox: []
+    },
+    {
+      schemaVersion: "private-connector-metering-state/2",
       revision: 2,
       nextSequence: 1,
       attempts: [{ phase: "dispatching" }],
       outbox: []
-    }));
-    const meter = await FulfillmentMetering.open(createHarness(directory).dependencies);
-    await assert.rejects(() => meter.snapshot());
-    const stillCorrupt = JSON.parse(await readFile(resolve(directory, "metering-state.json"), "utf8"));
-    assert.equal(stillCorrupt.attempts[0].phase, "dispatching");
+    }
+  ];
+  for (const fixture of fixtures) {
+    const directory = await newTempDir();
+    try {
+      const contents = JSON.stringify(fixture);
+      const path = resolve(directory, "metering-state.json");
+      await writeFile(path, contents);
+      await assert.rejects(() => FulfillmentMetering.open(createHarness(directory).dependencies));
+      assert.equal(await readFile(path, "utf8"), contents);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
+});
+
+await test("durable metering state is bound to provider, modes and tenant-project context", async () => {
+  const directory = await newTempDir();
+  try {
+    const harness = createHarness(directory);
+    const meter = await FulfillmentMetering.open(harness.dependencies);
+    const observation = await meter.recordObservation({
+      operation: "quote",
+      sourceEventKey: "context-bound-observation",
+      outcome: "observed",
+      completeness: "complete",
+      effect: "non_billable_observation"
+    });
+    const prepared = await meter.prepareBillableAttempt(billableInput("context-bound-attempt"));
+    assert.equal(observation.status, "recorded");
+    assert.equal(prepared.status, "ready");
+    const before = await meter.snapshot();
+    const incompatible = [
+      { providerId: "other-provider" },
+      { mode: "sandbox" },
+      { billingMode: "simulated" },
+      { evidenceMode: "provider_sandbox_account" },
+      { scope: { ...scope, tenantId: "other-tenant" } },
+      { scope: { ...scope, projectId: "other-project" } }
+    ];
+    for (const change of incompatible) {
+      await assert.rejects(() => FulfillmentMetering.open({ ...harness.dependencies, ...change }));
+    }
+    const durablePath = resolve(directory, "metering-state.json");
+    const canonicalContents = await readFile(durablePath, "utf8");
+    for (const mutate of [
+      (state) => { state.context.providerId = "other-provider"; },
+      (state) => { state.attempts[0].providerId = "other-provider"; },
+      (state) => { state.attempts[0].reservationCandidate.provider_id = "other-provider"; },
+      (state) => { state.attempts[0].reservationEnvelope.provider_id = "other-provider"; },
+      (state) => { state.outbox[0].candidate.trusted_scope.tenantId = "other-tenant"; },
+      (state) => { state.outbox[0].canonicalEnvelope.trusted_scope.tenantId = "other-tenant"; }
+    ]) {
+      const tampered = JSON.parse(canonicalContents);
+      mutate(tampered);
+      const tamperedContents = JSON.stringify(tampered);
+      await writeFile(durablePath, tamperedContents);
+      await assert.rejects(() => FulfillmentMetering.open(harness.dependencies));
+      assert.equal(await readFile(durablePath, "utf8"), tamperedContents);
+    }
+    await writeFile(durablePath, canonicalContents);
+    const restarted = await FulfillmentMetering.open(harness.dependencies);
+    assert.deepEqual(await restarted.snapshot(), before);
+    assert.equal((await restarted.replayPending()).pending, 0);
+    assert.equal((await restarted.snapshot()).attempts[0].attemptId, prepared.attemptId);
+    assert.equal((await restarted.snapshot()).outbox[0].eventId, observation.eventId);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+await test("runtime metering resolver partitions scopes with independent identical caller keys", async () => {
+  const directory = await newTempDir();
+  try {
+    const harness = createHarness(directory);
+    const resolver = createRuntimeMeteringResolver(harness.dependencies);
+    const otherScope = { tenantId: "tenant-fixture-2", projectId: "project-fixture-2" };
+    const first = await resolver(scope);
+    const second = await resolver(otherScope);
+    const observation = {
+      operation: "quote",
+      sourceEventKey: "same-source-key-in-each-tenant",
+      logicalOperationId: "same-logical-operation",
+      outcome: "observed",
+      completeness: "complete",
+      effect: "non_billable_observation"
+    };
+    const [firstObservation, secondObservation] = await Promise.all([
+      first.recordObservation(observation),
+      second.recordObservation(observation)
+    ]);
+    assert.equal(firstObservation.status, "recorded");
+    assert.equal(secondObservation.status, "recorded");
+    assert.notEqual(firstObservation.eventId, secondObservation.eventId);
+    const [firstAttempt, secondAttempt] = await Promise.all([
+      first.prepareBillableAttempt(billableInput("same-attempt-key", { logicalOperationId: "same-logical-operation" })),
+      second.prepareBillableAttempt(billableInput("same-attempt-key", { logicalOperationId: "same-logical-operation" }))
+    ]);
+    assert.equal(firstAttempt.status, "ready");
+    assert.equal(secondAttempt.status, "ready");
+    assert.notEqual(firstAttempt.attemptId, secondAttempt.attemptId);
+    const firstRestart = await resolver(scope);
+    const secondRestart = await resolver(otherScope);
+    assert.equal((await firstRestart.snapshot()).attempts[0].attemptId, firstAttempt.attemptId);
+    assert.equal((await secondRestart.snapshot()).attempts[0].attemptId, secondAttempt.attemptId);
+    const firstEnvelope = harness.state.sinkCalls.find((payload) => payload.event_id === firstObservation.eventId);
+    const secondEnvelope = harness.state.sinkCalls.find((payload) => payload.event_id === secondObservation.eventId);
+    assert.deepEqual(firstEnvelope.trusted_scope, scope);
+    assert.deepEqual(secondEnvelope.trusted_scope, otherScope);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+await test("late authorization responses preserve dispatch and provider outcomes across restarts", async () => {
+  for (const outcome of ["provider_accepted", "unknown"]) {
+    for (const completionOrder of ["authorization_during_dispatch", "authorization_after_outcome"]) {
+      const directory = await newTempDir();
+      try {
+        const authorizeStarted = deferred();
+        const authorizeResponse = deferred();
+        const resolverStarted = deferred();
+        const resolverResponse = deferred();
+        const harness = createHarness(directory, {
+          budgetBehavior: async () => {
+            authorizeStarted.resolve();
+            return authorizeResponse.promise;
+          }
+        });
+        harness.resolver.status = () => {
+          resolverStarted.resolve();
+          return resolverResponse.promise;
+        };
+        const preparingMeter = await FulfillmentMetering.open(harness.dependencies);
+        const resolverMeter = await FulfillmentMetering.open(harness.dependencies);
+        const dispatchMeter = await FulfillmentMetering.open(harness.dependencies);
+        const preparing = preparingMeter.prepareBillableAttempt(billableInput(`late-auth-${outcome}-${completionOrder}`));
+        await withTimeout(authorizeStarted.promise, "late-auth budget request");
+        const attemptId = (await preparingMeter.snapshot()).attempts[0].attemptId;
+        const reconciliation = resolverMeter.reconcileReservation(attemptId);
+        await withTimeout(resolverStarted.promise, "late-auth resolver request");
+        resolverResponse.resolve({ status: "reserved", reference: "shared-reservation-late-auth" });
+        assert.equal((await withTimeout(reconciliation, "late-auth resolver result")).status, "ready");
+
+        const dispatchStarted = deferred();
+        const dispatchResponse = deferred();
+        let dispatchCount = 0;
+        const dispatching = dispatchMeter.dispatchPreparedAttempt(attemptId, async () => {
+          dispatchCount += 1;
+          dispatchStarted.resolve();
+          if (outcome === "unknown") {
+            await dispatchResponse.promise;
+            throw new Error("fixture timeout after provider boundary");
+          }
+          return dispatchResponse.promise;
+        });
+        await waitForSignal(dispatchStarted, dispatching, "late-auth provider dispatch entry");
+        assert.equal((await resolverMeter.snapshot()).attempts[0].phase, "dispatching");
+
+        if (completionOrder === "authorization_during_dispatch") {
+          authorizeResponse.resolve({ authorized: true, reference: "shared-reservation-late-auth" });
+          await withTimeout(preparing, "authorization result during dispatch");
+          assert.equal((await preparingMeter.snapshot()).attempts[0].phase, "dispatching");
+        }
+        dispatchResponse.resolve({ outcome, providerRequestId: outcome === "provider_accepted" ? "late-auth-request" : undefined });
+        const dispatchResult = await withTimeout(dispatching, "late-auth provider outcome");
+        assert.equal(dispatchResult.status, "effect_recorded");
+        assert.equal(dispatchCount, 1);
+        if (completionOrder === "authorization_after_outcome") {
+          authorizeResponse.resolve({ authorized: true, reference: "shared-reservation-late-auth" });
+          await withTimeout(preparing, "authorization result after outcome");
+        }
+
+        const expectedPhase = outcome === "provider_accepted" ? "provider_accepted" : "unknown";
+        const reopened = await FulfillmentMetering.open(harness.dependencies);
+        const snapshot = await reopened.snapshot();
+        const stored = snapshot.attempts.find((attempt) => attempt.attemptId === attemptId);
+        assert.equal(stored.phase, expectedPhase);
+        assert.equal(stored.outcome, outcome);
+        assert.equal(stored.providerRequestId, outcome === "provider_accepted" ? "late-auth-request" : null);
+        assert.equal(snapshot.outbox.filter((event) => event.eventType === "billable_attempt_outcome").length, 1);
+        const outcomeEnvelope = harness.state.sinkCalls.find((payload) => payload.event_type === "billable_attempt_outcome");
+        assert.ok(outcomeEnvelope);
+        assert.equal(outcomeEnvelope.outcome, outcome);
+        assert.equal(outcomeEnvelope.provider_request_id, outcome === "provider_accepted" ? "late-auth-request" : null);
+        assert.equal(harness.state.budgetCalls.length, 1);
+      } finally { await rm(directory, { recursive: true, force: true }); }
+    }
+  }
+});
+
+await test("concurrent reservation resolutions cannot move dispatch intent or terminal outcomes backwards", async () => {
+  const directory = await newTempDir();
+  try {
+    const authorizeStarted = deferred();
+    const authorizeResponse = deferred();
+    const resolverGates = [deferred(), deferred(), deferred()];
+    const resolverStarted = [deferred(), deferred(), deferred()];
+    let resolverIndex = 0;
+    let pauseIntent = false;
+    let intentEntered = deferred();
+    let releaseIntent = deferred();
+    const harness = createHarness(directory, {
+      budgetBehavior: async () => {
+        authorizeStarted.resolve();
+        return authorizeResponse.promise;
+      },
+      sinkRecordHook: async (payload) => {
+        if (pauseIntent && payload.event_type === "transport_attempt_intent") {
+          pauseIntent = false;
+          intentEntered.resolve();
+          await releaseIntent.promise;
+        }
+      }
+    });
+    harness.resolver.status = () => {
+      const index = resolverIndex++;
+      resolverStarted[index]?.resolve();
+      return resolverGates[index].promise;
+    };
+    const authorizingMeter = await FulfillmentMetering.open(harness.dependencies);
+    const firstResolver = await FulfillmentMetering.open(harness.dependencies);
+    const secondResolver = await FulfillmentMetering.open(harness.dependencies);
+    const thirdResolver = await FulfillmentMetering.open(harness.dependencies);
+    const dispatchMeter = await FulfillmentMetering.open(harness.dependencies);
+    const preparing = authorizingMeter.prepareBillableAttempt(billableInput("concurrent-resolution-key"));
+    await withTimeout(authorizeStarted.promise, "initial budget request");
+    const attemptId = (await authorizingMeter.snapshot()).attempts[0].attemptId;
+    const resolution1 = firstResolver.reconcileReservation(attemptId);
+    await withTimeout(resolverStarted[0].promise, "first resolver request");
+    const resolution2 = secondResolver.reconcileReservation(attemptId);
+    await withTimeout(resolverStarted[1].promise, "second resolver request");
+    const resolution3 = thirdResolver.reconcileReservation(attemptId);
+    await withTimeout(resolverStarted[2].promise, "third resolver request");
+    resolverGates[0].resolve({ status: "reserved", reference: "shared-reservation-concurrent" });
+    assert.equal((await withTimeout(resolution1, "first reservation result")).status, "ready");
+
+    pauseIntent = true;
+    const dispatchEntered = deferred();
+    const dispatchOutcome = deferred();
+    const dispatching = dispatchMeter.dispatchPreparedAttempt(attemptId, async () => {
+      dispatchEntered.resolve();
+      return dispatchOutcome.promise;
+    });
+    await waitForSignal(intentEntered, dispatching, "dispatch intent delivery");
+    assert.equal((await dispatchMeter.snapshot()).attempts[0].phase, "dispatch_intent");
+    resolverGates[1].resolve({ status: "reserved", reference: "shared-reservation-concurrent" });
+    assert.equal((await withTimeout(resolution2, "dispatch-intent reservation result")).status, "blocked");
+    assert.equal((await dispatchMeter.snapshot()).attempts[0].phase, "dispatch_intent");
+
+    releaseIntent.resolve();
+    await waitForSignal(dispatchEntered, dispatching, "provider dispatch entry");
+    dispatchOutcome.resolve({ outcome: "provider_accepted", providerRequestId: "concurrent-resolution-request" });
+    assert.equal((await withTimeout(dispatching, "provider outcome")).outcome, "provider_accepted");
+    resolverGates[2].resolve({ status: "reserved", reference: "shared-reservation-concurrent" });
+    assert.equal((await withTimeout(resolution3, "terminal reservation result")).status, "blocked");
+    const snapshot = await (await FulfillmentMetering.open(harness.dependencies)).snapshot();
+    assert.equal(snapshot.attempts[0].phase, "provider_accepted");
+    assert.equal(snapshot.attempts[0].outcome, "provider_accepted");
+    assert.equal(snapshot.attempts[0].providerRequestId, "concurrent-resolution-request");
+    assert.equal(snapshot.outbox.filter((event) => event.eventType === "billable_attempt_outcome").length, 1);
+    authorizeResponse.resolve({ authorized: true, reference: "shared-reservation-concurrent" });
+    await withTimeout(preparing, "late authorization result");
+    assert.equal((await authorizingMeter.snapshot()).attempts[0].phase, "provider_accepted");
+    assert.equal(harness.state.budgetCalls.length, 1);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+await test("same-key preparation remains terminal across replay waits and release reconciliation", async () => {
+  for (const outcome of ["provider_accepted", "not_dispatched", "unknown"]) {
+    const directory = await newTempDir();
+    try {
+      let pauseFirstReplay = false;
+      let replayPauseUsed = false;
+      const replayEntered = deferred();
+      const releaseReplay = deferred();
+      const harness = createHarness(directory, {
+        budgetBehavior: async (_check, state) => {
+          if (state.budgetCalls.length === 1) throw new Error("fixture authorization ambiguity");
+          return { authorized: true, reference: `released-retry-${state.budgetCalls.length}` };
+        },
+        sinkRecordHook: async () => {
+          if (pauseFirstReplay && !replayPauseUsed) {
+            replayPauseUsed = true;
+            replayEntered.resolve();
+            await releaseReplay.promise;
+          }
+        }
+      });
+      harness.resolver.status = "not_found";
+      const meter = await FulfillmentMetering.open(harness.dependencies);
+      const initial = await meter.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}`));
+      assert.equal(initial.status, "blocked");
+      assert.equal(initial.reason, "budget_unknown");
+      const attemptId = initial.attemptId;
+      const secondManager = await FulfillmentMetering.open(harness.dependencies);
+      const original = await meter.snapshot();
+      const durablePath = resolve(directory, "metering-state.json");
+      const rawState = JSON.parse(await readFile(durablePath, "utf8"));
+      const preparedEvent = rawState.outbox.find((event) => event.attemptId === attemptId && event.eventType === "billable_attempt_prepared");
+      assert.ok(preparedEvent);
+      preparedEvent.deliveryState = "pending";
+      await writeFile(durablePath, JSON.stringify(rawState));
+
+      pauseFirstReplay = true;
+      const sameKeyPreparation = meter.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}`));
+      await waitForSignal(replayEntered, sameKeyPreparation, "same-key preparation replay");
+      harness.resolver.status = "reserved";
+      const restoredReservation = await secondManager.reconcileReservation(attemptId);
+      assert.equal(restoredReservation.status, "ready");
+      const beforeOutcome = await secondManager.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}`));
+      assert.equal(beforeOutcome.status, "ready");
+      let dispatchCount = 0;
+      const dispatchResult = await secondManager.dispatchPreparedAttempt(attemptId, async () => {
+        dispatchCount += 1;
+        if (outcome === "unknown") throw new Error("fixture dispatch timeout");
+        return { outcome };
+      });
+      assert.equal(dispatchResult.status, "effect_recorded");
+      assert.equal(dispatchResult.outcome, outcome);
+      assert.equal(dispatchCount, 1);
+      releaseReplay.resolve();
+      const retried = await sameKeyPreparation;
+      assert.equal(retried.status, "blocked");
+      const restarted = await FulfillmentMetering.open(harness.dependencies);
+      const terminal = await restarted.snapshot();
+      assert.equal(terminal.attempts[0].phase, outcome);
+      assert.equal(terminal.attempts[0].outcome, outcome);
+      assert.equal(terminal.attempts[0].attemptId, original.attempts[0].attemptId);
+      assert.equal(harness.state.budgetCalls.length, 1);
+      assert.equal(harness.state.sinkCalls.filter((payload) => payload.event_type === "billable_attempt_outcome").length, 1);
+
+      if (outcome === "not_dispatched") {
+        harness.resolver.status = "released";
+        const released = await restarted.reconcileReservation(attemptId);
+        assert.equal(released.status, "denied");
+        const stillTerminal = await (await FulfillmentMetering.open(harness.dependencies)).snapshot();
+        assert.equal(stillTerminal.attempts[0].phase, "not_dispatched");
+        const sameKeyAgain = await restarted.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}`));
+        assert.equal(sameKeyAgain.status, "blocked");
+        const distinct = await restarted.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}-new`, {
+          logicalOperationId: "logical-order-1"
+        }));
+        assert.equal(distinct.status, "ready");
+        assert.equal(harness.state.budgetCalls.length, 2);
+        assert.equal((await restarted.snapshot()).attempts.filter((attempt) => attempt.phase === "not_dispatched").length, 1);
+        let redispatches = 0;
+        const oldAttemptRetry = await restarted.dispatchPreparedAttempt(attemptId, async () => {
+          redispatches += 1;
+          return { outcome: "provider_accepted" };
+        });
+        assert.equal(oldAttemptRetry.status, "blocked");
+        assert.equal(redispatches, 0);
+      } else {
+        const sameKeyAgain = await restarted.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}`));
+        assert.equal(sameKeyAgain.status, "blocked");
+        const distinct = await restarted.prepareBillableAttempt(billableInput(`terminal-replay-${outcome}-new`));
+        assert.equal(distinct.status, "blocked");
+        assert.equal(distinct.reason, "logical_operation_blocked");
+        assert.equal(harness.state.budgetCalls.length, 1);
+      }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
 });
 
 await test("private producer rows cover valid, invalid, duplicate, conflicting and unknown quote plus submit, status, cancel and ambiguity", async () => {
@@ -710,6 +1251,90 @@ await test("private producer rows cover valid, invalid, duplicate, conflicting a
       assert.equal(payload.evidence_mode, "private_fixture");
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+await test("runtime rechecks quote expiry and mode after awaited dispatch metering", async () => {
+  for (const expiryDelta of [0, 1]) {
+    const directory = await newTempDir();
+    const dispatchEvent = deferred();
+    const releaseSink = deferred();
+    try {
+      const expiresAt = new Date(baseEpoch + 5_000).toISOString();
+      const harness = createRuntimeHarness(directory, {
+        sinkRecordHook: async (payload) => {
+          if (payload.outcome === "dispatching") {
+            dispatchEvent.resolve();
+            await releaseSink.promise;
+          }
+        }
+      });
+      const command = harness.command(`runtime-expiry-${expiryDelta}`, expiresAt);
+      const submission = harness.runtime.submit({ tenantId: scope.tenantId, projectId: scope.projectId, command }, scope);
+      await waitForSignal(dispatchEvent, submission, "dispatch observation sink");
+      harness.state.now = Date.parse(expiresAt) + expiryDelta;
+      releaseSink.resolve();
+      await assert.rejects(
+        submission,
+        (error) => error?.code === "stale_quote" && error?.sideEffectState === "not_dispatched"
+      );
+      assert.equal(harness.transportCalls, 0);
+      assert.equal(harness.budgetCalls, 1);
+      const stored = harness.attempts.get(`fixture-provider/${scope.tenantId}/${scope.projectId}/${command.idempotencyKey}`);
+      assert.equal(stored.budgetReservationState, "reserved");
+      assert.equal(stored.sideEffectState, "not_dispatched");
+      for (const retry of [command, harness.command(`runtime-expiry-new-${expiryDelta}`, expiresAt)]) {
+        await assert.rejects(
+          harness.runtime.submit({ tenantId: scope.tenantId, projectId: scope.projectId, command: retry }, scope),
+          (error) => error?.code === "stale_quote"
+        );
+      }
+      assert.equal(harness.transportCalls, 0);
+      assert.equal(harness.budgetCalls, 1);
+    } finally {
+      releaseSink.resolve();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  const directory = await newTempDir();
+  const dispatchEvent = deferred();
+  const releaseSink = deferred();
+  try {
+    let harness;
+    harness = createRuntimeHarness(directory, {
+      sinkRecordHook: async (payload) => {
+        if (payload.outcome === "dispatching") {
+          dispatchEvent.resolve();
+          await releaseSink.promise;
+        }
+      }
+    });
+    const command = harness.command("runtime-mode-change");
+    const submission = harness.runtime.submit({ tenantId: scope.tenantId, projectId: scope.projectId, command }, scope);
+    await waitForSignal(dispatchEvent, submission, "mode-change dispatch observation sink");
+    harness.transport.mode = "sandbox";
+    releaseSink.resolve();
+    await assert.rejects(
+      submission,
+      (error) => error?.code === "mode_mismatch" && error?.sideEffectState === "not_dispatched"
+    );
+    assert.equal(harness.transportCalls, 0);
+    assert.equal(harness.budgetCalls, 1);
+    const stored = harness.attempts.get(`fixture-provider/${scope.tenantId}/${scope.projectId}/${command.idempotencyKey}`);
+    assert.equal(stored.budgetReservationState, "reserved");
+    assert.equal(stored.sideEffectState, "not_dispatched");
+    for (const retry of [command, harness.command("runtime-mode-change-new")]) {
+      await assert.rejects(
+        harness.runtime.submit({ tenantId: scope.tenantId, projectId: scope.projectId, command: retry }, scope),
+        (error) => error?.code === "mode_mismatch"
+      );
+    }
+    assert.equal(harness.transportCalls, 0);
+    assert.equal(harness.budgetCalls, 1);
+  } finally {
+    releaseSink.resolve();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 await test("runtime resolver uses the durable outbox before submit transport and records the provider outcome", async () => {
@@ -808,6 +1433,12 @@ await test("runtime resolver uses the durable outbox before submit transport and
         return { authorized: true, reference: "runtime-reservation-1" };
       }
     };
+    const meteringResolver = createRuntimeMeteringResolver({
+      ...meterHarness.dependencies,
+      contracts: runtimeContracts,
+      usageSink: meterHarness.sink,
+      budgetClient
+    });
     const dependencies = {
       contracts: runtimeContracts,
       transport: {
@@ -829,12 +1460,7 @@ await test("runtime resolver uses the durable outbox before submit transport and
       },
       budgetClient,
       usageSink: meterHarness.sink,
-      metering: createRuntimeMeteringResolver({
-        ...meterHarness.dependencies,
-        contracts: runtimeContracts,
-        usageSink: meterHarness.sink,
-        budgetClient
-      })
+      metering: meteringResolver
     };
     const runtime = new FulfillmentConnectorRuntime(adapter, dependencies);
     const command = {
@@ -861,7 +1487,7 @@ await test("runtime resolver uses the durable outbox before submit transport and
     );
     assert.equal(transportCalls, 0);
     assert.equal(budgetCalls, 0);
-    const pendingMeter = await FulfillmentMetering.open({ ...meterHarness.dependencies, contracts: runtimeContracts, usageSink: meterHarness.sink, budgetClient });
+    const pendingMeter = await meteringResolver(scope);
     const pendingEvent = (await pendingMeter.snapshot()).outbox[0];
     assert.equal(pendingEvent.deliveryState, "pending");
 
@@ -871,7 +1497,7 @@ await test("runtime resolver uses the durable outbox before submit transport and
     assert.equal(result.value.providerRequestId, "supplier-request-runtime-1");
     assert.equal(transportCalls, 1);
     assert.equal(budgetCalls, 1);
-    const meter = await FulfillmentMetering.open({ ...meterHarness.dependencies, contracts: runtimeContracts, usageSink: meterHarness.sink, budgetClient });
+    const meter = await meteringResolver(scope);
     const snapshot = await meter.snapshot();
     assert.equal(snapshot.attempts.length, 0);
     assert.equal(snapshot.outbox.length, 4);
