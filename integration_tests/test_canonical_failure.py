@@ -24,6 +24,40 @@ class FixtureManifest(Record):
     digest: str
 
 
+def pin_owned_producer(producer: Path) -> Path:
+    git = shutil.which("git")
+    if git is None:
+        fail("git_runtime_missing", "canonical-integration-test")
+    for command in (
+        ("init",),
+        ("add", "."),
+        (
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@evals.example",
+            "commit",
+            "-m",
+            "controlled conformance fault",
+        ),
+    ):
+        _ = subprocess.run(  # noqa: S603 - fixed Git arguments in an owned test copy
+            (git, "-C", str(producer), *command), check=True, capture_output=True, timeout=30
+        )
+    pin = ContractPin(
+        revision=git_value(producer, "rev-parse", "HEAD"),
+        tree=git_value(producer, "rev-parse", "HEAD^{tree}"),
+        lockfile_digest=digest(read_bytes(producer / "package-lock.json")),
+        schema_manifest_digest=digest(read_bytes(producer / "generated/schema-manifest.json")),
+        fixture_manifest_digest=digest(read_bytes(producer / "generated/fixture-manifest.json")),
+        catalog_digest=digest(read_bytes(producer / "docs/contract-catalog.md")),
+        node_version="22.23.3",
+    )
+    pin_path = producer.parent / "pin.json"
+    _ = pin_path.write_text(pin.model_dump_json(), encoding="utf-8")
+    return pin_path
+
+
 def test_canonical_cli_retains_failure_when_golden_expectation_disagrees(tmp_path: Path) -> None:
     # Given an owned copy of the actual canonical SDK with one contradictory golden expectation.
     source = Path(os.environ["IE_CONTRACT_SOURCE"])
@@ -49,36 +83,7 @@ def test_canonical_cli_retains_failure_when_golden_expectation_disagrees(tmp_pat
         update={"files": files, "digest": "sha256:" + hashlib.sha256(canonical).hexdigest()}
     )
     _ = fixture_path.write_text(changed.model_dump_json(), encoding="utf-8")
-    git = shutil.which("git")
-    if git is None:
-        fail("git_runtime_missing", "canonical-integration-test")
-    for command in (
-        ("init",),
-        ("add", "."),
-        (
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@evals.example",
-            "commit",
-            "-m",
-            "controlled golden failure",
-        ),
-    ):
-        _ = subprocess.run(  # noqa: S603 - fixed Git arguments in an owned test copy
-            (git, "-C", str(producer), *command), check=True, capture_output=True, timeout=30
-        )
-    pin = ContractPin(
-        revision=git_value(producer, "rev-parse", "HEAD"),
-        tree=git_value(producer, "rev-parse", "HEAD^{tree}"),
-        lockfile_digest=digest(read_bytes(producer / "package-lock.json")),
-        schema_manifest_digest=digest(read_bytes(producer / "generated/schema-manifest.json")),
-        fixture_manifest_digest=digest(read_bytes(fixture_path)),
-        catalog_digest=digest(read_bytes(producer / "docs/contract-catalog.md")),
-        node_version="22.23.3",
-    )
-    pin_path = tmp_path / "pin.json"
-    _ = pin_path.write_text(pin.model_dump_json(), encoding="utf-8")
+    pin_path = pin_owned_producer(producer)
     output = tmp_path / "receipts"
     # When the actual public CLI evaluates the original SDK against the controlled oracle fault.
     result = CliRunner().invoke(

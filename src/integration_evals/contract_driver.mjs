@@ -38,6 +38,13 @@ for (const schema of schemas.schemas) {
     Object.assign(payload, fixture.set ?? {});
     let observation;
     switch (fixture.mode ?? 'wire') {
+      case 'commerce_evidence': {
+        const context = structuredClone(fixture.context);
+        if (context.artifact_bytes) context.artifact_bytes = Object.fromEntries(
+          Object.entries(context.artifact_bytes).map(([id, bytes]) => [id, Uint8Array.from(bytes)]));
+        observation = sdk.checkCommerceEvidence(schema.contract, payload, context);
+        break;
+      }
       case 'research_creative': {
         const context = structuredClone(fixture.context);
         if (context.artifact_bytes) context.artifact_bytes = Object.fromEntries(

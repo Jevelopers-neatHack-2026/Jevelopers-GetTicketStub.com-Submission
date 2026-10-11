@@ -174,7 +174,8 @@ in both JSON and Markdown. Neither issue closure nor model review updates accept
 The contracts command consumes the actual pinned shared-contracts ESM SDK and its
 golden fixtures. contracts/producer-pin.json fixes the reviewed producer commit/tree,
 lockfile, schema/fixture manifest and machine-catalog bytes. It currently selects the
-unreleased 0.3.0 candidate. No copied product validator or provider adapter is introduced.
+unreleased 0.4.0 candidate with all 45 catalog exports. No copied product validator or
+provider adapter is introduced.
 
 Stage a platform-specific executable identity with:
 
@@ -191,24 +192,27 @@ integration-evals contracts --pin contracts/producer-pin.json --producer /pinned
 
 The runner verifies clean actual checkouts and binary bytes, denies network access,
 contains subprocess lifetime, and invokes public canonical APIs for each declared
-fixture mode. Research/creative byte-array contexts follow the producer's documented
-fixture encoding. Returned schema hashes, case IDs and categories must match the full
+fixture mode. Research/creative and commerce/evidence byte-array contexts follow the
+producer's documented fixture encoding. Returned schema hashes, case IDs and categories must match the full
 frozen source metadata. Failures and complete missing export names are retained in an
 immutable contracts.json receipt with a byte hash. Raw payloads are withheld.
 
 An explicit candidate-scope pass establishes only the implemented synthetic fixture
-slice. Omitting candidate-scope exits 2 when the producer's full catalog has missing
-exports. Every receipt keeps product_acceptance blocked and owner acknowledgement null.
+slice. Both scopes exit 0 for the complete pinned catalog; omitting candidate-scope
+exits 2 when the producer's full catalog has missing exports. Every receipt keeps
+product_acceptance blocked and owner acknowledgement null.
 Package installation, owner agreement, real consumer domain handoffs and composed
 release verification remain separate requirements. CI runs both scopes against exact
 producer and Node pins; no provider credential or API budget is used.
 
-The separate integration_tests/test_canonical_failure.py scenario requires
+The separate integration_tests scenarios require
 IE_CONTRACT_SOURCE and IE_CONTRACT_RUNTIME pointing to that actual checkout and
-runtime record. It makes an owned temporary copy, contradicts one golden expectation,
-repins that controlled test revision and verifies CLI failure retention. It uses the
-original SDK implementation and changes no producer-owned source. CI runs this test
-under Linux isolation in addition to the default dependency-free tooling suite.
+runtime record. They verify complete candidate/full scope and make owned temporary copies
+to contradict one golden expectation or remove one schema-manifest export, repinning each
+controlled test revision. The unchanged SDK must retain the precise golden failure or
+missing export with CLI exits 1 and 2 respectively. They change no producer-owned source.
+CI runs these tests under Linux isolation in addition to the default dependency-free
+tooling suite.
 
 ## Current unresolved obligations
 
