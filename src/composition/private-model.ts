@@ -3,6 +3,7 @@ import {
 	assetBindingSchema,
 	resolveAsset,
 	checkPermission,
+	parseAsset,
 } from "../assets/private-assets.js";
 import type {
 	AssetPorts,
@@ -419,6 +420,107 @@ export function renderSvgWithFonts(
 		);
 	}
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}mm" height="${layout.height}mm" viewBox="0 0 ${layout.width} ${layout.height}"><defs><style>${styles}</style>${clips.join("")}</defs><rect x="0" y="0" width="${layout.width}" height="${layout.height}" fill="${layout.background}"/>${layers.join("")}</svg>`;
+}
+export function artifactIdentityHash(artifact: PrivateArtifact): Digest {
+	return fingerprint({
+		compositionHash: artifact.compositionHash,
+		renderHash: artifact.renderHash,
+		revision: artifact.revision,
+		sourceArtworkHashes: artifact.sourceArtworkHashes,
+	});
+}
+export function verifyArtifactIdentity(artifact: PrivateArtifact): Digest {
+	const { model } = artifact;
+	const layout = resolveLayout(model.layout);
+	const input = parseComposition(model.input, layout);
+	requireCore(
+		fingerprint(input) === fingerprint(model.input) &&
+			fingerprint(model) === artifact.compositionHash,
+		"RENDER_INTEGRITY",
+		"model.identity",
+	);
+	requireCore(
+		fingerprint(model.fonts) ===
+			fingerprint(artifact.fontBytes.map((f) => f.descriptor)) &&
+			new Set(model.fonts.map((f) => f.ref)).size === model.fonts.length &&
+			model.fonts.every((f) => layout.fonts.includes(f.ref)),
+		"FONT_INVALID",
+		"fonts.identity",
+	);
+	for (const font of artifact.fontBytes)
+		requireCore(
+			digest(Buffer.from(font.base64, "base64")) === font.descriptor.digest,
+			"FONT_INVALID",
+			`fonts.${font.descriptor.ref}.hash`,
+		);
+	const bindings = input.nodes.flatMap((n) =>
+		n.kind === "artwork" || n.kind === "overlay" ? [n.asset] : [],
+	);
+	const uniqueBindings = bindings.filter(
+		(b, i) =>
+			bindings.findIndex((a) => fingerprint(a) === fingerprint(b)) === i,
+	);
+	requireCore(
+		fingerprint(uniqueBindings) ===
+			fingerprint(artifact.assets.map((a) => a.binding)),
+		"RENDER_INTEGRITY",
+		"assets.inventory",
+	);
+	for (const asset of artifact.assets) {
+		requireCore(
+			fingerprint(asset.binding.scope) === fingerprint(input.scope),
+			"RENDER_INTEGRITY",
+			`assets.${asset.binding.ref}.scope`,
+		);
+		const parsed = parseAsset(
+			asset.binding,
+			Buffer.from(asset.sourceBase64, "base64"),
+		);
+		requireCore(
+			fingerprint(parsed) === fingerprint(asset),
+			"RENDER_INTEGRITY",
+			`assets.${asset.binding.ref}.display`,
+		);
+	}
+	requireCore(
+		fingerprint(artifact.sourceArtworkHashes) ===
+			fingerprint(
+				artifact.assets
+					.filter((a) => a.binding.purpose === "artwork")
+					.map((a) => a.binding.digest),
+			),
+		"RENDER_INTEGRITY",
+		"sourceArtworkHashes",
+	);
+	const texts = input.nodes
+		.filter((n) => n.kind === "text")
+		.map((n) => layoutText(n.field, artifact.fontBytes));
+	requireCore(
+		fingerprint(texts) === fingerprint(artifact.texts),
+		"RENDER_INTEGRITY",
+		"texts.identity",
+	);
+	const svg = renderSvgWithFonts(
+		model,
+		artifact.assets,
+		texts,
+		artifact.fontBytes,
+	);
+	requireCore(
+		svg === artifact.svg && digest(svg) === artifact.renderHash,
+		"RENDER_INTEGRITY",
+		"svg.identity",
+	);
+	requireCore(
+		artifact.revision ===
+			fingerprint({
+				compositionHash: artifact.compositionHash,
+				renderHash: artifact.renderHash,
+			}),
+		"RENDER_INTEGRITY",
+		"revision.identity",
+	);
+	return artifactIdentityHash(artifact);
 }
 export async function composeArtifact(
 	value: unknown,

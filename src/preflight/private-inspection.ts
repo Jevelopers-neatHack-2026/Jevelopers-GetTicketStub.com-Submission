@@ -5,6 +5,8 @@ import {
 	recheckPermissions,
 	renderSvgWithFonts,
 	requirePhysicalTextSize,
+	artifactIdentityHash,
+	verifyArtifactIdentity,
 } from "../composition/private-model.js";
 import type {
 	CompositionPorts,
@@ -13,6 +15,7 @@ import type {
 } from "../composition/private-model.js";
 import {
 	CompositionError,
+	canonical,
 	contains,
 	digest,
 	digestSchema,
@@ -22,7 +25,7 @@ import {
 	parse,
 	transformed,
 } from "../composition/primitives.js";
-import type { Rect, Transform } from "../composition/primitives.js";
+import type { Digest, Rect, Transform } from "../composition/primitives.js";
 import {
 	compareTemplateCompatibility,
 	resolveLayout,
@@ -56,6 +59,8 @@ const finalEvidenceSchema = z
 		format: z.enum(["svg", "png", "pdf"]),
 		compositionHash: digestSchema,
 		renderHash: digestSchema,
+		artifactIdentityHash: digestSchema,
+		svgDigest: digestSchema,
 		fileDigest: digestSchema,
 		parserRevision: z.string().min(1),
 		checks: z
@@ -73,9 +78,23 @@ const finalEvidenceSchema = z
 	})
 	.strict()
 	.readonly();
-export type FinalFileEvidence = z.infer<typeof finalEvidenceSchema>;
+export type FinalFileEvidence = z.infer<typeof finalEvidenceSchema> & {
+	readonly bindingHash: Digest;
+};
+function normalizeFileEvidence(
+	value: unknown,
+): z.infer<typeof finalEvidenceSchema> {
+	const file = parse(finalEvidenceSchema, value);
+	return freeze({
+		...file,
+		checks: [...file.checks].sort((a, b) =>
+			canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0,
+		),
+	});
+}
 export function finalFileEvidence(value: unknown): FinalFileEvidence {
-	return parse(finalEvidenceSchema, value);
+	const file = normalizeFileEvidence(value);
+	return freeze({ ...file, bindingHash: fingerprint(file) });
 }
 function covers(outer: Rect, t: Transform, inner: Rect): boolean {
 	const a = (-t.rotation * Math.PI) / 180;
@@ -154,6 +173,19 @@ export function inspectModel(
 		fingerprint(artifact.fontBytes.map((f) => f.descriptor))
 	)
 		add("FONT_INTEGRITY", "fonts", null, "pinned font descriptors", "digest");
+	try {
+		verifyArtifactIdentity(artifact);
+	} catch (error) {
+		if (error instanceof CompositionError)
+			add(
+				"ARTIFACT_IDENTITY",
+				error.path,
+				null,
+				"verified model, source, display and render relationships",
+				"digest",
+			);
+		else throw error;
+	}
 	const compatibility = compareTemplateCompatibility(
 		layout,
 		layout,
@@ -524,9 +556,21 @@ export function inspectModel(
 			);
 			continue;
 		}
+		let bindingValid = false;
+		try {
+			const { bindingHash, ...payload } = file;
+			bindingValid =
+				fingerprint(normalizeFileEvidence(payload)) === bindingHash;
+		} catch (error) {
+			if (!(error instanceof CompositionError)) throw error;
+		}
 		if (
 			file.compositionHash !== artifact.compositionHash ||
-			file.renderHash !== artifact.renderHash
+			file.renderHash !== artifact.renderHash ||
+			file.artifactIdentityHash !== artifactIdentityHash(artifact) ||
+			file.svgDigest !== digest(artifact.svg) ||
+			!bindingValid ||
+			(file.format === "svg" && file.fileDigest !== file.svgDigest)
 		)
 			add(
 				"EXPORT_BINDING",

@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { composeArtifact } from "../../src/composition/private-model.js";
+import {
+	composeArtifact,
+	artifactIdentityHash,
+} from "../../src/composition/private-model.js";
 import type {
 	LayoutNode,
 	PrivateArtifact,
@@ -23,7 +26,12 @@ const files = (artifact: PrivateArtifact) =>
 			format,
 			compositionHash: artifact.compositionHash,
 			renderHash: artifact.renderHash,
-			fileDigest: digest(`synthetic-hook-${format}`),
+			artifactIdentityHash: artifactIdentityHash(artifact),
+			svgDigest: digest(artifact.svg),
+			fileDigest:
+				format === "svg"
+					? digest(artifact.svg)
+					: digest(`synthetic-hook-${format}`),
 			parserRevision: "synthetic-hook-not-exporter",
 			checks: ["dimensions", "content", "fonts", "container", "profile"].map(
 				(name) => ({

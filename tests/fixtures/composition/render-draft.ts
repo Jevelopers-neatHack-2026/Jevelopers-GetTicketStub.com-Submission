@@ -6,9 +6,16 @@ import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { z } from "zod";
 import type { PrivateArtifact } from "../../../src/composition/private-model.js";
-import { recheckPermissions } from "../../../src/composition/private-model.js";
+import {
+	recheckPermissions,
+	verifyArtifactIdentity,
+} from "../../../src/composition/private-model.js";
 import type { CompositionPorts } from "../../../src/composition/private-model.js";
-import { digest, fingerprint } from "../../../src/composition/primitives.js";
+import {
+	digest,
+	fingerprint,
+	freeze,
+} from "../../../src/composition/primitives.js";
 import { finalFileEvidence } from "../../../src/preflight/private-inspection.js";
 import { assertEnvironment } from "../../../src/runtime/environment.js";
 import { openOfflineBrowser } from "../../../src/exporters/offline-browser.js";
@@ -28,6 +35,8 @@ export async function renderDraft(
 	ports: CompositionPorts,
 	output: string,
 ) {
+	artifact = freeze({ ...artifact });
+	const verifiedIdentity = verifyArtifactIdentity(artifact);
 	await recheckPermissions(artifact, ports, "export", 1000);
 	const { pins, receipt } = await assertEnvironment();
 	for (const [name, expected] of [
@@ -51,6 +60,8 @@ export async function renderDraft(
 			heightPx = Math.round((height * 96) / 25.4);
 		const page = await context.newPage();
 		await page.setViewportSize({ width: widthPx, height: heightPx });
+		assert.equal(verifyArtifactIdentity(artifact), verifiedIdentity);
+		const svgDigest = digest(artifact.svg);
 		await page.setContent(
 			`<html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; connect-src 'none'; script-src 'none'; base-uri 'none'"><style>@page{size:${width}mm ${height}mm;margin:0}html,body{margin:0}svg{display:block}</style></head><body>${artifact.svg}</body></html>`,
 		);
@@ -241,6 +252,8 @@ export async function renderDraft(
 				format,
 				compositionHash: artifact.compositionHash,
 				renderHash: artifact.renderHash,
+				artifactIdentityHash: verifiedIdentity,
+				svgDigest,
 				fileDigest: digest(
 					format === "svg" ? artifact.svg : format === "png" ? png : pdf,
 				),
@@ -259,6 +272,11 @@ export async function renderDraft(
 										? "failed"
 										: "passed",
 						evidenceDigest: fingerprint({
+							artifactIdentityHash: verifiedIdentity,
+							svgDigest,
+							fileDigest: digest(
+								format === "svg" ? artifact.svg : format === "png" ? png : pdf,
+							),
 							format,
 							name,
 							metrics,
@@ -278,6 +296,9 @@ export async function renderDraft(
 			compositionHash: artifact.compositionHash,
 			sourceArtworkHashes: artifact.sourceArtworkHashes,
 			renderHash: artifact.renderHash,
+			artifactIdentityHash: verifiedIdentity,
+			svgDigest,
+			sourceDisplayVerified: true,
 			pixelHash: digest(decoded.data),
 			normalizedPdfHash: digest(normalizedPdf),
 			metrics,

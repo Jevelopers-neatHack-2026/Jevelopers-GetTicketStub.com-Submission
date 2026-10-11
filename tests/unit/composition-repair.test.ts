@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { composeArtifact } from "../../src/composition/private-model.js";
+import {
+	composeArtifact,
+	artifactIdentityHash,
+} from "../../src/composition/private-model.js";
 import { digest, fingerprint } from "../../src/composition/primitives.js";
 import {
 	inspectModel,
@@ -420,6 +423,8 @@ test("failed final-file checks preserve the original repair input", async () => 
 				format: "pdf",
 				compositionHash: artifact.compositionHash,
 				renderHash: artifact.renderHash,
+				artifactIdentityHash: artifactIdentityHash(artifact),
+				svgDigest: digest(artifact.svg),
 				fileDigest: digest("synthetic-bad-pdf"),
 				parserRevision: "synthetic-negative-file-hook",
 				checks: [
