@@ -97,7 +97,7 @@
       "sponsor": "Entire",
       "status": "pending",
       "evidenceRef": "SPN-ENTIRE-001",
-      "requiredEvidence": "Entire-specific checkpoint/graph evidence and owner review; do not substitute another sponsor's run.",
+      "requiredEvidence": "Entire-specific checkpoint/graph evidence and owner review; do not substitute another sponsor's run. Producer source is now available at immutable integration-evals commit a9d68ef0116b1c20f7d70e0161016e21b4bb13b7 (evidence/entire/2026-10-11; merge of PR #31): historical metadata for one Claude Code checkpoint attached with session attach (private transcript not reviewed) and ten CI-exported Entire-graph snapshots with no agent session. Marketing byte-checked all 40 SHA256SUMS entries and read the ten graph headers (metadata only). The repository owner recorded acceptance at PR #31 (merged 2026-10-11T19:25:46Z), given in chat; it is not an independent human review or an Entire/sponsor statement. Availability and recorded owner acceptance are not marketing claim approval, and nothing here shows runtime, live-agent, hosted-mirror or current live capture, an integrated journey, reasoning or results.",
       "requiredIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
     },
     {
@@ -310,10 +310,15 @@
       "reviewStatus": "blocked",
       "limitations": [
         "Requires separate Entire checkpoint/graph evidence and source-owner review.",
-        "No sponsor use or live provider call was performed for this task."
+        "No sponsor use or live provider call was performed for this task.",
+        "Source availability, supplemental: public Entire source exists at integration-evals commit a9d68ef0116b1c20f7d70e0161016e21b4bb13b7 (merge of PR #31), immutable locator https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11. It holds historical metadata for one Claude Code checkpoint, 01M4P1DT7TRNWJ5EA42T47R1P0 on commit 3358f0d, created with session attach rather than live hook capture (private transcript not accessed or reviewed; the public origin holds no checkpoint refs), and ten Entire-graph snapshots exported by CI runs with no agent session.",
+        "Marketing byte-checked the raw Git bytes of all 40 SHA256SUMS entries and read the ten graph headers (repository and commit match the evidence rows; provider entire-graph v0.4.0, not pinned by the record). This is byte and metadata verification only. The header statistics are empty, so the file, symbol and relation counts in the record were not independently counted and are not used.",
+        "Recorded owner acceptance: the repository owner accepted the evidence in chat and recorded it at integration-evals PR #31 (merged 2026-10-11T19:25:46Z as a9d68ef0116b1c20f7d70e0161016e21b4bb13b7). It is not an independent human review and not an Entire or sponsor statement. Earlier statements in the pinned record (not completing SPN-02 by itself; configuration PRs open) are dated history, not a rejection of that decision.",
+        "Limits: one Claude checkpoint, no live hook capture, no Codex checkpoint, nothing mirrored on entire.io, no current live capture. The graphs are static code-structure exports and do not show an integrated product journey, agent reasoning, runtime behavior or results; no organizer-required facet is shown complete. Availability and recorded owner acceptance are not marketing claim approval, and the claim state, wording, evidence classification and approvals are unchanged."
       ],
       "reReviewTrigger": [
-        "Entire checkpoint, graph, mode, evidence, or source revision changes."
+        "Entire checkpoint, graph, mode, evidence, or source revision changes.",
+        "Any change to the integration-evals Entire evidence at or after a9d68ef0116b1c20f7d70e0161016e21b4bb13b7, to PR #31 owner acceptance, or an independent or sponsor review of the Entire evidence."
       ]
     },
     {
