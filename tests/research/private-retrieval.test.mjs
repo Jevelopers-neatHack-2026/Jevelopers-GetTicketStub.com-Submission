@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 import { gzipSync } from 'node:zlib';
 import { createEvidenceStore } from '../../src/evidence/store.mjs';
@@ -1218,41 +1219,277 @@ test('a delayed createRun cannot create a durable run after timeout or dispatch 
   await assert.rejects(h.frontier.getSnapshot(h.scope, runId), (error) => error?.code === 'FRONTIER_NOT_FOUND');
 });
 
-test('the whole-run deadline interrupts an already-admitted last request and keeps uncertain capacity reserved', { timeout: 8_000 }, async (t) => {
+test('the whole-run deadline interrupts an already-admitted last request and keeps uncertain capacity reserved', { timeout: 10_000 }, async (t) => {
+  const runDurationMs = 5_000;
+  const preCreateDelayMs = 200;
+  const closeEventObservationTimeoutMs = 1_000;
   let requestCount = 0;
+  let tcpConnectionCount = 0;
   let responseClosed = false;
+  let socketClosed = false;
+  let lateBodyAttempted = false;
+  let lateBodyDelivered = false;
+  let lateBodySawClosedResponse = false;
+  let persistedDeadlineAtMs;
+  let createRunEnteredAtPerfMs;
+  let createRunInvokedAtPerfMs;
+  let preCreateDelayElapsedMs;
+  let persistedDeadlineMapPerfBeforeMs;
+  let persistedDeadlineWallSampleAtMs;
+  let persistedDeadlineMapPerfAfterMs;
+  let persistedDeadlineLowerPerfMs;
+  let persistedDeadlineUpperPerfMs;
+  let runEntryPerfBeforeMs;
+  let runEntryPerfAfterMs;
+  let runEntryDeadlineLowerPerfMs;
+  let runEntryDeadlineUpperPerfMs;
+  let effectiveDeadlineLowerPerfMs;
+  let effectiveDeadlineUpperPerfMs;
+  let requestReceivedAtPerfMs;
+  let responseClosedAtPerfMs;
+  let socketClosedAtPerfMs;
+  let lateBodyAttemptedAtPerfMs;
   let delayedResponse;
+  let resolveRequestReceived;
+  let resolveResponseClosed;
+  let resolveSocketClosed;
+  let resolveLateBodyAttempt;
+  const requestReceived = new Promise((resolve) => { resolveRequestReceived = resolve; });
+  const responseClosedEvent = new Promise((resolve) => { resolveResponseClosed = resolve; });
+  const socketClosedEvent = new Promise((resolve) => { resolveSocketClosed = resolve; });
+  const lateBodyAttempt = new Promise((resolve) => { resolveLateBodyAttempt = resolve; });
   const server = await startFixture((_request, response) => {
     requestCount += 1;
+    requestReceivedAtPerfMs = performance.now();
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.write('<!doctype html>');
-    response.once('close', () => { responseClosed = true; clearTimeout(delayedResponse); });
-    delayedResponse = setTimeout(() => response.end(eventHtml()), 1_000);
+    response.once('close', () => {
+      responseClosed = true;
+      responseClosedAtPerfMs = performance.now();
+      resolveResponseClosed();
+    });
+    const delayUntilLateBodyMs = Number.isFinite(effectiveDeadlineUpperPerfMs)
+      ? Math.max(0, effectiveDeadlineUpperPerfMs - performance.now()) : 0;
+    delayedResponse = setTimeout(() => {
+      lateBodyAttempted = true;
+      lateBodyAttemptedAtPerfMs = performance.now();
+      lateBodySawClosedResponse = response.destroyed;
+      if (!response.destroyed) {
+        lateBodyDelivered = true;
+        response.end(eventHtml());
+      }
+      resolveLateBodyAttempt();
+    }, delayUntilLateBodyMs + 250);
+    resolveRequestReceived();
   });
-  t.after(() => server.close());
+  server.server.on('connection', (socket) => {
+    tcpConnectionCount += 1;
+    socket.once('close', () => {
+      socketClosed = true;
+      socketClosedAtPerfMs = performance.now();
+      resolveSocketClosed();
+    });
+  });
+  t.after(async () => {
+    clearTimeout(delayedResponse);
+    await server.close();
+  });
   const h = await harness(t);
   const runId = 'private-deadline-last-hop';
-  const running = runPrivateRetrieval(h.makeInput({
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    createRun: async (...args) => {
+      createRunEnteredAtPerfMs = performance.now();
+      const preCreateTargetPerfMs = createRunEnteredAtPerfMs + preCreateDelayMs;
+      while (performance.now() < preCreateTargetPerfMs) {
+        const remainingDelayMs = preCreateTargetPerfMs - performance.now();
+        await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.ceil(remainingDelayMs))));
+      }
+      createRunInvokedAtPerfMs = performance.now();
+      preCreateDelayElapsedMs = createRunInvokedAtPerfMs - createRunEnteredAtPerfMs;
+      const created = await h.frontier.createRun(...args);
+      persistedDeadlineAtMs = created.deadlineAtMs;
+      persistedDeadlineMapPerfBeforeMs = performance.now();
+      persistedDeadlineWallSampleAtMs = Date.now();
+      persistedDeadlineMapPerfAfterMs = performance.now();
+      // Date.now() is millisecond-granular. These sample intervals conservatively
+      // map the persisted wall deadline into the monotonic clock without selecting
+      // one sample endpoint as an exact deadline.
+      persistedDeadlineLowerPerfMs = persistedDeadlineMapPerfBeforeMs
+        + (persistedDeadlineAtMs - persistedDeadlineWallSampleAtMs - 1);
+      persistedDeadlineUpperPerfMs = persistedDeadlineMapPerfAfterMs
+        + (persistedDeadlineAtMs - persistedDeadlineWallSampleAtMs + 1);
+      effectiveDeadlineLowerPerfMs = Math.min(runEntryDeadlineLowerPerfMs, persistedDeadlineLowerPerfMs);
+      effectiveDeadlineUpperPerfMs = Math.min(runEntryDeadlineUpperPerfMs, persistedDeadlineUpperPerfMs);
+      return created;
+    },
+  });
+  const input = h.makeInput({
     runId,
     server,
+    frontier,
     seeds: [{ url: sourceUrl('/slow-body') }],
-    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: 750 },
-  }));
-  const deadlineObservedAt = Date.now();
+    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: runDurationMs },
+  });
+  runEntryPerfBeforeMs = performance.now();
+  const running = runPrivateRetrieval(input);
+  runEntryPerfAfterMs = performance.now();
+  runEntryDeadlineLowerPerfMs = runEntryPerfBeforeMs + runDurationMs;
+  runEntryDeadlineUpperPerfMs = runEntryPerfAfterMs + runDurationMs;
+  const runOutcome = running.then(
+    (result) => ({ kind: 'returned', result }),
+    (error) => ({ kind: 'rejected', error }),
+  );
+  const phase = await Promise.race([
+    requestReceived.then(() => ({ kind: 'request-received' })),
+    runOutcome,
+  ]);
+  if (phase.kind !== 'request-received') {
+    const outcome = phase.kind === 'returned'
+      ? JSON.stringify({ status: phase.result.status, limitations: phase.result.limitations })
+      : String(phase.error);
+    assert.fail(`run ended before a real local HTTP request arrived; requestCount=${requestCount}; elapsedMs=${performance.now() - runEntryPerfBeforeMs}; outcome=${outcome}`);
+  }
+  const remainingAtRequestMs = effectiveDeadlineLowerPerfMs - requestReceivedAtPerfMs;
+  assert.equal(tcpConnectionCount, 1, 'the local fixture observed a real TCP connection');
+  assert.equal(requestCount, 1, 'the local HTTP handler observed the admitted request');
+  assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the real frontier persisted the original run deadline');
+  assert.ok(preCreateDelayElapsedMs >= preCreateDelayMs, 'createRun was phase-shifted by the full bounded real-time delay');
+  assert.ok(persistedDeadlineLowerPerfMs > runEntryDeadlineUpperPerfMs,
+    'the newly persisted deadline maps later than the entire run-entry deadline interval');
+  assert.ok(effectiveDeadlineLowerPerfMs <= effectiveDeadlineUpperPerfMs, 'the effective deadline bounds are ordered');
+  assert.ok(remainingAtRequestMs > 500, 'the request reached the fixture with a bounded window left on the original deadline');
+  assert.ok(requestReceivedAtPerfMs < effectiveDeadlineLowerPerfMs,
+    'the request arrived before the conservative lower bound of the effective whole-run deadline');
+
   const result = await running;
-  assert.ok(Date.now() - deadlineObservedAt < 2_000, 'the final authorized hop is bounded by the run deadline');
+  const runReturnedAtPerfMs = performance.now();
+  const deadlineReturnLagFromUpperMs = runReturnedAtPerfMs - effectiveDeadlineUpperPerfMs;
+  const closeWaitStartedAtPerfMs = performance.now();
+  let closeEventsObserved;
+  let closeWaitTimer;
+  try {
+    closeEventsObserved = await Promise.race([
+      Promise.all([responseClosedEvent, socketClosedEvent]).then(() => true),
+      new Promise((resolve) => {
+        closeWaitTimer = setTimeout(() => resolve(false), closeEventObservationTimeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(closeWaitTimer);
+  }
+  const closeWaitFinishedAtPerfMs = performance.now();
+  t.diagnostic(JSON.stringify({
+    preCreateDelayTargetMs: preCreateDelayMs,
+    preCreateDelayElapsedMs,
+    createRunEnteredAtPerfMs,
+    createRunInvokedAtPerfMs,
+    runEntryPerfBeforeMs,
+    runEntryPerfAfterMs,
+    runEntryBracketWidthMs: runEntryPerfAfterMs - runEntryPerfBeforeMs,
+    runEntryDeadlineLowerPerfMs,
+    runEntryDeadlineUpperPerfMs,
+    persistedDeadlineAtMs,
+    persistedDeadlineMapPerfBeforeMs,
+    persistedDeadlineWallSampleAtMs,
+    persistedDeadlineMapPerfAfterMs,
+    persistedDeadlineMapSampleWidthMs: persistedDeadlineMapPerfAfterMs - persistedDeadlineMapPerfBeforeMs,
+    persistedDeadlineLowerPerfMs,
+    persistedDeadlineUpperPerfMs,
+    persistedDeadlineMappedWidthMs: persistedDeadlineUpperPerfMs - persistedDeadlineLowerPerfMs,
+    effectiveDeadlineLowerPerfMs,
+    effectiveDeadlineUpperPerfMs,
+    effectiveDeadlineIntervalWidthMs: effectiveDeadlineUpperPerfMs - effectiveDeadlineLowerPerfMs,
+    requestReceivedAtPerfMs: requestReceivedAtPerfMs ?? null,
+    remainingAtRequestMs: Number.isFinite(requestReceivedAtPerfMs)
+      ? effectiveDeadlineLowerPerfMs - requestReceivedAtPerfMs : null,
+    tcpConnectionCount,
+    requestCount,
+    runReturnedAtPerfMs,
+    deadlineReturnLagFromUpperMs,
+    deadlineReturnLagFromLowerMs: runReturnedAtPerfMs - effectiveDeadlineLowerPerfMs,
+    closeWaitStartedAtPerfMs,
+    closeWaitFinishedAtPerfMs,
+    closeWaitLagMs: closeWaitFinishedAtPerfMs - closeWaitStartedAtPerfMs,
+    closeEventObservationTimeoutMs,
+    closeEventsObserved,
+    responseClosed,
+    responseClosedAtPerfMs: responseClosedAtPerfMs ?? null,
+    socketClosed,
+    socketClosedAtPerfMs: socketClosedAtPerfMs ?? null,
+    lateBodyAttempted,
+    lateBodyAttemptedAtPerfMs: lateBodyAttemptedAtPerfMs ?? null,
+    lateBodySawClosedResponse,
+    lateBodyDelivered,
+  }));
+  assert.ok(runReturnedAtPerfMs <= effectiveDeadlineUpperPerfMs + 2_000,
+    'the final authorized hop returns promptly after the upper bound of the effective run deadline');
+  assert.equal(closeEventsObserved, true, 'both local response and TCP socket close events are observed within the bounded wait');
+  assert.ok(responseClosedAtPerfMs >= effectiveDeadlineLowerPerfMs - 100,
+    'the active local response remains open until the original run deadline');
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
-  assert.equal(requestCount, 1);
-  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
-  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'attempt_limit'));
-  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'deadline'));
-  const transport = await h.frontier.getTransportProgress(h.scope, runId);
-  assert.equal(transport.reservedBytes, 20 * 1024 * 1024);
-  assert.equal(transport.spentBytes, 0);
-  assert.equal(transport.states.unknown, 1);
-  assert.equal(responseClosed, true, 'deadline abort closes the local socket before the delayed body can arrive');
+  const snapshotBeforeLateBody = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshotBeforeLateBody.deadlineAtMs, persistedDeadlineAtMs, 'phase synchronization did not reset the persisted deadline');
+  assert.ok(snapshotBeforeLateBody.stopReasons.some((entry) => entry.reason === 'attempt_limit'));
+  assert.ok(snapshotBeforeLateBody.stopReasons.some((entry) => entry.reason === 'deadline'));
+  assert.equal(snapshotBeforeLateBody.counters.transportAttemptAdmissions, 1);
+  assert.equal(snapshotBeforeLateBody.candidates[0].state, 'unresolved');
+  assert.equal(snapshotBeforeLateBody.candidates[0].admittedAttemptCount, 1);
+  const transportBeforeLateBody = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transportBeforeLateBody.reservedBytes, 20 * 1024 * 1024);
+  assert.equal(transportBeforeLateBody.spentBytes, 0);
+  assert.equal(transportBeforeLateBody.states.unknown, 1);
+  assert.equal(responseClosed, true, 'deadline abort closes the local response socket');
+  assert.equal(socketClosed, true, 'the TCP socket is closed before the late body attempt');
+
+  await lateBodyAttempt;
+  assert.equal(lateBodyAttempted, true, 'the scheduled late body phase actually ran');
+  assert.ok(lateBodyAttemptedAtPerfMs > effectiveDeadlineUpperPerfMs,
+    'the late body phase begins after the upper bound of the effective original deadline');
+  assert.equal(lateBodySawClosedResponse, true, 'the response was already closed at the late body phase');
+  assert.equal(lateBodyDelivered, false, 'a late body cannot reach the closed client');
+  assert.ok(responseClosedAtPerfMs < lateBodyAttemptedAtPerfMs);
+  assert.ok(socketClosedAtPerfMs < lateBodyAttemptedAtPerfMs);
+  const snapshotAfterLateBody = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshotAfterLateBody.deadlineAtMs, persistedDeadlineAtMs);
+  assert.deepEqual(
+    snapshotAfterLateBody.candidates.map(({ candidateId, state, admittedAttemptCount }) => ({ candidateId, state, admittedAttemptCount })),
+    snapshotBeforeLateBody.candidates.map(({ candidateId, state, admittedAttemptCount }) => ({ candidateId, state, admittedAttemptCount })),
+    'the late server callback cannot complete or otherwise change the unresolved candidate',
+  );
+  assert.deepEqual(
+    snapshotAfterLateBody.stopReasons.map((entry) => entry.reason).sort(),
+    snapshotBeforeLateBody.stopReasons.map((entry) => entry.reason).sort(),
+  );
+  const transportAfterLateBody = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transportAfterLateBody.reservedBytes, transportBeforeLateBody.reservedBytes);
+  assert.equal(transportAfterLateBody.spentBytes, transportBeforeLateBody.spentBytes);
+  assert.deepEqual(transportAfterLateBody.states, transportBeforeLateBody.states);
+  t.diagnostic(JSON.stringify({
+    runEntryPerfBeforeMs,
+    runEntryPerfAfterMs,
+    runEntryBracketWidthMs: runEntryPerfAfterMs - runEntryPerfBeforeMs,
+    persistedDeadlineLowerPerfMs,
+    persistedDeadlineUpperPerfMs,
+    persistedDeadlineMappedWidthMs: persistedDeadlineUpperPerfMs - persistedDeadlineLowerPerfMs,
+    effectiveDeadlineLowerPerfMs,
+    effectiveDeadlineUpperPerfMs,
+    effectiveDeadlineIntervalWidthMs: effectiveDeadlineUpperPerfMs - effectiveDeadlineLowerPerfMs,
+    persistedDeadlineAtMs,
+    requestReceivedAtPerfMs,
+    remainingAtRequestMs,
+    tcpConnectionCount,
+    requestCount,
+    responseClosedAtPerfMs,
+    socketClosedAtPerfMs,
+    lateBodyAttemptedAtPerfMs,
+    lateBodyDelivered,
+    deadlineReturnLagFromUpperMs,
+    reservedBytesAfterLateBody: transportAfterLateBody.reservedBytes,
+    spentBytesAfterLateBody: transportAfterLateBody.spentBytes,
+    statesAfterLateBody: transportAfterLateBody.states,
+  }));
 });
 
 test('a remote stop during final evidence lookup returns promptly without materializing a draft', { timeout: 8_000 }, async (t) => {
