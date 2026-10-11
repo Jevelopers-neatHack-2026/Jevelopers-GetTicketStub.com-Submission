@@ -406,9 +406,6 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       // A prepared value is single use: it is consumed before the host port can run, so a replay is refused. That
       // includes a refusal below: a target whose content moved since prepare consumes the value and fails closed.
       preparedState.delete(input.prepared);
-      if (targetContentDigest(state.cell_id, state.target) !== state.targetDigest) {
-        throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
-      }
       const remaining = Date.parse(state.deadline_at) - readClock(now);
       if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
       // The runner passes its cancellation signal (operator abort combined with the operation deadline) as
@@ -419,8 +416,14 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       }
       const timeout = AbortSignal.timeout(Math.min(remaining, 120_000));
       // The runner passes the bound target's configuration; the host always sees that one, never a divergent copy.
-      return dispatchPort.dispatch({ ...input, configuration: state.target.configuration, prepared: state.hostPrepared, credential: state.credential,
-        signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout });
+      const hostArgs = { ...input, configuration: state.target.configuration, prepared: state.hostPrepared, credential: state.credential,
+        signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout };
+      // Every read of the caller's input (including getters on `metering` or enumerable properties) is done above, so
+      // the target content check runs last, immediately before the host port, and nothing can move it afterwards.
+      if (targetContentDigest(state.cell_id, state.target) !== state.targetDigest) {
+        throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
+      }
+      return dispatchPort.dispatch(hostArgs);
     };
   } else {
     adapter.dispatch = async () => {

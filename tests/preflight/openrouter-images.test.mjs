@@ -666,3 +666,19 @@ test('fields the validator and binding never read do not affect the target diges
   assert.equal(dispatches, 1);
   assert.equal(hostConfiguration, input.target.configuration, 'a divergent top-level configuration never reaches the host');
 });
+
+test('a caller getter that mutates the target while dispatch reads its input is refused before the host dispatch', async () => {
+  for (const [name, install] of [
+    ['enumerable property spread into the host args', (din, evil) => Object.defineProperty(din, 'zz_late', { enumerable: true, get() { evil(); return 1; } })],
+    ['metering getter', (din, evil) => Object.defineProperty(din, 'metering', { enumerable: true, get() { evil(); return undefined; } })]]) {
+    let dispatches = 0;
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async dispatch() { dispatches += 1; return {}; } } });
+    const input = billable();
+    const prepared = await adapter.prepare(input);
+    const din = { ...input, prepared };
+    install(din, () => { input.target.model = 'evil-author/evil-model'; });
+    await assert.rejects(adapter.dispatch(din), (error) => error.code === 'unsupported_image_configuration', name);
+    assert.equal(dispatches, 0, name);
+  }
+});
