@@ -175,7 +175,9 @@
           "PROV-DEMO-WORKFLOW-ALT-001",
           "PROV-PREVIEW-WORKFLOW-001",
           "PROV-FILE-CF037D115D82",
-          "PROV-FILE-A380F085125A"
+          "PROV-FILE-A380F085125A",
+          "PROV-FILE-800D4A16A6F4",
+          "PROV-FILE-89AE66BC68BC"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -253,7 +255,9 @@
         "derivedFrom": [
           "DEMO-WORKFLOW-DIAGRAM-001"
         ],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-FILE-749235528AD5"
+        ],
         "transformations": [
           "Raster export of DEMO-WORKFLOW-DIAGRAM-001."
         ]
@@ -331,7 +335,9 @@
           "DEMO-WORKFLOW-DIAGRAM-001"
         ],
         "derivatives": [
-          "PROV-FILE-A9D8CF2BE2A4"
+          "PROV-FILE-A9D8CF2BE2A4",
+          "PROV-FILE-5A1E2F886155",
+          "PROV-FILE-ECEB50A5FB3A"
         ],
         "transformations": [
           "Accessible text alternative authored from DEMO-WORKFLOW-DIAGRAM-001."
@@ -412,7 +418,8 @@
           "PROV-DEMO-SCREENSHOT-ALT-001",
           "PROV-PREVIEW-MOCKUP-001",
           "PROV-FILE-DDB2BC496431",
-          "PROV-FILE-267E17C53FB6"
+          "PROV-FILE-267E17C53FB6",
+          "PROV-FILE-6680B420C41F"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -490,7 +497,9 @@
         "derivedFrom": [
           "DEMO-SCREENSHOT-SET-001"
         ],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-FILE-27407AD91D34"
+        ],
         "transformations": [
           "Raster export of DEMO-SCREENSHOT-SET-001."
         ]
@@ -568,7 +577,8 @@
           "DEMO-SCREENSHOT-SET-001"
         ],
         "derivatives": [
-          "PROV-FILE-7B20B0799157"
+          "PROV-FILE-7B20B0799157",
+          "PROV-FILE-BCC33F252B89"
         ],
         "transformations": [
           "Accessible text alternative authored from DEMO-SCREENSHOT-SET-001."
@@ -661,7 +671,8 @@
           "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
           "PROV-PREVIEW-DECK-RESP-1040-001",
           "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
-          "PROV-FILE-16A3723BC5F7"
+          "PROV-FILE-16A3723BC5F7",
+          "PROV-FILE-A8CDC02FCD45"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -745,7 +756,8 @@
           "LAUNCH-X-ALT-TEXT-001",
           "PROV-PREVIEW-X-FEED-001",
           "PROV-FILE-767E4CA2260D",
-          "PROV-FILE-B7E582F9B754"
+          "PROV-FILE-B7E582F9B754",
+          "PROV-FILE-0F20A529D437"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -823,7 +835,9 @@
         "derivedFrom": [
           "LAUNCH-X-KEY-VISUAL-001"
         ],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-FILE-566A3B82406B"
+        ],
         "transformations": [
           "Raster export of LAUNCH-X-KEY-VISUAL-001."
         ]
@@ -901,7 +915,8 @@
           "LAUNCH-X-KEY-VISUAL-001"
         ],
         "derivatives": [
-          "PROV-FILE-32D1A28C5E72"
+          "PROV-FILE-32D1A28C5E72",
+          "PROV-FILE-1291336709CE"
         ],
         "transformations": [
           "Accessible text alternative authored from LAUNCH-X-KEY-VISUAL-001."
@@ -3812,7 +3827,9 @@
         "derivedFrom": [
           "DEMO-REHEARSAL-RENDER-PLAN-001"
         ],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-FILE-BB8088961885"
+        ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
           "Frame-aligned sentence-preserving SRT sidecar generated from render-plan cues."
@@ -3891,7 +3908,9 @@
         "derivedFrom": [
           "DEMO-REHEARSAL-RENDER-PLAN-001"
         ],
-        "derivatives": [],
+        "derivatives": [
+          "PROV-FILE-81300E0C9615"
+        ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
           "Frame-aligned sentence-preserving WebVTT sidecar generated from render-plan cues."
@@ -5610,7 +5629,8 @@
           "PROV-FILE-9F4BC10F8153",
           "PROV-FILE-773E6C706898",
           "PROV-FILE-EE26E516E1F2",
-          "PROV-FILE-DAABAA5BBBCE"
+          "PROV-FILE-DAABAA5BBBCE",
+          "PROV-FILE-2A0801C207B7"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -5689,7 +5709,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-A7C50DDF7F9A"
+          "PROV-FILE-A7C50DDF7F9A",
+          "PROV-FILE-99A2CFD0E288"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -5767,7 +5788,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-DC6A027B38C9"
+          "PROV-FILE-DC6A027B38C9",
+          "PROV-FILE-931FA338D053"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -5845,7 +5867,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-EFE7C960615E"
+          "PROV-FILE-EFE7C960615E",
+          "PROV-FILE-13139B1FD3A4"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -5926,7 +5949,8 @@
           "DEMO-REHEARSAL-RENDER-PLAN-001",
           "DEMO-REHEARSAL-TRANSCRIPT-001",
           "PROV-FILE-DD88A6342BC4",
-          "PROV-FILE-316F5E377A24"
+          "PROV-FILE-316F5E377A24",
+          "PROV-FILE-2D551B95A355"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6006,7 +6030,8 @@
           "DEMO-REHEARSAL-SCENES-001"
         ],
         "derivatives": [
-          "PROV-FILE-E05714683C41"
+          "PROV-FILE-E05714683C41",
+          "PROV-FILE-D128EE8CA45E"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -6085,7 +6110,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-47D32100F987"
+          "PROV-FILE-47D32100F987",
+          "PROV-FILE-544E2835265C"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6163,7 +6189,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-523AB7C5F3E1"
+          "PROV-FILE-523AB7C5F3E1",
+          "PROV-FILE-420DDEC6DC38"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6342,7 +6369,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-handoff.md",
-        "revision": "sha256:6243a8535e59e8893e6c13b64ffd558ba5e4d4c89ea96848f4935505246365d3",
+        "revision": "sha256:1693783a03d162d2cbfeebd97165b00036e7ed6d995309ee559a093dd3f757c0",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6400,8 +6427,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6243a8535e59e8893e6c13b64ffd558ba5e4d4c89ea96848f4935505246365d3",
-        "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
+        "value": "1693783a03d162d2cbfeebd97165b00036e7ed6d995309ee559a093dd3f757c0",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -6418,7 +6445,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:cbfb47a18beadb2d47f0766d6b0e27f0b3068d5fd58de3ad340f434ae57ec335",
+        "revision": "sha256:ed37eb2976f2d1080d7a290d74e5d08a7356ef8e84e8088a4f77a4683ed2e91b",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6476,7 +6503,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "cbfb47a18beadb2d47f0766d6b0e27f0b3068d5fd58de3ad340f434ae57ec335",
+        "value": "ed37eb2976f2d1080d7a290d74e5d08a7356ef8e84e8088a4f77a4683ed2e91b",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6619,7 +6646,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-5B3DC7E891CE"
+          "PROV-FILE-5B3DC7E891CE",
+          "PROV-FILE-541805829258"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -8525,9 +8553,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/manifest.json",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "sha256:596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/release/v0.1.0-rehearsal/manifest.json",
+        "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -8601,9 +8629,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/package-spec.json",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/release/v0.1.0-rehearsal/package-spec.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/package-spec.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -8659,8 +8687,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "fa8daa76dcb65cc170f94dd8cb25a912aff5bbac5d9d37fa1abebd924ccfbc5f",
-        "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
+        "value": "cb580597da5317ddd95e411f6e09ba31f8a3a6c4cdc2f42f056738e3cdd04e75",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -8981,7 +9009,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/release-checklist.md",
-        "revision": "sha256:86f673df1968c345927301d44150e9f292e3513e27bd400cac9d17dabeb5072e",
+        "revision": "sha256:a118bf5b3fba5ddde22bc02e5a4b85ad29cc4a2790342f45cd706947759821f0",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -9039,8 +9067,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "86f673df1968c345927301d44150e9f292e3513e27bd400cac9d17dabeb5072e",
-        "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
+        "value": "a118bf5b3fba5ddde22bc02e5a4b85ad29cc4a2790342f45cd706947759821f0",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -9057,7 +9085,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/releases/v0.1.0-rehearsal.md",
-        "revision": "sha256:b5232e6f4651d3e10100e1c2947d3695e16573c48dad5b7807cf47a891eb1b1f",
+        "revision": "sha256:f10b06bd54ec4ca99b002c89609b7c94d91e474300eb69da32d7c75fcf81e51a",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -9115,8 +9143,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "b5232e6f4651d3e10100e1c2947d3695e16573c48dad5b7807cf47a891eb1b1f",
-        "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
+        "value": "f10b06bd54ec4ca99b002c89609b7c94d91e474300eb69da32d7c75fcf81e51a",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -14661,9 +14689,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/rehearsal/metadata.json",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "d95f07e01386c0fe75e9c33461a03d5f550914fb",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/review/visual/rehearsal/metadata.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/d95f07e01386c0fe75e9c33461a03d5f550914fb/review/visual/rehearsal/metadata.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -14810,8 +14838,8 @@
       ],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6967abeb2831a7614c070cef9f6f7b643481c389bbf0631cfbd51fb6c7de1221",
-        "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
+        "value": "89b9c2728328aa66d868b59d6ef74d232e71f9cf1682361c1cc9bbdc5313fa4e",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -14829,9 +14857,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/visual/rehearsal/verification.md",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "d95f07e01386c0fe75e9c33461a03d5f550914fb",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/review/visual/rehearsal/verification.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/d95f07e01386c0fe75e9c33461a03d5f550914fb/review/visual/rehearsal/verification.md",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -14887,8 +14915,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "3d0842e11652c48eb9cefc4362c5ba61849d677bd71e4fd302a0f4685d9f15cb",
-        "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
+        "value": "b8f9f0e41c054ea5075c360064f5a6f450735fe8b2ac3d86811f84259afeacc0",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -15057,9 +15085,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_package_collateral.py",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "7901279d2214eb3073c8cf4c73cf71c2c7bb988a",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/tests/test_package_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7901279d2214eb3073c8cf4c73cf71c2c7bb988a/tests/test_package_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -15115,8 +15143,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "b7ccfaf7096d18b9ec29d6ac6e7d6c3bfd0813ee474ff554721d7e3e1f4f4503",
-        "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
+        "value": "5f2a85206d1cd04b78f1136cddf65969ee5c9b7f14c7cbce11c95f95565e5857",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -15285,9 +15313,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tools/package_collateral.py",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "7901279d2214eb3073c8cf4c73cf71c2c7bb988a",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/tools/package_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7901279d2214eb3073c8cf4c73cf71c2c7bb988a/tools/package_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -15343,8 +15371,8 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "a70ccbe32efc14887d465238e0218153ebe64c1cc1d4251598c7392f9e080464",
-        "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
+        "value": "6cf57d5070121a97320adb25cc1986ea09daa327d26e9ab64ac1159733800e3b",
+        "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
       "reviewDate": null,
@@ -15797,6 +15825,1975 @@
       "blockers": [
         "No destination-specific source-owner approval.",
         "Independent review pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-0F20A529D437",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r02-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r02-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-KEY-VISUAL-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/assets/x-submission-key-visual.svg retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-1291336709CE",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r02-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r02-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-ALT-TEXT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/assets/x-submission-alt-text.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-13139B1FD3A4",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r02-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r02-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-RECORDING-CHECKLIST-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/recording-checklist.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b1ec1323b648cb371c9e80fd9d52d6fbdf2321ab7d160fa077c512ddaa79afba",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-27407AD91D34",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-SCREENSHOT-PNG-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/screenshots/synthetic-stub-mockup.png retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-2A0801C207B7",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r02-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r02-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-VIDEO-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/exports/silent-synthetic-rehearsal.mp4 retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-2D551B95A355",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r02-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r02-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-SCENES-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/rehearsal-scenes.json retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-420DDEC6DC38",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r02-repository-internal-review-text-en-us-submission-preflight.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r02-repository-internal-review-text-en-us-submission-preflight.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SUBMISSION-NARRATIVE-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/submission-narrative.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-541805829258",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r02-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r02-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-COPY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/announcement-copy.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "cdc0cea55bfb3dac40f9da2905c195d411b69d34e9b7b9d37b638ee6d0bf2ba9",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-544E2835265C",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r02-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r02-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-STORYBOARD-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/storyboard.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-566A3B82406B",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r02-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r02-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-LAUNCH-X-KEY-PNG-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/assets/x-submission-key-visual.png retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-5A1E2F886155",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-WORKFLOW-ALT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow-alt-text.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-6680B420C41F",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SCREENSHOT-SET-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/screenshots/synthetic-stub-mockup.svg retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-693317555C52",
+      "kind": "internal_package_control",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/history/manifest-596ce1979cd501e.json",
+        "revision": "sha256:596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+        "revisionKind": "sha256_content_digest",
+        "url": null,
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local draft manifest retention by the user-assigned marketing-material supervisor session; historical bytes preserved unchanged.",
+      "toolModel": "Local package_collateral.py draft-history archive; no external provider.",
+      "evidenceClassification": "internal_historical_draft_manifest",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": false,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Byte-exact historical draft manifest snapshot retained for audit; this is not an approved or released package."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+        "status": "Exact SHA-256 content digest of the preserved historical draft manifest bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session); independent receiver review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "Historical draft metadata is retained for audit only and grants no publication rights.",
+        "Independent receiver review and all applicable destination approvals remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-749235528AD5",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-WORKFLOW-PNG-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow.png retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-800D4A16A6F4",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow.svg retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-81300E0C9615",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r02-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r02-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-CAPTIONS-VTT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/captions/silent-rehearsal.vtt retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-89AE66BC68BC",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/view/demo/diagrams/demo-workflow.svg",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/view/demo/diagrams/demo-workflow.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow.svg retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-931FA338D053",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r02-repository-internal-review-text-en-us-concept-explainer.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r02-repository-internal-review-text-en-us-concept-explainer.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-EXPLAINER-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/product-explanation.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "80a7c542ba6ccc230b130b60d377cf7bcc0f1910b7bcafa07a64fefbf070bc60",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-99A2CFD0E288",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r02-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r02-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-NARRATION-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/narration.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-A8CDC02FCD45",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r02-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r02-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/deck/concept-overview.html retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-B2F23F5731C2",
+      "kind": "internal_package_control",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/history/manifest-596ce1979cd501e0.json",
+        "revision": "sha256:596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+        "revisionKind": "sha256_content_digest",
+        "url": null,
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local draft manifest retention by the user-assigned marketing-material supervisor session; historical bytes preserved unchanged.",
+      "toolModel": "Local package_collateral.py draft-history archive; no external provider.",
+      "evidenceClassification": "internal_historical_draft_manifest",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": false,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Byte-exact historical draft manifest snapshot retained for audit; this is not an approved or released package."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+        "status": "Exact SHA-256 content digest of the preserved historical draft manifest bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session); independent receiver review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "Historical draft metadata is retained for audit only and grants no publication rights.",
+        "Independent receiver review and all applicable destination approvals remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-BB8088961885",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r02-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r02-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-CAPTIONS-SRT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/captions/silent-rehearsal.srt retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-BCC33F252B89",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-SCREENSHOT-ALT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/screenshots/synthetic-stub-alt-text.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-D128EE8CA45E",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r02-repository-internal-review-text-en-us-caption-exact-transcript.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r02-repository-internal-review-text-en-us-caption-exact-transcript.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-TRANSCRIPT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/rehearsal-transcript.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-ECEB50A5FB3A",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/view/demo/diagrams/demo-workflow-alt-text.md",
+        "revision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/e7be8ca7db02954259ac9ee666e2337cb67a1992/release/v0.1.0-rehearsal/view/demo/diagrams/demo-workflow-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local package_collateral.py builder run by the user-assigned marketing-material supervisor session; exact source bytes copied with no external provider.",
+      "toolModel": "Local Python package_collateral.py and standard library only; no paid API or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-WORKFLOW-ALT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow-alt-text.md retained.",
+          "Package builder copied exact source bytes into the retained r02 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
       ]
     }
   ],
