@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.8.1 (unreleased)
+
+FC-003/FC-004 duplicate-result candidate repair follows the whole-PR REQUEST_CHANGES at a08a24e: exact cached outcomes now pass command amount/intent/evidence/disposition checks and independent execution/usage validation. Replays validate the original command state without renewing eligibility, spending or executing again; advanced live state, expired grant leases, conserved uncertain holds, known partial consumption/overrun and fenced undispatched releases remain supported. Wire schemas, fixture bytes, dependency pins and historical verdicts remain unchanged. This semantic safety narrowing requires fresh full Astra High re-review and refreshed Finance compatibility review of the changed candidate. Prior limited Finance approval is not whole-PR approval or permanent acceptance; no adoption, closure or release is claimed.
+
 ## 0.8.0 (unreleased)
 
 Related #32 adds only FulfillmentCapabilitySnapshot@1.0.0 and PrintSpec@1.0.0 producer proposals, explicit exact source-field migration, immutable pure consistency/hash/binding checks, synthetic fixtures and readonly installed bindings. Actual source dimensions retain unspecified physical basis; missing printable/trim/frame data remain unknown. Legacy bundle/quote/authorization translations block with typed failures. Original schema/fixture encodings, Finance/CI repairs, 126 original criteria and 27 global IDs are preserved; SC-CAP.1..7 are a separate related follow-up. Independent Astra High review, canonical/producer/consumer agreement, genuine provider gates and supervisor publication/merge verification remain pending.

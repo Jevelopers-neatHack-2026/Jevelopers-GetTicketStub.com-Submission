@@ -36,5 +36,16 @@
   "accepted_consumer_reviews": [],
   "real_runtime_ledger_conformance": false,
   "reporting_gap": "GAP-001 remains pending versioned proposal; QueryRequest/Result are single-reservation",
-  "decision_mode_fix": "SC-CHK-002 local semantic safety narrowing on existing immutable v1 wires; explicit modes or independently supplied current budget modes now bind before dispatch and across outputs"
+  "decision_mode_fix": "SC-CHK-002 local semantic safety narrowing on existing immutable v1 wires; explicit modes or independently supplied current budget modes now bind before dispatch and across outputs",
+  "duplicate_result_semantic_repair": {
+    "candidate_package_version": "0.8.1",
+    "starting_source": "a08a24e5849a8012ab9b1a80764c70c1cad0d0ed",
+    "findings": ["FC-003", "FC-004"],
+    "impact": "Reject previously accepted contradictory duplicate outcomes; exact cached positive replays remain supported without new execution or renewed dispatch authority.",
+    "wire_versions": "retained_1.0.0_and_2.0.0_schema_fixture_bytes_unchanged",
+    "classification": "semantic_safety_narrowing_of_unaccepted_candidate",
+    "reviews_required": ["fresh_whole_candidate_Astra_High", "refreshed_Finance_compatibility"],
+    "prior_limited_approval_is_permanent": false,
+    "accepted_upgrade_or_closure": false
+  }
 }

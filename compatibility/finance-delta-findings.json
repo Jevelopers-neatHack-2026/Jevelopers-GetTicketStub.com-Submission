@@ -13,18 +13,30 @@
   "verified_probe_sha256": "a21deaeed94f3ff005bb206fca0356bd4f7504412ef881cbe325edc12a262ef6",
   "status": "candidate_repairs_pending_full_independent_and_finance_owner_review",
   "repair_starting_checkpoint": "08217739a612f218a51a2828d6e2119062e65279",
+  "duplicate_repair_starting_checkpoint": "a08a24e5849a8012ab9b1a80764c70c1cad0d0ed",
+  "review_history": [
+    { "source": "d969f68a13fc4c3e71d59b635ffd29b65d3205d5", "verdict": "REQUEST_CHANGES", "scope": "finance_only_not_whole_PR_or_adoption" },
+    { "source": "8e33685", "verdict": "APPROVE_COMPATIBILITY", "probes": 117, "scope": "limited_Finance_compatibility_evidence_not_whole_current_PR_approval" },
+    { "source": "a08a24e5849a8012ab9b1a80764c70c1cad0d0ed", "verdict": "REQUEST_CHANGES", "scope": "fresh_whole_PR", "recorded_cases": 72, "expectations_met": 65, "additional_counterexamples": 7 }
+  ],
+  "duplicate_candidate": {
+    "package_version": "0.8.1",
+    "status": "locally_repaired_candidate_pending_fresh_full_Astra_High_and_Finance_compatibility_review",
+    "recorded_input_replay": "original58_plus14_unchanged_inputs_and_expectations",
+    "accepted_upgrade_or_closure": false
+  },
   "findings": [
     {
       "id": "FC-003",
       "behavior": "QueryResult successful disposition can contradict current reservation lifecycle/consumption",
       "status": "locally_repaired_candidate_review_pending",
-      "candidate_behavior": "Every successful query disposition and duplicate binds the current snapshot and truthful lifecycle/settlement outcome; contradictory dispositions reject."
+      "candidate_behavior": "Every successful query disposition and duplicate binds the current snapshot and truthful lifecycle/settlement outcome; contradictory dispositions reject. Every duplicate validates the original effective cached outcome against exact command economics, intent and independently trusted consumption evidence without renewing eligibility or executing a transition."
     },
     {
       "id": "FC-004",
       "behavior": "Reusable reservation/query routes permit terminal release without complete finality/exposure evidence",
       "status": "locally_repaired_candidate_review_pending",
-      "candidate_behavior": "Reusable terminal snapshots, contextual snapshots and nested/direct result routes enforce complete finality or independently fenced undispatched zero-cost release; finished execution alone is insufficient."
+      "candidate_behavior": "Reusable terminal snapshots, contextual snapshots and nested/direct result routes enforce complete finality or independently fenced undispatched zero-cost release; finished execution alone is insufficient. All duplicate families now compare independent execution/usage expectations and preserve retained exposure and prior consumption evidence for reconciliation holds."
     },
     {
       "id": "GAP-002",

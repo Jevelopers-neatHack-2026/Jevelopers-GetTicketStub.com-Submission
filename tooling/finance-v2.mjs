@@ -183,9 +183,10 @@ function resolved(context, old, ref) {
     ['finished', 'not_dispatched'].includes(result.execution_state) && result.execution_state === context.execution_state &&
     reference(result.reference) && result.reference.contract === 'FinanceResolution' && ref !== null && ref !== undefined && same(result.reference, ref);
 }
-export function checkFinanceReservation(input, context) {
+function reservation(input, context, historical = false) {
   const parsed = boundary('BudgetReservation', input, context); if (!parsed.ok) return parsed;
-  const value = parsed.value, checked = facts(value, context); if (!checked.ok) return checked;
+  const value = parsed.value, checked = facts(value, context, historical); if (!checked.ok) return checked;
+  if (historical && value.settlement_intent !== 'none') { const observed = observation(value, context); if (!observed.ok) return observed; }
   if (value.execution_state !== context.execution_state || value.usage_completeness !== context.usage_completeness) return fail('INVALID_TRUST_CONTEXT', '/execution_state');
   if (value.lifecycle === 'expired' && Date.parse(context.now) < Date.parse(value.expires_at)) return fail('INVALID_TRANSITION', '/lifecycle');
   if (!context.prior) return parsed;
@@ -201,6 +202,7 @@ export function checkFinanceReservation(input, context) {
       compare(value.consumed, old.value.consumed) !== 0) return fail('IDENTITY_COLLISION', '/consumption_evidence_ref');
   return parsed;
 }
+export function checkFinanceReservation(input, context) { return reservation(input, context); }
 function commandShape(input, context) {
   if (!object(input) || !commands.includes(input.contract)) return fail('UNKNOWN_CONTRACT', '/contract');
   const parsed = boundary(input.contract, input, context); if (!parsed.ok) return parsed;
@@ -262,13 +264,16 @@ export function checkFinanceCommand(input, context) {
 export function checkFinanceResult(input, context) {
   if (!object(input) || !names.filter(name => name.endsWith('Result')).includes(input.contract)) return fail('UNKNOWN_CONTRACT', '/contract');
   const parsed = boundary(input.contract, input, context); if (!parsed.ok) return parsed;
-  const value = parsed.value;
+  let value = parsed.value;
+  const duplicate = value.disposition === 'duplicate';
   if (context.previous_result) {
     const previous = validateContractVersion(context.previous_result.contract, '2.0.0', context.previous_result);
     if (!previous.ok || !partition(previous.value, context).ok || (previous.value.reservation && !partition(previous.value.reservation, context).ok)) return fail('INVALID_TRUST_CONTEXT', '/previous_result');
   }
   const requestContext = { ...context, references: context.request_references };
-  if (value.disposition === 'duplicate' && context.command_prior !== undefined) requestContext.prior = context.command_prior;
+  if (duplicate && context.command_prior !== undefined) requestContext.prior = context.command_prior;
+  // A cached grant has no pre-grant reservation, even when the live state has advanced.
+  if (duplicate && context.request?.contract === 'ReserveRequest') delete requestContext.prior;
   const request = commandShape(context.request, requestContext); if (!request.ok) return fail('INVALID_TRUST_CONTEXT', '/request');
   const command = request.value;
   if (value.contract !== command.contract.replace('Request', 'Result') || value.request_id !== command.request_id || value.idempotency_key !== command.idempotency_key ||
@@ -289,16 +294,18 @@ export function checkFinanceResult(input, context) {
     if (value.reservation !== null && (!context.prior || !same(value.reservation, context.prior))) return fail('INVALID_RECEIPT', '/reservation');
     return parsed;
   }
-  if (value.disposition === 'duplicate') {
+  if (duplicate) {
     if (!object(context.previous_result) || !object(context.previous_command) || !same(context.previous_command, command)) return fail('INVALID_TRUST_CONTEXT', '/previous_result');
     const previous = validateContractVersion(value.contract, '2.0.0', context.previous_result);
-    if (!previous.ok || !partition(previous.value, context).ok || !same(previous.value.reservation, value.reservation) || !same(previous.value.request_ref, value.request_ref)) return fail('INVALID_RECEIPT', '/reservation');
-    const checked = facts(value.reservation, context, true); if (!checked.ok) return checked;
-    return parsed;
+    if (!previous.ok || !partition(previous.value, context).ok || failures.includes(previous.value.disposition) || previous.value.disposition === 'duplicate' ||
+        !same({ ...previous.value, disposition: 'duplicate' }, value)) return fail('INVALID_RECEIPT', '/reservation');
+    // Validate the original outcome, without renewing command eligibility or dispatch authority.
+    value = previous.value;
   }
-  const subcontext = { ...context, references: Object.fromEntries(Object.entries(context.references).filter(([key]) => key.startsWith('reservation/')).map(([key, ref]) => [key.slice('reservation/'.length), ref])) };
+  const outcomeContext = duplicate ? requestContext : context;
+  const subcontext = { ...outcomeContext, references: Object.fromEntries(Object.entries(context.references).filter(([key]) => key.startsWith('reservation/')).map(([key, ref]) => [key.slice('reservation/'.length), ref])) };
   if (value.disposition === 'held_for_reconciliation') {
-    const old = prior(context); if (!old.ok) return old;
+    const old = prior(outcomeContext); if (!old.ok) return old;
     if ((!uncertain(context.execution_state) && context.usage_completeness === 'complete') || value.reservation.lifecycle !== 'uncertain_in_flight' || value.reservation.settlement_ref !== null ||
         !same(value.reservation.consumed, old.value.consumed) || !same(value.reservation.held, old.value.held) ||
         !same(value.reservation.overrun, old.value.overrun) || !same(value.reservation.consumption_evidence_ref, old.value.consumption_evidence_ref) ||
@@ -311,25 +318,28 @@ export function checkFinanceResult(input, context) {
       if (context.prior_observation === undefined) delete heldContext.consumption_observation;
       else heldContext.consumption_observation = context.prior_observation;
     }
-    const checked = checkFinanceReservation(value.reservation, heldContext); return checked.ok ? parsed : checked;
+    const checked = reservation(value.reservation, heldContext, duplicate); return checked.ok ? parsed : checked;
   }
-  const transition = eligible(command, context); if (!transition.ok) return transition;
-  const checked = checkFinanceReservation(value.reservation, subcontext); if (!checked.ok) return checked;
+  if (!duplicate) { const transition = eligible(command, context); if (!transition.ok) return transition; }
+  const checked = reservation(value.reservation, subcontext, duplicate); if (!checked.ok) return checked;
   const snapshot = checked.value;
   for (const key of ['budget_scope_id', 'logical_operation_id', 'billable_attempt_id']) if (snapshot[key] !== command[key]) return fail('IDENTITY_COLLISION', '/reservation/' + key);
   if (command.contract === 'ReserveRequest') {
-    if (context.prior || !zero(snapshot.consumed) || snapshot.revision !== snapshot.grant_revision || snapshot.settlement_intent !== 'none' || snapshot.lifecycle !== 'held' ||
+    if (outcomeContext.prior || !zero(snapshot.consumed) || snapshot.revision !== snapshot.grant_revision || snapshot.settlement_intent !== 'none' || snapshot.lifecycle !== 'held' ||
         snapshot.grant_request_ref.id !== command.request_id || snapshot.grant_request_ref.content_hash !== hashManifest(command)) return fail('INVALID_RECEIPT', '/reservation');
+    if (!['granted', 'partially_granted'].includes(value.disposition) || value.disposition !== snapshot.decision) return fail('INVALID_RECEIPT', '/disposition');
     if (value.disposition === 'granted' && (snapshot.decision !== 'granted' || !same(snapshot.held, command.requested))) return fail('INVALID_MONEY', '/reservation/held');
     if (value.disposition === 'partially_granted' && (snapshot.decision !== 'partially_granted' || command.partial_grant !== 'allow_with_acknowledgement' ||
         !zero(snapshot.dispatch_cap) || snapshot.dispatch_acknowledgement_ref !== null)) return fail('INVALID_TRANSITION', '/reservation/dispatch_cap');
   } else if (command.contract === 'SettleRequest') {
     if (!same(snapshot.consumed, command.consumed) || snapshot.settlement_intent !== command.settlement_intent || snapshot.consumption_kind !== command.consumption_kind ||
         !same(snapshot.consumption_evidence_ref, command.usage_ref) || !same(snapshot.correction_ref, command.correction_ref) || !same(snapshot.exception_refs, command.exception_refs) ||
+        !same(snapshot.resolution_ref ?? null, command.resolution_ref ?? null) ||
         value.disposition !== (command.settlement_intent === 'final' ? 'consumed' : 'partially_consumed')) return fail('INVALID_MONEY', '/reservation/consumed');
   } else if (command.contract === 'ReleaseRequest') {
-    if (!same(snapshot.consumed, context.prior.consumed) || snapshot.lifecycle !== (value.disposition === 'expired' ? 'expired' : 'released') ||
-        (value.disposition === 'expired') !== (command.reason === 'expired') || !zero(snapshot.dispatch_cap)) return fail('INVALID_RECEIPT', '/reservation');
+    if (!['released', 'expired'].includes(value.disposition)) return fail('INVALID_RECEIPT', '/disposition');
+    if (!same(snapshot.consumed, outcomeContext.prior.consumed) || snapshot.lifecycle !== (value.disposition === 'expired' ? 'expired' : 'released') ||
+        (value.disposition === 'expired') !== (command.reason === 'expired') || !same(snapshot.resolution_ref ?? null, command.resolution_ref ?? null) || !zero(snapshot.dispatch_cap)) return fail('INVALID_RECEIPT', '/reservation');
   } else if (!object(context.current_reservation) || !same(snapshot, context.current_reservation)) return fail('INVALID_TRUST_CONTEXT', '/current_reservation');
   return parsed;
 }
