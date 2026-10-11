@@ -334,6 +334,8 @@ export interface ResolvedOpenRouterCredential {
     account_ref: string;
     project_ref: string;
     target_binding_sha256: string;
+    /** Required to echo the requested grant for the billable purpose; absent for the read-only check. */
+    grant_ref?: string;
   }>;
   readonly token: string;
   readonly expires_at: string;
@@ -344,17 +346,27 @@ export interface OpenRouterCredentialPort {
   readonly evidence_mode: 'live';
   resolveCredential(input: Readonly<{
     service: 'openrouter';
-    purpose: 'read_only_account_check';
+    purpose: 'read_only_account_check' | 'authorized_billable_operation';
     account_ref: string;
     project_ref: string;
     target_binding: AccessTargetBinding;
+    /** Present only for `authorized_billable_operation`. */
+    grant_ref?: string;
   }>): Promise<ResolvedOpenRouterCredential>;
 }
 
 /** Trusted host-composed billable dispatch. The built-in adapter never sends a paid request itself. */
 export interface OpenRouterImagesDispatchPort {
-  prepare?: AccessProviderAdapter['prepare'];
-  dispatch: AccessProviderAdapter['dispatch'];
+  /** Called only after the adapter resolved a credential bound to the grant and valid through the deadline. */
+  prepare?(input: Parameters<NonNullable<AccessProviderAdapter['prepare']>>[0] & Readonly<{
+    credential: Readonly<{ token: string }>;
+  }>): Promise<unknown>;
+  /** `prepared` is the value returned by the port's own `prepare` (or undefined). `signal` is capped by the deadline. */
+  dispatch(input: Omit<Parameters<AccessProviderAdapter['dispatch']>[0], 'prepared'> & Readonly<{
+    prepared: unknown;
+    credential: Readonly<{ token: string }>;
+    signal: AbortSignal;
+  }>): Promise<unknown>;
 }
 
 export interface OpenRouterImagesAdapterOptions {
