@@ -2328,8 +2328,34 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "e866dc29d76fc8d7f377896f84c7b2bc12be1846dbd2951ce10e84432e880893",
+      "sha256": "4b7f1a52e28bf1f4ce506e88c3d8c4bacc98e92c1fa7d9fb696af1ac71793b35",
       "provenanceRecordId": "PROV-FILE-B33563055168"
+    },
+    {
+      "fileId": "DOC-README-BANNER-DAY-001",
+      "path": "docs/assets/readme/banner-day.svg",
+      "classification": "repository_documentation_chrome",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": null,
+      "trackedAtRevisionStatus": "Added on local branch docs/readme-refresh-2026-10-11, not yet on main. Bind the landing main commit after merge; the exact content digest is pinned below and in provenance.",
+      "sha256": "4a6ef325303a743e0534ad1aa402e5f53d08ed3447a139f053a62dac34fa1b8d",
+      "provenanceRecordId": "PROV-FILE-B146083A2587"
+    },
+    {
+      "fileId": "DOC-README-BANNER-NIGHT-001",
+      "path": "docs/assets/readme/banner-night.svg",
+      "classification": "repository_documentation_chrome",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": null,
+      "trackedAtRevisionStatus": "Added on local branch docs/readme-refresh-2026-10-11, not yet on main. Bind the landing main commit after merge; the exact content digest is pinned below and in provenance.",
+      "sha256": "1bd02611ff78b1dfdf0f15c254660a0c96e1e7b7fa2bf4b319f3fed4a4212163",
+      "provenanceRecordId": "PROV-FILE-3625115C57D1"
     },
     {
       "fileId": "DEMO-DECK-SUPPORT-001",
