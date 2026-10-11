@@ -122,7 +122,8 @@ test("canonical owner acceptance gate reports missing C01 and C02 agreements as 
   assert.equal(accessGate.acceptance_allowed, false);
   assert.equal(accessGate.provider_dispatches, 0);
   assert.equal(accessGate.cells.length, 8);
-  assert.ok(accessGate.missing_owner_evidence.includes("openai_edit_account_permission_and_quota"));
+  assert.ok(accessGate.missing_owner_evidence.includes(
+    "one_of:openai_edit_account_permission_and_quota|openrouter_edit_account_permission_and_quota"));
   assert.ok(accessGate.missing_owner_evidence.includes("external_grant_and_finance_reservation"));
 });
 
