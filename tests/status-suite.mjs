@@ -3,6 +3,8 @@ import { readFile, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import * as connectorRoot from "../dist/index.js";
+import { parseStatusOutput, runStatusTests, STATUS_SUITE_CASE_COUNT } from "../scripts/run-status-tests.mjs";
 import {
   fixtureStatusMapping,
   fixtureTrackingHostPolicy,
@@ -1362,6 +1364,63 @@ add("provider lookup failures stay safe and do not cross finance or order bounda
     assert.equal(await store.projection(statusScope, "request-a"), undefined);
     assert.equal(Object.hasOwn(result, "orderCalls"), false);
   }, { responses: [async () => { throw new Error("private-provider-secret"); }] });
+});
+
+add("package root exposes the curated private status API", () => {
+  assert.equal(connectorRoot.fixtureStatusMapping, fixtureStatusMapping);
+  assert.equal(connectorRoot.fixtureTrackingHostPolicy, fixtureTrackingHostPolicy);
+  assert.equal(connectorRoot.normalizeProviderObservation, normalizeProviderObservation);
+  assert.equal(connectorRoot.StatusInputError, StatusInputError);
+  assert.equal(connectorRoot.LocalStatusStore, LocalStatusStore);
+  assert.equal(connectorRoot.StatusStoreError, StatusStoreError);
+});
+
+add("status runner rejects malformed output and process failures", () => {
+  const resultLines = Array.from({ length: STATUS_SUITE_CASE_COUNT }, (_, index) => `PASSED status-case-${index + 1}`);
+  const validOutput = `${resultLines.join("\n")}\nStatus inbox suite: ${STATUS_SUITE_CASE_COUNT}/${STATUS_SUITE_CASE_COUNT} passed\n`;
+  const parsed = parseStatusOutput(validOutput);
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.results.length, STATUS_SUITE_CASE_COUNT);
+  assert.equal(parsed.results.filter((result) => result.status === "passed").length, STATUS_SUITE_CASE_COUNT);
+  for (const malformed of [
+    validOutput.slice(0, -1),
+    `${validOutput}unexpected output\n`,
+    validOutput.replace(`Status inbox suite: ${STATUS_SUITE_CASE_COUNT}/${STATUS_SUITE_CASE_COUNT} passed`,
+      `Status inbox suite: ${STATUS_SUITE_CASE_COUNT - 1}/${STATUS_SUITE_CASE_COUNT} passed`),
+    validOutput.replace("status-case-2", "status-case-1"),
+    validOutput.replaceAll("\n", "\r\n")
+  ]) assert.equal(parseStatusOutput(malformed).valid, false);
+
+  const invoke = (child) => runStatusTests({ spawn: (_command, _args, options) => {
+    assert.equal(options.timeout, 300_000);
+    assert.equal(options.env.FC_STATUS_DIR, undefined);
+    return child;
+  } });
+  const good = invoke({ stdout: validOutput, stderr: "", status: 0, signal: null });
+  assert.equal(good.status, "passed");
+  assert.equal(good.passed, STATUS_SUITE_CASE_COUNT);
+  assert.equal(good.failed, 0);
+  assert.equal(good.processExitCode, 0);
+  assert.equal(good.processSignal, null);
+  assert.equal(good.processError, null);
+  assert.equal(good.stderrPresent, false);
+
+  const badCases = [
+    invoke({ stdout: validOutput, stderr: "warning", status: 0, signal: null }),
+    invoke({ stdout: validOutput, stderr: "", status: null, signal: "SIGTERM" }),
+    invoke({ stdout: validOutput, stderr: "", status: null, signal: null, error: { code: "ETIMEDOUT" } }),
+    invoke({ stdout: validOutput, stderr: "", status: 7, signal: null }),
+    runStatusTests({ spawn: () => { const error = new Error("spawn failed"); error.code = "EACCES"; throw error; } })
+  ];
+  for (const report of badCases) {
+    assert.equal(report.status, "failed");
+    assert.ok(report.failed > 0);
+  }
+  assert.equal(badCases[0].stderrPresent, true);
+  assert.equal(badCases[1].processSignal, "SIGTERM");
+  assert.equal(badCases[2].processError, "ETIMEDOUT");
+  assert.equal(badCases[3].processExitCode, 7);
+  assert.equal(badCases[4].processError, "EACCES");
 });
 
 let passedCount = 0;

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { STATUS_SUITE_CASE_COUNT } from "./run-status-tests.mjs";
 
 let allSharedShapes = [];
 let contractOwnership = {};
@@ -12,6 +13,7 @@ let privateQuoteFormat = null;
 let comparisonApiAvailable = false;
 let privateComparisonFormat = null;
 let attemptStoreApiAvailable = false;
+let statusApiAvailable = false;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -33,6 +35,9 @@ try {
   privateComparisonFormat = catalog.PRIVATE_COMPARISON_FORMAT ?? null;
   attemptStoreApiAvailable = typeof catalog.createLocalAttemptPersistence === "function" &&
     typeof catalog.LocalAttemptPersistence === "function" && typeof catalog.AttemptStoreError === "function";
+  statusApiAvailable = typeof catalog.LocalStatusStore === "function" &&
+    typeof catalog.StatusStoreError === "function" && typeof catalog.normalizeProviderObservation === "function" &&
+    typeof catalog.fixtureStatusMapping === "function" && typeof catalog.fixtureTrackingHostPolicy === "function";
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
 }
@@ -70,8 +75,37 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "status", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
+function validStatusRunnerReport(report) {
+  const reportKeys = ["schemaVersion", "suite", "mode", "status", "passed", "failed", "results", "processExitCode",
+    "processSignal", "processError", "stderrPresent", "externalProviderCalls", "orderCalls", "financeCalls", "skipped"];
+  if (report === null || typeof report !== "object" || Array.isArray(report) ||
+    Object.keys(report).sort().join("|") !== reportKeys.slice().sort().join("|") ||
+    report.schemaVersion !== "fulfillment-status-suite-result/1" || report.suite !== "status" || report.mode !== "simulated" ||
+    !["passed", "failed"].includes(report.status) || !Number.isSafeInteger(report.passed) || !Number.isSafeInteger(report.failed) ||
+    !Array.isArray(report.results) || report.passed < 0 || report.failed < 0 || report.passed + report.failed !== report.results.length ||
+    report.results.length < STATUS_SUITE_CASE_COUNT || !Number.isSafeInteger(report.processExitCode) && report.processExitCode !== null ||
+    report.processSignal !== null && typeof report.processSignal !== "string" ||
+    report.processError !== null && typeof report.processError !== "string" || typeof report.stderrPresent !== "boolean" ||
+    report.externalProviderCalls !== 0 || report.orderCalls !== 0 || report.financeCalls !== 0 || report.skipped !== 0) return false;
+  const names = new Set();
+  for (const result of report.results) {
+    if (result === null || typeof result !== "object" || Array.isArray(result) ||
+      !["passed", "failed"].includes(result.status) || typeof result.name !== "string" || result.name.length === 0 ||
+      names.has(result.name) || result.status === "failed" && typeof result.detail !== "string" ||
+      Object.keys(result).some((key) => !["name", "status", "detail"].includes(key))) return false;
+    names.add(result.name);
+  }
+  if (report.passed !== report.results.filter((result) => result.status === "passed").length ||
+    report.failed !== report.results.filter((result) => result.status === "failed").length ||
+    report.status !== (report.failed === 0 ? "passed" : "failed")) return false;
+  if (report.failed === 0) {
+    return report.results.length === STATUS_SUITE_CASE_COUNT && report.processExitCode === 0 &&
+      report.processSignal === null && report.processError === null && report.stderrPresent === false;
+  }
+  return report.status === "failed";
+}
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
   shape,
@@ -122,6 +156,13 @@ const comparisonBlockers = [
   "application consumer conformance and a trusted currentness recheck at use time are pending",
   "no selected provider adapter, live quote behavior, sandbox readiness, or release evidence is established"
 ];
+const statusBlockers = [
+  "issue 13 remains open; this result covers only private local status fixtures",
+  "shared-contracts #27 canonical status mapping and an accepted schema pin are pending",
+  "authenticated provider lookup and callback verification are not integrated",
+  "application consumer conformance for the local at-least-once outbox is pending",
+  "finance authority, sandbox account evidence, and release acceptance are unavailable"
+];
 
 let checks = [];
 let meteringReport = null;
@@ -129,6 +170,7 @@ let mockReport = null;
 let quoteReport = null;
 let comparisonReport = null;
 let attemptStoreReport = null;
+let statusReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -147,6 +189,7 @@ if (args.suite === "mock" && args.mode !== "simulated") failureReasons.push("moc
 if (args.suite === "quote" && args.mode !== "simulated") failureReasons.push("quote_fixture_suite_requires_simulated_mode");
 if (args.suite === "attempt-store" && args.mode !== "simulated") failureReasons.push("attempt_store_fixture_suite_requires_simulated_mode");
 if (args.suite === "comparison" && args.mode !== "simulated") failureReasons.push("comparison_fixture_suite_requires_simulated_mode");
+if (args.suite === "status" && args.mode !== "simulated") failureReasons.push("status_fixture_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -281,6 +324,29 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("comparison_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "status" && args.mode === "simulated") {
+  if (!statusApiAvailable) failureReasons.push("status_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runStatusTests } = await import("./run-status-tests.mjs");
+      statusReport = runStatusTests();
+      if (!validStatusRunnerReport(statusReport)) {
+        failureReasons.push("status_runner_report_invalid");
+        checks = Array.isArray(statusReport?.results) ? statusReport.results : [];
+      } else {
+        checks = statusReport.results;
+        if (statusReport.status === "passed" && statusReport.passed === STATUS_SUITE_CASE_COUNT &&
+          statusReport.failed === 0 && checks.length === STATUS_SUITE_CASE_COUNT &&
+          checks.every((check) => check.status === "passed")) {
+          status = "passed";
+        } else {
+          failureReasons.push("one_or_more_private_status_fixture_checks_failed");
+        }
+      }
+    }
+  } catch {
+    failureReasons.push("status_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -333,6 +399,8 @@ const result = {
           ? "local_private_attempt_persistence_and_simulated_runtime_suite"
         : args.suite === "comparison"
           ? "local_private_quote_comparison_projection_suite"
+        : args.suite === "status"
+          ? "local_private_status_fixture_suite"
           : args.suite === "metering"
             ? "local_private_metering_fixture_suite"
             : "local_private_fixture_contract_suite"
@@ -344,6 +412,7 @@ const result = {
     ...(args.suite === "catalog" ? catalogBlockers : []),
     ...(args.suite === "mock" ? mockBlockers : []),
     ...(args.suite === "quote" ? quoteBlockers : []),
+    ...(args.suite === "status" ? statusBlockers : []),
     ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
     ...(args.suite === "comparison" ? comparisonBlockers : []),
     ...(args.suite === "provider-matrix" ? [
@@ -543,6 +612,46 @@ const result = {
       blockers: attemptStoreBlockers
     }
   } : {}),
+  ...(args.suite === "status" ? {
+    statusAssessment: {
+      schemaVersion: "fulfillment-status-assessment/1",
+      evidenceScope: "private_local_status_inbox_and_synthetic_fixtures_only",
+      completion: "partial_private_status_inbox",
+      issue13: "open",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      privateStoreFormat: "fc-status-store/2",
+      priorFormat: "fc-status-store/1_rejected_without_migration",
+      commitMarker: "local_consistency_evidence_only_not_authentication_against_coordinated_rollback_or_directory_loss",
+      mappingAndPolicies: "development_fixture_only",
+      provenance: "observations_are_accepted_only_through_an_injected_lookup_port; no_provider_authentication_is_implemented",
+      callbacks: "unverified_hints_disabled_by_default; authenticated_provider_callback_integration_pending",
+      trustedLookupIntegration: "caller_port_only; authenticated_provider_read_integration_pending",
+      outbox: "local_durable_at_least_once; consumer_idempotency_and_conformance_pending",
+      sharedContract27: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#27",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerConformance: { state: "pending", consumerRevision: null, expectedResultsMatch: false },
+      financeAuthority: "not_implemented",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: 0,
+      orderCalls: 0,
+      financeCalls: 0,
+      runner: statusReport,
+      blockers: statusBlockers
+    }
+  } : {}),
   providerMatrixAssessment: args.suite === "provider-matrix" ? {
     schemaVersion: "fulfillment-provider-matrix-assessment/1",
     evidenceScope: "documented_metadata_and_private_policy_fixtures_only",
@@ -633,6 +742,7 @@ if (args["evidence-dir"] !== undefined) {
       ...(args.suite === "quote" ? quoteBlockers : []),
       ...(args.suite === "comparison" ? comparisonBlockers : []),
       ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
+      ...(args.suite === "status" ? statusBlockers : []),
       ...failureReasons
     ];
     if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
