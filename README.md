@@ -1,12 +1,53 @@
+<a href="https://github.com/Jevelopers-neatHack-2026/shared-contracts">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-night.svg">
+    <img alt="shared-contracts — Public schemas and compatibility fixtures. TicketStub banner showing two stub halves meeting at a perforation with interlocking bracket edges." src="docs/assets/readme/banner-day.svg" width="100%">
+  </picture>
+</a>
+
 # shared-contracts
+
+Versioned schemas, validation and compatibility fixtures for the interfaces between TicketStub repositories.
+
+<p>
+  <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: draft implementation candidate, no accepted release" src="https://img.shields.io/badge/status-draft%20candidate-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href="docs/contract-catalog.md"><img alt="Contract catalog: implemented candidates" src="https://img.shields.io/badge/catalog-candidate-26302A?style=flat-square&labelColor=17140F"></a>
+</p>
+
+[Status](#status) · [What's here](#whats-here) · [Development](#development) · [Contracts](#contracts) · [Docs](#docs) · [Related](#related-repositories)
+
+## Status
+
+**Draft implementation candidate.** [PR #31](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31) proposes the implemented schemas and executable development package documented here. It remains draft and unmerged; no contract version is an accepted release, and no owner acknowledgement or consumer adoption is implied by these local checks.
 
 Candidate package **0.8.3** contains 47 individually indexed wire names across 56 supported schema versions, generated Node ESM validators and deep readonly TypeScript bindings, pure context helpers, compatibility fixtures and offline consumer tooling. The narrow [#32 capability/print-spec proposal](docs/capability-contracts.md) adds `FulfillmentCapabilitySnapshot@1.0.0` and `PrintSpec@1.0.0` from concrete synthetic fulfillment inputs, pending independent and owner/consumer review. The nine finance families retain their 2.0.0 proposals and 1.0.0 encodings; named owners, proposed receipt/verifier names and actual producer/consumer acceptance remain pending. The GitHub repository was inspected as public on October 10, 2026; npm package `private: true` prevents registry publication. These are separate settings. No project license has been selected.
 
 The 0.8.3 candidate repairs SC-CHK-009 and SC-CHK-010 from the whole-PR review of `d428365`: ProductionBundle binds the complete immutable handoff reference, and a rejected research request must be a failed batch member. Wire schemas and fixture encodings are unchanged. Fresh exact-candidate review and acceptance remain required.
 
-Release remains blocked by the [fresh finance delta review](compatibility/finance-delta-findings.json), [pending owner-requested API proposals](compatibility/proposal-intake.json), and all nine real consumer adoptions. FC-001/002 remain repaired in the reviewed 2.0.0 proposal; candidate query-disposition and terminal-finality repairs now await fresh independent and finance-owner review. Partial dispatch is explicitly unsupported until a reviewed allowed-work/replan interface exists, while truthful partial grant/hold reporting remains supported. Current 1.0.0 operational finance helpers fail closed. The seven [checkpoint review repairs](compatibility/checkpoint-findings.json) are local contributions pending fresh exact-candidate review; passing checks are not acceptance. [Later downstream source observations](compatibility/downstream-observations.json) are separate from immutable discovery pins.
+Release remains blocked by the [fresh finance delta review](compatibility/finance-delta-findings.json), [pending owner-requested API proposals](compatibility/proposal-intake.json), and all nine real consumer adoptions. FC-001/002 remain repaired in the reviewed 2.0.0 proposal; candidate query-disposition and terminal-finality repairs now await fresh independent and finance-owner review. Partial dispatch is explicitly unsupported until a reviewed allowed-work/replan interface exists, while truthful partial grant/hold reporting remains supported. Current 1.0.0 operational finance helpers fail closed. The [checkpoint review repairs](compatibility/checkpoint-findings.json) are local contributions pending fresh exact-candidate review; passing checks are not acceptance. [Later downstream source observations](compatibility/downstream-observations.json) are separate from immutable discovery pins.
 
 The [SC-CI-001 observation shutdown repair](compatibility/ci-findings.json) retains the failed push history and requires fresh exact-candidate Linux CI and independent review. Transport failures remain failures, with no fixture-execution credit.
+
+- Earlier development evidence includes the [cost-intelligence proposal pin](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/blob/main/contracts.lock.json) for `@jevelopers/shared-contracts@0.3.0`, recorded in the upstream README as `proposal_only` with `adoption_accepted: false`. That earlier archive is not an accepted release or adoption of this 0.8.3 candidate.
+- Remaining work is tracked in [SC-EPIC #1](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1) and its linked SC issues, ending with the [SC-12 release gate](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/3). CON-01 to CON-03 remain pending in the [acceptance view](docs/architecture/ACCEPTANCE.md).
+
+## What's here
+
+This repository owns versioned request, result, event, error and validation contracts between independently developed repositories. Business behavior and provider implementations stay with their domain owners. See [ownership](docs/architecture/OWNERSHIP.md).
+
+The [contract catalog](docs/contract-catalog.md) describes the implemented candidate interfaces and their ownership and acceptance requirements:
+
+| Section | Covers |
+| --- | --- |
+| [Common envelope](docs/contract-catalog.md#common-envelope) | Required scope, correlation, provenance and `billing_mode` fields |
+| [Domain contracts](docs/contract-catalog.md#domain-contracts) | Project request through research, creative, production, quote, authorization, usage and summary |
+| [Ownership of state](docs/contract-catalog.md#ownership-of-state) | The authoritative owner of each record |
+| [Financial identities and lifecycles](docs/contract-catalog.md#financial-identities-and-lifecycles) | Operation, billable attempt and transport retry; valuation and reservation states |
+| [Compatibility acceptance](docs/contract-catalog.md#compatibility-acceptance) | Minimum checks before a contract is accepted |
+| [Error model](docs/contract-catalog.md#error-model) | Typed, retry-safe error fields |
+
+## Development
 
 Use **Node 22.23.3** for canonical generation, npm and the exact [lockfile](package-lock.json). Installed Node ESM, TypeScript and all-version fixtures were also verified on **Node 24.21.0** for consumer compatibility. The engine range retains Node 22 and permits Node 24 at that tested minimum; renderer/npm platform acceptance remains downstream. Prewarm the locked dependency cache before the isolated run. Validation uses no provider credentials and no provider calls:
 
@@ -52,6 +93,8 @@ export type ServerScope = TrustedContext;
 ```
 
 Structural parsing rejects duplicate JSON members, unsupported exact versions, unknown fields/enums and malformed primitives without coercion, defaults or mutation. Safe failures carry code/path/keyword and never submitted values; unknown-field paths identify their parent container. Pure semantic helpers in the [operations](docs/operations-contracts.md), [research/creative](docs/research-creative-contracts.md) and [commerce/evidence](docs/commerce-evidence-contracts.md) guides compare independently supplied domain contexts. They do not authenticate callers, issue approval, grant spending, render artwork, submit supplier orders or implement a ledger.
+
+## Contracts
 
 The [machine catalog](docs/contract-catalog.md) is the maintained inventory. Every named export links below to its actual schema, derived type, validator/helper, canonical fixtures and accountable domain/owner issue. Named reviewers and acknowledgements are still unassigned. The helper accepts the schema discriminator shown in its fixture; the [API/version map](generated/schema-manifest.json) records exact schema identities and bytes.
 
@@ -114,3 +157,24 @@ The runner uses the exact checked-in [nine-row handoff manifest](compatibility/c
 [Third-party notices](generated/THIRD_PARTY_NOTICES.md) preserve the actual licenses of Ajv and fast-deep-equal code bundled in validators. [Dependency provenance](generated/dependency-provenance.json) records locked versions/integrities; there are no runtime npm dependencies. Synthetic fixture assets have no real customer/provider content and establish no third-party asset rights. No tag, GitHub release, registry publication, visibility change or license choice is part of this candidate.
 
 [Ownership](docs/architecture/OWNERSHIP.md) and [acceptance view](docs/architecture/ACCEPTANCE.md) define boundaries. [Requirements](docs/requirements.json) preserve all SC/global IDs, including ARC-01, CON-01/02/03, ART-02/04/05, FIN-02/03/04 and EVAL-01/04. The [integration-evals master tracker](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.json) remains authoritative. [Architecture snapshot](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) and [original implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md) are historical planning context. Documentation and fixture execution establish no end-to-end product acceptance.
+
+## Docs
+
+- [Contract catalog](docs/contract-catalog.md)
+- [Ownership](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md)
+- [Architecture section 5: shared contracts and data ownership](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md#5-shared-contracts-and-data-ownership)
+- [Architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
+- [Releases and versioning standard](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/standards/releases-versioning.md)
+
+## Related repositories
+
+Related producers, consumers and coordination repositories:
+
+- [fulfillment-connectors](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors): validates through injected ports and records the shared-contracts issues it waits on.
+- [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence): records the earlier proposal archive described above; accepted adoption remains pending.
+- [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals): hosts the master checklist that tracks CON-01 contract compatibility.
+- [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com): architecture kit and producer/consumer map.
+
+## Contributing
+
+Follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Schema changes need review by at least one affected producer and consumer ([compatibility acceptance](docs/contract-catalog.md#compatibility-acceptance)). Run the development checks above and retain schema, fixture and package provenance for review. No license file is present in this repository.
