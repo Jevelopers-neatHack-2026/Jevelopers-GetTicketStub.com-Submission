@@ -4,6 +4,7 @@ import type { SemanticFont } from "./private-pdf-fonts.js";
 import { point } from "./private-pdf-geometry.js";
 import type { Matrix } from "./private-pdf-geometry.js";
 import { requireOutput } from "./private-policy.js";
+import { pdfGlyphAdvance } from "./private-pdf-font-position.js";
 type Contour = { commands: string[]; points: (readonly [number, number])[] };
 function contours(font: Font, id: number, m: Matrix, scale: number): Contour[] {
 	const result: Contour[] = [];
@@ -42,8 +43,8 @@ export function compareComposedOutlines(request: {
 		requireOutput(p !== undefined, "OUTPUT_INTEGRITY", "pdf.positions");
 		const [px, py] = point(
 			world,
-			anchor[0] + (x + p.xOffset) * scale,
-			-anchor[1] + (y + p.yOffset) * scale,
+			anchor[0] + x + p.xOffset * scale,
+			-anchor[1] + y + p.yOffset * scale,
 		);
 		expected.push(
 			...contours(
@@ -53,8 +54,12 @@ export function compareComposedOutlines(request: {
 				scale,
 			),
 		);
-		x += p.xAdvance;
-		y += p.yAdvance;
+		x += pdfGlyphAdvance(g, p.xAdvance, {
+			sizeMm: size,
+			unitsPerEm: source.unitsPerEm,
+			freetype: process.platform === "linux",
+		});
+		y += p.yAdvance * scale;
 	}
 	for (const g of glyphs) {
 		const f = fonts.get(g.font);

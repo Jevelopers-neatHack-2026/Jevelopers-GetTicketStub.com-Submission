@@ -3,6 +3,7 @@ import { requireOutput } from "./private-policy.js";
 import { point, includesBox, boxOf } from "./private-pdf-geometry.js";
 import type { Matrix } from "./private-pdf-geometry.js";
 import { compareComposedOutlines } from "./private-pdf-outlines.js";
+import { pdfGlyphAdvance } from "./private-pdf-font-position.js";
 import { canonicalGlyphMatches } from "./private-unicode-glyph-relations.js";
 import type { SemanticFont } from "./private-pdf-fonts.js";
 import type { PdfTextLine } from "./private-pdf-text-content.js";
@@ -155,11 +156,11 @@ export function validatePdfLine(request: {
 			"pdf.paintedGlyph",
 		);
 		const scale = source.node.field.sizeMm / font.unitsPerEm,
-			x =
-				Math.floor(source.line.x * 64) / 64 + (penX + position.xOffset) * scale,
+			x = Math.floor(source.line.x * 64) / 64 + penX + position.xOffset * scale,
 			y =
 				Math.floor(source.line.baseline * 64) / 64 -
-				(penY + position.yOffset) * scale;
+				penY -
+				position.yOffset * scale;
 		const [px, py] = point(world, x, -y);
 		const serializedTolerance = (pt * (gindex + 1)) / 65536 + 0.0001;
 		requireOutput(
@@ -193,8 +194,12 @@ export function validatePdfLine(request: {
 			);
 		}
 		cpByGlyph.push(String.fromCodePoint(...shaped.codePoints));
-		penX += position.xAdvance;
-		penY += position.yAdvance;
+		penX += pdfGlyphAdvance(shaped, position.xAdvance, {
+			sizeMm: source.node.field.sizeMm,
+			unitsPerEm: font.unitsPerEm,
+			freetype: process.platform === "linux",
+		});
+		penY += position.yAdvance * scale;
 	}
 	let offset = 0;
 	for (const cluster of line.clusters) {

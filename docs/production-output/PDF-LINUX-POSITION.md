@@ -84,3 +84,35 @@ After the measured fix, all required Linux head/candidate commands, post-test
 sandbox/calibration proof, permanent positive/negative regressions and fresh whole
 Astra review remain required. FINAL-PDF-1..4, FINAL-CI-1 and every retained history
 remain intact. Public/canonical/spec/approval/finance/consumer gates remain nonzero.
+
+## Measured nominal advance correction
+
+Checkpoint `2cf48d53097c174c3e84f3b5386b067b5d6574b7`, Linux run
+`38119488964`, artifact `11694464961` captured all six fixtures with their original
+`pdf.glyphPosition` rejection. First origins and transform bases matched the
+model; horizontal differences accumulated with glyph advances. At size 4 and
+1000 units/em, the nominal A advance was 2.55596923828125 source units, rather
+than fontkit's unscaled-design prediction of 2.556.
+
+The generated SVG requests `text-rendering:geometricPrecision`, so Blink uses
+an SVG font scaling factor of 1. The pinned Linux FreeType linear-metric path
+uses a 26.6 requested size and a 16.16 font scale. It rounds the nominal design
+advance through `FT_MulDiv` before HarfBuzz adds OpenType positioning. For this
+fixture, `size26 = 256`, `scale16 = 16777`, and `advance16 = 167506`. These
+values reproduce the captured nominal advance. See the pinned
+[FreeType scale and advance rounding](https://github.com/freetype/freetype/blob/891f904e2e7b4289f615598cd4b69832f87d2f3a/src/base/ftcalc.c#L161-L249),
+[Skia linear metrics](https://github.com/google/skia/blob/95ee33d7ec7791ab9c071675710a14fe6408ae4f/src/ports/SkFontHost_FreeType.cpp#L1382-L1390),
+and [Blink geometric-precision scaling](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/third_party/blink/renderer/core/layout/svg/layout_svg_inline_text.cc#L173-L196).
+
+`pdfGlyphAdvance` applies this nominal-width model to both ordinary glyph
+positions and composed-outline positions. OpenType placement adjustments remain
+separate from nominal widths. The macOS model, floor64 anchors, transform checks,
+licensed glyph/font bindings, source paint identity and serialization tolerances
+are retained. The inspector revision identifies the new position model.
+
+The regression fixture retains measured glyph origins from both profiles and
+tests all six fixture families. The uncorrected design-advance model fails the
+Linux observations within the original tolerance; the corrected model fits.
+The diagnostic JSON continues to expose the design-advance baseline for comparison,
+rather than substituting that baseline for parsed PDF evidence. Full real Linux
+head and PR-candidate CI still provide the acceptance proof.

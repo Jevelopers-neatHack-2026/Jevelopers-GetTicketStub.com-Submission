@@ -180,7 +180,7 @@ export function positionDiagnostic(request: {
 		.join("");
 	const result = {
 		model:
-			"unchanged-private-pdf-line-floor64-displacement65536; diagnostic-only",
+			"fontkit-design-advance-baseline_floor64_displacement65536; diagnostic-only",
 		sourceLineDigest: fingerprint(source.line.value),
 		actualLiteralDigest: fingerprint(literal),
 		shapingInputDigest: fingerprint(input),

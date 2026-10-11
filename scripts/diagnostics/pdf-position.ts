@@ -50,6 +50,7 @@ async function run() {
 	const sourceFiles = await Promise.all(
 		[
 			"src/exporters/private-pdf-line.ts",
+			"src/exporters/private-pdf-font-position.ts",
 			"src/exporters/private-pdf-geometry.ts",
 			"src/exporters/private-pdf-outlines.ts",
 			"src/exporters/private-pdf-source.ts",
