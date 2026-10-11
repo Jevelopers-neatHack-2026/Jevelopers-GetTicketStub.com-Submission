@@ -128,28 +128,58 @@ class PackagePolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "input.txt").write_text("snapshot bytes\n", encoding="utf-8")
+            spec_path = root / "release" / package.DEFAULT_VERSION / "package-spec.json"
+            spec_path.parent.mkdir(parents=True)
+            spec_path.write_text('{"assetRevision":"r01"}\n', encoding="utf-8")
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
             subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
-            subprocess.run(["git", "-C", str(root), "add", "input.txt"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "input.txt", str(spec_path.relative_to(root))], check=True)
             subprocess.run(["git", "-C", str(root), "commit", "-qm", "input snapshot"], check=True)
             candidate = subprocess.run(
                 ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
             ).stdout.strip()
             digest = package.sha256_file(root / "input.txt")
+            spec_digest = package.sha256_file(spec_path)
             cached = {"packageVersion": package.DEFAULT_VERSION, "candidateSourceCommitAtGeneration": candidate}
-            current = {"assets": [{"file": {"exists": True, "path": "input.txt", "sha256": digest}}]}
+            current = {
+                "assets": [{"file": {"exists": True, "path": "input.txt", "sha256": digest}}],
+                "supportFiles": [],
+                "policyInputHashes": {
+                    f"release/{package.DEFAULT_VERSION}/package-spec.json": {
+                        "path": f"release/{package.DEFAULT_VERSION}/package-spec.json",
+                        "exists": True,
+                        "sha256": spec_digest,
+                    }
+                },
+            }
             self.assertEqual([], package.source_snapshot_errors(root, cached, current))
 
             wrong_binding = {"assets": [{"file": {"exists": True, "path": "input.txt", "sha256": "0" * 64}}]}
+            wrong_binding.update(supportFiles=[], policyInputHashes={})
             self.assertIn(
                 "candidate source snapshot input differs from manifest binding: input.txt",
                 package.source_snapshot_errors(root, cached, wrong_binding),
+            )
+            conflicting_binding = package.json.loads(package.json.dumps(current))
+            conflicting_binding["supportFiles"] = [{"path": "input.txt", "sha256": "1" * 64}]
+            self.assertIn(
+                "candidate source snapshot has conflicting manifest bindings for: input.txt",
+                package.source_snapshot_errors(root, cached, conflicting_binding),
             )
             missing_commit = {**cached, "candidateSourceCommitAtGeneration": "f" * 40}
             self.assertIn(
                 "candidateSourceCommitAtGeneration does not identify an existing commit",
                 package.source_snapshot_errors(root, missing_commit, current),
+            )
+
+            spec_path.write_text('{"assetRevision":"r02"}\n', encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", str(spec_path.relative_to(root))], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "package spec r02"], check=True)
+            current["policyInputHashes"][f"release/{package.DEFAULT_VERSION}/package-spec.json"]["sha256"] = package.sha256_file(spec_path)
+            self.assertIn(
+                f"candidate source snapshot input differs from manifest binding: release/{package.DEFAULT_VERSION}/package-spec.json",
+                package.source_snapshot_errors(root, cached, current),
             )
 
             subprocess.run(["git", "-C", str(root), "checkout", "--orphan", "independent"], check=True, capture_output=True)

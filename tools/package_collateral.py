@@ -2263,10 +2263,15 @@ def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_
         return ["candidateSourceCommitAtGeneration is not an ancestor of the current source snapshot"]
 
     bound_paths: Dict[str, Tuple[Optional[str], Optional[Dict[str, Any]]]] = {}
+    conflicting_paths: set = set()
 
     def add(path: Any, digest: Any, binding: Any = None) -> None:
         if isinstance(path, str) and path and isinstance(digest, str) and SHA256.fullmatch(digest):
-            bound_paths[path] = (digest, binding if isinstance(binding, dict) else None)
+            value = (digest, binding if isinstance(binding, dict) else None)
+            if path in bound_paths and bound_paths[path] != value:
+                conflicting_paths.add(path)
+            else:
+                bound_paths[path] = value
 
     for asset in current_manifest.get("assets", []):
         file_row = asset.get("file", {})
@@ -2292,6 +2297,13 @@ def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_
         add(copy.get("path"), copy.get("expectedSha256"))
     for support in current_manifest.get("supportFiles", []):
         add(support.get("path"), support.get("sha256"), support.get("binding"))
+    policy_inputs = current_manifest.get("policyInputHashes", {})
+    if not isinstance(policy_inputs, dict):
+        return ["candidate source snapshot policyInputHashes are missing or invalid"]
+    for map_path, policy_input in policy_inputs.items():
+        if not isinstance(policy_input, dict) or policy_input.get("path") != map_path:
+            return [f"candidate source snapshot has an invalid policy input record for {map_path}"]
+        add(policy_input.get("path"), policy_input.get("sha256"), policy_input.get("binding"))
     for evidence in current_manifest.get("rehearsalEvidenceFiles", []):
         add(evidence.get("path"), evidence.get("sha256"))
     required = current_manifest.get("requiredSubmissionArtifact", {})
@@ -2299,6 +2311,11 @@ def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_
         add(required.get("path"), required.get("sha256"))
     for scene in current_manifest.get("scenes", {}).get("scenes", []):
         add(scene.get("assetPath"), scene.get("assetSha256"))
+    if conflicting_paths:
+        return [
+            "candidate source snapshot has conflicting manifest bindings for: "
+            + ", ".join(sorted(conflicting_paths))
+        ]
     for relative, (expected_digest, binding) in sorted(bound_paths.items()):
         try:
             safe_path(root, relative)
