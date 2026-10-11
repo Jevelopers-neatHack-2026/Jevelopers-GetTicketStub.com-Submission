@@ -1,24 +1,21 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadSandboxPolicy } from "./seccomp-policy.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const pins = JSON.parse(
 	await readFile(resolve(root, "docs/runtime/pins.json"), "utf8"),
 );
-const policyPath = resolve(root, "scripts/security/playwright-1.64.0.seccomp");
-const policyBytes = await readFile(policyPath);
-const policySha256 = createHash("sha256").update(policyBytes).digest("hex");
-assert.equal(
-	policySha256,
-	"cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849",
-);
-const policy = JSON.parse(policyBytes.toString());
+const policies = await loadSandboxPolicy();
+const policyPath = fileURLToPath(policies.derivedPath);
+const policySha256 = policies.derivedPolicySha256;
+const policy = policies.derived;
 
-function validateInspection(value, user) {
+function validateInspection(value, user, expectedPolicy = policy) {
 	assert.equal(value.Config.User, user);
 	assert.match(user, /^[1-9][0-9]*:[1-9][0-9]*$/);
 	assert.equal(value.Config.Image, pins.image.reference);
@@ -46,7 +43,10 @@ function validateInspection(value, user) {
 		option.startsWith("seccomp="),
 	);
 	assert.ok(seccomp);
-	assert.deepEqual(JSON.parse(seccomp.slice("seccomp=".length)), policy);
+	assert.deepEqual(
+		JSON.parse(seccomp.slice("seccomp=".length)),
+		expectedPolicy,
+	);
 	const baseline = value.Mounts.find(
 		(mount) => mount.Destination === "/run/pp-security",
 	);
@@ -65,7 +65,11 @@ function validateInspection(value, user) {
 		capDrop: config.CapDrop,
 		apparmor: value.AppArmorProfile,
 		noNewPrivileges: true,
-		seccompPolicySha256: policySha256,
+		seccompPolicySha256:
+			expectedPolicy === policies.base
+				? policies.basePolicySha256
+				: policySha256,
+		seccompBasePolicySha256: policies.basePolicySha256,
 		readonlyRootfs: config.ReadonlyRootfs,
 		hostNamespaceMountReadOnly: true,
 	};
@@ -97,7 +101,7 @@ if (process.argv[2] === "--check-inspection") {
 				net: await readlink("/proc/self/ns/net"),
 			}),
 		);
-		container = docker([
+		const containerArgs = [
 			"create",
 			"--platform",
 			"linux/amd64",
@@ -142,7 +146,82 @@ if (process.argv[2] === "--check-inspection") {
 			pins.image.reference,
 			"bash",
 			"scripts/ci-offline.sh",
-		]);
+		];
+		// Exact old/new syscall comparison under identical mandatory controls.
+		for (const [profilePath, expected] of [
+			[fileURLToPath(policies.basePath), "CHROOT_EPERM"],
+			[policyPath, "CHROOT_ENTERED_FDINFO"],
+		]) {
+			const args = containerArgs
+				.slice(0, -2)
+				.map((arg) =>
+					arg === `seccomp=${policyPath}` ? `seccomp=${profilePath}` : arg,
+				);
+			let probe;
+			try {
+				probe = docker([
+					...args,
+					"/work/out/toolchain/node-v24.21.0-linux-x64/bin/node",
+					"scripts/security/chroot-probe.mjs",
+				]);
+				const inspected = JSON.parse(docker(["inspect", probe]))[0];
+				const inspectedControls = validateInspection(
+					inspected,
+					user,
+					profilePath === policyPath ? policy : policies.base,
+				);
+				const started = spawnSync("docker", ["start", "--attach", probe], {
+					encoding: "utf8",
+					timeout: 15000,
+					maxBuffer: 16384,
+				});
+				assert.ok(
+					!started.error && started.status === 0,
+					"Fixed chroot probe execution failed.",
+				);
+				let receipt;
+				try {
+					receipt = JSON.parse(started.stdout).chrootProbe;
+				} catch (error) {
+					throw new Error("Fixed chroot probe receipt was invalid.");
+				}
+				assert.ok(
+					receipt.parentNonroot === true &&
+						receipt.parentCapabilities === "none" &&
+						receipt.noNewPrivileges === true &&
+						receipt.apparmor === "docker-default (enforce)" &&
+						receipt.seccomp === "filter",
+					"Fixed probe containment failed.",
+				);
+				const outcomes = [
+					"CHROOT_EPERM",
+					"CHROOT_ENTERED_FDINFO",
+					"UNKNOWN_FAILURE",
+					"PROBE_EXECUTION_FAILURE",
+				];
+				assert.ok(
+					outcomes.includes(receipt.outsideUserNamespace) &&
+						outcomes.includes(receipt.insideUserPidNetworkNamespace),
+					"Fixed probe outcomes were invalid.",
+				);
+				console.log(
+					JSON.stringify({
+						chrootPolicyComparison: {
+							container: inspectedControls,
+							outsideUserNamespace: receipt.outsideUserNamespace,
+							insideUserPidNetworkNamespace:
+								receipt.insideUserPidNetworkNamespace,
+							provenance: "FIXED_UNSHARE_GNU_CHROOT_PROBE",
+						},
+					}),
+				);
+				assert.equal(receipt.outsideUserNamespace, "CHROOT_EPERM");
+				assert.equal(receipt.insideUserPidNetworkNamespace, expected);
+			} finally {
+				if (probe) docker(["rm", "--force", probe]);
+			}
+		}
+		container = docker(containerArgs);
 		const inspected = JSON.parse(docker(["inspect", container]))[0];
 		const receipt = validateInspection(inspected, user);
 		assert.equal(

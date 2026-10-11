@@ -4,6 +4,10 @@ export PATH="$PWD/out/toolchain/node-v24.21.0-linux-x64/bin:$PATH"
 npm run build
 npm run typecheck
 npm run format:check
+node --test scripts/security/chroot-security.test.mjs
+node --test scripts/security/renderer-observer.test.mjs
+node --test scripts/security/browser-launch-probe.test.mjs
+node scripts/security/launch-diagnostic.mjs
 npm test
 node --test scripts/security/linux-browser.test.mjs
 npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/linux-ci

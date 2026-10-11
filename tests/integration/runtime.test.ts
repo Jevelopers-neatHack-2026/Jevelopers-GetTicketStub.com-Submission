@@ -151,12 +151,16 @@ test("rejects browser versions when the launched version differs", async () => {
 test("reports a typed sandbox failure without retry when browser launch rejects", async (t) => {
 	const pins = await loadPins();
 	const launch = t.mock.method(chromium, "launch", async () => {
-		throw new Error("synthetic launch failure containing private host detail");
+		throw new Error(
+			"browserType.launch: Target closed\nCall log:\n  - <launching> /private/chrome --url=https://private.invalid/token\n  - [pid=42][err] chrome_crashpad_handler: --database is required",
+		);
 	});
 	await assert.rejects(openOfflineBrowser(pins), (error: unknown) => {
 		assert.ok(error instanceof VerificationFailure);
 		assert.equal(error.code, "SANDBOX_POLICY_FAILURE");
-		assert.ok(!error.message.includes("private host detail"));
+		assert.ok(error.message.includes("[CRASHPAD_DATABASE_REQUIRED]"));
+		for (const privateValue of ["/private", "https://", "token", "pid=42"])
+			assert.ok(!error.message.includes(privateValue));
 		return true;
 	});
 	assert.equal(launch.mock.callCount(), 1);
