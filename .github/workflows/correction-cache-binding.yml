@@ -55,3 +55,13 @@ jobs:
           ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
           --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
           tests/integration/review-cache-binding/types-consumer.mts
+      - name: Strict immutable-history consumer
+        run: >-
+          ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
+          --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
+          tests/review/history/types-consumer.mts
+      - name: Strict scoped-cache consumer
+        run: >-
+          ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
+          --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
+          tests/cache/reuse/types-consumer.mts

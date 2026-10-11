@@ -53,6 +53,7 @@ const MAX_VERSION_PLAINTEXT_BYTES = 512 * 1024;
 const MAX_VERSION_SEALED_BYTES = 512 * 1024;
 const TENANT_DATABASE_QUEUES = new Map();
 const HISTORY_BINDING_PORTS = new WeakMap();
+const HISTORY_BINDING_PLANS = new WeakMap();
 const ABORT_SIGNAL_ABORTED_GETTER = typeof AbortSignal === 'function'
   ? Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get
   : undefined;
@@ -924,6 +925,61 @@ export function createCorrectionHistoryStore(options) {
     }
   }
 
+  function migrateBindingOperationReceipts(database) {
+    const initialColumns = new Set(database.prepare('PRAGMA table_info(correction_cache_operations)').all()
+      .map((column) => column.name));
+    const marker = database.prepare("SELECT value FROM correction_cache_meta WHERE key = 'binding_operation_receipt_schema'").get();
+    const missing = ['base_version_id', 'base_content_hash', 'fence', 'phase']
+      .some((name) => !initialColumns.has(name));
+    if (!missing && marker?.value === '2') return;
+
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      const columns = new Set(database.prepare('PRAGMA table_info(correction_cache_operations)').all()
+        .map((column) => column.name));
+      for (const [name, type] of [['base_version_id', 'TEXT'], ['base_content_hash', 'TEXT'], ['fence', 'INTEGER'], ['phase', 'TEXT']]) {
+        if (!columns.has(name)) database.exec(`ALTER TABLE correction_cache_operations ADD COLUMN ${name} ${type}`);
+      }
+
+      const operations = database.prepare(`SELECT * FROM correction_cache_operations
+        WHERE base_version_id IS NULL OR base_content_hash IS NULL OR fence IS NULL OR phase IS NULL`).all();
+      const stateFor = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?');
+      const headFor = database.prepare('SELECT * FROM heads WHERE event_key = ?');
+      const update = database.prepare(`UPDATE correction_cache_operations
+        SET base_version_id = ?, base_content_hash = ?, fence = ?, phase = ?
+        WHERE event_key = ? AND operation_hash = ? AND operation_id = ?
+          AND base_version_id IS NULL AND base_content_hash IS NULL AND fence IS NULL AND phase IS NULL`);
+      for (const operation of operations) {
+        const state = stateFor.get(operation.event_key);
+        const head = headFor.get(operation.event_key);
+        if (!state || !head || state.operation_id !== operation.operation_id
+          || state.operation_hash !== operation.operation_hash || state.fingerprint !== operation.fingerprint
+          || state.binding_id !== operation.binding_id || state.kind !== operation.kind
+          || !Number.isSafeInteger(state.fence) || state.fence < 1) continue;
+        const pending = ['pending_bind', 'pending_correction'].includes(state.phase)
+          && operation.target_version_id === null && operation.target_content_hash === null
+          && state.target_version_id === null && state.target_content_hash === null
+          && head.state === 'available' && head.version_id === state.base_version_id
+          && head.content_hash === state.base_content_hash;
+        const committed = ['history_committed', 'cache_invalidating', 'complete'].includes(state.phase)
+          && operation.target_version_id === state.target_version_id
+          && operation.target_content_hash === state.target_content_hash
+          && head.state === 'available' && head.version_id === state.target_version_id
+          && head.content_hash === state.target_content_hash;
+        if (!pending && !committed) continue;
+        update.run(state.base_version_id, state.base_content_hash, state.fence, state.phase,
+          operation.event_key, operation.operation_hash, operation.operation_id);
+      }
+      database.prepare(`INSERT INTO correction_cache_meta (key, value)
+        VALUES ('binding_operation_receipt_schema', '2')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run();
+      database.exec('COMMIT');
+    } catch (error) {
+      try { database.exec('ROLLBACK'); } catch { /* The outer transaction guard closes the connection. */ }
+      throw error;
+    }
+  }
+
   async function withTransaction(info, directory, operation, signal, finalBoundary, transactionOptions = undefined) {
     const timeoutMs = transactionOptions?.timeoutMs ?? limits.lockTimeoutMs;
     return withTenantDatabaseQueue(directory,
@@ -932,20 +988,21 @@ export function createCorrectionHistoryStore(options) {
         sync: transactionOptions?.sync === true,
         beforeBegin: transactionOptions?.beforeBegin,
         boundary: transactionOptions?.boundary,
+        prepareBeforeBegin: transactionOptions?.prepareBeforeBegin,
         checkBoundaryAfterCommit: transactionOptions?.checkBoundaryAfterCommit === true,
       }),
       signal);
   }
 
   async function withBindingTransaction(info, directory, operation, signal, beforeBegin, boundary,
-    checkBoundaryAfterCommit = false) {
+    checkBoundaryAfterCommit = false, prepareBeforeBegin = undefined) {
     const delays = [2, 4, 8, 12, 20, 30, 40];
     const startedAt = monotonicTimestampNs();
     for (let attempt = 0; ; attempt += 1) {
       throwIfAborted(signal);
       try {
         return await withTransaction(info, directory, operation, signal, undefined,
-          { timeoutMs: 0, sync: true, beforeBegin, boundary, checkBoundaryAfterCommit });
+          { timeoutMs: 0, sync: true, beforeBegin, boundary, checkBoundaryAfterCommit, prepareBeforeBegin });
       } catch (error) {
         if (!(error instanceof ReviewHistoryError) || error.code !== 'REVIEW_BUSY' || attempt >= delays.length) throw error;
         const elapsed = monotonicTimestampNs() - startedAt;
@@ -1137,6 +1194,10 @@ export function createCorrectionHistoryStore(options) {
           kind TEXT NOT NULL CHECK (kind IN ('bind', 'correction', 'source_refresh')),
           target_version_id TEXT,
           target_content_hash TEXT,
+          base_version_id TEXT,
+          base_content_hash TEXT,
+          fence INTEGER,
+          phase TEXT,
           PRIMARY KEY (event_key, operation_hash)
         ) STRICT;
         CREATE TABLE IF NOT EXISTS correction_cache_meta (
@@ -1175,6 +1236,7 @@ export function createCorrectionHistoryStore(options) {
           throw error;
         }
       }
+      migrateBindingOperationReceipts(database);
       await chmod(databasePath, 0o600);
       if (transactionOptions.beforeBegin) {
         try {
@@ -1197,11 +1259,18 @@ export function createCorrectionHistoryStore(options) {
       if (transactionOptions.boundary?.mustBeBeforeMs !== undefined
         && effectiveTransactionNow >= transactionOptions.boundary.mustBeBeforeMs) fail('REVIEW_EXPIRED');
       throwIfAborted(signal);
+      const preBeginTime = Object.freeze({ now: guardedTransactionNow, effectiveNow: effectiveTransactionNow });
+      let prepared;
+      if (transactionOptions.prepareBeforeBegin) {
+        prepared = transactionOptions.prepareBeforeBegin(database, preBeginTime, boundaryToken);
+        if (prepared && typeof prepared.then === 'function') fail('REVIEW_STORAGE');
+      }
+      throwIfAborted(signal);
       database.exec('BEGIN IMMEDIATE');
       open = true;
       advanceHistoryClock(database, guardedTransactionNow);
       preBeginRejected = false;
-      const transactionTime = Object.freeze({ now: guardedTransactionNow, effectiveNow: effectiveTransactionNow });
+      const transactionTime = Object.freeze({ ...preBeginTime, prepared });
       const result = transactionOptions.sync ? operation(database, transactionTime)
         : await operation(database, transactionTime);
       if (transactionOptions.sync && result && typeof result.then === 'function') fail('REVIEW_STORAGE');
@@ -1295,6 +1364,16 @@ export function createCorrectionHistoryStore(options) {
     return database.prepare(`SELECT * FROM versions WHERE event_key = ? AND version_id = ? AND state = 'available'`).get(eventKey, versionId);
   }
 
+  function bindingReferenceDigest(rows) {
+    return sha256(canonical(rows.map((row) => ({
+      referenceHash: row.reference_hash,
+      boundVersionId: row.bound_version_id,
+      boundContentHash: row.bound_content_hash,
+      encryptionKeyId: row.encryption_key_id,
+      sealed: Buffer.from(row.sealed).toString('base64'),
+    }))));
+  }
+
   async function decryptVersion(info, row) {
     if (!row || row.state !== 'available' || !row.encryption_key_id || !row.sealed) fail('REVIEW_NOT_FOUND');
     const key = await payloadKeyFor(info, row.encryption_key_id);
@@ -1356,8 +1435,10 @@ export function createCorrectionHistoryStore(options) {
       target_content_hash = ?, updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?`)
       .run(targetVersionId, targetContentHash, now, context.eventKey, operation.operationId, operation.fence);
     database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?
+      , base_version_id = ?, base_content_hash = ?, fence = ?, phase = 'history_committed'
       WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
-      .run(targetVersionId, targetContentHash, context.eventKey, current.operation_hash, operation.operationId);
+      .run(targetVersionId, targetContentHash, operation.baseVersionId, operation.baseContentHash, operation.fence,
+        context.eventKey, current.operation_hash, operation.operationId);
   }
 
   async function recordBindingHistoryTarget(bindingOperation, snapshot, signal = undefined) {
@@ -1441,6 +1522,7 @@ export function createCorrectionHistoryStore(options) {
 
   async function persistVersion({ info, directory, eventId, eventKey, actorId, operation, idempotencyKey,
     normalizedInput, state, parent, retentionHandle, signal, baseVersion, indexKey, request, action, field, bindingOperation }) {
+    const prepareOnly = bindingOperation?.prepareOnly === true;
     const upperBoundMs = parent?.expires_at_ms;
     const firstRetention = await resolveRetention(info, retentionHandle, upperBoundMs);
     throwIfAborted(signal);
@@ -1449,6 +1531,7 @@ export function createCorrectionHistoryStore(options) {
     const key = await payloadKeyFor(info);
     const keyHash = keyed(info, indexKey, 'idempotency-key', idempotencyKey);
     const fingerprintValue = fingerprint(indexKey, info, eventKey, actorId, operation, normalizedInput);
+    let keepPayloadKey = false;
     try {
       const preflight = await withTransaction(info, directory, (database, time) => {
         const now = time.now;
@@ -1469,6 +1552,7 @@ export function createCorrectionHistoryStore(options) {
       }, signal, undefined, { sync: true });
       if (preflight.replayRow) {
         if (preflight.replayRow.fingerprint !== fingerprintValue) fail('REVIEW_IDEMPOTENCY_CONFLICT');
+        if (prepareOnly) fail('REVIEW_BUSY');
         const replay = await findCommittedReplay(info, eventId, eventKey, actorId, operation, idempotencyKey,
           normalizedInput, indexKey, request, action, field, signal, bindingOperation);
         if (!replay) fail('REVIEW_VERSION_CONFLICT');
@@ -1497,6 +1581,41 @@ export function createCorrectionHistoryStore(options) {
       const finalExpiresAtMs = Math.min(retention.expiresAtMs, finalRetention.expiresAtMs);
       assertNotExpired(finalExpiresAtMs);
       throwIfAborted(signal);
+      if (prepareOnly) {
+        const planToken = createOpaque();
+        HISTORY_BINDING_PLANS.set(planToken, {
+          context: bindingOperation.context,
+          operation,
+          idempotencyKey,
+          normalizedInput,
+          state,
+          parent,
+          baseVersion,
+          currentHead: preflight.current,
+          referenceRows: preflight.refRows,
+          referenceDigest: bindingReferenceDigest(preflight.refRows),
+          references,
+          retention: Object.freeze({ ...finalRetention, expiresAtMs: finalExpiresAtMs }),
+          expiresAtMs: finalExpiresAtMs,
+          eventId,
+          eventKey,
+          actorId,
+          directory,
+          indexKey,
+          payloadKeyId: key.keyId,
+          payloadKey: key.key,
+          keyHash,
+          fingerprint: fingerprintValue,
+          request,
+          action,
+          field,
+          signal,
+          materialized: null,
+          disposed: false,
+        });
+        keepPayloadKey = true;
+        return Object.freeze({ preparedPlan: planToken });
+      }
       const authorizeBeforeBegin = async () => {
         throwIfAborted(signal);
         await reauthorizeRequest(info, request, eventId, action, actorId, field);
@@ -1681,7 +1800,7 @@ export function createCorrectionHistoryStore(options) {
           { reason: 'expired_history_revision_or_replay' }),
       });
     } finally {
-      key.key.fill(0);
+      if (!keepPayloadKey) key.key.fill(0);
     }
   }
 
@@ -1819,10 +1938,12 @@ export function createCorrectionHistoryStore(options) {
     throwIfAborted(signal);
     const indexKey = await indexKeyFor(info);
     const eventKey = keyed(info, indexKey, 'event', eventId);
+    let keepIndexKey = false;
     try {
       const normalizedInput = { eventId, baseVersionId, baseContentHash: input.baseContentHash, field, value };
-      const replay = await findCommittedReplay(info, eventId, eventKey, actorId, 'correction', idempotencyKey,
-        normalizedInput, indexKey, request, 'apply_correction', field, signal, internalBinding);
+      const replay = internalBinding?.prepareOnly ? null
+        : await findCommittedReplay(info, eventId, eventKey, actorId, 'correction', idempotencyKey,
+          normalizedInput, indexKey, request, 'apply_correction', field, signal, internalBinding);
       throwIfAborted(signal);
       if (replay) {
         if (internalBinding) await recordBindingHistoryTarget(internalBinding, replay.snapshot, signal);
@@ -1897,10 +2018,14 @@ export function createCorrectionHistoryStore(options) {
         field,
         bindingOperation: internalBinding,
       });
+      if (result?.preparedPlan) {
+        keepIndexKey = true;
+        return result;
+      }
       throwIfAborted(signal);
       return result;
     } finally {
-      indexKey.fill(0);
+      if (!keepIndexKey) indexKey.fill(0);
     }
   }
 
@@ -1921,10 +2046,12 @@ export function createCorrectionHistoryStore(options) {
     throwIfAborted(signal);
     const indexKey = await indexKeyFor(info);
     const eventKey = keyed(info, indexKey, 'event', eventId);
+    let keepIndexKey = false;
     try {
       const normalizedInput = { eventId, baseVersionId, baseContentHash: input.baseContentHash, sourceFacts: facts };
-      const replay = await findCommittedReplay(info, eventId, eventKey, actorId, 'source_refresh', idempotencyKey,
-        normalizedInput, indexKey, request, 'refresh_source_facts', undefined, signal, internalBinding);
+      const replay = internalBinding?.prepareOnly ? null
+        : await findCommittedReplay(info, eventId, eventKey, actorId, 'source_refresh', idempotencyKey,
+          normalizedInput, indexKey, request, 'refresh_source_facts', undefined, signal, internalBinding);
       throwIfAborted(signal);
       if (replay) {
         if (internalBinding) await recordBindingHistoryTarget(internalBinding, replay.snapshot, signal);
@@ -1982,10 +2109,14 @@ export function createCorrectionHistoryStore(options) {
         action: 'refresh_source_facts',
         bindingOperation: internalBinding,
       });
+      if (result?.preparedPlan) {
+        keepIndexKey = true;
+        return result;
+      }
       throwIfAborted(signal);
       return result;
     } finally {
-      indexKey.fill(0);
+      if (!keepIndexKey) indexKey.fill(0);
     }
   }
 
@@ -2448,20 +2579,19 @@ export function createCorrectionHistoryStore(options) {
           target_version_id, target_content_hash FROM correction_cache_state WHERE event_key = ?`).get(context.eventKey);
         let receipt;
         if (expectedCompletedOperation) {
-          receipt = database.prepare(`SELECT operation_id, kind, target_version_id, target_content_hash
+          receipt = database.prepare(`SELECT operation_id, kind, base_version_id, base_content_hash, fence, phase,
+              target_version_id, target_content_hash
             FROM correction_cache_operations WHERE event_key = ? AND operation_id = ?`)
             .get(context.eventKey, expectedCompletedOperation.operationId);
           if (head.version_id !== expectedCompletedOperation.targetVersionId
             || head.content_hash !== expectedCompletedOperation.targetContentHash
-            || !state || state.phase !== 'complete'
-            || state.operation_id !== expectedCompletedOperation.operationId
-            || state.fence !== expectedCompletedOperation.fence || state.kind !== expectedCompletedOperation.kind
-            || state.base_version_id !== expectedCompletedOperation.baseVersionId
-            || state.base_content_hash !== expectedCompletedOperation.baseContentHash
-            || state.target_version_id !== expectedCompletedOperation.targetVersionId
-            || state.target_content_hash !== expectedCompletedOperation.targetContentHash
+            || (state && state.phase !== 'complete')
             || !receipt || receipt.operation_id !== expectedCompletedOperation.operationId
             || receipt.kind !== expectedCompletedOperation.kind
+            || receipt.phase !== 'complete'
+            || receipt.fence !== expectedCompletedOperation.fence
+            || receipt.base_version_id !== expectedCompletedOperation.baseVersionId
+            || receipt.base_content_hash !== expectedCompletedOperation.baseContentHash
             || receipt.target_version_id !== expectedCompletedOperation.targetVersionId
             || receipt.target_content_hash !== expectedCompletedOperation.targetContentHash) fail('REVIEW_VERSION_CONFLICT');
         }
@@ -2527,20 +2657,19 @@ export function createCorrectionHistoryStore(options) {
               || state.base_version_id !== pendingOperation.baseVersionId
               || state.base_content_hash !== pendingOperation.baseContentHash))) fail('REVIEW_VERSION_CONFLICT');
           if (expectedCompletedOperation) {
-            const receipt = database.prepare(`SELECT operation_id, kind, target_version_id, target_content_hash
+            const receipt = database.prepare(`SELECT operation_id, kind, base_version_id, base_content_hash, fence, phase,
+                target_version_id, target_content_hash
               FROM correction_cache_operations WHERE event_key = ? AND operation_id = ?`)
               .get(context.eventKey, expectedCompletedOperation.operationId);
             if (head.version_id !== expectedCompletedOperation.targetVersionId
               || head.content_hash !== expectedCompletedOperation.targetContentHash
-              || !state || state.phase !== 'complete'
-              || state.operation_id !== expectedCompletedOperation.operationId
-              || state.fence !== expectedCompletedOperation.fence || state.kind !== expectedCompletedOperation.kind
-              || state.base_version_id !== expectedCompletedOperation.baseVersionId
-              || state.base_content_hash !== expectedCompletedOperation.baseContentHash
-              || state.target_version_id !== expectedCompletedOperation.targetVersionId
-              || state.target_content_hash !== expectedCompletedOperation.targetContentHash
+              || (state && state.phase !== 'complete')
               || !receipt || receipt.operation_id !== expectedCompletedOperation.operationId
               || receipt.kind !== expectedCompletedOperation.kind
+              || receipt.phase !== 'complete'
+              || receipt.fence !== expectedCompletedOperation.fence
+              || receipt.base_version_id !== expectedCompletedOperation.baseVersionId
+              || receipt.base_content_hash !== expectedCompletedOperation.baseContentHash
               || receipt.target_version_id !== expectedCompletedOperation.targetVersionId
               || receipt.target_content_hash !== expectedCompletedOperation.targetContentHash) fail('REVIEW_VERSION_CONFLICT');
           }
@@ -2569,7 +2698,7 @@ export function createCorrectionHistoryStore(options) {
   async function beginBindingOperation(context, specValue, request, signal) {
     throwIfAborted(signal);
     const spec = ownDataRecord(specValue, new Set([
-      'kind', 'operationKey', 'normalizedInput', 'baseVersionId', 'baseContentHash', 'action', 'field',
+      'kind', 'operationKey', 'normalizedInput', 'baseVersionId', 'baseContentHash', 'action', 'field', 'preparedRevision',
     ]));
     if (!spec || !['bind', 'correction', 'source_refresh'].includes(spec.kind)
       || !validSafeString(spec.operationKey, 1, 180) || !isRecord(spec.normalizedInput)
@@ -2579,13 +2708,29 @@ export function createCorrectionHistoryStore(options) {
       || (spec.kind !== 'bind' && spec.baseVersionId === undefined)
       || !validSafeString(spec.action, 1, 80)
       || (spec.field !== undefined && !validSafeString(spec.field, 1, 80))) fail();
+    const revisionPlan = spec.preparedRevision === undefined ? null : HISTORY_BINDING_PLANS.get(spec.preparedRevision);
+    if (spec.kind === 'bind' && spec.preparedRevision !== undefined) fail('REVIEW_INVALID');
     await reauthorizeRequest(context.info, request, context.eventId, spec.action, context.actorId, spec.field);
     throwIfAborted(signal);
     const operationHash = keyed(context.info, context.indexKey, 'binding-operation', spec.operationKey);
     const operationFingerprint = fingerprint(context.indexKey, context.info, context.eventKey, context.actorId,
       `correction_cache_${spec.kind}`, spec.normalizedInput);
+    if (revisionPlan && (revisionPlan.disposed || revisionPlan.context !== context
+      || revisionPlan.bindingKind !== spec.kind || revisionPlan.bindingOperationKey !== spec.operationKey
+      || revisionPlan.bindingFingerprint !== operationFingerprint
+      || revisionPlan.bindingBaseVersionId !== spec.baseVersionId
+      || revisionPlan.bindingBaseContentHash !== spec.baseContentHash)) fail('REVIEW_INVALID');
     const phase = spec.kind === 'bind' ? 'pending_bind' : 'pending_correction';
-    const candidate = await withTransaction(context.info, context.directory, (database, time) => {
+    const preflightAction = spec.kind === 'correction'
+      ? 'review.history.apply_correction' : 'review.history.refresh_source_facts';
+    const preflightBoundary = boundaryFor(context.info, context.actorId, context.eventId, preflightAction, spec.field, request, {
+      operationFingerprint,
+      kind: spec.kind,
+      baseVersionId: spec.baseVersionId ?? null,
+      baseContentHash: spec.baseContentHash ?? null,
+      stage: 'operation_preflight',
+    });
+    const candidate = await withBindingTransaction(context.info, context.directory, (database, time) => {
       const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
       if (!head || head.state !== 'available') fail(head ? 'REVIEW_EXPIRED' : 'REVIEW_NOT_FOUND');
       if (head.expires_at_ms <= time.now) fail('REVIEW_EXPIRED');
@@ -2595,7 +2740,8 @@ export function createCorrectionHistoryStore(options) {
       const baseVersionId = spec.baseVersionId ?? head.version_id;
       const baseContentHash = spec.baseContentHash ?? head.content_hash;
       return { head, receipt, state, baseVersionId, baseContentHash };
-    }, signal, undefined, { sync: true });
+    }, signal, () => reauthorizeRequest(context.info, request, context.eventId,
+      spec.action, context.actorId, spec.field), preflightBoundary);
     if (!candidate.receipt?.target_version_id
       && (candidate.head.version_id !== candidate.baseVersionId || candidate.head.content_hash !== candidate.baseContentHash)) {
       fail('REVIEW_VERSION_CONFLICT');
@@ -2603,11 +2749,22 @@ export function createCorrectionHistoryStore(options) {
     if (candidate.receipt && (candidate.receipt.fingerprint !== operationFingerprint || candidate.receipt.kind !== spec.kind)) {
       fail('REVIEW_IDEMPOTENCY_CONFLICT');
     }
-    const resumesPending = candidate.receipt && !candidate.receipt.target_version_id
+    if (spec.kind !== 'bind' && !revisionPlan && !candidate.receipt?.target_version_id) fail('REVIEW_INVALID');
+    if (candidate.receipt && (!candidate.receipt.phase || !Number.isSafeInteger(candidate.receipt.fence)
+      || candidate.receipt.fence < 1 || !candidate.receipt.base_version_id
+      || !/^[a-f0-9]{64}$/.test(candidate.receipt.base_content_hash ?? ''))) fail('REVIEW_BUSY');
+    const completedReceipt = candidate.receipt?.phase === 'complete';
+    if (completedReceipt && (!candidate.receipt.target_version_id
+      || !candidate.receipt.target_content_hash
+      || candidate.head.version_id !== candidate.receipt.target_version_id
+      || candidate.head.content_hash !== candidate.receipt.target_content_hash)) fail('REVIEW_VERSION_CONFLICT');
+    if (completedReceipt && candidate.state && candidate.state.phase !== 'complete') fail('REVIEW_BUSY');
+    const resumesPending = candidate.receipt && !completedReceipt
       && candidate.state?.operation_id === candidate.receipt.operation_id && candidate.state.phase !== 'complete';
+    if (revisionPlan && candidate.receipt?.target_version_id) fail('REVIEW_BUSY');
     const candidateOperationId = candidate.receipt?.operation_id ?? randomUUID();
     const candidateFence = resumesPending ? candidate.state.fence + 1
-      : candidate.receipt?.target_version_id ? Math.max(1, candidate.state?.fence ?? 1)
+      : completedReceipt ? candidate.receipt.fence
         : (candidate.state?.fence ?? 0) + 1;
     const boundaryAction = spec.kind === 'bind' ? 'review.history.cache_bind_begin' : 'review.history.revision_begin';
     const boundary = boundaryFor(context.info, context.actorId, context.eventId, boundaryAction, spec.field, request, {
@@ -2619,6 +2776,11 @@ export function createCorrectionHistoryStore(options) {
       baseContentHash: candidate.baseContentHash,
       expiresAtMs: candidate.head.expires_at_ms,
     }, candidate.head.expires_at_ms);
+    const prepareBeforeBegin = revisionPlan ? (database, time) => {
+      const prepared = materializeBindingRevision(revisionPlan, database, time, signal);
+      revisionPlan.materialized = prepared;
+      return prepared;
+    } : undefined;
     return withBindingTransaction(context.info, context.directory, (database, time) => {
       const now = time.now;
       const effectiveNow = time.effectiveNow;
@@ -2638,37 +2800,51 @@ export function createCorrectionHistoryStore(options) {
         || (state?.phase ?? null) !== (candidate.state?.phase ?? null)) fail('REVIEW_BUSY');
       if (receipt) {
         if (receipt.fingerprint !== operationFingerprint || receipt.kind !== spec.kind) fail('REVIEW_IDEMPOTENCY_CONFLICT');
+        if (receipt.phase === 'complete') {
+          if (!Number.isSafeInteger(receipt.fence) || receipt.fence < 1
+            || !receipt.base_version_id || !/^[a-f0-9]{64}$/.test(receipt.base_content_hash ?? '')
+            || !receipt.target_version_id || !/^[a-f0-9]{64}$/.test(receipt.target_content_hash ?? '')
+            || head.version_id !== receipt.target_version_id || head.content_hash !== receipt.target_content_hash
+            || (state && state.phase !== 'complete')) fail('REVIEW_VERSION_CONFLICT');
+          return Object.freeze({ operationId: receipt.operation_id, bindingId: receipt.binding_id,
+            fence: receipt.fence, kind: spec.kind, phase: 'complete', baseVersionId: receipt.base_version_id,
+            baseContentHash: receipt.base_content_hash, targetVersionId: receipt.target_version_id,
+            targetContentHash: receipt.target_content_hash, replayed: true });
+        }
         if (state?.operation_id === receipt.operation_id && state.phase !== 'complete') {
+          if (receipt.phase !== state.phase || receipt.fence !== state.fence
+            || receipt.base_version_id !== state.base_version_id || receipt.base_content_hash !== state.base_content_hash
+            || receipt.target_version_id !== state.target_version_id
+            || receipt.target_content_hash !== state.target_content_hash) fail('REVIEW_BUSY');
           const expectedHead = ['history_committed', 'cache_invalidating'].includes(state.phase)
             ? state.target_version_id : state.base_version_id;
           if (expectedHead && head.version_id !== expectedHead) fail('REVIEW_VERSION_CONFLICT');
           const nextFence = candidateFence;
+          if (revisionPlan) verifyPreparedRevisionAdmission(database, head, revisionPlan, time.prepared, effectiveNow);
           database.prepare('UPDATE correction_cache_state SET fence = ?, updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?')
             .run(nextFence, now, context.eventKey, state.operation_id, state.fence);
+          database.prepare('UPDATE correction_cache_operations SET fence = ?, phase = ? WHERE event_key = ? AND operation_hash = ? AND operation_id = ? AND fence = ?')
+            .run(nextFence, state.phase, context.eventKey, operationHash, receipt.operation_id, state.fence);
           return Object.freeze({ operationId: receipt.operation_id, bindingId: receipt.binding_id, fence: nextFence,
             kind: spec.kind, phase: state.phase, baseVersionId: state.base_version_id, baseContentHash: state.base_content_hash,
             targetVersionId: state.target_version_id, targetContentHash: state.target_content_hash, replayed: false });
-        }
-        if (receipt.target_version_id) {
-          return Object.freeze({ operationId: receipt.operation_id, bindingId: receipt.binding_id,
-            fence: state?.fence ?? 0, kind: spec.kind, phase: 'complete', baseVersionId: spec.baseVersionId,
-            baseContentHash: spec.baseContentHash, targetVersionId: receipt.target_version_id,
-            targetContentHash: receipt.target_content_hash, replayed: true });
         }
         fail('REVIEW_BUSY');
       }
       if (state && state.phase !== 'complete') fail('REVIEW_BUSY');
       if (head.version_id !== baseVersionId || head.content_hash !== baseContentHash) fail('REVIEW_VERSION_CONFLICT');
       if (head.expires_at_ms <= effectiveNow) fail('REVIEW_EXPIRED');
+      if (spec.kind !== 'bind') verifyPreparedRevisionAdmission(database, head, revisionPlan, time.prepared, effectiveNow);
       const count = database.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations WHERE event_key = ?').get(context.eventKey).count;
       if (count >= limits.maxRevisionsPerHistory + 128) fail('REVIEW_STORAGE_LIMIT');
       const operationId = candidateOperationId;
       const bindingId = spec.kind === 'bind' ? randomUUID() : null;
       const fence = candidateFence;
       database.prepare(`INSERT INTO correction_cache_operations
-        (event_key, operation_hash, fingerprint, operation_id, binding_id, kind, target_version_id, target_content_hash)
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`).run(context.eventKey, operationHash, operationFingerprint,
-        operationId, bindingId, spec.kind);
+        (event_key, operation_hash, fingerprint, operation_id, binding_id, kind, target_version_id, target_content_hash,
+         base_version_id, base_content_hash, fence, phase)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`).run(context.eventKey, operationHash, operationFingerprint,
+        operationId, bindingId, spec.kind, baseVersionId, baseContentHash, fence, phase);
       database.prepare(`INSERT INTO correction_cache_state
         (event_key, operation_id, operation_hash, fingerprint, binding_id, fence, kind, phase,
          base_version_id, base_content_hash, target_version_id, target_content_hash, updated_at_ms)
@@ -2684,7 +2860,7 @@ export function createCorrectionHistoryStore(options) {
         baseVersionId, baseContentHash,
         targetVersionId: null, targetContentHash: null, replayed: false });
     }, signal, () => reauthorizeRequest(context.info, request, context.eventId,
-      spec.action, context.actorId, spec.field), boundary);
+      spec.action, context.actorId, spec.field), boundary, false, prepareBeforeBegin);
   }
 
   function validateBindingRevisionInput(context, kind, inputValue) {
@@ -2710,7 +2886,267 @@ export function createCorrectionHistoryStore(options) {
     return true;
   }
 
-  async function bindingApplyHistoryOperation(context, operation, input, request, signal) {
+  function disposeBindingRevisionPlan(planToken) {
+    const plan = HISTORY_BINDING_PLANS.get(planToken);
+    if (!plan || plan.disposed) return;
+    plan.disposed = true;
+    HISTORY_BINDING_PLANS.delete(planToken);
+    plan.indexKey?.fill(0);
+    plan.payloadKey?.fill(0);
+    plan.materialized?.sealed?.fill(0);
+    plan.materialized = null;
+    plan.references = null;
+    plan.referenceRows = null;
+    plan.state = null;
+  }
+
+  async function bindingPrepareRevision(context, specValue, input, request, signal) {
+    throwIfAborted(signal);
+    const spec = ownDataRecord(specValue, new Set([
+      'kind', 'operationKey', 'normalizedInput', 'baseVersionId', 'baseContentHash', 'action', 'field',
+    ]));
+    if (!spec || !['correction', 'source_refresh'].includes(spec.kind)
+      || !validSafeString(spec.operationKey, 1, 180) || !isRecord(spec.normalizedInput)
+      || !validSafeString(spec.baseVersionId, 1, 180) || !/^[a-f0-9]{64}$/.test(spec.baseContentHash ?? '')) fail();
+    await reauthorizeRequest(context.info, request, context.eventId, spec.action, context.actorId, spec.field);
+    throwIfAborted(signal);
+    const operationHash = keyed(context.info, context.indexKey, 'binding-operation', spec.operationKey);
+    const operationFingerprint = fingerprint(context.indexKey, context.info, context.eventKey, context.actorId,
+      `correction_cache_${spec.kind}`, spec.normalizedInput);
+    const preflightAction = spec.kind === 'bind' ? 'review.history.cache_bind_begin'
+      : spec.kind === 'correction' ? 'review.history.apply_correction' : 'review.history.refresh_source_facts';
+    const preflightBoundary = boundaryFor(context.info, context.actorId, context.eventId, preflightAction, spec.field, request, {
+      operationFingerprint,
+      kind: spec.kind,
+      baseVersionId: spec.baseVersionId,
+      baseContentHash: spec.baseContentHash,
+      stage: 'revision_preflight',
+    });
+    const candidate = await withBindingTransaction(context.info, context.directory, (database, time) => {
+      const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
+      if (!head || head.state !== 'available' || head.expires_at_ms <= time.now) fail(head ? 'REVIEW_EXPIRED' : 'REVIEW_NOT_FOUND');
+      const receipt = database.prepare(`SELECT * FROM correction_cache_operations
+        WHERE event_key = ? AND operation_hash = ?`).get(context.eventKey, operationHash);
+      const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
+      const historyReceipt = database.prepare(`SELECT fingerprint, version_id FROM idempotency
+        WHERE event_key = ? AND key_hash = ?`).get(context.eventKey,
+        keyed(context.info, context.indexKey, 'idempotency-key', input.idempotencyKey));
+      return { head, receipt, state, historyReceipt };
+    }, signal, () => reauthorizeRequest(context.info, request, context.eventId,
+      spec.action, context.actorId, spec.field), preflightBoundary);
+    if (candidate.receipt && (candidate.receipt.fingerprint !== operationFingerprint
+      || candidate.receipt.kind !== spec.kind)) fail('REVIEW_IDEMPOTENCY_CONFLICT');
+    if (candidate.historyReceipt && !candidate.receipt) fail('REVIEW_BUSY');
+    if (candidate.receipt?.phase === 'complete') {
+      if (!Number.isSafeInteger(candidate.receipt.fence) || candidate.receipt.fence < 1
+        || candidate.receipt.base_version_id !== spec.baseVersionId
+        || candidate.receipt.base_content_hash !== spec.baseContentHash
+        || candidate.head.version_id !== candidate.receipt.target_version_id
+        || candidate.head.content_hash !== candidate.receipt.target_content_hash
+        || (candidate.state && candidate.state.phase !== 'complete')) fail('REVIEW_VERSION_CONFLICT');
+      return Object.freeze({ mode: 'replay', operation: Object.freeze({
+        operationId: candidate.receipt.operation_id,
+        bindingId: candidate.receipt.binding_id,
+        fence: candidate.receipt.fence,
+        kind: candidate.receipt.kind,
+        phase: 'complete',
+        baseVersionId: candidate.receipt.base_version_id,
+        baseContentHash: candidate.receipt.base_content_hash,
+        targetVersionId: candidate.receipt.target_version_id,
+        targetContentHash: candidate.receipt.target_content_hash,
+        replayed: true,
+      }) });
+    }
+    if (candidate.receipt && candidate.receipt.target_version_id) {
+      if (!candidate.state || candidate.state.operation_id !== candidate.receipt.operation_id
+        || candidate.state.phase === 'complete' || candidate.state.phase !== candidate.receipt.phase
+        || candidate.state.fence !== candidate.receipt.fence
+        || candidate.state.base_version_id !== candidate.receipt.base_version_id
+        || candidate.state.base_content_hash !== candidate.receipt.base_content_hash
+        || candidate.state.target_version_id !== candidate.receipt.target_version_id
+        || candidate.state.target_content_hash !== candidate.receipt.target_content_hash) fail('REVIEW_BUSY');
+      return Object.freeze({ mode: 'resume' });
+    }
+    if (candidate.receipt && (!candidate.state || candidate.state.operation_id !== candidate.receipt.operation_id
+      || candidate.state.phase === 'complete' || candidate.state.phase !== candidate.receipt.phase
+      || candidate.state.fence !== candidate.receipt.fence
+      || candidate.state.base_version_id !== spec.baseVersionId
+      || candidate.state.base_content_hash !== spec.baseContentHash)) fail('REVIEW_BUSY');
+    if (candidate.head.version_id !== spec.baseVersionId || candidate.head.content_hash !== spec.baseContentHash) {
+      fail('REVIEW_VERSION_CONFLICT');
+    }
+    const options = signal === undefined ? undefined : Object.freeze({ signal });
+    const result = spec.kind === 'correction'
+      ? await applyCorrection(context.scope, input, request, options, { context, prepareOnly: true })
+      : await refreshSources(context.scope, input, request, options, { context, prepareOnly: true });
+    if (!result?.preparedPlan) fail('REVIEW_INTEGRITY');
+    const plan = HISTORY_BINDING_PLANS.get(result.preparedPlan);
+    if (!plan || plan.disposed || plan.context !== context || plan.eventKey !== context.eventKey
+      || plan.actorId !== context.actorId || plan.baseVersion?.versionId !== spec.baseVersionId
+      || plan.baseVersion?.contentHash !== spec.baseContentHash) {
+      disposeBindingRevisionPlan(result.preparedPlan);
+      fail('REVIEW_INTEGRITY');
+    }
+    plan.bindingKind = spec.kind;
+    plan.bindingOperationKey = spec.operationKey;
+    plan.bindingFingerprint = operationFingerprint;
+    plan.bindingBaseVersionId = spec.baseVersionId;
+    plan.bindingBaseContentHash = spec.baseContentHash;
+    plan.bindingAction = spec.action;
+    plan.bindingField = spec.field;
+    try { throwIfAborted(signal); }
+    catch (error) { disposeBindingRevisionPlan(result.preparedPlan); throw error; }
+    return Object.freeze({ mode: 'prepared', plan: result.preparedPlan });
+  }
+
+  function materializeBindingRevision(plan, database, time, signal) {
+    if (!plan || plan.disposed || signal && signal.aborted) fail('REVIEW_ABORTED');
+    if (time.effectiveNow >= plan.expiresAtMs) fail('REVIEW_EXPIRED');
+    const current = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(plan.eventKey);
+    if (!current || current.state !== 'available' || current.version_id !== plan.currentHead?.version_id
+      || current.content_hash !== plan.currentHead?.content_hash || current.revision !== plan.currentHead?.revision
+      || current.expires_at_ms !== plan.currentHead?.expires_at_ms || current.expires_at_ms <= time.effectiveNow) fail('REVIEW_VERSION_CONFLICT');
+    const rows = database.prepare(`SELECT r.* FROM downstream_references AS r
+      WHERE r.event_key = ? AND r.bound_version_id = ? AND r.bound_content_hash = ?
+      AND NOT EXISTS (SELECT 1 FROM invalidations AS i WHERE i.event_key = r.event_key
+        AND i.reference_hash = r.reference_hash AND i.prior_version_id = r.bound_version_id
+        AND i.prior_content_hash = r.bound_content_hash) ORDER BY r.reference_hash LIMIT 129`)
+      .all(plan.eventKey, current.version_id, current.content_hash);
+    if (rows.length > 128 || bindingReferenceDigest(rows) !== plan.referenceDigest) fail('REVIEW_BUSY');
+    const revision = current.revision + 1;
+    if (!Number.isSafeInteger(revision) || revision > limits.maxRevisionsPerHistory) fail('REVIEW_STORAGE_LIMIT');
+    const createdAt = new Date(time.now).toISOString();
+    const nextState = plan.state.build(revision, keyed(plan.context.info, plan.indexKey, 'actor', plan.actorId), createdAt);
+    const invalidations = plan.references.map((reference) => ({
+      referenceId: reference.referenceId,
+      referenceKind: reference.kind,
+      priorVersionId: current.version_id,
+      priorContentHash: current.content_hash,
+      reason: plan.state.materialChanged ? 'material_projection_changed' : 'new_version_requires_new_binding',
+      materialChange: plan.state.materialChanged,
+      createdAt,
+    })).sort((left, right) => left.referenceId.localeCompare(right.referenceId));
+    const snapshot = buildSnapshot({ eventId: plan.eventId, eventKey: plan.eventKey, revision,
+      parentVersionId: current.version_id, createdAt, retention: plan.retention, state: nextState,
+      invalidations, indexKey: plan.indexKey });
+    const sealed = seal(plan.context.info, `${plan.eventKey}:${snapshot.versionId}`, 'version',
+      plan.payloadKeyId, plan.payloadKey, snapshot);
+    if (sealed.byteLength > MAX_VERSION_SEALED_BYTES) fail('REVIEW_STORAGE_LIMIT');
+    const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
+      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
+      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
+    if (liveBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+    return Object.freeze({ snapshot, sealed, currentHead: current, referenceDigest: plan.referenceDigest,
+      liveBytes, now: time.now, effectiveNow: time.effectiveNow });
+  }
+
+  function verifyPreparedRevisionAdmission(database, head, plan, prepared, effectiveNow) {
+    if (!plan || !prepared || plan.materialized !== prepared || plan.disposed
+      || !head || head.state !== 'available' || head.version_id !== plan.currentHead?.version_id
+      || head.content_hash !== plan.currentHead?.content_hash || head.revision !== plan.currentHead?.revision
+      || head.expires_at_ms !== plan.currentHead?.expires_at_ms || head.expires_at_ms <= effectiveNow
+      || prepared.snapshot.parentVersionId !== head.version_id || prepared.snapshot.revision !== head.revision + 1
+      || plan.expiresAtMs <= effectiveNow) fail('REVIEW_VERSION_CONFLICT');
+    const rows = database.prepare(`SELECT r.* FROM downstream_references AS r
+      WHERE r.event_key = ? AND r.bound_version_id = ? AND r.bound_content_hash = ?
+      AND NOT EXISTS (SELECT 1 FROM invalidations AS i WHERE i.event_key = r.event_key
+        AND i.reference_hash = r.reference_hash AND i.prior_version_id = r.bound_version_id
+        AND i.prior_content_hash = r.bound_content_hash) ORDER BY r.reference_hash LIMIT 129`)
+      .all(plan.eventKey, head.version_id, head.content_hash);
+    if (rows.length > 128 || bindingReferenceDigest(rows) !== plan.referenceDigest) fail('REVIEW_BUSY');
+    const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
+      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
+      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
+    if (liveBytes + prepared.sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+    return true;
+  }
+
+  async function commitPreparedBindingRevision(context, operation, planToken, signal) {
+    const plan = HISTORY_BINDING_PLANS.get(planToken);
+    if (!plan || plan.disposed || plan.context !== context || !plan.materialized
+      || operation.operationId === undefined || operation.baseVersionId !== plan.bindingBaseVersionId
+      || operation.baseContentHash !== plan.bindingBaseContentHash || operation.kind !== plan.bindingKind) fail('REVIEW_BUSY');
+    throwIfAborted(signal);
+    const boundary = boundaryFor(context.info, context.actorId, context.eventId,
+      plan.bindingAction === 'apply_correction' ? 'review.history.apply_correction' : 'review.history.refresh_source_facts',
+      plan.bindingField, context.request, {
+        operationId: operation.operationId,
+        fence: operation.fence,
+        operationFingerprint: plan.bindingFingerprint,
+        baseVersionId: operation.baseVersionId,
+        baseContentHash: operation.baseContentHash,
+        targetVersionId: plan.materialized.snapshot.versionId,
+        targetContentHash: plan.materialized.snapshot.contentHash,
+        expiresAtMs: plan.expiresAtMs,
+      }, plan.expiresAtMs);
+    try {
+      return await withBindingTransaction(context.info, context.directory, (database, time) => {
+        throwIfAborted(signal);
+        const snapshot = plan.materialized.snapshot;
+        const sealed = plan.materialized.sealed;
+        if (time.effectiveNow >= plan.expiresAtMs) fail('REVIEW_EXPIRED');
+        const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
+        if (!head || head.state !== 'available' || head.version_id !== operation.baseVersionId
+          || head.content_hash !== operation.baseContentHash || head.revision + 1 !== snapshot.revision
+          || head.version_id !== plan.materialized.currentHead.version_id
+          || head.content_hash !== plan.materialized.currentHead.content_hash
+          || head.expires_at_ms <= time.effectiveNow) fail('REVIEW_VERSION_CONFLICT');
+        const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
+        const receipt = database.prepare(`SELECT * FROM correction_cache_operations
+          WHERE event_key = ? AND operation_id = ?`).get(context.eventKey, operation.operationId);
+        if (!state || state.operation_id !== operation.operationId || state.fence !== operation.fence
+          || state.phase !== 'pending_correction' || state.base_version_id !== operation.baseVersionId
+          || state.base_content_hash !== operation.baseContentHash || state.target_version_id !== null
+          || !receipt || receipt.operation_id !== operation.operationId || receipt.phase !== 'pending_correction'
+          || receipt.fence !== operation.fence || receipt.base_version_id !== operation.baseVersionId
+          || receipt.base_content_hash !== operation.baseContentHash) fail('REVIEW_BUSY');
+        const rows = database.prepare(`SELECT r.* FROM downstream_references AS r
+          WHERE r.event_key = ? AND r.bound_version_id = ? AND r.bound_content_hash = ?
+          AND NOT EXISTS (SELECT 1 FROM invalidations AS i WHERE i.event_key = r.event_key
+            AND i.reference_hash = r.reference_hash AND i.prior_version_id = r.bound_version_id
+            AND i.prior_content_hash = r.bound_content_hash) ORDER BY r.reference_hash LIMIT 129`)
+          .all(context.eventKey, head.version_id, head.content_hash);
+        if (rows.length > 128 || bindingReferenceDigest(rows) !== plan.referenceDigest) fail('REVIEW_BUSY');
+        const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
+          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
+          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
+        if (liveBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+        const existing = database.prepare('SELECT fingerprint, version_id FROM idempotency WHERE event_key = ? AND key_hash = ?')
+          .get(context.eventKey, plan.keyHash);
+        if (existing) {
+          if (existing.fingerprint !== plan.fingerprint) fail('REVIEW_IDEMPOTENCY_CONFLICT');
+          fail('REVIEW_BUSY');
+        }
+        database.prepare(`INSERT INTO versions
+          (event_key, revision, version_id, parent_version_id, content_hash, material_hash, expires_at_ms,
+           encryption_key_id, sealed, state)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available')`).run(context.eventKey, snapshot.revision,
+          snapshot.versionId, snapshot.parentVersionId, snapshot.contentHash, snapshot.materialHash,
+          plan.expiresAtMs, plan.payloadKeyId, sealed);
+        database.prepare(`UPDATE heads SET revision = ?, version_id = ?, content_hash = ?, material_hash = ?,
+          expires_at_ms = ?, state = 'available' WHERE event_key = ?`).run(snapshot.revision,
+          snapshot.versionId, snapshot.contentHash, snapshot.materialHash, plan.expiresAtMs, context.eventKey);
+        for (const invalidation of snapshot.invalidations) {
+          database.prepare(`INSERT INTO invalidations
+            (event_key, reference_hash, prior_version_id, prior_content_hash, next_version_id, material_change, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(context.eventKey,
+            keyed(context.info, plan.indexKey, 'reference', invalidation.referenceId), invalidation.priorVersionId,
+            invalidation.priorContentHash, snapshot.versionId, invalidation.materialChange ? 1 : 0,
+            invalidation.reason, invalidation.createdAt);
+        }
+        database.prepare('INSERT INTO idempotency (event_key, key_hash, fingerprint, version_id) VALUES (?, ?, ?, ?)')
+          .run(context.eventKey, plan.keyHash, plan.fingerprint, snapshot.versionId);
+        recordBindingTargetInTransaction(database, { context, operation }, snapshot.versionId, snapshot.contentHash, time.now);
+        return Object.freeze({ snapshot, replayed: false, invalidations: snapshot.invalidations });
+      }, signal, () => reauthorizeRequest(context.info, context.request, context.eventId,
+        plan.bindingAction, context.actorId, plan.bindingField), boundary);
+    } finally {
+      disposeBindingRevisionPlan(planToken);
+    }
+  }
+
+  async function bindingApplyHistoryOperation(context, operation, input, request, signal, planToken = undefined) {
+    if (planToken !== undefined) return commitPreparedBindingRevision(context, operation, planToken, signal);
     const options = signal === undefined ? undefined : Object.freeze({ signal });
     if (operation.kind === 'correction') return applyCorrection(context.scope, input, request, options, { context, operation });
     if (operation.kind === 'source_refresh') return refreshSources(context.scope, input, request, options, { context, operation });
@@ -2811,9 +3247,11 @@ export function createCorrectionHistoryStore(options) {
         database.prepare(`UPDATE correction_cache_state SET phase = 'complete', target_version_id = ?,
           target_content_hash = ?, updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?`)
           .run(operation.baseVersionId, operation.baseContentHash, now, context.eventKey, operation.operationId, operation.fence);
-        database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?
+        database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?,
+          base_version_id = ?, base_content_hash = ?, fence = ?, phase = 'complete'
           WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
-          .run(operation.baseVersionId, operation.baseContentHash, context.eventKey, state.operation_hash, operation.operationId);
+          .run(operation.baseVersionId, operation.baseContentHash, operation.baseVersionId,
+            operation.baseContentHash, operation.fence, context.eventKey, state.operation_hash, operation.operationId);
       }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
         'record_downstream_reference', context.actorId), boundary);
       return Object.freeze({ bindingId: operation.bindingId, profileRef: input.profileRef, replayed: false });
@@ -2892,6 +3330,9 @@ export function createCorrectionHistoryStore(options) {
       }
       database.prepare("UPDATE correction_cache_state SET phase = 'cache_invalidating', updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?")
         .run(time.now, context.eventKey, operation.operationId, operation.fence);
+      database.prepare(`UPDATE correction_cache_operations SET phase = 'cache_invalidating', fence = ?
+        WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
+        .run(operation.fence, context.eventKey, state.operation_hash, operation.operationId);
     }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
       context.action, context.actorId, context.field), boundaryFor(context.info, context.actorId, context.eventId,
       'review.history.cache_operation_state', context.field, context.request, {
@@ -2926,9 +3367,11 @@ export function createCorrectionHistoryStore(options) {
       if (pending !== 0) fail('REVIEW_BUSY');
       database.prepare("UPDATE correction_cache_state SET phase = 'complete', updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?")
         .run(time.now, context.eventKey, operation.operationId, operation.fence);
-      database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?
+      database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?,
+        base_version_id = ?, base_content_hash = ?, fence = ?, phase = 'complete'
         WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
-        .run(operation.targetVersionId, operation.targetContentHash, context.eventKey, state.operation_hash, operation.operationId);
+        .run(operation.targetVersionId, operation.targetContentHash, operation.baseVersionId,
+          operation.baseContentHash, operation.fence, context.eventKey, state.operation_hash, operation.operationId);
       return Object.freeze({ completed: true });
     }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
       context.action, context.actorId, context.field), boundaryFor(context.info, context.actorId, context.eventId,
@@ -3071,8 +3514,11 @@ export function createCorrectionHistoryStore(options) {
     readVersion: bindingReadVersion,
     readOperationResult: bindingReadOperationResult,
     validateOperationInput: validateBindingRevisionInput,
+    prepareRevision: bindingPrepareRevision,
+    disposeRevisionPlan: disposeBindingRevisionPlan,
     beginOperation: beginBindingOperation,
-    applyOperation: bindingApplyHistoryOperation,
+    applyOperation: (context, operation, input, request, signal, planToken) =>
+      bindingApplyHistoryOperation(context, operation, input, request, signal, planToken),
     addCacheProfile: bindingAddCacheProfile,
     bindings: bindingRows,
     markInvalidated: markBindingInvalidated,

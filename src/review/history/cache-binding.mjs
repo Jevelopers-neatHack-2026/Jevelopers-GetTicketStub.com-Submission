@@ -304,6 +304,7 @@ export function createCorrectionCacheBinding(options) {
       const profile = cleanCacheInput(input.profile);
       const { scopes, historyContext, cacheContext } = await pairedContexts(scope, request, eventId,
         'read_history', 'private_profile.write', undefined, signal);
+      let preflightToken;
       try {
         const operationInput = Object.freeze({
           eventId: historyContext.eventId,
@@ -322,8 +323,15 @@ export function createCorrectionCacheBinding(options) {
         const projectionHash = sha256(canonical(projection));
         const projectedProfile = Object.freeze({ ...effectiveProfile, facts: projection });
         // Check cache limits against the facts that will be stored, while preserving the caller input schema.
-        const preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request,
-          projectedProfile, signal, capability, profile.facts);
+        const historyBindingPreflight = Object.freeze({
+          eventId: historyContext.eventId,
+          historyVersionId: bindHead.snapshot.versionId,
+          historyContentHash: bindHead.snapshot.contentHash,
+          historyProjectionHash: projectionHash,
+          historyExpiresAtMs,
+        });
+        preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request,
+          projectedProfile, signal, capability, profile.facts, historyBindingPreflight);
         if (signal.aborted) fail('REVIEW_ABORTED');
         const operation = await historyPort.beginOperation(historyContext, {
           kind: 'bind', operationKey: input.idempotencyKey, normalizedInput: operationInput,
@@ -386,6 +394,7 @@ export function createCorrectionCacheBinding(options) {
             replayed: stored.replayed === true });
         } finally { fence.close(); }
       } finally {
+        if (preflightToken) cachePort.disposePreflight(preflightToken, capability);
         historyPort.disposeContext(historyContext);
       }
     }, call?.signal, operationTimeoutMs);
@@ -423,19 +432,35 @@ export function createCorrectionCacheBinding(options) {
       const action = kind === 'correction' ? 'apply_correction' : 'refresh_source_facts';
       const { scopes, historyContext } = await pairedContexts(scope, request, raw.eventId,
         action, 'cache.invalidate', kind === 'correction' ? raw.field : undefined, signal);
+      let revisionPlan;
       try {
         historyPort.validateOperationInput(historyContext, kind, cleanInput);
+        const prepared = await historyPort.prepareRevision(historyContext, {
+          kind,
+          operationKey: raw.idempotencyKey,
+          normalizedInput,
+          baseVersionId: raw.baseVersionId,
+          baseContentHash: raw.baseContentHash,
+          action,
+          ...(kind === 'correction' ? { field: raw.field } : {}),
+        }, cleanInput, request, signal);
+        if (prepared.mode === 'replay') {
+          const snapshot = await historyPort.readOperationResult(historyContext, prepared.operation, request, action, signal);
+          return correctionResult(snapshot, true);
+        }
+        if (prepared.mode === 'prepared') revisionPlan = prepared.plan;
         const operation = await historyPort.beginOperation(historyContext, {
           kind, operationKey: raw.idempotencyKey, normalizedInput,
           baseVersionId: raw.baseVersionId, baseContentHash: raw.baseContentHash,
           action, ...(kind === 'correction' ? { field: raw.field } : {}),
+          ...(revisionPlan ? { preparedRevision: revisionPlan } : {}),
         }, request, signal);
         if (operation.replayed) {
           const snapshot = await historyPort.readOperationResult(historyContext, operation, request, action, signal);
           return correctionResult(snapshot, true);
         }
         if (signal.aborted) fail('REVIEW_ABORTED');
-        const revised = await historyPort.applyOperation(historyContext, operation, cleanInput, request, signal);
+        const revised = await historyPort.applyOperation(historyContext, operation, cleanInput, request, signal, revisionPlan);
         if (signal.aborted) fail('REVIEW_ABORTED');
         const targetOperation = Object.freeze({ ...operation,
           targetVersionId: revised.snapshot.versionId,
@@ -460,6 +485,7 @@ export function createCorrectionCacheBinding(options) {
         const snapshot = await historyPort.readOperationResult(historyContext, targetOperation, request, action, signal);
         return correctionResult(snapshot, revised.replayed);
       } finally {
+        if (revisionPlan) historyPort.disposeRevisionPlan(revisionPlan);
         historyPort.disposeContext(historyContext);
       }
     }, call?.signal, operationTimeoutMs);

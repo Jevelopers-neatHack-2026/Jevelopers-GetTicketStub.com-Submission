@@ -12,6 +12,8 @@ The explicit materiality rule is based on the visible projected facts, their sou
 
 The private cache-composition seam is documented in [correction-cache-binding.md](correction-cache-binding.md). It adds a separate durable barrier and encrypted exact binding for composed history/cache reads; the standalone history store does not claim a global transaction with the cache database.
 
+For composed correction and source-refresh operations, the facade prepares the complete next immutable snapshot and its local invalidation rows against the exact current base before it writes the durable cache-operation barrier. The same full snapshot is checked for aggregate source-claim, reference, and sealed-byte limits, then revalidated with the base head and reference digest before commit. Unsupported deterministic input leaves the prior history readable and creates no barrier; an uncertain failure after the barrier preserves the exact operation for retry. Durable replay receipts include the operation's base, target, fence, and phase. Legacy rows receive those fields only when the current operation state proves them; unprovable completed rows are kept fail closed rather than assigned a synthetic fence.
+
 ## Trusted host preconditions
 
 The application composition root must provide:

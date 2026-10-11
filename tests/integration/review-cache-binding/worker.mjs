@@ -102,18 +102,27 @@ const store = createCorrectionCacheBinding({
 const scope = await store.scopeForAuthenticatedRequest(request);
 if (mode === 'compete') writeFileSync(markerPath, 'ready-before-composed-correction');
 
-try {
-  const result = await store.applyCorrection(scope, {
-    eventId,
-    baseVersionId,
-    baseContentHash,
-    field: 'event_date',
-    value: { precision: 'date', value: '2027-06-22' },
-    idempotencyKey,
-    retentionHandle: Object.freeze(Object.create(null)),
-  }, request);
-  process.stdout.write(JSON.stringify({ outcome: 'committed', revision: result.snapshot.revision }));
-} catch (error) {
-  process.stdout.write(JSON.stringify({ outcome: 'error', code: error?.code ?? 'UNKNOWN' }));
-  if (mode === 'compete') process.exitCode = 1;
+if (mode === 'read-history') {
+  try {
+    const result = await store.getHistory(scope, eventId, request);
+    process.stdout.write(JSON.stringify({ outcome: 'read', revision: result.revision }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ outcome: 'error', code: error?.code ?? 'UNKNOWN' }));
+  }
+} else {
+  try {
+    const result = await store.applyCorrection(scope, {
+      eventId,
+      baseVersionId,
+      baseContentHash,
+      field: 'event_date',
+      value: { precision: 'date', value: mode === 'retry-correction' ? '2027-06-24' : '2027-06-22' },
+      idempotencyKey,
+      retentionHandle: Object.freeze(Object.create(null)),
+    }, request);
+    process.stdout.write(JSON.stringify({ outcome: 'committed', revision: result.snapshot.revision }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ outcome: 'error', code: error?.code ?? 'UNKNOWN' }));
+    if (mode === 'compete') process.exitCode = 1;
+  }
 }

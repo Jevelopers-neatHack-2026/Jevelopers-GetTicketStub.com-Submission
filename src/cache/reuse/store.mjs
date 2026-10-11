@@ -1072,6 +1072,118 @@ export function createScopedReuseStore(options) {
     }
   }
 
+  function assertBoundHistoryEventsFit(consumers, keys, binding, contentHash) {
+    const targets = consumers.length > 0 ? consumers : [null];
+    for (const consumerRef of targets) {
+      const event = {
+        eventId: 'e'.repeat(36),
+        reason: 'history_version_changed',
+        entryRef: 'p'.repeat(36),
+        contentHash,
+        version: Number.MAX_SAFE_INTEGER,
+        consumerRef,
+        createdAtMs: MAX_TIME,
+        bindingId: 'b'.repeat(36),
+        historyOperationId: 'o'.repeat(36),
+        priorHistoryVersionId: binding.historyVersionId,
+        priorHistoryContentHash: binding.historyContentHash,
+        targetHistoryVersionId: 'v'.repeat(36),
+        targetHistoryContentHash: 'h'.repeat(64),
+      };
+      sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'outbox', event.eventId, event, MAX_INVALIDATION_RECORD_BYTES);
+      sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash, 'outbox', event.eventId, {
+        ...event,
+        deliveryAttemptId: 'd'.repeat(36),
+        deliveryAttemptNumber: Number.MAX_SAFE_INTEGER,
+      }, MAX_INVALIDATION_RECORD_BYTES);
+    }
+  }
+
+  function disposeBoundProfilePreflight(preflightToken) {
+    if (!preflightToken || (typeof preflightToken !== 'object' && typeof preflightToken !== 'function')) return;
+    const preflight = boundProfilePreflights.get(preflightToken);
+    if (!preflight) return;
+    boundProfilePreflights.delete(preflightToken);
+    for (const key of [preflight.keys?.keyInfo?.key, preflight.keys?.payloadKey?.key]) {
+      try { key?.fill(0); } catch { /* A cache-owned key copy is best-effort zeroized. */ }
+    }
+  }
+
+  function boundProfileSignature(index, input, facts, binding) {
+    return stable({
+      identity: index.identity,
+      contentHash: index.contentHash,
+      pins: index.pins,
+      facts,
+      observation: input.observation,
+      freshnessTtlMs: input.freshnessTtlMs ?? null,
+      expiresAtMs: input.expiresAtMs ?? null,
+      binding,
+    });
+  }
+
+  async function preflightBoundCacheCapacity({ info, keys, index, entryPayload, observation, consumers, binding, ttlMs }) {
+    const correctionSlots = Math.max(1, consumers.length);
+    const generalSlots = Math.max(1, consumers.length);
+    const additionalSlots = correctionSlots + generalSlots;
+    return withBindingRead((database, time) => {
+      if (time.clockRollback) fail('REUSE_DENIED');
+      const entryCount = database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count;
+      if (entryCount >= limits.maxEntries) fail('REUSE_CAPACITY');
+      const historicalCap = database.prepare(`SELECT MIN(expires_at_ms) AS expires_at_ms FROM reuse_entries
+        WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND identity_hash = ? AND cache_key_hash = ?`)
+        .get(keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
+      const effectiveExpiry = Math.min(entryPayload.retentionPolicy.expiresAtMs,
+        binding.historyExpiresAtMs, historicalCap ?? MAX_TIME);
+      if (effectiveExpiry <= time.now || effectiveExpiry > binding.historyExpiresAtMs
+        || ttlMs > effectiveExpiry - time.now) fail('REUSE_POLICY_UNAVAILABLE');
+      const retentionPolicy = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: effectiveExpiry });
+      const versionedPayload = freeze({ ...entryPayload, retentionPolicy, version: Number.MAX_SAFE_INTEGER });
+      const entry = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'entry', 'p'.repeat(36), versionedPayload);
+      let additionalPayloadBytes = 0;
+      for (const consumerRef of consumers) {
+        const consumerHash = mac(keys.keyInfo.key, consumerRef);
+        const consumerPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+          'consumer_ref', `${'p'.repeat(36)}:${consumerHash}`, { consumerRef });
+        additionalPayloadBytes += consumerPayload.byteLength;
+      }
+      const observationPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'observation', 'o'.repeat(36), {
+          status: 'body_changed',
+          retrievedAtMs: observation.retrievedAtMs,
+          validatedAtMs: observation.validatedAtMs,
+          contentHash: index.contentHash,
+          sourceVersion: observation.sourceVersion,
+          attemptLineage: observation.attemptLineage,
+        });
+      additionalPayloadBytes += observationPayload.byteLength;
+      const reservation = {
+        bindingId: 'b'.repeat(36),
+        eventId: binding.eventId,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        operationId: 'o'.repeat(36),
+        profileRef: 'p'.repeat(36),
+        bindingHash: 'h'.repeat(64),
+        identity: index.identity,
+        pins: index.pins,
+        contentHash: index.contentHash,
+        version: Number.MAX_SAFE_INTEGER,
+        expiresAtMs: effectiveExpiry,
+        outboxSlots: correctionSlots,
+        consumers,
+      };
+      const reserved = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'correction_reservation', reservation.profileRef, reservation);
+      assertOutboxHeadroom(database, additionalSlots);
+      ensureStorageCapacity(database, entry.byteLength + reserved.byteLength + additionalPayloadBytes, 0, additionalSlots);
+      return Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: effectiveExpiry });
+    });
+  }
+
   function registeredConsumers(database, entry, payload, keys) {
     const refs = new Set(payload.consumers ?? []);
     const rows = database.prepare('SELECT * FROM reuse_consumer_refs WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?').all(entry.entry_id, entry.scope_kind, entry.partition_hash);
@@ -1307,6 +1419,7 @@ export function createScopedReuseStore(options) {
         : Math.min(entryPayload.retentionPolicy.expiresAtMs, historicalCap);
       if (fixedExpiry <= time.effectiveNow || fixedExpiry > binding.historyExpiresAtMs) fail('REUSE_POLICY_UNAVAILABLE');
       const version = nextVersion(database, 'tenant_private', keys.partitionHash, keys.identityHash);
+      if (!Number.isSafeInteger(version) || version < 1 || version > Number.MAX_SAFE_INTEGER) fail('REUSE_CAPACITY');
       const fixedRetention = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: fixedExpiry });
       const versionedPayload = freeze({ ...entryPayload, retentionPolicy: fixedRetention, version });
       const sealed = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash, 'entry', profileRef, versionedPayload);
@@ -1381,8 +1494,8 @@ export function createScopedReuseStore(options) {
     const ttlMs = preflight?.ttlMs ?? input.freshnessTtlMs ?? limits.defaultFreshnessTtlMs;
     const retentionBaseNow = preflight?.nowMs ?? now;
     if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > retention.expiresAtMs - retentionBaseNow) fail('REUSE_INVALID');
-    let privateReferences = { permissions: [], sourceRefs: [], correctionRefs: [] };
-    if (typeof config.resolvePrivateProfileReferences === 'function') {
+    let privateReferences = preflight?.privateReferences ?? { permissions: [], sourceRefs: [], correctionRefs: [] };
+    if (!preflight && typeof config.resolvePrivateProfileReferences === 'function') {
       let references;
       try {
         references = await config.resolvePrivateProfileReferences(Object.freeze({
@@ -1406,24 +1519,28 @@ export function createScopedReuseStore(options) {
       if (signalAborted(external.signal)) fail('REUSE_DENIED');
     }
     const permissions = validatePermissions(scopeKind === 'public_profile' ? (external.publicPermissions ?? []) : privateReferences.permissions);
-    const lineage = await resolveLineage(info, request, Object.freeze({
+    const lineage = preflight?.lineage ?? await resolveLineage(info, request, Object.freeze({
       kind: scopeKind,
       identity: parsedIdentity,
       contentHash: index.contentHash,
       version: 1,
       observation: observation.status,
     }));
-    await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
-    if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    const consumers = await resolveConsumers(info, request, Object.freeze({
+    if (!preflight) {
+      await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
+      if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    }
+    const consumers = preflight?.consumers ?? await resolveConsumers(info, request, Object.freeze({
       identity: parsedIdentity,
       contentHash: index.contentHash,
       scopeKind,
       ...(scopeKind === 'public_profile' ? { publicSafeOnly: true } : {}),
     }));
-    await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
-    if (signalAborted(external.signal)) fail('REUSE_DENIED');
-    const keys = await keyParts(info, scopeKind, index, async () => {
+    if (!preflight) {
+      await authorize(info, request, scopeKind === 'public_profile' ? 'public_profile.publish' : 'private_profile.write');
+      if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    }
+    const keys = preflight?.keys ?? await keyParts(info, scopeKind, index, async () => {
       await authorize(info, request, writeAction);
       if (signalAborted(external.signal)) fail('REUSE_DENIED');
     });
@@ -1612,34 +1729,51 @@ export function createScopedReuseStore(options) {
       || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash)
       || !Number.isSafeInteger(binding.historyExpiresAtMs)) fail('REUSE_INVALID');
     const facts = copyFacts(input.facts);
-    copyIndex(input);
+    const index = copyIndex(input);
     const preflight = preflightToken && boundProfilePreflights.get(preflightToken);
-    const signature = stable({ identity: identity(input.identity), contentHash: hashValue(input.contentHash),
-      pins: pins(input.pins), observation: input.observation,
-      freshnessTtlMs: input.freshnessTtlMs ?? null });
-    if (!preflight || preflight.used || preflight.info !== info || preflight.request !== request
-      || preflight.signature !== signature) fail('REUSE_INVALID');
-    preflight.used = true;
-    await authorize(info, request, 'private_profile.write');
-    if (signalAborted(signal)) fail('REUSE_DENIED');
-    return storeProfile(info, request, 'tenant_private', input, facts, {
-      correctionBinding: Object.freeze({ ...binding, operationId: operation.operationId }),
-      bindingOperation: operation,
-      commitGate,
-      signal,
-      boundProfilePreflight: preflight,
+    const bindingCoordinates = Object.freeze({
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      historyExpiresAtMs: binding.historyExpiresAtMs,
     });
+    const signature = boundProfileSignature(index, input, facts, bindingCoordinates);
+    if (!preflight || preflight.used || preflight.info !== info || preflight.request !== request
+      || preflight.signature !== signature || stable(preflight.binding) !== stable(bindingCoordinates)) fail('REUSE_INVALID');
+    preflight.used = true;
+    try {
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      return await storeProfile(info, request, 'tenant_private', input, facts, {
+        correctionBinding: Object.freeze({ ...binding, operationId: operation.operationId }),
+        bindingOperation: operation,
+        commitGate,
+        signal,
+        boundProfilePreflight: preflight,
+      });
+    } finally {
+      disposeBoundProfilePreflight(preflightToken);
+    }
   }
 
-  async function validateBoundPrivateProfileInput(scope, request, inputValue, signal, capability, callerFacts) {
+  async function validateBoundPrivateProfileInput(scope, request, inputValue, signal, capability, callerFacts, bindingValue) {
     if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
     const info = scopeInfo(scope);
     const input = record(inputValue, new Set([
       'identity', 'contentHash', 'pins', 'facts', 'observation', 'freshnessTtlMs', 'expiresAtMs',
     ]));
-    if (!input || !Object.hasOwn(input, 'facts') || !Object.hasOwn(input, 'observation')) fail('REUSE_INVALID');
+    const binding = record(bindingValue, new Set([
+      'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash', 'historyExpiresAtMs',
+    ]));
+    if (!input || !Object.hasOwn(input, 'facts') || !Object.hasOwn(input, 'observation')
+      || !binding || !string(binding.eventId, 180) || !string(binding.historyVersionId, 180)
+      || !/^[a-f0-9]{64}$/.test(binding.historyContentHash ?? '')
+      || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash ?? '')
+      || !Number.isSafeInteger(binding.historyExpiresAtMs) || binding.historyExpiresAtMs < 0
+      || binding.historyExpiresAtMs > MAX_TIME) fail('REUSE_INVALID');
     const index = copyIndex(input);
-    copyFacts(input.facts);
+    const facts = copyFacts(input.facts);
     if (callerFacts !== undefined) copyFacts(callerFacts);
     if (input.freshnessTtlMs !== undefined
       && (!Number.isSafeInteger(input.freshnessTtlMs) || input.freshnessTtlMs < 1
@@ -1648,32 +1782,122 @@ export function createScopedReuseStore(options) {
       && (!Number.isSafeInteger(input.expiresAtMs) || input.expiresAtMs < 0 || input.expiresAtMs > MAX_TIME)) {
       fail('REUSE_INVALID');
     }
-    const now = currentTime();
-    if (signalAborted(signal)) fail('REUSE_DENIED');
-    await authorize(info, request, 'private_profile.write');
-    if (signalAborted(signal)) fail('REUSE_DENIED');
-    const observation = validateInitialObservation(
-      await verifyObservation(info, request, index.contentHash, input.observation, 'initial'), index.contentHash, now);
-    await authorize(info, request, 'private_profile.write');
-    if (signalAborted(signal)) fail('REUSE_DENIED');
-    const retention = await resolveRetention(info, 'tenant_private', now, input.expiresAtMs ?? null);
-    await authorize(info, request, 'private_profile.write');
-    if (signalAborted(signal)) fail('REUSE_DENIED');
-    const ttlMs = input.freshnessTtlMs ?? limits.defaultFreshnessTtlMs;
-    if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > retention.expiresAtMs - now) fail('REUSE_INVALID');
-    const preflightToken = opaque();
-    boundProfilePreflights.set(preflightToken, {
-      info,
-      request,
-      signature: stable({ identity: index.identity, contentHash: index.contentHash, pins: index.pins,
-        observation: input.observation, freshnessTtlMs: input.freshnessTtlMs ?? null }),
-      observation,
-      retention,
-      ttlMs,
-      nowMs: now,
-      used: false,
-    });
-    return preflightToken;
+    let keys;
+    let transferred = false;
+    try {
+      const now = currentTime();
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const observation = validateInitialObservation(
+        await verifyObservation(info, request, index.contentHash, input.observation, 'initial'), index.contentHash, now);
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      let retention = await resolveRetention(info, 'tenant_private', now, input.expiresAtMs ?? null);
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const ttlMs = input.freshnessTtlMs ?? limits.defaultFreshnessTtlMs;
+      if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > retention.expiresAtMs - now
+        || ttlMs > binding.historyExpiresAtMs - now) fail('REUSE_INVALID');
+
+      let privateReferences = { permissions: [], sourceRefs: [], correctionRefs: [] };
+      if (typeof config.resolvePrivateProfileReferences === 'function') {
+        let references;
+        try {
+          references = await config.resolvePrivateProfileReferences(Object.freeze({
+            tenantId: info.tenantId,
+            actorId: info.actorId,
+            request,
+            kind: 'tenant_private',
+            identity: index.identity,
+            contentHash: index.contentHash,
+            projection: facts,
+          }));
+        } catch { fail('REUSE_POLICY_UNAVAILABLE'); }
+        const parsed = record(references, new Set(['permissions', 'sourceRefs', 'correctionRefs']));
+        if (!parsed) fail('REUSE_POLICY_UNAVAILABLE');
+        privateReferences = {
+          permissions: validatePermissions(parsed.permissions ?? []),
+          sourceRefs: boundedRefList(parsed.sourceRefs ?? []),
+          correctionRefs: boundedRefList(parsed.correctionRefs ?? []),
+        };
+        await authorize(info, request, 'private_profile.write');
+        if (signalAborted(signal)) fail('REUSE_DENIED');
+      }
+      const lineage = await resolveLineage(info, request, Object.freeze({
+        kind: 'tenant_private', identity: index.identity, contentHash: index.contentHash,
+        version: 1, observation: observation.status,
+      }));
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const consumers = await resolveConsumers(info, request, Object.freeze({
+        identity: index.identity, contentHash: index.contentHash, scopeKind: 'tenant_private',
+      }));
+      await authorize(info, request, 'private_profile.write');
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      keys = await keyParts(info, 'tenant_private', index, async () => {
+        await authorize(info, request, 'private_profile.write');
+        if (signalAborted(signal)) fail('REUSE_DENIED');
+      });
+      assertConsumersRevocable(consumers, keys, keys.partitionHash);
+      const permissions = validatePermissions(privateReferences.permissions);
+      const correctionBinding = Object.freeze({
+        bindingId: 'b'.repeat(36),
+        eventId: binding.eventId,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        operationId: 'o'.repeat(36),
+        historyExpiresAtMs: binding.historyExpiresAtMs,
+      });
+      assertBoundHistoryEventsFit(consumers, keys, binding, index.contentHash);
+      const entryPayload = freeze({
+        kind: 'private',
+        identity: index.identity,
+        pins: index.pins,
+        contentHash: index.contentHash,
+        facts,
+        sourceVersion: observation.sourceVersion,
+        retrievedAtMs: observation.retrievedAtMs,
+        initialValidatedAtMs: observation.validatedAtMs,
+        freshnessTtlMs: ttlMs,
+        permissions,
+        sourceRefs: privateReferences.sourceRefs,
+        correctionRefs: privateReferences.correctionRefs,
+        correctionBinding,
+        lineage,
+        consumers,
+        retentionPolicy: retention,
+        rights: 'not_asserted',
+      });
+      if (Buffer.byteLength(stable(entryPayload), 'utf8') > limits.maxEntryBytes) fail('REUSE_CAPACITY');
+      retention = await preflightBoundCacheCapacity({ info, keys, index, entryPayload, observation, consumers, binding, ttlMs });
+      if (signalAborted(signal)) fail('REUSE_DENIED');
+      const cacheSignature = boundProfileSignature(index, input, facts, binding);
+      const preflightToken = opaque();
+      boundProfilePreflights.set(preflightToken, {
+        info,
+        request,
+        signature: cacheSignature,
+        binding: Object.freeze({ ...binding }),
+        observation,
+        retention,
+        ttlMs,
+        nowMs: now,
+        privateReferences,
+        lineage,
+        consumers,
+        keys,
+        used: false,
+      });
+      transferred = true;
+      return preflightToken;
+    } finally {
+      if (!transferred && keys) {
+        try { keys.keyInfo.key.fill(0); } catch { /* Cache-owned key copy. */ }
+        try { keys.payloadKey.key.fill(0); } catch { /* Cache-owned key copy. */ }
+      }
+    }
   }
 
   async function publishReviewedPublicProfile(scope, request, inputValue) {
@@ -2998,8 +3222,12 @@ export function createScopedReuseStore(options) {
   CACHE_BINDING_PORTS.set(api, Object.freeze({
     hasBoundaryGuard: typeof config.authorizeBoundary === 'function',
     context: bindingContext,
-    validateProfileInput: (scope, request, input, signal, capability, callerFacts) =>
-      validateBoundPrivateProfileInput(scope, request, input, signal, capability, callerFacts),
+    validateProfileInput: (scope, request, input, signal, capability, callerFacts, binding) =>
+      validateBoundPrivateProfileInput(scope, request, input, signal, capability, callerFacts, binding),
+    disposePreflight: (token, capability) => {
+      if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
+      disposeBoundProfilePreflight(token);
+    },
     putProfile: (scope, request, input, binding, operation, gate, signal, capability, preflightToken) =>
       putBoundPrivateProfile(scope, request, input, binding, operation, gate, signal, capability, preflightToken),
     loadCandidate: (scope, request, binding, use, signal, capability) =>

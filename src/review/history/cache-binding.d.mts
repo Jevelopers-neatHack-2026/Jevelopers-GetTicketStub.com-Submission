@@ -80,6 +80,18 @@ export interface BoundPrivateProfileResult {
   readonly replayed: boolean;
 }
 
+type RefBearingUnavailablePrivateLookup = Extract<PrivateLookupResult,
+  Readonly<{ status: 'unavailable'; profileRef: string }>>;
+type OtherRefBearingUnavailablePrivateLookup = Omit<RefBearingUnavailablePrivateLookup, 'reason'> & Readonly<{
+  reason: Exclude<RefBearingUnavailablePrivateLookup['reason'], 'expired'>;
+}>;
+
+/** Composed reads may hide an expired profile reference after history retention ends. */
+export type ComposedPrivateLookupResult =
+  | Exclude<PrivateLookupResult, RefBearingUnavailablePrivateLookup>
+  | OtherRefBearingUnavailablePrivateLookup
+  | Readonly<{ status: 'unavailable'; reason: 'expired' }>;
+
 export interface CorrectionCacheBindingStore<Request = unknown, RetentionHandle extends object = object> {
   scopeForAuthenticatedRequest(request: Request, options?: CorrectionCacheBindingCallOptions): Promise<CorrectionCacheBindingScope>;
   createHistory(scope: CorrectionCacheBindingScope, input: CreateHistoryInput<RetentionHandle>, request: Request,
@@ -95,7 +107,7 @@ export interface CorrectionCacheBindingStore<Request = unknown, RetentionHandle 
   refreshSources(scope: CorrectionCacheBindingScope, input: SourceRefreshInput<RetentionHandle>, request: Request,
     options?: CorrectionCacheBindingCallOptions): Promise<HistoryWriteResult>;
   getPrivateProfile(scope: CorrectionCacheBindingScope, eventId: string, request: Request, lookup: LookupInput,
-    use?: string, options?: CorrectionCacheBindingCallOptions): Promise<PrivateLookupResult>;
+    use?: string, options?: CorrectionCacheBindingCallOptions): Promise<ComposedPrivateLookupResult>;
   dispatchPendingInvalidations(scope: CorrectionCacheBindingScope, request: Request, maximum?: number,
     options?: CorrectionCacheBindingCallOptions): ReturnType<ReuseStore<Request>['dispatchPendingInvalidations']>;
   outboxSnapshot(scope: CorrectionCacheBindingScope, request: Request): ReturnType<ReuseStore<Request>['outboxSnapshot']>;
