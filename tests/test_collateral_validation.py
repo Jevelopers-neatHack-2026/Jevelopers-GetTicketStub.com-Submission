@@ -4,6 +4,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ from tools.validate_collateral import (  # noqa: E402
     validate_fixture,
     validate_inventory,
     validate_inventory_provenance,
+    validate_narrative_copy,
     validate_provenance,
     validate_provenance_composition,
     validate_provenance_lineage,
@@ -66,11 +68,12 @@ class CollateralPolicyValidationTests(unittest.TestCase):
         self.assertFalse(any("CTA-PRODUCT-TRANSACTION-001" in item for item in blockers))
         self.assertFalse(any("text/JSON canary does not establish pixel redaction" in item for item in blockers))
 
-    def test_scoped_visual_redaction_evidence_replaces_blanket_pixel_blocker(self):
+    def test_scoped_visual_redaction_evidence_is_format_specific(self):
         formats = {row["format"]: row for row in self.provenance["visualReview"]["formats"]}
         self.assertIn("controlled synthetic redaction test passes", formats["SVG"]["status"])
         self.assertIn("controlled synthetic redaction test passes", formats["PNG"]["status"])
-        self.assertIn("NOT_APPLICABLE", formats["audio/video"]["status"])
+        self.assertIn("author_checks_recorded_for_silent_synthetic_rehearsal", formats["audio/video"]["status"])
+        self.assertIn("no speech/audio", formats["audio/video"]["status"])
         self.assertIn("NOT_APPLICABLE", formats["office/deck exports"]["status"])
 
     def test_unsupported_automation_live_and_savings_copy_is_rejected(self):
@@ -173,6 +176,52 @@ class CollateralPolicyValidationTests(unittest.TestCase):
         ]
         errors = validate_visual_copy(mutated, self.handoff, self.provenance)
         self.assertTrue(any("unmapped copy fragment" in item and "concept-overview.html" in item for item in errors), errors)
+
+    def test_narrative_copy_joins_exact_scenes_screen_text_and_proposals(self):
+        self.assertEqual(validate_narrative_copy(self.claims, self.provenance, self.inventory), [])
+
+        missing_screen = copy.deepcopy(self.claims)
+        missing_screen["narrativeCopy"]["screenTextUnits"].pop()
+        errors = validate_narrative_copy(missing_screen, self.provenance, self.inventory)
+        self.assertTrue(any("screenTextUnits must uniquely cover" in item for item in errors), errors)
+
+        missing_proposal = copy.deepcopy(self.claims)
+        missing_proposal["narrativeCopy"]["requiredProposalIds"].pop()
+        errors = validate_narrative_copy(missing_proposal, self.provenance, self.inventory)
+        self.assertTrue(any("proposal manifest must independently list" in item for item in errors), errors)
+
+    def test_narrative_copy_rejects_screen_text_and_proposal_claim_drift(self):
+        changed_screen = copy.deepcopy(self.claims)
+        changed_screen["narrativeCopy"]["screenTextUnits"][0]["exactText"] = "Unreviewed product result"
+        errors = validate_narrative_copy(changed_screen, self.provenance, self.inventory)
+        self.assertTrue(any("browser-visible text mapping drifted" in item for item in errors), errors)
+
+        changed_proposal = copy.deepcopy(self.claims)
+        proposal_id = changed_proposal["narrativeCopy"]["requiredProposalIds"][0]
+        proposal = next(row for row in changed_proposal["claims"] if row["id"] == proposal_id)
+        proposal["allowedWording"] += " with verified results"
+        errors = validate_narrative_copy(changed_proposal, self.provenance, self.inventory)
+        self.assertTrue(any(f"{proposal_id} exactWording differs" in item for item in errors), errors)
+
+    def test_narrative_accessible_screens_and_status_are_current(self):
+        original_read_text = Path.read_text
+
+        def altered_read_text(path, *args, **kwargs):
+            content = original_read_text(path, *args, **kwargs)
+            if path == ROOT / "demo/rehearsal-transcript.md":
+                return content.replace("- CONCEPTUAL ONLY\n", "", 1)
+            if path == ROOT / "demo/narration.md":
+                return content.replace(
+                    "The five proposed scene rows are identified in the scene-map `ledgerJoinProposals` array and mapped to `messaging/claims.json`; they remain unapproved.",
+                    "The proposed scene wording is identified in the scene-map `ledgerJoinProposals` array. It has not been merged into `messaging/claims.json`.",
+                    1,
+                )
+            return content
+
+        with mock.patch.object(Path, "read_text", new=altered_read_text):
+            errors = validate_narrative_copy(self.claims, self.provenance, self.inventory)
+        self.assertTrue(any("on-screen text differs" in item for item in errors), errors)
+        self.assertTrue(any("stale proposal-join status" in item for item in errors), errors)
 
     def test_provenance_lineage_rejects_missing_reciprocity_unknown_parent_and_cycles(self):
         baseline = copy.deepcopy(self.provenance)
@@ -358,6 +407,21 @@ class CollateralPolicyValidationTests(unittest.TestCase):
             row["lifecycleState"] = "released"
             indexed = tracked[row["path"]]
             indexed.update(lifecycleState="released", releaseEligible=True)
+            output_record = provenance_by_id[asset_id]
+            output_record.update(
+                publishability="approved",
+                reviewer="Controlled synthetic test reviewer",
+                reviewDate="2026-10-10",
+                blockers=[],
+            )
+            output_record["permission"].update(
+                status="approved",
+                reference="In-memory controlled test fixture only; no real output or external permission is asserted.",
+                owner="Controlled synthetic test fixture",
+                approvedDestinations=["controlled synthetic test destination"],
+                externalPublication="not granted",
+            )
+            output_record["allowedDestinations"] = ["controlled synthetic test destination"]
         return claims, provenance, inventory
 
     def test_controlled_release_transition_passes_validate_all_then_submission_readiness(self):

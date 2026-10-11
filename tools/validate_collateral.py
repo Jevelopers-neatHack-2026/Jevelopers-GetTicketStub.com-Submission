@@ -976,6 +976,394 @@ def validate_visual_copy(
     return errors
 
 
+def _caption_timestamp(seconds: float, comma: bool = False) -> str:
+    milliseconds = round(seconds * 1000)
+    hours, milliseconds = divmod(milliseconds, 3_600_000)
+    minutes, milliseconds = divmod(milliseconds, 60_000)
+    whole_seconds, milliseconds = divmod(milliseconds, 1_000)
+    separator = "," if comma else "."
+    return f"{hours:02}:{minutes:02}:{whole_seconds:02}{separator}{milliseconds:03}"
+
+
+def validate_narrative_copy(
+    ledger: dict[str, Any], register: dict[str, Any], inventory: dict[str, Any]
+) -> list[str]:
+    """Join scene narration, captions, browser-visible text, and alternatives to exact ledger rows."""
+    errors: list[str] = []
+    mapping = ledger.get("narrativeCopy")
+    if not isinstance(mapping, dict) or mapping.get("schemaVersion") != "1.0":
+        return ["narrativeCopy exact-copy map with schemaVersion 1.0 is required"]
+
+    claim_by_id = {
+        row.get("id"): row for row in ledger.get("claims", []) if isinstance(row, dict)
+    }
+    cta_by_id = {
+        row.get("id"): row for row in ledger.get("ctas", []) if isinstance(row, dict)
+    }
+    evidence_by_id = {
+        row.get("id"): row for row in ledger.get("evidenceClasses", []) if isinstance(row, dict)
+    }
+    provenance_by_id = {
+        row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)
+    }
+    inventory_by_path = {
+        row.get("path"): row for row in inventory.get("trackedFiles", []) if isinstance(row, dict)
+    }
+
+    def exact_source_pin(path_text: str, commit: str, digest: str, context: str) -> None:
+        path = ROOT / path_text
+        if not path.is_file():
+            errors.append(f"{context}: exact source path is missing: {path_text}")
+            return
+        actual = _sha256_path(path)
+        if digest != actual:
+            errors.append(f"{context}: source SHA-256 drift for {path_text}")
+        if not isinstance(commit, str) or not HEX40.fullmatch(commit):
+            errors.append(f"{context}: source must pin a full commit")
+            return
+        pinned = _pinned_file(commit, path_text)
+        if pinned is None or _sha256_bytes(pinned) != actual:
+            errors.append(f"{context}: pinned commit does not contain the exact current source {path_text}")
+        tracked_row = inventory_by_path.get(path_text)
+        if not tracked_row or tracked_row.get("exists") is not True:
+            errors.append(f"{context}: exact source path is not indexed in the collateral inventory: {path_text}")
+        record_id = tracked_row.get("provenanceRecordId") if tracked_row else None
+        record = provenance_by_id.get(record_id)
+        if not record or record.get("source", {}).get("path") != path_text:
+            errors.append(f"{context}: exact source path has no matching inventory/provenance join: {path_text}")
+        elif record.get("checksum", {}).get("value") != actual:
+            errors.append(f"{context}: provenance checksum drift for {path_text}")
+
+    source = mapping.get("sceneSource", {})
+    scene_path = source.get("path")
+    if scene_path != "demo/rehearsal-scenes.json":
+        errors.append("narrativeCopy must name demo/rehearsal-scenes.json as its canonical scene source")
+    else:
+        exact_source_pin(scene_path, source.get("sourceCommit"), source.get("sha256"), "narrative scene source")
+    plan_ref = mapping.get("renderPlan", {})
+    plan_path = plan_ref.get("path")
+    if plan_path != "demo/exports/rehearsal-render-plan.json":
+        errors.append("narrativeCopy must name the canonical rehearsal render plan")
+    else:
+        exact_source_pin(plan_path, plan_ref.get("sourceCommit"), plan_ref.get("sha256"), "narrative render plan")
+
+    try:
+        scenes_data = _read_json(ROOT / "demo/rehearsal-scenes.json")
+        plan_data = _read_json(ROOT / "demo/exports/rehearsal-render-plan.json")
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return errors + [f"narrative scene/render source is invalid: {exc}"]
+    scenes = scenes_data.get("scenes", [])
+    if len(scenes) != mapping.get("expectedSceneCount"):
+        errors.append("narrativeCopy expectedSceneCount does not match the source scene count")
+    if plan_data.get("scenes") != scenes:
+        errors.append("render plan scene content drifted from the canonical scene source")
+
+    proposals = {
+        row.get("id"): row for row in scenes_data.get("ledgerJoinProposals", []) if isinstance(row, dict)
+    }
+    required_proposals = mapping.get("requiredProposalIds", [])
+    if set(required_proposals) != set(proposals) or len(required_proposals) != len(proposals):
+        errors.append("narrativeCopy proposal manifest must independently list every unique source proposal")
+    for proposal_id, proposal in proposals.items():
+        claim = claim_by_id.get(proposal_id)
+        if not claim:
+            errors.append(f"narrative proposal {proposal_id} has no exact claim-ledger row")
+            continue
+        if claim.get("allowedWording") != proposal.get("exactWording"):
+            errors.append(f"narrative proposal {proposal_id} exactWording differs from its claim-ledger row")
+        if claim.get("state") not in {"mock", "planned", "blocked"} or claim.get("reviewStatus") == "approved":
+            errors.append(f"narrative proposal {proposal_id} must remain an unapproved draft/status row")
+        claim_source = claim.get("source", {})
+        if claim_source.get("path") != scene_path or claim_source.get("revision") != source.get("sourceCommit"):
+            errors.append(f"narrative proposal {proposal_id} must pin the exact scene-source commit")
+        if claim.get("requiredQualifier"):
+            related_scene_ids = proposal.get("sceneIds", [proposal.get("sceneId")])
+            if isinstance(related_scene_ids, str):
+                related_scene_ids = [related_scene_ids]
+            for scene_id in filter(None, related_scene_ids):
+                scene = next((item for item in scenes if item.get("sceneId") == scene_id), None)
+                if not scene:
+                    errors.append(f"narrative proposal {proposal_id} references unknown scene {scene_id}")
+                    continue
+                qualifiers = {
+                    claim_by_id.get(segment.get("claimId"), {}).get("requiredQualifier")
+                    for segment in scene.get("copySegments", [])
+                    if segment.get("kind") == "claim_qualifier"
+                }
+                if claim.get("requiredQualifier") not in qualifiers:
+                    errors.append(f"narrative proposal {proposal_id} lacks its exact contextual qualifier in {scene_id}")
+
+    copy_units = mapping.get("copyUnits", [])
+    copy_by_id = {row.get("unitId"): row for row in copy_units if isinstance(row, dict)}
+    expected_copy_count = sum(len(scene.get("copySegments", [])) for scene in scenes)
+    if len(copy_units) != expected_copy_count or len(copy_by_id) != len(copy_units):
+        errors.append("narrativeCopy copyUnits must uniquely cover every exact scene caption/narration segment")
+    screen_units = mapping.get("screenTextUnits", [])
+    screen_by_id = {row.get("unitId"): row for row in screen_units if isinstance(row, dict)}
+    expected_screen_count = sum(len(scene.get("screenText", [])) for scene in scenes)
+    if (
+        len(screen_units) != expected_screen_count
+        or len(screen_by_id) != len(screen_units)
+        or len(screen_units) != mapping.get("expectedScreenTextUnitCount")
+    ):
+        errors.append("narrativeCopy screenTextUnits must uniquely cover every exact scene screen-text line")
+
+    for scene in scenes:
+        scene_id = scene.get("sceneId")
+        if scene.get("captionText") != scene.get("narration"):
+            errors.append(f"{scene_id}: captionText must exactly match narration")
+        if " ".join(segment.get("text", "") for segment in scene.get("copySegments", [])) != scene.get("captionText"):
+            errors.append(f"{scene_id}: captionText must be composed from its classified copy segments")
+        for index, segment in enumerate(scene.get("copySegments", [])):
+            unit_id = f"{scene_id}::segment-{index:02}"
+            row = copy_by_id.get(unit_id)
+            if not row:
+                errors.append(f"{scene_id}: exact copy segment is unmapped ({unit_id})")
+                continue
+            if row.get("exactText") != segment.get("text") or row.get("kind") != segment.get("kind"):
+                errors.append(f"{unit_id}: mapped copy kind/text drifted from the canonical scene")
+            if row.get("sceneId") != scene_id:
+                errors.append(f"{unit_id}: mapped copy belongs to a different scene")
+            if segment.get("kind") in {"claim_wording", "claim_qualifier"}:
+                refs = [segment.get("claimId"), *segment.get("alsoClaimIds", [])]
+                for claim_id in filter(None, refs):
+                    claim = claim_by_id.get(claim_id)
+                    if not claim:
+                        errors.append(f"{unit_id}: missing claim {claim_id}")
+                        continue
+                    if segment.get("kind") == "claim_qualifier":
+                        if claim_id == segment.get("claimId") and segment.get("text") != claim.get("requiredQualifier"):
+                            errors.append(f"{unit_id}: qualifier does not exactly match {claim_id}")
+                        elif claim_id in segment.get("alsoClaimIds", []) and segment.get("text") not in {
+                            claim.get("requiredQualifier"), claim.get("allowedWording")
+                        }:
+                            errors.append(f"{unit_id}: secondary claim context does not match {claim_id}")
+                    else:
+                        source_wording = segment.get("sourceWording", segment.get("text"))
+                        if source_wording != claim.get("allowedWording"):
+                            errors.append(f"{unit_id}: sourceWording differs from {claim_id} allowedWording")
+                        if segment.get("text") not in {source_wording, source_wording + "."}:
+                            errors.append(f"{unit_id}: rendered wording drifted from the exact claim text")
+            elif segment.get("kind") == "proposed_wording":
+                proposal_id = segment.get("proposalId")
+                claim = claim_by_id.get(proposal_id)
+                if proposal_id not in proposals or not claim:
+                    errors.append(f"{unit_id}: proposed copy lacks its source proposal or ledger row")
+                elif segment.get("text") != proposals[proposal_id].get("exactWording") or segment.get("text") != claim.get("allowedWording"):
+                    errors.append(f"{unit_id}: proposed copy differs from exact proposal/ledger wording")
+            elif segment.get("kind") == "cta_wording":
+                cta = cta_by_id.get(segment.get("ctaId"))
+                if not cta or segment.get("text") != cta.get("exactText"):
+                    errors.append(f"{unit_id}: exact CTA text/ID is missing or drifted")
+            else:
+                errors.append(f"{unit_id}: unsupported copy segment kind {segment.get('kind')!r}")
+
+        for index, text in enumerate(scene.get("screenText", [])):
+            unit_id = f"{scene_id}::screen-{index:02}"
+            row = screen_by_id.get(unit_id)
+            if not row:
+                errors.append(f"{scene_id}: browser-visible text is unmapped ({unit_id})")
+                continue
+            if row.get("exactText") != text or row.get("sceneId") != scene_id:
+                errors.append(f"{unit_id}: browser-visible text mapping drifted")
+            refs = row.get("claimIds", [])
+            if any(claim_id not in claim_by_id for claim_id in refs):
+                errors.append(f"{unit_id}: browser-visible text references an unknown claim")
+            if any(claim_id not in scene.get("claimIDs", []) for claim_id in refs):
+                errors.append(f"{unit_id}: browser-visible claim reference is not attached to the same scene")
+            for claim_id in refs:
+                claim = claim_by_id[claim_id]
+                wording = claim.get("allowedWording", "")
+                qualifier = claim.get("requiredQualifier", "")
+                exact_text = row.get("exactText", "")
+                fragments = [part for part in (wording, qualifier) if part]
+                if not any(
+                    fragment.casefold().rstrip(" .") in exact_text.casefold().rstrip(" .")
+                    or exact_text.casefold().rstrip(" .") in fragment.casefold().rstrip(" .")
+                    for fragment in fragments
+                ):
+                    errors.append(f"{unit_id}: claim reference {claim_id} does not support this exact screen line")
+            for proposal_id in row.get("proposalIds", []):
+                proposal = proposals.get(proposal_id)
+                if not proposal or proposal_id not in claim_by_id:
+                    errors.append(f"{unit_id}: browser-visible status references an unknown proposal {proposal_id}")
+                elif proposal.get("exactWording", "").casefold() not in row.get("exactText", "").casefold() and row.get("exactText") not in {"Hold or revise draft", "Production handoff: planned"}:
+                    errors.append(f"{unit_id}: proposal reference does not match the source screen label")
+            for cta_id in row.get("ctaIds", []):
+                cta = cta_by_id.get(cta_id)
+                if not cta or cta.get("exactText") != row.get("exactText"):
+                    errors.append(f"{unit_id}: browser-visible CTA is not exact")
+            status = row.get("statusReference")
+            if not refs and not row.get("proposalIds") and not row.get("ctaIds") and not isinstance(status, dict):
+                errors.append(f"{unit_id}: browser-visible screen text has no claim, CTA, proposal, or status mapping")
+            if isinstance(status, dict):
+                status_type = status.get("type")
+                evidence_id = status.get("evidenceClassId")
+                if evidence_id and evidence_id not in evidence_by_id:
+                    errors.append(f"{unit_id}: status references unknown evidence class {evidence_id}")
+                if status_type == "sponsor_facet":
+                    scene_facet = next((item for item in scene.get("sponsorFacets", []) if item.get("aspect") == status.get("aspect")), None)
+                    if not scene_facet or scene_facet.get("status") != "pending" or status.get("status") != "pending" or evidence_id != scene.get("sponsorEvidenceClass"):
+                        errors.append(f"{unit_id}: sponsor facet status must match its own pending source row")
+                elif status_type == "sponsor_status" and (status.get("status") != "pending" or evidence_id != scene.get("sponsorEvidenceClass")):
+                    errors.append(f"{unit_id}: sponsor status must remain in its distinct pending class")
+                elif status_type == "provider_mode" and (status.get("value") != scene.get("providerMode") or status.get("value") != "not_run"):
+                    errors.append(f"{unit_id}: provider mode label must match not_run in the source scene")
+                elif status_type == "evidence_class_status":
+                    if status.get("status") != "pending" or "PENDING" not in row.get("exactText", ""):
+                        errors.append(f"{unit_id}: rehearsal EVAL label must preserve its source-pinned pending state")
+                elif status_type == "submission_field_status" and (status.get("status") != "pending" or "PENDING" not in row.get("exactText", "")):
+                    errors.append(f"{unit_id}: unresolved submission field must remain visibly pending")
+                elif status_type == "qualifying_status_label":
+                    if not status.get("relatedClaimIds") or any(claim_id not in scene.get("claimIDs", []) for claim_id in status.get("relatedClaimIds", [])):
+                        errors.append(f"{unit_id}: qualification label must map to the same scene's claims")
+                elif status_type == "scene_state_label":
+                    if status.get("sceneId") != scene_id or status.get("evidenceClass") != scene.get("evidenceClass") or status.get("providerMode") != scene.get("providerMode"):
+                        errors.append(f"{unit_id}: scene status label differs from its source-state record")
+                elif status_type not in {"sponsor_facet", "sponsor_status", "provider_mode", "evidence_class_status", "submission_field_status", "qualifying_status_label", "scene_state_label"}:
+                    errors.append(f"{unit_id}: unsupported screen-text status-reference kind {status_type!r}")
+
+    # Reject stale or extra copy rows, and keep the expected input surfaces independent of the source segments.
+    expected_copy_ids = {
+        f"{scene.get('sceneId')}::segment-{index:02}"
+        for scene in scenes for index, _ in enumerate(scene.get("copySegments", []))
+    }
+    if set(copy_by_id) != expected_copy_ids:
+        errors.append("narrativeCopy contains missing or stale caption/narration mapping IDs")
+    expected_screen_ids = {
+        f"{scene.get('sceneId')}::screen-{index:02}"
+        for scene in scenes for index, _ in enumerate(scene.get("screenText", []))
+    }
+    if set(screen_by_id) != expected_screen_ids:
+        errors.append("narrativeCopy contains missing or stale browser screen-text mapping IDs")
+
+    expected_surfaces = {
+        "demo/rehearsal-scenes.json", "demo/narration.md", "demo/rehearsal-transcript.md",
+        "demo/captions/silent-rehearsal.srt", "demo/captions/silent-rehearsal.vtt",
+        "demo/deck/rehearsal-scenes.html",
+    }
+    surface_rows = mapping.get("surfaces", [])
+    surface_paths = [row.get("path") for row in surface_rows if isinstance(row, dict)]
+    if set(surface_paths) != expected_surfaces or len(surface_paths) != len(expected_surfaces):
+        errors.append("narrativeCopy surfaces must independently enumerate scene, narration, transcript, both caption sidecars, and HTML")
+    for row in surface_rows:
+        if not isinstance(row, dict):
+            continue
+        path_text, asset_id = row.get("path"), row.get("assetId")
+        record_id = row.get("provenanceRecordId")
+        inv_row = inventory_by_path.get(path_text)
+        record = provenance_by_id.get(record_id)
+        if not inv_row or inv_row.get("provenanceRecordId") != record_id:
+            errors.append(f"narrative surface {path_text}: inventory/provenance ID join is missing")
+        if not record or record.get("assetId") != asset_id or record.get("source", {}).get("path") != path_text:
+            errors.append(f"narrative surface {path_text}: canonical asset provenance path/ID mismatch")
+        if path_text and (ROOT / path_text).is_file() and record and record.get("checksum", {}).get("value") != _sha256_path(ROOT / path_text):
+            errors.append(f"narrative surface {path_text}: current bytes do not match canonical provenance checksum")
+
+    # The HTML embeds exact scene and cue data; fixed labels are explicitly classified as draft/accessibility state.
+    html_map = mapping.get("html", {})
+    html_path = ROOT / str(html_map.get("path", ""))
+    try:
+        html_text = html_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"narrative HTML source cannot be read: {exc}")
+        html_text = ""
+    match = re.search(r"const data=(\{.*?\});const cue=", html_text, re.S)
+    if not match:
+        errors.append("narrative HTML must embed the exact render-plan data payload")
+    else:
+        try:
+            html_data = json.loads(match.group(1))
+            if html_data.get("scenes") != plan_data.get("scenes") or html_data.get("cues") != plan_data.get("cues"):
+                errors.append("narrative HTML dynamic copy differs from the pinned render plan")
+        except json.JSONDecodeError as exc:
+            errors.append(f"narrative HTML dynamic copy payload is invalid JSON: {exc}")
+    for fragment in html_map.get("staticFragments", []):
+        if not isinstance(fragment, dict) or not fragment.get("exactText") or fragment.get("exactText") not in html_text:
+            errors.append("narrative HTML fixed status/accessibility fragment is missing or unmapped")
+        elif fragment.get("role") not in {"document title status", "persistent status label", "persistent status and media label", "accessible caption region label"}:
+            errors.append("narrative HTML fixed fragment has an unsupported surface role")
+    if html_map.get("ariaLabel") and f'aria-label="{html_map["ariaLabel"]}"' not in html_text:
+        errors.append("narrative HTML accessible caption-region label is missing or drifted")
+
+    # SRT/VTT cues must match exact cue text/timestamps; no speech or audio timing is inferred.
+    for sidecar_path, is_srt in (("demo/captions/silent-rehearsal.srt", True), ("demo/captions/silent-rehearsal.vtt", False)):
+        try:
+            content = (ROOT / sidecar_path).read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"caption sidecar cannot be read: {sidecar_path}: {exc}")
+            continue
+        blocks = [block.splitlines() for block in re.split(r"\n\s*\n", content) if block.strip()]
+        if not is_srt and blocks and blocks[0] == ["WEBVTT"]:
+            blocks = blocks[1:]
+        if len(blocks) != len(plan_data.get("cues", [])):
+            errors.append(f"{sidecar_path}: cue count differs from the render plan")
+            continue
+        for index, (block, cue) in enumerate(zip(blocks, plan_data.get("cues", []))):
+            if is_srt:
+                if len(block) < 3 or block[0] != str(index + 1):
+                    errors.append(f"{sidecar_path}: malformed SRT cue {index + 1}")
+                    continue
+                timing_line, text_lines = block[1], block[2:]
+            else:
+                if len(block) < 2:
+                    errors.append(f"{sidecar_path}: malformed VTT cue {index + 1}")
+                    continue
+                timing_line, text_lines = block[0], block[1:]
+            expected_timing = f"{_caption_timestamp(cue['startSeconds'], is_srt)} --> {_caption_timestamp(cue['endSeconds'], is_srt)}"
+            if timing_line != expected_timing or " ".join(text_lines) != cue.get("text"):
+                errors.append(f"{sidecar_path}: exact cue text/timing drift at cue {index + 1}")
+
+    transcript_path = ROOT / "demo/rehearsal-transcript.md"
+    try:
+        transcript = transcript_path.read_text(encoding="utf-8")
+        transcript_captions = re.findall(r"^\*\*Caption:\*\* (.*)$", transcript, re.M)
+        if transcript_captions != [scene.get("captionText") for scene in scenes]:
+            errors.append("accessible transcript caption lines differ from the exact scene captions")
+        transcript_lines = transcript.splitlines()
+        transcript_screens: list[list[str]] = []
+        index = 0
+        while index < len(transcript_lines):
+            if transcript_lines[index] == "**On screen:**":
+                index += 1
+                while index < len(transcript_lines) and not transcript_lines[index].strip():
+                    index += 1
+                screen_lines: list[str] = []
+                while index < len(transcript_lines) and transcript_lines[index].startswith("- "):
+                    screen_lines.append(transcript_lines[index][2:])
+                    index += 1
+                transcript_screens.append(screen_lines)
+            else:
+                index += 1
+        expected_screens = [scene.get("screenText", []) for scene in scenes]
+        if transcript_screens != expected_screens:
+            errors.append("accessible transcript on-screen text differs from the exact scene screenText lines")
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"accessible transcript cannot be read: {exc}")
+
+    narration_path = ROOT / "demo/narration.md"
+    try:
+        narration = narration_path.read_text(encoding="utf-8")
+        narration_rows: dict[str, str] = {}
+        for line in narration.splitlines():
+            if not line.startswith("| `scene-"):
+                continue
+            cells = [cell.strip() for cell in line.split("|")]
+            if len(cells) == 5 and cells[1].startswith("`") and cells[1].endswith("`"):
+                narration_rows[cells[1][1:-1]] = cells[3]
+        expected_narration = {scene.get("sceneId"): scene.get("captionText") for scene in scenes}
+        if narration_rows != expected_narration:
+            errors.append("narration script rows differ from the exact scene caption/narration text")
+        if "mapped to `messaging/claims.json`; they remain unapproved." not in narration:
+            errors.append("narration script must accurately describe the five proposal rows as joined and unapproved")
+        if "It has not been merged into `messaging/claims.json`" in narration:
+            errors.append("narration script contains stale proposal-join status")
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"narration script cannot be read: {exc}")
+
+    return errors
+
+
 def validate_inventory(inventory: dict[str, Any]) -> list[str]:
     """Check exact tracked-file coverage, stable IDs, availability, lifecycle, and checksums."""
     errors: list[str] = []
@@ -1537,6 +1925,7 @@ def validate_all(
     errors.extend(validate_inventory(inventory))
     errors.extend(validate_inventory_composition(inventory, register))
     errors.extend(validate_inventory_provenance(inventory, register))
+    errors.extend(validate_narrative_copy(ledger, register, inventory))
     return errors
 
 

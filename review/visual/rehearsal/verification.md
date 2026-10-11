@@ -1,0 +1,67 @@
+# Silent synthetic rehearsal — author verification only
+
+The local candidate is `demo/exports/silent-synthetic-rehearsal.mp4`: H.264/yuv420p, 1280 × 720, 30 fps, 4,500 frames, exactly 150.000 seconds, 2,012,777 bytes. SHA-256: `c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace`. The 20 MB target is a local Git payload choice, not an organizer requirement. This is a silent, captioned rehearsal; it has one video stream, no audio stream, and no embedded subtitle stream.
+
+`metadata.json` contains the machine-readable artifact path, dimensions/duration/hash, all ten scene IDs, source commit/paths/checksums, export and sidecar checksums, exact tool versions, author inspection, limitations, and pending independent review. The original rendering used general-authored sources from commit `75123ec8a99a94ecbb1227eae945efa62a175091`. The current source receipt matches commit `bcae620efd3a700397779864647e5ee38b671573`, after exact mechanical adoption of the formatted storyboard and updated narration/transcript documentation described below; the scene render contract and all rendered content remain unchanged. No claims/inventory/provenance files were edited here.
+
+## Local recipe and actual checks
+
+From the repository root, using installed local tools:
+
+```sh
+python3 tools/render_rehearsal.py
+python3 -m unittest discover -s tests -p 'test_visual_*.py' -v
+ffprobe -v error -show_format -show_streams -of json demo/exports/silent-synthetic-rehearsal.mp4
+```
+
+The Python recipe validates source status/timing/copy and pending sponsor facets, writes the editable HTML text-card source and caption sidecars, invokes local Chrome through `tools/render_rehearsal.mjs`, then encodes static cue PNGs with local FFmpeg (`libx264`, ultrafast, CRF 28, yuv420p, 30 fps, `-an`). Local concat with stream copy and `+faststart` produces the MP4. Temporary segments are removed. No paid call, remote media, provider runtime, TTS, or voice synthesis was used. Installed versions: FFmpeg/ffprobe 8.1, Chrome 154.0.8037.98, Node 24.15.0, Python 3.9.6, Pillow 11.3.0. Re-rendering resets author inspection to pending; inspect the new encoded frames before annotating a new receipt. Different platform fonts/encoder versions may change hashes even with the same recipe.
+
+The actual final browser run rendered 17 cue frames with exact source screenText and captionText matches, zero page errors, zero external requests, and no main/caption overflow. `browser.json` records measured bounds and the browser version. The plain-text fallback is deliberate: it presents the general scene text without shrinking dense workflow/support diagrams, inventing product UI, or inserting external logos. Existing visual SVG/PNG sources remain unchanged.
+
+All 22 visual tests passed, zero failures/skips, including seven rehearsal tests for actual MP4 properties, source/caption timing and text, exact browser copy/status, all 20 decoded scene boundary frames, final hashes, and rejection of malformed timing/copy/sponsor states or missing local runtime. No final-release or independent-approval status is inferred from these tests.
+
+## Captions, frames, and viewing context
+
+All ten scene start frames and the final frame before each scene ends were decoded from the final MP4 and inspected as native 1280 × 720 and landscape mobile 780 × 439 start/end pairs under `inspection/`. All 20 boundaries retain the correct scene, caption, persistent `DRAFT • SYNTHETIC REHEARSAL` / `NOT A PRODUCT DEMO • SILENT / CAPTIONED` header, and useful evidence/status labels. Tests compare decoded boundary pixels against the corresponding Chrome cue PNGs with a bounded codec-difference tolerance. This is representative frame inspection, not a claim of watching continuous 150-second playback or independent approval.
+
+There are 17 sentence-preserving caption cues. Their concatenation reproduces each general caption exactly; sidecars are `demo/captions/silent-rehearsal.srt` and `.vtt`. The shortest cue is 4.333 seconds, the maximum reading rate is 17.039 characters/second, and the longest cue is 138 characters. Every cue is checked for wrapping/overflow in the actual browser. Complete negated sentences remain together so a later cue cannot read as a positive product/savings claim. Timings match the silent scene display at 30 fps; speech synchronization is not applicable. Narration/transcript remain separate general-authored text artifacts.
+
+The intended checked mobile context is landscape/fullscreen at 780 × 439. At that width, the smallest essential 28 px sponsor/status text becomes 17.06 px, body/caption 32 px becomes 19.5 px, and heading 36 px becomes 21.94 px. Portrait inline video is not claimed readable; the packaged general transcript supplies the text equivalent. Meaningful text stays at least 5% from frame edges; main text bottoms at or before y=510 and the caption band starts y=526 and ends y=680. Caption lines fit the opaque band and do not obscure scene text.
+
+Ink `#17140F` against cream `#F4ECDD` has 15.645:1 contrast; cream against moss `#26302A` has 11.627:1. Both exceed 4.5:1 normal text, 3:1 large text (24 CSS px normal or 18.667 CSS px bold at actual viewing size), and 3:1 essential-mark thresholds. Status is written in text rather than conveyed by color. Reading order is persistent draft/silent status, exact scene text in source order, then current caption. Scene 2 retains context → design → human review; scene 3 retains hold/revise and planned handoff. Video/text-card keyboard focus is not applicable; future hosting player controls remain a destination review requirement.
+
+## Failures corrected before final candidate
+
+Initial same-document hash navigation repeated scene 1; full query-string navigation and exact DOM equality guards corrected it. Initial first-paint compositor tiling was found in decoded frames; post-resize/font/animation-frame settling corrected it. Initial balanced word segmentation split a negated sentence into a potentially misleading fragment; complete-sentence segmentation corrected it without changing general copy. A mistyped inspection path and an oversized multi-image tool output were corrected by using actual filenames and inspecting final pairs in batches of two scenes. None of those superseded exports is represented as the final candidate. The final browser and encoded-frame checks pass.
+
+## Remaining blocks
+
+All 15 sponsor architecture/implementation/runtime/reasoning/result facets remain PENDING throughout their respective sponsor scenes; providerMode remains `not_run`. Product implementation, authentic customer journey, sponsor usage, and comparable EVAL-02 savings evidence remain unverified. All submission identity/URL/cutoff fields remain pending, and final runtime evidence is blocked. Brand BK14/BK15, source rights/consent/privacy, destination release checks, general ledger/provenance/inventory joins, accountable-owner approval, and fresh independent Astra review remain external gates. This artifact is not a final sponsor-eligible video, product demo, app certification, brand approval, publication approval, or submission.
+
+## MMREL-001 receipt correction
+
+The earlier ffprobe receipt included the author checkout's absolute filename. The recipe now invokes ffprobe with the repository-relative video path and repository cwd. The refreshed filename is exactly `demo/exports/silent-synthetic-rehearsal.mp4`; dependent renderer/ffprobe checksums are refreshed in `metadata.json`. The MP4, SRT, VTT, HTML, cue PNGs, and decoded inspection PNGs were preserved byte-for-byte; no re-encoding or narrative change was needed.
+
+The regression checks the deterministic relative filename and full actual ffprobe result, copies the same MP4 into a second temporary checkout and verifies that its result is identical, scans all rehearsal JSON/Markdown receipts and the render plan for machine-local filesystem fields, and exercises positive leak cases plus public-URL exceptions. Actual second-location ffprobe reproduction passed; all 22 visual tests passed with no skips. The only local-path field found in the original tracked media reports was the corrected ffprobe filename. Independent review of this correction remains pending.
+
+The second-location regression initially exposed macOS temporary-directory alias differences. Resolving both the video and repository root before computing the relative path corrected that case. The final second-location probe and full suite pass.
+
+## Storyboard source receipt refresh
+
+The exact `demo/storyboard.md` blob from narrative commit `1d12448ed92de392f272743a19b7be87b0b301e7` removes two trailing spaces on each of the Asset and Status lines. This only changes Markdown line-break formatting; no wording, scene contract, timing, caption, claim, or media input changed. Its current SHA-256 is `90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3`, replacing `412840002cd4908961fc6a66166050307c1426c7be88062c6cd22ab94019f6da`. The actual file bytes and byte count were read to refresh `metadata.json`; all four recorded source files exactly match that narrative commit. The original rendering source commit is retained separately.
+
+Against baseline `c2badc5b297cea393c75dae28300fc60f69040b0`, all MP4/SRT/VTT/HTML/render-plan/cue-PNG/inspection-PNG bytes are unchanged. Re-encoding was unnecessary because the renderer consumes the unchanged scene JSON and does not render the Markdown storyboard. The refreshed source checksum, all other recorded hashes, the actual relative-path ffprobe result, and second-checkout receipt reproduction pass the full 22-test visual suite with no skips. MMREL-001 remains fixed; independent review and all external release gates remain pending.
+
+## Narrative/transcript source receipt refresh
+
+The exact `demo/narration.md` and `demo/rehearsal-transcript.md` blobs were mechanically adopted from general narrative commit `da10a923c37ef384b8cb8bcbf3381be40ac617df`. Narration changes only the documentation status: five proposed rows are now mapped to the ledger but remain unapproved. Its ten spoken scene strings are unchanged. The transcript now lists each scene's existing `screenText` as exact ordered bullets, correcting capitalization/punctuation and including `CONCEPTUAL ONLY`; the ten captions remain unchanged. This is a text-equivalent documentation correction, not new rendered content.
+
+Narration SHA-256 is `818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6`; transcript SHA-256 is `36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e`. The receipt hashes/byte counts were read from the exact adopted files. At that refresh all four source files matched that narrative revision; original `renderSourceCommit` remains `75123ec8a99a94ecbb1227eae945efa62a175091`. Actual comparison verifies the scene JSON is unchanged, all ten transcript bullet arrays equal scene screenText in order, every transcript caption equals captionText, and all ten narration strings remain present unchanged.
+
+Against baseline `9c25e41a58daed00d32d54557a8317ae435e3709`, all MP4/SRT/VTT/HTML/render-plan/cue-PNG/inspection-PNG bytes are unchanged. The unchanged scene JSON is the rendering input, so no re-encoding was necessary. Full 22-test visual suite passes with no skips, including receipt hashes, actual relative ffprobe filename, second-checkout reproduction, and local-path leak checks. MMREL-001 remains fixed. The source documentation status update confers no claim approval; independent review and external release gates remain pending.
+
+## Final storyboard status/source checkpoint
+
+The exact `demo/storyboard.md` blob from final general checkpoint `bcae620efd3a700397779864647e5ee38b671573` updates journey/hold-revise/event ledger references to mapped but proposed/unapproved rows. The actual diff changes only claim/status documentation in three table rows; it changes no scene JSON, displayed text, caption, narration, timing, or rendered content. Its actual SHA-256 is `b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467`. Narration/transcript remain the exact unchanged blobs adopted from `da10a923c37ef384b8cb8bcbf3381be40ac617df` with the hashes above.
+
+All four recorded source files now match `bcae620efd3a700397779864647e5ee38b671573` exactly; metadata sourceCommit and actual storyboard hash/byte count are refreshed. The original renderSourceCommit remains `75123ec8a99a94ecbb1227eae945efa62a175091`. All MP4/caption/HTML/render-plan/cue-PNG/inspection-PNG bytes remain identical to baseline `9c25e41a58daed00d32d54557a8317ae435e3709`, with no re-encoding. The full 22-test visual suite passes without skips, including the MMREL-001 relative-filename/leak regression and second-checkout ffprobe reproduction. Independent review and external release gates remain pending.

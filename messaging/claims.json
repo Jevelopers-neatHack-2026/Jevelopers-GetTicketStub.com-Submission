@@ -24,9 +24,10 @@
       "rank": 3,
       "subject": "Demonstrated product behavior",
       "canonicalSource": "Jevelopers-neatHack-2026/getticketstub.com",
-      "revision": "5a2986454297dd6df97088a8fbde69adc771f7a0",
-      "path": "docs/architecture/OWNERSHIP.md",
-      "rule": "This pinned revision is documentation-only. Use product release evidence for complete-app behavior; GT-10B evidence is limited to its scoped adapter."
+      "revision": "7f59d33922a0585205547d490b288b49eed32419",
+      "path": "README.md",
+      "rule": "PR #22 at this pin integrates the existing Next.js App Router studio/runtime. The preview defaults to demo fixtures and simulated art/agent responses; this source does not prove deployed or production behavior. Use a sanitized versioned capability manifest and producer-reviewed GT-12 #6 acceptance evidence before whole-product claims.",
+      "sha256": "896457d9b29f1ced4b326143648261a15d047348a364e7375335164c5a1cee4b"
     },
     {
       "rank": 4,
@@ -159,25 +160,27 @@
       "state": "blocked",
       "source": {
         "repo": "Jevelopers-neatHack-2026/getticketstub.com",
-        "path": "docs/architecture/OWNERSHIP.md",
-        "revision": "5a2986454297dd6df97088a8fbde69adc771f7a0",
-        "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/5a2986454297dd6df97088a8fbde69adc771f7a0/docs/architecture/OWNERSHIP.md"
+        "path": "README.md",
+        "revision": "7f59d33922a0585205547d490b288b49eed32419",
+        "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/7f59d33922a0585205547d490b288b49eed32419/README.md",
+        "sha256": "896457d9b29f1ced4b326143648261a15d047348a364e7375335164c5a1cee4b"
       },
-      "evidenceReference": "PRODUCT-RELEASE-EVIDENCE-PENDING",
-      "evidenceClassification": "documentation_only",
+      "evidenceReference": "PRODUCT-RELEASE-EVIDENCE-PENDING; GT-19 #19 capability manifest; GT-12 #6 acceptance",
+      "evidenceClassification": "prototype_implementation_and_demo_mode_documentation",
       "providerMode": "none",
       "reviewDate": null,
       "reviewer": "Product release owner; evidence and review pending.",
       "reviewStatus": "blocked",
       "limitations": [
-        "The pinned source is documentation-only.",
-        "Product PR #5 is proposed and unmerged, so it is not shipped behavior evidence.",
-        "GT-10B #19 may support only its scoped adapter behavior; GT-12 #6 is required for complete customer-application v1/release claims."
+        "PR #22, merged at commit 7f59d33922a0585205547d490b288b49eed32419, integrates the existing Next.js App Router studio/runtime; README says this does not complete issues #7, #1, or the product release criteria. PR #20 remains separate.",
+        "The documented preview defaults to demo research fixtures and simulated art/agent responses, disables arbitrary event URL fetching, and keeps checkout, sign-in, wallet passes, and QR codes simulated. The README says no live provider calls were made to validate the deployment fix.",
+        "A source tree, production build workflow, or README does not prove a deployed preview, an accepted end-to-end customer journey, live provider/sponsor activity, authentic sponsor results, or production readiness.",
+        "Current whole-product capability remains pending a sanitized, versioned capability manifest and producer-reviewed acceptance evidence tracked by GT-19 #19 and GT-12 #6."
       ],
       "reReviewTrigger": [
-        "A pinned product implementation and scoped test/evidence reference becomes available.",
-        "For whole-app wording, GT-12 release evidence changes or completes.",
-        "Any capability, provider mode, route, or limitation changes."
+        "A sanitized, versioned GT-19 capability manifest and scoped producer tests become available.",
+        "GT-12 #6 release acceptance and authentic customer-journey evidence change or complete.",
+        "Provider mode, route, implemented capability, deployment state, sponsor evidence, or limitation changes."
       ]
     },
     {
@@ -2490,6 +2493,168 @@
       "reReviewTrigger": [
         "The source text, visual, accessibility alternative, crop, asset path, brand revision, evidence, or destination changes."
       ]
+    },
+    {
+      "id": "REHEARSAL-JOURNEY-001",
+      "kind": "proposed_policy",
+      "allowedWording": "Here, one ticket idea moves from context to design and a human review.",
+      "requiredQualifier": "Conceptual only; implementation is unverified.",
+      "prohibitedVariants": [
+        "Treat the proposed sentence as proof of implemented product behavior."
+      ],
+      "audience": "Internal rehearsal reviewers; not approved as external copy.",
+      "destination": "Internal rehearsal copy only; external publication and submission remain blocked.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/rehearsal-scenes.json",
+        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/demo/rehearsal-scenes.json"
+      },
+      "evidenceReference": "demo/rehearsal-scenes.json#REHEARSAL-JOURNEY-001",
+      "evidenceClassification": "draft_rehearsal_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent and relevant producer/source-owner review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Describes the rehearsal concept without asserting implemented product behavior.",
+        "Conceptual rehearsal wording; it does not establish implemented product behavior."
+      ],
+      "reReviewTrigger": [
+        "Scene wording, source pin, associated claims, event page/cutoff, rights or intended destination changes.",
+        "Before any external use, recheck source owner and independent review."
+      ]
+    },
+    {
+      "id": "REHEARSAL-HOLD-REVISE-001",
+      "kind": "proposed_policy",
+      "allowedWording": "A reviewer may hold or revise this draft; production handoff is planned.",
+      "requiredQualifier": "This is a proposed review rule, not a verified product feature.",
+      "prohibitedVariants": [
+        "Treat the proposed sentence as proof of implemented product behavior."
+      ],
+      "audience": "Internal rehearsal reviewers; not approved as external copy.",
+      "destination": "Internal rehearsal copy only; external publication and submission remain blocked.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/rehearsal-scenes.json",
+        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/demo/rehearsal-scenes.json"
+      },
+      "evidenceReference": "demo/rehearsal-scenes.json#REHEARSAL-HOLD-REVISE-001",
+      "evidenceClassification": "draft_rehearsal_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent and relevant producer/source-owner review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Explicitly proposed human-review framing; not a verified product feature.",
+        "Proposed review-rule and production handoff wording; not a verified product feature."
+      ],
+      "reReviewTrigger": [
+        "Scene wording, source pin, associated claims, event page/cutoff, rights or intended destination changes.",
+        "Before any external use, recheck source owner and independent review."
+      ]
+    },
+    {
+      "id": "REHEARSAL-SPONSOR-FACETS-001",
+      "kind": "rehearsal_status_copy",
+      "allowedWording": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+      "prohibitedVariants": [
+        "Treat the proposed sentence as proof of implemented product behavior."
+      ],
+      "audience": "Internal rehearsal reviewers; not approved as external copy.",
+      "destination": "Internal rehearsal copy only; external publication and submission remain blocked.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/rehearsal-scenes.json",
+        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/demo/rehearsal-scenes.json"
+      },
+      "evidenceReference": "demo/rehearsal-scenes.json#REHEARSAL-SPONSOR-FACETS-001",
+      "evidenceClassification": "draft_rehearsal_copy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent and relevant producer/source-owner review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Maps each official sponsor coverage category to its current missing-evidence state.",
+        "Status-only rehearsal copy; each sponsor evidence facet remains pending and providerMode is not_run."
+      ],
+      "reReviewTrigger": [
+        "Scene wording, source pin, associated claims, event page/cutoff, rights or intended destination changes.",
+        "Before any external use, recheck source owner and independent review."
+      ]
+    },
+    {
+      "id": "EVENT-SUBMISSION-FIELDS-001",
+      "kind": "event_requirement_summary",
+      "allowedWording": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord.",
+      "prohibitedVariants": [
+        "Treat the event requirement or pending field as submission authorization."
+      ],
+      "audience": "Internal rehearsal reviewers; not approved as external copy.",
+      "destination": "Internal rehearsal copy only; external publication and submission remain blocked.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/rehearsal-scenes.json",
+        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/demo/rehearsal-scenes.json"
+      },
+      "evidenceReference": "official-neathack-page",
+      "evidenceClassification": "official_event_requirements_checked_2026-10-11",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent and relevant producer/source-owner review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Verbatim-scoped summary of organizer requirements, not a product or sponsor result.",
+        "Draft summary of organizer requirements checked on 2026-10-11 UTC; recheck the organizer page before submission."
+      ],
+      "reReviewTrigger": [
+        "Scene wording, source pin, associated claims, event page/cutoff, rights or intended destination changes.",
+        "Before any external use, recheck source owner and independent review."
+      ]
+    },
+    {
+      "id": "EVENT-POST-CUTOFF-STATUS-001",
+      "kind": "event_requirement_summary",
+      "allowedWording": "Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission.",
+      "prohibitedVariants": [
+        "Treat the event requirement or pending field as submission authorization."
+      ],
+      "audience": "Internal rehearsal reviewers; not approved as external copy.",
+      "destination": "Internal rehearsal copy only; external publication and submission remain blocked.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "demo/rehearsal-scenes.json",
+        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/demo/rehearsal-scenes.json"
+      },
+      "evidenceReference": "official-neathack-page",
+      "evidenceClassification": "official_event_requirements_checked_2026-10-11",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent and relevant producer/source-owner review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Keeps the unannounced cutoff and unavailable post link explicit as of the recorded check.",
+        "Status snapshot only; organizer post and cutoff must be rechecked before submission."
+      ],
+      "reReviewTrigger": [
+        "Scene wording, source pin, associated claims, event page/cutoff, rights or intended destination changes.",
+        "Before any external use, recheck source owner and independent review."
+      ]
     }
   ],
   "ctas": [
@@ -2504,15 +2669,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact CTA wording review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-REPOSITORY-DOCS-002",
@@ -2525,15 +2692,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact CTA wording review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-PRODUCT-TRANSACTION-001",
@@ -2565,15 +2734,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact visual CTA review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-REPOSITORY-DOCS-ALT-001",
@@ -2586,15 +2757,17 @@
         "status": "confirmed_for_pinned_documentation_only",
         "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
       },
-      "wordingReview": "pending",
+      "wordingReview": "approved",
       "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact visual CTA review pending.",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "README target revision or repository visibility changes.",
         "Copy becomes attached to an application or landing-page transaction.",
         "The destination/action or availability changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     },
     {
       "id": "CTA-WORKFLOW-TEXT-EQUIVALENT-001",
@@ -2604,17 +2777,19 @@
       "destinationOwner": "User-assigned marketing-material supervisor for repository content; independent accessibility review pending.",
       "target": "demo/diagrams/demo-workflow-alt-text.md",
       "availability": {
-        "status": "available_in_candidate",
-        "conditions": "The exact Markdown text alternative is tracked in this candidate; its content and release remain draft."
+        "status": "confirmed_local_repository_file_only",
+        "conditions": "The exact tracked Markdown text alternative is approved as a repository documentation target for this static action only; content/accessibility review and downstream release remain pending."
       },
-      "wordingReview": "pending",
-      "routeReview": "available_static_repository_file",
-      "reviewDate": null,
-      "reviewer": "User-assigned marketing-material supervisor; exact accessible-action review pending.",
+      "wordingReview": "approved",
+      "routeReview": "confirmed_static_repository_file_only",
+      "reviewDate": "2026-10-11",
+      "reviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
       "reReviewTrigger": [
         "The alternative path or content changes.",
         "The surrounding HTML or destination changes."
-      ]
+      ],
+      "routeReviewer": "User-assigned accountable marketing-material root supervisor AI session 01a1285a-d98b-7c52-9b28-74f8aab0a55c",
+      "routeReviewDate": "2026-10-11"
     }
   ],
   "releasePolicy": {
@@ -3901,5 +4076,969 @@
         "releaseDisposition": "blocked"
       }
     ]
+  },
+  "narrativeCopy": {
+    "schemaVersion": "1.0",
+    "status": "draft_exact_copy_map_pending_independent_and_producer_review",
+    "sceneSource": {
+      "path": "demo/rehearsal-scenes.json",
+      "assetId": "DEMO-REHEARSAL-SCENES-001",
+      "sourceCommit": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+      "provenanceRecordId": "DEMO-REHEARSAL-SCENES-001"
+    },
+    "renderPlan": {
+      "path": "demo/exports/rehearsal-render-plan.json",
+      "assetId": "DEMO-REHEARSAL-RENDER-PLAN-001",
+      "sourceCommit": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "4a34976e55559da0980cea196022a642ec04d2cf3ad69925fcff7378befaeeb7",
+      "provenanceRecordId": "DEMO-REHEARSAL-RENDER-PLAN-001"
+    },
+    "requiredProposalIds": [
+      "REHEARSAL-JOURNEY-001",
+      "REHEARSAL-HOLD-REVISE-001",
+      "REHEARSAL-SPONSOR-FACETS-001",
+      "EVENT-SUBMISSION-FIELDS-001",
+      "EVENT-POST-CUTOFF-STATUS-001"
+    ],
+    "copyUnits": [
+      {
+        "unitId": "scene-01-concept-title::segment-00",
+        "sceneId": "scene-01-concept-title",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "TicketStub.",
+        "claimId": "CLAIM-PRODUCT-NAME-001",
+        "sourceWording": "TicketStub"
+      },
+      {
+        "unitId": "scene-01-concept-title::segment-01",
+        "sceneId": "scene-01-concept-title",
+        "surface": "caption_narration",
+        "kind": "claim_qualifier",
+        "exactText": "Project name only; product availability is unverified.",
+        "claimId": "CLAIM-PRODUCT-NAME-001"
+      },
+      {
+        "unitId": "scene-01-concept-title::segment-02",
+        "sceneId": "scene-01-concept-title",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "A keepsake concept.",
+        "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+        "sourceWording": "A keepsake concept"
+      },
+      {
+        "unitId": "scene-01-concept-title::segment-03",
+        "sceneId": "scene-01-concept-title",
+        "surface": "caption_narration",
+        "kind": "claim_qualifier",
+        "exactText": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+        "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+        "alsoClaimIds": [
+          "CLAIM-SIMULATION-001"
+        ]
+      },
+      {
+        "unitId": "scene-02-context-design-review::segment-00",
+        "sceneId": "scene-02-context-design-review",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "Here, one ticket idea moves from context to design and a human review.",
+        "proposalId": "REHEARSAL-JOURNEY-001"
+      },
+      {
+        "unitId": "scene-02-context-design-review::segment-01",
+        "sceneId": "scene-02-context-design-review",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "Context → design → human review.",
+        "claimId": "CLAIM-PROCESS-CONCEPT-001",
+        "sourceWording": "Context → design → human review"
+      },
+      {
+        "unitId": "scene-02-context-design-review::segment-02",
+        "sceneId": "scene-02-context-design-review",
+        "surface": "caption_narration",
+        "kind": "claim_qualifier",
+        "exactText": "Conceptual only; implementation is unverified.",
+        "claimId": "CLAIM-PROCESS-CONCEPT-001"
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::segment-00",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "A reviewer may hold or revise this draft; production handoff is planned.",
+        "proposalId": "REHEARSAL-HOLD-REVISE-001"
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::segment-01",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "Approval before production.",
+        "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+        "sourceWording": "Approval before production"
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::segment-02",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "surface": "caption_narration",
+        "kind": "claim_qualifier",
+        "exactText": "This is a proposed review rule, not a verified product feature.",
+        "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001"
+      },
+      {
+        "unitId": "scene-04-product-evidence-status::segment-00",
+        "sceneId": "scene-04-product-evidence-status",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "Product capability, automation, and transaction copy is pending pinned product-release evidence.",
+        "claimId": "CLAIM-PRODUCT-CAPABILITY-001"
+      },
+      {
+        "unitId": "scene-04-product-evidence-status::segment-01",
+        "sceneId": "scene-04-product-evidence-status",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "No product or sponsor results verified.",
+        "claimId": "CLAIM-NO-RESULTS-VERIFIED-001"
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::segment-00",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+        "proposalId": "REHEARSAL-SPONSOR-FACETS-001"
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::segment-01",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+        "claimId": "CLAIM-SPN-01-NEATLOGS-001"
+      },
+      {
+        "unitId": "scene-06-entire-evidence::segment-00",
+        "sceneId": "scene-06-entire-evidence",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+        "proposalId": "REHEARSAL-SPONSOR-FACETS-001"
+      },
+      {
+        "unitId": "scene-06-entire-evidence::segment-01",
+        "sceneId": "scene-06-entire-evidence",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+        "claimId": "CLAIM-SPN-02-ENTIRE-001"
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::segment-00",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+        "proposalId": "REHEARSAL-SPONSOR-FACETS-001"
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::segment-01",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+        "claimId": "CLAIM-SPN-03-CFO-001"
+      },
+      {
+        "unitId": "scene-08-comparison-and-results::segment-00",
+        "sceneId": "scene-08-comparison-and-results",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "No measured improvement or savings claim is approved; comparable baseline evidence is pending.",
+        "claimId": "CLAIM-EVAL02-COMPARISON-001"
+      },
+      {
+        "unitId": "scene-08-comparison-and-results::segment-01",
+        "sceneId": "scene-08-comparison-and-results",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "No product or sponsor results verified.",
+        "claimId": "CLAIM-NO-RESULTS-VERIFIED-001"
+      },
+      {
+        "unitId": "scene-09-submission-gate::segment-00",
+        "sceneId": "scene-09-submission-gate",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord.",
+        "proposalId": "EVENT-SUBMISSION-FIELDS-001"
+      },
+      {
+        "unitId": "scene-09-submission-gate::segment-01",
+        "sceneId": "scene-09-submission-gate",
+        "surface": "caption_narration",
+        "kind": "proposed_wording",
+        "exactText": "Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission.",
+        "proposalId": "EVENT-POST-CUTOFF-STATUS-001"
+      },
+      {
+        "unitId": "scene-10-status-and-docs-cta::segment-00",
+        "sceneId": "scene-10-status-and-docs-cta",
+        "surface": "caption_narration",
+        "kind": "claim_wording",
+        "exactText": "No product or sponsor results verified.",
+        "claimId": "CLAIM-NO-RESULTS-VERIFIED-001"
+      },
+      {
+        "unitId": "scene-10-status-and-docs-cta::segment-01",
+        "sceneId": "scene-10-status-and-docs-cta",
+        "surface": "caption_narration",
+        "kind": "cta_wording",
+        "exactText": "Explore the repository docs.",
+        "ctaId": "CTA-REPOSITORY-DOCS-001"
+      }
+    ],
+    "screenTextUnits": [
+      {
+        "unitId": "scene-01-concept-title::screen-00",
+        "sceneId": "scene-01-concept-title",
+        "exactText": "SYNTHETIC CONCEPT ONLY",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "qualifying_status_label",
+          "relatedClaimIds": [
+            "CLAIM-PRODUCT-NAME-001",
+            "CLAIM-KEEPSAKE-CONCEPT-001",
+            "CLAIM-SIMULATION-001"
+          ],
+          "evidenceClass": "mock"
+        }
+      },
+      {
+        "unitId": "scene-01-concept-title::screen-01",
+        "sceneId": "scene-01-concept-title",
+        "exactText": "TicketStub — project name only; product availability is unverified",
+        "claimIds": [
+          "CLAIM-PRODUCT-NAME-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-01-concept-title::screen-02",
+        "sceneId": "scene-01-concept-title",
+        "exactText": "A keepsake concept",
+        "claimIds": [
+          "CLAIM-KEEPSAKE-CONCEPT-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-01-concept-title::screen-03",
+        "sceneId": "scene-01-concept-title",
+        "exactText": "No product behavior, live sponsor integration, or measured savings are demonstrated.",
+        "claimIds": [
+          "CLAIM-SIMULATION-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-02-context-design-review::screen-00",
+        "sceneId": "scene-02-context-design-review",
+        "exactText": "CONCEPTUAL ONLY",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "qualifying_status_label",
+          "relatedClaimIds": [
+            "CLAIM-PROCESS-CONCEPT-001"
+          ],
+          "evidenceClass": "mock"
+        }
+      },
+      {
+        "unitId": "scene-02-context-design-review::screen-01",
+        "sceneId": "scene-02-context-design-review",
+        "exactText": "Context → design → human review",
+        "claimIds": [
+          "CLAIM-PROCESS-CONCEPT-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-02-context-design-review::screen-02",
+        "sceneId": "scene-02-context-design-review",
+        "exactText": "Conceptual only; implementation is unverified.",
+        "claimIds": [
+          "CLAIM-PROCESS-CONCEPT-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::screen-00",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "exactText": "PROPOSED REVIEW RULE",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "qualifying_status_label",
+          "relatedClaimIds": [
+            "CLAIM-HUMAN-APPROVAL-CONCEPT-001"
+          ],
+          "evidenceClass": "planned"
+        }
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::screen-01",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "exactText": "Hold or revise draft",
+        "claimIds": [],
+        "proposalIds": [
+          "REHEARSAL-HOLD-REVISE-001"
+        ],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::screen-02",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "exactText": "Production handoff: planned",
+        "claimIds": [],
+        "proposalIds": [
+          "REHEARSAL-HOLD-REVISE-001"
+        ],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-03-hold-revise-handoff::screen-03",
+        "sceneId": "scene-03-hold-revise-handoff",
+        "exactText": "This is a proposed review rule, not a verified product feature.",
+        "claimIds": [
+          "CLAIM-HUMAN-APPROVAL-CONCEPT-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-04-product-evidence-status::screen-00",
+        "sceneId": "scene-04-product-evidence-status",
+        "exactText": "PINNED PRODUCT SOURCE: DOCUMENTATION ONLY",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "qualifying_status_label",
+          "relatedClaimIds": [
+            "CLAIM-PRODUCT-CAPABILITY-001",
+            "CLAIM-NO-RESULTS-VERIFIED-001"
+          ],
+          "evidenceClass": "pending"
+        }
+      },
+      {
+        "unitId": "scene-04-product-evidence-status::screen-01",
+        "sceneId": "scene-04-product-evidence-status",
+        "exactText": "Product capability, automation, and transaction copy is pending pinned product-release evidence.",
+        "claimIds": [
+          "CLAIM-PRODUCT-CAPABILITY-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-04-product-evidence-status::screen-02",
+        "sceneId": "scene-04-product-evidence-status",
+        "exactText": "No product or sponsor results verified.",
+        "claimIds": [
+          "CLAIM-NO-RESULTS-VERIFIED-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-00",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "NEATLOGS — SPN-01 — PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_status",
+          "evidenceClassId": "SPN-01",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-01",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "Architecture: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-01",
+          "aspect": "architecture",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-02",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "Implementation: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-01",
+          "aspect": "implementation",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-03",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "Runtime: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-01",
+          "aspect": "runtime",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-04",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "Reasoning: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-01",
+          "aspect": "reasoning",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-05",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "Result: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-01",
+          "aspect": "result",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-06",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+        "claimIds": [
+          "CLAIM-SPN-01-NEATLOGS-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-05-neatlogs-evidence::screen-07",
+        "sceneId": "scene-05-neatlogs-evidence",
+        "exactText": "providerMode: not_run",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "provider_mode",
+          "value": "not_run",
+          "evidenceClassId": "SPN-01"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-00",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "ENTIRE — SPN-02 — PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_status",
+          "evidenceClassId": "SPN-02",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-01",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "Architecture: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-02",
+          "aspect": "architecture",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-02",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "Implementation: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-02",
+          "aspect": "implementation",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-03",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "Runtime: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-02",
+          "aspect": "runtime",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-04",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "Reasoning: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-02",
+          "aspect": "reasoning",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-05",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "Result: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-02",
+          "aspect": "result",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-06",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+        "claimIds": [
+          "CLAIM-SPN-02-ENTIRE-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-06-entire-evidence::screen-07",
+        "sceneId": "scene-06-entire-evidence",
+        "exactText": "providerMode: not_run",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "provider_mode",
+          "value": "not_run",
+          "evidenceClassId": "SPN-02"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-00",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "CFO.AI — SPN-03 — PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_status",
+          "evidenceClassId": "SPN-03",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-01",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "Architecture: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-03",
+          "aspect": "architecture",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-02",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "Implementation: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-03",
+          "aspect": "implementation",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-03",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "Runtime: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-03",
+          "aspect": "runtime",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-04",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "Reasoning: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-03",
+          "aspect": "reasoning",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-05",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "Result: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "sponsor_facet",
+          "evidenceClassId": "SPN-03",
+          "aspect": "result",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-06",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+        "claimIds": [
+          "CLAIM-SPN-03-CFO-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-07-cfo-ai-evidence::screen-07",
+        "sceneId": "scene-07-cfo-ai-evidence",
+        "exactText": "providerMode: not_run",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "provider_mode",
+          "value": "not_run",
+          "evidenceClassId": "SPN-03"
+        }
+      },
+      {
+        "unitId": "scene-08-comparison-and-results::screen-00",
+        "sceneId": "scene-08-comparison-and-results",
+        "exactText": "EVAL-02 — PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "evidence_class_status",
+          "evidenceClassId": "EVAL-02",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-08-comparison-and-results::screen-01",
+        "sceneId": "scene-08-comparison-and-results",
+        "exactText": "No measured improvement or savings claim is approved; comparable baseline evidence is pending.",
+        "claimIds": [
+          "CLAIM-EVAL02-COMPARISON-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-08-comparison-and-results::screen-02",
+        "sceneId": "scene-08-comparison-and-results",
+        "exactText": "No product or sponsor results verified.",
+        "claimIds": [
+          "CLAIM-NO-RESULTS-VERIFIED-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-00",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Team name: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Team name: PENDING",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-01",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Submitter name: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Submitter name: PENDING",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-02",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Project name: PENDING SUBMITTER CONFIRMATION",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Project name: PENDING SUBMITTER CONFIRMATION",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-03",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Public repository URL: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Public repository URL: PENDING",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-04",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Public demo URL: PENDING",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Public demo URL: PENDING",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-05",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Official X quote-post: PENDING PUBLICATION/LINK",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Official X quote-post: PENDING PUBLICATION/LINK",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-09-submission-gate::screen-06",
+        "sceneId": "scene-09-submission-gate",
+        "exactText": "Confirmed cutoff: PENDING DISCORD ANNOUNCEMENT",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "submission_field_status",
+          "exactStatusText": "Confirmed cutoff: PENDING DISCORD ANNOUNCEMENT",
+          "status": "pending"
+        }
+      },
+      {
+        "unitId": "scene-10-status-and-docs-cta::screen-00",
+        "sceneId": "scene-10-status-and-docs-cta",
+        "exactText": "REHEARSAL ONLY — SUBMISSION READINESS BLOCKED",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": {
+          "type": "qualifying_status_label",
+          "relatedClaimIds": [
+            "CLAIM-NO-RESULTS-VERIFIED-001"
+          ],
+          "evidenceClass": "pending"
+        }
+      },
+      {
+        "unitId": "scene-10-status-and-docs-cta::screen-01",
+        "sceneId": "scene-10-status-and-docs-cta",
+        "exactText": "No product or sponsor results verified.",
+        "claimIds": [
+          "CLAIM-NO-RESULTS-VERIFIED-001"
+        ],
+        "proposalIds": [],
+        "ctaIds": [],
+        "statusReference": null
+      },
+      {
+        "unitId": "scene-10-status-and-docs-cta::screen-02",
+        "sceneId": "scene-10-status-and-docs-cta",
+        "exactText": "Explore the repository docs.",
+        "claimIds": [],
+        "proposalIds": [],
+        "ctaIds": [
+          "CTA-REPOSITORY-DOCS-001"
+        ],
+        "statusReference": null
+      }
+    ],
+    "surfaces": [
+      {
+        "path": "demo/rehearsal-scenes.json",
+        "assetId": "DEMO-REHEARSAL-SCENES-001",
+        "provenanceRecordId": "DEMO-REHEARSAL-SCENES-001",
+        "role": "canonical scene timing, exact copy segments, screen text and qualifiers"
+      },
+      {
+        "path": "demo/narration.md",
+        "assetId": "DEMO-NARRATION-001",
+        "provenanceRecordId": "DEMO-NARRATION-001",
+        "role": "general-authored narration text; status remains draft"
+      },
+      {
+        "path": "demo/rehearsal-transcript.md",
+        "assetId": "DEMO-REHEARSAL-TRANSCRIPT-001",
+        "provenanceRecordId": "DEMO-REHEARSAL-TRANSCRIPT-001",
+        "role": "accessible transcript and exact caption text alternative"
+      },
+      {
+        "path": "demo/captions/silent-rehearsal.srt",
+        "assetId": "DEMO-REHEARSAL-CAPTIONS-SRT-001",
+        "provenanceRecordId": "DEMO-REHEARSAL-CAPTIONS-SRT-001",
+        "role": "timed SRT sidecar; silent display timing only"
+      },
+      {
+        "path": "demo/captions/silent-rehearsal.vtt",
+        "assetId": "DEMO-REHEARSAL-CAPTIONS-VTT-001",
+        "provenanceRecordId": "DEMO-REHEARSAL-CAPTIONS-VTT-001",
+        "role": "timed WebVTT sidecar; silent display timing only"
+      },
+      {
+        "path": "demo/deck/rehearsal-scenes.html",
+        "assetId": "DEMO-REHEARSAL-HTML-001",
+        "provenanceRecordId": "DEMO-REHEARSAL-HTML-001",
+        "role": "generated visible scene/caption surface; not product UI"
+      }
+    ],
+    "html": {
+      "path": "demo/deck/rehearsal-scenes.html",
+      "renderPlanPath": "demo/exports/rehearsal-render-plan.json",
+      "staticFragments": [
+        {
+          "exactText": "Draft synthetic silent rehearsal — not product demo",
+          "role": "document title status",
+          "status": "draft_not_product_demo"
+        },
+        {
+          "exactText": "DRAFT • SYNTHETIC REHEARSAL",
+          "role": "persistent status label",
+          "status": "draft_synthetic_rehearsal"
+        },
+        {
+          "exactText": "NOT A PRODUCT DEMO • SILENT / CAPTIONED",
+          "role": "persistent status and media label",
+          "status": "not_product_demo_silent_captioned"
+        },
+        {
+          "exactText": "Exact rehearsal caption",
+          "role": "accessible caption region label",
+          "status": "accessibility_attribute"
+        }
+      ],
+      "ariaLabel": "Exact rehearsal caption",
+      "dynamicCopySource": "renderPlan.scenes[].screenText and renderPlan.cues[].text"
+    },
+    "accessibility": {
+      "transcriptAssetId": "DEMO-REHEARSAL-TRANSCRIPT-001",
+      "captionAssetIds": [
+        "DEMO-REHEARSAL-CAPTIONS-SRT-001",
+        "DEMO-REHEARSAL-CAPTIONS-VTT-001"
+      ],
+      "captionTiming": "silent scene display, not speech synchronization",
+      "htmlFallback": "Source screenText and captionText are exact scene-source strings; final hosted-player controls need destination review."
+    },
+    "provenanceBoundary": "These rows establish exact local copy/source joins only. They do not approve claims, brand use, rights, event submission, product behavior, sponsor results or publication.",
+    "expectedSceneCount": 10,
+    "expectedCopyUnitCount": 24,
+    "expectedScreenTextUnitCount": 51
   }
 }

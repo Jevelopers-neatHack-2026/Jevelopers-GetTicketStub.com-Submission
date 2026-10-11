@@ -546,7 +546,19 @@
       "currentAssets": [
         "DEMO-WORKFLOW-DIAGRAM-001",
         "DEMO-SCREENSHOT-SET-001",
-        "DEMO-DECK-SUPPORT-001"
+        "DEMO-DECK-SUPPORT-001",
+        "DEMO-EXPLAINER-001",
+        "DEMO-STORYBOARD-001",
+        "DEMO-NARRATION-001",
+        "DEMO-RECORDING-CHECKLIST-001",
+        "DEMO-SUBMISSION-NARRATIVE-001",
+        "DEMO-REHEARSAL-SCENES-001",
+        "DEMO-REHEARSAL-TRANSCRIPT-001",
+        "DEMO-REHEARSAL-CAPTIONS-SRT-001",
+        "DEMO-REHEARSAL-CAPTIONS-VTT-001",
+        "DEMO-REHEARSAL-RENDER-PLAN-001",
+        "DEMO-REHEARSAL-HTML-001",
+        "DEMO-REHEARSAL-VIDEO-001"
       ],
       "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
@@ -577,7 +589,9 @@
       ],
       "dependencies": [
         "Approved claims and evidence from MM-02 and upstream owners; no sponsor result is inferred from this plan.",
-        "Current diagram/mockup/HTML are draft synthetic support only; the required product explainer, storyboard, narration, and ≤3-minute final video remain uncreated and need producer-owned evidence and approval."
+        "Current diagram/mockup/HTML are draft synthetic support only; the required product explainer, storyboard, narration, and ≤3-minute final video remain uncreated and need producer-owned evidence and approval.",
+        "All present collateral remains draft/internal; downstream rights, product, sponsor, organizer and independent review remain separate gates.",
+        "DEMO-REHEARSAL-VIDEO-001 is a 150-second silent concept rehearsal only; it does not satisfy missing DEMO-SUBMISSION-VIDEO-001."
       ],
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
@@ -592,7 +606,9 @@
       "disposition": "existing",
       "currentAssets": [
         "LAUNCH-X-KEY-VISUAL-001",
-        "LAUNCH-X-ALT-TEXT-001"
+        "LAUNCH-X-ALT-TEXT-001",
+        "LAUNCH-X-COPY-001",
+        "LAUNCH-X-CTA-001"
       ],
       "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "launch/",
@@ -615,7 +631,8 @@
         "MM-05 (#6, pending); https://neatlogs.com/hackathon, checked 2026-10-11 UTC; final cutoff is announced on Discord, so recheck before use"
       ],
       "dependencies": [
-        "Exact post, final CTA/destination and submitter confirmation; asset-specific permission and review."
+        "Exact post, final CTA/destination and submitter confirmation; asset-specific permission and review.",
+        "All present collateral remains draft/internal; downstream rights, product, sponsor, organizer and independent review remain separate gates."
       ],
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
@@ -629,7 +646,8 @@
       "family": "Product explainers and system diagrams",
       "disposition": "existing",
       "currentAssets": [
-        "DEMO-WORKFLOW-DIAGRAM-001"
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "DEMO-EXPLAINER-001"
       ],
       "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "messaging/ and demo/",
@@ -650,7 +668,8 @@
         "Product behavior must be pinned to getticketstub.com evidence; MM-05 (#6) governs asset rights and redaction."
       ],
       "dependencies": [
-        "Diagram need remains conditional; no product architecture illustration is claimed present."
+        "Diagram need remains conditional; no product architecture illustration is claimed present.",
+        "All present collateral remains draft/internal; downstream rights, product, sponsor, organizer and independent review remain separate gates."
       ],
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
@@ -664,7 +683,8 @@
       "family": "Pitch and demo deck support",
       "disposition": "existing",
       "currentAssets": [
-        "DEMO-DECK-SUPPORT-001"
+        "DEMO-DECK-SUPPORT-001",
+        "DEMO-REHEARSAL-HTML-001"
       ],
       "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
@@ -683,7 +703,8 @@
         "MM-05 (#6, asset-specific if activated)"
       ],
       "dependencies": [
-        "Trigger: approved story or official requirement confirms use; otherwise retain as deferred."
+        "Trigger: approved story or official requirement confirms use; otherwise retain as deferred.",
+        "All present collateral remains draft/internal; downstream rights, product, sponsor, organizer and independent review remain separate gates."
       ],
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
@@ -722,7 +743,8 @@
         "MM-05 (#6) must record source, rights, consent, redaction and destination approval before reuse."
       ],
       "dependencies": [
-        "Trigger: storyboard confirms a scene need and source owner supplies reviewable, sanitized material or an approved mockup brief."
+        "Trigger: storyboard confirms a scene need and source owner supplies reviewable, sanitized material or an approved mockup brief.",
+        "All present collateral remains draft/internal; downstream rights, product, sponsor, organizer and independent review remain separate gates."
       ],
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
@@ -740,11 +762,14 @@
       "disposition": "existing",
       "currentAssets": [
         "LAUNCH-X-KEY-VISUAL-001",
-        "LAUNCH-X-ALT-TEXT-001"
+        "LAUNCH-X-ALT-TEXT-001",
+        "LAUNCH-X-COPY-001",
+        "LAUNCH-X-CTA-001",
+        "BRAND-CONSUMPTION-001"
       ],
       "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "launch/",
-      "usageNeed": "Draft X visual and accessible alternative exist; final announcement copy/post, official post link, submitter, final cutoff, demo link, exact destination and publication approval remain pending.",
+      "usageNeed": "Draft X visual, accessible alternative and template copy exist; final post, official post link, submitter, final cutoff, demo link, exact destination and publication approval remain pending.",
       "v1": true,
       "plannedAssetIds": [
         "LAUNCH-X-COPY-001",
@@ -764,7 +789,8 @@
         "MM-05 (#6, pending); https://neatlogs.com/hackathon, checked 2026-10-11 UTC; refresh final cutoff and destination before delivery."
       ],
       "dependencies": [
-        "Confirm exact destination, CTA, submitter and dimensions/limits; no posting or external submission is part of this inventory."
+        "Confirm exact destination, CTA, submitter and dimensions/limits; no posting or external submission is part of this inventory.",
+        "All present collateral remains draft/internal; downstream rights, product, sponsor, organizer and independent review remain separate gates."
       ],
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
@@ -813,7 +839,10 @@
       "editableSourceLocations": [
         "messaging/README.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "MSG-POSITIONING-001"
+      ]
     },
     {
       "assetId": "MSG-CLAIMS-001",
@@ -850,7 +879,10 @@
       "editableSourceLocations": [
         "messaging/claims.json"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "MSG-CLAIMS-001"
+      ]
     },
     {
       "assetId": "MSG-REVIEW-001",
@@ -886,16 +918,19 @@
       "editableSourceLocations": [
         "review/messaging-checklist.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "MSG-REVIEW-001"
+      ]
     },
     {
       "assetId": "DEMO-EXPLAINER-001",
-      "type": "product explanation",
-      "disposition": "planned",
+      "type": "Text-only explanation of currently documented product evidence; no product flow or runtime claim.",
+      "disposition": "existing",
       "path": "demo/product-explanation.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Explain one supported journey and clearly distinguish demonstrated from future behavior.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Text-only explanation of currently documented product evidence; no product flow or runtime claim.",
       "destination": "Demo and submission narrative",
       "requiredForV1": true,
       "implementationIssue": "MM-03",
@@ -903,7 +938,9 @@
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
         "MM-02 claims ledger, pending",
-        "EVAL-03"
+        "EVAL-03",
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
       ],
       "provenanceReferences": [
         "Pinned getticketstub.com and integration-evals evidence, pending source-owner handoff"
@@ -922,16 +959,18 @@
         "demo/product-explanation.md"
       ],
       "exportLocations": [],
-      "provenanceRecordIds": []
+      "provenanceRecordIds": [
+        "DEMO-EXPLAINER-001"
+      ]
     },
     {
       "assetId": "DEMO-STORYBOARD-001",
-      "type": "timed storyboard",
-      "disposition": "planned",
+      "type": "Timed rehearsal storyboard, not an implemented product storyboard.",
+      "disposition": "existing",
       "path": "demo/storyboard.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Plan the coherent journey and label each scene with claim/asset/evidence references, duration and fallback.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Timed rehearsal storyboard, not an implemented product storyboard.",
       "destination": "Demo production",
       "requiredForV1": true,
       "implementationIssue": "MM-03",
@@ -942,7 +981,9 @@
         "EVAL-03",
         "SPN-01",
         "SPN-02",
-        "SPN-03"
+        "SPN-03",
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
       ],
       "provenanceReferences": [
         "MM-05 provenance register, pending"
@@ -959,16 +1000,19 @@
       "editableSourceLocations": [
         "demo/storyboard.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-STORYBOARD-001"
+      ]
     },
     {
       "assetId": "DEMO-NARRATION-001",
-      "type": "demo narration",
-      "disposition": "planned",
+      "type": "General-authored rehearsal narration; draft until exact-copy/evidence review.",
+      "disposition": "existing",
       "path": "demo/narration.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Provide a complete timed script aligned with storyboard and approved claims.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "General-authored rehearsal narration; draft until exact-copy/evidence review.",
       "destination": "Demo production and accessible transcript",
       "requiredForV1": true,
       "implementationIssue": "MM-03",
@@ -976,7 +1020,9 @@
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
         "MM-02 claims ledger, pending",
-        "EVAL-03"
+        "EVAL-03",
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
       ],
       "provenanceReferences": [
         "Pinned evidence references by scene, pending"
@@ -993,23 +1039,27 @@
       "editableSourceLocations": [
         "demo/narration.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-NARRATION-001"
+      ]
     },
     {
       "assetId": "DEMO-RECORDING-CHECKLIST-001",
-      "type": "recording and fallback checklist",
-      "disposition": "planned",
+      "type": "Producer checklist; requirements and product-evidence gates remain pending.",
+      "disposition": "existing",
       "path": "demo/recording-checklist.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Guide safe capture, visible limitations, evidence labels and recovery/fallback.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Producer checklist; requirements and product-evidence gates remain pending.",
       "destination": "Demo producer and receiving teammate",
       "requiredForV1": true,
       "implementationIssue": "MM-03",
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "MM-02 claims ledger, pending",
+        "CLAIM-PRODUCT-CAPABILITY-001"
       ],
       "provenanceReferences": [
         "MM-05 redaction and permission rules, pending"
@@ -1026,16 +1076,19 @@
       "editableSourceLocations": [
         "demo/recording-checklist.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-RECORDING-CHECKLIST-001"
+      ]
     },
     {
       "assetId": "DEMO-SUBMISSION-NARRATIVE-001",
-      "type": "compact submission narrative",
-      "disposition": "planned",
+      "type": "Submission preflight narrative; all unsupported product/sponsor/evaluation fields remain pending.",
+      "disposition": "existing",
       "path": "demo/submission-narrative.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Provide the concise project and journey narrative required for event submission.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Submission preflight narrative; all unsupported product/sponsor/evaluation fields remain pending.",
       "destination": "Official hackathon submission; destination must be reconfirmed",
       "requiredForV1": true,
       "implementationIssue": "MM-03",
@@ -1046,7 +1099,11 @@
         "EVAL-03",
         "SPN-01",
         "SPN-02",
-        "SPN-03"
+        "SPN-03",
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-SPN-01-NEATLOGS-001",
+        "CLAIM-SPN-02-ENTIRE-001",
+        "CLAIM-SPN-03-CFO-001"
       ],
       "provenanceReferences": [
         "https://neatlogs.com/hackathon, checked 2026-10-11 UTC; exact post/cutoff and current evidence must be rechecked before submission"
@@ -1064,7 +1121,9 @@
         "demo/submission-narrative.md"
       ],
       "exportLocations": [],
-      "provenanceRecordIds": []
+      "provenanceRecordIds": [
+        "DEMO-SUBMISSION-NARRATIVE-001"
+      ]
     },
     {
       "assetId": "DEMO-SUBMISSION-VIDEO-001",
@@ -1144,7 +1203,10 @@
         "demo/diagrams/demo-workflow.png",
         "demo/diagrams/demo-workflow-alt-text.md"
       ],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "DEMO-WORKFLOW-DIAGRAM-001"
+      ]
     },
     {
       "assetId": "DEMO-SCREENSHOT-SET-001",
@@ -1184,7 +1246,10 @@
         "demo/screenshots/synthetic-stub-mockup.png",
         "demo/screenshots/synthetic-stub-alt-text.md"
       ],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "DEMO-SCREENSHOT-SET-001"
+      ]
     },
     {
       "assetId": "DEMO-DECK-SUPPORT-001",
@@ -1231,16 +1296,19 @@
         "review/visual/previews/deck-mobile-390.png",
         "review/visual/previews/deck-mobile-full.png"
       ],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "DEMO-DECK-SUPPORT-001"
+      ]
     },
     {
       "assetId": "LAUNCH-X-COPY-001",
-      "type": "X submission and demo-sharing copy",
-      "disposition": "planned",
+      "type": "Pending-template X announcement copy; placeholders and posting authorization remain unresolved.",
+      "disposition": "existing",
       "path": "launch/announcement-copy.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Prepare accurate copy variants for the official X quote-post, including team, name, project, public repository and demo link; do not publish from this repo task.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Pending-template X announcement copy; placeholders and posting authorization remain unresolved.",
       "destination": "X quote-post; official post, exact destination and submitter to be confirmed",
       "requiredForV1": true,
       "implementationIssue": "MM-04",
@@ -1248,7 +1316,8 @@
       "reviewerRole": "Product and frontend — destination owner",
       "claimReferences": [
         "MM-02 claims ledger, pending",
-        "EVAL-03"
+        "EVAL-03",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
       ],
       "provenanceReferences": [
         "https://neatlogs.com/hackathon, checked 2026-10-11 UTC; MM-05 rights/approval pending"
@@ -1267,7 +1336,9 @@
         "launch/announcement-copy.md"
       ],
       "exportLocations": [],
-      "provenanceRecordIds": []
+      "provenanceRecordIds": [
+        "LAUNCH-X-COPY-001"
+      ]
     },
     {
       "assetId": "LAUNCH-X-KEY-VISUAL-001",
@@ -1359,19 +1430,20 @@
     },
     {
       "assetId": "LAUNCH-X-CTA-001",
-      "type": "reviewed CTA and destination record",
-      "disposition": "planned",
+      "type": "Repository-docs CTA usage in event submission template; route and wording review remain pending.",
+      "disposition": "existing",
       "path": "launch/announcement-copy.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Record exact CTA, intended action, destination class/owner and availability conditions.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Repository-docs CTA usage in event submission template; route and wording review remain pending.",
       "destination": "X post; exact URL and availability require destination-owner confirmation",
       "requiredForV1": true,
       "implementationIssue": "MM-04",
       "ownerRole": "Product and frontend — campaign/content owner",
       "reviewerRole": "Product and frontend — destination owner",
       "claimReferences": [
-        "MM-02 CTA/source review, pending"
+        "MM-02 CTA/source review, pending",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
       ],
       "provenanceReferences": [
         "Destination confirmation and current official post remain pending"
@@ -1390,7 +1462,9 @@
         "launch/announcement-copy.md"
       ],
       "exportLocations": [],
-      "provenanceRecordIds": []
+      "provenanceRecordIds": [
+        "LAUNCH-X-CTA-001"
+      ]
     },
     {
       "assetId": "LAUNCH-UPDATE-RECAP-001",
@@ -1456,7 +1530,10 @@
       "editableSourceLocations": [
         "review/provenance.json"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "PROVENANCE-REGISTER-001"
+      ]
     },
     {
       "assetId": "PROVENANCE-REDACTION-001",
@@ -1488,23 +1565,27 @@
       "editableSourceLocations": [
         "review/publication-safety.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "PROVENANCE-REDACTION-001"
+      ]
     },
     {
       "assetId": "BRAND-CONSUMPTION-001",
-      "type": "brand consumption contract and reviewed treatments",
-      "disposition": "planned",
+      "type": "Brand source-consumption policy and pending upstream approval record.",
+      "disposition": "existing",
       "path": "review/brand-consumption.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Pin and consume brand-kit guidance without creating a competing identity; review one demo and one announcement treatment.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Brand source-consumption policy and pending upstream approval record.",
       "destination": "Collateral contributors and brand/landing reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-06",
       "ownerRole": "Product and frontend — collateral designer",
       "reviewerRole": "Product and frontend — brand-kit and landing consumer reviewers",
       "claimReferences": [
-        "EVAL-03, visual/evidence distinction"
+        "EVAL-03, visual/evidence distinction",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
         "Canonical brand-kit source; exact consumed revision and allowlist approval to be recorded by MM-06"
@@ -1512,36 +1593,45 @@
       "v1": true,
       "intendedAudience": "Collateral designers and brand-kit/landing-page consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-ANNOUNCEMENT-001"
+      ],
       "dependencies": [
         "Pinned brand-kit artifacts and the required brand/landing consumer review."
       ],
       "editableSourceLocations": [
         "review/brand-consumption.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "BRAND-CONSUMPTION-001"
+      ]
     },
     {
       "assetId": "ACCESSIBILITY-GUIDE-001",
-      "type": "collateral readability/accessibility guide",
+      "type": "Format-scoped accessibility requirements, including a separate future final-video review.",
       "disposition": "existing",
       "path": "review/accessibility.md",
       "pathAvailability": "created_in_candidate",
       "lifecycleState": "draft",
-      "intendedUse": "Define measurable size/contrast checks, reading order, plain language and accessible alternatives by format.",
+      "intendedUse": "Format-scoped accessibility requirements, including a separate future final-video review.",
       "destination": "Collateral authors and reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-08",
       "ownerRole": "Product and frontend — content accessibility reviewer",
       "reviewerRole": "Product and frontend — collateral designer",
-      "claimReferences": [],
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
       "provenanceReferences": [
         "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": true,
       "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/8",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
       "dependencies": [
         "Selected final formats, variants and intended viewing contexts."
       ],
@@ -1549,29 +1639,36 @@
         "review/accessibility.md"
       ],
       "exportLocations": [],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "ACCESSIBILITY-GUIDE-001"
+      ]
     },
     {
       "assetId": "ACCESSIBILITY-CHECKLIST-001",
-      "type": "per-export accessibility checklist",
+      "type": "Exact accessible review checklist and scoped author checks; independent review pending.",
       "disposition": "existing",
       "path": "review/accessibility-checklist.md",
       "pathAvailability": "created_in_candidate",
       "lifecycleState": "draft",
-      "intendedUse": "Record viewing size, contrast, alt text/reading order and captions/transcript checks per export.",
+      "intendedUse": "Exact accessible review checklist and scoped author checks; independent review pending.",
       "destination": "Collateral package and release gate",
       "requiredForV1": true,
       "implementationIssue": "MM-08",
       "ownerRole": "Product and frontend — content accessibility reviewer",
       "reviewerRole": "Product and frontend — collateral designer",
-      "claimReferences": [],
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
       "provenanceReferences": [
         "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": true,
       "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/8",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
       "dependencies": [
         "Selected final formats, variants and intended viewing contexts."
       ],
@@ -1579,23 +1676,27 @@
         "review/accessibility-checklist.md"
       ],
       "exportLocations": [],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "ACCESSIBILITY-CHECKLIST-001"
+      ]
     },
     {
       "assetId": "HANDOFF-GUIDE-001",
-      "type": "collateral handoff guide",
-      "disposition": "planned",
+      "type": "Receiving procedure for the internal rehearsal package; external release authorization remains separate.",
+      "disposition": "existing",
       "path": "docs/collateral-handoff.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Help a teammate find the editable source, latest approved variant, checksum and reuse restrictions.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Receiving procedure for the internal rehearsal package; external release authorization remains separate.",
       "destination": "Receiving teammate and downstream consumers",
       "requiredForV1": true,
       "implementationIssue": "MM-07",
       "ownerRole": "Product and frontend — collateral release maintainer",
       "reviewerRole": "Product and frontend — receiving teammate",
       "claimReferences": [
-        "EVAL-03"
+        "EVAL-03",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
         "Manifest, source revision, checksum, approvals and destination-specific permissions, pending"
@@ -1603,23 +1704,28 @@
       "v1": true,
       "intendedAudience": "The receiving teammate and approved downstream asset consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/11",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
       "dependencies": [
         "Exact approved source/export files and MM-02/MM-05/MM-06/MM-08 review records."
       ],
       "editableSourceLocations": [
         "docs/collateral-handoff.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "HANDOFF-GUIDE-001"
+      ]
     },
     {
       "assetId": "HANDOFF-MANIFEST-001",
-      "type": "versioned release manifest and checksums",
-      "disposition": "planned",
-      "path": "release/VERSION/manifest.json",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Map asset IDs to exact sources/exports, checksum, dimensions, claim/provenance, brand, accessibility, approval and destination.",
+      "type": "Generated internal draft package manifest; refresh required after final metadata join and canonical merge.",
+      "disposition": "existing",
+      "path": "release/v0.1.0-rehearsal/manifest.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Generated internal draft package manifest; refresh required after final metadata join and canonical merge.",
       "destination": "Versioned teammate handoff",
       "requiredForV1": true,
       "implementationIssue": "MM-07",
@@ -1627,7 +1733,8 @@
       "reviewerRole": "Product and frontend — receiving teammate",
       "claimReferences": [
         "EVAL-03",
-        "EVAL-04"
+        "EVAL-04",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
         "Per-asset source and release approvals, pending"
@@ -1635,23 +1742,28 @@
       "v1": true,
       "intendedAudience": "The receiving teammate and approved downstream asset consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/11",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
       "dependencies": [
         "Exact approved source/export files and MM-02/MM-05/MM-06/MM-08 review records."
       ],
       "editableSourceLocations": [
         "release/VERSION/manifest.json"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "HANDOFF-MANIFEST-001"
+      ]
     },
     {
       "assetId": "RELEASE-CHECKLIST-001",
-      "type": "collateral release checklist",
-      "disposition": "planned",
+      "type": "Internal checklist for selected collateral and external submission decisions.",
+      "disposition": "existing",
       "path": "review/release-checklist.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Gate package readiness separately from external submission/publication readiness.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Internal checklist for selected collateral and external submission decisions.",
       "destination": "Repository release reviewer",
       "requiredForV1": true,
       "implementationIssue": "MM-09",
@@ -1664,7 +1776,8 @@
         "EVAL-04",
         "SPN-01",
         "SPN-02",
-        "SPN-03"
+        "SPN-03",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
         "Exact candidate, leaf evidence, external blockers and source-owner receipts, pending"
@@ -1672,23 +1785,28 @@
       "v1": true,
       "intendedAudience": "The repository release reviewer and stakeholders for the explicitly scoped package.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/3",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
       "dependencies": [
         "Closure evidence for MM-01 through MM-08 plus the exact candidate and versioned manifest."
       ],
       "editableSourceLocations": [
         "review/release-checklist.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "RELEASE-CHECKLIST-001"
+      ]
     },
     {
       "assetId": "RELEASE-RECORD-001",
-      "type": "versioned release decision record",
-      "disposition": "planned",
-      "path": "review/releases/VERSION.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Record PASS/BLOCKED by check, tested revision, commands, limitations and separate collateral/submission decisions.",
+      "type": "Internal release decision record; draft package and final submission remain blocked.",
+      "disposition": "existing",
+      "path": "review/releases/v0.1.0-rehearsal.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Internal release decision record; draft package and final submission remain blocked.",
       "destination": "Repository release record",
       "requiredForV1": true,
       "implementationIssue": "MM-09",
@@ -1701,7 +1819,8 @@
         "EVAL-04",
         "SPN-01",
         "SPN-02",
-        "SPN-03"
+        "SPN-03",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
         "Version manifest and exact reviewer/owner decisions, pending"
@@ -1709,14 +1828,19 @@
       "v1": true,
       "intendedAudience": "The repository release reviewer and stakeholders for the explicitly scoped package.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/3",
-      "familyIds": [],
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
       "dependencies": [
         "Closure evidence for MM-01 through MM-08 plus the exact candidate and versioned manifest."
       ],
       "editableSourceLocations": [
         "review/releases/VERSION.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "RELEASE-RECORD-001"
+      ]
     },
     {
       "assetId": "PROV-SYNTHETIC-CANARY-001",
@@ -1748,7 +1872,10 @@
       "editableSourceLocations": [
         "review/fixtures/synthetic-canaries.json"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ]
     },
     {
       "assetId": "VALIDATOR-COLLATERAL-001",
@@ -1784,7 +1911,10 @@
       "editableSourceLocations": [
         "tools/validate_collateral.py"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "VALIDATOR-COLLATERAL-001"
+      ]
     },
     {
       "assetId": "TEST-COLLATERAL-POLICY-001",
@@ -1820,7 +1950,249 @@
       "editableSourceLocations": [
         "tests/test_collateral_validation.py"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "TEST-COLLATERAL-POLICY-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-SCENES-001",
+      "type": "Canonical 10-scene, 150-second silent synthetic rehearsal script and exact copy source.",
+      "disposition": "existing",
+      "path": "demo/rehearsal-scenes.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Canonical 10-scene, 150-second silent synthetic rehearsal script and exact copy source.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending."
+      ],
+      "editableSourceLocations": [
+        "demo/rehearsal-scenes.json"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-SCENES-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-TRANSCRIPT-001",
+      "type": "Exact general-authored text transcript for the silent rehearsal; accessibility companion, not final product evidence.",
+      "disposition": "existing",
+      "path": "demo/rehearsal-transcript.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exact general-authored text transcript for the silent rehearsal; accessibility companion, not final product evidence.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending."
+      ],
+      "editableSourceLocations": [
+        "demo/rehearsal-transcript.md"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-TRANSCRIPT-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-CAPTIONS-SRT-001",
+      "type": "Sentence-preserving timed SRT sidecar synchronized to silent rehearsal frames.",
+      "disposition": "existing",
+      "path": "demo/captions/silent-rehearsal.srt",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Sentence-preserving timed SRT sidecar synchronized to silent rehearsal frames.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending."
+      ],
+      "editableSourceLocations": [
+        "demo/captions/silent-rehearsal.srt"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-CAPTIONS-SRT-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-CAPTIONS-VTT-001",
+      "type": "Sentence-preserving timed WebVTT sidecar synchronized to silent rehearsal frames.",
+      "disposition": "existing",
+      "path": "demo/captions/silent-rehearsal.vtt",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Sentence-preserving timed WebVTT sidecar synchronized to silent rehearsal frames.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending."
+      ],
+      "editableSourceLocations": [
+        "demo/captions/silent-rehearsal.vtt"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-CAPTIONS-VTT-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-RENDER-PLAN-001",
+      "type": "Local render plan copied from scene source; internal production metadata, not product evidence.",
+      "disposition": "existing",
+      "path": "demo/exports/rehearsal-render-plan.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Local render plan copied from scene source; internal production metadata, not product evidence.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending."
+      ],
+      "editableSourceLocations": [
+        "demo/exports/rehearsal-render-plan.json"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-RENDER-PLAN-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-HTML-001",
+      "type": "Generated static browser rehearsal surface with status, scene text and exact captions; not product UI.",
+      "disposition": "existing",
+      "path": "demo/deck/rehearsal-scenes.html",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Generated static browser rehearsal surface with status, scene text and exact captions; not product UI.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending."
+      ],
+      "editableSourceLocations": [
+        "demo/deck/rehearsal-scenes.html"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-HTML-001"
+      ]
+    },
+    {
+      "assetId": "DEMO-REHEARSAL-VIDEO-001",
+      "type": "150-second silent synthetic concept rehearsal, distinct from the required final product video.",
+      "disposition": "existing",
+      "path": "demo/exports/silent-synthetic-rehearsal.mp4",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "150-second silent synthetic concept rehearsal, distinct from the required final product video.",
+      "destination": "Internal candidate review; external destination approval not granted.",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Assigned collateral production/review owner; source-owner approvals remain producer-owned.",
+      "reviewerRole": "User-assigned marketing-material supervisor for marketing copy; product/evidence/brand/source-owner approval remains separate.",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "provenanceReferences": [],
+      "v1": false,
+      "intendedAudience": "Internal collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "Independent exact-revision review and applicable producer/source-owner evidence remain pending.",
+        "This 150-second silent synthetic rehearsal does not satisfy DEMO-SUBMISSION-VIDEO-001; the final authentic product demo remains absent."
+      ],
+      "editableSourceLocations": [
+        "demo/exports/silent-synthetic-rehearsal.mp4"
+      ],
+      "exportLocations": [],
+      "provenanceRecordIds": [
+        "DEMO-REHEARSAL-VIDEO-001"
+      ]
     }
   ],
   "acceptance": {
@@ -1836,7 +2208,9 @@
     "MM-05-A": "Provenance schema records source/revision or digest, creator/tool/model, consent, rights, destination, attribution, expiry, redaction, lineage/checksum, reviewer and publishability. No visual/media destination-specific right is approved.",
     "MM-05-B": "The synthetic text/JSON fixture and controlled SVG/PNG pixel, metadata and canary checks are joined to scoped author receipts for the pinned formats, 16 local browser views, contrast results and text alternatives. Independent content/accessibility approval and rights remain pending; this is not generic media proof.",
     "MM-05-C": "Reuse, attribution, expiry, revocation, derivative lineage and restricted-original rules are documented. No real customer, secret or financial data was introduced.",
-    "MM-05-status": "Visual sources, exports, HTML and alternatives have scoped author evidence joined in this candidate; independent review, brand/source-owner rights, final destination approval, product/evaluation evidence and final submission outputs remain pending."
+    "MM-05-status": "Visual sources, exports, HTML and alternatives have scoped author evidence joined in this candidate; independent review, brand/source-owner rights, final destination approval, product/evaluation evidence and final submission outputs remain pending.",
+    "MM-03-currentArtifacts": "Current candidate tracks a 150-second silent synthetic rehearsal, scene source, narration, storyboard, transcript, SRT/VTT, generated HTML and scoped author receipts. The required authentic product demo remains absent at demo/exports/v1-demo.mp4 and the rehearsal is not a substitute.",
+    "MM-05-currentArtifacts": "All tracked candidate files have exact path/checksum rows. Narrative, rehearsal, caption, HTML, package-copy, render-frame, inspection and tool/evidence records are joined with source-to-derivative lineage and separate composition dependencies; external rights and independent approvals remain blocked."
   },
   "links": {
     "officialEventRequirements": {
@@ -1863,7 +2237,17 @@
     "comparisonEvidenceIssue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
     "financeQueryIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
     "cfoBusinessPlanIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3",
-    "entireCheckpointIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
+    "entireCheckpointIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10",
+    "currentProductRuntimeStatus": {
+      "repository": "Jevelopers-neatHack-2026/getticketstub.com",
+      "revision": "7f59d33922a0585205547d490b288b49eed32419",
+      "path": "README.md",
+      "sha256": "896457d9b29f1ced4b326143648261a15d047348a364e7375335164c5a1cee4b",
+      "mergedPullRequest": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/22",
+      "checkedAt": "2026-10-11T01:00:16Z",
+      "sourceScope": "README in the exact merge commit; confirms a Next.js App Router preview runtime and its documented modes, not a deployed run or product-release acceptance.",
+      "status": "prototype runtime source exists; default preview is simulated/demo mode; complete product capability and GT-12 #6 acceptance remain pending"
+    }
   },
   "visualJoin": {
     "handoffPath": "review/visual/asset-handoff.json",
@@ -1940,11 +2324,12 @@
       "path": "README.md",
       "classification": "repository_navigation",
       "pathAvailability": "tracked_at_baseline",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "c7949fad78a40d1aae4d812f48c057c101df3cee3df6ad96fbe83583bf9272e2"
+      "sha256": "e866dc29d76fc8d7f377896f84c7b2bc12be1846dbd2951ce10e84432e880893",
+      "provenanceRecordId": "PROV-FILE-B33563055168"
     },
     {
       "fileId": "DEMO-DECK-SUPPORT-001",
@@ -2035,45 +2420,49 @@
       "path": "docs/architecture/ACCEPTANCE.md",
       "classification": "architecture_documentation",
       "pathAvailability": "tracked_at_baseline",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "b4d60d9ce1b4d32fde62461c297b51853a89da7c5a60c690d29fd6fa9f042dc0"
+      "sha256": "b4d60d9ce1b4d32fde62461c297b51853a89da7c5a60c690d29fd6fa9f042dc0",
+      "provenanceRecordId": "PROV-FILE-4308465C541F"
     },
     {
       "fileId": "DOC-OWNERSHIP-001",
       "path": "docs/architecture/OWNERSHIP.md",
       "classification": "architecture_documentation",
       "pathAvailability": "tracked_at_baseline",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "721ca07fd6e3dba5892802259de1c92772814d450fafde5e1e4903253429a07e"
+      "sha256": "721ca07fd6e3dba5892802259de1c92772814d450fafde5e1e4903253429a07e",
+      "provenanceRecordId": "PROV-FILE-B47812D21B93"
     },
     {
       "fileId": "INV-MM01-001",
       "path": "docs/collateral-inventory.json",
       "classification": "inventory_registry",
-      "pathAvailability": "created_in_candidate",
+      "pathAvailability": "tracked_at_baseline",
       "lifecycleState": "draft",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
-      "sha256": null
+      "checksumStatus": "Self-referential registry; exact source/content digest is stored in the external provenance register without recursive self-hashing.",
+      "sha256": null,
+      "provenanceRecordId": "PROV-FILE-E018FDB8D981"
     },
     {
       "fileId": "NAV-MM01-001",
       "path": "docs/collateral-organization.md",
       "classification": "navigation_documentation",
-      "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "89da9ce07c97d33cdf482e1e28d7aa078cc3f88459393b6077a49db96d2f5b23"
+      "sha256": "7caa85001ac4c425bffcc6056cb2fc7b204263a4ad0079fb791cb48478bfd3e5",
+      "provenanceRecordId": "PROV-FILE-D12BFAAF0BBC"
     },
     {
       "fileId": "PROV-REDACTION-AFTER-ALT-001",
@@ -2188,11 +2577,12 @@
       "path": "messaging/README.md",
       "classification": "claim_policy",
       "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "2d634b9d6a86ef89f186ae660da77089baedd858688a77054a5754f43a5486d1"
+      "trackedAtRevision": "44c8ad88ffac455a61f239e4d6dfe14b38a742d0",
+      "sha256": "1d9e094c1708b9106cd2c33ca1a1ab805f0410fbddd763937e937983cc53efc6",
+      "provenanceRecordId": "MSG-POSITIONING-001"
     },
     {
       "fileId": "MSG-CLAIMS-001",
@@ -2202,16 +2592,17 @@
       "lifecycleState": "draft",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
-      "sha256": null
+      "trackedAtRevision": "44c8ad88ffac455a61f239e4d6dfe14b38a742d0",
+      "checksumStatus": "Self-referential registry; exact source/content digest is stored in the external provenance register without recursive self-hashing.",
+      "sha256": null,
+      "provenanceRecordId": "MSG-CLAIMS-001"
     },
     {
       "fileId": "PROV-ACCESSIBILITY-CHECKLIST-001",
       "path": "review/accessibility-checklist.md",
       "classification": "accessible_alternative",
       "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
@@ -2223,7 +2614,7 @@
       "path": "review/accessibility.md",
       "classification": "accessible_alternative",
       "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
@@ -2235,7 +2626,7 @@
       "path": "review/fixtures/synthetic-canaries.json",
       "classification": "synthetic_test_fixture",
       "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
@@ -2247,11 +2638,12 @@
       "path": "review/messaging-checklist.md",
       "classification": "review_policy",
       "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "805f207fb52c5f48a641aacc552de2036485af94334fa99d588cb12cde2dd193"
+      "sha256": "805f207fb52c5f48a641aacc552de2036485af94334fa99d588cb12cde2dd193",
+      "provenanceRecordId": "MSG-REVIEW-001"
     },
     {
       "fileId": "PROV-REGISTER-001",
@@ -2262,7 +2654,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "checksumStatus": "Self-referential registry; exact source/content digest is stored in the external provenance register without recursive self-hashing.",
       "sha256": null
     },
     {
@@ -2270,11 +2662,12 @@
       "path": "review/publication-safety.md",
       "classification": "reuse_policy",
       "pathAvailability": "created_in_candidate",
-      "lifecycleState": "draft",
+      "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "ce092eb260a4d0f5cccd2edcf7c441757157c91ac20dba65ab2e52f3dc6d7252"
+      "sha256": "461675a53c5d334656533d1a8ad78f7efaabb9b2ebcab515624ea5f3043ac87e",
+      "provenanceRecordId": "PROVENANCE-REDACTION-001"
     },
     {
       "fileId": "PROV-VISUAL-ACCESSIBILITY-001",
@@ -2417,7 +2810,8 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "8ec4a394e9789330919d2be50411f35137392576cc0ed3b90b9f42ab707d01f4"
+      "sha256": "7c20d01fe7cef04ba6590fb236c803c5e191aee3e46fc4d4d8b78b7f125761b3",
+      "provenanceRecordId": "TEST-COLLATERAL-POLICY-001"
     },
     {
       "fileId": "TEST-VISUAL-ACCESSIBILITY-001",
@@ -2464,7 +2858,8 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "ff306b0a781917540e950a3d5f93c3eed7f67cf1eccbe479a1cece0014837022"
+      "sha256": "6239f2e5789afb2904d47a687c076b6135d5d684b18799fe56597366d5dd6cf7",
+      "provenanceRecordId": "VALIDATOR-COLLATERAL-001"
     },
     {
       "fileId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
@@ -2621,6 +3016,1974 @@
       "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
       "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-768-001",
       "sha256": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99"
+    },
+    {
+      "fileId": "FILE-1A9519107C1A",
+      "path": "demo/captions/silent-rehearsal.srt",
+      "classification": "rehearsal_caption_sidecar",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
+      "provenanceRecordId": "DEMO-REHEARSAL-CAPTIONS-SRT-001"
+    },
+    {
+      "fileId": "FILE-AE3EFDFDA8C5",
+      "path": "demo/captions/silent-rehearsal.vtt",
+      "classification": "rehearsal_caption_sidecar",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
+      "provenanceRecordId": "DEMO-REHEARSAL-CAPTIONS-VTT-001"
+    },
+    {
+      "fileId": "FILE-2CA6F0294431",
+      "path": "demo/deck/rehearsal-scenes.html",
+      "classification": "generated_rehearsal_html",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "212b7d09fe923a8a0a3bc54c7a20936ed53b49d56eb94ffd8fa86d4f0b8bcb01",
+      "provenanceRecordId": "DEMO-REHEARSAL-HTML-001"
+    },
+    {
+      "fileId": "FILE-3716D613195D",
+      "path": "demo/exports/frames/cue-00.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "eca6e1b5453ef0d81b5ed3dcaf5c491c37022ffd145415e147b74aad32875391",
+      "provenanceRecordId": "PROV-FILE-3716D613195D"
+    },
+    {
+      "fileId": "FILE-4FD3FB542CF3",
+      "path": "demo/exports/frames/cue-01.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "31183ad4981e84bfab46248e49ed637fbf0d2008005f3e187c7b9ced0c1a6402",
+      "provenanceRecordId": "PROV-FILE-4FD3FB542CF3"
+    },
+    {
+      "fileId": "FILE-5EA686DC4E24",
+      "path": "demo/exports/frames/cue-02.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "9bf9d3b8f9899054635b824026e418ca38df5ab6a93119effa9d97eb4b327281",
+      "provenanceRecordId": "PROV-FILE-5EA686DC4E24"
+    },
+    {
+      "fileId": "FILE-CB372036614B",
+      "path": "demo/exports/frames/cue-03.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b16315fe7e2c4ac603eb8e4ba5baac45e9ba5f075adcaf0890ec64a348e14ebf",
+      "provenanceRecordId": "PROV-FILE-CB372036614B"
+    },
+    {
+      "fileId": "FILE-4AADBA8840DA",
+      "path": "demo/exports/frames/cue-04.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "ea8e6ed6c55b1f9b71fe501e155a53d88bd4dcf0de861edd40d737b7acb505d4",
+      "provenanceRecordId": "PROV-FILE-4AADBA8840DA"
+    },
+    {
+      "fileId": "FILE-5DCA1AE82CC4",
+      "path": "demo/exports/frames/cue-05.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "299a57372d7270712736b917b9a34bbb3d2d4634ffcab29ac8bd8899c50d7233",
+      "provenanceRecordId": "PROV-FILE-5DCA1AE82CC4"
+    },
+    {
+      "fileId": "FILE-67A16078F594",
+      "path": "demo/exports/frames/cue-06.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2030a8e9724e874677783424da075e01d5aec488204749d8bef8caaf32e94e5b",
+      "provenanceRecordId": "PROV-FILE-67A16078F594"
+    },
+    {
+      "fileId": "FILE-C8AE4B0E16A8",
+      "path": "demo/exports/frames/cue-07.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "076fd7df44e38d892ae7f2e1680370ece02e7078220e4ef5067cfe4c690fc8a8",
+      "provenanceRecordId": "PROV-FILE-C8AE4B0E16A8"
+    },
+    {
+      "fileId": "FILE-D9A0BA9B0206",
+      "path": "demo/exports/frames/cue-08.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "163fb954016e0f3fa086d542b02c4a721ffffe048d2761dd9364c300065b3e70",
+      "provenanceRecordId": "PROV-FILE-D9A0BA9B0206"
+    },
+    {
+      "fileId": "FILE-732353DBE72E",
+      "path": "demo/exports/frames/cue-09.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "d766d0a3a957542a193362997617f62b90468e90d60a1cafd0d530000a9483d9",
+      "provenanceRecordId": "PROV-FILE-732353DBE72E"
+    },
+    {
+      "fileId": "FILE-4C8D25D71459",
+      "path": "demo/exports/frames/cue-10.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "cb804f44a5b4be1db473b36cd2cc4ae3228472386fa5e57f77daba286120341e",
+      "provenanceRecordId": "PROV-FILE-4C8D25D71459"
+    },
+    {
+      "fileId": "FILE-F915DA52D796",
+      "path": "demo/exports/frames/cue-11.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "0507af27d7acabcaee8f409bd82cb16fdc903a97284d63825ea48abea281db0b",
+      "provenanceRecordId": "PROV-FILE-F915DA52D796"
+    },
+    {
+      "fileId": "FILE-52BCC178CDC6",
+      "path": "demo/exports/frames/cue-12.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "bfd3dc310e51e483d76c8a56a698f7e071b470cc7d4337dea7f76d5672ecf275",
+      "provenanceRecordId": "PROV-FILE-52BCC178CDC6"
+    },
+    {
+      "fileId": "FILE-E8E784C67EFD",
+      "path": "demo/exports/frames/cue-13.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "38082fad8223c09da41aa07125146dc458ed33b88802f64d7af95ef486639233",
+      "provenanceRecordId": "PROV-FILE-E8E784C67EFD"
+    },
+    {
+      "fileId": "FILE-D625D5CA0DDD",
+      "path": "demo/exports/frames/cue-14.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "df3dcd380c2e465930b9f3ffb0af443a746bb7b1e1125bcb2a5879092d7187b7",
+      "provenanceRecordId": "PROV-FILE-D625D5CA0DDD"
+    },
+    {
+      "fileId": "FILE-7EC8F35A605A",
+      "path": "demo/exports/frames/cue-15.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "9d43d0786369058fee21fc442a19139a60eaa163cb7a22d199f24c7b4e7a3494",
+      "provenanceRecordId": "PROV-FILE-7EC8F35A605A"
+    },
+    {
+      "fileId": "FILE-7AD8D7B8A20F",
+      "path": "demo/exports/frames/cue-16.png",
+      "classification": "internal_rendered_cue_frame",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "8d16e9f3cab26534ed0b4dd2af0550f82b2ddc6d86de421d619f6850559fe279",
+      "provenanceRecordId": "PROV-FILE-7AD8D7B8A20F"
+    },
+    {
+      "fileId": "FILE-9C5D8B3D0D2D",
+      "path": "demo/exports/rehearsal-render-plan.json",
+      "classification": "rehearsal_render_plan",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "4a34976e55559da0980cea196022a642ec04d2cf3ad69925fcff7378befaeeb7",
+      "provenanceRecordId": "DEMO-REHEARSAL-RENDER-PLAN-001"
+    },
+    {
+      "fileId": "FILE-52E68BB878FB",
+      "path": "demo/exports/silent-synthetic-rehearsal.mp4",
+      "classification": "silent_synthetic_rehearsal_video",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+      "provenanceRecordId": "DEMO-REHEARSAL-VIDEO-001"
+    },
+    {
+      "fileId": "FILE-17460F83DFC9",
+      "path": "demo/narration.md",
+      "classification": "draft_demo_narrative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
+      "provenanceRecordId": "DEMO-NARRATION-001"
+    },
+    {
+      "fileId": "FILE-B66BC926B523",
+      "path": "demo/product-explanation.md",
+      "classification": "draft_demo_narrative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "80a7c542ba6ccc230b130b60d377cf7bcc0f1910b7bcafa07a64fefbf070bc60",
+      "provenanceRecordId": "DEMO-EXPLAINER-001"
+    },
+    {
+      "fileId": "FILE-8F4CF9FEEAA1",
+      "path": "demo/recording-checklist.md",
+      "classification": "draft_demo_narrative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b1ec1323b648cb371c9e80fd9d52d6fbdf2321ab7d160fa077c512ddaa79afba",
+      "provenanceRecordId": "DEMO-RECORDING-CHECKLIST-001"
+    },
+    {
+      "fileId": "FILE-07F4E3645C40",
+      "path": "demo/rehearsal-scenes.json",
+      "classification": "canonical_rehearsal_scene_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+      "provenanceRecordId": "DEMO-REHEARSAL-SCENES-001"
+    },
+    {
+      "fileId": "FILE-D1C88DC26891",
+      "path": "demo/rehearsal-transcript.md",
+      "classification": "accessible_rehearsal_transcript",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
+      "provenanceRecordId": "DEMO-REHEARSAL-TRANSCRIPT-001"
+    },
+    {
+      "fileId": "FILE-0FA8CC6D3163",
+      "path": "demo/storyboard.md",
+      "classification": "draft_demo_narrative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
+      "provenanceRecordId": "DEMO-STORYBOARD-001"
+    },
+    {
+      "fileId": "FILE-603326FDADA1",
+      "path": "demo/submission-narrative.md",
+      "classification": "draft_demo_narrative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
+      "provenanceRecordId": "DEMO-SUBMISSION-NARRATIVE-001"
+    },
+    {
+      "fileId": "FILE-7FEE86B4BBB1",
+      "path": "docs/collateral-handoff.md",
+      "classification": "repository_navigation",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "44c8ad88ffac455a61f239e4d6dfe14b38a742d0",
+      "sha256": "14adede49c5dcab40399575d9786d172c64f2fe360ff3cd24134adffbc9025d7",
+      "provenanceRecordId": "HANDOFF-GUIDE-001"
+    },
+    {
+      "fileId": "FILE-CEBA79733279",
+      "path": "launch/announcement-copy.md",
+      "classification": "draft_campaign_collateral",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "cdc0cea55bfb3dac40f9da2905c195d411b69d34e9b7b9d37b638ee6d0bf2ba9",
+      "provenanceRecordId": "LAUNCH-X-COPY-001"
+    },
+    {
+      "fileId": "FILE-B9AC31BA1594",
+      "path": "launch/deliverable-briefs.md",
+      "classification": "draft_campaign_collateral",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a46d4f9f3e3b8e56b49f8ded2af473d1d68e96623a372f3fa3bfcdfc246a6b8a",
+      "provenanceRecordId": "PROV-FILE-B9AC31BA1594"
+    },
+    {
+      "fileId": "FILE-16A3723BC5F7",
+      "path": "release/v0.1.0-rehearsal/assets/deck-001-demo-deck-support-001-r01-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+      "provenanceRecordId": "PROV-FILE-16A3723BC5F7"
+    },
+    {
+      "fileId": "FILE-DC6A027B38C9",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r01-repository-internal-review-text-en-us-concept-explainer.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "65d514f87c806a5e78c29e9999f724bd38380ccc0341409ae6572ce6c1c5376f",
+      "provenanceRecordId": "PROV-FILE-DC6A027B38C9"
+    },
+    {
+      "fileId": "FILE-A7C50DDF7F9A",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r01-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "9acec3f0efd53772baa66d69487fc3cc69eb4e027d7e05690610fb7152d06f72",
+      "provenanceRecordId": "PROV-FILE-A7C50DDF7F9A"
+    },
+    {
+      "fileId": "FILE-EFE7C960615E",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r01-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "c7267dbb0c417766c0b65f3af2e52a2787bd1d93007112cdaf756f63dc34ecf4",
+      "provenanceRecordId": "PROV-FILE-EFE7C960615E"
+    },
+    {
+      "fileId": "FILE-7E82E52F7C29",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r01-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
+      "provenanceRecordId": "PROV-FILE-7E82E52F7C29"
+    },
+    {
+      "fileId": "FILE-2114D5392229",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r01-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
+      "provenanceRecordId": "PROV-FILE-2114D5392229"
+    },
+    {
+      "fileId": "FILE-DD88A6342BC4",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r01-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+      "provenanceRecordId": "PROV-FILE-DD88A6342BC4"
+    },
+    {
+      "fileId": "FILE-E05714683C41",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r01-repository-internal-review-text-en-us-caption-exact-transcript.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "6d15ba0ae0b32c1f0e7ae9232687b39bf759e6ae44659c900da30600604e1984",
+      "provenanceRecordId": "PROV-FILE-E05714683C41"
+    },
+    {
+      "fileId": "FILE-316F5E377A24",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r01-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+      "provenanceRecordId": "PROV-FILE-316F5E377A24"
+    },
+    {
+      "fileId": "FILE-47D32100F987",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r01-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3",
+      "provenanceRecordId": "PROV-FILE-47D32100F987"
+    },
+    {
+      "fileId": "FILE-523AB7C5F3E1",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r01-repository-internal-review-text-en-us-submission-preflight.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
+      "provenanceRecordId": "PROV-FILE-523AB7C5F3E1"
+    },
+    {
+      "fileId": "FILE-A380F085125A",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r01-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
+      "provenanceRecordId": "PROV-FILE-A380F085125A"
+    },
+    {
+      "fileId": "FILE-CF037D115D82",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r01-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+      "provenanceRecordId": "PROV-FILE-CF037D115D82"
+    },
+    {
+      "fileId": "FILE-A9D8CF2BE2A4",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r01-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+      "provenanceRecordId": "PROV-FILE-A9D8CF2BE2A4"
+    },
+    {
+      "fileId": "FILE-267E17C53FB6",
+      "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r01-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
+      "provenanceRecordId": "PROV-FILE-267E17C53FB6"
+    },
+    {
+      "fileId": "FILE-DDB2BC496431",
+      "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r01-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+      "provenanceRecordId": "PROV-FILE-DDB2BC496431"
+    },
+    {
+      "fileId": "FILE-7B20B0799157",
+      "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r01-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
+      "provenanceRecordId": "PROV-FILE-7B20B0799157"
+    },
+    {
+      "fileId": "FILE-32D1A28C5E72",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r01-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+      "provenanceRecordId": "PROV-FILE-32D1A28C5E72"
+    },
+    {
+      "fileId": "FILE-5B3DC7E891CE",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r01-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "cdc0cea55bfb3dac40f9da2905c195d411b69d34e9b7b9d37b638ee6d0bf2ba9",
+      "provenanceRecordId": "PROV-FILE-5B3DC7E891CE"
+    },
+    {
+      "fileId": "FILE-B7E582F9B754",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r01-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
+      "provenanceRecordId": "PROV-FILE-B7E582F9B754"
+    },
+    {
+      "fileId": "FILE-767E4CA2260D",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r01-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+      "provenanceRecordId": "PROV-FILE-767E4CA2260D"
+    },
+    {
+      "fileId": "FILE-B2D7970642E6",
+      "path": "release/v0.1.0-rehearsal/manifest.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "3618ec3addd926846835da9e83af80647821ff2d6323af8dd5f23ec2c26c27ce",
+      "provenanceRecordId": "HANDOFF-MANIFEST-001"
+    },
+    {
+      "fileId": "FILE-C8093907B9B9",
+      "path": "release/v0.1.0-rehearsal/package-spec.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
+      "sha256": "37cabd5d8b2ad223c8e6b3486333fb1210ae45dc9a21794609532e590a17b1fd",
+      "provenanceRecordId": "PROV-FILE-C8093907B9B9"
+    },
+    {
+      "fileId": "FILE-54D26FCE011C",
+      "path": "review/brand-consumption.md",
+      "classification": "internal_review_or_publication_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b0ca34576d614fe9e3d6b97a887bf461341bac12750ab571b02d4baf25ffa7e2",
+      "provenanceRecordId": "BRAND-CONSUMPTION-001"
+    },
+    {
+      "fileId": "FILE-AF5EF6677890",
+      "path": "review/official-format-sources.json",
+      "classification": "internal_review_or_publication_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "beabce8b0427f78946a5ff01f5abbb417a95489b226e46fee38c991569b121ac",
+      "provenanceRecordId": "PROV-FILE-AF5EF6677890"
+    },
+    {
+      "fileId": "FILE-D8C72FE9ACAE",
+      "path": "review/release-checklist.md",
+      "classification": "internal_review_or_publication_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "44c8ad88ffac455a61f239e4d6dfe14b38a742d0",
+      "sha256": "2bfe8e6bf38bbaf6632d3bb4c50210be47661c5529cc92a1a26d265ec0a73d9b",
+      "provenanceRecordId": "RELEASE-CHECKLIST-001"
+    },
+    {
+      "fileId": "FILE-75BC745F1013",
+      "path": "review/releases/v0.1.0-rehearsal.md",
+      "classification": "internal_review_or_publication_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "44c8ad88ffac455a61f239e4d6dfe14b38a742d0",
+      "sha256": "cce2765324ad3e0c72056bf6d6072bb69bdcd3c39dd1ec7da60c5d883a9326af",
+      "provenanceRecordId": "RELEASE-RECORD-001"
+    },
+    {
+      "fileId": "FILE-EEE7F058D430",
+      "path": "review/visual/brand-comparison.json",
+      "classification": "internal_review_or_publication_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "6acf594a741911b56b219f1d13038377e8d0e59013f095462d309a4596f1844f",
+      "provenanceRecordId": "PROV-FILE-EEE7F058D430"
+    },
+    {
+      "fileId": "FILE-6F03DD9432B7",
+      "path": "review/visual/brand-comparison/announcement.html",
+      "classification": "internal_brand_comparison_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "885f7c1289650509afb42991a8754023fe49d30cf4de17a38c2a8118787ff52f",
+      "provenanceRecordId": "PROV-FILE-6F03DD9432B7"
+    },
+    {
+      "fileId": "FILE-2E6666E835BD",
+      "path": "review/visual/brand-comparison/announcement.png",
+      "classification": "internal_brand_comparison_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b073ef808cbef97f0abfde4211259da4a03d08638f30430fb9a53dd6977f2676",
+      "provenanceRecordId": "PROV-FILE-2E6666E835BD"
+    },
+    {
+      "fileId": "FILE-3690237F6289",
+      "path": "review/visual/brand-comparison/demo.html",
+      "classification": "internal_brand_comparison_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "ac9fc648b0c4a3d720513346679f9abda2658e1216f77486c1c94383e04e53f4",
+      "provenanceRecordId": "PROV-FILE-3690237F6289"
+    },
+    {
+      "fileId": "FILE-4E03DF2B9B4E",
+      "path": "review/visual/brand-comparison/demo.png",
+      "classification": "internal_brand_comparison_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "f9bd3462c157a474135e72edb0cec80bd1fa78cf5118e2888c5b3d0595cfbd7d",
+      "provenanceRecordId": "PROV-FILE-4E03DF2B9B4E"
+    },
+    {
+      "fileId": "FILE-3F01F61BC5A1",
+      "path": "review/visual/brand-comparison/render.mjs",
+      "classification": "internal_brand_comparison_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "dcf8d2ae38589781f1b79904946a9b537328e4c37472ef2b8d1db1beaed5b122",
+      "provenanceRecordId": "PROV-FILE-3F01F61BC5A1"
+    },
+    {
+      "fileId": "FILE-17BBF330C0A3",
+      "path": "review/visual/rehearsal/browser.json",
+      "classification": "internal_video_render_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "92d0b83fa4ee5ec015c1cfe7b32c32fc8e844f2bacd9b3d5e599d1eb683a07eb",
+      "provenanceRecordId": "PROV-FILE-17BBF330C0A3"
+    },
+    {
+      "fileId": "FILE-29268545EDB5",
+      "path": "review/visual/rehearsal/ffprobe.json",
+      "classification": "internal_video_render_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "9fb1ae033268d1ae411072a82e24019c767362f778ed21cb8c899e6b6fb8c379",
+      "provenanceRecordId": "PROV-FILE-29268545EDB5"
+    },
+    {
+      "fileId": "FILE-DB0600AC8A2B",
+      "path": "review/visual/rehearsal/inspection/scene-01-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a4a221d45b6b6a6fa0f0104adb35d7922f82b2d4571f1afb1289c9aae36ff66a",
+      "provenanceRecordId": "PROV-FILE-DB0600AC8A2B"
+    },
+    {
+      "fileId": "FILE-0F033F767161",
+      "path": "review/visual/rehearsal/inspection/scene-01-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a590d8b2c66ffa8c361e3da13725de53a7d63070744c7b74903539a699783154",
+      "provenanceRecordId": "PROV-FILE-0F033F767161"
+    },
+    {
+      "fileId": "FILE-5BEE2BEA8414",
+      "path": "review/visual/rehearsal/inspection/scene-01-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "fd2dbdfe915755f823b738a226f33b436c2f5beda3ac9264238bc87122f2a085",
+      "provenanceRecordId": "PROV-FILE-5BEE2BEA8414"
+    },
+    {
+      "fileId": "FILE-F2364AEA0C27",
+      "path": "review/visual/rehearsal/inspection/scene-01-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "8b8e10e086cce4503e58b731f55064a244f11daa009c49a2a94dcd6ffc5124bf",
+      "provenanceRecordId": "PROV-FILE-F2364AEA0C27"
+    },
+    {
+      "fileId": "FILE-C648C54526A9",
+      "path": "review/visual/rehearsal/inspection/scene-01-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "fc9d9100665421af78b17dd790f0ab21cc41808af10adb0a9b5298de5179d7c6",
+      "provenanceRecordId": "PROV-FILE-C648C54526A9"
+    },
+    {
+      "fileId": "FILE-F8BBF18D0B48",
+      "path": "review/visual/rehearsal/inspection/scene-01-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "e5040a3021cdba5fc0489d157f2f6c172aeb63e0518aad833f4bb6f9a034ee6d",
+      "provenanceRecordId": "PROV-FILE-F8BBF18D0B48"
+    },
+    {
+      "fileId": "FILE-89E6D060C555",
+      "path": "review/visual/rehearsal/inspection/scene-02-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a3afc6e4a3b80519a6fa3d0f29da1b9fd8ded7a37357d5ac8617861f235cb808",
+      "provenanceRecordId": "PROV-FILE-89E6D060C555"
+    },
+    {
+      "fileId": "FILE-99040C8F4B23",
+      "path": "review/visual/rehearsal/inspection/scene-02-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2178134ea13b29c9470b388e93f6d39edd634023bd2f73e1d24be8f441ccd27c",
+      "provenanceRecordId": "PROV-FILE-99040C8F4B23"
+    },
+    {
+      "fileId": "FILE-64BC837372AA",
+      "path": "review/visual/rehearsal/inspection/scene-02-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b9269c91baf7d43da7161b37f51cc7e53275a226d7d65c50fa8fe174ab49af3d",
+      "provenanceRecordId": "PROV-FILE-64BC837372AA"
+    },
+    {
+      "fileId": "FILE-264E088CE7B6",
+      "path": "review/visual/rehearsal/inspection/scene-02-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "d0c2fb4638197ea983de6a290ede89c132ae9d71464019f2ab0486f40b796a12",
+      "provenanceRecordId": "PROV-FILE-264E088CE7B6"
+    },
+    {
+      "fileId": "FILE-FF1444C4EB7B",
+      "path": "review/visual/rehearsal/inspection/scene-02-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "8e9d964b4cb7b3c1dafafbe3676d4d82c7eaec5eec4cfec622bdac4ecc5dab14",
+      "provenanceRecordId": "PROV-FILE-FF1444C4EB7B"
+    },
+    {
+      "fileId": "FILE-7C5652543BB8",
+      "path": "review/visual/rehearsal/inspection/scene-02-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "753bc1488e795c122db1274499fc41e92720b0c1eceff777df482aca31aebcf9",
+      "provenanceRecordId": "PROV-FILE-7C5652543BB8"
+    },
+    {
+      "fileId": "FILE-EC4B0792F9C6",
+      "path": "review/visual/rehearsal/inspection/scene-03-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2d0e12022b2bb29270485a4652dd8cf72c06d5564052c09dcb96d7273de68426",
+      "provenanceRecordId": "PROV-FILE-EC4B0792F9C6"
+    },
+    {
+      "fileId": "FILE-A5434D7DB595",
+      "path": "review/visual/rehearsal/inspection/scene-03-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "22747fb1e09801677aac4c10ae443503565a714b82d599646ea52d1fbdd40a46",
+      "provenanceRecordId": "PROV-FILE-A5434D7DB595"
+    },
+    {
+      "fileId": "FILE-6602E8ECE6C9",
+      "path": "review/visual/rehearsal/inspection/scene-03-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "87432e2c1a811979df2f1c11fbbdeb4f6c918990790cac7abd6cbc04bea8da47",
+      "provenanceRecordId": "PROV-FILE-6602E8ECE6C9"
+    },
+    {
+      "fileId": "FILE-1F86B0E4D187",
+      "path": "review/visual/rehearsal/inspection/scene-03-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "180c2dd2e9bd1e5cae830fe15037b8be97b61c2ed94c4d2888a796fa2a8fcc5d",
+      "provenanceRecordId": "PROV-FILE-1F86B0E4D187"
+    },
+    {
+      "fileId": "FILE-3B6B5E633B43",
+      "path": "review/visual/rehearsal/inspection/scene-03-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "fb05ecaac1d377a33345b2657b9786106568b88051745c74c2899ed6ab03c5b7",
+      "provenanceRecordId": "PROV-FILE-3B6B5E633B43"
+    },
+    {
+      "fileId": "FILE-0236B549A9F3",
+      "path": "review/visual/rehearsal/inspection/scene-03-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "22a7f55ed24f0a72ac843a79b2ba5af21c998dd75bc10bde6aee3d724a94545d",
+      "provenanceRecordId": "PROV-FILE-0236B549A9F3"
+    },
+    {
+      "fileId": "FILE-04ED2CE78C87",
+      "path": "review/visual/rehearsal/inspection/scene-04-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "6433c0cc92bc9dbb470f7a6b0ea48f9c1735efdee59965f4c66e56c7cf3aa54c",
+      "provenanceRecordId": "PROV-FILE-04ED2CE78C87"
+    },
+    {
+      "fileId": "FILE-CAF69092D7BF",
+      "path": "review/visual/rehearsal/inspection/scene-04-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a269148c74df635946abb85641dcd330f36964916624f3394f51196e7212d4cb",
+      "provenanceRecordId": "PROV-FILE-CAF69092D7BF"
+    },
+    {
+      "fileId": "FILE-1C42EF4819E7",
+      "path": "review/visual/rehearsal/inspection/scene-04-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "693261dc3d56a93537f4ed7ea2130713c681d3aadfcbbaf690ea4f165f1a750e",
+      "provenanceRecordId": "PROV-FILE-1C42EF4819E7"
+    },
+    {
+      "fileId": "FILE-049071AC1902",
+      "path": "review/visual/rehearsal/inspection/scene-04-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "936c19a237cabb6873ad1000b7844ff7cce67c2dfd59fab4e7bfa416408f7a24",
+      "provenanceRecordId": "PROV-FILE-049071AC1902"
+    },
+    {
+      "fileId": "FILE-B279EF04E25B",
+      "path": "review/visual/rehearsal/inspection/scene-04-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "604e088c3dd276378436de0ab3856a64cc4995768792922d5d5012dfc58e6c90",
+      "provenanceRecordId": "PROV-FILE-B279EF04E25B"
+    },
+    {
+      "fileId": "FILE-98B0C0ADF3EB",
+      "path": "review/visual/rehearsal/inspection/scene-04-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "4c243fabb007f07ec5ad7c08e33e174331c70239d8c48cd9303fc2a0ed279306",
+      "provenanceRecordId": "PROV-FILE-98B0C0ADF3EB"
+    },
+    {
+      "fileId": "FILE-CA5B5A3B0EC6",
+      "path": "review/visual/rehearsal/inspection/scene-05-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a1b8c5befcbdee53883d7e63dc580e8c7178ec28a5ff77d61e469cc89202f417",
+      "provenanceRecordId": "PROV-FILE-CA5B5A3B0EC6"
+    },
+    {
+      "fileId": "FILE-7C9C7CF0D00B",
+      "path": "review/visual/rehearsal/inspection/scene-05-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "80b101e3ba401d7d47acd36f8b3aa6c2113b680ddc068857ac34e0e789c60261",
+      "provenanceRecordId": "PROV-FILE-7C9C7CF0D00B"
+    },
+    {
+      "fileId": "FILE-EFC882254156",
+      "path": "review/visual/rehearsal/inspection/scene-05-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "fa0f84d8a03d10f56a9b57bf18c802c4a65cd49f020f99c314ab979ba285ba89",
+      "provenanceRecordId": "PROV-FILE-EFC882254156"
+    },
+    {
+      "fileId": "FILE-9AE1587A0A28",
+      "path": "review/visual/rehearsal/inspection/scene-05-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "7891ce53e2319f917553cbc6c6b75373c0b01e141277b531ed9aec284cbee4cf",
+      "provenanceRecordId": "PROV-FILE-9AE1587A0A28"
+    },
+    {
+      "fileId": "FILE-8E91BF192E0F",
+      "path": "review/visual/rehearsal/inspection/scene-05-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "483f28380ef4d9437df9dfae3760344a18c346291be6a08fc6812646a5ce6777",
+      "provenanceRecordId": "PROV-FILE-8E91BF192E0F"
+    },
+    {
+      "fileId": "FILE-DE1A21E27AE3",
+      "path": "review/visual/rehearsal/inspection/scene-05-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "5defd37c04d32723d0ad88bda62accbebee8d564c740cfaa50356013ed46593b",
+      "provenanceRecordId": "PROV-FILE-DE1A21E27AE3"
+    },
+    {
+      "fileId": "FILE-D2E773EC9C6C",
+      "path": "review/visual/rehearsal/inspection/scene-06-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "d994517d543754f0e26d6c79815d6c9024aa7826ae629d5e74e5cbd9d8f6c771",
+      "provenanceRecordId": "PROV-FILE-D2E773EC9C6C"
+    },
+    {
+      "fileId": "FILE-6128D1F77A5F",
+      "path": "review/visual/rehearsal/inspection/scene-06-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b4d437383670c84cd23d5674260c3489ccbb2d5093d62521751b1008674cfffe",
+      "provenanceRecordId": "PROV-FILE-6128D1F77A5F"
+    },
+    {
+      "fileId": "FILE-1F99FAC8E682",
+      "path": "review/visual/rehearsal/inspection/scene-06-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "78b9854cb4f6681a934700cb5d4266b3e3651f1ae3739018cdfef90531e0a807",
+      "provenanceRecordId": "PROV-FILE-1F99FAC8E682"
+    },
+    {
+      "fileId": "FILE-8468618D99E2",
+      "path": "review/visual/rehearsal/inspection/scene-06-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "cb65dbf2975a7a4845e7de440d5268e8d3aff38fac5273f0ee89b3e3028b9151",
+      "provenanceRecordId": "PROV-FILE-8468618D99E2"
+    },
+    {
+      "fileId": "FILE-A81EE23DDFB0",
+      "path": "review/visual/rehearsal/inspection/scene-06-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "1a0d80045b63a78e803b2ff4599283dc106ae8fd5fc69719bb6d6ddb480a88e5",
+      "provenanceRecordId": "PROV-FILE-A81EE23DDFB0"
+    },
+    {
+      "fileId": "FILE-463378FA20B8",
+      "path": "review/visual/rehearsal/inspection/scene-06-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "8bcf58d34dde10939fc967693f01e5c3867e16fb9e3f42dc4752279a72bceafa",
+      "provenanceRecordId": "PROV-FILE-463378FA20B8"
+    },
+    {
+      "fileId": "FILE-8F42CFB3BC06",
+      "path": "review/visual/rehearsal/inspection/scene-07-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "5766d98929f971c3e2aebba9182d34e26f7115477100fd0e0b44d2848942d7bd",
+      "provenanceRecordId": "PROV-FILE-8F42CFB3BC06"
+    },
+    {
+      "fileId": "FILE-703BA3EED5F9",
+      "path": "review/visual/rehearsal/inspection/scene-07-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "a2cd48c93850d1850abbd8940d0ff03160390c6289ca00b9d9ddb9199f3c5d35",
+      "provenanceRecordId": "PROV-FILE-703BA3EED5F9"
+    },
+    {
+      "fileId": "FILE-F89B298605E1",
+      "path": "review/visual/rehearsal/inspection/scene-07-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "cce45faccb6b31cad2f839cb38bec53c64c57e50f49821581367d2f894ead7b0",
+      "provenanceRecordId": "PROV-FILE-F89B298605E1"
+    },
+    {
+      "fileId": "FILE-B494447BDFEE",
+      "path": "review/visual/rehearsal/inspection/scene-07-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "66ef2bf040cdcde3e7d9b67fa17a96e94fa0fc1310effc68abbcbd0c6a86d283",
+      "provenanceRecordId": "PROV-FILE-B494447BDFEE"
+    },
+    {
+      "fileId": "FILE-5467967F63C8",
+      "path": "review/visual/rehearsal/inspection/scene-07-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "d97d2ef06541fd0a03a23f0b8f85d50273e6a050e8cdacb7cce8086919986f68",
+      "provenanceRecordId": "PROV-FILE-5467967F63C8"
+    },
+    {
+      "fileId": "FILE-941D7DC22157",
+      "path": "review/visual/rehearsal/inspection/scene-07-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "b45ef41ba684dee7cefed6722fb86e76662f814833b19dfddd9d3490e9a61f33",
+      "provenanceRecordId": "PROV-FILE-941D7DC22157"
+    },
+    {
+      "fileId": "FILE-2C197B938639",
+      "path": "review/visual/rehearsal/inspection/scene-08-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "014d124d8c32d80f33918796f0818c61136a9a709244de4291945ef2c861997f",
+      "provenanceRecordId": "PROV-FILE-2C197B938639"
+    },
+    {
+      "fileId": "FILE-C5228E8DA345",
+      "path": "review/visual/rehearsal/inspection/scene-08-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "ce11c4cbbf2c8c3bc97f0246e885a36fcb2aa13a3e4e0d1d71400065b8f09507",
+      "provenanceRecordId": "PROV-FILE-C5228E8DA345"
+    },
+    {
+      "fileId": "FILE-5C821E1EE3A0",
+      "path": "review/visual/rehearsal/inspection/scene-08-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "57bbf853f8fcc19469ab5f459d4b8033f1bb62864e10af9a6e7a8b1c463f1418",
+      "provenanceRecordId": "PROV-FILE-5C821E1EE3A0"
+    },
+    {
+      "fileId": "FILE-D8A8021362A3",
+      "path": "review/visual/rehearsal/inspection/scene-08-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "3eb137c5eb41616a9f78087b5e1848ccec923d967d4d205c0eec4c3c2c35d1e0",
+      "provenanceRecordId": "PROV-FILE-D8A8021362A3"
+    },
+    {
+      "fileId": "FILE-49FD0E80412C",
+      "path": "review/visual/rehearsal/inspection/scene-08-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "1cfe2b19335bc0f88500083a86336c554b594c6bb3c89c20fbcc162dd73c033d",
+      "provenanceRecordId": "PROV-FILE-49FD0E80412C"
+    },
+    {
+      "fileId": "FILE-44AF7A5651DC",
+      "path": "review/visual/rehearsal/inspection/scene-08-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "7068c1edb0cf2670e5f69f9ef2bf6a44f0d07d1964cfb530d49b35ee5abc71bd",
+      "provenanceRecordId": "PROV-FILE-44AF7A5651DC"
+    },
+    {
+      "fileId": "FILE-E7EA533DE3D0",
+      "path": "review/visual/rehearsal/inspection/scene-09-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "bdf6113693271b59130cd907aa3af2e5767093cd3d98cc5c193ac4a962a5a2f3",
+      "provenanceRecordId": "PROV-FILE-E7EA533DE3D0"
+    },
+    {
+      "fileId": "FILE-773E6C706898",
+      "path": "review/visual/rehearsal/inspection/scene-09-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "2ef029139154104ae7d91cd5e57edc72219c02b6ecf97358daeba761e81e56a8",
+      "provenanceRecordId": "PROV-FILE-773E6C706898"
+    },
+    {
+      "fileId": "FILE-FD9E52D36B2F",
+      "path": "review/visual/rehearsal/inspection/scene-09-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "e0930287cb9dbe1e053c5e23f6581d5ec5b6f91bdb7c5616e0f300bd9a5b8132",
+      "provenanceRecordId": "PROV-FILE-FD9E52D36B2F"
+    },
+    {
+      "fileId": "FILE-990440925BDE",
+      "path": "review/visual/rehearsal/inspection/scene-09-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "0e2a9daec67f7d0c159fe3e444b3c14f713aea664c9aaa24901be16f08a6ef8f",
+      "provenanceRecordId": "PROV-FILE-990440925BDE"
+    },
+    {
+      "fileId": "FILE-CF4D2C9A534D",
+      "path": "review/visual/rehearsal/inspection/scene-09-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "51150b20b1892a200bbb6234cfce0987d19355329084ed90e847545d3460ef1d",
+      "provenanceRecordId": "PROV-FILE-CF4D2C9A534D"
+    },
+    {
+      "fileId": "FILE-9F4BC10F8153",
+      "path": "review/visual/rehearsal/inspection/scene-09-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "c7fae144a45f8887420ecf6ec3b94e626fed30747999f13494422b1e2d273611",
+      "provenanceRecordId": "PROV-FILE-9F4BC10F8153"
+    },
+    {
+      "fileId": "FILE-4FB03C941213",
+      "path": "review/visual/rehearsal/inspection/scene-10-end-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "170ac00b1b9c2f7d96116f3a953e7402d2bd3c83a9d40b51a955e2fb51036272",
+      "provenanceRecordId": "PROV-FILE-4FB03C941213"
+    },
+    {
+      "fileId": "FILE-DAABAA5BBBCE",
+      "path": "review/visual/rehearsal/inspection/scene-10-end.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "75017842c7b9829bcedbef73a6c40c768677dd954676222e39df8d0f51f22448",
+      "provenanceRecordId": "PROV-FILE-DAABAA5BBBCE"
+    },
+    {
+      "fileId": "FILE-9940F713F3ED",
+      "path": "review/visual/rehearsal/inspection/scene-10-pair-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "f7164c269d443265dc6e86e9ca0b1a5f60db2560763ff827eea024ef955dc614",
+      "provenanceRecordId": "PROV-FILE-9940F713F3ED"
+    },
+    {
+      "fileId": "FILE-5B13C371E065",
+      "path": "review/visual/rehearsal/inspection/scene-10-pair.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "0e5ca905bb2eff2e2f1e0f55403a634cd5673ce03826e8c0dc7b42ece282b774",
+      "provenanceRecordId": "PROV-FILE-5B13C371E065"
+    },
+    {
+      "fileId": "FILE-ED9BE7370193",
+      "path": "review/visual/rehearsal/inspection/scene-10-start-mobile.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "957320ec24a489ab7be21587dc02d7b7a12aa77f216ff0ef4cc306220fb26978",
+      "provenanceRecordId": "PROV-FILE-ED9BE7370193"
+    },
+    {
+      "fileId": "FILE-EE26E516E1F2",
+      "path": "review/visual/rehearsal/inspection/scene-10-start.png",
+      "classification": "internal_video_frame_inspection",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "07f9a68bcc982ef9c55c19d167311885d62219c68c69b80dde28cc2836799545",
+      "provenanceRecordId": "PROV-FILE-EE26E516E1F2"
+    },
+    {
+      "fileId": "FILE-76B9976258CF",
+      "path": "review/visual/rehearsal/metadata.json",
+      "classification": "internal_video_render_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "d95f07e01386c0fe75e9c33461a03d5f550914fb",
+      "sha256": "89b9c2728328aa66d868b59d6ef74d232e71f9cf1682361c1cc9bbdc5313fa4e",
+      "provenanceRecordId": "PROV-FILE-76B9976258CF"
+    },
+    {
+      "fileId": "FILE-74AFB81F0B01",
+      "path": "review/visual/rehearsal/verification.md",
+      "classification": "internal_video_render_evidence",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "d95f07e01386c0fe75e9c33461a03d5f550914fb",
+      "sha256": "b8f9f0e41c054ea5075c360064f5a6f450735fe8b2ac3d86811f84259afeacc0",
+      "provenanceRecordId": "PROV-FILE-74AFB81F0B01"
+    },
+    {
+      "fileId": "FILE-F80BB089B08C",
+      "path": "tests/test_narrative_handoff.py",
+      "classification": "validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "346bebeb4101c54b34d79cc74bc15ee645bce7345db22fac1a10d28f10b88a74",
+      "provenanceRecordId": "PROV-FILE-F80BB089B08C"
+    },
+    {
+      "fileId": "FILE-2A535BD0A4EB",
+      "path": "tests/test_package_collateral.py",
+      "classification": "validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "9b0f48ce5f8b7afaa0cbbd3ef0f1735cb3208fe8",
+      "sha256": "e76854e692d7604a45433bea4872b84f88e7efbf14c0118fa47cdbd34746e0e0",
+      "provenanceRecordId": "PROV-FILE-2A535BD0A4EB"
+    },
+    {
+      "fileId": "FILE-BD8780BC3698",
+      "path": "tests/test_visual_brand.py",
+      "classification": "validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "7b2ef24fd93598a81c03cd0f66a212987c1e22d066b41385278bc1db13230464",
+      "provenanceRecordId": "PROV-FILE-BD8780BC3698"
+    },
+    {
+      "fileId": "FILE-77C02118A8C3",
+      "path": "tests/test_visual_rehearsal.py",
+      "classification": "validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "0875c49d7cd1b7449c6652d49d5fd30b991d042ea75190231470e5c708878455",
+      "provenanceRecordId": "PROV-FILE-77C02118A8C3"
+    },
+    {
+      "fileId": "FILE-E9F11F71B634",
+      "path": "tools/package_collateral.py",
+      "classification": "validation_tooling",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "44c8ad88ffac455a61f239e4d6dfe14b38a742d0",
+      "sha256": "2409fe19b80d92a0c157c21a67be4fd38f55e4f929857dfd689108aa61bfcc53",
+      "provenanceRecordId": "PROV-FILE-E9F11F71B634"
+    },
+    {
+      "fileId": "FILE-8AE539DE1633",
+      "path": "tools/render_rehearsal.mjs",
+      "classification": "renderer_tooling",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "74e9cbcc471df0d74589ede07826f51f13e92ac1f91fe0b99c8ddc2e67896ca0",
+      "provenanceRecordId": "PROV-FILE-8AE539DE1633"
+    },
+    {
+      "fileId": "FILE-4E8894154A7B",
+      "path": "tools/render_rehearsal.py",
+      "classification": "renderer_tooling",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+      "sha256": "57a1d67b51b86cb752edc04d16231830f7e47bb4b5847c0e1fe83a73efea8982",
+      "provenanceRecordId": "PROV-FILE-4E8894154A7B"
+    },
+    {
+      "fileId": "FILE-931FA338D053",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r02-repository-internal-review-text-en-us-concept-explainer.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "80a7c542ba6ccc230b130b60d377cf7bcc0f1910b7bcafa07a64fefbf070bc60",
+      "provenanceRecordId": "PROV-FILE-931FA338D053"
+    },
+    {
+      "fileId": "FILE-99A2CFD0E288",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r02-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
+      "provenanceRecordId": "PROV-FILE-99A2CFD0E288"
+    },
+    {
+      "fileId": "FILE-13139B1FD3A4",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r02-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "b1ec1323b648cb371c9e80fd9d52d6fbdf2321ab7d160fa077c512ddaa79afba",
+      "provenanceRecordId": "PROV-FILE-13139B1FD3A4"
+    },
+    {
+      "fileId": "FILE-BB8088961885",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r02-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
+      "provenanceRecordId": "PROV-FILE-BB8088961885"
+    },
+    {
+      "fileId": "FILE-81300E0C9615",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r02-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
+      "provenanceRecordId": "PROV-FILE-81300E0C9615"
+    },
+    {
+      "fileId": "FILE-2D551B95A355",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r02-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+      "provenanceRecordId": "PROV-FILE-2D551B95A355"
+    },
+    {
+      "fileId": "FILE-D128EE8CA45E",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r02-repository-internal-review-text-en-us-caption-exact-transcript.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
+      "provenanceRecordId": "PROV-FILE-D128EE8CA45E"
+    },
+    {
+      "fileId": "FILE-2A0801C207B7",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r02-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+      "provenanceRecordId": "PROV-FILE-2A0801C207B7"
+    },
+    {
+      "fileId": "FILE-544E2835265C",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r02-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
+      "provenanceRecordId": "PROV-FILE-544E2835265C"
+    },
+    {
+      "fileId": "FILE-420DDEC6DC38",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r02-repository-internal-review-text-en-us-submission-preflight.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
+      "provenanceRecordId": "PROV-FILE-420DDEC6DC38"
+    },
+    {
+      "fileId": "FILE-749235528AD5",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
+      "provenanceRecordId": "PROV-FILE-749235528AD5"
+    },
+    {
+      "fileId": "FILE-800D4A16A6F4",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+      "provenanceRecordId": "PROV-FILE-800D4A16A6F4"
+    },
+    {
+      "fileId": "FILE-5A1E2F886155",
+      "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r02-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+      "provenanceRecordId": "PROV-FILE-5A1E2F886155"
+    },
+    {
+      "fileId": "FILE-27407AD91D34",
+      "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
+      "provenanceRecordId": "PROV-FILE-27407AD91D34"
+    },
+    {
+      "fileId": "FILE-6680B420C41F",
+      "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+      "provenanceRecordId": "PROV-FILE-6680B420C41F"
+    },
+    {
+      "fileId": "FILE-BCC33F252B89",
+      "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r02-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
+      "provenanceRecordId": "PROV-FILE-BCC33F252B89"
+    },
+    {
+      "fileId": "FILE-1291336709CE",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r02-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+      "provenanceRecordId": "PROV-FILE-1291336709CE"
+    },
+    {
+      "fileId": "FILE-541805829258",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r02-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "cdc0cea55bfb3dac40f9da2905c195d411b69d34e9b7b9d37b638ee6d0bf2ba9",
+      "provenanceRecordId": "PROV-FILE-541805829258"
+    },
+    {
+      "fileId": "FILE-566A3B82406B",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r02-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
+      "provenanceRecordId": "PROV-FILE-566A3B82406B"
+    },
+    {
+      "fileId": "FILE-0F20A529D437",
+      "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r02-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+      "provenanceRecordId": "PROV-FILE-0F20A529D437"
+    },
+    {
+      "fileId": "FILE-693317555C52",
+      "path": "release/v0.1.0-rehearsal/history/manifest-596ce1979cd501e.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "5dae8fc85f737f7632c4d9f74203cbd0f66dbbd2",
+      "sha256": "596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+      "provenanceRecordId": "PROV-FILE-693317555C52"
+    },
+    {
+      "fileId": "FILE-B2F23F5731C2",
+      "path": "release/v0.1.0-rehearsal/history/manifest-596ce1979cd501e0.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "1ded02af87e0b7d64bd77d27f229cca2a52c5771",
+      "sha256": "596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+      "provenanceRecordId": "PROV-FILE-B2F23F5731C2"
+    },
+    {
+      "fileId": "FILE-A8CDC02FCD45",
+      "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r02-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+      "provenanceRecordId": "PROV-FILE-A8CDC02FCD45"
+    },
+    {
+      "fileId": "FILE-ECEB50A5FB3A",
+      "path": "release/v0.1.0-rehearsal/view/demo/diagrams/demo-workflow-alt-text.md",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+      "provenanceRecordId": "PROV-FILE-ECEB50A5FB3A"
+    },
+    {
+      "fileId": "FILE-89AE66BC68BC",
+      "path": "release/v0.1.0-rehearsal/view/demo/diagrams/demo-workflow.svg",
+      "classification": "internal_package_copy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+      "provenanceRecordId": "PROV-FILE-89AE66BC68BC"
+    },
+    {
+      "fileId": "FILE-BB0E1AB425C4",
+      "path": "release/v0.1.0-rehearsal/history/manifest-370228dd6e87aff5.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3b06552124bc38b8516659471235839c3ad5d133",
+      "sha256": "370228dd6e87aff579500b823344c5a739ae9fefb821e33a5923fc3f5de483f0",
+      "provenanceRecordId": "PROV-FILE-BB0E1AB425C4"
+    },
+    {
+      "fileId": "FILE-DA43D93E03D4",
+      "path": "release/v0.1.0-rehearsal/history/manifest-67758e86c3d3948e.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "98f63c9763099a8c874da487ad3e11ada9578b49",
+      "sha256": "67758e86c3d3948edba7dd58f049457c7959eb38a72c6cca6fde2ab152bfe4d3",
+      "provenanceRecordId": "PROV-FILE-DA43D93E03D4"
+    },
+    {
+      "fileId": "FILE-C40849C440BF",
+      "path": "release/v0.1.0-rehearsal/history/manifest-b2d6cda610ad01aa.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "86d827556f3eea0e9bc9b4989b6720b2821d1606",
+      "sha256": "b2d6cda610ad01aa35a0b5337f0d59f74724ad8f6f55ca1768060c46cbdc5072",
+      "provenanceRecordId": "PROV-FILE-C40849C440BF"
     }
   ],
   "submissionScope": {
@@ -2669,6 +5032,6 @@
         "reReviewTrigger": "Official post, event format, demo requirements, X destination or confirmed cutoff changes."
       }
     ],
-    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Every selected or submission root's intended destinations must also be explicitly approved on each consumed source, export and composition dependency; destination requirements stay scoped to each root's own provenance closure. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
+    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals. Every selected or submission root's intended destinations must also be explicitly approved on each consumed source, export and composition dependency; destination requirements stay scoped to each root's own provenance closure. Internal DEMO-REHEARSAL-VIDEO-001 (150-second silent synthetic concept) is a distinct record and never satisfies missing DEMO-SUBMISSION-VIDEO-001."
   }
 }
