@@ -18,6 +18,9 @@ build:
 	node --check src/controls/integration.mjs
 	node --check src/controls/public-result.mjs
 	node --check src/controls/inspection-consumer.mjs
+	node --check src/controls/inspection-integration.mjs
+	node --check src/controls/inspection-result.mjs
+	node --check src/controls/inspection-view.mjs
 	node --check src/controls/index.mjs
 	node --check src/runtime/creative-runtime.mjs
 	node --check src/api/v1.mjs
@@ -44,6 +47,7 @@ controls-runtime-prerequisite:
 
 controls-package-check:
 	node scripts/controls-package-check.mjs --evidence-dir $(CONTROLS_PACKAGE_EVIDENCE)
+	node fixtures/controls/installed-inspection-check.mjs --evidence-dir $(CONTROLS_PACKAGE_EVIDENCE)/actual-inspection
 
 typecheck-contracts:
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc -p tests/contracts/types/tsconfig.json

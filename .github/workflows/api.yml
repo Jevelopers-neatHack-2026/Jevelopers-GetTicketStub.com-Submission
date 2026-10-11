@@ -257,6 +257,11 @@ jobs:
             build/image-adapter-live-gate.json
             build/image-adapter-live-gate.stdout.json
             build/image-adapter-acceptance-gate.stdout.json
+            build/concepts-CI-evidence.json
+            build/concepts-CI-test.tap
+            build/concepts-package-artifacts/
+            build/concepts-failclosedlive-evidence.json
+            build/concepts-failclosedlive.stdout.json
             build/inspection-evidence.json
             build/inspection-test.tap
             build/inspection-live-gate.json

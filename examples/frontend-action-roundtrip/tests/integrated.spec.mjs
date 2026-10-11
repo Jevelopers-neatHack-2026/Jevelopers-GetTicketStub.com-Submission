@@ -316,9 +316,9 @@ for (const [label, code] of [
   if (label === 'synthetic GitHub') await page.screenshot({ path: 'test-results/apply-unknown-error-fixed.png', fullPage: true });
 });
 
-test('stale old-tab Restore keeps actual selection and typed refresh guidance without a caught handler exception', async ({ page, context, request }, testInfo) => {
+test('stale old-tab Restore keeps actual selection and typed refresh guidance without a caught handler exception', async ({ page, context, request, baseURL }, testInfo) => {
   await expect(page.getByLabel('Historical artwork version').locator('option')).toHaveCount(1);
-  const other = await context.newPage(); await other.goto('http://127.0.0.1:4317/');
+  const other = await context.newPage(); await other.goto(baseURL);
   await expect(other.getByLabel('Artwork style')).toBeVisible();
   await other.getByLabel('Artwork style').selectOption('vibrant');
   const applied = other.waitForResponse('**/api/apply'); await other.getByRole('button', { name: 'Apply changes', exact: true }).click();
