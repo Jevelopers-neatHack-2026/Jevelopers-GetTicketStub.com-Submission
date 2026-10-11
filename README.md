@@ -26,9 +26,9 @@ The package has a strict Node 24 / TypeScript ESM runtime foundation and private
 - Private composition, typography, asset, template, preflight and repair mechanics; local rendering, output inspection, CSV batches and archives; exact dependency, font and browser pins live in [`pins.json`](docs/runtime/pins.json).
 - `pp-verify` runs the calibration and private test suites. Private suites can pass their local checks while still reporting `external-blocked`; release exits 1 with `RELEASE_INCOMPLETE` until its outside contracts and acceptance evidence are available.
 
-These private mechanisms do not define accepted public production operations or a canonical `ProductionBundle`. Test inputs and permission ports are synthetic; no supplier format is enabled, and no supplier, approval, purchase, identity or ledger authority is connected. Handoff eligibility remains false and production eligibility unknown. The calibration profile is sRGB; local output does not claim CMYK, PDF/X or printer certification.
+The separate `@jevelopers/print-production/candidate` surface binds all six typed operations to real local composition, inspection, export, batch and storage behavior against the frozen shared-contracts 0.9.4 development candidate. It creates canonical v2 bundle bytes and verifies them with the owner byte verifier. It remains explicitly unaccepted: fresh owner review is pending, synthetic authority is used in tests, supplier eligibility is blocked, and canonical visible batch rows are blocked by the candidate's eligibility requirement (PP#13.4). JobRef/status retains persisted row evidence with `batch:null`; candidate repair scheduling and CSV activation remain unimplemented. See [candidate adapter availability and limits](docs/contracts/candidate-adapter.md). The calibration profile is sRGB; local output does not claim CMYK, PDF/X or printer certification.
 
-Pending: the revised Linux sandbox configuration (ROOT-R1) still needs remote CI execution and independent review; macOS receipts do not certify Linux. See [evidence and remaining acceptance](docs/runtime/README.md#evidence-and-remaining-acceptance) and [the security policy record](scripts/security/README.md).
+Runtime PR20 merged at `e7e57bbb048c7c2a5529eed658c8d3ecf8b5ceac` with actual Linux proof and final source review disposition ROOT-R1 resolved. Pipeline PR23 merged at `e2c946b0c4f979227c19d0534ac71b5d5a85badb` with an explicit CI waiver. Separately, main's [PR29](https://github.com/Jevelopers-neatHack-2026/print-production/pull/29) merged at `f0afc32d2624a0aec1c74e50e07e70bab3e6c5fa` and changed CI child deadlines after that waiver. That history is inherited; current CI status was not observed during this dependency refresh. See [evidence and remaining acceptance](docs/runtime/README.md#evidence-and-remaining-acceptance).
 
 ## Quickstart
 
@@ -61,9 +61,9 @@ npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/loc
 | [`src/runtime/`](docs/runtime/README.md), `src/index.ts` | Local runtime implemented | Pinned offline calibration; the package root exports runtime verification only. |
 | [`src/composition/`](docs/composition/README.md), `src/templates/`, `src/typography/`, `src/assets/`, `src/preflight/`, `src/repair/` | Private local mechanics | Synthetic inputs and private adapters; no approved supplier roster or canonical production contracts. |
 | `src/exporters/`, `src/personalization/`, `src/manifests/`, `src/storage/`, `src/jobs/` | Private output and batch mechanics | Local files, inspection, CSV/batches, archives and durable storage; no handoff-eligible bundle. See [production output](docs/production-output/README.md). |
-| [`src/api/`](src/api/README.md) | Canonical API pending | Public production contracts await PP-01B and shared-contracts acceptance. |
+| [`src/api/`](docs/contracts/candidate-adapter.md) | Six development adapters implemented | Frozen unaccepted shared-contracts candidate; real local bundle integrity, blocked supplier eligibility and canonical row publication. |
 | [`scripts/verify/`](scripts/verify/dispatcher.ts) | Local suites; release blocked | Private checks run locally; external integration gates remain open. |
-| [`scripts/security/`](scripts/security/README.md) | Linux candidate pending CI | Runtime sandbox policy and probes; remote execution and review are required for this candidate. |
+| [`scripts/security/`](scripts/security/README.md) | Accepted runtime foundation | ROOT-R1 resolved in reviewed/merged PR20; separate main PR29 changed CI deadlines; current CI status unobserved. |
 
 ## Docs
 

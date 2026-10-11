@@ -6,6 +6,10 @@ composition/output mechanics. The public ESM exports are
 `VerificationFailure`; the root API still exposes runtime verification only.
 Production contracts and supplier specifications await PP-01B and the external
 owners. No supplier, approval, purchase, identity or ledger authority exists.
+The separate `./candidate` package surface now provides six real local adapters
+against the immutable, unaccepted shared-contracts 0.9.4 candidate. Canonical
+bundle byte integrity can pass while supplier eligibility and canonical visible
+batch publication remain blocked. See [candidate adapters](../contracts/candidate-adapter.md).
 
 ## Run
 
@@ -137,11 +141,14 @@ The image environment variable alone is not cryptographic attestation: provenanc
 comes from the workflow's digest-pinned Docker invocation. The host kernel is
 recorded, not fixed by the userland image.
 
-Docker's daemon was unavailable during the ROOT-R1 security revision. The earlier
-Linux runs passed rendering tests with disabled sandbox and host IPC; those runs
-do not verify the revised security configuration. Revised Linux execution is
-**pending remote CI**; macOS receipts do not certify Linux. CI prints sanitized
-runtime and observed security receipts to its job log. The workflow has no
-deploy/publish/provider/comment/issue-close steps. Linux CI execution, accountable
-reviewer sign-off and merged implementation evidence remain required for closure.
-Global acceptance IDs and their trackers remain under existing owners.
+The earlier ROOT-R1 revision was prepared while Docker's daemon was unavailable;
+its older Linux runs used disabled sandbox and host IPC. Those historical runs
+remain insufficient evidence for the revised security configuration. Runtime
+PR20 subsequently merged at `e7e57bbb048c7c2a5529eed658c8d3ecf8b5ceac` with actual
+Linux proof and final source review disposition ROOT-R1 resolved. Pipeline PR23
+merged at `e2c946b0c4f979227c19d0534ac71b5d5a85badb` with an explicit CI waiver.
+Separately, main's [PR29](https://github.com/Jevelopers-neatHack-2026/print-production/pull/29)
+merged at `f0afc32d2624a0aec1c74e50e07e70bab3e6c5fa`; its child-deadline change
+followed that waiver and is inherited by this branch. Current CI status was not
+observed or tested during the dependency refresh. Global acceptance IDs and their
+trackers remain under existing owners.
