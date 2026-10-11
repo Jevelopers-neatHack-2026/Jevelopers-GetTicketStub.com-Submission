@@ -10,6 +10,21 @@ Use validateContract/parseContract for structure, then checkResearchCreative or 
 
 References are exact contract/schema/id/revision/content-hash tuples. Missing or altered expected references fail at their path. URI syntax and allowlisted literal hostname comparison are pure input checks; DNS, redirects, SSRF enforcement, fetching and retention/access execution remain app/harness/EI responsibilities. Source/customer/fact/asset/diagnostic data are restricted fields and do not enter the public EvidenceProjection allowlist.
 
+The 0.8.3 development repair for SC-CHK-011 additionally binds references to the actual independently supplied record. Relabeling the lookup descriptor cannot change that record's contract, supported schema version, ID, explicit revision or digest. Research/design field semantics also require the intended research package, request/receipt, fact, design, control, brief, job, artifact or approval kind. This applies to nested and array references as well as parent/current/new-package routes. The existing exact-version reference validator and canonical schema registry remain the version evidence; no caller-created registry or inferred kind from an opaque ID is introduced.
+
+| Supplied record | Identity and revision evidence | Digest evidence |
+| --- | --- | --- |
+| EventIntelligencePackage, including historical parents/current correction targets/new packages | package_id, package_version, contract, schema_version | Recomputed package_hash |
+| DesignVersion parent | design_version_id, revision, contract, schema_version | Recomputed design_hash |
+| JobStatus | job_id, revision, contract, schema_version | Canonical hash of the full record |
+| ResearchFact embedded in an answer's package | fact_id, revision, ResearchFact kind, containing package's supported schema version | Recomputed fact_hash and containing package_hash |
+| ResearchRequest | request_id, contract, schema_version; revision comes from the independent descriptor | Canonical hash of the full record |
+| ResearchRequestReceipt in a batch | receipt_id, contract, schema_version; revision comes from the independent descriptor | Canonical hash of the full receipt |
+
+ResearchRequest and the research receipts have no domain revision field. Their descriptor revision is therefore independently supplied lookup evidence, not a value inferred from schema_version or fabricated as zero/one. A changed descriptor revision alone remains valid when the actual revision-free record and other supported tuple fields match. Descriptor-only brief/control/design/receipt/invalidation targets still require exact independent lookup and the intended field kind; these helpers do not load absent target records. Historical parents and correction targets are checked for identity and digest without requiring current job, expiry or approval status. Existing current-use package/asset checks retain their separate requirements.
+
+The [reference finding record](../compatibility/research-reference-findings.json) preserves SC-CHK-011 and the independent exclusion of the exploratory request-revision expectation. Immutable historical 44-row inputs/expectations remain unchanged: the repaired replay meets 43/44 original expectations and 44/44 independently dispositioned expectations. These are local development results, not whole-PR approval, accepted consumer pins or service authenticity.
+
 ApprovalVerification is a narrow trusted-context interface, not an approval issuer or wire ApprovalReceipt. It requires explicit expected audience, string actor, tenant/project, subject identity/version/hash/use, issuer, issue/expiry time, current valid/revoked/unknown status and immutable reference. Asset claims must match that externally verified current record; missing, forged, revoked, expired or transformed-byte reuse fails. A URL, payload boolean, discovery or matching hash cannot create permission. Full ApprovalReference/Receipt exports and actual authenticated revocation checks belong to the later group and application owner.
 
 ## Project and research ingress

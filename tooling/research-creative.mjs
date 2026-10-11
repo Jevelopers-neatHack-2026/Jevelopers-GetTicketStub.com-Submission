@@ -6,6 +6,20 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 const equal = (a, b) => canonicalJson(a) === canonicalJson(b);
 const sameSet = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && new Set(a).size === a.length && a.every(id => b.includes(id));
 const delivery = new Set(['contract', 'event_id', 'producer', 'occurred_at', 'observed_at', 'ingested_at', 'source_refs', 'trace_id', 'correlation_id']);
+const recordReference = (reference, record, identity) => reference.contract === record.contract && reference.schema_version === record.schema_version && Object.entries(identity).every(([key, value]) => reference[key] === value);
+const referenceKinds = {
+  project_request_ref: 'ProjectRequest', request_ref: 'ResearchRequest', request_receipt_ref: 'ResearchRequestReceipt', request_receipt_refs: 'ResearchRequestReceipt',
+  answer_receipt_refs: 'ResearchAnswerReceipt', batch_receipt_ref: 'ResearchBatchReceipt', package_ref: 'EventIntelligencePackage', expected_package_ref: 'EventIntelligencePackage', new_package_ref: 'EventIntelligencePackage', affected_package_refs: 'EventIntelligencePackage',
+  fact_refs: 'ResearchFact', brief_ref: 'CreativeBrief', control_ref: 'DesignControlSchema', design_ref: 'DesignVersion', job_ref: 'JobStatus',
+  artifact_ref: 'Artifact', source_artifact_ref: 'Artifact', affected_asset_refs: 'Artifact', approval_ref: 'ApprovalReference', approval_refs: 'ApprovalReference'
+};
+
+function referenceKind(contract, path) {
+  const key = path.replace(/\/\d+$/, '').split('/').at(-1);
+  if (key === 'parent_ref') return contract === 'DesignVersion' ? 'DesignVersion' : 'EventIntelligencePackage';
+  if (key === 'receipt_ref' && contract === 'ResearchInvalidation') return 'ResearchCorrectionReceipt';
+  return referenceKinds[key];
+}
 
 export function researchContentHash(value, field) {
   canonicalJson(value);
@@ -17,6 +31,13 @@ function refs(value, path = '', slot = false) {
   if (value === null || typeof value !== 'object') return [];
   if (slot && object(value) && Object.hasOwn(value, 'id') && Object.hasOwn(value, 'schema_version') && Object.hasOwn(value, 'content_hash')) return [[path, value]];
   return Object.entries(value).flatMap(([key, child]) => ['value', 'candidate_values', 'customer_input', 'visual_intent'].includes(key) ? [] : refs(child, path ? path + '/' + key : key, key.endsWith('_ref') || key.endsWith('_refs') || (slot && Array.isArray(value))));
+}
+
+function supportedRecordReferences(value) {
+  return refs(value).every(([path, reference]) => {
+    const kind = referenceKind(value.contract, path);
+    return validateVersionedReference(reference).ok && (!kind || reference.contract === kind);
+  });
 }
 
 function boundary(contract, input, context) {
@@ -32,6 +53,11 @@ function boundary(contract, input, context) {
     const expected = context.references[path];
     if (!validateVersionedReference(expected).ok) return fail('INVALID_TRUST_CONTEXT', '/' + path);
     if (!equal(reference, expected)) return fail('REFERENCE_MISMATCH', '/' + path);
+    const kind = referenceKind(contract, path);
+    if (kind && reference.contract !== kind) {
+      const code = contract === 'ResearchAnswerReceipt' || contract === 'ResearchRequestReceipt' || contract === 'ResearchBatchReceipt' ? 'INVALID_RECEIPT' : 'REFERENCE_MISMATCH';
+      return fail(code, '/' + (contract === 'ResearchBatchReceipt' && path.startsWith('request_receipt_refs/') ? 'request_receipt_refs' : path));
+    }
   }
   return parsed;
 }
@@ -103,6 +129,7 @@ function approvalFor(asset, context, path) {
 }
 
 function packageFacts(v, context) {
+  if (!supportedRecordReferences(v)) return fail('INVALID_TRUST_CONTEXT', '/package');
   if (context.max_age_seconds !== undefined && (!Number.isSafeInteger(context.max_age_seconds) || context.max_age_seconds < 0)) return fail('INVALID_TRUST_CONTEXT', '/max_age_seconds');
   if (v.package_hash !== researchContentHash(v, 'package_hash')) return fail('REFERENCE_MISMATCH', '/package_hash');
   if (Date.parse(v.expires_at) <= Date.parse(context.now)) return fail('EXPIRED', '/expires_at');
@@ -127,8 +154,8 @@ function packageFacts(v, context) {
   }
   if (context.prior_package) {
     const old = validateContract('EventIntelligencePackage', context.prior_package);
-    if (!old.ok || !checkTrustedContext(old.value, context.scope).ok || old.value.package_hash !== researchContentHash(old.value, 'package_hash')) return fail('INVALID_TRUST_CONTEXT', '/prior_package');
-    if (v.package_id !== old.value.package_id || v.package_version !== old.value.package_version + 1 || !v.parent_ref || v.parent_ref.id !== old.value.package_id || v.parent_ref.revision !== old.value.package_version || v.parent_ref.content_hash !== old.value.package_hash) return fail('STALE_REVISION', '/parent_ref');
+    if (!old.ok || !checkTrustedContext(old.value, context.scope).ok || !supportedRecordReferences(old.value) || old.value.package_hash !== researchContentHash(old.value, 'package_hash')) return fail('INVALID_TRUST_CONTEXT', '/prior_package');
+    if (v.package_id !== old.value.package_id || v.package_version !== old.value.package_version + 1 || !v.parent_ref || !recordReference(v.parent_ref, old.value, { id: old.value.package_id, revision: old.value.package_version, content_hash: old.value.package_hash })) return fail('STALE_REVISION', '/parent_ref');
   } else if (v.package_version !== 1 || v.parent_ref !== null) return fail('INVALID_TRUST_CONTEXT', '/prior_package');
   return ok(v);
 }
@@ -145,21 +172,21 @@ function requestReceiptFields(value, path = '') {
 
 export function checkResearchRequestReceipt(input, context) {
   const parsed = boundary('ResearchRequestReceipt', input, context); if (!parsed.ok) return parsed;
-  const request = validateContract('ResearchRequest', context.request); if (!request.ok || !checkTrustedContext(request.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/request');
+  const request = validateContract('ResearchRequest', context.request); if (!request.ok || !checkTrustedContext(request.value, context.scope).ok || !supportedRecordReferences(request.value)) return fail('INVALID_TRUST_CONTEXT', '/request');
   const v = parsed.value;
-  if (v.request_id !== request.value.request_id || v.request_hash !== hashManifest(request.value) || v.request_ref.id !== request.value.request_id || v.request_ref.content_hash !== v.request_hash) return fail('INVALID_RECEIPT', '/request_hash');
+  if (v.request_id !== request.value.request_id || v.request_hash !== hashManifest(request.value) || !recordReference(v.request_ref, request.value, { id: request.value.request_id, content_hash: v.request_hash })) return fail('INVALID_RECEIPT', '/request_hash');
   const fields = requestReceiptFields(v); return fields.ok ? parsed : fields;
 }
 
 export function checkResearchAnswerReceipt(input, context) {
   const parsed = boundary('ResearchAnswerReceipt', input, context); if (!parsed.ok) return parsed;
   const request = validateContract('ResearchRequest', context.request), pkg = validateContract('EventIntelligencePackage', context.package);
-  if (!request.ok || !pkg.ok || !checkTrustedContext(request.value, context.scope).ok || !checkTrustedContext(pkg.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT');
+  if (!request.ok || !pkg.ok || !checkTrustedContext(request.value, context.scope).ok || !checkTrustedContext(pkg.value, context.scope).ok || !supportedRecordReferences(request.value) || !supportedRecordReferences(pkg.value)) return fail('INVALID_TRUST_CONTEXT');
   const v = parsed.value;
-  if (v.request_ref.contract !== request.value.contract || v.request_ref.schema_version !== request.value.schema_version ||
-      v.request_ref.id !== request.value.request_id || v.request_ref.content_hash !== hashManifest(request.value)) return fail('INVALID_RECEIPT', '/request_ref');
-  if (v.request_id !== request.value.request_id || v.batch_id !== request.value.batch_id || v.package_ref.id !== pkg.value.package_id || v.package_ref.revision !== pkg.value.package_version || v.package_ref.content_hash !== pkg.value.package_hash) return fail('INVALID_RECEIPT', '/package_ref');
-  if (!sameSet(v.answer_ids, v.fact_refs.map(ref => ref.id)) || v.fact_refs.some(ref => !pkg.value.facts.some(fact => fact.fact_id === ref.id && fact.revision === ref.revision && fact.fact_hash === ref.content_hash))) return fail('INVALID_RECEIPT', '/fact_refs');
+  if (!recordReference(v.request_ref, request.value, { id: request.value.request_id, content_hash: hashManifest(request.value) })) return fail('INVALID_RECEIPT', '/request_ref');
+  if (pkg.value.package_hash !== researchContentHash(pkg.value, 'package_hash')) return fail('INVALID_TRUST_CONTEXT', '/package');
+  if (v.request_id !== request.value.request_id || v.batch_id !== request.value.batch_id || !recordReference(v.package_ref, pkg.value, { id: pkg.value.package_id, revision: pkg.value.package_version, content_hash: pkg.value.package_hash })) return fail('INVALID_RECEIPT', '/package_ref');
+  if (!sameSet(v.answer_ids, v.fact_refs.map(ref => ref.id)) || v.fact_refs.some(ref => !pkg.value.facts.some(fact => ref.contract === 'ResearchFact' && ref.schema_version === pkg.value.schema_version && fact.fact_id === ref.id && fact.revision === ref.revision && fact.fact_hash === ref.content_hash && fact.fact_hash === researchContentHash(fact, 'fact_hash')))) return fail('INVALID_RECEIPT', '/fact_refs');
   if (v.status === 'complete' && !sameSet(v.answer_ids, pkg.value.facts.map(fact => fact.fact_id))) return fail('INVALID_RECEIPT', '/answer_ids');
   return parsed;
 }
@@ -173,7 +200,7 @@ export function checkResearchBatchReceipt(input, context) {
   if (!sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || new Set(context.request_receipts.map(receipt => receipt.receipt_id)).size !== context.request_receipts.length || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
   for (const [index, receipt] of context.request_receipts.entries()) {
     const fields = requestReceiptFields(receipt, '/request_receipts/' + index); if (!fields.ok) return fields;
-    if (!v.request_receipt_refs.some(ref => ref.contract === receipt.contract && ref.schema_version === receipt.schema_version && ref.id === receipt.receipt_id && ref.content_hash === hashManifest(receipt))) return fail('INVALID_RECEIPT', '/request_receipt_refs');
+    if (!v.request_receipt_refs.some(ref => recordReference(ref, receipt, { id: receipt.receipt_id, content_hash: hashManifest(receipt) }))) return fail('INVALID_RECEIPT', '/request_receipt_refs');
     switch (receipt.status) {
       case 'accepted': break;
       case 'rejected':
@@ -201,9 +228,10 @@ function correctionAuthority(v, context) {
 export function checkResearchCorrectionRequest(input, context) {
   const parsed = boundary('ResearchCorrectionRequest', input, context); if (!parsed.ok) return parsed;
   const authority = correctionAuthority(parsed.value, context); if (!authority.ok) return authority;
-  const pkg = validateContract('EventIntelligencePackage', context.package); if (!pkg.ok || !checkTrustedContext(pkg.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/package');
+  const pkg = validateContract('EventIntelligencePackage', context.package); if (!pkg.ok || !checkTrustedContext(pkg.value, context.scope).ok || !supportedRecordReferences(pkg.value)) return fail('INVALID_TRUST_CONTEXT', '/package');
   const v = parsed.value;
-  if (v.expected_package_ref.id !== pkg.value.package_id || v.expected_package_ref.revision !== pkg.value.package_version || v.expected_package_ref.content_hash !== pkg.value.package_hash) return fail('STALE_REVISION', '/expected_package_ref');
+  if (pkg.value.package_hash !== researchContentHash(pkg.value, 'package_hash')) return fail('INVALID_TRUST_CONTEXT', '/package');
+  if (!recordReference(v.expected_package_ref, pkg.value, { id: pkg.value.package_id, revision: pkg.value.package_version, content_hash: pkg.value.package_hash })) return fail('STALE_REVISION', '/expected_package_ref');
   if (new Set(v.changes.map(change => change.fact_id)).size !== v.changes.length || v.changes.some(change => !authority.value.allowed_fact_ids.includes(change.fact_id) || !pkg.value.facts.some(fact => fact.fact_id === change.fact_id))) return fail('POLICY_MISMATCH', '/changes');
   for (let index = 0; index < v.changes.length; index++) {
     const original = pkg.value.facts.find(fact => fact.fact_id === v.changes[index].fact_id);
@@ -223,7 +251,7 @@ export function checkResearchCorrectionReceipt(input, context) {
   if (v.status !== 'accepted') return v.new_package_ref === null ? parsed : fail('INVALID_RECEIPT', '/new_package_ref');
   const pkg = validateContract('EventIntelligencePackage', context.new_package); if (!pkg.ok) return fail('INVALID_TRUST_CONTEXT', '/new_package');
   const checked = packageFacts(pkg.value, { ...context, prior_package: context.package }); if (!checked.ok) return checked;
-  if (!checkTrustedContext(pkg.value, context.scope).ok || !v.new_package_ref || v.new_package_ref.id !== pkg.value.package_id || v.new_package_ref.revision !== pkg.value.package_version || v.new_package_ref.content_hash !== pkg.value.package_hash) return fail('INVALID_RECEIPT', '/new_package_ref');
+  if (!checkTrustedContext(pkg.value, context.scope).ok || !v.new_package_ref || !recordReference(v.new_package_ref, pkg.value, { id: pkg.value.package_id, revision: pkg.value.package_version, content_hash: pkg.value.package_hash })) return fail('INVALID_RECEIPT', '/new_package_ref');
   if (pkg.value.facts.length !== context.package.facts.length) return fail('INVALID_RECEIPT', '/new_package_ref');
   for (const old of context.package.facts) {
     const next = pkg.value.facts.find(fact => fact.fact_id === old.fact_id), change = request.value.changes.find(change => change.fact_id === old.fact_id);
@@ -238,7 +266,7 @@ export function checkResearchInvalidation(input, context) {
   if (!v.affected_package_refs.length && !v.affected_asset_refs.length) return fail('INVALID_PAYLOAD', '/affected_package_refs');
   if (Date.parse(v.effective_at) > Date.parse(context.now)) return fail('INVALID_PAYLOAD', '/effective_at');
   if (!context.prior_invalidation) return v.revision === 1 ? parsed : fail('INVALID_TRUST_CONTEXT', '/prior_invalidation');
-  const old = validateContract('ResearchInvalidation', context.prior_invalidation); if (!old.ok || !checkTrustedContext(old.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/prior_invalidation');
+  const old = validateContract('ResearchInvalidation', context.prior_invalidation); if (!old.ok || !checkTrustedContext(old.value, context.scope).ok || !supportedRecordReferences(old.value)) return fail('INVALID_TRUST_CONTEXT', '/prior_invalidation');
   if (v.invalidation_id !== old.value.invalidation_id) return fail('IDENTITY_COLLISION', '/invalidation_id');
   if (v.revision === old.value.revision) return equal(v, old.value) ? parsed : fail('REVISION_CONFLICT', '/revision');
   if (v.revision !== old.value.revision + 1 || Date.parse(v.effective_at) < Date.parse(old.value.effective_at)) return fail('STALE_REVISION', '/revision');
@@ -252,7 +280,7 @@ export function checkCreativeBrief(input, context) {
   const packageChecked = packageFacts(pkg.value, context); if (!packageChecked.ok) return packageChecked;
   const v = parsed.value;
   if (v.brief_hash !== researchContentHash(v, 'brief_hash')) return fail('REFERENCE_MISMATCH', '/brief_hash');
-  if (v.package_ref.id !== pkg.value.package_id || v.package_ref.revision !== pkg.value.package_version || v.package_ref.content_hash !== pkg.value.package_hash) return fail('STALE_REVISION', '/package_ref');
+  if (!recordReference(v.package_ref, pkg.value, { id: pkg.value.package_id, revision: pkg.value.package_version, content_hash: pkg.value.package_hash })) return fail('STALE_REVISION', '/package_ref');
   for (let index = 0; index < v.composition_facts.length; index++) if (!pkg.value.facts.some(fact => equal(fact, v.composition_facts[index]))) return fail('REFERENCE_MISMATCH', '/composition_facts/' + index);
   if (v.readiness === 'ready' && (pkg.value.readiness !== 'ready' || v.composition_facts.some(fact => fact.status !== 'known'))) return fail('UNSUPPORTED_CASE', '/readiness');
   for (let index = 0; index < v.asset_refs.length; index++) if (!pkg.value.approved_assets.some(asset => equal(asset, v.asset_refs[index]))) return fail('STALE_APPROVAL', '/asset_refs/' + index);
@@ -287,12 +315,13 @@ export function checkDesignVersion(input, context) {
   const v = parsed.value;
   const job = validateContract('JobStatus', context.job);
   if (!job.ok || !checkTrustedContext(job.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/job');
-  if (v.job_outcome !== job.value.outcome || v.job_ref.id !== job.value.job_id || v.job_ref.revision !== job.value.revision || v.job_ref.content_hash !== hashManifest(job.value)) return fail('REFERENCE_MISMATCH', '/job_ref');
+  if (v.job_outcome !== job.value.outcome || !recordReference(v.job_ref, job.value, { id: job.value.job_id, revision: job.value.revision, content_hash: hashManifest(job.value) })) return fail('REFERENCE_MISMATCH', '/job_ref');
   if (v.design_hash !== researchContentHash(v, 'design_hash')) return fail('REFERENCE_MISMATCH', '/design_hash');
   if (v.lineage_branch !== context.expected_branch) return fail('SCOPE_MISMATCH', '/lineage_branch');
   if (context.prior_design) {
-    const old = validateContract('DesignVersion', context.prior_design); if (!old.ok || !checkTrustedContext(old.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/prior_design');
-    if (v.design_id !== old.value.design_id || v.design_version_id === old.value.design_version_id || v.revision !== old.value.revision + 1 || !v.parent_ref || v.parent_ref.id !== old.value.design_version_id || v.parent_ref.revision !== old.value.revision || v.parent_ref.content_hash !== old.value.design_hash) return fail('INVALID_TRANSITION', '/parent_ref');
+    const old = validateContract('DesignVersion', context.prior_design); if (!old.ok || !checkTrustedContext(old.value, context.scope).ok || !supportedRecordReferences(old.value)) return fail('INVALID_TRUST_CONTEXT', '/prior_design');
+    if (v.design_id !== old.value.design_id || v.design_version_id === old.value.design_version_id || v.revision !== old.value.revision + 1 || !v.parent_ref || !recordReference(v.parent_ref, old.value, { id: old.value.design_version_id, revision: old.value.revision, content_hash: old.value.design_hash })) return fail('INVALID_TRANSITION', '/parent_ref');
+    if (old.value.design_hash !== researchContentHash(old.value, 'design_hash')) return fail('INVALID_TRUST_CONTEXT', '/prior_design');
   } else if (v.revision !== 1 || v.parent_ref !== null) return fail('INVALID_TRUST_CONTEXT', '/prior_design');
   if (v.job_outcome === 'succeeded' && (v.artifact_state !== 'available' || !v.artwork || !v.preview)) return fail('INVALID_TRANSITION', '/artwork');
   if (v.artifact_state === 'unavailable') return v.artwork === null && v.preview === null ? parsed : fail('INVALID_PAYLOAD', '/artifact_state');

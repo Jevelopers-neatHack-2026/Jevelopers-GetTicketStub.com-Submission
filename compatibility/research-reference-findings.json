@@ -1,0 +1,45 @@
+{
+  "package_version": "0.8.3",
+  "state": "development_candidate_fresh_whole_pr_review_required",
+  "source_head": "9820f68144d7d8fa6ca52332784a653f0e3c1e17",
+  "finding": {
+    "id": "SC-CHK-011",
+    "severity": "medium",
+    "blocking": true,
+    "status": "locally_repaired_pending_fresh_exact_candidate_review",
+    "cause": "The research/design routes compared IDs, revisions and hashes without binding contract/schema to the independently supplied target record. The earlier commerce recordReference repair and research batch admission repair did not cover these comparisons.",
+    "affected_links": [
+      "DesignVersion.job_ref",
+      "DesignVersion.parent_ref",
+      "CreativeBrief.package_ref",
+      "ResearchAnswerReceipt.package_ref",
+      "EventIntelligencePackage.parent_ref",
+      "ResearchCorrectionRequest.expected_package_ref",
+      "ResearchCorrectionReceipt.new_package_ref"
+    ],
+    "remedy": "Keep exact independent lookup; bind actual supported record contract/schema/identity/revision/digest and intended reference field kind across research/design routes. Recompute supplied package, fact and historical design digests without imposing current-use authority on historical records."
+  },
+  "independent_disposition": {
+    "reviewer_session": "01a12a33-2942-7230-8e78-48b2164ff818",
+    "reviewed_head": "9820f68144d7d8fa6ca52332784a653f0e3c1e17",
+    "reviewed_base": "686ead140e12b86ce4279b1beea881164025ba6a",
+    "reviewed_candidate": "cf002b8fe6273c7d7c6f74a0e887ff2fa1ade689",
+    "verdict": "REQUEST_CHANGES",
+    "excluded_probe": "ResearchAnswerReceipt/request_ref/wrong-revision",
+    "historical_expected_ok": false,
+    "effective_expected_ok": true,
+    "reason": "ResearchRequest has no revision field. Its independently trusted descriptor legitimately supplies revision; no record revision may be invented.",
+    "all_other_44_row_expectations": "unchanged",
+    "historical_artifacts": "preserved byte-exact, including original expected/actual/input hashes",
+    "before_original_expectations_met": "36/44",
+    "before_dispositioned_expectations_met": "37/44",
+    "after_original_expectations_met": "43/44",
+    "after_dispositioned_expectations_met": "44/44"
+  },
+  "limits": [
+    "Exact independent descriptors remain necessary for targets without supplied records and for revisions absent from the supplied record.",
+    "This does not authenticate the application context or invent a trusted registry, issuer, current status or consumer acceptance.",
+    "SC-CHK-009/010, all prior stable finding dispositions and remaining role/acceptance obligations are retained. No old approval transfers to these changed bytes.",
+    "Supervisor delivery and fresh whole-PR Astra High review of the exact resulting candidate/archive remain mandatory. No commit, registry release, merge or issue closure is implied."
+  ]
+}

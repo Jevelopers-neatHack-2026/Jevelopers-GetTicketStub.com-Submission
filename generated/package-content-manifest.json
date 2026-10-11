@@ -17,6 +17,7 @@
     "compatibility/owner-findings.json": "sha256:439277b856243391f80adafe2fd4db8eb659da98bf215da3df1b125553f6b55f",
     "compatibility/privacy-policy.json": "sha256:305551c6948d793cb720150433848d0894b38b8166600dff5376199dd5269fae",
     "compatibility/proposal-intake.json": "sha256:90cf33964d5c7b91024039070391a0fb2176022367a64aa3dbf55747718ec100",
+    "compatibility/research-reference-findings.json": "sha256:bd5cbf4dda95d44d9b4479f723da62dd25cb69119cbba6e93f3addba6512baf6",
     "compatibility/semantic-links-findings.json": "sha256:033141d2b4737b8ea0c93dc0787314d74239f50e2e646a7c08ea1c2c57296899",
     "compatibility/version-policy.json": "sha256:0ab5a03a4045d7667130cf37897cc505428d9bfe90b605eff80d50e1968acbd7",
     "docs/acceptance-criteria.json": "sha256:e68d640eb80a7b8d51176ee29b308f1a1377f42ef90dd3631a12faee6669b09a",
@@ -38,7 +39,7 @@
     "docs/privacy-policy.md": "sha256:8710f71141723a4c7afd07800de636bb44e70e1ba032d499e73989c345204022",
     "docs/release-guide.md": "sha256:65e48d37aff7ef3ea090b59f6bc072ef14f9f62f5b76010ea95eae2ab09dc0a5",
     "docs/requirements.json": "sha256:c82c19b084cb2956a1f4a6318ef05f497d0b262ce2b3d8f38a0e60763cef1de9",
-    "docs/research-creative-contracts.md": "sha256:c6348d72fcb4f999402d9758a10b1641d59312521d3124d9da28f5253fb0362a",
+    "docs/research-creative-contracts.md": "sha256:50458be984e6e6414cc5f0b81d6e1f1d5d3f4be2d693dca27a4a983759e684c8",
     "examples/capability-consumer.mjs": "sha256:38651af331cc4135313730d22df9b420d0ef1d206a50d8091f0c7e8b939f5258",
     "examples/commerce-evidence-consumer.mjs": "sha256:f00779982137a5d3f187ad5463bae22a4b97a7e599a72aadd453d7f61e3af71e",
     "examples/consumer.mjs": "sha256:de7af1dbe0eda4c5adf76b4ae524e6409ebe7a889020f5a4353748923126bd95",
@@ -242,8 +243,8 @@
     "tooling/fixture-harness.mjs": "sha256:caae1104c26ba8712e8be8f7dbc23bc9de9927d9e6aca4d382a65235339192ed",
     "tooling/historical-finance-fixtures.mjs": "sha256:fd6ba9668356090ff4b2011347b0e4e5c744b946667775c0cf3586305604c85d",
     "tooling/operations.mjs": "sha256:2744ade5ae232d2ecff821bd2a9a8465d96a2590c2e3dc2a202e402d17942bf8",
-    "tooling/research-creative.mjs": "sha256:0599480ed3dc6bf263f55f7da3710dba6d0a48e741fcbcd86f171edb13fba393",
+    "tooling/research-creative.mjs": "sha256:e508ab30d23fb841c9f7d9c85b0978af627e854ad32cfb7c9c89763fd3d25657",
     "tooling/runtime.mjs": "sha256:66d969987a44cb106644d423e8c915b4fd07516fbf063f5120697aa91bd2333f"
   },
-  "digest": "sha256:92bbba84942c0c4b035072633bcf3ded78e4da5f17f00dd268a3d1511060fa86"
+  "digest": "sha256:4c0f099b62dba65fbefc9dad32d648111a1e09cd443c4569086f1ed15ac85ed1"
 }
