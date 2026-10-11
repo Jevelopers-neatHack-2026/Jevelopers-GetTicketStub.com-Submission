@@ -84,3 +84,5 @@ export class CreativeControlsAdapter {
   close(): void;
 }
 export * from './inspection-consumer.mjs';
+export * from './inspection-integration.mjs';
+export * from './inspection-view.mjs';

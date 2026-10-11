@@ -9,7 +9,7 @@ jobs:
   controls:
     runs-on: ubuntu-24.04
     env:
-      CONTROLS_PACKAGE_EVIDENCE: examples/frontend-action-roundtrip/test-results/controls-package-evidence
+      CONTROLS_PACKAGE_EVIDENCE: build/controls-package-evidence
     strategy:
       fail-fast: false
       matrix:
@@ -47,5 +47,7 @@ jobs:
         if: always()
         with:
           name: controls-mock-evidence-node-${{ matrix.node }}
-          path: examples/frontend-action-roundtrip/test-results/
+          path: |
+            examples/frontend-action-roundtrip/test-results/
+            build/controls-package-evidence/
           if-no-files-found: error

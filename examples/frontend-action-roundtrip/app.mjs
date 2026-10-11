@@ -1,7 +1,15 @@
-import { assertRenderableSchema, defaultDraft, activeQuestions, canonical } from '/schema.mjs';
+import { assertRenderableSchema, defaultDraft, activeQuestions, canonical, validId } from '/schema.mjs';
+import { projectInspectionView, projectRepairResult } from '/inspection-view.mjs';
 import { applyErrorMessage, historyErrorMessage } from './messages.mjs';
 import { projectApplyResult, projectCounters, projectHistoryList, projectHistoryResult } from '/public-result.mjs';
 const $ = id => document.getElementById(id);
+let inspectionSource, inspectionAction, inspectionView, inspectionPending = false, repairAction, displayedDesign, inspectionGeneration = 0;
+function clearInspection(design, source) {
+ inspectionGeneration++; $('inspection-repair').textContent='Request image repair preserving the brief and locks'; displayedDesign=design; inspectionSource=source; inspectionAction=undefined; inspectionView=undefined; repairAction=undefined;
+ for(const id of ['inspection-refs','inspection-usage','inspection-limits']) $(id).textContent='';
+ $('inspection-error').hidden=true; $('inspection-status').textContent=source?'Saved artwork ready for separate inspection.':'Save an artwork revision before inspection.';
+ $('inspect').disabled=!source;for(const id of ['inspect-retry','inspect-lookup','inspect-cancel','inspection-repair']) $(id).disabled=true;
+}
 let schema, draft, lastAction, operationId, operationStatus, historySelection, pending = false;
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -25,7 +33,7 @@ function result(data) {
   }
   $('status').textContent = data.acknowledgment_only ? `Existing operation acknowledged: ${operationId}. No approval or purchase was created.` : data.code === 'cancelled' ? 'Operation cancelled. No approval or purchase was created.' :
     `${data.code === 'replayed' ? 'Existing operation returned' : data.code === 'completed' ? 'Artwork revision saved' : data.code === 'ready' ? 'Typed handoff ready' : 'Apply accepted'}: ${operationId}. No approval or purchase was created.`;
-  if (data.result?.design_version) refreshHistory();
+  if (data.result?.design_version) { refreshHistory(); if (inspectionSource !== data.operation_id) clearInspection({design_version_id:data.result.design_version.design_version_id,artifact_hash:data.result.design_version.artifact.content_hash},data.operation_id); $('inspect').disabled = false; }
   $('draft-state').textContent = data.acknowledgment_only ? 'Existing operation acknowledged. Validate handoff to review its current typed handoff.' : data.status === 'completed' ? 'Revision saved. Refresh controls to review the current version before drafting another edit.' : data.code === 'cancelled' ? 'Operation cancelled. Make a new draft selection to Apply again.' : 'Draft submitted. Retry or cancel the existing operation.';
   $('cancel').disabled = data.code === 'cancelled' || data.status === 'completed'; $('handoff').disabled = data.code === 'cancelled' || data.status === 'completed';
   if (data.result?.design_version) { const design = data.result.design_version; $('artifact').hidden = false; $('artifact').textContent = `Saved version ${design.design_version_id} · exact artwork ${design.artifact.content_hash} · backend job ${data.backend_job_id}`;
@@ -58,7 +66,7 @@ function questions() {
 }
 async function refresh() {
   try {
-    const data = await api('/api/schema'); schema = assertRenderableSchema(data.schema); draft = defaultDraft(schema);
+    const data = await api('/api/schema'); $('inspection-section').hidden=!data.backend; if(!data.backend)$('evidence-description').textContent='Foundation fixture only: typed controls bookkeeping and handoff compatibility. Native image, saved-version inspection and production integrations are unavailable on this server.'; schema = assertRenderableSchema(data.schema); draft = defaultDraft(schema);
     // Keep an already accepted operation available for cancellation after refresh.
     lastAction = undefined;
     $('fields').replaceChildren(Object.assign(document.createElement('legend'), { textContent: 'Draft selections' }));
@@ -113,7 +121,64 @@ for (const id of ['compare-history', 'restore-history']) $(id).addEventListener(
     const data = projectHistoryResult(response, id === 'restore-history');
     if (!data.ok) return error(historyErrorMessage(data));
     $('history-result').textContent = id === 'restore-history' ? `Selected saved artwork ${data.result.design_version_id}. No image call or approval created.` : `Compared exact hashes ${data.result.left} and ${data.result.right}.`;
-    if (id === 'restore-history') { $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(data.result.design_version_id)}`; $('artwork-preview').hidden = false; await refresh(); }
+    if (id === 'restore-history') { clearInspection(undefined,undefined); $('artifact').hidden=true; $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(data.result.design_version_id)}`; $('artwork-preview').hidden = false; await refresh(); }
   } catch { error('Version operation unavailable.'); }
 });
 refresh();
+
+function inspectionCounts(data) {
+ const c = data?.counters;
+ if (!c || !['observer_calls','independent_decision_calls','dependent_choice_calls','reservations','holds','releases'].every(k=>Number.isSafeInteger(c[k])&&c[k]>=0)) return;
+ $('inspection-counters').textContent = `Observer calls: ${c.observer_calls} · Independent decision calls: ${c.independent_decision_calls} · Dependent Choice calls: ${c.dependent_choice_calls} · Reservations: ${c.reservations} · Holds: ${c.holds} · Releases: ${c.releases}`;
+}
+function inspectionError() {
+ $('inspection-error').hidden = false; $('inspection-error').textContent = 'Inspection response unavailable. Recover or retry the existing inspection identity. Saved artwork remains available.';
+ $('inspection-error').focus(); $('inspect-retry').disabled = !inspectionAction; $('inspect-lookup').disabled = !inspectionAction; $('inspect-cancel').disabled = !inspectionAction;
+ $('inspection-repair').disabled = !repairAction;
+}
+function renderInspection(data, focus = false, generation = inspectionGeneration) {
+ if(generation!==inspectionGeneration)return;
+ inspectionCounts(data); const view = projectInspectionView(data?.view);
+ if (!view) { inspectionError(); return; }
+ if(!displayedDesign)return;
+ if(displayedDesign && (view.references.design_version_id!==displayedDesign.design_version_id || view.references.artifact_hash!==displayedDesign.artifact_hash))return;
+ inspectionView = view; inspectionSource = view.references.source_operation_id; inspectionAction = view.references.inspection_action_id;
+ $('inspection-error').hidden = true;
+ $('inspection-status').textContent = view.message;
+ $('inspection-refs').textContent = `Inspection ${inspectionAction} · saved version ${view.references.design_version_id} · exact artwork ${view.references.artifact_hash}${view.report_hash ? ` · report ${view.report_hash}` : ''}`;
+ $('inspection-usage').textContent = `${view.usage_completeness === 'complete' ? 'Usage reported complete.' : view.usage_completeness === 'partial' ? 'Usage is partial.' : 'Usage is unknown.'} Total cost remains unknown. Reservation status is unknown.`;
+ $('inspection-limits').textContent = view.limits ? `Backend root limits: ${view.limits.remaining_repairs} repairs, ${view.limits.remaining_elapsed_ms} milliseconds and ${view.limits.remaining_simulated_units} fixture units remaining. Limits are rechecked by the backend.` : 'Repair limits unavailable.';
+ $('inspect').disabled = true; $('inspect-retry').disabled = false; $('inspect-lookup').disabled = false;
+ $('inspect-cancel').disabled = ['completed','cancelled'].includes(view.status); $('inspection-repair').disabled = !view.repair_available;
+ if (focus) $('inspection-status').focus();
+}
+async function inspect(retry) {
+ if (inspectionPending || !inspectionSource) return;
+ inspectionAction ??= `inspect_${crypto.randomUUID()}`;
+ const generation=inspectionGeneration; inspectionPending = true; $('inspect').disabled = true; $('inspect-retry').disabled = true; $('inspect-lookup').disabled = false; $('inspect-cancel').disabled = false;
+ $('inspection-status').textContent = 'Inspection pending. The saved artwork remains available.';
+ try { renderInspection(await api('/api/inspection', { source_operation_id: inspectionSource, inspection_action_id: inspectionAction }), true, generation); }
+ catch { if(generation===inspectionGeneration)inspectionError(); } finally { inspectionPending = false; if(generation===inspectionGeneration)$('inspect-retry').disabled = !inspectionAction; }
+}
+$('inspect').addEventListener('click',()=>inspect(false)); $('inspect-retry').addEventListener('click',()=>inspect(true));
+for (const [id,path] of [['inspect-lookup','/api/inspection/lookup'],['inspect-cancel','/api/inspection/cancel']]) $(id).addEventListener('click',async()=>{
+ const generation=inspectionGeneration; try { renderInspection(await api(path,{inspection_action_id:inspectionAction}),true,generation); } catch { if(generation===inspectionGeneration)inspectionError(); }
+});
+$('inspection-repair').addEventListener('click',async()=>{
+ if (!inspectionView?.repair_available || inspectionPending) return;
+ const generation=inspectionGeneration; repairAction ??= `repair_${crypto.randomUUID()}`; inspectionPending = true; $('inspection-repair').disabled = true;
+ try {
+  const data = await api('/api/inspection/repair',{inspection_action_id:inspectionAction,repair_action_id:repairAction,repair_action:'image.edit'});
+  if(generation!==inspectionGeneration)return; inspectionCounts(data); const repair=projectRepairResult(data.repair,repairAction);
+  if (!repair) return inspectionError();
+  clearInspection({design_version_id:repair.design_version_id,artifact_hash:repair.artifact_hash},repair.action_id); $('artifact').hidden=false; $('artifact').textContent=`Saved version ${repair.design_version_id} · exact artwork ${repair.artifact_hash}`;
+  $('inspection-status').textContent=`Repair saved as a new immutable version ${repair.design_version_id}. Review and inspect this version separately. No approval or purchase created.`;
+  $('inspect').disabled=false; $('inspect-retry').disabled=true; $('inspect-lookup').disabled=true; $('inspect-cancel').disabled=true;
+  $('artwork-preview').src=`/api/artifact?design_version_id=${encodeURIComponent(repair.design_version_id)}`;
+  $('artwork-preview').hidden=false; refreshHistory(); $('inspection-status').focus();
+ } catch { if(generation===inspectionGeneration)inspectionError(); } finally { inspectionPending=false; }
+});
+async function recoverInspection() {
+ const generation=inspectionGeneration; try { const history=projectHistoryList(await api('/api/history'));if(generation!==inspectionGeneration || !history)return;const current=history.items.find(x=>x.design_version_id===history.selection.design_version_id);if(!current)return;displayedDesign??={design_version_id:current.design_version_id,artifact_hash:current.artifact.content_hash};const data=await api('/api/inspection/latest');if(generation!==inspectionGeneration)return;const repair=projectRepairResult(data.repair,data.repair?.action_id);if(repair && repair.design_version_id===current.design_version_id && repair.artifact_hash===current.artifact.content_hash){clearInspection({design_version_id:repair.design_version_id,artifact_hash:repair.artifact_hash},repair.action_id);$('artifact').hidden=false;$('artifact').textContent=`Saved version ${repair.design_version_id} · exact artwork ${repair.artifact_hash}`;$('artwork-preview').src=`/api/artifact?design_version_id=${encodeURIComponent(repair.design_version_id)}`;$('artwork-preview').hidden=false;if(data.view?.references?.design_version_id===repair.design_version_id)renderInspection(data);return;}if(data.view)renderInspection(data,false,generation);if(data.repair?.ok===false && data.repair.status==='pending' && validId(data.repair.action_id) && data.repair.inspection_action_id===inspectionAction && inspectionView?.repair_available){repairAction=data.repair.action_id;$('inspection-repair').textContent='Recover existing repair';$('inspection-repair').disabled=false;$('inspection-status').textContent='Repair outcome pending. Recover the existing repair identity; do not request another edit.';} } catch { /* No existing identity is claimed on initial load. */ }
+}
+recoverInspection();
