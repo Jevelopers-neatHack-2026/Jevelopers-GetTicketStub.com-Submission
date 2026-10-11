@@ -173,7 +173,8 @@
       "1.0.0"
     ],
     "ProductionBundle": [
-      "1.0.0"
+      "1.0.0",
+      "2.0.0"
     ],
     "FulfillmentQuote": [
       "1.0.0"
@@ -185,6 +186,93 @@
       "1.0.0"
     ],
     "EvaluationEvidence": [
+      "1.0.0"
+    ],
+    "ProductionReference": [
+      "1.0.0"
+    ],
+    "ProductionPolicy": [
+      "1.0.0"
+    ],
+    "ProductionRuntime": [
+      "1.0.0"
+    ],
+    "ProductionResource": [
+      "1.0.0"
+    ],
+    "ArtifactRef": [
+      "1.0.0"
+    ],
+    "JobRef": [
+      "1.0.0"
+    ],
+    "ComposeArtifactRequest": [
+      "1.0.0"
+    ],
+    "PersonalizeBatchRequest": [
+      "1.0.0"
+    ],
+    "InspectArtifactRequest": [
+      "1.0.0"
+    ],
+    "ExportBundleRequest": [
+      "1.0.0"
+    ],
+    "CompareTemplateRequest": [
+      "1.0.0"
+    ],
+    "ArtifactStatusRequest": [
+      "1.0.0"
+    ],
+    "ProductionError": [
+      "1.0.0"
+    ],
+    "ProductionDiagnostic": [
+      "1.0.0"
+    ],
+    "TemplateSpec": [
+      "1.0.0"
+    ],
+    "PersonalizationSchema": [
+      "1.0.0"
+    ],
+    "Composition": [
+      "1.0.0"
+    ],
+    "CompatibilityReport": [
+      "1.0.0"
+    ],
+    "PreflightReport": [
+      "1.0.0"
+    ],
+    "ArtifactFile": [
+      "2.0.0"
+    ],
+    "ProductionBundleDetached": [
+      "1.0.0"
+    ],
+    "ProductionBundleRef": [
+      "1.0.0"
+    ],
+    "RowResult": [
+      "1.0.0"
+    ],
+    "BatchResult": [
+      "1.0.0"
+    ],
+    "ArtifactManifestStatus": [
+      "1.0.0"
+    ],
+    "CsvDialect": [
+      "1.0.0"
+    ],
+    "CsvMapping": [
+      "1.0.0"
+    ],
+    "CsvCheckpoint": [
+      "1.0.0"
+    ],
+    "ProductionExecutionPins": [
       "1.0.0"
     ]
   },

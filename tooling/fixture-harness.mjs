@@ -4,6 +4,7 @@ import { checkResearchCreative } from './research-creative.mjs';
 import { checkCommerceEvidence } from './commerce-evidence.mjs';
 import { historicalFinanceFixture } from './historical-finance-fixtures.mjs';
 import { checkPrintSpec, checkFulfillmentCapabilitySnapshot } from './capability.mjs';
+import { checkProductionFixture } from './production-fixture-check.mjs';
 
 export const fixtureCategories = Object.freeze(['minimal', 'full', 'missing', 'type', 'enum', 'malformed_json', 'unsupported_version', 'unknown_field', 'unknown_critical', 'additive_field', 'retained_encoding']);
 const digest = value => hashBytes(new TextEncoder().encode(canonicalJson(value)));
@@ -28,6 +29,7 @@ export function fixturePayload(manifest, fixture) {
 
 export function evaluateFixture(contract, manifest, fixture) {
   const payload = fixturePayload(manifest, fixture);
+  if (fixture.mode === 'production') return checkProductionFixture(contract, payload, fixture.context);
   if (fixture.mode === 'capability') return contract === 'PrintSpec' ? checkPrintSpec(payload, fixture.context) : checkFulfillmentCapabilitySnapshot(payload, fixture.context);
   if (fixture.mode === 'commerce_evidence' || fixture.mode === 'research_creative') {
     const context = structuredClone(fixture.context);

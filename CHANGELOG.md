@@ -1,5 +1,12 @@
 # Candidate changes
 
+## 0.9.0 (unreleased development candidate)
+
+- Add the separate production namespace, six service interfaces, closed requests/results/errors, templates/compositions, row/batch values and conditional disabled CSV boundaries.
+- Add ArtifactFile/2, ProductionBundle/2 and detached metadata with bounded acyclic byte verification and independent eligibility checks. Retain v1 schema/fixture bytes and commerce behavior.
+- Split standalone validator generation within existing package bounds. Add synthetic calibration provenance, installed type/fixture checks and 24 separate local criteria.
+- Independent, producer and consumer acceptance remain pending; domain services and real integration are separate owner work.
+
 ## 0.8.3 (unreleased)
 
 SC-CHK-009 and SC-CHK-010 candidate repairs follow the whole-PR REQUEST_CHANGES at d428365. ProductionBundle compares handoff contract, schema version, identity, revision and hash with the independently supplied manifest; a mismatch returns REFERENCE_MISMATCH at /handoff_ref. ResearchBatchReceipt requires rejected admissions to be failed members under either acceptance policy; admitted requests may still fail during execution, and genuine partial outcomes remain supported. Schemas, retained fixture bytes, Finance and consumer observer behavior are unchanged. These safety checks narrow previously permissive helper behavior and require fresh exact-candidate independent review; no consumer adoption or release approval is claimed.

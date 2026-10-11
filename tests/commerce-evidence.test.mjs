@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { catalog, assertFixture } from '../scripts/contracts.mjs';
 import { readJson, root } from '../scripts/generate.mjs';
-import { validateContract, parseContract, checkCommerceEvidence, commerceContentHash, projectEvaluationEvidence } from '../generated/index.mjs';
+import { validateContract, validateContractVersion, parseContractVersion, checkCommerceEvidence, commerceContentHash, projectEvaluationEvidence } from '../generated/index.mjs';
 for (const entry of (await catalog()).filter(entry => entry.state === 'commerce_evidence_candidate')) {
   const manifest = await readJson(entry.fixtures);
   for (const fixture of manifest.cases) test(entry.name + ' / ' + fixture.id, () => {
@@ -21,8 +21,8 @@ for (const entry of (await catalog()).filter(entry => entry.state === 'commerce_
         if (context.artifact_bytes) context.artifact_bytes = Object.fromEntries(Object.entries(context.artifact_bytes).map(([id, bytes]) => [id, Uint8Array.from(bytes)]));
         result = checkCommerceEvidence(entry.name, value, context); break;
       }
-      case 'parse': result = parseContract(entry.name, fixture.json); break;
-      case undefined: result = validateContract(entry.name, value); break;
+      case 'parse': result = parseContractVersion(entry.name, manifest.schema_version, fixture.json); break;
+      case undefined: result = validateContractVersion(entry.name, manifest.schema_version, value); break;
       default: throw new Error('Unknown fixture mode');
     }
     // Then success or the exact typed rejection/path must match.

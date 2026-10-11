@@ -90,7 +90,7 @@ export async function observeConsumerDriver({ script, checkout, snapshot, env, h
         const expected = fixtures.get(value.contract + '@' + value.manifest?.schema_version);
         const bound = expected !== undefined && hashManifest(value.manifest) === hashManifest(expected);
         const records = Array.isArray(value.records) ? value.records : [];
-        coverage.push({ contract: value.contract, version: value.manifest?.schema_version, bound, failures: Array.isArray(value.failures) ? value.failures.length : -1, positive: records.filter(row => row.expected?.ok).length, negative: records.filter(row => row.expected?.ok === false).length, semantic: records.some(row => ['semantic', 'research_creative', 'commerce_evidence', 'capability'].includes(row.mode)) ? 1 : 0 });
+        coverage.push({ contract: value.contract, version: value.manifest?.schema_version, bound, failures: Array.isArray(value.failures) ? value.failures.length : -1, positive: records.filter(row => row.expected?.ok).length, negative: records.filter(row => row.expected?.ok === false).length, semantic: records.some(row => ['semantic', 'research_creative', 'commerce_evidence', 'capability', 'production'].includes(row.mode)) ? 1 : 0 });
       }
       await post('Debugger.resume');
     }

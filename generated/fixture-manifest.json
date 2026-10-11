@@ -5,12 +5,24 @@
     "fixtures/ApprovalVerificationOutcome.json": "sha256:f136f78fa7808eb6243fc000f03f327bf193728442385d84d4f4664592564452",
     "fixtures/ApprovalVerificationRequest.json": "sha256:d9096dec5fcd2957298a69999aff1ebb6cfc1155bef0b19593f1fe84ef9faf58",
     "fixtures/ArtifactConsumptionReceipt.json": "sha256:d0695aa669d5dba731773688c0e9da6a1cdd87e372811c3c1a3a4ed2865cbfdc",
+    "fixtures/ArtifactFile.2_0_0.json": "sha256:0c06132595d91116504b2d7998b81a17521fe09eaf36836ef37e5104065f6c02",
     "fixtures/ArtifactHandoffManifest.json": "sha256:9b9df6ae0950490d9d2400f01c6d2c0d8e354628353a29b6473f458422e22442",
+    "fixtures/ArtifactManifestStatus.json": "sha256:e97497716ff45e8b9dadc35f1e898bd1c8a3360f1db1da09438bd95188efa9c1",
+    "fixtures/ArtifactRef.json": "sha256:af3dc9faf31c1a094e6e24dd0cc8380905e18d770b62c9a2e8809d19b6a83ca3",
+    "fixtures/ArtifactStatusRequest.json": "sha256:8a9bb09d1edbdb5776d7518266ef29a6c6b7830e7b3d2d0b5e218c88e8a86044",
+    "fixtures/BatchResult.json": "sha256:5172c07883a8fa53477a7a4a2478cbc0c811da5de3f0bedd7e8229acedd7266d",
     "fixtures/BudgetReservation.2_0_0.json": "sha256:124afa6c759ee7cab4b48d1513d94d7b82be2eb69a2834b25db81a38f57be992",
     "fixtures/BudgetReservation.json": "sha256:67c8688aa6a452e0a17b036f31d99322f400be81b4a3c492b51c62f820908459",
     "fixtures/Cancellation.json": "sha256:e6fc45ce5810512c20a592a884fc5f528c17a4d36df65157849354fe2860f5c7",
     "fixtures/CommonEnvelope.json": "sha256:d7a213af70a993b438a49cf5f045532158d0d668cbf4663cb2ef4c176051853c",
+    "fixtures/CompareTemplateRequest.json": "sha256:7f260328934c424913e02f06b91ad3c46c146248e1dd29d1d1f8683fb5560d13",
+    "fixtures/CompatibilityReport.json": "sha256:3b7f426f069d3af98d762a73076049f1daca0727108264b19265f7f19435ecb2",
+    "fixtures/ComposeArtifactRequest.json": "sha256:2ba05fcfb46ca4302b07f2300326863d5d738c11cab795aa8f6b6faacb5aed31",
+    "fixtures/Composition.json": "sha256:411c61b4cc285a9a4425f22f09dc8f87b809685d363b1f0f22a8fb36edf97922",
     "fixtures/CreativeBrief.json": "sha256:e60e6eb7e961e9dfe2672e34075da2d44dc80bd5594f550791c4d1fa6786e3d0",
+    "fixtures/CsvCheckpoint.json": "sha256:2b50134d5f6c06712180e2f0471a020eebee0e9158750bd2eb96c53e7df4d60d",
+    "fixtures/CsvDialect.json": "sha256:3327a0e38c832721645c14c359fd6b9c75d82383e6a77a58a8c11d6d12586fb6",
+    "fixtures/CsvMapping.json": "sha256:cd6711a9428991ceb4d49b675b6f33afd5304484a97ad6bacefef1b8b7757d81",
     "fixtures/DecisionPortRequest.json": "sha256:3a329855d56d43c98c20d918cf426cfa4507ec5a73c4cc92b70cf8d9d2260246",
     "fixtures/DecisionPortResult.json": "sha256:87976200ac9593fd2ce7b71f608c8c9f288954281f541fb1e6a594a20ce65f3e",
     "fixtures/DecisionReceipt.json": "sha256:988ec53fc071d124b42b6c0c0b1af16027b6b7068a789daddbdf9fa039553fe2",
@@ -20,18 +32,36 @@
     "fixtures/EvaluationEvidence.json": "sha256:68c861c9f88d74874feff28c4b29ce0f3d788abce168e5509d3b3588c96e747a",
     "fixtures/EventIntelligencePackage.json": "sha256:0ab1c2710489d7120418b023f92605d46e3d0e4df6371a084bebc3c3aa0cf5a7",
     "fixtures/EvidenceProjection.json": "sha256:b8750bad839c7f4262ef9bcdcb464a50a68bff9ddf1524bc93a88e709ef7912b",
+    "fixtures/ExportBundleRequest.json": "sha256:c2aad98184856793c18d63e94b62b9477e47471660ee2dc9bd2f74ad10b69cb8",
     "fixtures/FinancialSummary.json": "sha256:ac30f110ef9777177feabae9cb00286e946a86caff106d029c65d25bf325d19d",
     "fixtures/FulfillmentCapabilitySnapshot.json": "sha256:794cfb339feb4d34f8455ea137ce728e7b9f866c9603256bfe32b5483c6b0e9c",
     "fixtures/FulfillmentQuote.json": "sha256:1621415f6ecb241555a38d10549cd927687574598ec1d42639976754c211614f",
     "fixtures/FulfillmentStatus.json": "sha256:b507e4d87b8983ee2118437241fd3581c11473cd6359b02c32f2bef4af55234f",
+    "fixtures/InspectArtifactRequest.json": "sha256:490afbf154f6b586d6b1931432ea6f8cb2816cddeb14561d143b4aab2c200632",
     "fixtures/JobCommandAcknowledgement.json": "sha256:3105f4820c963dd8ad93f578959d07df5ddd8f80e805ffd6b073fcf7d9161e6c",
     "fixtures/JobProgress.json": "sha256:9ca32597732cc0633506cb37c7e29887817bb77c0946a39fe2f33b594b6c12dd",
+    "fixtures/JobRef.json": "sha256:78cfb68db35f9592eb6dd5d6aa8e8ed80b4d3074518c3f7d67557136c76a28e2",
     "fixtures/JobStatus.json": "sha256:1ababacfb0e7b497dc063cf3f65891152e19eef2064e43abc94bc6fa9b911d96",
     "fixtures/OrderAuthorization.json": "sha256:3d5a1023f318fac63063d98c2b1b89eb11e50b7e1e00568b023b688ed3be0d44",
     "fixtures/PartialFailure.json": "sha256:a7ff6f52f4b8bf7a89524d94fd5ebc4134a5bf15ebc587aea62f441fe7b2fbe6",
+    "fixtures/PersonalizationSchema.json": "sha256:5e8635c81b63ff2bdf60cface4d57e672a088ffe40513eb112ce2d82fa768b6b",
+    "fixtures/PersonalizeBatchRequest.json": "sha256:4a7c259c4a7a7b64f09c70a66bc16c1b6aaec1cf479da61b51528c95a1ad6ddf",
+    "fixtures/PreflightReport.json": "sha256:f50c7368c5f222ea737cb85ceb9a3c9cb1db74c73a9772ecaf68e1ff4a70b253",
     "fixtures/PrintSpec.json": "sha256:f47c8088e85ccdc84b8f219e353b8d3df5786b7669f3fc419b04553c7ec25ccd",
     "fixtures/ProductionApproval.example.json": "sha256:085bd9eb87444b3c0699cac1c840f181be239fbfa2553b2330bbcd672963cd15",
+    "fixtures/ProductionBundle.2_0_0.json": "sha256:869f79387538a5539c4303c99ef4373511d24190ea67ceec1558adcd4c1ed91d",
     "fixtures/ProductionBundle.json": "sha256:108048d668254fca9117c7b22a8eeb1cc62d4308a3a005d6bd8c8eea8c968237",
+    "fixtures/ProductionBundleDetached.json": "sha256:2c145885e5975093d27fd3efc5009a4acde191eea06cee7c4fce56c2bd85726b",
+    "fixtures/ProductionBundleRef.json": "sha256:36f1b0ab04e9b94d2cf3a7952ea86f7b54b28fb8668c977649f3dc5c6e292746",
+    "fixtures/ProductionCalibration.json": "sha256:13377016c70b329b63d293a915d2830614503f157b3d77a3f36f24193b4f0667",
+    "fixtures/ProductionDerivedProvenance.json": "sha256:5c019f1f170db59633f13ff9984665b26742e087aa655cd944d6b2f9412845db",
+    "fixtures/ProductionDiagnostic.json": "sha256:8b7ee4c88cb9f46ab5b44035453a559f031e16e630df770ba87fac264e264a58",
+    "fixtures/ProductionError.json": "sha256:fb3ce3e7feff036dd8db0fccefce1b4b3ad1c72a17fa3fcec7352585b206846c",
+    "fixtures/ProductionExecutionPins.json": "sha256:d2f4727c26661fe6b9834187814720b447d6e83c04f63f5c552feb34bb81063d",
+    "fixtures/ProductionPolicy.json": "sha256:c58f48fe6b9b6fb7367d8b649eefb056b90559da4b107e2ef1110a9d732df08b",
+    "fixtures/ProductionReference.json": "sha256:bafa935e6b9c462e9ac847776df9de031a95ed6952cb4e45ad5b95470cc46139",
+    "fixtures/ProductionResource.json": "sha256:2476f3debd92e1288c6c5b20d692d25c822663892f7a1f5bea23042c8ac82bb8",
+    "fixtures/ProductionRuntime.json": "sha256:6a2e28e77b0e50bde717a812ae05a9b2c91b7ee9aa6b526e3841819849ce24f6",
     "fixtures/ProjectRequest.json": "sha256:5ad1e5aa2074e2acd58d3a7eb8246e889321a6e786766d2c30e90e1f877fcc12",
     "fixtures/QueryRequest.2_0_0.json": "sha256:69c2290ed3e18b2a577d4ae5f8e493d3b506a8a71761f59e0b32887a12a84e1f",
     "fixtures/QueryRequest.json": "sha256:02ecc8f5d62b0edb35aed2bc40ed660eee4d4e692212ae70f72d1ea0a0760672",
@@ -52,13 +82,15 @@
     "fixtures/ReserveRequest.json": "sha256:0fe5d1788056e3556e814ab67d464137cbbef854a3110ab40b71a3b5d0f74e50",
     "fixtures/ReserveResult.2_0_0.json": "sha256:e2419a75d531f05a369b67e36b0cd60e5f5ff4e929421a2253b5fdd113bf08ee",
     "fixtures/ReserveResult.json": "sha256:8e585628276b57b9cf835e4432c8f4c531cfc46b9a46abb2bd235dbb117966fe",
+    "fixtures/RowResult.json": "sha256:050e67fe81ca4d960c21ad21fc920d56aab0d1eee8ed3d972bb76df03f6cbc06",
     "fixtures/SettleRequest.2_0_0.json": "sha256:4d4052071702778c3320ed8cd432e54ab9ff52721c46966f921015899184444a",
     "fixtures/SettleRequest.json": "sha256:7ccaefabc7ecd07d4e2fdcfc79169b1ae5550c390c7c18d8d31e84f4c82dcf3f",
     "fixtures/SettleResult.2_0_0.json": "sha256:8f8ec98f3163120cf6e32181fbae9aa6a120d82d22d811d52fd8068b87fc9408",
     "fixtures/SettleResult.json": "sha256:f1727555000cad209b3bcb54d09ec3a3ca66d7c07b6e55882762e44a27d5eeb2",
+    "fixtures/TemplateSpec.json": "sha256:6d189113bbd077b0728b67e61c86391364bd0ac6b3a4830a87a0bac3785a598c",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:d5e47a9dabebf4840c98f1622a52d07ad06991452a8470a78cee1b4fbe478b46",
+  "digest": "sha256:a871be1c18570714e97be62fe3c582c6f2689254aae4ab9ba5f5ec40c698c654",
   "status": "synthetic_candidates_only",
   "contracts": [
     {
@@ -1280,6 +1312,138 @@
       ]
     },
     {
+      "contract": "ArtifactFile",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ArtifactFile.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "ArtifactHandoffManifest",
       "version": "1.0.0",
       "policy_version": "1.0.0",
@@ -1586,6 +1750,534 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:e0d707100173b55e0489bb6c942ede210b275511d27ba715e1c3bd3df858dbec"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ArtifactManifestStatus",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ArtifactManifestStatus.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ArtifactRef",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ArtifactRef.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ArtifactStatusRequest",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ArtifactStatusRequest.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "BatchResult",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/BatchResult.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
           }
         }
       ]
@@ -2526,6 +3218,534 @@
       ]
     },
     {
+      "contract": "CompareTemplateRequest",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/CompareTemplateRequest.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "CompatibilityReport",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/CompatibilityReport.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ComposeArtifactRequest",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ComposeArtifactRequest.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "Composition",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/Composition.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "CreativeBrief",
       "version": "1.0.0",
       "policy_version": "1.0.0",
@@ -2722,6 +3942,402 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:cc0920aec394246eafdce2b0ec33c500e92d0b969a9dcf19e868ef6a1c5f499e"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "CsvCheckpoint",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/CsvCheckpoint.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "CsvDialect",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/CsvDialect.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "CsvMapping",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/CsvMapping.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
           }
         }
       ]
@@ -5046,6 +6662,138 @@
       ]
     },
     {
+      "contract": "ExportBundleRequest",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ExportBundleRequest.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "FinancialSummary",
       "version": "1.0.0",
       "policy_version": "1.0.0",
@@ -6074,6 +7822,138 @@
       ]
     },
     {
+      "contract": "InspectArtifactRequest",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/InspectArtifactRequest.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "JobCommandAcknowledgement",
       "version": "1.0.0",
       "policy_version": "1.0.0",
@@ -6585,6 +8465,138 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:0c0cc5dc43d5eefed58df69e395cc767794af00693ae3d25646ec31e08fc19bc"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "JobRef",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/JobRef.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
           }
         }
       ]
@@ -7408,6 +9420,402 @@
       ]
     },
     {
+      "contract": "PersonalizationSchema",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/PersonalizationSchema.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "PersonalizeBatchRequest",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/PersonalizeBatchRequest.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "PreflightReport",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/PreflightReport.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "PrintSpec",
       "version": "1.0.0",
       "policy_version": "1.0.0",
@@ -7588,6 +9996,138 @@
             "ok": false,
             "code": "GEOMETRY_UNCONFIRMED",
             "path": "/constraints/inset_geometry_basis"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionBundle",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionBundle.2_0_0.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
           }
         }
       ]
@@ -7855,6 +10395,1194 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:f938da00c07a1b6fb49c5d6d492de7dd9c9e9752413188cbbaae61ff7b05afd4"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionBundleDetached",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionBundleDetached.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionBundleRef",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionBundleRef.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionDiagnostic",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionDiagnostic.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionError",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionError.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionExecutionPins",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionExecutionPins.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionPolicy",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionPolicy.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionReference",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionReference.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionResource",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionResource.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ProductionRuntime",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProductionRuntime.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
           }
         }
       ]
@@ -12489,6 +16217,138 @@
       ]
     },
     {
+      "contract": "RowResult",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/RowResult.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "SettleRequest",
       "version": "2.0.0",
       "policy_version": "1.0.0",
@@ -13725,6 +17585,138 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:97adf594a3bf73fe215d24d21f7801df4f8a2a1df28ce782d330570d517e1944"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "TemplateSpec",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/TemplateSpec.json",
+      "cases": [
+        {
+          "id": "minimal",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/contract"
+          }
+        },
+        {
+          "id": "parse",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown_field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown_critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive_field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "production-independent-bindings",
+          "category": "production_semantic",
+          "policy_version": "1.0.0",
+          "mode": "production",
+          "expected": {
+            "ok": true
           }
         }
       ]

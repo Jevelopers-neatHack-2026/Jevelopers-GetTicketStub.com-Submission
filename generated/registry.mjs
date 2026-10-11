@@ -14,8 +14,23 @@ const records = {
   "ArtifactConsumptionReceipt": {
     "1.0.0": "ArtifactConsumptionReceipt_1_0_0"
   },
+  "ArtifactFile": {
+    "2.0.0": "ArtifactFile_2_0_0"
+  },
   "ArtifactHandoffManifest": {
     "1.0.0": "ArtifactHandoffManifest_1_0_0"
+  },
+  "ArtifactManifestStatus": {
+    "1.0.0": "ArtifactManifestStatus_1_0_0"
+  },
+  "ArtifactRef": {
+    "1.0.0": "ArtifactRef_1_0_0"
+  },
+  "ArtifactStatusRequest": {
+    "1.0.0": "ArtifactStatusRequest_1_0_0"
+  },
+  "BatchResult": {
+    "1.0.0": "BatchResult_1_0_0"
   },
   "BudgetReservation": {
     "1.0.0": "BudgetReservation_1_0_0",
@@ -27,8 +42,29 @@ const records = {
   "CommonEnvelope": {
     "1.0.0": "CommonEnvelope_1_0_0"
   },
+  "CompareTemplateRequest": {
+    "1.0.0": "CompareTemplateRequest_1_0_0"
+  },
+  "CompatibilityReport": {
+    "1.0.0": "CompatibilityReport_1_0_0"
+  },
+  "ComposeArtifactRequest": {
+    "1.0.0": "ComposeArtifactRequest_1_0_0"
+  },
+  "Composition": {
+    "1.0.0": "Composition_1_0_0"
+  },
   "CreativeBrief": {
     "1.0.0": "CreativeBrief_1_0_0"
+  },
+  "CsvCheckpoint": {
+    "1.0.0": "CsvCheckpoint_1_0_0"
+  },
+  "CsvDialect": {
+    "1.0.0": "CsvDialect_1_0_0"
+  },
+  "CsvMapping": {
+    "1.0.0": "CsvMapping_1_0_0"
   },
   "DecisionPortRequest": {
     "1.0.0": "DecisionPortRequest_1_0_0"
@@ -57,6 +93,9 @@ const records = {
   "EvidenceProjection": {
     "1.0.0": "EvidenceProjection_1_0_0"
   },
+  "ExportBundleRequest": {
+    "1.0.0": "ExportBundleRequest_1_0_0"
+  },
   "FinancialSummary": {
     "1.0.0": "FinancialSummary_1_0_0"
   },
@@ -69,11 +108,17 @@ const records = {
   "FulfillmentStatus": {
     "1.0.0": "FulfillmentStatus_1_0_0"
   },
+  "InspectArtifactRequest": {
+    "1.0.0": "InspectArtifactRequest_1_0_0"
+  },
   "JobCommandAcknowledgement": {
     "1.0.0": "JobCommandAcknowledgement_1_0_0"
   },
   "JobProgress": {
     "1.0.0": "JobProgress_1_0_0"
+  },
+  "JobRef": {
+    "1.0.0": "JobRef_1_0_0"
   },
   "JobStatus": {
     "1.0.0": "JobStatus_1_0_0"
@@ -84,11 +129,48 @@ const records = {
   "PartialFailure": {
     "1.0.0": "PartialFailure_1_0_0"
   },
+  "PersonalizationSchema": {
+    "1.0.0": "PersonalizationSchema_1_0_0"
+  },
+  "PersonalizeBatchRequest": {
+    "1.0.0": "PersonalizeBatchRequest_1_0_0"
+  },
+  "PreflightReport": {
+    "1.0.0": "PreflightReport_1_0_0"
+  },
   "PrintSpec": {
     "1.0.0": "PrintSpec_1_0_0"
   },
   "ProductionBundle": {
-    "1.0.0": "ProductionBundle_1_0_0"
+    "1.0.0": "ProductionBundle_1_0_0",
+    "2.0.0": "ProductionBundle_2_0_0"
+  },
+  "ProductionBundleDetached": {
+    "1.0.0": "ProductionBundleDetached_1_0_0"
+  },
+  "ProductionBundleRef": {
+    "1.0.0": "ProductionBundleRef_1_0_0"
+  },
+  "ProductionDiagnostic": {
+    "1.0.0": "ProductionDiagnostic_1_0_0"
+  },
+  "ProductionError": {
+    "1.0.0": "ProductionError_1_0_0"
+  },
+  "ProductionExecutionPins": {
+    "1.0.0": "ProductionExecutionPins_1_0_0"
+  },
+  "ProductionPolicy": {
+    "1.0.0": "ProductionPolicy_1_0_0"
+  },
+  "ProductionReference": {
+    "1.0.0": "ProductionReference_1_0_0"
+  },
+  "ProductionResource": {
+    "1.0.0": "ProductionResource_1_0_0"
+  },
+  "ProductionRuntime": {
+    "1.0.0": "ProductionRuntime_1_0_0"
   },
   "ProjectRequest": {
     "1.0.0": "ProjectRequest_1_0_0"
@@ -138,6 +220,9 @@ const records = {
     "1.0.0": "ReserveResult_1_0_0",
     "2.0.0": "ReserveResult_2_0_0"
   },
+  "RowResult": {
+    "1.0.0": "RowResult_1_0_0"
+  },
   "SettleRequest": {
     "1.0.0": "SettleRequest_1_0_0",
     "2.0.0": "SettleRequest_2_0_0"
@@ -145,6 +230,9 @@ const records = {
   "SettleResult": {
     "1.0.0": "SettleResult_1_0_0",
     "2.0.0": "SettleResult_2_0_0"
+  },
+  "TemplateSpec": {
+    "1.0.0": "TemplateSpec_1_0_0"
   },
   "UsageEvent": {
     "1.0.0": "UsageEvent_1_0_0"

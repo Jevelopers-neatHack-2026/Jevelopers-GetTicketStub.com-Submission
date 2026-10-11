@@ -1192,6 +1192,188 @@
         "npm run test:installed"
       ],
       "closure_evidence": null
+    },
+    {
+      "issue": 34,
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34",
+      "stable_key": "SC-PROD-API",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "acceptance_ids": [
+        "SC-PROD-API.1",
+        "SC-PROD-API.2",
+        "SC-PROD-API.3",
+        "SC-PROD-API.4",
+        "SC-PROD-API.5",
+        "SC-PROD-API.6"
+      ],
+      "artifact_dependencies": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        32
+      ],
+      "closure_dependencies": [],
+      "status": "local_development_candidate_pending_independent_and_owner_review",
+      "owner_role": "shared-contracts canonical maintainer",
+      "named_owner": null,
+      "checks": [
+        "npm run generate",
+        "npm run typecheck",
+        "node --test tests/production*.test.mjs",
+        "npm run contracts:check",
+        "npm run contracts:fixtures",
+        "npm run contracts:compat",
+        "npm run docs:check",
+        "npm run test:installed"
+      ],
+      "closure_evidence": null
+    },
+    {
+      "issue": 35,
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/35",
+      "stable_key": "SC-PROD-COMPOSITION",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "acceptance_ids": [
+        "SC-PROD-COMPOSITION.1",
+        "SC-PROD-COMPOSITION.2",
+        "SC-PROD-COMPOSITION.3",
+        "SC-PROD-COMPOSITION.4",
+        "SC-PROD-COMPOSITION.5",
+        "SC-PROD-COMPOSITION.6"
+      ],
+      "artifact_dependencies": [
+        34
+      ],
+      "closure_dependencies": [],
+      "status": "local_development_candidate_pending_independent_and_owner_review",
+      "owner_role": "shared-contracts canonical maintainer",
+      "named_owner": null,
+      "checks": [
+        "npm run generate",
+        "npm run typecheck",
+        "node --test tests/production*.test.mjs",
+        "npm run contracts:check",
+        "npm run contracts:fixtures",
+        "npm run contracts:compat",
+        "npm run docs:check",
+        "npm run test:installed"
+      ],
+      "closure_evidence": null
+    },
+    {
+      "issue": 36,
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36",
+      "stable_key": "SC-PROD-ROWS",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "acceptance_ids": [
+        "SC-PROD-ROWS.1",
+        "SC-PROD-ROWS.2",
+        "SC-PROD-ROWS.3",
+        "SC-PROD-ROWS.4",
+        "SC-PROD-ROWS.5",
+        "SC-PROD-ROWS.6"
+      ],
+      "artifact_dependencies": [
+        34
+      ],
+      "closure_dependencies": [],
+      "status": "local_development_candidate_pending_independent_and_owner_review",
+      "owner_role": "shared-contracts canonical maintainer",
+      "named_owner": null,
+      "checks": [
+        "npm run generate",
+        "npm run typecheck",
+        "node --test tests/production*.test.mjs",
+        "npm run contracts:check",
+        "npm run contracts:fixtures",
+        "npm run contracts:compat",
+        "npm run docs:check",
+        "npm run test:installed"
+      ],
+      "closure_evidence": null
+    },
+    {
+      "issue": 37,
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/37",
+      "stable_key": "SC-PROD-BUNDLE",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "acceptance_ids": [
+        "SC-PROD-BUNDLE.1",
+        "SC-PROD-BUNDLE.2",
+        "SC-PROD-BUNDLE.3",
+        "SC-PROD-BUNDLE.4",
+        "SC-PROD-BUNDLE.5",
+        "SC-PROD-BUNDLE.6"
+      ],
+      "artifact_dependencies": [
+        34
+      ],
+      "closure_dependencies": [],
+      "status": "local_development_candidate_pending_independent_and_owner_review",
+      "owner_role": "shared-contracts canonical maintainer",
+      "named_owner": null,
+      "checks": [
+        "npm run generate",
+        "npm run typecheck",
+        "node --test tests/production*.test.mjs",
+        "npm run contracts:check",
+        "npm run contracts:fixtures",
+        "npm run contracts:compat",
+        "npm run docs:check",
+        "npm run test:installed"
+      ],
+      "closure_evidence": null
     }
   ]
 }

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/ArtifactManifestStatus/1.0.0",
+  "title": "ArtifactManifestStatus",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "ArtifactManifestStatus",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "artifact",
+              "x-classification": "public"
+            },
+            "artifact_ref": {
+              "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0",
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "kind",
+            "artifact_ref"
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "job",
+              "x-classification": "public"
+            },
+            "job_ref": {
+              "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0",
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "kind",
+            "job_ref"
+          ],
+          "x-classification": "restricted"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "failed",
+        "partial",
+        "completed",
+        "cancelled"
+      ],
+      "x-classification": "restricted"
+    },
+    "bundle_ref": {
+      "anyOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "batch": {
+      "anyOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/BatchResult/1.0.0",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "integrity": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "unknown"
+      ],
+      "x-classification": "restricted"
+    },
+    "eligibility": {
+      "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility",
+      "x-classification": "restricted"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+        "x-classification": "restricted"
+      },
+      "minItems": 0,
+      "maxItems": 100,
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "target",
+    "status",
+    "bundle_ref",
+    "batch",
+    "integrity",
+    "eligibility",
+    "evidence_refs"
+  ],
+  "x-classification": "restricted"
+}

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { root } from './generate.mjs';
 import { hashBytes } from '../tooling/runtime.mjs';
+import { productionInstalledChecks } from './production-installed-check.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'shared-contracts-consumer-'));
 function run(command, args, cwd) {
@@ -29,6 +30,7 @@ try {
   console.log(run(process.execPath, ['fixture-consumer.mjs'], directory).trim());
   await cp(root + 'examples/capability-consumer.mjs', join(directory, 'capability-consumer.mjs'));
   console.log(run(process.execPath, ['capability-consumer.mjs'], directory).trim());
+  await productionInstalledChecks(directory, run);
   await writeFile(join(directory, 'consumer.mts'), `import { parseContract, versions } from '@jevelopers/shared-contracts';
 import type { ContractMap, ContractVersionMap, ContractName, TenantId, ProjectId } from '@jevelopers/shared-contracts';
 import { runCanonicalFixtures } from '@jevelopers/shared-contracts/fixture-harness';

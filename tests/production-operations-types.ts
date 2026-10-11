@@ -1,0 +1,17 @@
+import type { ProductionContext as CommerceProductionContext } from '@jevelopers/shared-contracts/commerce-evidence';
+import type { ProductionContext, ProductionOperations, ProductionResult, ComposeArtifactRequest, PersonalizeBatchRequest, InspectArtifactRequest, ExportBundleRequest, CompareTemplateRequest, ArtifactStatusRequest, ArtifactRef, JobRef, BatchResult, PreflightReport, ProductionBundleRef, CompatibilityReport, ArtifactManifestStatus, ProductionReferenceValue } from '@jevelopers/shared-contracts/production-operations';
+import type { ProductionBundle_1_0_0, ProductionBundle_2_0_0, Composition } from '@jevelopers/shared-contracts';
+type Assert<T extends true> = T;
+type Equal<A,B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+type Compose = Assert<Equal<ProductionOperations['composeArtifact'], (ctx: ProductionContext, request: ComposeArtifactRequest) => Promise<ProductionResult<ArtifactRef>>>>;
+type Personalize = Assert<Equal<ProductionOperations['personalizeArtifactBatch'], (ctx: ProductionContext, request: PersonalizeBatchRequest) => Promise<ProductionResult<JobRef | BatchResult>>>>;
+type Inspect = Assert<Equal<ProductionOperations['inspectArtifact'], (ctx: ProductionContext, request: InspectArtifactRequest) => Promise<ProductionResult<PreflightReport>>>>;
+type Export = Assert<Equal<ProductionOperations['exportArtifactBundle'], (ctx: ProductionContext, request: ExportBundleRequest) => Promise<ProductionResult<ProductionBundleRef>>>>;
+type Compare = Assert<Equal<ProductionOperations['compareTemplateCompatibility'], (ctx: ProductionContext, request: CompareTemplateRequest) => Promise<ProductionResult<CompatibilityReport>>>>;
+type Status = Assert<Equal<ProductionOperations['getArtifactManifestStatus'], (ctx: ProductionContext, request: ArtifactStatusRequest) => Promise<ProductionResult<ArtifactManifestStatus>>>>;
+type Contexts = Assert<CommerceProductionContext extends ProductionContext ? false : true>;
+type OldContext = Assert<Equal<CommerceProductionContext['expected_spec'], ProductionBundle_1_0_0['print_spec']>>;
+type NewBundle = Assert<Equal<ProductionBundle_2_0_0['schema_version'], '2.0.0'>>;
+type UnsupportedVersion = Assert<'9.0.0' extends ProductionReferenceValue['schema_version'] ? false : true>;
+type ReadonlyFacts = Assert<Equal<Composition['fact_bindings'], Readonly<Composition['fact_bindings']>>>;
+export type ProductionTypeParity = readonly [Compose,Personalize,Inspect,Export,Compare,Status,Contexts,OldContext,NewBundle,UnsupportedVersion,ReadonlyFacts];

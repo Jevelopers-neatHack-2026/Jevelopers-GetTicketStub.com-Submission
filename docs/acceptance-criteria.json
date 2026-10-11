@@ -759,6 +759,486 @@
         30
       ],
       "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-API.1",
+      "requirement": "All six exact names, context arguments and Promise result types compile; existing commerce ProductionContext and exports remain intact.",
+      "issue": 34,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-API.2",
+      "requirement": "Exact request fields/version discriminators reject unknown and forged authority fields before any resolver invocation.",
+      "issue": 34,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-API.3",
+      "requirement": "Separate result/error validation covers all twenty-one codes, fixed safe messages, explicit uncertainty and persisted/unavailable diagnostic branches.",
+      "issue": 34,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-API.4",
+      "requirement": "New references support the necessary target versions without modifying old reference bytes or validation. Unsupported string/digest revision translation returns a typed blocked result.",
+      "issue": 34,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-API.5",
+      "requirement": "Pure semantic digest construction binds exact effective inputs/pins and excludes transport/time/current-status fields; it performs no persistence or replay.",
+      "issue": 34,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-API.6",
+      "requirement": "Catalog ownership, classifications, schema/type parity, old-version fixtures and explicit proposed handoff records exist; no accepted package or issuer pin is fabricated.",
+      "issue": 34,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-COMPOSITION.1",
+      "requirement": "Complete discriminated TemplateSpec and Composition schemas and immutable generated values exist with every field classified.",
+      "issue": 35,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-COMPOSITION.2",
+      "requirement": "Pure checks enforce unique slots/fields, bounds, orientation, font limits, exact values and readonly approved facts without private scenegraph exports.",
+      "issue": 35,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-COMPOSITION.3",
+      "requirement": "Nm conversion uses exact integer/decimal arithmetic and round-trip checks; unknown geometry or absent supported private bounds blocks translation rather than rounding or inventing constraints.",
+      "issue": 35,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-COMPOSITION.4",
+      "requirement": "Hash domains and acyclic policy references are explicit; synthetic refs resolve to actual derived candidate fixture documents.",
+      "issue": 35,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-COMPOSITION.5",
+      "requirement": "A field adapter records representable, unsupported and domain-dependent mappings. Facts, genuine registry entries and resolved-composition evidence remain named handoffs.",
+      "issue": 35,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-COMPOSITION.6",
+      "requirement": "Legacy translation, unknown supplier geometry, material-change and unsupported format/profile fixtures preserve the existing capability contracts.",
+      "issue": 35,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-ROWS.1",
+      "requirement": "Duplicate IDs reject the plan; equal content under different IDs remains separate; required/extra/readonly fields and exact string limits are checked.",
+      "issue": 36,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-ROWS.2",
+      "requirement": "Atomic default, global count partition, publication visibility, cancellation and skipped reasons are explicit and independently validated.",
+      "issue": 36,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-ROWS.3",
+      "requirement": "Row/bundle bindings agree on job, row, ordinal and input hash; unknown or failed mandatory checks never become eligible output.",
+      "issue": 36,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-ROWS.4",
+      "requirement": "Pagination is bounded and complete; cursor authentication remains host-owned. Private lease/fence/queue objects are absent from public values.",
+      "issue": 36,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-ROWS.5",
+      "requirement": "PartialFailure policy conversion distinguishes execution success from committed visibility; terminal partial JobStatus projection is explicit and never cast as equivalent.",
+      "issue": 36,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-ROWS.6",
+      "requirement": "CSV-disabled rejection is executable; enabling schemas/checkpoint rules have separate tests and cannot imply a signed roster, streaming parser or launch approval.",
+      "issue": 36,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-BUNDLE.1",
+      "requirement": "V2 schemas/types/fixtures exist and old v1 schemas, IDs and direct version imports remain unchanged; root version unions do not change v1-specific helper semantics.",
+      "issue": 37,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-BUNDLE.2",
+      "requirement": "Payload, content, raw manifest, ZIP, detached, lineage and outer commitments have distinct documented domains and no cycles.",
+      "issue": 37,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-BUNDLE.3",
+      "requirement": "Pure verification rejects missing/extra/duplicate/unsafe/tampered entries, descriptor mismatches, recursion and an untrusted self-authenticating detached file.",
+      "issue": 37,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-BUNDLE.4",
+      "requirement": "Metadata, row scope, preflight and approval bindings are checked independently from byte integrity; null preview or unknown geometry cannot establish eligibility.",
+      "issue": 37,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-BUNDLE.5",
+      "requirement": "Ninety-seven payload/ninety-eight ZIP/one-hundred outer limits and finite byte limits are enforced before allocation; no unbounded archive parsing.",
+      "issue": 37,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
+    },
+    {
+      "id": "SC-PROD-BUNDLE.6",
+      "requirement": "Installed archive, generator-size, exact-version compatibility and derived fixture provenance checks pass on a clean pinned candidate; real consumer verification remains separately reported.",
+      "issue": 37,
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        23,
+        24,
+        29,
+        32
+      ],
+      "scope": "separate_production_local_criterion_not_original_master_criteria"
     }
   ]
 }

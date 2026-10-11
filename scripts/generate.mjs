@@ -1,10 +1,9 @@
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
-import standalone from 'ajv/dist/standalone/index.js';
 import { compile } from 'json-schema-to-typescript';
 import { createHash } from 'node:crypto';
-import { build } from 'esbuild';
+import { productionSchema, validatorModules } from './production-validator-modules.mjs';
 import ts from 'typescript';
 import { packageContentManifest } from './package-content.mjs';
 
@@ -83,16 +82,16 @@ export async function outputs() {
     }
     const source = await readFile(root + paths[index]);
     manifest.push({ contract: schema.title, version, schema_id: schema.$id, path: paths[index], sha256: createHash('sha256').update(source).digest('hex') });
-    const declaration = await compile(schema, schema.title, { bannerComment: "import type { Brand } from './brands.js';", cwd: root, $refOptions: refOptions, additionalProperties: false, unknownAny: true, ...(['PrintSpec', 'FulfillmentCapabilitySnapshot'].includes(schema.title) ? { ignoreMinAndMaxItems: true } : {}) });
+    const declaration = await compile(schema, schema.title, { bannerComment: "import type { Brand } from './brands.js';", cwd: root, $refOptions: refOptions, additionalProperties: false, unknownAny: true, ...(['PrintSpec', 'FulfillmentCapabilitySnapshot'].includes(schema.title) || productionSchema(schema) ? { ignoreMinAndMaxItems: true } : {}) });
     result.set(exportName + '.d.ts', immutableDeclaration(declaration));
   }
   exports.DefinitionVersionedReference = 'https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference';
   exports.DefinitionDecisionQuestion = 'https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/properties/questions/additionalProperties';
   exports.DefinitionApprovalBinding = 'https://schemas.jevelopers.org/ApprovalReceipt/1.0.0#/$defs/ApprovalBinding';
-  const bundled = await build({ stdin: { contents: standalone.default(ajv, exports), resolveDir: root, sourcefile: 'validators.mjs' }, bundle: true, write: false, metafile: true, format: 'esm', platform: 'node', target: 'node22', legalComments: 'none' });
-  const validation = bundled.outputFiles[0].text;
-  if (Object.values(bundled.metafile.outputs).some(output => output.imports.length)) throw new Error('Standalone validators require a runtime dependency');
-  result.set('validators.mjs', validation.trimEnd() + '\n');
+  exports.DefinitionProductionReference = 'https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference';
+  const modules = await validatorModules(ajv, exports, root);
+  for (const module of modules) result.set(module.filename, module.contents);
+  const bundled = { metafile: { inputs: Object.assign({}, ...modules.map(module => module.bundled.metafile.inputs)) } };
   const lock = await readJson('package-lock.json');
   const embedded = [...new Set(Object.keys(bundled.metafile.inputs).filter(path => path.includes('node_modules/')).map(path => path.split('node_modules/').at(-1).split('/')[0]))].sort();
   const provenance = [];
@@ -128,6 +127,7 @@ export async function outputs() {
   result.set('commerce-evidence.d.ts', (await readFile(root + 'tooling/commerce-evidence-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   result.set('finance-v2.d.ts', (await readFile(root + 'tooling/finance-v2-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   result.set('capability.d.ts', (await readFile(root + 'tooling/capability-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
+  result.set('production-operations.d.ts', (await readFile(root + 'tooling/production-operations-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   const details = localSchemas.get('https://schemas.jevelopers.org/ErrorEnvelope/1.0.0').$defs.ErrorDetail.oneOf;
   const errorRegistry = Object.fromEntries(details.map(detail => [detail.properties.code.const, { category: detail.properties.category.const, safe_message: detail.properties.safe_message.const }]));
   result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');

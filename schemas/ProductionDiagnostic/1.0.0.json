@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/ProductionDiagnostic/1.0.0",
+  "title": "ProductionDiagnostic",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "ProductionDiagnostic",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "x-classification": "restricted",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-classification": "restricted"
+    },
+    "content_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "composeArtifact",
+        "personalizeArtifactBatch",
+        "inspectArtifact",
+        "exportArtifactBundle",
+        "compareTemplateCompatibility",
+        "getArtifactManifestStatus"
+      ],
+      "x-classification": "restricted"
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "APPROVAL_INVALID",
+          "APPROVAL_REVOKED",
+          "APPROVAL_UNAVAILABLE",
+          "SPEC_UNKNOWN",
+          "PRODUCT_MISMATCH",
+          "DIMENSIONS_MISMATCH",
+          "BLEED_MISMATCH",
+          "SAFE_MISMATCH",
+          "DPI_MISMATCH",
+          "PROFILE_UNSUPPORTED",
+          "EXPORT_UNSUPPORTED",
+          "FONT_UNSUPPORTED",
+          "TRANSPARENCY_MISMATCH",
+          "ASPECT_MISMATCH",
+          "SURFACE_UNSUPPORTED",
+          "FACTS_UNSUPPORTED",
+          "PREFLIGHT_FAILED",
+          "PREVIEW_UNKNOWN",
+          "ROW_BINDING_MISMATCH",
+          "SOURCE_MISMATCH",
+          "POLICY_MISMATCH",
+          "CALIBRATION_ONLY",
+          "OWNER_ACCEPTANCE_PENDING",
+          "CANCELLED",
+          "SKIPPED_POLICY",
+          "SKIPPED_CANCELLED",
+          "INVALID_INPUT",
+          "HASH_MISMATCH",
+          "STORAGE_UNAVAILABLE",
+          "RENDER_UNAVAILABLE",
+          "EXPIRED",
+          "STALE",
+          "NOT_FOUND"
+        ],
+        "x-classification": "restricted"
+      },
+      "minItems": 0,
+      "maxItems": 32,
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "tenant_id",
+    "project_id",
+    "id",
+    "revision",
+    "content_hash",
+    "operation",
+    "reason_codes"
+  ],
+  "x-classification": "restricted"
+}

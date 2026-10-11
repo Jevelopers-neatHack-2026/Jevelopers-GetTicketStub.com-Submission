@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/ProductionPolicy/1.0.0",
+  "title": "ProductionPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "ProductionPolicy",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "x-classification": "restricted",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-classification": "restricted"
+    },
+    "content_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "formatting",
+        "layout",
+        "output",
+        "repair",
+        "warning",
+        "proof",
+        "inspection"
+      ],
+      "x-classification": "restricted"
+    },
+    "commitment": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "formatting": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "locale": {
+              "type": "string",
+              "maxLength": 64,
+              "x-classification": "restricted"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 100,
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "locale",
+            "timezone"
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "output": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "color_space": {
+              "const": "sRGB",
+              "x-classification": "public"
+            },
+            "pdf_profile": {
+              "const": "plain",
+              "x-classification": "public"
+            },
+            "minimum_dpi": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9600,
+              "x-classification": "restricted"
+            },
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ],
+                "x-classification": "restricted"
+              },
+              "minItems": 1,
+              "maxItems": 3,
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "color_space",
+            "pdf_profile",
+            "minimum_dpi",
+            "formats"
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "tenant_id",
+    "project_id",
+    "id",
+    "revision",
+    "content_hash",
+    "kind",
+    "commitment",
+    "formatting",
+    "output"
+  ],
+  "x-classification": "restricted"
+}

@@ -421,6 +421,246 @@
       "path": "schemas/FulfillmentCapabilitySnapshot/1.0.0.json",
       "sha256": "8e3c53eee9f6dfa31237e601993c3501f2c4dc4002df194f2cd82adbd6ec5091",
       "accepted": false
+    },
+    {
+      "contract": "ProductionReference",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionReference/1.0.0",
+      "path": "schemas/ProductionReference/1.0.0.json",
+      "sha256": "31809938753b54160867928bc770f09ddcaf77ac4b536dc5354b268e1620bbd4",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionPolicy",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionPolicy/1.0.0",
+      "path": "schemas/ProductionPolicy/1.0.0.json",
+      "sha256": "8810a3082361048cf78db9db3ce741dbdd0a216d3196c85141a8515bc4cd7957",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionRuntime",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionRuntime/1.0.0",
+      "path": "schemas/ProductionRuntime/1.0.0.json",
+      "sha256": "747a5fa887bd543c5ef71807ef6962e2fa9c533608dd5329c6c959223cd5e717",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionResource",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionResource/1.0.0",
+      "path": "schemas/ProductionResource/1.0.0.json",
+      "sha256": "7461bc460a6b07afebd6f41a803d8c5eeb6aafb9183583f4c75f2ee21eb07488",
+      "accepted": false
+    },
+    {
+      "contract": "ArtifactRef",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactRef/1.0.0",
+      "path": "schemas/ArtifactRef/1.0.0.json",
+      "sha256": "84bf617e1e7403894cc1aefeed2b9095cda48ad4ef44f63d4b3f963928867486",
+      "accepted": false
+    },
+    {
+      "contract": "JobRef",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/JobRef/1.0.0",
+      "path": "schemas/JobRef/1.0.0.json",
+      "sha256": "425fc408a05fef9ff19ae57f77ca01bc8575cfa84b695eeeb3141eded87185af",
+      "accepted": false
+    },
+    {
+      "contract": "ComposeArtifactRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ComposeArtifactRequest/1.0.0",
+      "path": "schemas/ComposeArtifactRequest/1.0.0.json",
+      "sha256": "0bcd5a6159f3e744b7cf67a0f023d130c4d33e05a7d50dfef07ff378f7a012e2",
+      "accepted": false
+    },
+    {
+      "contract": "PersonalizeBatchRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PersonalizeBatchRequest/1.0.0",
+      "path": "schemas/PersonalizeBatchRequest/1.0.0.json",
+      "sha256": "6677f74e0345c14adfda73ff999cb727dcd36d5a91addd92d585192a308cdbbf",
+      "accepted": false
+    },
+    {
+      "contract": "InspectArtifactRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/InspectArtifactRequest/1.0.0",
+      "path": "schemas/InspectArtifactRequest/1.0.0.json",
+      "sha256": "ac12ea17ee3e8cf5b41570ceafec24bfdb7caf1e2361645eeedc3c35cbb86e9a",
+      "accepted": false
+    },
+    {
+      "contract": "ExportBundleRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ExportBundleRequest/1.0.0",
+      "path": "schemas/ExportBundleRequest/1.0.0.json",
+      "sha256": "3d583c3624cd968213002443edd88f5406b54bed69d222a7dfdd35c7fc59b385",
+      "accepted": false
+    },
+    {
+      "contract": "CompareTemplateRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CompareTemplateRequest/1.0.0",
+      "path": "schemas/CompareTemplateRequest/1.0.0.json",
+      "sha256": "cf1ed451ff4ee3d643fb5fbb5d61f0b1bdba7bc7cfe81d981c788dc694e7a615",
+      "accepted": false
+    },
+    {
+      "contract": "ArtifactStatusRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactStatusRequest/1.0.0",
+      "path": "schemas/ArtifactStatusRequest/1.0.0.json",
+      "sha256": "dfdfa93d4f875faa071b18988e2a5e8049405e274cf13fcc759d9d08450a2445",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionError",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionError/1.0.0",
+      "path": "schemas/ProductionError/1.0.0.json",
+      "sha256": "09ee344e9bea0fc57e1d8ab0d43956e0e4c17980fae04711bf5e1f5929edb576",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionDiagnostic",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionDiagnostic/1.0.0",
+      "path": "schemas/ProductionDiagnostic/1.0.0.json",
+      "sha256": "d070725981c5c28b43dfe8bd80f2fa5bfa9dcb500316acfe9a78ab35bc77d652",
+      "accepted": false
+    },
+    {
+      "contract": "TemplateSpec",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/TemplateSpec/1.0.0",
+      "path": "schemas/TemplateSpec/1.0.0.json",
+      "sha256": "13b82aa8791bef4f540700a296314e17c739a6238221fcfb7f07d22ca06a407f",
+      "accepted": false
+    },
+    {
+      "contract": "PersonalizationSchema",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PersonalizationSchema/1.0.0",
+      "path": "schemas/PersonalizationSchema/1.0.0.json",
+      "sha256": "4c2bd7c21b07d89fbb76daf9611523ab8458f50ed2da68daf0c21fe34c5d45b2",
+      "accepted": false
+    },
+    {
+      "contract": "Composition",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/Composition/1.0.0",
+      "path": "schemas/Composition/1.0.0.json",
+      "sha256": "cbabeb51ce55ddc3355d54d6b4db81218eec0af6c25c17e02783f90c0d46df9d",
+      "accepted": false
+    },
+    {
+      "contract": "CompatibilityReport",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CompatibilityReport/1.0.0",
+      "path": "schemas/CompatibilityReport/1.0.0.json",
+      "sha256": "0f656fbc0143bd1bc642bb91be65fe388c4f4ff1c7cd5ad6a8dcd9e6b5b4b6db",
+      "accepted": false
+    },
+    {
+      "contract": "PreflightReport",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PreflightReport/1.0.0",
+      "path": "schemas/PreflightReport/1.0.0.json",
+      "sha256": "bdfc46a91fa4702291ab4e594283b3514a79434c5dec31797c60577c1e42f56a",
+      "accepted": false
+    },
+    {
+      "contract": "ArtifactFile",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactFile/2.0.0",
+      "path": "schemas/ArtifactFile/2.0.0.json",
+      "sha256": "039ab23a46193d9c57b927c7b9ef04c0b73353d5f527635534ed43eda2e67835",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundle/2.0.0",
+      "path": "schemas/ProductionBundle/2.0.0.json",
+      "sha256": "e5693456714bcbfe9fba4b72970e638ec854b2a3f64513af9beab5fbdaf0f390",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionBundleDetached",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundleDetached/1.0.0",
+      "path": "schemas/ProductionBundleDetached/1.0.0.json",
+      "sha256": "20292f043e8981cf72c64bd85d5d5cb51d8df2d9c724eb25aea07da7b786da67",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionBundleRef",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0",
+      "path": "schemas/ProductionBundleRef/1.0.0.json",
+      "sha256": "117d3166df06dd3606781f577b9cde2f4aa94fb648dc00732a8a2d6e0b396462",
+      "accepted": false
+    },
+    {
+      "contract": "RowResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/RowResult/1.0.0",
+      "path": "schemas/RowResult/1.0.0.json",
+      "sha256": "6c5fe78914d83716b9563927523dd1b3a690c3fcc3f7f031973e36295989cb06",
+      "accepted": false
+    },
+    {
+      "contract": "BatchResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/BatchResult/1.0.0",
+      "path": "schemas/BatchResult/1.0.0.json",
+      "sha256": "29f26ae3e4494ece2f0e1fd2eb1fd29307be06e4a2b1f4951674ff3d4e4becc1",
+      "accepted": false
+    },
+    {
+      "contract": "ArtifactManifestStatus",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactManifestStatus/1.0.0",
+      "path": "schemas/ArtifactManifestStatus/1.0.0.json",
+      "sha256": "d7db2e25b9a671cd11612926d68e0c6a2f57d20b3a86c75373f4b4de53d3cae4",
+      "accepted": false
+    },
+    {
+      "contract": "CsvDialect",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CsvDialect/1.0.0",
+      "path": "schemas/CsvDialect/1.0.0.json",
+      "sha256": "ca272c3f07c931dc2d71d4e2c804745bad666c63b9508c5d94f1fb80f3b8b491",
+      "accepted": false
+    },
+    {
+      "contract": "CsvMapping",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CsvMapping/1.0.0",
+      "path": "schemas/CsvMapping/1.0.0.json",
+      "sha256": "c39201dd3f8ee2b92ea438f8774511468bc25eb447220daf6f8a30f1282fbac7",
+      "accepted": false
+    },
+    {
+      "contract": "CsvCheckpoint",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CsvCheckpoint/1.0.0",
+      "path": "schemas/CsvCheckpoint/1.0.0.json",
+      "sha256": "6ce5e8f5a73f33351ed0599e61d66f5cce3c55e5e5df9570c70d15f258cad4d8",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionExecutionPins",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionExecutionPins/1.0.0",
+      "path": "schemas/ProductionExecutionPins/1.0.0.json",
+      "sha256": "4d1d8b18150f3b25171b524f24c8d51288b2b987a88948106529f8976ad40079",
+      "accepted": false
     }
   ]
 }

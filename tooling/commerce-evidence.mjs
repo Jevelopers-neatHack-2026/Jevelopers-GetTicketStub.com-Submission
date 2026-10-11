@@ -1,4 +1,4 @@
-import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest, hashBytes, projectEvidence, ContractError } from './runtime.mjs';
+import { validateContract, validateContractVersion, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest, hashBytes, projectEvidence, ContractError } from './runtime.mjs';
 import { validateVersionedReference } from './operations.mjs';
 import { DefinitionApprovalBinding } from '../generated/validators.mjs';
 const ok = value => ({ ok: true, value });
@@ -24,7 +24,7 @@ function refs(value, path = '', slot = false) {
 }
 
 function boundary(contract, input, context) {
-  const parsed = validateContract(contract, input); if (!parsed.ok) return parsed;
+  const parsed = contract === 'ProductionBundle' ? validateContractVersion(contract, '1.0.0', input) : validateContract(contract, input); if (!parsed.ok) return parsed;
   if (!object(context)) return fail('INVALID_TRUST_CONTEXT');
   try { canonicalJson(Object.fromEntries(Object.entries(context).filter(([key]) => key !== 'artifact_bytes'))); } catch (error) { if (error instanceof ContractError) return fail('INVALID_TRUST_CONTEXT'); throw error; }
   if (!validatePrimitive('UtcTime', context.now).ok || context.policy_version !== '1.0.0' || !object(context.references)) return fail('INVALID_TRUST_CONTEXT');

@@ -1,6 +1,6 @@
 {
   "name": "@jevelopers/shared-contracts",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -20,6 +20,16 @@
     "tooling/capability-consistency.mjs",
     "tooling/capability-adapter.mjs",
     "tooling/historical-finance-fixtures.mjs",
+    "tooling/production-operations.mjs",
+    "tooling/production-errors.mjs",
+    "tooling/production-values.mjs",
+    "tooling/production-rows.mjs",
+    "tooling/production-csv.mjs",
+    "tooling/production-bundle.mjs",
+    "tooling/production-zip.mjs",
+    "tooling/production-preflight.mjs",
+    "tooling/production-error-adapter.mjs",
+    "tooling/production-fixture-check.mjs",
     "schemas",
     "fixtures",
     "compatibility",
@@ -29,6 +39,10 @@
     "CHANGELOG.md"
   ],
   "exports": {
+    "./production-operations": {
+      "types": "./generated/production-operations.d.ts",
+      "import": "./tooling/production-operations.mjs"
+    },
     "./capability": {
       "types": "./generated/capability.d.ts",
       "import": "./tooling/capability.mjs"

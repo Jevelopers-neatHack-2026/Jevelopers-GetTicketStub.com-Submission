@@ -139,7 +139,7 @@ export async function execute(command, options) {
         if (!entry.requirement || !entry.trust_boundary || !entry.semantic_authority || !entry.field_steward || !entry.lifecycle) add('INCOMPLETE_INVENTORY', entry);
         if (options['require-owner'] && (!entry.named_owner || !entry.reviewer || !entry.owner_acknowledgement)) add('BLOCKED_OWNER_ACCEPTANCE', entry);
         if (options['require-consumer'] && (!entry.producers.length || !entry.consumers.length || entry.consumers.some(name => !knownConsumers.includes(name)))) add('MISSING_CONSUMER', entry);
-        if (options['require-leaf'] && (!Number.isInteger(entry.issue) || entry.issue < 4 || (entry.issue > 28 && entry.issue !== 32))) add('MISSING_LEAF', entry);
+        if (options['require-leaf'] && (!Number.isInteger(entry.issue) || entry.issue < 4 || (entry.issue > 28 && ![32, 34, 35, 36, 37].includes(entry.issue)))) add('MISSING_LEAF', entry);
         if (options['require-version-policy'] && !await exists(entry.version_policy)) add('MISSING_VERSION_POLICY', entry);
         if (options['require-field-classification'] && !options['policy-only']) {
           for (const version of contractVersions(entry)) {
