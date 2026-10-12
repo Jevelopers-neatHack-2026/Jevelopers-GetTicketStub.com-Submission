@@ -417,6 +417,24 @@ export function register(define) {
     assert.equal(h.base.simulator.dispatchCounters().submit, 0);
     assert.equal(h.counters.adapter.submit ?? 0, 1, "the adapter was entered but the recheck refused the transport request");
     assert.equal(h.base.store.attempts[0].sideEffectState, "not_dispatched");
+    // The synchronous comparison itself: a gate whose recheck is a COHERENT passing report with a different byte-set digest and the same
+    // bundle hash. (A genuine gate cannot produce this, so a sealed test gate is used.) Nothing is sent; the authorization revalidation still ran once.
+    const real = await reportOf();
+    const drifted = structuredClone(real);
+    drifted.inputDigests["output.png"] = sha(enc("the store now serves other bytes"));
+    drifted.outputDigests["output.png"] = drifted.inputDigests["output.png"];
+    drifted.setDigest = contract.computeSetDigest(drifted.inputDigests);
+    redigest(drifted);
+    assert.equal(contract.validateGateReport(drifted, { bundleDigest: f.BUNDLE_HASH }).ok, true, "the drifted report is itself well-formed and passing");
+    let phase = 0;
+    const sealed = f.createGateRuntime({ gate: sealedGate(() => { phase += 1; return phase === 1 ? real : drifted; }) });
+    const prepared = await f.prepareBundleSubmit(sealed);
+    const drift = await expectConnectorError(submit(sealed, prepared.command), "bundle_changed", "not_dispatched");
+    assert.equal(drift.retryable, false);
+    assert.equal(phase, 2, "check then recheck");
+    assert.equal(sealed.counters.revalidate, 1, "the comparison follows the authorization await");
+    assert.equal(transportsOf(sealed).length, 0);
+    assert.equal(sealed.base.simulator.dispatchCounters().submit, 0);
   });
 
   define("runtime.store-failure-zero-transport", async () => {
@@ -604,18 +622,20 @@ export function register(define) {
     inputDigestChanged: (r) => { r.inputDigests["output.png"] = sha(enc("x")); }, outputDigestChanged: (r) => { r.outputDigests["output.png"] = sha(enc("x")); },
     unchangedLie: (r) => { r.unchanged = false; }, setDigestGarbage: (r) => { r.setDigest = sha(enc("garbage")); }, badTime: (r) => { r.evaluatedAt = "yesterday"; },
     badValidator: (r) => { r.consumer.validatorVersion = "other/1"; }, badDiagnostic: (r) => { r.diagnostic = { reasons: ["lowercase reason"] }; },
-    notAllowedState: (r) => { const c = r.criteria.find((x) => x.id === "anchor_resolution"); c.state = "blocked"; c.code = "X"; }
+    notAllowedState: (r) => { const c = r.criteria.find((x) => x.id === "anchor_resolution"); c.state = "blocked"; c.code = "X"; },
+    reportDigestGarbage: (r) => { r.reportDigest = sha(enc("not the digest of this report")); },
+    unchangedClaimedWithDifferentOutput: (r) => { r.outputDigests["output.png"] = sha(enc("changed by the owner or the decoder")); r.unchanged = true; }
   };
 
   define("runtime.gate-claiming-eligible-or-extra-keys-rejected", async () => {
     const real = await reportOf();
     for (const [label, mutate] of Object.entries(tamperCases)) {
       for (const recompute of [true, false]) {
-        const copy = structuredClone(real); mutate(copy); if (recompute && label !== "setDigestGarbage") redigest(copy);
+        const copy = structuredClone(real); mutate(copy); if (recompute && !["setDigestGarbage", "reportDigestGarbage"].includes(label)) redigest(copy);
         const validation = contract.validateGateReport(copy, { bundleDigest: f.BUNDLE_HASH });
         assert.equal(validation.ok, false, `${label} (recompute=${recompute})`);
       }
-      const copy = redigest((() => { const c = structuredClone(real); mutate(c); return c; })());
+      const copy = (() => { const c = structuredClone(real); mutate(c); return ["setDigestGarbage", "reportDigestGarbage"].includes(label) ? c : redigest(c); })();
       const { h, world } = bundleRuntime({ noGate: true });
       const rt = f.createGateRuntime({ gate: sealedGate(() => copy) });
       const { command } = await f.prepareBundleSubmit(rt);
