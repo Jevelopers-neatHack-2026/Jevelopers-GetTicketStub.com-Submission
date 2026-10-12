@@ -1063,7 +1063,11 @@ export async function runPrivateRetrieval(value) {
   const abortError = () => new RetrievalError(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : 'CANCELED');
   const beginCleanupEnvelope = () => {
     if (!Number.isFinite(cleanupEnvelopeDeadline)) {
-      cleanupEnvelopeDeadline = performance.now() + STOP_RECOVERY_ENVELOPE_MS;
+      // A delayed deadline callback must spend the time left in the original
+      // recovery envelope, rather than granting a new full cleanup budget.
+      // Cancellation observed before that deadline still gets its own envelope.
+      cleanupEnvelopeDeadline = Math.min(performance.now(), deadlineAtMonotonic)
+        + STOP_RECOVERY_ENVELOPE_MS;
     }
   };
   const remainingCleanupMs = () => Number.isFinite(cleanupEnvelopeDeadline)
@@ -1079,7 +1083,10 @@ export async function runPrivateRetrieval(value) {
     stopPersistenceStarted = true;
     if (!runCreated) return;
     const cleanup = new AbortController();
-    const timer = setTimeout(() => cleanup.abort(), STOP_PERSIST_CLEANUP_MS);
+    const remaining = Math.min(STOP_PERSIST_CLEANUP_MS, remainingCleanupMs());
+    let timer;
+    if (remaining <= 0) cleanup.abort();
+    else timer = setTimeout(() => cleanup.abort(), remaining);
     const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason, cleanup.signal))
       .catch(() => {}).finally(() => {
         clearTimeout(timer);

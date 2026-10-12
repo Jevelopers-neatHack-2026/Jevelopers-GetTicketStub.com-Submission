@@ -4189,6 +4189,201 @@ test('deadline returns with an unresolved admission when stop persistence never 
   assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
 });
 
+test('late deadline delivery cannot renew cleanup for a stalled stop write', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  let runAuthorizedAt;
+  let persistedDeadlineAtMs;
+  let stopEnteredAt;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  let stopCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    createRun: async (...args) => {
+      const created = await h.frontier.createRun(...args);
+      persistedDeadlineAtMs = created.deadlineAtMs;
+      return created;
+    },
+    stopRun: async () => {
+      stopCalls += 1;
+      stopEnteredAt = performance.now();
+      return new Promise(() => {});
+    },
+  });
+  const runId = 'private-delayed-deadline-never-stop';
+  const durationMs = 1_500;
+  const cancellation = new AbortController();
+  t.after(() => cancellation.abort());
+  const input = h.makeInput({
+    runId, server, frontier, signal: cancellation.signal,
+    seeds: [{ url: sourceUrl('/delayed-deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+    authorizeCurrent() {
+      if (runAuthorizedAt === undefined) runAuthorizedAt = performance.now();
+      return true;
+    },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  });
+  const runEnteredAt = performance.now();
+  const running = runPrivateRetrieval(input);
+  const phase = await Promise.race([
+    retentionCallbackStarted.then(() => 'retention-entered'),
+    running.then(() => 'returned-before-retention'),
+  ]);
+  assert.equal(phase, 'retention-entered', 'the admitted body completes before the deadline-delivery fault');
+  const deadlineLowerAt = runEnteredAt + durationMs;
+  const deadlineUpperAt = runAuthorizedAt + durationMs;
+  await waitUntilPerfAtOrAfter(deadlineLowerAt - 100);
+  const blockStartedAt = performance.now();
+  assert.ok(blockStartedAt < deadlineLowerAt, 'the controlled delay starts before the original deadline');
+  assert.equal(stopCalls, 0, 'deadline cleanup has not started before the fault is injected');
+  // Deliberately prevent timer delivery across the original deadline. The
+  // blocking interval ends inside its existing 750ms cleanup envelope; it does
+  // not demand an impossible return while JavaScript is still blocked.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0,
+    Math.max(0, deadlineUpperAt + 300 - performance.now()));
+  const blockEndedAt = performance.now();
+  assert.ok(blockEndedAt >= deadlineUpperAt + 250, 'deadline delivery is delayed by at least 250ms');
+  assert.ok(blockEndedAt < deadlineLowerAt + 650, 'at least 100ms of the original cleanup envelope remains');
+  const result = await running;
+  const elapsedMs = performance.now() - runAuthorizedAt;
+  t.diagnostic(JSON.stringify({
+    mode: 'synthetic-deadline-delivery-delay', durationMs, elapsedMs,
+    runEnteredAt, runAuthorizedAt, deadlineLowerAt, deadlineUpperAt,
+    blockStartedAt, blockEndedAt, stopEnteredAt, persistedDeadlineAtMs,
+    resultStatus: result.status, requestCount, stopCalls,
+  }));
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('deadline_exceeded'));
+  assert.equal(requestCount, 1);
+  assert.equal(stopCalls, 1);
+  assert.ok(stopEnteredAt >= blockEndedAt, 'the stop write starts only after delayed deadline delivery');
+  const interrupted = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(interrupted.deadlineAtMs, persistedDeadlineAtMs, 'fault injection cannot reset the stored deadline');
+  assert.equal(interrupted.candidates[0].state, 'unresolved');
+  assert.equal(interrupted.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(interrupted.candidates[0].admittedAttemptCount, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0);
+  assert.ok(transport.spentBytes > 0);
+  const reopened = h.openFrontier();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const restarted = await runPrivateRetrieval(h.makeInput({
+    runId, server, frontier: reopened,
+    seeds: [{ url: sourceUrl('/delayed-deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+  }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'restart cannot redispatch the expired unresolved admission');
+  const afterRestart = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.deadlineAtMs, persistedDeadlineAtMs);
+  assert.equal(afterRestart.candidates[0].state, 'unresolved');
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.deepEqual(await reopened.getTransportProgress(reopenedScope, runId), transport,
+    'restart cannot release spent bytes or create another transport attempt');
+  assert.ok(elapsedMs <= durationMs + 850,
+    `late timer delivery cannot renew the original 750ms cleanup budget plus 100ms scheduling tolerance (${elapsedMs.toFixed(1)}ms)`);
+});
+
+for (const deadlineLagMs of [350, 900]) {
+  test(`stop persistence shares the remaining cleanup signal after ${deadlineLagMs}ms of event-loop delay`, { timeout: 8_000 }, async (t) => {
+    const durationMs = 1_500;
+    let authorizedAt;
+    let callbackReleasedAt;
+    let stopSignalAbortedAt;
+    let stopCalls = 0;
+    let requestCount = 0;
+    const server = await startFixture((_request, response) => {
+      requestCount += 1;
+      respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+    });
+    t.after(() => server.close());
+    const h = await harness(t);
+    const frontier = frontierWithMethodOverrides(h.frontier, {
+      stopRun: async (_scope, _runId, _reason, signal) => {
+        stopCalls += 1;
+        const observeAbort = () => { stopSignalAbortedAt = performance.now(); };
+        if (signal.aborted) observeAbort();
+        else signal.addEventListener('abort', observeAbort, { once: true });
+        return new Promise(() => {});
+      },
+    });
+    const runId = `private-delayed-deadline-${deadlineLagMs}`;
+    const running = runPrivateRetrieval(h.makeInput({
+      runId,
+      server,
+      frontier,
+      seeds: [{ url: sourceUrl('/delayed-deadline') }],
+      limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+      authorizeCurrent() {
+        if (authorizedAt === undefined) authorizedAt = performance.now();
+        return true;
+      },
+      async retentionHandleFor() {
+        const deadline = authorizedAt + durationMs;
+        await waitUntilPerfAtOrAfter(deadline - 500);
+        assert.ok(performance.now() < deadline, 'the fixture enters its blocking callback before expiry');
+        // Deliberately prevent the deadline timer from running. This is a local
+        // fixture, not a claim that JavaScript can interrupt synchronous work.
+        const blocker = new Int32Array(new SharedArrayBuffer(4));
+        Atomics.wait(blocker, 0, 0, Math.max(1, deadline + deadlineLagMs - performance.now()));
+        callbackReleasedAt = performance.now();
+        return new Promise(() => {});
+      },
+    }));
+    const result = await running;
+    const returnedAt = performance.now();
+    const elapsedMs = returnedAt - authorizedAt;
+    t.diagnostic(JSON.stringify({ deadlineLagMs, durationMs, elapsedMs,
+      callbackLagMs: callbackReleasedAt - authorizedAt - durationMs,
+      cleanupAfterCallbackMs: returnedAt - callbackReleasedAt,
+      stopSignalLagMs: stopSignalAbortedAt - authorizedAt - durationMs }));
+    assert.ok(callbackReleasedAt >= authorizedAt + durationMs + deadlineLagMs - 5,
+      'the fixture actually delays deadline observation by the declared interval');
+    if (deadlineLagMs < 750) {
+      assert.ok(elapsedMs <= durationMs + 850,
+        `delayed deadline handling shares the original 750ms cleanup envelope plus 100ms scheduling tolerance (${elapsedMs.toFixed(1)}ms)`);
+    } else {
+      assert.ok(returnedAt - callbackReleasedAt < 100,
+        'an exhausted cleanup envelope does not start another scheduled wait');
+    }
+    assert.ok(Number.isFinite(stopSignalAbortedAt), 'stop persistence is signalled within the remaining cleanup envelope');
+    assert.ok(stopSignalAbortedAt <= Math.max(authorizedAt + durationMs + 750, callbackReleasedAt) + 100,
+      'the stop-persistence signal cannot restart its 500ms allowance after delayed handling');
+    assert.equal(result.status, 'incomplete');
+    assert.equal(result.draft, null);
+    assert.ok(result.limitations.includes('deadline_exceeded'));
+    assert.equal(stopCalls, 1);
+    assert.equal(requestCount, 1);
+    const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+    assert.notEqual(snapshot.candidates[0].state, 'completed');
+    assert.equal(snapshot.candidates[0].admittedAttemptCount, 1);
+    const transport = await h.frontier.getTransportProgress(h.scope, runId);
+    assert.equal(transport.reservedBytes, 0, 'the completed response retains its actual byte settlement');
+    assert.ok(transport.spentBytes > 0);
+    const reopened = h.openFrontier();
+    const restarted = await runPrivateRetrieval(h.makeInput({
+      runId, server, frontier: reopened,
+      seeds: [{ url: sourceUrl('/delayed-deadline') }],
+      limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+    }));
+    assert.equal(restarted.draft, null);
+    assert.equal(requestCount, 1, 'restart cannot redispatch the expired admitted candidate');
+    const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+    assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
+  });
+}
+
 test('a stop before the first admission keeps the lease cancellation reason', { timeout: 8_000 }, async (t) => {
   let bindingStarted;
   const candidateBindingStarted = new Promise((resolve) => { bindingStarted = resolve; });

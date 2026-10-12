@@ -258,6 +258,121 @@ test("keeps exact JSON tokens separate from extractor-normalized identity values
   assert.equal(result.occurrenceCandidates[0].facts.start[0].precision, "date");
 });
 
+test("structured identity claims require nested JSON paths instead of dotted display labels", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = jsonLdScripts([{ "@graph": [{
+    "@type": "Event",
+    name: "Nested location event",
+    "location.name": "Unrelated dotted venue",
+    "location.address.addressLocality": "Unrelated dotted city",
+    "location.address": { addressLocality: "Unrelated dotted parent" },
+    location: {
+      name: "Actual Hall",
+      "address.addressLocality": "Unrelated dotted child",
+      address: { addressLocality: "Actual City" },
+    },
+  }] }]);
+  const result = await composeSourceIdentity(sourceInput(harness.store, document(bytes), harness.createPermit()));
+  const occurrence = result.occurrenceCandidates[0];
+  assert.deepEqual(occurrence.facts.venue.map((claim) => claim.value), ["Actual Hall"]);
+  assert.deepEqual(occurrence.facts.city.map((claim) => claim.value), ["Actual City"]);
+  assert.deepEqual(result.facts.map((fact) => fact.normalizedValue).sort(), ["Actual City", "Actual Hall", "Nested location event"]);
+  const extraction = result.sources[0].extraction;
+  assert.ok(extraction.events[0].candidates.some((candidate) => candidate.source.jsonPointer === "/@graph/0/location.name"),
+    "unsupported literal keys remain inspectable in the original extraction");
+  const scope = await harness.store.scopeForAuthenticatedRequest(request());
+  const evidence = await harness.store.lookupEvidence(scope, result.sources[0].evidence.evidenceId);
+  const positions = await harness.store.listEvidencePositions(scope, evidence, request());
+  assert.equal(positions.length, 3, "only the three supported fields are selected for fact evidence");
+});
+
+test("literal dotted keys alone cannot create sourced identity facts", async (t) => {
+  const harness = await createHarness(t);
+  const writes = [];
+  const observedStore = Object.fromEntries([
+    "scopeForAuthenticatedRequest", "ingestEvidence", "appendFact", "materializeSelected",
+  ].map((method) => [method, (...args) => {
+    if (method === "ingestEvidence" || method === "appendFact") writes.push(method);
+    return harness.store[method](...args);
+  }]));
+  const bytes = jsonLdScripts([{
+    "@type": "Event",
+    "location.name": "Unrelated dotted venue",
+    "location.address.addressLocality": "Unrelated dotted city",
+  }]);
+  await expectCompositionError(
+    composeSourceIdentity(sourceInput(observedStore, document(bytes), harness.createPermit())),
+    "NO_IDENTITY_CANDIDATES",
+  );
+  assert.deepEqual(writes, [], "unsupported-only fields stop before source or fact ingestion");
+});
+
+test("structured identity paths stay relative to their exact escaped entity pointer", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = jsonLdScripts([{ "events/~[0]": [
+    { "@type": "Event", name: "Escaped parent", location: { name: "Real Hall", address: { addressLocality: "Real City" } } },
+    { "@type": "Organization", name: "Distinct organizer", "location.name": "Unrelated venue" },
+  ] }]);
+  const result = await composeSourceIdentity(sourceInput(harness.store, document(bytes), harness.createPermit()));
+  assert.equal(result.sources[0].extraction.events[0].jsonPointer, "/events~1~0[0]/0");
+  assert.equal(result.occurrenceCandidates[0].facts.venue[0].value, "Real Hall");
+  assert.equal(result.occurrenceCandidates[0].facts.city[0].value, "Real City");
+  assert.equal(result.entityCandidates[0].names[0].value, "Distinct organizer");
+  assert.equal(result.facts.length, 4);
+});
+
+const XHTML_IDENTITY_CASES = [
+  {
+    label: "numeric and predefined XML references",
+    nameToken: '"  Caf&#xE9; &amp; Night  "',
+    expected: "Café & Night",
+  },
+  {
+    label: "XML encoded JSON quotes",
+    nameToken: "&quot;Café Night&quot;",
+    expected: "Café Night",
+  },
+  {
+    label: "a JSON scalar spanning CDATA boundaries",
+    nameToken: '"Caf<![CDATA[é]]> Night"',
+    expected: "Café Night",
+  },
+];
+
+for (const fixture of XHTML_IDENTITY_CASES) {
+  test(`XHTML identity retains exact source bytes for ${fixture.label}`, async (t) => {
+    const harness = await createHarness(t);
+    const bytes = Buffer.from('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>🧭</title>'
+      + `<script type="application/ld+json">{"@type":"Event","name":${fixture.nameToken},"startDate":"2027-01-01"}</script>`
+      + '</head><body/></html>');
+    const doc = { ...document(bytes), contentType: "application/xhtml+xml; charset=utf-8" };
+    const result = await composeSourceIdentity(sourceInput(harness.store, doc, harness.createPermit()));
+    const nameFact = result.facts.find((fact) => fact.field === "name");
+    assert.equal(nameFact.rawValue, fixture.nameToken);
+    assert.equal(nameFact.normalizedValue, fixture.expected);
+    assert.equal(nameFact.status, "sourced");
+    assert.equal(nameFact.supports[0].contentHash, digest(bytes));
+    assert.equal(result.occurrenceCandidates[0].facts.title[0].value, fixture.expected);
+    assert.equal(result.occurrenceCandidates[0].facts.start[0].precision, "date");
+    const sourceCandidate = result.sources[0].extraction.events[0].candidates.find((candidate) => candidate.field === "name");
+    const { startByte, endByte } = sourceCandidate.source.locator;
+    assert.equal(bytes.subarray(startByte, endByte).toString("utf8"), fixture.nameToken);
+    const reopened = harness.openStore();
+    const scope = await reopened.scopeForAuthenticatedRequest(request());
+    const factHandle = await reopened.lookupFact(scope, nameFact.factId);
+    const readback = await reopened.readFact(scope, factHandle, request());
+    assert.equal(readback.rawValue, fixture.nameToken);
+    assert.equal(readback.normalizedValue, fixture.expected);
+    const replay = await composeSourceIdentity(sourceInput(reopened, doc, harness.createPermit()));
+    const contentFingerprint = (fact) => factFingerprint({ ...fact, factId: undefined });
+    assert.deepEqual(replay.facts.map(contentFingerprint), result.facts.map(contentFingerprint));
+    assert.deepEqual(replay.occurrenceCandidates, result.occurrenceCandidates);
+    assert.equal(replay.sources[0].evidence.evidenceId, result.sources[0].evidence.evidenceId);
+    assert.equal(factFingerprint(await reopened.readFact(scope, factHandle, request())), factFingerprint(readback),
+      "recomposition does not mutate the original immutable fact");
+  });
+}
+
 test("the composer snapshots caller bytes and source arrays before its first async step", async (t) => {
   const harness = await createHarness(t);
   const bytes = await fixture("multi-event.html");

@@ -37,6 +37,10 @@ const SVG_ASSET_ACCEPT = "image/svg+xml";
 const SVG_ASSET_MAX_BYTES = 128 * 1024;
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 const SUPPORTED_MIME = new Set([...ACCEPT.split(", "), SVG_ASSET_ACCEPT]);
+const TEXTUAL_MIME = new Set([
+  "text/html", "application/xhtml+xml", "text/plain", "application/json", "application/ld+json", SVG_ASSET_ACCEPT,
+]);
+const MIME_PARAMETER_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+/;
 const ABORTED_GETTER = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
 const ADD_EVENT_LISTENER = EventTarget.prototype.addEventListener;
 const REMOVE_EVENT_LISTENER = EventTarget.prototype.removeEventListener;
@@ -309,9 +313,66 @@ function requestOnce(validated, address, context, seam, accept = ACCEPT) {
 
 function parseMime(contentType, mode = "document") {
   if (typeof contentType !== "string" || contentType.length > 256) throw new RetrievalError("UNSUPPORTED_MEDIA");
-  const mime = contentType.split(";", 1)[0].trim().toLowerCase();
+  const separator = contentType.indexOf(";");
+  let offset = separator === -1 ? contentType.length : separator;
+  const mime = contentType.slice(0, offset).replace(/^[ \t]+|[ \t]+$/g, "").toLowerCase();
   if (!SUPPORTED_MIME.has(mime) || (mode === "svg-asset" ? mime !== SVG_ASSET_ACCEPT : mime === SVG_ASSET_ACCEPT)) {
     throw new RetrievalError("UNSUPPORTED_MEDIA");
+  }
+  // The public document retains the historical base MIME string. Validate
+  // interpretation-changing parameters before discarding them: downstream
+  // text readers support UTF-8 only and cannot recover an erased declaration.
+  let charsetSeen = false;
+  const skipWhitespace = () => {
+    while (contentType[offset] === " " || contentType[offset] === "\t") offset += 1;
+  };
+  const readToken = () => {
+    const token = MIME_PARAMETER_TOKEN.exec(contentType.slice(offset))?.[0];
+    if (!token) throw new RetrievalError("UNSUPPORTED_MEDIA");
+    offset += token.length;
+    return token;
+  };
+  while (offset < contentType.length) {
+    skipWhitespace();
+    if (offset === contentType.length) break;
+    if (contentType[offset++] !== ";") throw new RetrievalError("UNSUPPORTED_MEDIA");
+    skipWhitespace();
+    // RFC 9110 parameters allow empty semicolon-delimited segments.
+    if (offset === contentType.length || contentType[offset] === ";") continue;
+    const name = readToken().toLowerCase();
+    if (contentType[offset++] !== "=") throw new RetrievalError("UNSUPPORTED_MEDIA");
+    let value;
+    if (contentType[offset] === '"') {
+      offset += 1;
+      value = "";
+      let closed = false;
+      while (offset < contentType.length) {
+        let code = contentType.charCodeAt(offset++);
+        if (code === 0x22) { closed = true; break; }
+        if (code === 0x5c) {
+          if (offset === contentType.length) throw new RetrievalError("UNSUPPORTED_MEDIA");
+          code = contentType.charCodeAt(offset++);
+        }
+        if (code !== 0x09 && (code < 0x20 || code === 0x7f || code > 0xff)) {
+          throw new RetrievalError("UNSUPPORTED_MEDIA");
+        }
+        value += String.fromCharCode(code);
+      }
+      if (!closed) throw new RetrievalError("UNSUPPORTED_MEDIA");
+    } else {
+      value = readToken();
+    }
+    if (TEXTUAL_MIME.has(mime)) {
+      // Extended/continued charset parameters are not part of this module's
+      // supported encoding contract; never choose one parser's interpretation.
+      if (name.startsWith("charset*")) throw new RetrievalError("UNSUPPORTED_MEDIA");
+      if (name === "charset") {
+        if (charsetSeen || !["utf-8", "utf8"].includes(value.toLowerCase())) {
+          throw new RetrievalError("UNSUPPORTED_MEDIA");
+        }
+        charsetSeen = true;
+      }
+    }
   }
   return mime;
 }
@@ -665,7 +726,13 @@ export class SafeFetcher {
             throw new RetrievalError("TRANSPORT_FAILURE");
           }
           let mime;
-          try { mime = parseMime(response.headers["content-type"], mode); }
+          try {
+            // IncomingMessage.headers silently discards duplicate Content-Type
+            // fields. Inspect the distinct values before normalizing the type.
+            const contentTypes = response.headersDistinct["content-type"];
+            if (!Array.isArray(contentTypes) || contentTypes.length !== 1) throw new RetrievalError("UNSUPPORTED_MEDIA");
+            mime = parseMime(contentTypes[0], mode);
+          }
           catch (error) {
             await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "content_type_rejected" }));
             throwIfStopped(context);
