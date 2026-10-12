@@ -1,6 +1,7 @@
 # `brand-kit`
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
+**Repository status:** Public on GitHub. Evidence: `gh repo view Jevelopers-neatHack-2026/brand-kit --json visibility,isPrivate` returned `visibility: PUBLIC`, `isPrivate: false` on 2026-10-12 (about 04:13 UTC). No repository settings were changed.
+**Earlier status (history, superseded):** Verified existing on GitHub, private, October 10, 2026.
 **Proposed owner:** Product and frontend.
 **Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
 
