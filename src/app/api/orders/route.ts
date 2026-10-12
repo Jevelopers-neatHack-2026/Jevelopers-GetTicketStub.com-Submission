@@ -3,18 +3,20 @@ import type { Order } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { recordEvent } from "@/server/event-log";
-import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
+import { HttpError, appOrigin, checkOrigin, configuredOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
-import { sendMail } from "@/server/mail";
-import { newToken } from "@/server/crypto";
 import { refOf } from "@/server/events";
-import { receiptMail, stubImageUrl } from "@/server/templates";
+import { sendReceipt } from "@/server/receipt";
 import { parseEmail, parseText } from "@/server/validate";
+import { DodoError, createCheckout, dodoConfig } from "@/server/payments/dodo";
+import { allOrderable, isDigitalOnly, verifiedTotalMinor } from "@/server/payments/pricing";
 
 const MATERIALS = ["digital", "card", "print", "framed"];
 const FINISHES = ["matte", "foil", "holo"];
 const SIZES = ["classic", "stamp", "framed", "file"];
 const METHODS = ["apple-pay", "google-pay", "card", "gift-print", "organizer-print"];
+/** Methods a hosted provider checkout collects. Gift and organizer prints are not paid this way. */
+const PAID_METHODS = new Set(["apple-pay", "google-pay", "card"]);
 const bad = (m: string) => new HttpError(400, "bad_request", m);
 const minor = (v: unknown, what: string) => {
   if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 100_000_000) throw bad(`${what} is not a valid amount.`);
@@ -59,6 +61,15 @@ function parseOrder(v: unknown): Omit<Order, "id" | "mode" | "createdAt"> {
   return out;
 }
 
+/** Where the provider sends the buyer back. A live charge is only ever sent to APP_URL, never to a host the request names. */
+function returnOrigin(req: Request, environment: "test_mode" | "live_mode"): string {
+  if (environment === "live_mode" && !configuredOrigin()) {
+    console.error("[payments] live payments need APP_URL; checkout refused");
+    throw new HttpError(502, "payment_unavailable", "We couldn't start the payment. Nothing was charged. Try again in a moment.");
+  }
+  return appOrigin(req);
+}
+
 export const POST = route(async (req: Request) => {
   requireStorage();
   checkOrigin(req);
@@ -85,19 +96,30 @@ export const POST = route(async (req: Request) => {
     mode: "sandbox",
     createdAt: new Date().toISOString(),
   };
-  await getStorage().createOrder(order, account?.id ?? null, email);
-  try {
-    const origin = appOrigin(req);
-    // A signed-in order can show its first stub: snapshot it as a share so the email picture can render it.
-    let shareToken: string | null = null;
-    const first = account ? (await getStorage().listWall(account.id)).find((s) => s.id === order.stubIds[0]) : undefined;
-    if (account && first) shareToken = await getStorage().upsertShare(account.id, first, newToken(9), Date.now());
-    await sendMail(email, receiptMail(order, `${origin}/wall`, stubImageUrl(origin, shareToken)), `receipt ${order.id}`);
-  } catch {
-    // The order is saved either way; sendMail has logged why the receipt didn't go.
+  // An all-digital card or wallet order of orderable variants is paid through Dodo when it is configured. Anything else
+  // (a physical line, or a preview such as digital holo) stays a sandbox order
+  // until it can be charged (#64). Nothing is stored when the checkout can't be started.
+  const dodo = dodoConfig();
+  let checkoutUrl: string | undefined;
+  if (dodo && isDigitalOnly(order) && allOrderable(order) && PAID_METHODS.has(order.method)) {
+    const amountMinor = verifiedTotalMinor(order);
+    try {
+      const c = await createCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl: `${returnOrigin(req, dodo.environment)}/payment/return?order=${encodeURIComponent(order.id)}` });
+      order.payment = { provider: "dodo", environment: dodo.environment, status: "pending", amountMinor, currency: "USD", checkoutSessionId: c.sessionId, updatedAt: new Date().toISOString() };
+      checkoutUrl = c.checkoutUrl;
+    } catch (e) {
+      if (!(e instanceof DodoError)) throw e;
+      console.error(`[payments] dodo checkout failed: ${e.status}`);
+      throw new HttpError(502, "payment_unavailable", "We couldn't start the payment. Nothing was charged. Try again in a moment.");
+    }
   }
-  await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
-  return json({ order });
+  await getStorage().createOrder(order, account?.id ?? null, email);
+  // A paid order's receipt is sent once its payment is confirmed (see the Dodo webhook), not now.
+  if (!checkoutUrl) await sendReceipt(order, account?.id ?? null, email, appOrigin(req));
+  // A started checkout is not an order yet: it counts as paid only when the provider's webhook says so (order_paid).
+  if (checkoutUrl) await recordEvent(req, "checkout_started", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor, provider: "dodo" }, { ctx });
+  else await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
+  return json(checkoutUrl ? { order, checkoutUrl } : { order });
 });
 
 export const GET = route(async (req: Request) => {

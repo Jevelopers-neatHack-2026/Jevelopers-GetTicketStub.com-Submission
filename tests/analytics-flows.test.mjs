@@ -256,7 +256,25 @@ const draft = () => ({
   email: SEEDS.email,
 });
 
+// a digital file, matte: orderable, so the server may charge for it
+const payable = () => ({ ...draft(), lines: [{ title: SEEDS.title, material: "digital", finish: "matte", size: "file", totalMinor: 900 }], totalMinor: 900 });
+
 describe("sandbox orders", () => {
+  test("a draft that could be paid for keeps no local record when the server doesn't take it, whatever the error", async () => {
+    assert.equal(orders.isPayable(payable()), true);
+    assert.equal(orders.isPayable(draft()), false, "a preview variant is a sandbox order");
+    assert.equal(orders.isPayable({ ...payable(), method: "gift-print" }), false);
+    for (const code of ["amount_mismatch", "rate_limited", "internal"]) {
+      reply = () => ({ status: 500, body: { error: { code, message: SEEDS.message } } });
+      const placed = await orders.placeOrder(payable());
+      assert.equal(placed.code, code);
+      assert.deepEqual(commerce.loadOrders(), []);
+    }
+    reply = () => new TypeError(SEEDS.message);
+    assert.equal((await orders.placeOrder(payable())).code, "network");
+    assert.deepEqual(commerce.loadOrders(), []);
+  });
+
   test("a server receipt is one sandbox_order, never a purchase", async () => {
     reply = () => ({ status: 200, body: { order: { ...draft(), id: "sbx_server", mode: "sandbox", createdAt: "x" } } });
     const placed = await orders.placeOrder(draft());
@@ -285,6 +303,24 @@ describe("sandbox orders", () => {
     await orders.placeOrder(draft());
     assert.deepEqual(events("sandbox_order"), [{ method: "card", result: "placed", receipt: "server", line_count: 1, value: 61, currency: "USD", capability: "sandbox", storage: "failed" }]);
     assert.deepEqual(events("storage_failure"), [{ store: "orders", op: "write", reason: "quota" }]);
+  });
+
+  test("a started provider checkout is not a placed order: no sandbox_order, no local record, and a retry keeps the checkout", async () => {
+    const checkoutUrl = "https://checkout.example.test/session";
+    reply = () => ({ status: 200, body: { order: { ...draft(), id: "ord_pay", mode: "sandbox", createdAt: "x" }, checkoutUrl } });
+    const placed = await orders.placeOrder(draft());
+    assert.deepEqual([placed.checkoutUrl, placed.receipt], [checkoutUrl, false]);
+    assert.deepEqual(events("sandbox_order"), []);
+    assert.deepEqual(commerce.loadOrders(), []);
+    // the first request couldn't start the payment: nothing is placed, then the retry is sent to the checkout
+    reply = () => ({ status: 502, body: { error: { code: "payment_unavailable", message: SEEDS.message } } });
+    const failed = await orders.placeOrder(payable());
+    assert.equal(failed.code, "payment_unavailable");
+    assert.deepEqual(commerce.loadOrders(), []);
+    assert.equal(events("sandbox_order")[0].result, "not_persisted");
+    reply = () => ({ status: 200, body: { order: { ...payable(), id: "ord_pay2", mode: "sandbox", createdAt: "x" }, checkoutUrl } });
+    const retried = await orders.resendOrder(failed);
+    assert.deepEqual([retried.checkoutUrl, retried.receipt], [checkoutUrl, false]);
   });
 
   test("a full quota and a refused server is not_persisted, with no value: nothing kept the order", async () => {

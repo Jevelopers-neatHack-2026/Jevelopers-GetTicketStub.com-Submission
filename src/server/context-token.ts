@@ -121,11 +121,11 @@ const ACCOUNT_CAPS = [
 ];
 /** Per project role. The same user holds different roles on different projects. */
 const PROJECT_CAPS: Record<"stub" | "event", Partial<Record<Role, string[]>>> = {
-  stub: { owner: ["stub.read", "stub.write", "stub.approve", "share.revoke", "gift.create"], member: ["stub.read"], viewer: ["stub.read"] },
+  stub: { owner: ["stub.read", "stub.write", "stub.approve", "order.authorize", "share.revoke", "gift.create"], member: ["stub.read"], viewer: ["stub.read"] },
   event: { captain: ["event.read", "event.publish", "claims.read"], member: ["event.read"], viewer: ["event.read"] },
 };
 /** Project capabilities only a signed-in account can hold: a guest device that owns a stub still can't approve it. */
-const ACCOUNT_ONLY_PROJECT_CAPS: readonly string[] = ["stub.approve"];
+const ACCOUNT_ONLY_PROJECT_CAPS: readonly string[] = ["stub.approve", "order.authorize"];
 /** Staff: the admin mount only. Staff get no read access to anyone's projects. */
 const STAFF_CAPS = ["admin.view"];
 
