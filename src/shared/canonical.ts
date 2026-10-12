@@ -27,17 +27,11 @@ export type SharedQueryResult = CanonicalValue<'QueryResult'>;
 export type SharedFinancialSummary = CanonicalValue<'FinancialSummary'>;
 export type SharedErrorEnvelope = CanonicalValue<'ErrorEnvelope'>;
 
-function hasForeignLegacyVersion(contract: ContractName, value: unknown): boolean {
-  if (!Object.hasOwn(LEGACY_CANONICAL_VERSIONS, contract)) return false;
-  // Match the SDK's JSON-safety precedence before considering a version election.
-  try { canonicalJson(value); } catch (error) {
-    if (error instanceof ContractError) return false;
-    throw error;
+function freezeSnapshot(value: unknown): void {
+  if (value !== null && typeof value === 'object') {
+    for (const child of Object.values(value)) freezeSnapshot(child);
+    Object.freeze(value);
   }
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const version = Object.getOwnPropertyDescriptor(value, 'schema_version')?.value;
-  return typeof version === 'string'
-    && version !== LEGACY_CANONICAL_VERSIONS[contract as LegacyCanonicalName];
 }
 
 export function validateCanonical<K extends ContractName>(args: {
@@ -47,16 +41,42 @@ export function validateCanonical<K extends ContractName>(args: {
   operation: string;
   requestId: string;
 }): Validation<CanonicalValue<K>> {
-  const result = validateContract(args.contract, args.value);
-  const foreignVersion = hasForeignLegacyVersion(args.contract, args.value);
-  if (result.ok && !foreignVersion) return { ok: true, value: result.value as CanonicalValue<K> };
-  const unsupported = foreignVersion || (!result.ok && result.errors.some(issue => issue.code === 'UNSUPPORTED_VERSION'));
-  const error: ErrorEnvelope = errorEnvelope(
-    args.module,
-    args.operation,
-    unsupported ? 'UNSUPPORTED_VERSION' : 'VALIDATION_ERROR',
-    args.requestId,
-    unsupported ? 'The shared contract version is not supported.' : 'The shared contract payload does not match its pinned schema.',
-  );
-  return { ok: false, error };
+  // Preserve original argument evaluation order and never reread caller bindings.
+  const contract = args.contract;
+  const input = args.value;
+  const mapped = typeof contract === 'string' && Object.hasOwn(LEGACY_CANONICAL_VERSIONS, contract);
+  const refuse = (code: 'UNSUPPORTED_VERSION' | 'VALIDATION_ERROR'): Validation<CanonicalValue<K>> => {
+    // Success never reads error metadata; a refused decision is already fixed.
+    const module = args.module;
+    const operation = args.operation;
+    const requestId = args.requestId;
+    const error: ErrorEnvelope = errorEnvelope(module, operation, code, requestId,
+      code === 'UNSUPPORTED_VERSION' ? 'The shared contract version is not supported.'
+        : 'The shared contract payload does not match its pinned schema.');
+    return { ok: false, error };
+  };
+  let payload = input;
+  if (mapped) {
+    let serialized: string;
+    try { serialized = canonicalJson(input); } catch (error) {
+      if (error instanceof ContractError) return refuse('VALIDATION_ERROR');
+      throw error;
+    }
+    payload = JSON.parse(serialized) as unknown;
+    freezeSnapshot(payload);
+    // The SDK originally dispatches using an ordinary read after JSON safety.
+    // Refuse inconsistent source/snapshot views; validate and return only private data.
+    const sourceVersion = input !== null && typeof input === 'object' && !Array.isArray(input)
+      ? (input as { schema_version?: unknown }).schema_version : undefined;
+    const snapshotVersion = payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as { schema_version?: unknown }).schema_version : undefined;
+    const expected = LEGACY_CANONICAL_VERSIONS[contract as LegacyCanonicalName];
+    if ((typeof sourceVersion === 'string' && sourceVersion !== expected)
+        || (typeof snapshotVersion === 'string' && snapshotVersion !== expected)) return refuse('UNSUPPORTED_VERSION');
+    if (sourceVersion !== expected || snapshotVersion !== expected) return refuse('VALIDATION_ERROR');
+  }
+  const result = validateContract(contract, payload);
+  // All subsequent success operations use only this invocation's stable validated value.
+  if (result.ok) return { ok: true, value: result.value as CanonicalValue<K> };
+  return refuse(result.errors.some(issue => issue.code === 'UNSUPPORTED_VERSION') ? 'UNSUPPORTED_VERSION' : 'VALIDATION_ERROR');
 }
