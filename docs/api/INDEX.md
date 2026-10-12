@@ -8,7 +8,7 @@ This package is a host-composed finance library, not a running service. The root
 | Pricing | Versioned v2 catalog writes and exact non-posting estimates are implemented behind host ports. | Legacy 1.0.0 estimate remains typed unavailable; estimates do not authorize budgets or post charges. |
 | Budgets | CI05A reservation authorization, snapshot, revalidation, dispatch and policy operations use the configured PostgreSQL Finance authority. | Public settlement/release and expense-adjustment posting remain unavailable; nested scopes are deferred under issues [#17](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/17) and [#18](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/18). |
 | Ledger | Scoped PostgreSQL append and immutable projection/replay operations are implemented. | Financial-event intake and direct quarantine resolution are unavailable. |
-| Reporting | Scoped queries, immutable snapshots and prepared-export functions work with configured ports. | Shared-contract adoption, consumer ACK, production issuer mapping and CFO.ai delivery remain pending. |
+| Reporting | Scoped queries, immutable snapshots and prepared-export functions work with configured ports; [packet-specific synthetic ACKs](cfo-ai-handoff.md#accepted-synthetic-handoffs) are recorded. | Broader shared-contract adoption, new reported-unsettled compatibility/ACKs, actual host issuer/fence adoption and CFO.ai delivery/import remain pending. |
 | Reconciliation | Typed request/result shapes exist. | Start/read return typed pending results; source adapters and matching rules are absent. |
 | CFO.ai | Manual mapping and prepared file formats are documented. | There is no connector or automatic plan delivery. |
 
