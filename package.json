@@ -39,7 +39,7 @@
     "neatlogs": "1.1.28"
   },
   "devDependencies": {
-    "creative-engine": "https://codeload.github.com/Jevelopers-neatHack-2026/creative-engine/tar.gz/a63c9d174ceeb8cceb9eef7d03b8dbde1bf02cf8",
+    "creative-engine": "https://codeload.github.com/Jevelopers-neatHack-2026/creative-engine/tar.gz/e4fa66488f31577f516b27238e945a1fb3c2143f",
     "typescript": "5.9.3"
   }
 }
