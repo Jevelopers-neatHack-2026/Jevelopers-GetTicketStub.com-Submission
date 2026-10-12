@@ -28,6 +28,8 @@ jobs:
       - run: uv run basedpyright -p pyrightconfig.stdlib.json
       - run: uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
       - run: uv run integration-evals validate
+      - name: Verify print source preparation and default-off runtime gates
+        run: uv run pytest component_tests/test_print_setup.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py --junitxml=reports/runs/verification/print-defaults-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
@@ -105,7 +107,7 @@ jobs:
           persist-credentials: false
       - name: Verify source retrieval boundary in an isolated Linux component workspace
         run: |
-          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/runs/verification/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/runs/verification/retrieval-component" .venv/bin/python -m pytest component_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/runs/verification/component-junit.xml
+          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/runs/verification/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/runs/verification/retrieval-component" .venv/bin/python -m pytest component_tests/test_retrieval.py -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/runs/verification/component-junit.xml
       - name: Verify missing assembly is reported as blocked
         shell: bash
         run: |
