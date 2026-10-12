@@ -1,6 +1,6 @@
 # CFO.ai input mapping and export handoff (CI-08X.4)
 
-This document defines how a finance export feeds the TicketStub CFO.ai business plan. It is a **manual handoff**: no CFO.ai connector exists or is required. Configured snapshot-backed export preparation is implemented as a [Finance-owned proposal](./prepared-exports.md); passing actual PostgreSQL query-to-export evidence and consumer acceptance remain pending. Unconfigured `exportSummary` stays typed unavailable.
+This document defines a **manual handoff** to the TicketStub CFO.ai business plan. No CFO.ai connector exists or is required. Snapshot-backed export preparation is implemented when host ports are configured; actual PostgreSQL query-to-export evidence, metric/policy review, consumer acceptance and plan update remain separate. An unconfigured call returns typed unavailable. A prepared file is not a CFO.ai delivery or verified financial statement.
 
 | Item | State, 2026-10-12 |
 | --- | --- |
@@ -45,12 +45,13 @@ Metric names below are **proposed**. CI-08 must publish each `definition_ref` be
 
 Product funnel counts (visits, studio starts, paid orders) are **not** finance metrics. They come from product analytics and are out of scope here.
 
-## Manual procedure, once `exportSummary` is available
+## Manual preparation and plan handoff
 
-1. Request a CSV or JSON export with `destination: "cfo.ai"`, `evidenceMode: "live"`, and the explicit live-billing scope. Keep production and test/development scope records distinguishable and retain real paid-test expense. Keep both manifests and artifact hashes. Synthetic configured fixtures use `evidenceMode: "mocked"` and never enter actual plan values.
-2. Check every row against the "What may flow" table. Reject the export if any of those preconditions fails.
-3. Make the edits in the CFO.ai canvas or its assistant, never in the reviewer workbook alone, then re-export the native workbook.
-4. Retain a new dated evidence folder in integration-evals with the manifest hash, the new workbook, recalculation results and the changed inputs. Do not overwrite earlier snapshots.
+1. Prepare CSV or JSON only through the configured, authorized snapshot-backed composition described in [prepared exports](./prepared-exports.md). Use the verified source scope and evidence mode; selecting `evidenceMode: live` does not prove live provider activity. Keep query/export receipts and artifact hashes. Synthetic fixtures marked `mocked` must never enter actual plan values.
+2. Check every row against the "What may flow" table and its source evidence. Reject the export if a source, scope, currency, completeness or mapping precondition fails.
+3. The CFO.ai business-plan owner makes any approved change in the canvas or its assistant and re-exports the native workbook. A local prepared file does not update the plan.
+4. Retain a new dated evidence folder in integration-evals with the reviewed manifest/hash, resulting workbook, recalculation results and changed inputs. Do not overwrite earlier snapshots.
+
 
 CSV consumers must treat any text cell beginning with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed as data, including their full-width forms and when they follow leading whitespace. The internal encoder in `src/integrations/csv.ts` (CI-08X.3) prefixes such cells with `'`; rejects the byte-order mark, C1 and bidirectional control characters, and a `sep=` directive in the first header cell (upstream must strip direction marks from right-to-left names); and writes RFC 4180 CSV with CRLF records and no byte-order mark, keeps money as exact decimals at a fixed scale and rejects amounts more precise than that scale instead of rounding them, and writes unknown values as empty cells rather than `0`. The configured `exportSummary` and rich export paths use this protected encoder.
 

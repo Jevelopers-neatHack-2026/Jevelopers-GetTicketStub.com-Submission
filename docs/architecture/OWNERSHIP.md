@@ -1,8 +1,8 @@
-# `cost-intelligence`
+# cost-intelligence ownership and implementation boundary
 
-**Repository status:** Verified existing on GitHub, public, October 10, 2026.
+**Repository status:** Public on GitHub; verified October 12, 2026.
 **Proposed owner:** Finance and reliability.
-**Delivery state:** Foundation implementation candidate is under review; financial domain acceptance remains planned until evidence is recorded.
+**Implementation state:** A private Node.js 22 package contains local finance modules behind injected PostgreSQL, authority, storage, evidence and clock ports. Usage intake, pricing v2, ledger append/projection, budget reservation authority, scoped reporting and prepared exports have source and test coverage. Contract adoption, real host issuer integration, financial acceptance, settlement/release finality and CFO.ai delivery remain separate.
 
 ## Responsibility
 
@@ -10,23 +10,23 @@ Own the authoritative financial ledger, usage costing, metered client, budget pr
 
 Retain immutable records with correction or adjustment entries. Preserve source currency and pricing assumptions. Unknown usage is a data-quality condition, never an automatic zero. Attribute development and customer operations separately while reconciling them to provider totals.
 
-## Planned internal modules
+## Current implementation surface
 
-- `src/metering/`: Provider-neutral client and usage observations.
-- `src/pricing/`: Versioned rate cards and estimation rules.
-- `src/budgets/`: Atomic reservations, settlement, release, and enforcement.
-- `src/ledger/`: Revenue, expenses, cash movements, and adjustments.
-- `src/integrations/`: Model billing, available Entire development usage, Neatlogs evidence links, payment records, and supplier inputs.
-- `src/reconciliation/`: Matching, variance review, and source status.
-- `src/reporting/`: Financial summaries and CFO.ai export packages.
+The ESM package targets Node.js 22.23.3 through 22.x with npm 10.9.9. It exports contracts, metering, pricing, budgets, ledger, accounting, integrations, evidence, reconciliation and reporting. Local source includes versioned pricing v2 catalog/estimate operations; usage-intake persistence and recovery; PostgreSQL ledger event append and immutable projection; CI05A scoped budget authorization, dispatch and policy operations; authorized reporting snapshots; and snapshot-backed JSON/CSV export preparation.
 
-## Dependencies and handoff
+These are host-composed functions, not a running service. They require finance authority, trusted context, injected databases/source evidence and private storage or signing material as described in the API guides. Pinned shared-contracts 0.3.0 remains proposal-only. Local schemas and tests do not establish canonical adoption or consumer compatibility.
 
-Consume shared contracts and usage from specialist modules. Deduplicate repeated observations of an attempt while retaining separately billed retry attempts. Reconcile request estimates with provider charges without counting both as independent expenses. Supply authoritative summaries to `team-dashboard` and permission-checked financial commands through the application boundary.
+Typed unavailable operations include legacy pricing 1.0.0 estimate, ledger financial ingest, budget settlement/release, expense adjustment and reconciliation. Nested budget scopes remain deferred as P1 issue #17 from the default v1 integration/release gate by issue #18. CFO.ai has a manual handoff but no connector or automatic delivery path. Prepared files, synthetic fixtures and mode labels are not production financial evidence.
 
-## P0 demo slice
+## Integration targets and handoff
 
-Meter one design journey, enforce concurrent-safe reservations, record labeled sandbox commerce, and produce a reconcilable summary. Export documented CFO.ai inputs; a direct connector is optional.
+Application integrations must provide independently reviewed finance authority, source evidence and exact scope mapping. This package does not issue external grants, infer permission from application roles, or expose a hosted finance endpoint. Current app main does not import it at runtime. Inspect producer and consumer main at exact revisions and retain matching tests before claiming integration.
+
+See the [development guide](../development.md), [API map](../api/INDEX.md), [authorization and data-handling guide](../api/security.md), [reporting guide](../api/reporting.md), and [prepared export guide](../api/prepared-exports.md).
+
+## P0 target slice
+
+Design intent: meter one design journey, enforce concurrent-safe reservations, record labeled sandbox commerce, and produce a reconcilable summary. Prepare CFO.ai inputs only from independently verified source records; direct connection is optional. This is not a current complete journey.
 
 ## Acceptance boundary
 
@@ -37,8 +37,8 @@ Meter one design journey, enforce concurrent-safe reservations, record labeled s
 - [ ] Adjustments preserve audit history and source references.
 - [ ] Summary totals trace to ledger entries and reconciliation status.
 
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+The canonical current-state architecture describes implementation across repositories. The historical v1.0 architecture kit remains design intent: [current organization architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture/CURRENT-STATE.md) · [v1.0 design intent](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md).
 
-## Acceptance and contributor handoff
+Use the [repository acceptance view](ACCEPTANCE.md) for criterion allocation only. Current criteria and evidence live in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) and [JSON tracker](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.json). See the [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md), [contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md) and [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
 
-Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
+For a guide-by-topic list, see the [documentation index](../INDEX.md).
