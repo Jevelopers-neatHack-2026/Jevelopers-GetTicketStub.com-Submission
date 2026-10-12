@@ -181,7 +181,8 @@
           "PROV-FILE-A5E8BBF5FF4A",
           "PROV-FILE-4B060E5557AA",
           "PROV-FILE-13BB351BAC0E",
-          "PROV-FILE-8017C8E075C2"
+          "PROV-FILE-8017C8E075C2",
+          "PROV-FILE-DE26BDA4F1D1"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -264,7 +265,8 @@
           "PROV-FILE-D4B2B1930956",
           "PROV-FILE-B537A130F68C",
           "PROV-FILE-C300FDE4C745",
-          "PROV-FILE-6A159534063A"
+          "PROV-FILE-6A159534063A",
+          "PROV-FILE-221911C28B6F"
         ],
         "transformations": [
           "Raster export of DEMO-WORKFLOW-DIAGRAM-001."
@@ -349,7 +351,8 @@
           "PROV-FILE-DEA6A69EF5BD",
           "PROV-FILE-0D28FDFB0E68",
           "PROV-FILE-60BE4690ED40",
-          "PROV-FILE-40E75822129C"
+          "PROV-FILE-40E75822129C",
+          "PROV-FILE-8D0E6B746299"
         ],
         "transformations": [
           "Accessible text alternative authored from DEMO-WORKFLOW-DIAGRAM-001."
@@ -435,7 +438,8 @@
           "PROV-FILE-B55F1E60FB96",
           "PROV-FILE-FCAB68BF860F",
           "PROV-FILE-8D24032AEA41",
-          "PROV-FILE-5953C74B7BF4"
+          "PROV-FILE-5953C74B7BF4",
+          "PROV-FILE-75FAA64BC37D"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -518,7 +522,8 @@
           "PROV-FILE-5070A9FA76FD",
           "PROV-FILE-B799FB308774",
           "PROV-FILE-62F1DA753A4C",
-          "PROV-FILE-B76C23B2D185"
+          "PROV-FILE-B76C23B2D185",
+          "PROV-FILE-E7B13371635E"
         ],
         "transformations": [
           "Raster export of DEMO-SCREENSHOT-SET-001."
@@ -602,7 +607,8 @@
           "PROV-FILE-B6E7C1F60600",
           "PROV-FILE-C26CC89CAD05",
           "PROV-FILE-89726CA6F138",
-          "PROV-FILE-FB0884C0F32D"
+          "PROV-FILE-FB0884C0F32D",
+          "PROV-FILE-D33DB9240A9F"
         ],
         "transformations": [
           "Accessible text alternative authored from DEMO-SCREENSHOT-SET-001."
@@ -700,7 +706,8 @@
           "PROV-FILE-F0C165179525",
           "PROV-FILE-AF86C17818DB",
           "PROV-FILE-851C9FC8D72B",
-          "PROV-FILE-F75E39B31190"
+          "PROV-FILE-F75E39B31190",
+          "PROV-FILE-F57A0062911E"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -789,7 +796,8 @@
           "PROV-FILE-BACD07F5D132",
           "PROV-FILE-7C84F1124A37",
           "PROV-FILE-BFDFCDC8EA94",
-          "PROV-FILE-0D9669046C64"
+          "PROV-FILE-0D9669046C64",
+          "PROV-FILE-EEF100D059A0"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -872,7 +880,8 @@
           "PROV-FILE-EF2480C90F4D",
           "PROV-FILE-7381AE3DD290",
           "PROV-FILE-16D0D70154A7",
-          "PROV-FILE-B2A6310CDE7E"
+          "PROV-FILE-B2A6310CDE7E",
+          "PROV-FILE-5D40F4238A49"
         ],
         "transformations": [
           "Raster export of LAUNCH-X-KEY-VISUAL-001."
@@ -956,7 +965,8 @@
           "PROV-FILE-ED5D97E26765",
           "PROV-FILE-D0D54CE0A080",
           "PROV-FILE-0087939D5B0E",
-          "PROV-FILE-35546E2BD419"
+          "PROV-FILE-35546E2BD419",
+          "PROV-FILE-CD8E6AB035B0"
         ],
         "transformations": [
           "Accessible text alternative authored from LAUNCH-X-KEY-VISUAL-001."
@@ -3739,14 +3749,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "README.md",
-        "revision": "sha256:9b7f3a9c5f24aea334968ef21eb7db27291bb523ede7dff53e83c5b8e8a2f3e1",
+        "revision": "sha256:b1e4f6d3817bee765221cc342401e834638bc41320d6be11f6a9d5bd9af3e616",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (r06 current package reference (issue 11 r06 final followup), commit efb3538) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (current-revision r05 package reference (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (r04 current-revision package reference (issue 11 follow-up), commit 4f5dc5d) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: README refresh author subagent, authored on branch docs/readme-refresh-2026-10-11 and adopted into main by PR #16 (merge 353ad3e; exact banner blobs first committed at beb053f); current prose revision (PR #17 commits 8aae5e7 and 11a5512) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revision by Anthropic Claude Opus 5.5 (claude-opus-5-5), self-reported runtime identity, not independently verified. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r07 current package reference (issue 11 r07 final followup), commit 9cd03e7) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r06 current package reference (issue 11 r06 final followup), commit efb3538) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (current-revision r05 package reference (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (r04 current-revision package reference (issue 11 follow-up), commit 4f5dc5d) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: README refresh author subagent, authored on branch docs/readme-refresh-2026-10-11 and adopted into main by PR #16 (merge 353ad3e; exact banner blobs first committed at beb053f); current prose revision (PR #17 commits 8aae5e7 and 11a5512) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revision by Anthropic Claude Opus 5.5 (claude-opus-5-5), self-reported runtime identity, not independently verified. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -3800,7 +3810,7 @@
       ],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "9b7f3a9c5f24aea334968ef21eb7db27291bb523ede7dff53e83c5b8e8a2f3e1",
+        "value": "b1e4f6d3817bee765221cc342401e834638bc41320d6be11f6a9d5bd9af3e616",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -4043,7 +4053,8 @@
           "PROV-FILE-5E2976679C5C",
           "PROV-FILE-7958C8F94D25",
           "PROV-FILE-21380EB5044A",
-          "PROV-FILE-F80C51D3133F"
+          "PROV-FILE-F80C51D3133F",
+          "PROV-FILE-06DBECEFECD9"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -4128,7 +4139,8 @@
           "PROV-FILE-77112C4E205D",
           "PROV-FILE-E675EF032A18",
           "PROV-FILE-543727072A31",
-          "PROV-FILE-43365A390E1B"
+          "PROV-FILE-43365A390E1B",
+          "PROV-FILE-1649CE9B4212"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -5853,7 +5865,8 @@
           "PROV-FILE-AA2B61DEEDFF",
           "PROV-FILE-5617568E3DD3",
           "PROV-FILE-77B626BDBF79",
-          "PROV-FILE-EE417A122940"
+          "PROV-FILE-EE417A122940",
+          "PROV-FILE-D931A142DAEE"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -5937,7 +5950,8 @@
           "PROV-FILE-5E30437D48A6",
           "PROV-FILE-BAD0F8C17451",
           "PROV-FILE-7694BDDD3706",
-          "PROV-FILE-56D79A988B0C"
+          "PROV-FILE-56D79A988B0C",
+          "PROV-FILE-0C1339422D4F"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6020,7 +6034,8 @@
           "PROV-FILE-5211797AFA49",
           "PROV-FILE-DBB640EF8867",
           "PROV-FILE-BF6482D96047",
-          "PROV-FILE-26E94737CC5E"
+          "PROV-FILE-26E94737CC5E",
+          "PROV-FILE-1B0EFB15A9E5"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6047,14 +6062,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "demo/recording-checklist.md",
-        "revision": "sha256:5310065f7b48a09f1df1a81135808bc7c8441d1ba0a531199b0e5ea5cf5515bd",
+        "revision": "sha256:8193d82268d36030d6433ddedd6b350f657216527fc82dc46c1dd0f043947a74",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (link to the planned human recording runbook (source lease), commit 5b5e06c) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (r04 recording checklist capture-status and SPN-03 source-status update (issue 9 lease), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (recording team correction wording (recording team correction), commit 3dc4636) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) recording team correction writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (link to the planned human recording runbook (source lease), commit 5b5e06c) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (r04 recording checklist capture-status and SPN-03 source-status update (issue 9 lease), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "draft_collateral",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -6103,7 +6118,8 @@
           "PROV-FILE-946308520A8D",
           "PROV-FILE-6E68E383049B",
           "PROV-FILE-2532F14FC419",
-          "PROV-FILE-A0B9D370BA7B"
+          "PROV-FILE-A0B9D370BA7B",
+          "PROV-FILE-2E0190D72440"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6112,7 +6128,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "5310065f7b48a09f1df1a81135808bc7c8441d1ba0a531199b0e5ea5cf5515bd",
+        "value": "8193d82268d36030d6433ddedd6b350f657216527fc82dc46c1dd0f043947a74",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6189,7 +6205,8 @@
           "PROV-FILE-82124887CB12",
           "PROV-FILE-C1F2C610A776",
           "PROV-FILE-B88DE43278FA",
-          "PROV-FILE-9D76851B9F22"
+          "PROV-FILE-9D76851B9F22",
+          "PROV-FILE-C11DF4AAABAC"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6274,7 +6291,8 @@
           "PROV-FILE-BAAC15849931",
           "PROV-FILE-712064C06931",
           "PROV-FILE-6E5F5148D69C",
-          "PROV-FILE-75BC12DEFFA5"
+          "PROV-FILE-75BC12DEFFA5",
+          "PROV-FILE-46063B4B3DB0"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -6358,7 +6376,8 @@
           "PROV-FILE-0853DDEBA1EA",
           "PROV-FILE-99E7ADEB5F9C",
           "PROV-FILE-F999CDE3A52C",
-          "PROV-FILE-EDECD39AB59B"
+          "PROV-FILE-EDECD39AB59B",
+          "PROV-FILE-47EBB19024C6"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6441,7 +6460,8 @@
           "PROV-FILE-8AD60C075166",
           "PROV-FILE-B5C05168FA5B",
           "PROV-FILE-D16AC6FC9C20",
-          "PROV-FILE-995769484C47"
+          "PROV-FILE-995769484C47",
+          "PROV-FILE-216A3022D768"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6620,14 +6640,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-handoff.md",
-        "revision": "sha256:6e0b8760cccc8c228ab80d8248dce39c6d11e436fa159d455621ca1e3cc34d1a",
+        "revision": "sha256:e18d1b5eeb0eeee7eef5c956a0add7001f6969653e76ba6c938b765ef94e2bb7",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (r06 notes and planned human recording runbook selection and pending-reject status (issue 11 r06 final followup), commit 6589670) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (current-revision r05 notes (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (r04 current-revision notes (issue 11 follow-up), commit 4f5dc5d) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (separate r03 explainer internal-disposition receipt binding, commit cd43af8) by the Anthropic Claude Sonnet 5.5 session a6577582-cf63-4a70-9d60-5074af7d8fdb; earlier revisions: Current revision (historical internal-disposition anchoring note, commit 1c90dca) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Current product source-status revision (commit 657656e) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Current prose revision (PR #17 commit 8aae5e7) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a6577582-cf63-4a70-9d60-5074af7d8fdb, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider, standard speed; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r07 notes, Crystal and Lars each-video recording team wording and open assembly/selection (issue 11 r07 final followup), commit 9cd03e7) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r06 notes and planned human recording runbook selection and pending-reject status (issue 11 r06 final followup), commit 6589670) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (current-revision r05 notes (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (r04 current-revision notes (issue 11 follow-up), commit 4f5dc5d) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (separate r03 explainer internal-disposition receipt binding, commit cd43af8) by the Anthropic Claude Sonnet 5.5 session a6577582-cf63-4a70-9d60-5074af7d8fdb; earlier revisions: Current revision (historical internal-disposition anchoring note, commit 1c90dca) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Current product source-status revision (commit 657656e) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Current prose revision (PR #17 commit 8aae5e7) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a6577582-cf63-4a70-9d60-5074af7d8fdb, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider, standard speed; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -6678,7 +6698,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6e0b8760cccc8c228ab80d8248dce39c6d11e436fa159d455621ca1e3cc34d1a",
+        "value": "e18d1b5eeb0eeee7eef5c956a0add7001f6969653e76ba6c938b765ef94e2bb7",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6696,14 +6716,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:74c066e4f3ff5a07ffbf2f3a03bbb5497654f1f85a9212cb1dc6f2e11836d373",
+        "revision": "sha256:e3d761f2486fa6f9d7a21a3ccba397206303a93e091c9d328b02c4a692d4efd6",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current inventory-digest join refresh (issue 11 r06 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r05 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (Entire SPN-02 source status) by the Anthropic Claude Sonnet 5.5 session a2a839e5-19e1-4617-8767-91c4348070fb; earlier revisions: Current inventory-digest join refresh (CFO.ai owner status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Current inventory-digest join refresh (CFO.ai revision 2 source status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a2a839e5-19e1-4617-8767-91c4348070fb, firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current inventory-digest join refresh (issue 11 r07 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r06 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r05 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (Entire SPN-02 source status) by the Anthropic Claude Sonnet 5.5 session a2a839e5-19e1-4617-8767-91c4348070fb; earlier revisions: Current inventory-digest join refresh (CFO.ai owner status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Current inventory-digest join refresh (CFO.ai revision 2 source status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a2a839e5-19e1-4617-8767-91c4348070fb, firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -6754,7 +6774,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "74c066e4f3ff5a07ffbf2f3a03bbb5497654f1f85a9212cb1dc6f2e11836d373",
+        "value": "e3d761f2486fa6f9d7a21a3ccba397206303a93e091c9d328b02c4a692d4efd6",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6902,7 +6922,8 @@
           "PROV-FILE-6A60A1997A26",
           "PROV-FILE-8C0D6BFADB46",
           "PROV-FILE-BD57BC1099E6",
-          "PROV-FILE-EC791CEECD4A"
+          "PROV-FILE-EC791CEECD4A",
+          "PROV-FILE-7C62837DBB55"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -8884,14 +8905,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/package-spec.json",
-        "revision": "efb35388b062ff5518f764592cefaf6eb04b96d2",
+        "revision": "9cd03e796de2a8a5f7a74abbb60e8e1b8ed7af43",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/efb35388b062ff5518f764592cefaf6eb04b96d2/release/v0.1.0-rehearsal/package-spec.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/9cd03e796de2a8a5f7a74abbb60e8e1b8ed7af43/release/v0.1.0-rehearsal/package-spec.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (r06 revision bump and planned human recording runbook package-spec entry (issue 11 r06 final followup), commit efb3538) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r05 revision bump and LAUNCH-X-COPY-001 CLAIM-X-DEST claimIds and limitations (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (LAUNCH-X-COPY-001 limitation update for known team/project/repository draft fields (issue 11 follow-up), commit 4f5dc5d) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r04 package revision bump (issue 11 integration), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r07 revision bump (issue 11 r07 final followup), commit 9cd03e7) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r06 revision bump and planned human recording runbook package-spec entry (issue 11 r06 final followup), commit efb3538) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r05 revision bump and LAUNCH-X-COPY-001 CLAIM-X-DEST claimIds and limitations (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (LAUNCH-X-COPY-001 limitation update for known team/project/repository draft fields (issue 11 follow-up), commit 4f5dc5d) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r04 package revision bump (issue 11 integration), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -8942,7 +8963,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "5bc7db53c6ec5fa423a9317c7ca86e52d8933be06af439b19746fe1e2cf7056e",
+        "value": "ffca3fc73d5552eed50a14a5fc849b4cb015042e4961365180516dcc0aa23dfc",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -9264,14 +9285,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/release-checklist.md",
-        "revision": "sha256:967adf3f2fc48c253ca4e9221c2a60b170fee43377a7359d869d62cc81926aa6",
+        "revision": "sha256:6c1177cc43eb06bab28d52d4f87121ee8e7258054e88fd2dd0804e85a562664a",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (runbook planned-row checklist item (source lease), commit 2ddd79e) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (input status and required candidate validation items (issue 3 lease), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) lease writer session (session ID not exposed to the integration writer); earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (recording team correction checklist wording (recording team correction), commit 3dc4636) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) recording team correction writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (runbook planned-row checklist item (source lease), commit 2ddd79e) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (input status and required candidate validation items (issue 3 lease), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) lease writer session (session ID not exposed to the integration writer); earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -9322,7 +9343,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "967adf3f2fc48c253ca4e9221c2a60b170fee43377a7359d869d62cc81926aa6",
+        "value": "6c1177cc43eb06bab28d52d4f87121ee8e7258054e88fd2dd0804e85a562664a",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -9340,14 +9361,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "review/releases/v0.1.0-rehearsal.md",
-        "revision": "sha256:4c5d526e531b2210754d5bae0332fb5beb6a30473f7287030ccd3e21cffaabf6",
+        "revision": "sha256:4181610e1b44c2c884499f0cc6075b6129599c32c215f21950add2c3715b8343",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (release record update for scoped source, roles and PR24 verification (source lease), commit 2ddd79e) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (handoff input status record (issue 3 lease), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (separate r03 explainer internal-disposition receipt binding, commit cd43af8) by the Anthropic Claude Sonnet 5.5 session a6577582-cf63-4a70-9d60-5074af7d8fdb; earlier revisions: Current revision (historical internal-disposition anchoring note, commit 1c90dca) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Current prose revision (PR #17 commit 8aae5e7) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a6577582-cf63-4a70-9d60-5074af7d8fdb, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (recording team correction release record wording (recording team correction), commit 3dc4636) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) recording team correction writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (release record update for scoped source, roles and PR24 verification (source lease), commit 2ddd79e) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (handoff input status record (issue 3 lease), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) lease writer session (session ID not exposed to the integration writer); earlier revisions: Current revision (separate r03 explainer internal-disposition receipt binding, commit cd43af8) by the Anthropic Claude Sonnet 5.5 session a6577582-cf63-4a70-9d60-5074af7d8fdb; earlier revisions: Current revision (historical internal-disposition anchoring note, commit 1c90dca) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Current prose revision (PR #17 commit 8aae5e7) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a6577582-cf63-4a70-9d60-5074af7d8fdb, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -9398,7 +9419,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "4c5d526e531b2210754d5bae0332fb5beb6a30473f7287030ccd3e21cffaabf6",
+        "value": "4181610e1b44c2c884499f0cc6075b6129599c32c215f21950add2c3715b8343",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -15340,14 +15361,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_package_collateral.py",
-        "revision": "efb35388b062ff5518f764592cefaf6eb04b96d2",
+        "revision": "9cd03e796de2a8a5f7a74abbb60e8e1b8ed7af43",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/efb35388b062ff5518f764592cefaf6eb04b96d2/tests/test_package_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/9cd03e796de2a8a5f7a74abbb60e8e1b8ed7af43/tests/test_package_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (r06 package-name fixture literal (issue 11 r06 final followup), commit efb3538) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r05 package-name fixture literal (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (r04 package-name literal (issue 11 integration), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r07 package-name fixture literal (issue 11 r07 final followup), commit 9cd03e7) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r06 package-name fixture literal (issue 11 r06 final followup), commit efb3538) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current revision (r05 package-name fixture literal (issue 11 final packaging), commit 6bc2686) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current revision (r04 package-name literal (issue 11 integration), commit b3997f5) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -15398,7 +15419,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "ae2bb30bb45ffd8aadbc5b8a8319aed361d546bda417588d1ee18e3919c198cb",
+        "value": "aaa25a919fcf3d3c1c350e601ade40fe2de082138dd7bc684fd5d65b73150870",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -24478,19 +24499,19 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "demo/human-recording-runbook.md",
-        "revision": "sha256:2798ec241e79445518a83817f87cb30c432a19bcaad4058c4ca6cf8d37b17242",
+        "revision": "sha256:a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-12",
-      "creator": "Created at revision commit 5b5e06c by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer) as a planned internal human recording guide for the user-assigned marketing-material supervisor; no teammate review, dry run or recording has been performed.",
-      "toolModel": "Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed.",
+      "creator": "Current revision (recording team correction: Crystal and Lars each doing a video, assembly/selection/submitter open (recording team correction), commit 3dc4636) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) recording team correction writer session (session ID not exposed to the integration writer); earlier revisions: Created at revision commit 5b5e06c by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer) as a planned internal human recording guide for the user-assigned marketing-material supervisor; no teammate review, dry run or recording has been performed.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed.",
       "evidenceClassification": "draft_collateral",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
         "subjects": [],
-        "details": "No recording, voice, face or private customer material exists or is asserted; the guide names a confirmed human recorder by first name as recorded in an owner relay and grants no consent, release or speaking approval."
+        "details": "No recording, voice, face or private customer material exists or is asserted; the guide names Crystal and Lars by first name as the video contributors, as recorded in an owner relay, and grants no consent, release or speaking approval."
       },
       "permission": {
         "status": "authorized_internal_candidate_review_only",
@@ -24529,7 +24550,8 @@
       "lineage": {
         "derivedFrom": [],
         "derivatives": [
-          "PROV-FILE-9A6779572D19"
+          "PROV-FILE-9A6779572D19",
+          "PROV-FILE-2E0DDA13290C"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release or recording approval inferred."
@@ -24538,7 +24560,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "2798ec241e79445518a83817f87cb30c432a19bcaad4058c4ca6cf8d37b17242",
+        "value": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent, teammate and producer/source-owner review pending.",
@@ -26278,6 +26300,1821 @@
       "checksum": {
         "algorithm": "SHA-256",
         "value": "2798ec241e79445518a83817f87cb30c432a19bcaad4058c4ca6cf8d37b17242",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending.",
+        "Planned runbook: not cleared for publication or recording."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-CA879629FF50",
+      "kind": "internal_package_control",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/history/manifest-7b10d5f106f085c3.json",
+        "revision": "sha256:7b10d5f106f085c30aeec64443210cd723c70b50d277bb58bca033d7d870810f",
+        "revisionKind": "sha256_content_digest",
+        "url": null,
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Local draft manifest retention by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed) for the user-assigned marketing-material supervisor; historical bytes preserved unchanged.",
+      "toolModel": "Local package_collateral.py draft-history archive convention applied by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); byte copy of the prior current manifest (SHA-256 7b10d5f106f085c30aeec64443210cd723c70b50d277bb58bca033d7d870810f) made before the new source snapshot; native effort and speed not exposed; no external provider.",
+      "evidenceClassification": "internal_historical_draft_manifest",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": false,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Exact prior draft manifest bytes archived before regeneration; no release decision or approval is inferred."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "7b10d5f106f085c30aeec64443210cd723c70b50d277bb58bca033d7d870810f",
+        "status": "Exact SHA-256 content digest of the immutable archived prior draft manifest bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session); independent receiver review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record preserves prior draft manifest bytes and grants no external destination permission.",
+        "The archived draft is not an approved release or submission artifact."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-1B0EFB15A9E5",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r07-repository-internal-review-text-en-us-concept-explainer.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r07-repository-internal-review-text-en-us-concept-explainer.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-26E94737CC5E retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-EXPLAINER-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/product-explanation.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "466d020a4d8d3e13a3b870a8bac5508b43e1d36bded53f574ecb00f7287de75a",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-0C1339422D4F",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r07-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r07-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-56D79A988B0C retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-NARRATION-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/narration.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-2E0190D72440",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-A0B9D370BA7B retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-RECORDING-CHECKLIST-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/recording-checklist.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "8193d82268d36030d6433ddedd6b350f657216527fc82dc46c1dd0f043947a74",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-06DBECEFECD9",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-F80C51D3133F retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-CAPTIONS-SRT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/captions/silent-rehearsal.srt retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-1649CE9B4212",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-43365A390E1B retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-CAPTIONS-VTT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/captions/silent-rehearsal.vtt retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-C11DF4AAABAC",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r07-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r07-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-9D76851B9F22 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-SCENES-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/rehearsal-scenes.json retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-46063B4B3DB0",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r07-repository-internal-review-text-en-us-caption-exact-transcript.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r07-repository-internal-review-text-en-us-caption-exact-transcript.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-75BC12DEFFA5 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-TRANSCRIPT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/rehearsal-transcript.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-D931A142DAEE",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r07-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r07-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-EE417A122940 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-REHEARSAL-VIDEO-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/exports/silent-synthetic-rehearsal.mp4 retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-47EBB19024C6",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r07-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r07-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-EDECD39AB59B retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-STORYBOARD-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/storyboard.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-216A3022D768",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r07-repository-internal-review-text-en-us-submission-preflight.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r07-repository-internal-review-text-en-us-submission-preflight.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-995769484C47 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SUBMISSION-NARRATIVE-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/submission-narrative.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-221911C28B6F",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-6A159534063A retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-WORKFLOW-PNG-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow.png retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-DE26BDA4F1D1",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-8017C8E075C2 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-WORKFLOW-DIAGRAM-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow.svg retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-8D0E6B746299",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-40E75822129C retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-WORKFLOW-ALT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/diagrams/demo-workflow-alt-text.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-E7B13371635E",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-B76C23B2D185 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-SCREENSHOT-PNG-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/screenshots/synthetic-stub-mockup.png retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-75FAA64BC37D",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-5953C74B7BF4 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-SCREENSHOT-SET-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/screenshots/synthetic-stub-mockup.svg retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-D33DB9240A9F",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-FB0884C0F32D retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-DEMO-SCREENSHOT-ALT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/screenshots/synthetic-stub-alt-text.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-CD8E6AB035B0",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r07-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r07-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-35546E2BD419 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-ALT-TEXT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/assets/x-submission-alt-text.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-7C62837DBB55",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r07-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r07-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-EC791CEECD4A retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-COPY-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/announcement-copy.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "31b61fceca4012e66054ce44d358042d5abe47ef5319b02e8a479218bbf36526",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-5D40F4238A49",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-B2A6310CDE7E retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "PROV-LAUNCH-X-KEY-PNG-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/assets/x-submission-key-visual.png retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-EEF100D059A0",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-0D9669046C64 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "LAUNCH-X-KEY-VISUAL-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path launch/assets/x-submission-key-visual.svg retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-F57A0062911E",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r07-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r07-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-F75E39B31190 retained (earlier r03/r04/r05 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-DECK-SUPPORT-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/deck/concept-overview.html retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+        "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record grants internal candidate-review scope only, not external destination permission.",
+        "Independent exact-byte and applicable source-owner, brand and destination review remain pending."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-2E0DDA13290C",
+      "kind": "internal_package_copy",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r07-repository-internal-review-text-en-us-planned-internal-human-guide.md",
+        "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r07-repository-internal-review-text-en-us-planned-internal-human-guide.md",
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Mechanical package execution by the Anthropic Claude Sonnet 5.5 issue 11 r07 final followup package writer session (ID not exposed) running the existing local package_collateral.py builder at r07 for the user-assigned marketing-material supervisor; source bytes copied with no external provider and no visual/UI authorship change. Prior r06 copy record PROV-FILE-9A6779572D19 retained (r06 record chain preserved in that record).",
+      "toolModel": "Local Python package_collateral.py and standard library only, executed by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty; no paid API, browser or external media provider.",
+      "evidenceClassification": "internal_draft_package_copy",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "repository-internal-review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "repository-internal-review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [
+          "DEMO-HUMAN-RECORDING-RUNBOOK-001"
+        ],
+        "derivatives": [],
+        "transformations": [
+          "Byte-identical package copy for internal candidate review; exact source path demo/human-recording-runbook.md retained.",
+          "Package builder copied exact source bytes into the r07 rehearsal package; this does not grant external rights."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
         "status": "Computed from exact current package bytes; the recorded source commit contains these bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor (AI session) for packaging handoff only; independent exact-byte and source-owner/rights review pending.",
