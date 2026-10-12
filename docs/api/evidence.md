@@ -16,6 +16,8 @@ Both lookups authorize with the existing `ledger.readSnapshot` grant (no new per
 
 The validated request is copied and frozen before any asynchronous authorization or storage work. Each raw host authority response is copied into private data before the shared authorization gate validates it, so later mutation of a retained host object cannot replace the principal revision that the gate checked. Store results are copied before another await can change their scope-checked identities or allowlisted fields. The current grant is checked at entry, after the posting read before any related-observation read, and after the last read before disclosure. Absent and unavailable read results go through the same renewed authorization. A denied, expired, unavailable or scope-mismatched decision returns only its safe error envelope, with no retained evidence. A changed membership or service-grant revision also refuses the lookup; the caller can start a new request under the new revision. These checks use the configured host authority on every call and do not establish a real issuer integration or an export disclosure fence.
 
+Raw authority snapshots preserve own-key semantics so malformed response fields remain invalid after copying. An authority value that cannot be copied produces only the existing safe unavailable envelope before any evidence read.
+
 - `lookupPostingEvidence`: posting to source observations (same logical operation), reservation, rate/rule versions and typed operational refs.
 - `lookupByOperationalReference`: reverse lookup by a resolved, validated, indexed kind. Matches are links only; an empty result is declared as not proof of zero usage.
 

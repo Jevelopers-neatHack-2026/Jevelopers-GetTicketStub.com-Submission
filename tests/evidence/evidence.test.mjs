@@ -481,6 +481,51 @@ for (const lookup of ['posting', 'reverse']) {
   }
 }
 
+for (const lookup of ['posting', 'reverse']) {
+  for (const malformedPart of ['response', 'principal', 'scope']) {
+    test(`${lookup} lookup rejects malformed ${malformedPart} own keys before any evidence read`, async () => {
+      for (const kind of ['user', 'service']) {
+        const calls = [];
+        const runtime = { clock, store: store([], { calls }), financeAuthority: {
+          async authorizeCurrent(input) {
+            const issued = await authority().authorizeCurrent(input);
+            if (kind === 'service') issued.principal = {
+              kind, actorId: scopeA.actorId, serviceStatus: 'active', serviceGrantRevision: 's1',
+            };
+            // An own __proto__ field is invalid data. Snapshotting must retain
+            // that fact instead of promoting its value into a prototype.
+            const ownPrototype = value => Object.fromEntries([['__proto__', value]]);
+            if (malformedPart === 'response') return ownPrototype(issued);
+            return { ...issued, [malformedPart]: ownPrototype(issued[malformedPart]) };
+          },
+        } };
+        const result = lookup === 'posting'
+          ? await lookupPostingEvidence(request(scopeA, { eventId: 'evt-expense-1' }), runtime)
+          : await lookupByOperationalReference(request(scopeA, { reference: { status: 'resolved', kind: 'logical_operation', namespace: 'cost-intelligence', id: 'op-1' } }), runtime);
+        assert.equal(result.ok, false);
+        assert.equal(result.error.code, 'SOURCE_UNAVAILABLE');
+        assert.equal(Object.hasOwn(result, 'value'), false);
+        assert.deepEqual(calls, [], 'malformed authority never starts a protected read');
+      }
+    });
+  }
+}
+
+test('uncopyable raw authority returns only a safe unavailable envelope', async () => {
+  const calls = [];
+  const runtime = { clock, store: store([], { calls }), financeAuthority: {
+    async authorizeCurrent(input) {
+      return { ...await authority().authorizeCurrent(input), unexpected: () => 'SYNTHETIC_PRIVATE_CALLBACK' };
+    },
+  } };
+  const result = await lookupPostingEvidence(request(scopeA, { eventId: 'evt-expense-1' }), runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'SOURCE_UNAVAILABLE');
+  assert.equal(Object.hasOwn(result, 'value'), false);
+  assert.equal(JSON.stringify(result).includes('SYNTHETIC_PRIVATE_CALLBACK'), false);
+  assert.deepEqual(calls, []);
+});
+
 test('caller mutation during authorization cannot substitute evidence scope or posting identity', async () => {
   const submitted = request({ ...scopeA }, { eventId: 'evt-expense-1' });
   const seen = [];

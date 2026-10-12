@@ -354,7 +354,9 @@ async function authorize(request: { requestId: string; scope: TrustedScope }, po
       // Detach the full raw response before the shared gate validates it. A
       // retained host alias must not replace the validated principal revision
       // while this lookup resumes from a later authorization await.
-      return Value.Clone(await authorizeCurrent(input));
+      // Preserve own keys (including malformed __proto__ keys) so copying
+      // cannot turn a rejected response into inherited valid-looking fields.
+      return structuredClone(await authorizeCurrent(input));
     },
   };
   // Reads reuse the existing ledger snapshot read grant; no new permission is introduced by this slice.
