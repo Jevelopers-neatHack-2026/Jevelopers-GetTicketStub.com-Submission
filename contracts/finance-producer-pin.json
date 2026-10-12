@@ -1,0 +1,60 @@
+{
+  "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+  "revision": "4f3ae9e5cf31f5bce295582db7c76f78cccb93f2",
+  "tree": "091e66027ff1cb4664c8ff53dd8450c34781e973",
+  "archive_sha256": "8157d4e3b6cf64026a895a9d394385428b7b361f1ef7e21f181a4d93eb48c0e7",
+  "lockfile_sha256": "ce010e42e20485b37edf9a41eccf55c9e378f0e8845c176535905645b1e6c823",
+  "node": "22.23.3",
+  "npm": "10.9.9",
+  "typescript": "5.9.3",
+  "postgres": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+  "contract": {
+    "status": "proposal_only",
+    "adoption_accepted": false,
+    "revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+    "version": "0.3.0",
+    "archive_sha256": "29032c3caae8f5d45a9665ef2263e7014e429b94d4b4267d36826c0790de88f2"
+  },
+  "migrations": [
+    {
+      "name": "0001_foundation.sql",
+      "sha256": "149333f85d5b5673d0a050e001e9cb1fdc370568c37fef23006bb98c9e03a11b"
+    },
+    {
+      "name": "0002_foundation_health.sql",
+      "sha256": "d49306f7312d713b335b3dc5863fe228e8b4daf1a5380138f8847c14a7f62b99"
+    },
+    {
+      "name": "0003_financial_ledger.sql",
+      "sha256": "d8db9d67e42ffa9ac3d5b7205992956a6afef26d8114580a29dc0d2e409a7c6a"
+    },
+    {
+      "name": "0004_pricing_catalog.sql",
+      "sha256": "86ce94579fe19f5edb965721ef1c9d8e5daa874ada4dbeb2b87c23a0a325441b"
+    },
+    {
+      "name": "0005_pricing_valuation_history.sql",
+      "sha256": "b648d9dffbff134250c032622a5a946df903b36ba42f1bdc4daefb81dee9af80"
+    },
+    {
+      "name": "0006_finance_security_roles.sql",
+      "sha256": "fb5ef6ffd1cae4afaf5c3d35092bf837948878aae7ac83dd31566daa0fd06b8e"
+    },
+    {
+      "name": "0007_accounting_projection_snapshots.sql",
+      "sha256": "7fad294f854955f118f65fa3e198cfe4b1a7cb835a22e156a3d3509281f64ca6"
+    },
+    {
+      "name": "0008_budget_reservations.sql",
+      "sha256": "ae4a6eabdfd06779f76c80a204c00b08ed36c493ec08334a84b3bd2dae1da0c0"
+    },
+    {
+      "name": "0009_usage_intake.sql",
+      "sha256": "ad083cdc40e78ac3753e657a46de6c201ca3efb33e6bd3b024bf7e29a3c24b0f"
+    },
+    {
+      "name": "0010_budget_authority_bindings.sql",
+      "sha256": "1f3f1949abd9ce3a4771e17287fce813694a56a93c0f901dfaeb60a568b80af6"
+    }
+  ]
+}

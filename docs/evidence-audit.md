@@ -29,6 +29,7 @@ Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. 
 | `symlink-escape` | Manifest or listed path resolves outside the manifest directory (or outside the repo for the manifest itself) |
 | `missing-file`, `not-regular-file`, `file-unreadable` | Listed file absent, not a regular file, or unreadable |
 | `hash-mismatch` | SHA-256 differs from the manifest |
+| `input-too-large` | A manifest or checklist file exceeds the 1 MiB metadata limit |
 | `duplicate-key` | A JSON object repeats a key (ambiguous; rejected without reading either value) |
 | `duplicate-status` | A Markdown criterion has more than one status line, even if they agree |
 | `empty-checklist` | The JSON `criteria` list or the Markdown criterion set is empty |
@@ -38,7 +39,7 @@ Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. 
 | `checkbox-mismatch` | Markdown `[x]` is not exactly the `verified` state |
 | `verified-missing-evidence`, `verified-missing-revisions` | A verified entry lacks nonempty `evidence_refs` or `tested_revision_refs` |
 
-Markdown criteria are `### ID title` headings; the whole block up to the next heading is scanned and must hold exactly one `- [ ] **Status** ...` line. Errors never echo file contents, status values, manifest paths or arbitrary IDs; only fixed messages, codes, line numbers, positional indexes, and criterion IDs that match the `ABC-12` form.
+Markdown criteria are `### ID title` headings; the whole block up to the next heading is scanned and must hold exactly one `- [ ] **Status** ...` line. Criterion IDs are limited to 64 characters. Error objects omit criterion IDs and never echo file contents, status values, input paths or manifest paths. Their details use zero-based JSON criterion indexes and 1-based Markdown heading line numbers so maintainers can locate entries without exposing caller-supplied IDs. The `file` field uses fixed checklist labels, `evidence`, or a 1-based evidence-manifest index in sorted discovery order. The report retains at most 100 detailed errors, sets `errors_truncated` when more exist, and keeps complete per-code totals in `error_counts`.
 
 ## Limits
 

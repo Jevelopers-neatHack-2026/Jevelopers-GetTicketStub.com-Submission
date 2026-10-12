@@ -26,6 +26,8 @@ acceptance still needs owner runners, exact composed release pins, ratified data
 policy, and authorized real evidence. The producer release, adoption and product holds are
 retained, and nothing here claims producer acceptance.
 
+The `entire-graph` workflow runs on pushes to `main` and its intended weekly schedule. It has read-only repository permissions and uploads artifacts. Pull-request and manually selected-ref triggers are disabled, so it does not automatically publish generated instruction branches. Prepare instruction updates through a separate reviewed pull request.
+
 Complete benchmark work in [issue #15](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15)
 and [issue #16](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16) is
 deferred until after deployment by explicit user instruction, as an initial-deployment
