@@ -16,5 +16,6 @@ This map routes engineers to the maintained API, gates, local evidence and bound
 
 ## Controls and handoff
 - [Controls integration](controls-integration.md), [controls package integration](controls-package-integration.md), [actual inspection](controls/actual-inspection.md), and [inspection consumer preparation](controls/inspection-consumer-preparation.md) cover local controls and consumer boundaries.
+- [Composition controls integration](controls/composition-integration.md) documents the staged mock review, Apply, history, and recovery consumer; [reviewed artwork action recovery](controls/artwork-recovery.md) documents durable style-action recovery and its limits.
 - [Creative boundary](contracts/creative-boundary.md), [approval handoff](contracts/approval-handoff.md), [DecisionPort](contracts/decision-port.md), and [metering](contracts/metering.md) identify proposals and owner handoffs.
 - See [ownership](architecture/OWNERSHIP.md) and [acceptance allocation](architecture/ACCEPTANCE.md).

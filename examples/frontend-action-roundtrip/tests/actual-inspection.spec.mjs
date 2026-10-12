@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './capture-test.mjs';
 import AxeBuilder from '@axe-core/playwright';
 const counts=async request=>(await request.get('/api/counters')).json();
 async function apply(page){await page.getByLabel('Artwork style').selectOption('vibrant');const pending=page.waitForResponse('**/api/apply');await page.getByRole('button',{name:'Apply changes',exact:true}).click();const result=await(await pending).json();expect(result.ok).toBe(true);await expect(page.locator('#inspect')).toBeEnabled();return result;}

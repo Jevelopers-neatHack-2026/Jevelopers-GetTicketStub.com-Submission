@@ -80,3 +80,17 @@ createControlSchema(state, 'creative-controls/2.0');
 // @ts-expect-error Apply cannot carry purchase authorization.
 const privilegedAction: ApplyPayload = { ...action, intent: 'purchase' };
 void privilegedAction;
+
+// Additive projection/Apply consumer: legacy declarations above stay closed.
+import { COMPOSITION_APPLY_VERSION, createCompositionControlPlan, assertCompositionCurrent,
+  type CompositionControlApply, type CreativeCompositionControlProjection } from 'creative-engine/controls';
+type CompositionIsAny<T> = 0 extends (1 & T) ? true : false;
+const checkedProjectionType: CompositionIsAny<ReturnType<typeof assertCompositionCurrent>> = false;
+const checkedPlanType: CompositionIsAny<ReturnType<typeof createCompositionControlPlan>> = false;
+declare const exactProjection: CreativeCompositionControlProjection;
+const exactAction: CompositionControlApply = { action_version: COMPOSITION_APPLY_VERSION, action_id:'installed:apply', intent:'apply', projection_sha256:exactProjection.projection_sha256, draft:{categories:{name_size:'large'},exact:{}} };
+// @ts-expect-error closed original category values
+const badComposition: CompositionControlApply = {...exactAction,draft:{categories:{logo_position:'middle'},exact:{}}};
+// @ts-expect-error Apply never authorizes purchase
+const badAuthority: CompositionControlApply = {...exactAction,intent:'purchase'};
+void [checkedProjectionType,checkedPlanType,exactAction,badComposition,badAuthority];

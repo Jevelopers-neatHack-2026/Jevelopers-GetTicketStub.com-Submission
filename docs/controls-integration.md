@@ -1,3 +1,5 @@
+Current staged composition details and remaining full original-scope dependencies are in [composition controls integration](controls/composition-integration.md). Final qualification waits corrected coherent backend integration and exact-head checks/review.
+
 Current actual Apply→CE09 consumer details and boundaries are in [actual saved-artwork inspection](controls/actual-inspection.md). Earlier checkpoint statements below retain their historical scope; they do not describe current inspection as unimplemented.
 
 # Structured controls and actual local Apply integration
@@ -9,8 +11,7 @@ immutable version store and usage outbox. The
 browser's default fixture uses **MOCK trusted host authority and intercepted
 provider/Finance transport**. It authenticates no real membership and makes no
 network provider calls. Local API execution and persisted bytes, hashes, jobs,
-selection, replay and cancellation are real. Composition and correction
-consumers remain required local work; they are explicitly unavailable.
+selection, replay and cancellation are real. A separately versioned staged composition controls consumer and durable artwork-action recovery now exist; see [composition controls integration](controls/composition-integration.md) and [reviewed artwork action recovery](controls/artwork-recovery.md). These offline mock/local consumers do not supply the original CE-05 `creative.composition.consume/1` ControlOperation bridge, compound routing or factual-correction workflow, nor do they establish app-runtime integration or external acceptance. The original composition/compound bridge remains typed-unavailable below; research correction remains pending.
 
 This contributes to CON-01/02/03 (Agent and research), ART-01 (Creative and
 fulfillment), ART-02/EVAL-03 (Product and frontend), and EVAL-04 (Finance and
@@ -216,12 +217,14 @@ browser tests capture caught handler exceptions and verify both paths leave
 selection and attempt/reservation counters unchanged. Unknown history codes and
 backend messages render only fixed local recovery text.
 The trusted context policy declares optional `can_read`, with strict source
-consumers constructing both denied and omitted policies. Actual package-path
-publication and its consumer remain pending.
+consumers constructing both denied and omitted policies. The package remains
+private and unpublished to a registry; PR #57 adds a packed, installed local
+consumer for composition and artwork recovery. Application imports and externally
+accepted package consumers remain pending.
 
 ## Required backend bridges
 
-These are required local integrations, not scope waivers or external blockers:
+This table tracks the original CE-05 typed `ControlOperation` bridge and related follow-up consumers. It is distinct from the separately versioned staged `CompositionControlsAdapter` documented above; the typed-unavailable bridge outcome does not mean that the separate local mock composition consumer is absent. These remain required local integrations, not scope waivers or external blockers:
 
 | Bridge | Required contract and result | Current outcome |
 | --- | --- | --- |

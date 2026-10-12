@@ -26,3 +26,12 @@ button:disabled, #apply:disabled { color: #526266; background: #edf0eb; border-c
 #inspection-refs dd { margin: 4px 0 0; overflow-wrap: anywhere; line-height: 1.45; }
 footer { color: #526266; font-size: 13px; line-height: 1.5; }
 code { white-space: normal; overflow-wrap: anywhere; }
+input:not([type=checkbox]) { width: 100%; border: 1px solid #677d80; border-radius: 6px; padding: 12px; font: inherit; color: #172a30; }
+.preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.preview-grid figure { margin: 0; min-width: 0; }
+.preview-grid img { width: 100%; height: auto; image-rendering: auto; border-radius: 6px; border: 1px solid #c6d0ca; }
+figcaption, #composition-identity, #review-binding, #initialization-review, #operation-status, #composition-status { overflow-wrap: anywhere; line-height: 1.5; }
+#composition-error { color: #8b2424; background: #fff1ed; padding: 14px; border-radius: 6px; }
+#composition-apply, #initialize { background: #173e3c; color: white; }
+#composition-apply:disabled, #initialize:disabled { background: #edf0eb; color: #526266; }
+@media (max-width: 540px) { .preview-grid { grid-template-columns: 1fr; } body { padding: 20px 12px; } }
