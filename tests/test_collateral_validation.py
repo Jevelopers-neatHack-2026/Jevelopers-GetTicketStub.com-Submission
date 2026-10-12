@@ -104,6 +104,31 @@ class CollateralPolicyValidationTests(unittest.TestCase):
         errors = validate_claims(mutated)
         self.assertTrue(any("SPN-02 must have its own unique evidence reference" in item for item in errors), errors)
 
+    def test_neatlogs_source_availability_cannot_approve_the_pending_claim(self):
+        pin = "31b4f53b46a584c4b5b4a6a7076f6800c37b00e5"
+        claim = next(item for item in self.claims["claims"] if item["id"] == "CLAIM-SPN-01-NEATLOGS-001")
+        evidence = next(item for item in self.claims["evidenceClasses"] if item["id"] == "SPN-01")
+        self.assertEqual(claim["state"], "blocked")
+        self.assertEqual(claim["reviewStatus"], "blocked")
+        self.assertEqual(evidence["status"], "pending")
+        self.assertEqual(
+            claim["allowedWording"],
+            "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+        )
+        self.assertIn(pin, " ".join(claim["limitations"]))
+        for universal in ("Every step is traced in Neatlogs.", "Every export was accepted by Neatlogs."):
+            self.assertIn(universal, claim["prohibitedVariants"])
+        mutated = copy.deepcopy(self.claims)
+        row = next(item for item in mutated["claims"] if item["id"] == "CLAIM-SPN-01-NEATLOGS-001")
+        row["reviewStatus"] = "approved"
+        row["reviewDate"] = "2026-10-12"
+        row["source"]["revision"] = pin
+        errors = validate_claims(mutated)
+        self.assertTrue(
+            any("CLAIM-SPN-01-NEATLOGS-001" in item and "cannot be approved" in item for item in errors),
+            errors,
+        )
+
     def test_unavailable_route_cannot_be_approved_as_a_cta(self):
         mutated = copy.deepcopy(self.claims)
         cta = next(item for item in mutated["ctas"] if item["id"] == "CTA-REPOSITORY-DOCS-001")
