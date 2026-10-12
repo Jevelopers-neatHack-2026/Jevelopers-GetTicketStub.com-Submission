@@ -3,7 +3,8 @@
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
-// any skipped check exit nonzero. Each run writes <evidence-dir>/<suite>-<timestamp>.json.
+// any failed/skipped check or missing positive result exit nonzero, even if a child exits 0.
+// Each run writes <evidence-dir>/<suite>-<timestamp>.json.
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:net";
@@ -12,12 +13,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { summarizeCheckResult } from "./lib/check-result.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const guard = join(root, "scripts/lib/fixture-network-guard.mjs");
-/** smoke-server checks that need `next dev`; production answers them differently on purpose. */
-// smoke-server now checks the email preview against the server it talks to, so nothing is excused
-const DEV_ONLY_CHECKS = [];
 const STAFF_EMAIL = "verify-staff@example.com";
 const MEMBER_EMAIL = "verify-member@example.com";
 /** A throwaway issuer key for the finance-context suite: random per run, never the published fixture key. */
@@ -143,18 +142,13 @@ function runNode(nodeArgs, env) {
 async function script(file, fileArgs = [], envExtra = {}) {
   const { code, out } = await runNode([join(root, file), ...fileArgs], childEnv(envExtra));
   process.stdout.write(out);
-  const lines = out.split(/\r?\n/);
-  const passed = lines.filter((l) => /^(ok|PASS)\b/.test(l)).length;
-  const skipped = lines.filter((l) => !/^(ok|PASS)\b/.test(l) && /\bskip(ped)?\b/i.test(l)).length;
-  // Checks that only hold in `next dev`, named exactly; they fail by design against the production server used here.
-  const failLines = lines.filter((l) => /^FAIL\b/.test(l));
-  const expected = failLines.filter((l) => DEV_ONLY_CHECKS.some((name) => l.startsWith(`FAIL ${name}`)));
-  const failed = failLines.length - expected.length;
-  const ok = (code === 0 || (failLines.length > 0 && failed === 0)) && skipped === 0;
-  steps.push({ name: file, command: `node ${file} ${fileArgs.join(" ")}`.trim(), exitCode: code, passed, failed, skipped, ...(expected.length ? { expectedFailures: expected } : {}), ok });
-  if (skipped) console.error(`FAIL ${file}: ${skipped} required check(s) skipped`);
-  if (!ok && code === 0) console.error(`FAIL ${file}: exit 0 but ${failed} failed line(s)`);
-  if (expected.length) console.log(`note ${expected.length} dev-only check(s) failed by design against the production server: ${expected.join("; ")}`);
+  const result = summarizeCheckResult(code, out);
+  steps.push({ name: file, command: `node ${file} ${fileArgs.join(" ")}`.trim(), ...result });
+  if (code !== 0) console.error(`FAIL ${file}: child exited ${code}`);
+  if (result.failed) console.error(`FAIL ${file}: ${result.failed} check(s) failed`);
+  if (result.skipped) console.error(`FAIL ${file}: ${result.skipped} required check(s) skipped`);
+  if (!result.passed) console.error(`FAIL ${file}: no recognized passing check result`);
+  if (result.detail) console.error(`FAIL ${file}: ${result.detail}`);
 }
 
 function freePort() {
