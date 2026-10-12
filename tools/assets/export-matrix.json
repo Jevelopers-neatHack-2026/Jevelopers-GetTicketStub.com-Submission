@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "status": "local-review-only",
+  "release_eligible": false,
+  "approval_reference": null,
+  "approval_blockers": ["BK-02 identity decision (#9)", "BK-06 rights clearance (#7)", "BK-07 technical/provenance/consumer reviewer appointments (#8)"],
+  "png_encoding": "8-bit RGBA, sRGB perceptual intent, no ICC/text/time metadata, straight alpha",
+  "unsupported_formats": ["JPEG", "WebP", "ICO", "PDF", "EPS", "CMYK print separations", "font files"],
+  "vectors": [
+    {"file": "ts-stamp.svg", "kind": "stamp", "backgrounds": ["cream", "ink"], "current_color": false, "knockout": false},
+    {"file": "ts-stamp-mono-orange.svg", "kind": "stamp", "backgrounds": ["cream", "ink"], "current_color": false, "knockout": true},
+    {"file": "ts-stamp-mono-ink.svg", "kind": "stamp", "backgrounds": ["cream"], "current_color": false, "knockout": true},
+    {"file": "ts-stamp-mono-cream.svg", "kind": "stamp", "backgrounds": ["ink"], "current_color": false, "knockout": true},
+    {"file": "ts-stamp-currentcolor.svg", "kind": "stamp", "backgrounds": ["cream", "ink"], "current_color": true, "knockout": true},
+    {"file": "favicon.svg", "kind": "favicon", "backgrounds": ["cream", "ink"], "current_color": false, "knockout": true},
+    {"file": "app-icon.svg", "kind": "app-icon", "backgrounds": ["cream", "ink"], "current_color": false, "knockout": false},
+    {"file": "wordmark.svg", "kind": "wordmark", "backgrounds": ["cream"], "current_color": false, "knockout": false},
+    {"file": "wordmark-cream.svg", "kind": "wordmark", "backgrounds": ["ink"], "current_color": false, "knockout": false},
+    {"file": "wordmark-orange.svg", "kind": "wordmark", "backgrounds": ["cream", "ink"], "current_color": false, "knockout": false},
+    {"file": "wordmark-compact.svg", "kind": "compact-wordmark", "backgrounds": ["cream"], "current_color": false, "knockout": false},
+    {"file": "lockup-horizontal.svg", "kind": "horizontal-lockup", "backgrounds": ["cream"], "current_color": false, "knockout": false},
+    {"file": "lockup-horizontal-mono.svg", "kind": "horizontal-lockup", "backgrounds": ["cream", "ink"], "current_color": true, "knockout": false},
+    {"file": "lockup-stacked.svg", "kind": "stacked-lockup", "backgrounds": ["cream"], "current_color": false, "knockout": false}
+  ],
+  "rasters": [
+    {"source": "favicon.svg", "file": "favicon-16.png", "width": 16, "height": 16, "dpi": 96, "alpha": "transparent", "purpose": "Browser fallback review at 16 CSS px"},
+    {"source": "favicon.svg", "file": "favicon-24.png", "width": 24, "height": 24, "dpi": 96, "alpha": "transparent", "purpose": "Browser fallback review at 24 CSS px"},
+    {"source": "favicon.svg", "file": "favicon-32.png", "width": 32, "height": 32, "dpi": 96, "alpha": "transparent", "purpose": "Browser fallback review at 32 CSS px"},
+    {"source": "app-icon.svg", "file": "app-icon-1024.png", "width": 1024, "height": 1024, "dpi": 96, "alpha": "opaque", "purpose": "Required 1024 px app-icon candidate; no corner mask or app-store submission"}
+  ]
+}

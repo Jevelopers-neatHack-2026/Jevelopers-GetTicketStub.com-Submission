@@ -3,12 +3,18 @@
 Glyphs are shaped with HarfBuzz (so kerning is real) and converted to paths, so the
 SVGs do not depend on any installed font.
 
-    python -m pip install fonttools uharfbuzz
+    python -m pip install --require-hashes -r tools/assets/requirements.txt
     python tools/build_logos.py
+
+See docs/asset-exports.md for the pinned toolchain and local review-only PNGs.
 """
 from __future__ import annotations
 
+import argparse
+import hashlib
 import io
+import json
+from importlib.metadata import version
 from pathlib import Path
 
 import uharfbuzz as hb
@@ -27,6 +33,24 @@ COPPER = "#B4693E"
 CYAN = "#7CC6D2"
 CREAM = "#F4ECDD"
 INK = "#17140F"
+
+
+def verify_inputs(tokens_path: Path = ROOT / "tokens" / "tokens.json") -> None:
+    """Fail before writing if a pinned source or palette literal has drifted.
+
+    The parity check preserves existing SVG bytes. It is not identity approval.
+    """
+    config = json.loads((ROOT / "tools" / "assets" / "toolchain.json").read_text())
+    for package in ("fonttools", "uharfbuzz"):
+        expected = config["python_packages"][package]
+        if version(package) != expected:
+            raise ValueError(f"{package} must be {expected}; use tools/assets/requirements.txt")
+    if hashlib.sha256(FRAUNCES.read_bytes()).hexdigest() != config["font"]["sha256"]:
+        raise ValueError("Fraunces source hash changed; a reviewed source update is required")
+    tokens = json.loads(tokens_path.read_text(encoding="utf-8"))
+    for name, literal in {"orange": ORANGE, "copper": COPPER, "cyan": CYAN, "cream": CREAM, "ink": INK}.items():
+        if tokens["color"][name]["$value"].upper() != literal:
+            raise ValueError(f"Logo palette differs from color.{name}; review before regeneration")
 
 
 class Face:
@@ -107,8 +131,9 @@ def svg(w: float, h: float, body: str, title: str) -> str:
     )
 
 
-def build():
-    OUT.mkdir(exist_ok=True)
+def build(output_dir: Path = OUT):
+    verify_inputs()
+    output_dir.mkdir(parents=True, exist_ok=True)
     mark = Face(FRAUNCES, {"opsz": 144, "wght": 600, "SOFT": 0, "WONK": 0})
     bold = Face(FRAUNCES, {"opsz": 144, "wght": 800, "SOFT": 0, "WONK": 0})
     word = Face(FRAUNCES, {"opsz": 144, "wght": 560, "SOFT": 30, "WONK": 0})
@@ -198,9 +223,11 @@ def build():
         f'<g fill="{INK}" transform="translate({(SWW - WW) / 2:.2f} {sh2 + gapv:.2f})"><path d="{t1}"/>{dots}<path d="{t2}"/></g>', "TicketStub")
 
     for name, body in files.items():
-        (OUT / name).write_text(body, encoding="utf-8")
-        print(f"logo/{name}  {len(body) / 1024:.1f} KB")
+        (output_dir / name).write_text(body, encoding="utf-8")
+        print(f"{name}  {len(body) / 1024:.1f} KB")
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=OUT)
+    build(parser.parse_args().output_dir)

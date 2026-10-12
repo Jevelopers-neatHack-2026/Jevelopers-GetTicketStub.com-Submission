@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TicketStub local import fixture</title>
+<link rel="stylesheet" href="brand-kit/tokens/tokens.css">
+<link rel="stylesheet" href="plain.css">
+<main>
+  <p>Unapproved local brand import fixture. Synthetic interface; no product or release acceptance.</p>
+  <section class="example">
+    <div class="brand-plate"><img src="brand-kit/logo/wordmark.svg" alt="TicketStub" width="200"></div>
+    <h1>Root-theme example</h1><p>Review the source, then choose a next step.</p>
+    <button type="button">Review draft</button>
+  </section>
+  <section class="example ts-night">
+    <h2>Night-stage example</h2><p>This optional section uses the existing night tokens.</p>
+    <button type="button">Review draft</button>
+  </section>
+</main>
+</html>
