@@ -9,7 +9,11 @@ from time import monotonic
 
 import pytest
 
+from component_tests.container_docker import Docker
+from component_tests.container_records import Configuration, Observation
+from component_tests.guarded_active import stop_active
 from component_tests.guarded_git import CONFIG, git_command, minimal_git, verify_git_projection
+from component_tests.guarded_identity import OwnerBinding
 from component_tests.guarded_print import (
     LIMIT,
     GuardedPrint,
@@ -208,3 +212,50 @@ def test_stalled_stdin_obeys_same_absolute_deadline() -> None:
                 _ = client.wait(timeout=5)
                 writer.close()
                 client.stdin = None
+
+
+def test_stale_held_owner_identity_is_rejected_before_any_signal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binding = OwnerBinding(
+        host_owner=Observation(
+            pid=os.getpid(),
+            uid=61002,
+            gid=61002,
+            groups=(61002,),
+            status={},
+            namespaces={},
+            cgroup="controlled-binding",
+            apparmor="docker-default (enforce)",
+        ),
+        host_owner_start_ticks="0",
+        executable_identity=(0, 0),
+        command=("original-node",),
+    )
+    _ = (tmp_path / "print-owner-binding.json").write_text(binding.model_dump_json())
+    signals: list[tuple[int, int]] = []
+
+    def record_signal(descriptor: int, number: int) -> None:
+        signals.append((descriptor, number))
+
+    def stale_fdinfo(path: Path, *, max_bytes: int, deadline: float) -> bytes:
+        assert path.parent == Path("/proc/self/fdinfo")
+        assert max_bytes == 65536
+        assert deadline > monotonic()
+        return f"Pid:\t{os.getpid() + 1}\n".encode()
+
+    monkeypatch.setattr("component_tests.guarded_identity.read_bytes", stale_fdinfo)
+    monkeypatch.setattr("component_tests.guarded_active.send_pidfd_signal", record_signal)
+    configuration = Configuration(
+        producer=tmp_path, directory=tmp_path, name="ie-lifetime-" + "a" * 32
+    )
+    reader, writer = os.pipe()
+    with (
+        os.fdopen(reader, "rb", buffering=0) as handle,
+        os.fdopen(writer, "wb", buffering=0),
+        pytest.raises(AssertionError),
+    ):
+        stop_active(
+            Docker(configuration, monotonic() + 3), "full-id", "test", tmp_path, handle.fileno()
+        )
+    assert signals == []

@@ -10,7 +10,7 @@ from integration_evals.artifacts import load_record, read_bytes
 from integration_evals.execution import Settings
 from integration_evals.models import Catalog, Outcome, Run, Status, Suite
 from integration_evals.print_setup import CONFIGURATION_PATH, PROFILE_PATH
-from integration_evals.processes import TestInvocation
+from integration_evals.processes import TestInvocation as RuntimeInvocation
 from integration_evals.release import audit, export_audit
 from integration_evals.reporting import Tracker, save_run
 from integration_evals.runner import execute
@@ -18,13 +18,13 @@ from integration_evals.specifications import Requirements
 
 
 @pytest.fixture(scope="module")
-def print_invocation() -> TestInvocation | None:
+def print_invocation() -> RuntimeInvocation | None:
     return None
 
 
 @pytest.fixture(scope="module")
 def verified_print_workspace(
-    tmp_path_factory: pytest.TempPathFactory, print_invocation: TestInvocation | None
+    tmp_path_factory: pytest.TempPathFactory, print_invocation: RuntimeInvocation | None
 ) -> Path:
     # Given the original case, original fixture bytes and reviewed source configuration.
     workspace = workspace_at(
@@ -79,7 +79,7 @@ def verified_print_workspace(
     "mutation", ["schema", "hash", "runtime", "case", "mode", "replay", "cleanup-lock", "positive"]
 )
 def test_print_protocol_rejects_unsupported_inputs(
-    verified_print_workspace: Path, mutation: Mutation, print_invocation: TestInvocation | None
+    verified_print_workspace: Path, mutation: Mutation, print_invocation: RuntimeInvocation | None
 ) -> None:
     # Given an exact reviewed owner snapshot and a single scoped protocol change.
     # When the real source command runs under the unchanged evaluator containment.

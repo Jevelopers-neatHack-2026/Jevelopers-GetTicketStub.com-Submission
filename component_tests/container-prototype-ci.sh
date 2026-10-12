@@ -13,6 +13,6 @@ PATH="$(dirname "$node"):$PATH" TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 \
   npm --prefix "$IE_PRINT_SOURCE" run build
 sudo -n env IE_PRINT_CONTAINER_PROTOTYPE=guarded-development \
   IE_PRINT_SOURCE="$IE_PRINT_SOURCE" IE_PRINT_LIFETIME_EVIDENCE="$IE_PRINT_LIFETIME_EVIDENCE" \
-  .venv/bin/python -m pytest component_tests/test_container_prototype.py \
+  .venv/bin/python -m pytest component_tests/test_container_prototype.py component_tests/test_guarded_native.py \
   -o cache_dir="$IE_PRINT_LIFETIME_EVIDENCE/pytest-cache" \
   --junitxml="$IE_PRINT_LIFETIME_EVIDENCE/lifetime-junit.xml"

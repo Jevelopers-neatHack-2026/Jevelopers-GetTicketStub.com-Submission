@@ -16,6 +16,7 @@ from component_tests.container_docker import Docker, prepare
 from component_tests.container_lease import armed_lease
 from component_tests.container_reap import finish, reap_clients
 from component_tests.container_records import Configuration, OwnerReceipt
+from component_tests.container_socket import listen_lease
 
 
 def checkpoint(stage: str, deadline: float, client_pid: int = 0) -> None:
@@ -31,6 +32,19 @@ def cancellation(_number: int, _frame: FrameType | None) -> None:
     raise InterruptedError
 
 
+def controller_error(configuration: Configuration, phase: str, error: BaseException) -> None:
+    _ = (configuration.directory / "controller-error.txt").write_text(type(error).__name__)
+    _ = (configuration.directory / "controller-error.json").write_text(
+        json.dumps(
+            {
+                "phase": phase,
+                "error": type(error).__name__,
+                "errno": error.errno if isinstance(error, OSError) else None,
+            }
+        )
+    )
+
+
 def execute(configuration: Configuration) -> int:
     if not __debug__ or os.environ.get("IE_PRINT_CONTAINER_PROTOTYPE") != "guarded-development":
         raise PermissionError(errno.EPERM, "Guarded development selection required")
@@ -42,15 +56,12 @@ def execute(configuration: Configuration) -> int:
     identity: str | None = None
     clients: list[subprocess.Popen[bytes]] = []
     outcome = "ERROR"
+    phase = "lease-bind"
     try:
         with ExitStack() as stack:
             server = stack.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM))
-            address = configuration.directory / "control/lease"
-            server.bind(str(address))
-            os.chown(address, configuration.guard.uid, configuration.guard.gid)
-            address.chmod(0o600)
-            server.listen(1)
-            server.settimeout(max(0.001, deadline - monotonic()))
+            listen_lease(server, configuration, deadline)
+            phase = "docker-create"
             creation = subprocess.Popen(  # noqa: S603 - reaped after sockets close in finally
                 (docker.executable, *docker.create_arguments()),
                 stdout=subprocess.PIPE,
@@ -64,6 +75,7 @@ def execute(configuration: Configuration) -> int:
             assert (configuration.directory / "cid").read_text().strip() == identity
             _ = (configuration.directory / "owned-id").write_text(identity)
             checkpoint("created", deadline)
+            phase = "docker-start"
             started = subprocess.Popen(  # noqa: S603 - reaped after sockets close in finally
                 (docker.executable, "start", "--attach", identity),
                 stdout=subprocess.DEVNULL,
@@ -71,8 +83,10 @@ def execute(configuration: Configuration) -> int:
             )
             clients.append(started)
             checkpoint("start-attach-client-launched", deadline, started.pid)
+            phase = "lease-attach"
             lease, receipt = stack.enter_context(armed_lease(docker, server, identity))
             checkpoint("lease-armed", deadline)
+            phase = "owner-canary"
             owner_raw = docker.run(
                 (
                     "exec",
@@ -94,7 +108,7 @@ def execute(configuration: Configuration) -> int:
             assert started.wait(timeout=max(0.001, deadline - monotonic())) == 0
             outcome = "LIFETIME_PROBE_COMPLETED"
     except (AssertionError, OSError, subprocess.SubprocessError, ValueError) as error:
-        _ = (configuration.directory / "controller-error.txt").write_text(type(error).__name__)
+        controller_error(configuration, phase, error)
     finally:
         reaper = Docker(configuration, monotonic() + 5)
         if not reap_clients(reaper, clients):

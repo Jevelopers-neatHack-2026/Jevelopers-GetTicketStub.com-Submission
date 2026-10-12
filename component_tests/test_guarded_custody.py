@@ -1,0 +1,81 @@
+"""Real temporary-directory custody under simulated unknown teardown boundaries."""
+
+import errno
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from time import monotonic
+
+import pytest
+
+from component_tests.container_records import Configuration
+from component_tests.guarded_print import GuardedPrint, PrintDocker, reserve_custody
+from integration_evals.artifacts import load_record
+from integration_evals.errors import InvalidArtifactError
+from integration_evals.print_setup import PROFILE_PATH, PrintProfile
+from integration_evals.processes import ProcessSettings
+
+
+@pytest.mark.parametrize("failure", ["expired-budget", "receipt-write", "teardown-write"])
+def test_unknown_teardown_preserves_home_before_expired_budget_and_receipt_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    directory = tmp_path / "retained"
+    directory.mkdir(mode=0o700)
+    _ = (directory / "pre-dispatch.json").write_bytes(b"{}")
+    profile = load_record(Path(__file__).resolve().parents[1] / PROFILE_PATH, PrintProfile)
+    output = BytesIO(b"original-capture")
+    original_write = Path.write_text
+
+    def fail_receipt(
+        path: Path,
+        data: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        if path.name == "invocation.json":
+            raise OSError(errno.ENOSPC, "controlled receipt write failure")
+        return original_write(path, data, encoding=encoding, errors=errors, newline=newline)
+
+    def unknown_finish(docker: PrintDocker, *_: object, **_unused: object) -> bool:
+        assert docker.deadline < monotonic(), "Regression must exhaust the reap budget"
+        if failure == "teardown-write":
+            raise OSError(errno.ENOSPC, "controlled teardown diagnostic write failure")
+        return False
+
+    def prepared(*_: object) -> tuple[PrintDocker, dict[str, str], PrintProfile]:
+        return docker, {}, profile
+
+    def no_run(*_: object) -> None:
+        return
+
+    def reaped(*_: object) -> bool:
+        return True
+
+    with TemporaryDirectory(dir=tmp_path) as disposable:
+        home = Path(disposable) / "home"
+        home.mkdir()
+        _ = (home / "owner-artifact").write_bytes(b"retained-original-bytes")
+        config = Configuration(
+            producer=tmp_path, directory=directory, name="ie-lifetime-" + "a" * 32
+        )
+        docker = PrintDocker(config, monotonic() + 30, tmp_path, tmp_path, home)
+        reserve_custody(docker)
+        monkeypatch.setattr(GuardedPrint, "prepare", prepared)
+        monkeypatch.setattr(GuardedPrint, "run", no_run)
+        monkeypatch.setattr("component_tests.guarded_print.monotonic", lambda: -100)
+        monkeypatch.setattr("component_tests.guarded_print.reap_clients", reaped)
+        monkeypatch.setattr("component_tests.guarded_print.finish", unknown_finish)
+        if failure == "receipt-write":
+            monkeypatch.setattr(Path, "write_text", fail_receipt)
+        settings = ProcessSettings(tmp_path, {}, b"", output, 30, writable_directory=home)
+        with pytest.raises(InvalidArtifactError if failure == "expired-budget" else OSError):
+            _ = GuardedPrint(tmp_path, directory)(("original-owner",), settings)
+        assert not home.exists()
+        assert output.getvalue() == b"original-capture"
+    assert not Path(disposable).exists()
+    assert (
+        directory / "quarantined-home/owner-artifact"
+    ).read_bytes() == b"retained-original-bytes"
+    assert (directory / "invocation.json").exists() is (failure == "expired-budget")

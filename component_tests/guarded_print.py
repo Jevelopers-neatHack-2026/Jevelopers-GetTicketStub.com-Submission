@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic, sleep
@@ -20,6 +21,7 @@ from component_tests.container_binding import bind_owner
 from component_tests.container_docker import Docker, prepare
 from component_tests.container_facts import facts
 from component_tests.container_lease import armed_lease
+from component_tests.container_pidfd import open_pidfd
 from component_tests.container_prototype import checkpoint
 from component_tests.container_reap import finish, reap_clients
 from component_tests.container_records import (
@@ -29,8 +31,10 @@ from component_tests.container_records import (
     Record,
     require_role,
 )
+from component_tests.container_socket import listen_lease
 from component_tests.guarded_active import stop_active
 from component_tests.guarded_git import verify_git_projection
+from component_tests.guarded_identity import OwnerBinding, authenticate_owner, start_ticks
 from integration_evals.artifacts import digest, read_bytes
 from integration_evals.contracts import runtime_digest
 from integration_evals.errors import InvalidArtifactError, fail
@@ -81,6 +85,22 @@ def own_tree(path: Path, uid: int, gid: int) -> None:
             os.chown(base / name, uid, gid, follow_symlinks=False)
 
 
+def reserve_custody(docker: "PrintDocker") -> None:
+    """Reserve a same-filesystem owned destination before any namespace dispatch."""
+    destination = docker.configuration.directory / "quarantined-home"
+    destination.mkdir(mode=0o700)
+    assert destination.stat().st_dev == docker.home.stat().st_dev
+    assert destination.stat().st_uid == os.getuid()
+
+
+def preserve_home(docker: "PrintDocker") -> None:
+    """Atomically retain original HOME before fallible receipts or caller disposal."""
+    try:
+        _ = docker.home.replace(docker.configuration.directory / "quarantined-home")
+    except OSError as error:
+        fail("guarded_print_custody_unknown", type(error).__name__)
+
+
 @dataclass(frozen=True, slots=True)
 class PrintDocker(Docker):
     checkout: Path
@@ -129,7 +149,7 @@ def bind_print_owner(
     identity: str,
     command: tuple[str, ...],
     expected_environment: dict[str, str],
-) -> None:
+) -> int:
     raw = PrintOwnerReceipt.model_validate_json(
         owner_record(docker.configuration.directory, "owner-start.json", docker.deadline)
     )
@@ -175,20 +195,40 @@ def bind_print_owner(
     assert raw.host_read_denied is True
     assert raw.network_errno in (101, 113)
     assert len(raw.tamper) == 10
-    _ = (docker.configuration.directory / "print-owner-binding.json").write_text(
-        json.dumps(
-            {
-                "full_id": identity,
-                "host_owner": owner.model_dump(),
-                "container_owner": receipt.model_dump(),
-                "command": argv,
-                "executable_sha256": runtime_digest(Path(command[0])),
-                "environment": environment,
-                "security_probes": raw.model_dump(),
-            },
-            indent=2,
+    with os.fdopen(open_pidfd(owner.pid), "rb", buffering=0) as handle:
+        observed = (process / "exe").stat()
+        binding = OwnerBinding(
+            host_owner=owner,
+            host_owner_start_ticks=start_ticks(owner.pid, docker.deadline),
+            executable_identity=(observed.st_dev, observed.st_ino),
+            command=command,
         )
-    )
+        _ = authenticate_owner(
+            binding, handle.fileno(), docker.configuration.owner, docker.deadline
+        )
+        _ = (docker.configuration.directory / "print-owner-binding.json").write_text(
+            json.dumps(
+                {
+                    "full_id": identity,
+                    **binding.model_dump(),
+                    "held_pidfd": {
+                        "target": str(Path(f"/proc/self/fd/{handle.fileno()}").readlink()),
+                        "fdinfo": read_bytes(
+                            Path(f"/proc/self/fdinfo/{handle.fileno()}"),
+                            max_bytes=65536,
+                            deadline=docker.deadline,
+                        ).decode(),
+                        "inheritable": os.get_inheritable(handle.fileno()),
+                    },
+                    "container_owner": receipt.model_dump(),
+                    "executable_sha256": runtime_digest(Path(command[0])),
+                    "environment": environment,
+                    "security_probes": raw.model_dump(),
+                },
+                indent=2,
+            )
+        )
+        return os.dup(handle.fileno())
 
 
 @dataclass(slots=True)
@@ -345,6 +385,7 @@ class GuardedPrint:
         verify_tree(checkout)
         verify_tree(home)
         prepare(config)
+        reserve_custody(docker)
         _ = (config.directory / "pre-dispatch.json").write_text(
             json.dumps(
                 {
@@ -366,6 +407,10 @@ class GuardedPrint:
                             "component_tests/guarded_print.py",
                             "component_tests/guarded_owner.py",
                             "component_tests/guarded_git.py",
+                            "component_tests/guarded_active.py",
+                            "component_tests/guarded_compose_probe.py",
+                            "component_tests/guarded_identity.py",
+                            "component_tests/container_socket.py",
                             "src/integration_evals/artifacts.py",
                             "src/integration_evals/validation.py",
                             "src/integration_evals/print_setup.py",
@@ -420,12 +465,8 @@ class GuardedPrint:
         config = docker.configuration
         deadline = docker.deadline
         launch = config.directory / "launch"
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-            address = config.directory / "control/lease"
-            server.bind(str(address))
-            os.chown(address, config.guard.uid, config.guard.gid)
-            address.chmod(0o600)
-            server.listen(1)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server, ExitStack() as handles:
+            listen_lease(server, config, deadline)
             creation = subprocess.Popen(  # noqa: S603 - fixed isolated Docker argv
                 (docker.executable, *docker.create_arguments()),
                 stdout=subprocess.PIPE,
@@ -481,7 +522,13 @@ class GuardedPrint:
                 self.event("exec-client-launched", docker, state, client.pid)
                 wait_owner(client, config.directory, deadline)
                 self.event("exec-attached", docker, state, client.pid)
-                bind_print_owner(docker, state.identity, command, environment)
+                owner_handle = handles.enter_context(
+                    os.fdopen(
+                        bind_print_owner(docker, state.identity, command, environment),
+                        "rb",
+                        buffering=0,
+                    )
+                )
                 bind_owner(
                     docker,
                     state.identity,
@@ -493,7 +540,11 @@ class GuardedPrint:
                 callback = (
                     (
                         lambda: self.compose_active(
-                            docker, state, client.pid, environment["IE_NAMESPACE"]
+                            docker,
+                            state,
+                            client.pid,
+                            environment["IE_NAMESPACE"],
+                            owner_handle.fileno(),
                         )
                     )
                     if self.compose_checkpoint
@@ -514,11 +565,16 @@ class GuardedPrint:
             assert started.wait(timeout=max(0.001, deadline - monotonic())) == 0
 
     def compose_active(
-        self, docker: PrintDocker, state: InvocationState, client_pid: int, namespace: str
+        self,
+        docker: PrintDocker,
+        state: InvocationState,
+        client_pid: int,
+        namespace: str,
+        owner_descriptor: int,
     ) -> None:
 
         assert state.identity is not None
-        stop_active(docker, state.identity, namespace, docker.home)
+        stop_active(docker, state.identity, namespace, docker.home, owner_descriptor)
         self.event("compose-active", docker, state, client_pid)
 
     def __call__(self, command: tuple[str, ...], settings: ProcessSettings) -> int:
@@ -527,6 +583,11 @@ class GuardedPrint:
         )
         config = docker.configuration
         home = docker.home
+        pre_dispatch_sha256 = digest(
+            read_bytes(
+                config.directory / "pre-dispatch.json", max_bytes=65536, deadline=docker.deadline
+            )
+        )
         state = InvocationState()
         failure: BaseException | None = None
         try:
@@ -542,21 +603,20 @@ class GuardedPrint:
             failure = error
         finally:
             reaper = PrintDocker(config, monotonic() + 5, docker.checkout, docker.repository, home)
-            clients_reaped = reap_clients(reaper, state.clients)
-            stopped = finish(reaper, state.identity, completed=failure is None)
+            stopped = False
+            try:
+                clients_reaped = reap_clients(reaper, state.clients)
+                stopped = finish(reaper, state.identity, completed=failure is None)
+            finally:
+                if not stopped:
+                    preserve_home(reaper)
             receipt = {
                 "backend": "guarded-print-development",
                 "acceptance": "blocked",
                 "full_id": state.identity,
                 "command": command,
                 "request_sha256": digest(settings.payload),
-                "pre_dispatch_sha256": digest(
-                    read_bytes(
-                        config.directory / "pre-dispatch.json",
-                        max_bytes=65536,
-                        deadline=reaper.deadline,
-                    )
-                ),
+                "pre_dispatch_sha256": pre_dispatch_sha256,
                 "source_revision": profile.revision,
                 "source_tree": profile.tree,
                 "roles": {"guard": config.guard.model_dump(), "owner": config.owner.model_dump()},
@@ -571,8 +631,6 @@ class GuardedPrint:
                 "error": type(failure).__name__ if failure else None,
             }
             _ = (config.directory / "invocation.json").write_text(json.dumps(receipt, indent=2))
-            if not stopped:
-                _ = home.rename(config.directory / "quarantined-home")
             if stopped:
                 own_tree(docker.checkout, 0, 0)
             if not clients_reaped or not stopped:

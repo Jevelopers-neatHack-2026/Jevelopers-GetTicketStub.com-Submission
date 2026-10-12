@@ -202,7 +202,11 @@ probes, a host-only read probe and a real denied network connection. A detached
 closed-stdio sibling occupies the same namespace as the original Node command.
 Additional SIGKILL tests pause the creator at Docker exec launch, attach, the
 real original owner awaiting its request, and an unfinished actual compose.
-The latter authenticates the original Node PID, stops it through its kernel pidfd,
+The latter holds the original Node pidfd from initial authenticated binding before
+request delivery. Before every signal it checks that held handle, start time,
+executable inode/argv, role, namespace and cgroup; it never reopens a stored numeric
+PID to signal it. A rejected stale identity sends zero signals. It stops that Node
+through the held pidfd,
 and uses a readonly observer as the same nonroot container user. An explicit SQLite
 read transaction must observe the original request-bound compose operation,
 pending attempt and its `execution_started` event; actual opened DB/WAL/SHM
@@ -215,7 +219,20 @@ survive. This additional active-compose proof is required but has not yet run on
 hosted Linux. Cancellation, original deadline and unreachable teardown tests preserve
 errors. If termination/removal cannot be verified, the original HOME is renamed
 into root-owned quarantine without copying or publishing its response, and all
-unknown-container records remain intact for independent recovery.
+unknown-container records remain intact for independent recovery. A same-device
+check reserves the empty protected destination before dispatch. Atomic preservation
+runs in a `finally` before any receipt work, even after an expired reap budget or
+failed teardown diagnostic write. The predispatch digest is cached before execution;
+a failed invocation-receipt write cannot skip quarantine. Failed preservation has
+its own custody error and is never reported as successful.
+
+The protected filesystem socket is bound through a held nofollow/CLOEXEC control
+directory descriptor and the short `/proc/self/fd/N/lease` pathname. The same inode
+remains under the exact readonly control mount, with original peer/EOF/UID checks
+and 0700/0600 permissions. This avoids Linux AF_UNIX pathname limits for long
+staging roots without an abstract socket. A real Linux long-root regression checks
+the filesystem inode, permissions and EOF; a separate real pidfd regression rejects
+a stale binding before any signal.
 
 Owner-writable control receipts use bounded nonblocking nofollow regular-file
 reads. Stdin and stdout share one nonblocking selector and absolute deadline;
@@ -226,6 +243,16 @@ with three bounded 180-second pulls and records each failed attempt. Its 30-minu
 setup/test job budget leaves all 30-second owner and five-second reap bounds intact.
 The earlier combined run `38238794152` was cancelled during image pull before any
 guarded tests executed; it establishes neither success nor runtime failure.
+The next frozen `c5fe871` dispatch failed all nine lifecycles before Docker creation
+with controller `OSError`, consistent with its 108-byte lease pathname. Its sixteen
+guarded cases did not run. The same head's legacy job reached thirteen-item test
+collection and failed on an imported `TestInvocation` protocol warning, before
+print assertions; the apt warning was nonfatal. Aliasing that import restores clean
+collection with warnings still treated as errors. These failures remain historical
+evidence; neither proves a current producer protocol or nested Bubblewrap result.
+The combined script now executes and retains both suites independently and exits
+nonzero if either fails. Sanitized controller failures retain phase, error class
+and errno only.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,
