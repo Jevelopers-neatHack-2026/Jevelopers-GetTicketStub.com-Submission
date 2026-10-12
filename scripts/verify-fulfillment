@@ -181,7 +181,7 @@ const blockers = [
 ];
 const securityBlockers = [
   "accepted shared-contracts SC8 artifact and pin are missing",
-  "encrypted scoped storage, key management, retention execution, and deletion audit are not implemented",
+  "encrypted scoped storage, retention execution, and deletion audit are not implemented; the tombstone fingerprint keyring has no provisioned server-side key source",
   "a production server-side secret manager and credential-rotation evidence are unavailable",
   "DNS-pinned asset transport, TLS peer enforcement, redirect cleanup, and production host policy are injected-port requirements only",
   "durable callback replay storage and a selected provider's documented authenticity method are unavailable",

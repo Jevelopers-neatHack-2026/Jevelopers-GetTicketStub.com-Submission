@@ -19,6 +19,13 @@ export const PRODIGI_SANDBOX_BASE_URL = "https://api.sandbox.prodigi.com/v4.0" a
 
 export type SandboxOperation = "quote" | "submit" | "status";
 
+/**
+ * Identifier the offline-tested Prodigi v4 sandbox adapter presents to the
+ * policy. Only a request naming this adapter can reach `sandbox_call_permitted`;
+ * every other request keeps the prerequisites-only result.
+ */
+export const PRODIGI_SANDBOX_ADAPTER_ID = "prodigi-v4-sandbox" as const;
+
 export interface SandboxRoute {
   readonly method: "GET" | "POST";
   readonly path: string;
@@ -80,6 +87,13 @@ export const PROVIDER_ENVIRONMENT_MATRIX = deepFreeze({
       selectedDestinationCountryCode: null,
       selectedShippingMethod: null,
       productAndDestinationSuitability: "pending print-production owner decision",
+      sandboxAdapter: {
+        adapterId: PRODIGI_SANDBOX_ADAPTER_ID,
+        implementation: "offline_fixture_tested",
+        accountTested: false,
+        callPermittedWhen: "evaluateProviderPolicy returns sandbox_call_permitted: the request names this adapter, uses the sandbox host and credential class, and an injected verifier confirms the owner decision.",
+        details: "Quote, order-create and order-read adapter covered by synthetic fixtures only. No request has been sent to Prodigi; per-operation implementation and accountTested fields stay unchanged until sandbox evidence exists."
+      },
       documentation: {
         checkedAt,
         revision: "unknown",
@@ -145,6 +159,8 @@ export interface ProviderPolicyInput {
   readonly destinationCountryCode?: unknown;
   readonly shippingMethod?: unknown;
   readonly decisionReference?: unknown;
+  /** Names the calling adapter. Only `PRODIGI_SANDBOX_ADAPTER_ID` can be permitted. */
+  readonly adapterId?: unknown;
 }
 
 export interface SandboxDecisionRequest {
@@ -189,13 +205,15 @@ export type ProviderPolicyReason =
 
 export interface ProviderPolicyAssessment {
   readonly schemaVersion: "fulfillment-provider-policy-assessment/1";
-  readonly status: "simulated_offline" | "blocked" | "sandbox_prerequisites_verified";
+  readonly status: "simulated_offline" | "blocked" | "sandbox_prerequisites_verified" | "sandbox_call_permitted";
   readonly mode: "simulated" | "sandbox" | null;
   readonly providerId: "deterministic-simulator" | "prodigi" | null;
   readonly sandboxPreconditionsSatisfied: boolean;
   readonly sandboxRoute: SandboxRoute | null;
-  readonly providerAdapterImplemented: false;
-  readonly providerCallPermitted: false;
+  /** True only for `sandbox_call_permitted`. */
+  readonly providerAdapterImplemented: boolean;
+  /** True only for `sandbox_call_permitted`; the policy itself still makes no request. */
+  readonly providerCallPermitted: boolean;
   readonly networkRequests: 0;
   readonly credentialReads: 0;
   readonly secretMaterialReturned: false;
@@ -211,7 +229,8 @@ const INPUT_KEYS = new Set([
   "sku",
   "destinationCountryCode",
   "shippingMethod",
-  "decisionReference"
+  "decisionReference",
+  "adapterId"
 ]);
 
 function readPlainDataRecord(value: unknown): Record<string, unknown> | undefined {
@@ -247,8 +266,8 @@ function assessment(
     providerId,
     sandboxPreconditionsSatisfied,
     sandboxRoute,
-    providerAdapterImplemented: false,
-    providerCallPermitted: false,
+    providerAdapterImplemented: status === "sandbox_call_permitted",
+    providerCallPermitted: status === "sandbox_call_permitted",
     networkRequests: 0,
     credentialReads: 0,
     secretMaterialReturned: false,
@@ -314,7 +333,7 @@ export async function evaluateProviderPolicy(
     if (providerId !== "deterministic-simulator") {
       return assessment("blocked", "simulated", null, false, ["provider_not_supported"]);
     }
-    if ("endpoint" in fields || "credentialClass" in fields) {
+    if ("endpoint" in fields || "credentialClass" in fields || "adapterId" in fields) {
       return assessment("blocked", "simulated", "deterministic-simulator", false, ["simulated_mode_must_be_offline"]);
     }
     return assessment("simulated_offline", "simulated", "deterministic-simulator", false, []);
@@ -322,6 +341,9 @@ export async function evaluateProviderPolicy(
 
   if (fields.providerId !== "prodigi") {
     return assessment("blocked", "sandbox", null, false, ["provider_not_supported"]);
+  }
+  if (fields.adapterId !== undefined && fields.adapterId !== PRODIGI_SANDBOX_ADAPTER_ID) {
+    return assessment("blocked", "sandbox", "prodigi", false, ["invalid_configuration"]);
   }
   const endpointFailure = validSandboxEndpoint(fields.endpoint);
   if (endpointFailure !== undefined) {
@@ -392,6 +414,9 @@ export async function evaluateProviderPolicy(
     return assessment("blocked", "sandbox", "prodigi", false, ["decision_does_not_match_request"]);
   }
 
+  if (fields.adapterId === PRODIGI_SANDBOX_ADAPTER_ID) {
+    return assessment("sandbox_call_permitted", "sandbox", "prodigi", true, [], PRODIGI_SANDBOX_OPERATION_ENDPOINTS[operation]);
+  }
   return assessment(
     "sandbox_prerequisites_verified",
     "sandbox",

@@ -58,6 +58,7 @@ export type {
 } from "./attempt-store.js";
 export {
   evaluateProviderPolicy,
+  PRODIGI_SANDBOX_ADAPTER_ID,
   PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_OPERATION_ENDPOINTS,
   PROVIDER_ENVIRONMENT_MATRIX
@@ -187,3 +188,84 @@ export type {
   PngObservedFormat,
   PngPhysicalResolution
 } from "./png-inspection.js";
+export {
+  createEnvServerSecretSource,
+  PRODIGI_SANDBOX_SECRET_BINDING,
+  SecretResolverError
+} from "./prodigi-secrets.js";
+export type {
+  CredentialClass,
+  EnvSecretSourceOptions,
+  SecretReferenceBinding,
+  SecretResolverErrorCode
+} from "./prodigi-secrets.js";
+export {
+  createFetchProdigiHttpPort,
+  createProdigiQuotePort,
+  mapOrderRequest,
+  mapQuoteRequest,
+  PRODIGI_SANDBOX_ORIGIN,
+  ProdigiSandboxClient,
+  ProdigiSandboxError,
+  projectOrderResponse,
+  projectQuoteResponse,
+  toProdigiShippingMethod,
+  toStatusResult
+} from "./prodigi-sandbox.js";
+export type {
+  ProdigiHttpPort,
+  ProdigiHttpRequest,
+  ProdigiHttpResponse,
+  ProdigiOrderCreateInput,
+  ProdigiOrderItemInput,
+  ProdigiOrderObservation,
+  ProdigiOrderRecipientInput,
+  ProdigiOrderStage,
+  ProdigiProviderQuote,
+  ProdigiQuoteMappingConfig,
+  ProdigiQuoteShippingMethod,
+  ProdigiSandboxClientOptions,
+  ProdigiSandboxDecision,
+  ProdigiSandboxErrorCode,
+  ProdigiShippingMethod,
+  ProdigiSideEffectState,
+  ProdigiSizing,
+  ProdigiStepState
+} from "./prodigi-sandbox.js";
+export {
+  createInMemoryProdigiReconciliationStore,
+  createProdigiReadLimiter,
+  decideProdigiOrdering,
+  isProdigiOrderCallbackType,
+  PRODIGI_CALLBACK_EVENT_TYPES,
+  PRODIGI_ORDER_CALLBACK_TYPE_PREFIX,
+  PRODIGI_SANDBOX_CALLBACK_SOURCE,
+  parseProdigiCallbackEvent,
+  ProdigiCallbackError,
+  ProdigiCallbackReconciler
+} from "./prodigi-callbacks.js";
+export type {
+  ProdigiCallbackErrorCode,
+  ProdigiCallbackHint,
+  ProdigiCallbackOutcome,
+  ProdigiCallbackReconcilerOptions,
+  ProdigiCallbackResult,
+  InMemoryProdigiReconciliationStore,
+  ProdigiOrderingDecision,
+  ProdigiOrderReader,
+  ProdigiPollPolicy,
+  ProdigiAbandonReason,
+  ProdigiJobRetryPolicy,
+  ProdigiPendingReconciliation,
+  ProdigiReconcileAbandonedEvent,
+  ProdigiReadLimiter,
+  ProdigiReconcileErrorCode,
+  ProdigiReconcileJob,
+  ProdigiReconcileResult,
+  ProdigiReconcileStatus,
+  ProdigiReconciliationScheduler,
+  ProdigiScheduledRunResult,
+  ProdigiScheduledRunStatus,
+  ProdigiReconciledOrderState,
+  ProdigiReconciliationStore
+} from "./prodigi-callbacks.js";
