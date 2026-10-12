@@ -7,7 +7,7 @@ import { getStub, upsertStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
 import { CartLineSpec } from "@/customer/studio/editor/MaterialPicker";
 import { PageShell, EmptyState, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
-import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
+import { AfterPay, PayResumeNote, ReceiptField, askToSignIn, useReceiptEmail } from "@/customer/account/Receipt";
 import { useOrderFlow } from "@/customer/account/useOrderFlow";
 import { CART_EVENT, SANDBOX_LABEL, billableSeats, cartItemState, cartMarks, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
@@ -85,7 +85,13 @@ export default function CartClient() {
   const blocked = items.map((i) => orderGate(variantFor(i.material, i.size, i.finish), mode)).find((g) => !g.ok);
   const hold = stale.length > 0 ? `${stale.length === 1 ? "One stub needs" : `${stale.length} stubs need`} you to choose again before you can pay.` : blocked && !blocked.ok ? blocked.message : "";
 
+  // Signed out, Pay opens the sign-in sheet first; "Continue as guest" (or being signed in) goes straight on.
   function pay() {
+    if (paid) return;
+    if (!hold && !receipt.problem && askToSignIn(receipt, placeAsGuest)) return;
+    placeAsGuest();
+  }
+  function placeAsGuest() {
     if (paid) return;
     if (!checkoutBegun.current) {
       checkoutBegun.current = true;
@@ -223,6 +229,7 @@ export default function CartClient() {
                 <SourceMark p="estimated" />. A quote is not a charge. Prices are sandbox fixtures, not printer quotes · capability map {CAPABILITY_VERSION}.
               </p>
               {paid ? null : <ReceiptField id="cart-email" r={receipt} error={emailError === hold ? "" : emailError} onChange={() => setEmailError("")} />}
+              {paid ? null : <PayResumeNote r={receipt} />}
               {hold && !paid ? (
                 <p className={ui.err} data-announce>
                   {hold}

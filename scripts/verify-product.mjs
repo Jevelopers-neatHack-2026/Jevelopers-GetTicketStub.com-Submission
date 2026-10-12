@@ -1,5 +1,5 @@
 // One entry point for the product checks, with evidence.
-//   npm run verify:product -- --suite <foundation|access|approval|order-auth|research|creative|review|capabilities|messages|a11y|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
+//   npm run verify:product -- --suite <foundation|access|approval|order-auth|research|creative|review|capabilities|messages|a11y|pay-signin|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
@@ -42,6 +42,8 @@ const SUITES = {
   messages: { server: false, needs: ["scripts/check-messages.mjs", "src/customer/feedback-messages/messages.ts"], run: () => script("scripts/check-messages.mjs") },
   // GT-11: axe-core, overflow, keyboard, dialog focus and reduced motion in a real headless Chrome (needs Chrome or Edge, or CHROME_PATH).
   a11y: { server: true, needs: [".next/BUILD_ID", "scripts/check-a11y.mjs", "scripts/lib/cdp.mjs", "scripts/lib/contrast.mjs", "node_modules/axe-core/axe.min.js"], run: (ctx) => script("scripts/check-a11y.mjs", [ctx.base, evidenceDir]) },
+  // Pay while signed out opens the sign-in sheet (Continue as guest, link, resume on the pay step), in real headless Chrome.
+  "pay-signin": { server: true, needs: [".next/BUILD_ID", "scripts/check-pay-signin.mjs", "scripts/lib/cdp.mjs"], run: (ctx) => script("scripts/check-pay-signin.mjs", [ctx.base, evidenceDir]) },
   production: { server: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: (ctx) => script("scripts/smoke-production.mjs", [], { SMOKE_BASE_URL: ctx.base }) },
   // Storage that cannot be written: the server starts with TICKETSTUB_DB under a file, so every OS refuses it.
   degraded: { server: true, unwritableStorage: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: degraded },

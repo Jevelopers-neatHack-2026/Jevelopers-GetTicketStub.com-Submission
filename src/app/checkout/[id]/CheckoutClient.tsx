@@ -9,7 +9,7 @@ import { getStub, upsertStub } from "@/customer/studio/store";
 import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/studio/types";
 import { PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
 import { formatDate } from "@/customer/pages/share";
-import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
+import { AfterPay, PayResumeNote, ReceiptField, askToSignIn, useReceiptEmail } from "@/customer/account/Receipt";
 import { useOrderFlow } from "@/customer/account/useOrderFlow";
 import { FINISHES, SANDBOX_LABEL, cartItemFromStub, finishMarks, finishPrices, gateFor, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, HOLO_WORDS, SIZE_COPY, statusMark } from "@/customer/pages/capabilities";
@@ -101,7 +101,13 @@ export default function CheckoutClient({ id }: { id: string }) {
     );
   }
 
+  // Signed out, Pay opens the sign-in sheet first; "Continue as guest" (or being signed in) goes straight on.
   function pay() {
+    if (!stub || !draft || paid) return;
+    if (gate.ok && !expired && !receipt.problem && askToSignIn(receipt, placeAsGuest)) return;
+    placeAsGuest();
+  }
+  function placeAsGuest() {
     if (!stub || !draft || paid) return;
     if (!gate.ok) {
       flow("checkout_invalid", { reason: "variant_blocked" });
@@ -256,6 +262,8 @@ export default function CheckoutClient({ id }: { id: string }) {
           </div>
 
           {paid ? null : <ReceiptField id="co-email" r={receipt} error={receipt.problem && error === receipt.problem ? error : ""} onChange={() => setError("")} />}
+
+          {paid ? null : <PayResumeNote r={receipt} />}
 
           <div className={s.actions}>
             {paid ? (
