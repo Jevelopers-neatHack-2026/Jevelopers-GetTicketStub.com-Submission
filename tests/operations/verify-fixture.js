@@ -13,6 +13,8 @@ import {
 } from './failure-diagnostics.js';
 import { validateOps04PublicPhaseMetrics } from './ops04-failure-diagnostics.js';
 import { parseOperationsCaptureFromTap } from '../../src/internal/private-ops-diagnostics.js';
+import { parseC04CompletionFromTap } from './fixture-recovery-diagnostics.js';
+import { parseFixtureAttemptArtifacts } from './fixture-attempt-artifacts.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const OPS12_RECOVERY_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS12_RECOVERY_DIAGNOSTIC ';
@@ -256,6 +258,8 @@ const tapText = `${testResult.stdout ?? ''}${testResult.stderr ?? ''}`;
 const tapSummary = parseTAP(tapText);
 const tapArtifact = writeArtifact(join(artifactDirectory, `${stem}.tap`), Buffer.from(safeTap(tapText), 'utf8'));
 const ops07CaptureResult = parseOps07Capture(tapText);
+const c04Completion = parseC04CompletionFromTap(tapText);
+const fixtureAttempts = parseFixtureAttemptArtifacts(tapText);
 let metrics = null;
 try {
   metrics = JSON.parse(readFileSync(metricsPath, 'utf8'));
@@ -449,6 +453,10 @@ const diagnosticsValue = {
   ops07Capture: ops07CaptureResult.valid
     ? { valid: true, capture: ops07CaptureResult.capture }
     : { valid: false, reason: ops07CaptureResult.reason },
+  c04Completion: c04Completion.valid
+    ? { valid: true, diagnostic: c04Completion.diagnostic }
+    : { valid: false, reason: c04Completion.reason },
+  fixtureAttempts,
   records: diagnosticRecords.slice(0, 32)
 };
 const diagnosticsBytes = Buffer.from(`${JSON.stringify(diagnosticsValue, null, 2)}\n`, 'utf8');
@@ -596,6 +604,7 @@ const manifest = {
   artifacts: { tap: tapArtifact, diagnostics: diagnosticsArtifact, diagnosticsSidecar: diagnosticsSidecarArtifact },
   passed: resultCode === 0 && tapSummary.complete && tapSummary.skippedCount === 0
     && ops07CaptureResult.valid && ops07CaptureResult.capture.flags.complete
+    && c04Completion.valid && fixtureAttempts.complete
     && allNetworkCallCountsZero && resourceMetricsComplete
     && artifactMembersIntegrity && jsonlMembersIncludedInUpload && diagnosticsIncludedInUpload && requiredEvidenceSetComplete
     && (fixture !== 'runbook-clean-start' || (runbookCode === 0 && runbookArtifact !== null
