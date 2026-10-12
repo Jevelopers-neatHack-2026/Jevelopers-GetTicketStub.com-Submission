@@ -1,5 +1,5 @@
 // One entry point for the product checks, with evidence.
-//   npm run verify:product -- --suite <foundation|access|research|creative|review|capabilities|messages|a11y|download|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
+//   npm run verify:product -- --suite <foundation|access|approval|research|creative|review|capabilities|messages|a11y|download|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
@@ -25,6 +25,8 @@ const MEMBER_EMAIL = "verify-member@example.com";
 const SUITES = {
   foundation: { server: true, needs: [".next/BUILD_ID"], run: foundation },
   access: { server: true, needs: [".next/BUILD_ID", "scripts/smoke-server.mjs"], run: (ctx) => script("scripts/smoke-server.mjs", [ctx.base], { SMOKE_ADMIN_EMAIL: STAFF_EMAIL }) },
+  // GT-06B: the artwork approval and its verifier (two accounts, stale, revoke, 404 parity, Origin, fixtures), against the production build.
+  approval: { server: true, needs: [".next/BUILD_ID", "scripts/check-approval.mjs", "fixtures/approval/index.json", "fixtures/approval/verify.mjs"], run: (ctx) => script("scripts/check-approval.mjs", [ctx.base]) },
   research: { server: false, needs: ["scripts/smoke-ticketmaster.mjs", "scripts/fixtures/ticketmaster-discovery-event.json"], run: () => script("scripts/smoke-ticketmaster.mjs") },
   creative: { server: false, needs: ["scripts/check-creative-adapter.mjs", "src/customer/studio/creative/fixtures"], run: () => script("scripts/check-creative-adapter.mjs") },
   review: { server: false, needs: ["scripts/check-review-versions.mjs", "src/customer/studio/facts/corrections.ts"], run: () => script("scripts/check-review-versions.mjs") },
@@ -325,6 +327,10 @@ async function degraded(ctx) {
     ["POST", "/api/share", { stub: {} }],
     ["GET", "/api/share/abcdefghijkl"],
     ["POST", "/api/share/revoke", { stubId: "s1" }],
+    ["POST", "/api/approvals", { stubId: "s1", purpose: "print.compose", expectedVersionId: "v1" }],
+    ["GET", "/api/approvals?project=stub:s1"],
+    ["POST", "/api/approvals/revoke", { stubId: "s1", approvalId: "apr_x" }],
+    ["POST", "/api/approvals/verify", { token: "x", expect: {} }],
     ["POST", "/api/orders", { order: {} }],
     ["GET", "/api/orders"],
     ["POST", "/api/organizer/events", { title: "x" }],

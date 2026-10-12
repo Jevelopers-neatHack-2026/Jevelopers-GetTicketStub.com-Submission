@@ -8,7 +8,7 @@ import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
 import { EVENT_RETENTION_MS, EVENT_SCHEMA, type StoredEvent, type TicketstubEvent } from "./events";
 import { migrate } from "./migrations";
-import type { Account, AccountState, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, GiftView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
+import type { Account, AccountState, ApprovalRow, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, GiftView, LoginLinkRecord, NewApproval, NewClaim, Storage, WallState } from "./storage";
 
 type Row = Record<string, unknown>;
 
@@ -119,6 +119,10 @@ export class SqliteStorage implements Storage {
       this.run("UPDATE claims SET claimed_by = NULL, claimed_stub_id = NULL, claimed_at = NULL WHERE claimed_by = ?", accountId);
       // Cascades: sessions, wall stubs (and tombstones), organizer events and their claims.
       this.run("DELETE FROM accounts WHERE id = ?", accountId);
+      // The append-only triggers let these go only now that the account is gone.
+      this.run("DELETE FROM approval_revocations WHERE tenant = ?", accountId);
+      this.run("DELETE FROM approval_summaries WHERE tenant = ?", accountId);
+      this.run("DELETE FROM approvals WHERE tenant = ?", accountId);
       return [...mine].filter((name) => {
         const like = `%${name}%`;
         return !this.get("SELECT 1 AS x FROM wall_stubs WHERE data LIKE ? LIMIT 1", like) &&
@@ -378,6 +382,68 @@ export class SqliteStorage implements Storage {
 
   async revokeGift(ownerKey: string, tokenHash: string): Promise<boolean> {
     return Number(this.run("DELETE FROM gifts WHERE token_hash = ? AND owner_key = ?", tokenHash, ownerKey).changes) > 0;
+  }
+
+  private approvalRow(r: Row): ApprovalRow {
+    return {
+      id: r.id as string,
+      tenant: r.tenant as string,
+      project: r.project as string,
+      purpose: r.purpose as string,
+      record: r.record as string,
+      issuedAt: Number(r.issued_at),
+      expiresAt: Number(r.expires_at),
+      revokedAt: r.revoked_at === null || r.revoked_at === undefined ? null : Number(r.revoked_at),
+      summary: typeof r.summary === "string" ? r.summary : null,
+    };
+  }
+
+  private static readonly APPROVAL_SELECT =
+    "SELECT a.*, (SELECT revoked_at FROM approval_revocations r WHERE r.approval_id = a.id) AS revoked_at, " +
+    "(SELECT summary FROM approval_summaries s WHERE s.approval_id = a.id) AS summary FROM approvals a";
+
+  async getWallStub(accountId: string, stubId: string): Promise<Stub | null> {
+    const r = this.get("SELECT data FROM wall_stubs WHERE account_id = ? AND stub_id = ? AND deleted = 0", accountId, stubId);
+    return r ? (JSON.parse(r.data as string) as Stub) : null;
+  }
+
+  async issueApproval(tenant: string, stubId: string, now: number, make: (stub: Stub) => NewApproval): Promise<{ row: ApprovalRow; created: boolean } | null> {
+    return this.tx(() => {
+      const w = this.get("SELECT data FROM wall_stubs WHERE account_id = ? AND stub_id = ? AND deleted = 0", tenant, stubId);
+      if (!w) return null;
+      const made = make(JSON.parse(w.data as string) as Stub);
+      const same = this.get(
+        `${SqliteStorage.APPROVAL_SELECT} WHERE a.tenant = ? AND a.project = ? AND a.purpose = ? AND a.idem_key = ? AND a.expires_at > ? ` +
+          "AND NOT EXISTS (SELECT 1 FROM approval_revocations r WHERE r.approval_id = a.id) ORDER BY a.seq DESC LIMIT 1",
+        tenant, stubId, made.purpose, made.idemKey, now,
+      );
+      if (same) return { row: this.approvalRow(same), created: false };
+      this.run(
+        "INSERT INTO approvals (id, tenant, project, purpose, idem_key, record, issued_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        made.id, tenant, stubId, made.purpose, made.idemKey, made.record, made.issuedAt, made.expiresAt,
+      );
+      this.run("INSERT INTO approval_summaries (approval_id, tenant, summary) VALUES (?, ?, ?)", made.id, tenant, made.summary);
+      return { row: { id: made.id, tenant, project: stubId, purpose: made.purpose, record: made.record, issuedAt: made.issuedAt, expiresAt: made.expiresAt, revokedAt: null, summary: made.summary }, created: true };
+    });
+  }
+
+  async getApproval(id: string): Promise<ApprovalRow | null> {
+    const r = this.get(`${SqliteStorage.APPROVAL_SELECT} WHERE a.id = ?`, id);
+    return r ? this.approvalRow(r) : null;
+  }
+
+  async listApprovals(tenant: string, stubId: string): Promise<ApprovalRow[]> {
+    return this.all(`${SqliteStorage.APPROVAL_SELECT} WHERE a.tenant = ? AND a.project = ? ORDER BY a.seq DESC LIMIT 200`, tenant, stubId).map((r) => this.approvalRow(r));
+  }
+
+  async revokeApproval(tenant: string, stubId: string, approvalId: string, now: number): Promise<"revoked" | "already" | "missing"> {
+    return this.tx(() => {
+      const a = this.get("SELECT id FROM approvals WHERE id = ? AND tenant = ? AND project = ?", approvalId, tenant, stubId);
+      if (!a) return "missing" as const;
+      if (this.get("SELECT 1 AS x FROM approval_revocations WHERE approval_id = ?", approvalId)) return "already" as const;
+      this.run("INSERT INTO approval_revocations (approval_id, tenant, revoked_at) VALUES (?, ?, ?)", approvalId, tenant, now);
+      return "revoked" as const;
+    });
   }
 
   async appendEvent(e: TicketstubEvent, tenantRef?: string): Promise<void> {

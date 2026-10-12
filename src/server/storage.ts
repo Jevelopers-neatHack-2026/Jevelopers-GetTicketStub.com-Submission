@@ -85,6 +85,35 @@ export interface ArtQuota {
 
 export type ArtQuotaResult = { ok: true } | { ok: false; retryAt: number };
 
+/** One stored approval: the signed record as JSON, plus what the append-only tables add. */
+export interface ApprovalRow {
+  id: string;
+  tenant: string;
+  /** The stub id. */
+  project: string;
+  purpose: string;
+  /** The record as canonical JSON. The token is derived from it. */
+  record: string;
+  issuedAt: number;
+  expiresAt: number;
+  /** Epoch ms of the revocation row, or null. */
+  revokedAt: number | null;
+  /** The owner-only printed-facts summary as JSON (never part of the signed record), or null for an approval issued before it existed. */
+  summary: string | null;
+}
+
+/** What `issueApproval`'s builder returns for a stub it was shown. `idemKey` is the hash of purpose + binding. */
+export interface NewApproval {
+  id: string;
+  purpose: string;
+  idemKey: string;
+  record: string;
+  /** Owner-only printed-facts summary as JSON, stored beside the record in the same write. */
+  summary: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
 export interface Storage {
   // accounts
   findOrCreateAccount(email: string, now: number): Promise<Account>;
@@ -155,6 +184,21 @@ export interface Storage {
   ownsStub(tenantId: string, stubId: string): Promise<boolean>;
   /** The account that created an organizer event, or null. */
   getEventCaptain(eventId: string): Promise<string | null>;
+
+  // artwork approvals (append-only; see src/server/approval.ts)
+  /** One stub from the account's own wall, or null (missing, deleted). The stub the server holds, never one from a body. */
+  getWallStub(accountId: string, stubId: string): Promise<Stub | null>;
+  /**
+   * In one write lock: reads the wall stub, hands it to `make`, and inserts what it returns. If the same tenant, project, purpose
+   * and binding already has a live (not revoked, not expired) approval, that one is returned with created false and nothing is inserted.
+   * Null when the stub is not on the account's wall. `make` throws to refuse.
+   */
+  issueApproval(tenant: string, stubId: string, now: number, make: (stub: Stub) => NewApproval): Promise<{ row: ApprovalRow; created: boolean } | null>;
+  getApproval(id: string): Promise<ApprovalRow | null>;
+  /** Newest first. */
+  listApprovals(tenant: string, stubId: string): Promise<ApprovalRow[]>;
+  /** Adds a revocation row for an approval this tenant holds. "already" when one exists, "missing" for an id that is not this tenant's. */
+  revokeApproval(tenant: string, stubId: string, approvalId: string, now: number): Promise<"revoked" | "already" | "missing">;
 
   // product events (append-only; see src/server/events.ts)
   appendEvent(event: TicketstubEvent, tenantRef?: string): Promise<void>;
