@@ -78,7 +78,7 @@ export function parseExportCsv(content) {
   return rows.map(row=>{assert.equal(row.length,header.length,'CSV column count');return Object.fromEntries(header.map((key,index)=>[key,row[index]]));});
 }
 
-export function validateCapturedExport(receipt,query,loaded) {
+export function validateCapturedExport(receipt,query,loaded,{legacySnapshotAliasOnly=false}={}) {
   const {files}=loaded;const rich=receipt.schemaVersion==='2.0.0';const manifest=receipt.manifest;
   if(rich)validateFixtureSchema(files[schemaPath('2.0.0','ReportingExportReceipt')],receipt);
   else {exactKeys(receipt,['manifest','artifactManifest','artifacts'],'Legacy response constituents');validateFixtureSchema(files[schemaPath('1.0.0','ExportManifest')],manifest);}
@@ -91,7 +91,10 @@ export function validateCapturedExport(receipt,query,loaded) {
     for(const key of ['status','destination','exportId','createdAt','snapshotId','summaryContentHash','queryContentHash','evidenceMode'])assert.deepEqual(artifactManifest[key],manifest[key],'Legacy manifest bindings');
   }else {assert.equal(manifest.canonicalAdoption,'proposal_only');assert.equal(manifest.consumerAcknowledgement,'pending');assert.equal(manifest.definitionsStatus,'pending_owner_review');}
   assert.equal(artifactManifest.delivery,'manual_prepared');assert.equal(manifest.evidenceMode,'mocked');
-  assert.equal(manifest.snapshotId,rich?query.snapshotId:'snapshot:'+recordHash(query.snapshotId).slice(7),'Captured snapshot/query binding');
+  if(legacySnapshotAliasOnly) {
+    assert.equal(rich,false);assert.match(manifest.snapshotId,/^snapshot:[a-f0-9]{64}$/u);
+    assert.equal(manifest.snapshotId,query.snapshotId,'Captured public legacy alias binding; raw-preimage equality unavailable');
+  }else assert.equal(manifest.snapshotId,rich?query.snapshotId:'snapshot:'+recordHash(query.snapshotId).slice(7),'Captured snapshot/query binding');
   assert.equal(query.queryContentHash,manifest.queryContentHash,'Captured query binding');
   assert.equal(query.summaryContentHash,rich?manifest.projectionContentHash:manifest.summaryContentHash,'Captured economic hash binding');
   assert.deepEqual(receipt.artifacts.map(file=>file.fileName),['summary.json','metrics.csv']);
@@ -198,7 +201,10 @@ export async function runExportCandidate(outputArg) {
   try {
     const loaded=await loadExportFixtures();assert.equal(process.version,`v${loaded.pin.node}`);await recordEvaluator(here,output);
     const git=spawnSync('git',['-C',here,'show','-s','--format=%H%n%T','HEAD'],{encoding:'utf8',timeout:30000});assert.equal(git.status,0);const [revision,tree]=git.stdout.trim().split('\n');
-    receipt.consumer={revision,tree};receipt.provenance=loaded.pin;receipt.observation=evaluateExportCandidate(loaded);receipt.status='passed';receipt.consumerAcknowledgement='SCOPED_SYNTHETIC_EXPORT_CAPTURE_PROJECTION_ONLY';
+    receipt.consumer={revision,tree};receipt.provenance=loaded.pin;receipt.observation=evaluateExportCandidate(loaded);receipt.consumerAcknowledgement='SCOPED_SYNTHETIC_EXPORT_CAPTURE_PROJECTION_ONLY';
+    const {loadDenialSupplement,evaluateDenialSupplement}=await import('./export-denial-supplement.mjs');
+    const supplement=await loadDenialSupplement();receipt.denialSupplement={provenance:supplement.pin,observation:evaluateDenialSupplement(supplement,loaded)};
+    receipt.status='passed';
   }catch(error){receipt.failure=error.message;process.exitCode=1;}
   await writeFile(join(output,'receipt.json'),JSON.stringify(receipt,null,2)+'\n');await writeFile(join(output,'artifacts.json'),JSON.stringify(await fileManifest(output),null,2)+'\n');
   console.log(`Captured Finance export consumer ${receipt.status}; receipt: ${join(output,'receipt.json')}`);

@@ -4,6 +4,9 @@ on:
     paths:
       - finance_component_tests/export-candidate.mjs
       - finance_component_tests/export-candidate.test.mjs
+      - finance_component_tests/export-denial-supplement.mjs
+      - finance_component_tests/export-denial-supplement.test.mjs
+      - finance_component_tests/fixtures/export3e8/**
       - finance_component_tests/fixtures/export0c4/**
       - finance_component_tests/fixture-schema.mjs
       - finance_component_tests/candidate924.mjs
@@ -11,6 +14,7 @@ on:
       - finance_component_tests/receipt.mjs
       - finance_component_tests/run.mjs
       - contracts/finance-export0c4-fixture-pin.json
+      - contracts/finance-export3e8-supplement-pin.json
       - contracts/finance924-fixture-pin.json
       - .github/workflows/finance-export-fixtures.yml
   workflow_dispatch:
@@ -32,7 +36,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/finance-export-temp"
           sudo -n unshare --net -- runuser -u "$(id -un)" -- env -i PATH="$PATH" TMPDIR="$RUNNER_TEMP/finance-export-temp" \
-            node --test finance_component_tests/export-candidate.test.mjs finance_component_tests/candidate924.test.mjs finance_component_tests/receipt.test.mjs \
+            node --test finance_component_tests/export-candidate.test.mjs finance_component_tests/export-denial-supplement.test.mjs finance_component_tests/candidate924.test.mjs finance_component_tests/receipt.test.mjs \
             > "$RUNNER_TEMP/finance-export-tests.tap" 2>&1
       - name: Record qualified captured export consumer ACK
         shell: bash

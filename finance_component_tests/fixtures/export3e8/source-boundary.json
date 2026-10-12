@@ -1,0 +1,1140 @@
+{
+  "original": "0c4c7024c68b5a52a12f3de3cec891f64aa65bd3",
+  "candidate": "3e88311d481052f522e8e79ed20155334ab526e7",
+  "candidateTree": "fc3541edcc80ed9c0b30908cd4bbb0425ff15305",
+  "changedPaths": [
+    "tests/exports/query-export-pg.test.mjs"
+  ],
+  "files": [
+    {
+      "path": ".claude/settings.json",
+      "originalBlob": "9889ea5133a7edfaecbd4f65e9f3382637115477",
+      "candidateBlob": "9889ea5133a7edfaecbd4f65e9f3382637115477"
+    },
+    {
+      "path": ".entire/.gitignore",
+      "originalBlob": "e66987d2baadec50fc9285426dcb00d81edb7aff",
+      "candidateBlob": "e66987d2baadec50fc9285426dcb00d81edb7aff"
+    },
+    {
+      "path": ".entire/README.md",
+      "originalBlob": "b95a88da5fdd7d55ccd94d072f90f5f3a3412639",
+      "candidateBlob": "b95a88da5fdd7d55ccd94d072f90f5f3a3412639"
+    },
+    {
+      "path": ".entire/graph-agent.md",
+      "originalBlob": "c2a3257cac08c6ef63b4884a61e2c4fd884028f7",
+      "candidateBlob": "c2a3257cac08c6ef63b4884a61e2c4fd884028f7"
+    },
+    {
+      "path": ".entire/settings.json",
+      "originalBlob": "8f70ea31376b248be4e3813e07812f493b3818cf",
+      "candidateBlob": "8f70ea31376b248be4e3813e07812f493b3818cf"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "originalBlob": "95bd5e393407a6a97e091e8d0a1c15073622d090",
+      "candidateBlob": "95bd5e393407a6a97e091e8d0a1c15073622d090"
+    },
+    {
+      "path": ".github/workflows/entire-graph.yml",
+      "originalBlob": "b03e4a2bfaa2560285cb5bfe86b2f1ab539bf33e",
+      "candidateBlob": "b03e4a2bfaa2560285cb5bfe86b2f1ab539bf33e"
+    },
+    {
+      "path": ".gitignore",
+      "originalBlob": "b881e43029bc60acd14f3973b7478c92c68e410f",
+      "candidateBlob": "b881e43029bc60acd14f3973b7478c92c68e410f"
+    },
+    {
+      "path": ".node-version",
+      "originalBlob": "de889f8c2e71ed4bdfc48f042e6265f8f67f6356",
+      "candidateBlob": "de889f8c2e71ed4bdfc48f042e6265f8f67f6356"
+    },
+    {
+      "path": ".npmrc",
+      "originalBlob": "95248542edfa68f40f00fd8063d272ae2839a8fa",
+      "candidateBlob": "95248542edfa68f40f00fd8063d272ae2839a8fa"
+    },
+    {
+      "path": "AGENTS.md",
+      "originalBlob": "6d806d1dc80a8f435b20bcf4c92cdec6ac268bb9",
+      "candidateBlob": "6d806d1dc80a8f435b20bcf4c92cdec6ac268bb9"
+    },
+    {
+      "path": "CLAUDE.md",
+      "originalBlob": "6d806d1dc80a8f435b20bcf4c92cdec6ac268bb9",
+      "candidateBlob": "6d806d1dc80a8f435b20bcf4c92cdec6ac268bb9"
+    },
+    {
+      "path": "README.md",
+      "originalBlob": "0c0a1ab84264830e0396e6ef8623640c70b3a871",
+      "candidateBlob": "0c0a1ab84264830e0396e6ef8623640c70b3a871"
+    },
+    {
+      "path": "contracts.lock.json",
+      "originalBlob": "cb6f51de3d8288809ef47cce5c2908449613e0b7",
+      "candidateBlob": "cb6f51de3d8288809ef47cce5c2908449613e0b7"
+    },
+    {
+      "path": "docs/api/README.md",
+      "originalBlob": "aa2087706bc5399129c8c316000c007f8537a8fc",
+      "candidateBlob": "aa2087706bc5399129c8c316000c007f8537a8fc"
+    },
+    {
+      "path": "docs/api/accounting.md",
+      "originalBlob": "c75392d29a4f8cf88244b7e9766f7bc848a5f522",
+      "candidateBlob": "c75392d29a4f8cf88244b7e9766f7bc848a5f522"
+    },
+    {
+      "path": "docs/api/budget-authority.md",
+      "originalBlob": "911318d13137de690c7812d5b2ce6eefa7547213",
+      "candidateBlob": "911318d13137de690c7812d5b2ce6eefa7547213"
+    },
+    {
+      "path": "docs/api/cfo-ai-handoff.md",
+      "originalBlob": "8871baae6aa14a87f51f29cc23ee8b20f5e033ff",
+      "candidateBlob": "8871baae6aa14a87f51f29cc23ee8b20f5e033ff"
+    },
+    {
+      "path": "docs/api/compatibility.md",
+      "originalBlob": "a70a9fc39cd965f4eb36517a67b6ad4fcb726f5f",
+      "candidateBlob": "a70a9fc39cd965f4eb36517a67b6ad4fcb726f5f"
+    },
+    {
+      "path": "docs/api/entire-graph-agent-fallback.md",
+      "originalBlob": "a9fc915299d830e94b36cccd05dde05447597b61",
+      "candidateBlob": "a9fc915299d830e94b36cccd05dde05447597b61"
+    },
+    {
+      "path": "docs/api/evidence.md",
+      "originalBlob": "5921685a3edad5881372c7cf16de7dc85ce428b4",
+      "candidateBlob": "5921685a3edad5881372c7cf16de7dc85ce428b4"
+    },
+    {
+      "path": "docs/api/ledger.md",
+      "originalBlob": "eb0e9a4fe7efaa9403cf8038ec507eb74953ebda",
+      "candidateBlob": "eb0e9a4fe7efaa9403cf8038ec507eb74953ebda"
+    },
+    {
+      "path": "docs/api/prepared-exports.md",
+      "originalBlob": "fcc87a40713c600fc4864ba62dc80baafac2eb9f",
+      "candidateBlob": "fcc87a40713c600fc4864ba62dc80baafac2eb9f"
+    },
+    {
+      "path": "docs/api/pricing-source-evidence-2026-10-11.md",
+      "originalBlob": "3c8fc7fa318490acb8158517ba3659e72c8601c4",
+      "candidateBlob": "3c8fc7fa318490acb8158517ba3659e72c8601c4"
+    },
+    {
+      "path": "docs/api/pricing.md",
+      "originalBlob": "892df31e91eed5d1c5a79dc5f9fe7323e72aa773",
+      "candidateBlob": "892df31e91eed5d1c5a79dc5f9fe7323e72aa773"
+    },
+    {
+      "path": "docs/api/reporting.md",
+      "originalBlob": "c0a998b1eaed30d635359ed5b74b20e3e22bd9c7",
+      "candidateBlob": "c0a998b1eaed30d635359ed5b74b20e3e22bd9c7"
+    },
+    {
+      "path": "docs/api/schema-index.json",
+      "originalBlob": "cf3877d6e914ad6a96e41bdbd63d805697791b5e",
+      "candidateBlob": "cf3877d6e914ad6a96e41bdbd63d805697791b5e"
+    },
+    {
+      "path": "docs/api/security.md",
+      "originalBlob": "9d925c3d7b5557d96a5bfb80ccbb5bbf3c7f19db",
+      "candidateBlob": "9d925c3d7b5557d96a5bfb80ccbb5bbf3c7f19db"
+    },
+    {
+      "path": "docs/api/usage-intake.md",
+      "originalBlob": "aa838efb2b20bf24ddb77a3d79986640fb92aa44",
+      "candidateBlob": "aa838efb2b20bf24ddb77a3d79986640fb92aa44"
+    },
+    {
+      "path": "docs/architecture/ACCEPTANCE.md",
+      "originalBlob": "76a25d116f12010f292e547722f644615351e4a8",
+      "candidateBlob": "76a25d116f12010f292e547722f644615351e4a8"
+    },
+    {
+      "path": "docs/architecture/DECISIONS.md",
+      "originalBlob": "fd5dd9b8092dcea43bf4423bf6c445a0e8f418d9",
+      "candidateBlob": "fd5dd9b8092dcea43bf4423bf6c445a0e8f418d9"
+    },
+    {
+      "path": "docs/architecture/OWNERSHIP.md",
+      "originalBlob": "860d1f8e883f8eca62b13d594bdf6cd6e1d4a541",
+      "candidateBlob": "860d1f8e883f8eca62b13d594bdf6cd6e1d4a541"
+    },
+    {
+      "path": "docs/assets/readme/banner-day.svg",
+      "originalBlob": "389a5314a78463259c8e520c155a0756a0d90872",
+      "candidateBlob": "389a5314a78463259c8e520c155a0756a0d90872"
+    },
+    {
+      "path": "docs/assets/readme/banner-night.svg",
+      "originalBlob": "3accf6f3262fa868c7e11ad8cfe3efcd74a4cad7",
+      "candidateBlob": "3accf6f3262fa868c7e11ad8cfe3efcd74a4cad7"
+    },
+    {
+      "path": "docs/development.md",
+      "originalBlob": "55dcc4a114c21a5f0ce1fa8b542809aa60d8150b",
+      "candidateBlob": "55dcc4a114c21a5f0ce1fa8b542809aa60d8150b"
+    },
+    {
+      "path": "examples/worker-composition.ts",
+      "originalBlob": "a97222d77742b0ae5504344a6132ace30fb952b5",
+      "candidateBlob": "a97222d77742b0ae5504344a6132ace30fb952b5"
+    },
+    {
+      "path": "fixtures/accounting/ci06-golden-events.json",
+      "originalBlob": "ef537f938a3d43d988565e0798c78e93cc188578",
+      "candidateBlob": "ef537f938a3d43d988565e0798c78e93cc188578"
+    },
+    {
+      "path": "fixtures/api/decision-results.response.json",
+      "originalBlob": "9b4e0fa97fe2b8f495d4faf347a322080b23a415",
+      "candidateBlob": "9b4e0fa97fe2b8f495d4faf347a322080b23a415"
+    },
+    {
+      "path": "fixtures/api/error-envelope.response.json",
+      "originalBlob": "9a24864c8c5ddea43ee362ee1726f4e9879ea3a9",
+      "candidateBlob": "9a24864c8c5ddea43ee362ee1726f4e9879ea3a9"
+    },
+    {
+      "path": "fixtures/api/financial-event-unknown.request.json",
+      "originalBlob": "8436c39e1f87d8b24cefd6d97b00c8c75fd58889",
+      "candidateBlob": "8436c39e1f87d8b24cefd6d97b00c8c75fd58889"
+    },
+    {
+      "path": "fixtures/api/summary-query.request.json",
+      "originalBlob": "f74c1152c0d645b8b2c5142573e12ec0f4e5cd02",
+      "candidateBlob": "f74c1152c0d645b8b2c5142573e12ec0f4e5cd02"
+    },
+    {
+      "path": "fixtures/exports/global-scenario-coverage.json",
+      "originalBlob": "491699896037a041ba2677f35193b00d9966dec7",
+      "candidateBlob": "491699896037a041ba2677f35193b00d9966dec7"
+    },
+    {
+      "path": "fixtures/exports/synthetic-snapshot-summary.json",
+      "originalBlob": "7677f66d643e9a9430623b8baf6ec5c4c52fe160",
+      "candidateBlob": "7677f66d643e9a9430623b8baf6ec5c4c52fe160"
+    },
+    {
+      "path": "fixtures/ledger/ci02-synthetic-acceptance.json",
+      "originalBlob": "d98acaf5056b8969528206967f03745c633ff2b1",
+      "candidateBlob": "d98acaf5056b8969528206967f03745c633ff2b1"
+    },
+    {
+      "path": "fixtures/metering/usage-observation.request.json",
+      "originalBlob": "5d26dfabcffa7f3ab0706603838601aaf2b526a5",
+      "candidateBlob": "5d26dfabcffa7f3ab0706603838601aaf2b526a5"
+    },
+    {
+      "path": "fixtures/pricing/ci03-synthetic-acceptance.json",
+      "originalBlob": "1e2c1a3e0d568133d4579b09bd73aa85b46be430",
+      "candidateBlob": "1e2c1a3e0d568133d4579b09bd73aa85b46be430"
+    },
+    {
+      "path": "fixtures/pricing/ci03-v1-compatibility.json",
+      "originalBlob": "dc28c43358e47a2b19ca116aa6032f5511625ded",
+      "candidateBlob": "dc28c43358e47a2b19ca116aa6032f5511625ded"
+    },
+    {
+      "path": "fixtures/pricing/synthetic-tariff-source.md",
+      "originalBlob": "7b9b8daf143cfb8ec6441a53f5741c78030c131a",
+      "candidateBlob": "7b9b8daf143cfb8ec6441a53f5741c78030c131a"
+    },
+    {
+      "path": "fixtures/reporting/ci08-manual-oracle.json",
+      "originalBlob": "c657840d0cb4934f6c1dc94c467025b5646d53e8",
+      "candidateBlob": "c657840d0cb4934f6c1dc94c467025b5646d53e8"
+    },
+    {
+      "path": "fixtures/reporting/definition-registry.json",
+      "originalBlob": "ffd2c5008cad32c38fe25ffabea551e3b3ccdabe",
+      "candidateBlob": "ffd2c5008cad32c38fe25ffabea551e3b3ccdabe"
+    },
+    {
+      "path": "fixtures/reporting/ie-ci06-pg-page.json",
+      "originalBlob": "6c2df16a1c95011a0e4c641030e9ab4829f9cea8",
+      "candidateBlob": "6c2df16a1c95011a0e4c641030e9ab4829f9cea8"
+    },
+    {
+      "path": "fixtures/reporting/prepared-export-request.json",
+      "originalBlob": "d6341ec937fb36235fb62743063892c439ae4751",
+      "candidateBlob": "d6341ec937fb36235fb62743063892c439ae4751"
+    },
+    {
+      "path": "fixtures/reporting/producer-budget-v2-page.json",
+      "originalBlob": "f4c78de8b7a323d6835b177de72619f86c4265dc",
+      "candidateBlob": "f4c78de8b7a323d6835b177de72619f86c4265dc"
+    },
+    {
+      "path": "fixtures/reporting/producer-v1-page.json",
+      "originalBlob": "108f91c0efabc9aaa6436520191ff10c244cc394",
+      "candidateBlob": "108f91c0efabc9aaa6436520191ff10c244cc394"
+    },
+    {
+      "path": "fixtures/reporting/producer-v2-page.json",
+      "originalBlob": "d372965f4968352bec0e82197312086363e80782",
+      "candidateBlob": "d372965f4968352bec0e82197312086363e80782"
+    },
+    {
+      "path": "fixtures/reporting/proposal-manifest-54.json",
+      "originalBlob": "bf4ca3937523bd8e67571e730edc39734721d935",
+      "candidateBlob": "bf4ca3937523bd8e67571e730edc39734721d935"
+    },
+    {
+      "path": "fixtures/reporting/proposal-manifest.json",
+      "originalBlob": "d5c48256c40e37bffb9901845d324647b4ff697b",
+      "candidateBlob": "d5c48256c40e37bffb9901845d324647b4ff697b"
+    },
+    {
+      "path": "fixtures/reporting/query-export-handoff.json",
+      "originalBlob": "b5b0825e580f4dd1fc99f24ea67bc271d0a7e4be",
+      "candidateBlob": "b5b0825e580f4dd1fc99f24ea67bc271d0a7e4be"
+    },
+    {
+      "path": "fixtures/security/authority-cases.json",
+      "originalBlob": "2b7c5744c3dffcd93d559294b2e55553557f6b12",
+      "candidateBlob": "2b7c5744c3dffcd93d559294b2e55553557f6b12"
+    },
+    {
+      "path": "migrations/0001_foundation.sql",
+      "originalBlob": "6b014d7e708d3318b7f3f5aff5c0ced8d11d1274",
+      "candidateBlob": "6b014d7e708d3318b7f3f5aff5c0ced8d11d1274"
+    },
+    {
+      "path": "migrations/0002_foundation_health.sql",
+      "originalBlob": "372f425a0ad8e8a1a3acd37eee2f1a4e4e15220f",
+      "candidateBlob": "372f425a0ad8e8a1a3acd37eee2f1a4e4e15220f"
+    },
+    {
+      "path": "migrations/0003_financial_ledger.sql",
+      "originalBlob": "a64b6b21f5c01b752d31926c276c2c15e2644094",
+      "candidateBlob": "a64b6b21f5c01b752d31926c276c2c15e2644094"
+    },
+    {
+      "path": "migrations/0004_pricing_catalog.sql",
+      "originalBlob": "5248be07424a9b318620232f807373a009830fc0",
+      "candidateBlob": "5248be07424a9b318620232f807373a009830fc0"
+    },
+    {
+      "path": "migrations/0005_pricing_valuation_history.sql",
+      "originalBlob": "8b691083c59a0c98594724859e703bca308ef592",
+      "candidateBlob": "8b691083c59a0c98594724859e703bca308ef592"
+    },
+    {
+      "path": "migrations/0006_finance_security_roles.sql",
+      "originalBlob": "b615bb95c664f62dddd865f8d74f98dfc0a4842f",
+      "candidateBlob": "b615bb95c664f62dddd865f8d74f98dfc0a4842f"
+    },
+    {
+      "path": "migrations/0007_accounting_projection_snapshots.sql",
+      "originalBlob": "44523ee8b5c1572873a765262039a33cbe63b386",
+      "candidateBlob": "44523ee8b5c1572873a765262039a33cbe63b386"
+    },
+    {
+      "path": "migrations/0008_budget_reservations.sql",
+      "originalBlob": "464c4a5a871d9bfa55bed3287c0e6e50167a8940",
+      "candidateBlob": "464c4a5a871d9bfa55bed3287c0e6e50167a8940"
+    },
+    {
+      "path": "migrations/0009_usage_intake.sql",
+      "originalBlob": "53c44e57a8f583c2de0e985bf5fcf32f9944d2fd",
+      "candidateBlob": "53c44e57a8f583c2de0e985bf5fcf32f9944d2fd"
+    },
+    {
+      "path": "migrations/0010_budget_authority_bindings.sql",
+      "originalBlob": "fa76e9f077bc89e4b247cf010f57d99674f77761",
+      "candidateBlob": "fa76e9f077bc89e4b247cf010f57d99674f77761"
+    },
+    {
+      "path": "migrations/0012_reporting_snapshots.sql",
+      "originalBlob": "f2db8064c2d338d694077fb6ef67d143f5ccf863",
+      "candidateBlob": "f2db8064c2d338d694077fb6ef67d143f5ccf863"
+    },
+    {
+      "path": "package-lock.json",
+      "originalBlob": "cda7a2a72069ccfdd15b133be9f90ac362c3fbc2",
+      "candidateBlob": "cda7a2a72069ccfdd15b133be9f90ac362c3fbc2"
+    },
+    {
+      "path": "package.json",
+      "originalBlob": "86c1f549a601b860d72d17cd72d4edd275e96d05",
+      "candidateBlob": "86c1f549a601b860d72d17cd72d4edd275e96d05"
+    },
+    {
+      "path": "postgres-test-image.json",
+      "originalBlob": "edd579fd024f5067348c086a03badde150fbc40e",
+      "candidateBlob": "edd579fd024f5067348c086a03badde150fbc40e"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/AuthorizationDecisionSchema.json",
+      "originalBlob": "4cfa545bb4c91ffb969c734644df4087844efa4c",
+      "candidateBlob": "4cfa545bb4c91ffb969c734644df4087844efa4c"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeReceiptSchema.json",
+      "originalBlob": "256bab29e630e703b8dff6602af201d8f8268db9",
+      "candidateBlob": "256bab29e630e703b8dff6602af201d8f8268db9"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeRequestSchema.json",
+      "originalBlob": "13f24b11ff54cb8275b38b50cc6fd38080d18c0a",
+      "candidateBlob": "13f24b11ff54cb8275b38b50cc6fd38080d18c0a"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/CurrentReservationRequestSchema.json",
+      "originalBlob": "75b25b43be98c7a81fd975d141e05414ed5971a1",
+      "candidateBlob": "75b25b43be98c7a81fd975d141e05414ed5971a1"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ExpenseAdjustmentRequestSchema.json",
+      "originalBlob": "1f82cdbf9e5ce77bb0d5338909f6774fb6d3a251",
+      "candidateBlob": "1f82cdbf9e5ce77bb0d5338909f6774fb6d3a251"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/FinanceReservationAuthoritySchema.json",
+      "originalBlob": "7a8cbe681d8c6ac14dde23263a0e2a4a89eb667b",
+      "candidateBlob": "7a8cbe681d8c6ac14dde23263a0e2a4a89eb667b"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/MarkDispatchedCommandSchema.json",
+      "originalBlob": "56a698777b58b4b1cbfdbcc35e30d68b774ce4d1",
+      "candidateBlob": "56a698777b58b4b1cbfdbcc35e30d68b774ce4d1"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/PartialAcknowledgementRequestSchema.json",
+      "originalBlob": "19a63e35c010bd5cda853f6f307ff19479d974c4",
+      "candidateBlob": "19a63e35c010bd5cda853f6f307ff19479d974c4"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/PostingReceiptSchema.json",
+      "originalBlob": "8a033575e05fe02461aa7cc6b61a1aab98d8834a",
+      "candidateBlob": "8a033575e05fe02461aa7cc6b61a1aab98d8834a"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReleaseReservationCommandSchema.json",
+      "originalBlob": "49ce30dac4a64e2ba85e5f104c1f6ff229cd912e",
+      "candidateBlob": "49ce30dac4a64e2ba85e5f104c1f6ff229cd912e"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationAuthorityBindingSchema.json",
+      "originalBlob": "6267ec5a8fb0c657b81554dd885258cf8f928131",
+      "candidateBlob": "6267ec5a8fb0c657b81554dd885258cf8f928131"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationCommandSchema.json",
+      "originalBlob": "a64075335fb45f9f7a91aa4f482b84d7c013d8af",
+      "candidateBlob": "a64075335fb45f9f7a91aa4f482b84d7c013d8af"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationRequestSchema.json",
+      "originalBlob": "f0bf1b451984449230d3b7fdbd4b32a9275eebfb",
+      "candidateBlob": "f0bf1b451984449230d3b7fdbd4b32a9275eebfb"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationSnapshotSchema.json",
+      "originalBlob": "bb229440fd0578c47d1ba09be0a77c85a6f91337",
+      "candidateBlob": "bb229440fd0578c47d1ba09be0a77c85a6f91337"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationWorkPlanSchema.json",
+      "originalBlob": "4dbe4112fc44d1714184ffd2fde382f119eda250",
+      "candidateBlob": "4dbe4112fc44d1714184ffd2fde382f119eda250"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/budgets/SettleReservationCommandSchema.json",
+      "originalBlob": "2aa3ca681a0540b70a3fed5fd9c1b02f85e12abc",
+      "candidateBlob": "2aa3ca681a0540b70a3fed5fd9c1b02f85e12abc"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/integrations/ExportManifestSchema.json",
+      "originalBlob": "be1674274891d646a5b405599a27d3f365ee50e3",
+      "candidateBlob": "be1674274891d646a5b405599a27d3f365ee50e3"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/integrations/ExportRequestSchema.json",
+      "originalBlob": "3ae8f1ad6d9e4b4896d391ed5bfcbe23769dc09f",
+      "candidateBlob": "3ae8f1ad6d9e4b4896d391ed5bfcbe23769dc09f"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/FinancialEventSchema.json",
+      "originalBlob": "6a4c94b18f2d539eb839d60efb065369836649c9",
+      "candidateBlob": "6a4c94b18f2d539eb839d60efb065369836649c9"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendReceiptSchema.json",
+      "originalBlob": "f9bd2aa0888de263c7403c1b21e0f7d415253389",
+      "candidateBlob": "f9bd2aa0888de263c7403c1b21e0f7d415253389"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendRequestSchema.json",
+      "originalBlob": "b9a6f76212b60a063ef5995cc0068c28d0df08b4",
+      "candidateBlob": "b9a6f76212b60a063ef5995cc0068c28d0df08b4"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerClassificationSchema.json",
+      "originalBlob": "bd2f8297f42cbe638dcf81d1eef1d80f5d8e56c7",
+      "candidateBlob": "bd2f8297f42cbe638dcf81d1eef1d80f5d8e56c7"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerEventTypeSchema.json",
+      "originalBlob": "29be5967e9293e0945ea52f0b0b98366aa50c777",
+      "candidateBlob": "29be5967e9293e0945ea52f0b0b98366aa50c777"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionRequestSchema.json",
+      "originalBlob": "6bf88495ccfcfa9df2c2f11246110b1809d592ad",
+      "candidateBlob": "6bf88495ccfcfa9df2c2f11246110b1809d592ad"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionSchema.json",
+      "originalBlob": "56fe5320da5bf7e86e8d5cf7adcbffb60186dea4",
+      "candidateBlob": "56fe5320da5bf7e86e8d5cf7adcbffb60186dea4"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/metering/IngestionReceiptSchema.json",
+      "originalBlob": "39f786e987757c717db12b094e99186b66d74efb",
+      "candidateBlob": "39f786e987757c717db12b094e99186b66d74efb"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/metering/UsageObservationSchema.json",
+      "originalBlob": "75c999e46d07be8e1e124870851f52dbd200a8e1",
+      "candidateBlob": "75c999e46d07be8e1e124870851f52dbd200a8e1"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/metering/UsageOutboxReplayReceiptSchema.json",
+      "originalBlob": "18ffad0fde3334c1d479d3f9c8d8676243e88310",
+      "candidateBlob": "18ffad0fde3334c1d479d3f9c8d8676243e88310"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/metering/UsageOutboxReplayRequestSchema.json",
+      "originalBlob": "53ff28461de3a0aba9711ef64b7cf33705085878",
+      "candidateBlob": "53ff28461de3a0aba9711ef64b7cf33705085878"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateRequestSchema.json",
+      "originalBlob": "83aa46978deb41f882c61d8fef636fab52a14b8c",
+      "candidateBlob": "83aa46978deb41f882c61d8fef636fab52a14b8c"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateResultSchema.json",
+      "originalBlob": "d74f48ade7e6da8b519b7357c6cc5daf5f3153b2",
+      "candidateBlob": "d74f48ade7e6da8b519b7357c6cc5daf5f3153b2"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/pricing/RateCardSchema.json",
+      "originalBlob": "6782acc10f61e6f712516a3309b616023572b443",
+      "candidateBlob": "6782acc10f61e6f712516a3309b616023572b443"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationRequestSchema.json",
+      "originalBlob": "3e4597b3c516bedf75e83d3a818b9f7199039666",
+      "candidateBlob": "3e4597b3c516bedf75e83d3a818b9f7199039666"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationResultSchema.json",
+      "originalBlob": "48f5d1f017e4dbc8e03e25725722a6f1e1e86860",
+      "candidateBlob": "48f5d1f017e4dbc8e03e25725722a6f1e1e86860"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationRunSchema.json",
+      "originalBlob": "8ed9b80d200eb148b653a038f7735cfcbc3f0b78",
+      "candidateBlob": "8ed9b80d200eb148b653a038f7735cfcbc3f0b78"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryFiltersSchema.json",
+      "originalBlob": "e50c7b09a6139b091ca671374e58838f563e6790",
+      "candidateBlob": "e50c7b09a6139b091ca671374e58838f563e6790"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryPageSchema.json",
+      "originalBlob": "bf2a599475d44b804110351aaf78fa2b04219dd9",
+      "candidateBlob": "bf2a599475d44b804110351aaf78fa2b04219dd9"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryQuerySchema.json",
+      "originalBlob": "7dfa82387229a3aacb1d1bec405738c2961a7eaf",
+      "candidateBlob": "7dfa82387229a3aacb1d1bec405738c2961a7eaf"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/ReportingMetricDefinitionSchema.json",
+      "originalBlob": "0c04d1318eb59d5c45cb004d2c0302153e1d952b",
+      "candidateBlob": "0c04d1318eb59d5c45cb004d2c0302153e1d952b"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/ReportingPolicyDefinitionSchema.json",
+      "originalBlob": "cbc7314e3d09b31d793bf42f594c35e1bf09fce9",
+      "candidateBlob": "cbc7314e3d09b31d793bf42f594c35e1bf09fce9"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/ReportingSnapshotReadRequestSchema.json",
+      "originalBlob": "7ffe8a56cdaa5cc398b017857800f6a831339ad8",
+      "candidateBlob": "7ffe8a56cdaa5cc398b017857800f6a831339ad8"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/reporting/SummarySourceWatermarkSchema.json",
+      "originalBlob": "82f2421cbbe03a291d8c691a84c0a324624b3ab7",
+      "candidateBlob": "82f2421cbbe03a291d8c691a84c0a324624b3ab7"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/shared/ErrorEnvelopeSchema.json",
+      "originalBlob": "6ec78164b134d20ce4848478c0d14538d37c9f98",
+      "candidateBlob": "6ec78164b134d20ce4848478c0d14538d37c9f98"
+    },
+    {
+      "path": "schemas/cost-intelligence/1.0.0/shared/TrustedScopeSchema.json",
+      "originalBlob": "d828e35d02c462749620cc60b043e156a13dda7a",
+      "candidateBlob": "d828e35d02c462749620cc60b043e156a13dda7a"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportManifestSchema.json",
+      "originalBlob": "ea39d2ca0947477feba49531c931e8656dd8404c",
+      "candidateBlob": "ea39d2ca0947477feba49531c931e8656dd8404c"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportReceiptSchema.json",
+      "originalBlob": "0843627f36942753d1b0dea9f4010ab2647c2c76",
+      "candidateBlob": "0843627f36942753d1b0dea9f4010ab2647c2c76"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportRequestSchema.json",
+      "originalBlob": "79876e65bbd6fc7034fe592c1356112ef9e5b83f",
+      "candidateBlob": "79876e65bbd6fc7034fe592c1356112ef9e5b83f"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/CatalogWriteReceiptSchema.json",
+      "originalBlob": "6a4d045ee7939da01c7c9a8efb0168347d7620a9",
+      "candidateBlob": "6a4d045ee7939da01c7c9a8efb0168347d7620a9"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/EstimateRequestSchema.json",
+      "originalBlob": "1d83cf8cef841c44c6faa07e8d446383e16b7e13",
+      "candidateBlob": "1d83cf8cef841c44c6faa07e8d446383e16b7e13"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/EstimateResultSchema.json",
+      "originalBlob": "eef3f0bb5430fe29e09de6d00c782677d9c764fc",
+      "candidateBlob": "eef3f0bb5430fe29e09de6d00c782677d9c764fc"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/EstimateStatusSchema.json",
+      "originalBlob": "19b721a26c3fe0b271e07c0df9b6b17f3653b55b",
+      "candidateBlob": "19b721a26c3fe0b271e07c0df9b6b17f3653b55b"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/ExactRatioSchema.json",
+      "originalBlob": "cb8fddbddaccc73aae596b5508d246b380ca4b51",
+      "candidateBlob": "cb8fddbddaccc73aae596b5508d246b380ca4b51"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/FxRateSchema.json",
+      "originalBlob": "0dcddf1f5329c09bec5e4ca517933f7493f18d22",
+      "candidateBlob": "0dcddf1f5329c09bec5e4ca517933f7493f18d22"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/PricingPartitionGroupSchema.json",
+      "originalBlob": "8867381759cc8ef30cd2ff92472939c283e573fc",
+      "candidateBlob": "8867381759cc8ef30cd2ff92472939c283e573fc"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/PricingRuleSchema.json",
+      "originalBlob": "57ebeb56164bce102e1ba6de6cb121af8d6eb9c6",
+      "candidateBlob": "57ebeb56164bce102e1ba6de6cb121af8d6eb9c6"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RateCardSchema.json",
+      "originalBlob": "809de48e58fa76a6e5266c271537592678016bc3",
+      "candidateBlob": "809de48e58fa76a6e5266c271537592678016bc3"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RegisterFxRateRequestSchema.json",
+      "originalBlob": "77181cede0ac26f604d4c8dda35123a51a42054e",
+      "candidateBlob": "77181cede0ac26f604d4c8dda35123a51a42054e"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RegisterPricingRuleRequestSchema.json",
+      "originalBlob": "883d80c77779a403c9d7a8d57913bb8477e2c4fd",
+      "candidateBlob": "883d80c77779a403c9d7a8d57913bb8477e2c4fd"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RegisterRateCardRequestSchema.json",
+      "originalBlob": "4b6456606d7d3a02b4ed8b37b5c775ab34115484",
+      "candidateBlob": "4b6456606d7d3a02b4ed8b37b5c775ab34115484"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/SourceReferenceSchema.json",
+      "originalBlob": "37da1eb11bfec0b6f87ceffb47be7debcd0e69df",
+      "candidateBlob": "37da1eb11bfec0b6f87ceffb47be7debcd0e69df"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/pricing/VersionedReferenceSchema.json",
+      "originalBlob": "2d50744c614809dc149504b3998774be8aa557ff",
+      "candidateBlob": "2d50744c614809dc149504b3998774be8aa557ff"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryFiltersSchema.json",
+      "originalBlob": "162dc7497df54a34c26aa2c5737a69c1a536a1b4",
+      "candidateBlob": "162dc7497df54a34c26aa2c5737a69c1a536a1b4"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryPageSchema.json",
+      "originalBlob": "0a7bbac6efc7e038952086dcd52f85b668efe77d",
+      "candidateBlob": "0a7bbac6efc7e038952086dcd52f85b668efe77d"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryQuerySchema.json",
+      "originalBlob": "cc55d9b3d6f454e20a9b0a687193fc741d0a0ec9",
+      "candidateBlob": "cc55d9b3d6f454e20a9b0a687193fc741d0a0ec9"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/ReportingAmountSchema.json",
+      "originalBlob": "0491640baa21f007504f109866e680b6cec1887b",
+      "candidateBlob": "0491640baa21f007504f109866e680b6cec1887b"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/ReportingCurrencySummarySchema.json",
+      "originalBlob": "d77a615ee35870b189ef7bcdb620a0f3f8b97d61",
+      "candidateBlob": "d77a615ee35870b189ef7bcdb620a0f3f8b97d61"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/ReportingDetailSchema.json",
+      "originalBlob": "8bf015eed8bd0f3fc37f21e381534795eaa731b9",
+      "candidateBlob": "8bf015eed8bd0f3fc37f21e381534795eaa731b9"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/ReportingDimensionSchema.json",
+      "originalBlob": "1fd1e9547388d2a4dc856c0675f55cc79829938a",
+      "candidateBlob": "1fd1e9547388d2a4dc856c0675f55cc79829938a"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/ReportingProductEvidenceSchema.json",
+      "originalBlob": "a725cbe41033e798d0673fd80d7a7e7a0375beaa",
+      "candidateBlob": "a725cbe41033e798d0673fd80d7a7e7a0375beaa"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/ReportingProjectionSchema.json",
+      "originalBlob": "245675a757e4b219754ca541aee2d356271179ea",
+      "candidateBlob": "245675a757e4b219754ca541aee2d356271179ea"
+    },
+    {
+      "path": "scripts/export-schemas.mjs",
+      "originalBlob": "8919b2cb5bed8dc4d642eef9efff4bf5ef0eafc7",
+      "candidateBlob": "8919b2cb5bed8dc4d642eef9efff4bf5ef0eafc7"
+    },
+    {
+      "path": "scripts/run-suite.mjs",
+      "originalBlob": "be9a6f94a1b6e3e1a8a29d0c017753dd42e4b3ef",
+      "candidateBlob": "be9a6f94a1b6e3e1a8a29d0c017753dd42e4b3ef"
+    },
+    {
+      "path": "scripts/sanitize.mjs",
+      "originalBlob": "de4d39b0f97a405652a063015e2c41e267783555",
+      "candidateBlob": "de4d39b0f97a405652a063015e2c41e267783555"
+    },
+    {
+      "path": "scripts/suite-policy.mjs",
+      "originalBlob": "086da2ec3aa4d9cbc10cbe218d25b214b7fedbb2",
+      "candidateBlob": "086da2ec3aa4d9cbc10cbe218d25b214b7fedbb2"
+    },
+    {
+      "path": "scripts/test-db-lifecycle.mjs",
+      "originalBlob": "7d3f824ad42992ac5e6f4b037810dff6a34af980",
+      "candidateBlob": "7d3f824ad42992ac5e6f4b037810dff6a34af980"
+    },
+    {
+      "path": "scripts/test-event-reporter.mjs",
+      "originalBlob": "97d677cdcab1cdd3c4332a85fbe6cd908c3d49de",
+      "candidateBlob": "97d677cdcab1cdd3c4332a85fbe6cd908c3d49de"
+    },
+    {
+      "path": "scripts/test-file-evidence.mjs",
+      "originalBlob": "cf607dbcb9d6e884b027394e8e8070cf204f3cfa",
+      "candidateBlob": "cf607dbcb9d6e884b027394e8e8070cf204f3cfa"
+    },
+    {
+      "path": "scripts/validate-entire-graph-artifact.mjs",
+      "originalBlob": "136ebd62125d4a2f5025d82fd79b37ba83b2ca08",
+      "candidateBlob": "136ebd62125d4a2f5025d82fd79b37ba83b2ca08"
+    },
+    {
+      "path": "scripts/verify-db-durability.mjs",
+      "originalBlob": "42a42b16a31ffc42de691b5467e10e6753a4aeff",
+      "candidateBlob": "42a42b16a31ffc42de691b5467e10e6753a4aeff"
+    },
+    {
+      "path": "scripts/with-postgres.mjs",
+      "originalBlob": "e51a919f0026bafe685d9314b6206b54ce4b37c5",
+      "candidateBlob": "e51a919f0026bafe685d9314b6206b54ce4b37c5"
+    },
+    {
+      "path": "src/accounting/index.ts",
+      "originalBlob": "ce6ee1b9650faae726940b5135353ba7d47ab63b",
+      "candidateBlob": "ce6ee1b9650faae726940b5135353ba7d47ab63b"
+    },
+    {
+      "path": "src/budgets/authority.ts",
+      "originalBlob": "b4c8b91db14d08e4d882db1c98ff88bd485b5899",
+      "candidateBlob": "b4c8b91db14d08e4d882db1c98ff88bd485b5899"
+    },
+    {
+      "path": "src/budgets/index.ts",
+      "originalBlob": "a3cdfe8d8e0ee1c308cd7cf80d08440bde689282",
+      "candidateBlob": "a3cdfe8d8e0ee1c308cd7cf80d08440bde689282"
+    },
+    {
+      "path": "src/budgets/reservation-store.ts",
+      "originalBlob": "766b8b2e6f60a0f6012b86b8acb6aacc71f44994",
+      "candidateBlob": "766b8b2e6f60a0f6012b86b8acb6aacc71f44994"
+    },
+    {
+      "path": "src/evidence/index.ts",
+      "originalBlob": "b968edaf0c96e5df8c6e50bc54475d869d4b11fd",
+      "candidateBlob": "b968edaf0c96e5df8c6e50bc54475d869d4b11fd"
+    },
+    {
+      "path": "src/index.ts",
+      "originalBlob": "6b0e6eee5b1d776d744bde21c914a76b89445c1a",
+      "candidateBlob": "6b0e6eee5b1d776d744bde21c914a76b89445c1a"
+    },
+    {
+      "path": "src/integrations/artifact-store.ts",
+      "originalBlob": "8223c60ac8933d968ce0a8fa633abf1e9be80575",
+      "candidateBlob": "8223c60ac8933d968ce0a8fa633abf1e9be80575"
+    },
+    {
+      "path": "src/integrations/csv.ts",
+      "originalBlob": "c02608f74e660cce0e00547ff5685f06a389eaf8",
+      "candidateBlob": "c02608f74e660cce0e00547ff5685f06a389eaf8"
+    },
+    {
+      "path": "src/integrations/disclosure-fence.ts",
+      "originalBlob": "b878c91d002094f8cdff9bf7244daf47605561dc",
+      "candidateBlob": "b878c91d002094f8cdff9bf7244daf47605561dc"
+    },
+    {
+      "path": "src/integrations/index.ts",
+      "originalBlob": "aecb79ae02b12efbbf17ea42525146af7a573853",
+      "candidateBlob": "aecb79ae02b12efbbf17ea42525146af7a573853"
+    },
+    {
+      "path": "src/integrations/node-filesystem.d.ts",
+      "originalBlob": "2df7aae4ced84ea53b6bd52c63b6132fc8736084",
+      "candidateBlob": "2df7aae4ced84ea53b6bd52c63b6132fc8736084"
+    },
+    {
+      "path": "src/integrations/reporting-bridge.ts",
+      "originalBlob": "eb2fc7044f905f2a83979dec9114f8a3e3b17482",
+      "candidateBlob": "eb2fc7044f905f2a83979dec9114f8a3e3b17482"
+    },
+    {
+      "path": "src/integrations/reporting-export.ts",
+      "originalBlob": "ff16c0b7ad04e96243fa1ee002ac70f4adb27150",
+      "candidateBlob": "ff16c0b7ad04e96243fa1ee002ac70f4adb27150"
+    },
+    {
+      "path": "src/integrations/runtime.ts",
+      "originalBlob": "1d492bb725fea8338ab75c5d4e2cdf15bdbe123f",
+      "candidateBlob": "1d492bb725fea8338ab75c5d4e2cdf15bdbe123f"
+    },
+    {
+      "path": "src/ledger/index.ts",
+      "originalBlob": "61322f6700be81004894ac761b5ded4f68a5f21b",
+      "candidateBlob": "61322f6700be81004894ac761b5ded4f68a5f21b"
+    },
+    {
+      "path": "src/ledger/store.ts",
+      "originalBlob": "fe2671270cf04258414a67836002f65847817c7a",
+      "candidateBlob": "fe2671270cf04258414a67836002f65847817c7a"
+    },
+    {
+      "path": "src/metering/index.ts",
+      "originalBlob": "ee4035c6fbbe4902650a0bfa8ec2c72980cb71af",
+      "candidateBlob": "ee4035c6fbbe4902650a0bfa8ec2c72980cb71af"
+    },
+    {
+      "path": "src/node-crypto.d.ts",
+      "originalBlob": "10dae2d0093d84bc710b183b1199d1171e2a1060",
+      "candidateBlob": "10dae2d0093d84bc710b183b1199d1171e2a1060"
+    },
+    {
+      "path": "src/pricing/estimate.ts",
+      "originalBlob": "3bb1b2b4e38351a13d10895164f4e23f10305001",
+      "candidateBlob": "3bb1b2b4e38351a13d10895164f4e23f10305001"
+    },
+    {
+      "path": "src/pricing/exact.ts",
+      "originalBlob": "a46d1a478f102c24cea81e103cccd512991544d8",
+      "candidateBlob": "a46d1a478f102c24cea81e103cccd512991544d8"
+    },
+    {
+      "path": "src/pricing/index.ts",
+      "originalBlob": "7afde4adec302ea7d9fea1d23697d8e044d3e21d",
+      "candidateBlob": "7afde4adec302ea7d9fea1d23697d8e044d3e21d"
+    },
+    {
+      "path": "src/pricing/legacy-schemas.ts",
+      "originalBlob": "77cecf65347f263c4210ea78c5dc0959d9cc4cc8",
+      "candidateBlob": "77cecf65347f263c4210ea78c5dc0959d9cc4cc8"
+    },
+    {
+      "path": "src/pricing/schemas.ts",
+      "originalBlob": "424203c92822ca878c039491038527daece927fe",
+      "candidateBlob": "424203c92822ca878c039491038527daece927fe"
+    },
+    {
+      "path": "src/pricing/store.ts",
+      "originalBlob": "21c16e5a1ba53f7f1778b6e000b980539dc49d0a",
+      "candidateBlob": "21c16e5a1ba53f7f1778b6e000b980539dc49d0a"
+    },
+    {
+      "path": "src/reconciliation/index.ts",
+      "originalBlob": "d09f3f2e50f8eaa0bc8d4063e503b01d1d9dd293",
+      "candidateBlob": "d09f3f2e50f8eaa0bc8d4063e503b01d1d9dd293"
+    },
+    {
+      "path": "src/reporting/canonical-mapping.ts",
+      "originalBlob": "3a58883ca52a02b873f81bcfe560e1285ae1958a",
+      "candidateBlob": "3a58883ca52a02b873f81bcfe560e1285ae1958a"
+    },
+    {
+      "path": "src/reporting/definitions.ts",
+      "originalBlob": "50a3b47bc565751d5698534679423530d5f77ac5",
+      "candidateBlob": "50a3b47bc565751d5698534679423530d5f77ac5"
+    },
+    {
+      "path": "src/reporting/host-authority.ts",
+      "originalBlob": "e738cde037841bdd02fc976684fcdc1e4afc2e8a",
+      "candidateBlob": "e738cde037841bdd02fc976684fcdc1e4afc2e8a"
+    },
+    {
+      "path": "src/reporting/index.ts",
+      "originalBlob": "fee11fa6b48d87e314435b906e6c2a5c81441657",
+      "candidateBlob": "fee11fa6b48d87e314435b906e6c2a5c81441657"
+    },
+    {
+      "path": "src/reporting/node-crypto.d.ts",
+      "originalBlob": "ec3f23c84ccba1eb39751ce1491752d7c589e148",
+      "candidateBlob": "ec3f23c84ccba1eb39751ce1491752d7c589e148"
+    },
+    {
+      "path": "src/reporting/projection.ts",
+      "originalBlob": "d8b80d358f2c9c1cb2617bb0caac966561f8d1fc",
+      "candidateBlob": "d8b80d358f2c9c1cb2617bb0caac966561f8d1fc"
+    },
+    {
+      "path": "src/reporting/reader.ts",
+      "originalBlob": "906b0a955d2f8c01caf4f049f8544772494f34a6",
+      "candidateBlob": "906b0a955d2f8c01caf4f049f8544772494f34a6"
+    },
+    {
+      "path": "src/reporting/runtime.ts",
+      "originalBlob": "940dce0b3a5f37c091799c9bd10710bf20ae2e32",
+      "candidateBlob": "940dce0b3a5f37c091799c9bd10710bf20ae2e32"
+    },
+    {
+      "path": "src/reporting/schema-v1.ts",
+      "originalBlob": "8e2d215cfb66d684374d26652eaf3082993f45eb",
+      "candidateBlob": "8e2d215cfb66d684374d26652eaf3082993f45eb"
+    },
+    {
+      "path": "src/reporting/schema-v2.ts",
+      "originalBlob": "89acc4e0c4a20ddea056587dd6a4eb07013b40a8",
+      "candidateBlob": "89acc4e0c4a20ddea056587dd6a4eb07013b40a8"
+    },
+    {
+      "path": "src/reporting/snapshots.ts",
+      "originalBlob": "d77dedcf2616789a556d2147e0b5030ad1dc6e67",
+      "candidateBlob": "d77dedcf2616789a556d2147e0b5030ad1dc6e67"
+    },
+    {
+      "path": "src/shared/canonical.ts",
+      "originalBlob": "d27a56d4b01f8eb56933bf3044cb37f39b063fee",
+      "candidateBlob": "d27a56d4b01f8eb56933bf3044cb37f39b063fee"
+    },
+    {
+      "path": "src/shared/contracts.ts",
+      "originalBlob": "30c23a943a8eb826e934d7468deaccee878b194e",
+      "candidateBlob": "30c23a943a8eb826e934d7468deaccee878b194e"
+    },
+    {
+      "path": "src/shared/database-scope.ts",
+      "originalBlob": "0fbb25c51d6c409e45fcdb30b1b32299eae87f9a",
+      "candidateBlob": "0fbb25c51d6c409e45fcdb30b1b32299eae87f9a"
+    },
+    {
+      "path": "src/shared/index.ts",
+      "originalBlob": "ae90925398f6fbe1bc4b8c6788def5181c1ed91b",
+      "candidateBlob": "ae90925398f6fbe1bc4b8c6788def5181c1ed91b"
+    },
+    {
+      "path": "tests/accounting/accounting.test.mjs",
+      "originalBlob": "c951bdd8f2bfdaadb0993e2ed957d1ea55eb59b7",
+      "candidateBlob": "c951bdd8f2bfdaadb0993e2ed957d1ea55eb59b7"
+    },
+    {
+      "path": "tests/budgets/authorization.test.mjs",
+      "originalBlob": "84689b45b1d9f81f13ee8a93c0af93f3ff247c3a",
+      "candidateBlob": "84689b45b1d9f81f13ee8a93c0af93f3ff247c3a"
+    },
+    {
+      "path": "tests/budgets/contention.test.mjs",
+      "originalBlob": "29ee3e193c8e8db40a38dd700c6bf5c6ea32625b",
+      "candidateBlob": "29ee3e193c8e8db40a38dd700c6bf5c6ea32625b"
+    },
+    {
+      "path": "tests/budgets/lifecycle.test.mjs",
+      "originalBlob": "f0bbc24c65b02f9e8f355692d9f90f64441942be",
+      "candidateBlob": "f0bbc24c65b02f9e8f355692d9f90f64441942be"
+    },
+    {
+      "path": "tests/budgets/reservation-harness.mjs",
+      "originalBlob": "64d4a9c0d3212a3de8170545746d6b792318aa05",
+      "candidateBlob": "64d4a9c0d3212a3de8170545746d6b792318aa05"
+    },
+    {
+      "path": "tests/contracts/api-contract-shapes.test.mjs",
+      "originalBlob": "adc435fb0533640abb58f414f8e91f1df98dab92",
+      "candidateBlob": "adc435fb0533640abb58f414f8e91f1df98dab92"
+    },
+    {
+      "path": "tests/contracts/shared-contracts.test.mjs",
+      "originalBlob": "4ddc3dfe882c3a16ede626c8474155ee7134bc1e",
+      "candidateBlob": "4ddc3dfe882c3a16ede626c8474155ee7134bc1e"
+    },
+    {
+      "path": "tests/evidence/evidence.test.mjs",
+      "originalBlob": "2e9ecc188a087116979bd53f43c8ead4537d7978",
+      "candidateBlob": "2e9ecc188a087116979bd53f43c8ead4537d7978"
+    },
+    {
+      "path": "tests/exports/context-renewal.test.mjs",
+      "originalBlob": "819a2afde61e003a9c4c208371acda5702246ff7",
+      "candidateBlob": "819a2afde61e003a9c4c208371acda5702246ff7"
+    },
+    {
+      "path": "tests/exports/csv-encoding.test.mjs",
+      "originalBlob": "41dc923f73875383ef7c51644c88720bb43782f8",
+      "candidateBlob": "41dc923f73875383ef7c51644c88720bb43782f8"
+    },
+    {
+      "path": "tests/exports/disclosure-fence.test.mjs",
+      "originalBlob": "46dcccea2a7a5584e15747f83599cd7a76ab19eb",
+      "candidateBlob": "46dcccea2a7a5584e15747f83599cd7a76ab19eb"
+    },
+    {
+      "path": "tests/exports/prepared-exports.test.mjs",
+      "originalBlob": "91ea3a6c75b4e3ba7352214163b44057f8a7066f",
+      "candidateBlob": "91ea3a6c75b4e3ba7352214163b44057f8a7066f"
+    },
+    {
+      "path": "tests/exports/public-exports.test.mjs",
+      "originalBlob": "2c3f6b640fe68984fef38f76801ecb868f840e85",
+      "candidateBlob": "2c3f6b640fe68984fef38f76801ecb868f840e85"
+    },
+    {
+      "path": "tests/exports/query-export-composition.test.mjs",
+      "originalBlob": "77dd4be6435d85221b1e5c31c72e0705dcadff9a",
+      "candidateBlob": "77dd4be6435d85221b1e5c31c72e0705dcadff9a"
+    },
+    {
+      "path": "tests/exports/query-export-fixtures.mjs",
+      "originalBlob": "40e31191631de319e74eca62d32efb379c555cd6",
+      "candidateBlob": "40e31191631de319e74eca62d32efb379c555cd6"
+    },
+    {
+      "path": "tests/exports/query-export-pg.test.mjs",
+      "originalBlob": "51d55300907cebb185e7c303fd8f8c4c5aaa8c6a",
+      "candidateBlob": "1fff08edb83c00bccf54ac2cc3f75af21781132e"
+    },
+    {
+      "path": "tests/exports/read-renewal.test.mjs",
+      "originalBlob": "c2b5c9a14a1d63387286358d78af0af6c99e3fd2",
+      "candidateBlob": "c2b5c9a14a1d63387286358d78af0af6c99e3fd2"
+    },
+    {
+      "path": "tests/exports/synthetic-disclosure-host.mjs",
+      "originalBlob": "d518474bd04b287aaf30c713072aa7212dfac18f",
+      "candidateBlob": "d518474bd04b287aaf30c713072aa7212dfac18f"
+    },
+    {
+      "path": "tests/fixtures/db/previous-foundation.sql",
+      "originalBlob": "00ae73d7fcd4a858712481064e16ad95f53e6087",
+      "candidateBlob": "00ae73d7fcd4a858712481064e16ad95f53e6087"
+    },
+    {
+      "path": "tests/ledger/ledger.test.mjs",
+      "originalBlob": "d885a7469c1e6ce44f49bc7b3d29a91669430b3d",
+      "candidateBlob": "d885a7469c1e6ce44f49bc7b3d29a91669430b3d"
+    },
+    {
+      "path": "tests/metering/metering.test.mjs",
+      "originalBlob": "3b281aa726f30369a4047f54195bed177234af14",
+      "candidateBlob": "3b281aa726f30369a4047f54195bed177234af14"
+    },
+    {
+      "path": "tests/migrations/migrations.test.mjs",
+      "originalBlob": "c609c3c9d873d16238d903387e87b8c7e653f76e",
+      "candidateBlob": "c609c3c9d873d16238d903387e87b8c7e653f76e"
+    },
+    {
+      "path": "tests/pricing/pricing.test.mjs",
+      "originalBlob": "829a2ddf0f8569d3c08d5b1bf93f1ea1c0a74dab",
+      "candidateBlob": "829a2ddf0f8569d3c08d5b1bf93f1ea1c0a74dab"
+    },
+    {
+      "path": "tests/recovery/crash-worker.mjs",
+      "originalBlob": "d521bab1d81b60ab42878e06a54d6da1fa73590c",
+      "candidateBlob": "d521bab1d81b60ab42878e06a54d6da1fa73590c"
+    },
+    {
+      "path": "tests/recovery/recovery.test.mjs",
+      "originalBlob": "8a71e86e6c0169dff09be2059292a62407298e59",
+      "candidateBlob": "8a71e86e6c0169dff09be2059292a62407298e59"
+    },
+    {
+      "path": "tests/reporting/reporting.test.mjs",
+      "originalBlob": "1970c009dc03eaca2d2a97df293a8b11e4632454",
+      "candidateBlob": "1970c009dc03eaca2d2a97df293a8b11e4632454"
+    },
+    {
+      "path": "tests/reporting/semantic-regressions.test.mjs",
+      "originalBlob": "e93ffa2d079e68be4351d9b09f84a5d663c4f876",
+      "candidateBlob": "e93ffa2d079e68be4351d9b09f84a5d663c4f876"
+    },
+    {
+      "path": "tests/security/security.test.mjs",
+      "originalBlob": "8e413b9cd2db15ac4408e7b169ffff61234fbd7d",
+      "candidateBlob": "8e413b9cd2db15ac4408e7b169ffff61234fbd7d"
+    },
+    {
+      "path": "tests/smoke/api-boundaries.test.mjs",
+      "originalBlob": "d39682e03316a7b9edd0adf4ecb7d4275c3274df",
+      "candidateBlob": "d39682e03316a7b9edd0adf4ecb7d4275c3274df"
+    },
+    {
+      "path": "tests/smoke/postgres-cleanup.test.mjs",
+      "originalBlob": "9f9e8cb6f7f95721aa617a5c82859b1befa0ec20",
+      "candidateBlob": "9f9e8cb6f7f95721aa617a5c82859b1befa0ec20"
+    },
+    {
+      "path": "tests/traceability/release-gates.test.mjs",
+      "originalBlob": "e34abd050cf48613dcef50d0a2588bdd1c8dcb99",
+      "candidateBlob": "e34abd050cf48613dcef50d0a2588bdd1c8dcb99"
+    },
+    {
+      "path": "tsconfig.json",
+      "originalBlob": "13dddee49cba70973686a3c120ed687d39039158",
+      "candidateBlob": "13dddee49cba70973686a3c120ed687d39039158"
+    },
+    {
+      "path": "vendor/shared-contracts-0.3.0-proposal.tgz",
+      "originalBlob": "29136c1c70021ac6ddf4ebe6bf07f6f7bcfcbb6b",
+      "candidateBlob": "29136c1c70021ac6ddf4ebe6bf07f6f7bcfcbb6b"
+    }
+  ]
+}
