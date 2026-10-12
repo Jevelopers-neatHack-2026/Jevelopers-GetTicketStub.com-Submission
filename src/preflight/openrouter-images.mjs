@@ -172,6 +172,60 @@ function targetBinding(target, scope) {
   };
 }
 
+// Read the final authority view without invoking accessors, proxy traps, or
+// coercion hooks after the injected clock. Callback-backed authority cannot
+// provide a stable final fence; unrelated target annotations are outside it.
+function dataProperty(object, key) {
+  if (!object || typeof object !== 'object' || utilTypes.isProxy(object)) throw new TypeError('authority record');
+  const prototype = Object.getPrototypeOf(object);
+  if (prototype !== Object.prototype && prototype !== null && !(Array.isArray(object) && prototype === Array.prototype)) {
+    throw new TypeError('authority prototype');
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(object, key);
+  if (!descriptor) return undefined;
+  if (!Object.hasOwn(descriptor, 'value')) throw new TypeError('authority accessor');
+  return descriptor.value;
+}
+
+function copyAuthorityData(value, seen = new Set()) {
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'function' || typeof value === 'symbol') throw new TypeError('authority value');
+    return value;
+  }
+  if (utilTypes.isProxy(value) || seen.has(value) || seen.size >= 32) throw new TypeError('authority graph');
+  dataProperty(value, '');
+  seen.add(value);
+  const copy = Array.isArray(value) ? [] : Object.create(null);
+  for (const key of Object.keys(value)) {
+    Object.defineProperty(copy, key, { value: copyAuthorityData(dataProperty(value, key), seen),
+      enumerable: true, writable: true, configurable: true });
+  }
+  if (Array.isArray(value)) copy.length = dataProperty(value, 'length');
+  seen.delete(value);
+  return copy;
+}
+
+function prepareAuthorityData(input) {
+  const field = (object, key) => copyAuthorityData(dataProperty(object, key));
+  const target = dataProperty(input, 'target');
+  const sdk = dataProperty(target, 'sdk');
+  const scope = dataProperty(input, 'scope');
+  const current = {
+    cell_id: field(input, 'cell_id'), grant_ref: field(input, 'grant_ref'),
+    deadline_at: field(input, 'deadline_at'),
+    scope: Object.fromEntries(['tenant_id', 'project_id', 'budget_scope_id', 'account_ref', 'project_ref']
+      .map((key) => [key, field(scope, key)])),
+    target: Object.fromEntries(['service', 'endpoint', 'model', 'configuration_sha256']
+      .map((key) => [key, field(target, key)])),
+  };
+  current.target.sdk = { name: field(sdk, 'name'), version: field(sdk, 'version') };
+  current.target.configuration = field(target, 'configuration');
+  for (const key of ['configuration', 'authorization_evidence']) {
+    if (Object.hasOwn(input, key)) current[key] = field(input, key);
+  }
+  return current;
+}
+
 function capturePrepareBinding(input) {
   let cellId;
   let sourceTarget;
@@ -301,6 +355,9 @@ export function validateOpenRouterImageTarget(cellId, target) {
   }
   if (target.endpoint !== OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT || typeof target.model !== 'string' || !MODEL_ID.test(target.model)) {
     throw error('unsupported_image_configuration', 'OpenRouter endpoint and explicit author/slug model must match the pin.');
+  }
+  if (!hashString(target.configuration_sha256)) {
+    throw error('unsupported_image_configuration', 'OpenRouter configuration_sha256 must be a primitive SHA-256 pin.');
   }
   const config = target.configuration;
   const required = ['prompt_template_ref', 'prompt_template_sha256', 'provider_tag', 'profile_sha256',
@@ -657,6 +714,17 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
           throw error('credential_unavailable', 'Billable preparation bindings changed while an asynchronous operation was pending.');
         }
       };
+      const assertFinalBindingsUnchanged = () => {
+        let current;
+        try { current = prepareAuthorityData(input); }
+        catch { throw error('credential_unavailable', 'Billable authority requires stable own data properties.'); }
+        if (!binding.matches(current)) {
+          if (!binding.matchesTarget(current)) {
+            throw error('unsupported_image_configuration', 'The OpenRouter image target changed during billable preparation.');
+          }
+          throw error('credential_unavailable', 'Billable preparation authority changed before host preparation.');
+        }
+      };
       assertNotCancelled();
       assertBindingsUnchanged();
       assertNotCancelled();
@@ -677,8 +745,12 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       remainingUntil(binding.deadlineAt, now);
       assertNotCancelled();
       const credential = Object.freeze({ token });
+      const prepareInput = Object.freeze({ ...hostInput, credential });
+      // The final clock can also mutate authority. Read only own data properties
+      // after every callback-capable boundary, then invoke the captured function.
+      assertFinalBindingsUnchanged();
       const hostPrepared = prepareHost
-        ? await prepareHost.call(dispatchPort, Object.freeze({ ...hostInput, credential })) : undefined;
+        ? await Reflect.apply(prepareHost, dispatchPort, [prepareInput]) : undefined;
       assertNotCancelled();
       assertBindingsUnchanged();
       assertNotCancelled();

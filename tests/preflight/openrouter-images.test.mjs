@@ -1801,6 +1801,48 @@ test('the final dispatch clock rejects faults and catches cancellation after com
   }
 });
 
+test('the final preparation clock cannot change the authority before host work', async () => {
+  const input = billable(); const host = []; let armed = false; let mutateOnClock = false;
+  const adapter = createOpenRouterImagesAdapter({ now() {
+    if (mutateOnClock) input.target.configuration.provider_tag = 'changed-provider';
+    return clock();
+  }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+  dispatchPort: { async dispatch() { host.push('dispatch'); }, get prepare() {
+    if (armed) mutateOnClock = true;
+    return async () => { host.push('prepare'); };
+  } } });
+  armed = true;
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration');
+  assert.deepEqual(host, []);
+});
+
+test('preparation refuses object-valued configuration hashes before credential-bearing host work', async () => {
+  const input = billable(); const host = []; let accessorReads = 0;
+  input.target.configuration_sha256 = { get pin() { accessorReads += 1; return digest('synthetic-pin'); } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock,
+    credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async prepare() { host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration');
+  assert.equal(accessorReads, 0);
+  assert.deepEqual(host, []);
+});
+
+test('host preparation invokes the captured function without reading its own call property', async () => {
+  const input = billable(); const host = []; let callReads = 0;
+  const prepareHost = async () => { host.push('prepare'); };
+  Object.defineProperty(prepareHost, 'call', { get() {
+    callReads += 1;
+    input.target.configuration.provider_tag = 'changed-provider';
+    return async () => { host.push('override'); };
+  } });
+  const adapter = createOpenRouterImagesAdapter({ now: clock,
+    credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { prepare: prepareHost, async dispatch() { host.push('dispatch'); } } });
+  assert.deepEqual(await adapter.prepare(input), { prepared: true });
+  assert.equal(callReads, 0);
+  assert.deepEqual(host, ['prepare']);
+});
+
 test('prepare rejects deadlines crossed by host accessors or final binding getters before sharing credentials', async () => {
   for (const boundary of ['host-accessor', 'binding-getter']) {
     let currentTime = clock();
