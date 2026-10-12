@@ -1,0 +1,592 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sc13-proposal:reporting-v1:ReportingQuery:0.1.0-proposed",
+  "title": "ReportingQuery (PROPOSED, unreviewed, non-canonical)",
+  "description": "SC-13 proposal packet. Not a canonical shared-contracts $id, not exported, not adopted. Structural only; see README.md for host verification obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "query_id",
+    "request_id",
+    "expected_scope",
+    "period",
+    "currency",
+    "fx_conversion",
+    "environments",
+    "billing_modes",
+    "policy_refs",
+    "snapshot",
+    "sources",
+    "metrics",
+    "denominator",
+    "filters",
+    "group_by",
+    "time_bucket",
+    "include_unallocated_bucket",
+    "page"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ReportingQuery/0.1.0-proposed"
+    },
+    "query_id": {
+      "$ref": "#/$defs/id"
+    },
+    "request_id": {
+      "$ref": "#/$defs/id"
+    },
+    "expected_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_assertion",
+        "tenant_id",
+        "project_id"
+      ],
+      "properties": {
+        "scope_assertion": {
+          "const": "caller_expectation_not_authorization"
+        },
+        "tenant_id": {
+          "$ref": "#/$defs/id"
+        },
+        "project_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_utc",
+        "end_utc",
+        "interval",
+        "basis",
+        "timezone",
+        "timezone_policy_ref"
+      ],
+      "properties": {
+        "start_utc": {
+          "$ref": "#/$defs/utc_instant"
+        },
+        "end_utc": {
+          "$ref": "#/$defs/utc_instant"
+        },
+        "interval": {
+          "const": "start_inclusive_end_exclusive"
+        },
+        "basis": {
+          "const": "recognized_at_utc"
+        },
+        "timezone": {
+          "$ref": "#/$defs/iana_timezone"
+        },
+        "timezone_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        }
+      }
+    },
+    "currency": {
+      "$ref": "#/$defs/currency_code"
+    },
+    "fx_conversion": {
+      "const": "none_single_currency_partition",
+      "description": "Sourced FX is deferred (README Q-FX); one query covers exactly one currency partition."
+    },
+    "environments": {
+      "$ref": "#/$defs/environment_list"
+    },
+    "billing_modes": {
+      "$ref": "#/$defs/billing_mode_list"
+    },
+    "policy_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accounting_policy_ref",
+        "allocation_policy_ref",
+        "metric_definition_set_ref",
+        "schema_policy_ref"
+      ],
+      "properties": {
+        "accounting_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        },
+        "allocation_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        },
+        "metric_definition_set_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        },
+        "schema_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        }
+      }
+    },
+    "snapshot": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "snapshot_id",
+            "as_of_utc",
+            "snapshot_fingerprint"
+          ],
+          "properties": {
+            "mode": {
+              "const": "pinned"
+            },
+            "snapshot_id": {
+              "$ref": "#/$defs/id"
+            },
+            "as_of_utc": {
+              "$ref": "#/$defs/utc_instant"
+            },
+            "snapshot_fingerprint": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "as_of_utc"
+          ],
+          "properties": {
+            "mode": {
+              "const": "resolve_at_as_of"
+            },
+            "as_of_utc": {
+              "$ref": "#/$defs/utc_instant"
+            }
+          }
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/source_watermark"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "metric_key",
+          "definition_ref"
+        ],
+        "properties": {
+          "metric_key": {
+            "$ref": "#/$defs/metric_key"
+          },
+          "definition_ref": {
+            "$ref": "#/$defs/immutable_ref"
+          }
+        }
+      }
+    },
+    "denominator": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/denominator_ref"
+        }
+      ]
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "workflow_id": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "run_id": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "order_id": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "design_version_id": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "metric_key": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/metric_key"
+          },
+          "uniqueItems": true
+        },
+        "accounting_class": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/token"
+          },
+          "uniqueItems": true
+        }
+      },
+      "description": "Each dimension appears at most once (object key). Values within a dimension are OR; dimensions are AND."
+    },
+    "group_by": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4,
+      "items": {
+        "enum": [
+          "workflow_id",
+          "run_id",
+          "order_id",
+          "design_version_id",
+          "metric_key",
+          "accounting_class"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "time_bucket": {
+      "enum": [
+        "none",
+        "day",
+        "month"
+      ],
+      "description": "Bucket boundaries use period.timezone (proposed; README Q-TZ)."
+    },
+    "include_unallocated_bucket": {
+      "const": true,
+      "description": "Unmatched spend must remain visible in an explicit unallocated bucket."
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "limit",
+        "order",
+        "cursor"
+      ],
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "order": {
+          "const": "group_key_asc"
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "token",
+                "bound_snapshot_id",
+                "query_hash"
+              ],
+              "properties": {
+                "token": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "bound_snapshot_id": {
+                  "$ref": "#/$defs/id"
+                },
+                "query_hash": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "object",
+            "properties": {
+              "cursor": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "cursor"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "pinned"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          }
+        },
+        "required": [
+          "snapshot"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "Opaque bounded identifier. Carries no authority; existence and ownership are host-verified."
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Lowercase snake_case vocabulary token. Closed vocabularies are owner-supplied at adoption; this proposal does not define them."
+    },
+    "utc_instant": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 30,
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$",
+      "description": "UTC instant ending in Z. Calendar validity (for example February 30) is a host obligation."
+    },
+    "iana_timezone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$",
+      "description": "IANA timezone name shape only. Membership in the pinned tz database is a host obligation."
+    },
+    "currency_code": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "Three-letter currency code shape only. Registry membership is a host obligation."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "not": {
+        "pattern": "^sha256:0{64}$"
+      },
+      "description": "Lowercase sha256 digest. The zero-filled placeholder is rejected structurally; digest correctness is a host obligation."
+    },
+    "immutable_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "content_hash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "content_hash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "environment_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/token"
+      },
+      "uniqueItems": true,
+      "description": "Included environments, selected independently of billing modes. Values come from the owner vocabulary."
+    },
+    "billing_mode_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/token"
+      },
+      "uniqueItems": true,
+      "description": "Included billing modes. Values come from the owner vocabulary."
+    },
+    "metric_key": {
+      "enum": [
+        "gross_sales",
+        "net_sales",
+        "direct_costs",
+        "contribution",
+        "operating_result",
+        "cash",
+        "budget_remaining"
+      ],
+      "description": "Metric names preserved from cost-intelligence#14 comment 6103884301 (ci-operational-accounting-1.0.0). Names only; definitions stay with Finance."
+    },
+    "denominator_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "definition_ref"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "approved_design",
+            "workflow",
+            "order"
+          ]
+        },
+        "definition_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        }
+      }
+    },
+    "watermark": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "watermark_utc",
+            "cursor"
+          ],
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "watermark_utc": {
+              "$ref": "#/$defs/utc_instant"
+            },
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9._:=-]+$",
+              "description": "Opaque source cursor or null when the source exposes none."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reason"
+          ],
+          "properties": {
+            "state": {
+              "const": "unknown"
+            },
+            "reason": {
+              "enum": [
+                "missing_source",
+                "partial_source",
+                "unreconciled",
+                "missing_fx_rate",
+                "missing_attribution",
+                "definition_unavailable",
+                "not_yet_resolved",
+                "denominator_zero",
+                "denominator_missing"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "source_watermark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "watermark"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "watermark": {
+          "$ref": "#/$defs/watermark"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2488 @@
+{
+  "synthetic": true,
+  "notice": "SYNTHETIC test data only. Not Finance-approved, not real accounting, not authoritative. Proposal packet SC-13 reporting-v1.",
+  "schemas": {
+    "query": "reporting-query.schema.json",
+    "manifest": "reporting-export-manifest.schema.json"
+  },
+  "not_covered_by_schema": [
+    "Cross-document equality between a query and its manifest (scope, period, currency, modes, policy refs, snapshot).",
+    "Digest correctness: any 64-hex lowercase digest other than all zeros passes.",
+    "start_utc < end_utc, calendar validity (for example February 30), as_of_utc ordering.",
+    "Timezone and currency registry membership; environment, billing-mode and accounting-class vocabularies.",
+    "Decimal scale versus precision.max_fraction_digits, decimal sums, ratio arithmetic, zero-denominator detection.",
+    "Whether negative amounts are legal for a given metric (the schema permits a leading minus except negative zero).",
+    "Consistency of coverage counts, completeness, missing_source_ids and unknown amounts or watermarks.",
+    "Uniqueness inside arrays of objects (metric keys, source ids, provenance ids).",
+    "Cursor bound_snapshot_id and query_hash agreement with the query; cursor tamper evidence.",
+    "Object reference reachability, access and tenant ownership; redaction of ids.",
+    "Finance metric definitions, class/sign matrices and recognition rules; none are modelled here."
+  ],
+  "cases": [
+    {
+      "id": "query.positive.pinned",
+      "schema": "query",
+      "expect": "valid",
+      "note": "Pinned snapshot, null cursor, one known and one unknown source watermark.",
+      "data": {
+        "schema_version": "ReportingQuery/0.1.0-proposed",
+        "query_id": "q-synthetic-1",
+        "request_id": "req-synthetic-1",
+        "expected_scope": {
+          "scope_assertion": "caller_expectation_not_authorization",
+          "tenant_id": "tenant-synthetic",
+          "project_id": "project-synthetic"
+        },
+        "period": {
+          "start_utc": "2026-09-01T00:00:00Z",
+          "end_utc": "2026-10-01T00:00:00Z",
+          "interval": "start_inclusive_end_exclusive",
+          "basis": "recognized_at_utc",
+          "timezone": "UTC",
+          "timezone_policy_ref": {
+            "id": "tzpolicy-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        },
+        "currency": "USD",
+        "fx_conversion": "none_single_currency_partition",
+        "environments": [
+          "env_alpha"
+        ],
+        "billing_modes": [
+          "mode_alpha"
+        ],
+        "policy_refs": {
+          "accounting_policy_ref": {
+            "id": "acct-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "allocation_policy_ref": {
+            "id": "alloc-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          "metric_definition_set_ref": {
+            "id": "metrics-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "schema_policy_ref": {
+            "id": "schemapol-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        },
+        "snapshot": {
+          "mode": "pinned",
+          "snapshot_id": "snap-synthetic-1",
+          "as_of_utc": "2026-10-02T00:00:00Z",
+          "snapshot_fingerprint": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        },
+        "sources": [
+          {
+            "source_id": "src-a",
+            "watermark": {
+              "state": "known",
+              "watermark_utc": "2026-10-01T12:00:00Z",
+              "cursor": "cur-1"
+            }
+          },
+          {
+            "source_id": "src-b",
+            "watermark": {
+              "state": "unknown",
+              "reason": "missing_source"
+            }
+          }
+        ],
+        "metrics": [
+          {
+            "metric_key": "gross_sales",
+            "definition_ref": {
+              "id": "def-gross",
+              "version": "1.0.0",
+              "content_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+            }
+          },
+          {
+            "metric_key": "cash",
+            "definition_ref": {
+              "id": "def-cash",
+              "version": "1.0.0",
+              "content_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+            }
+          }
+        ],
+        "denominator": {
+          "kind": "none"
+        },
+        "filters": {
+          "workflow_id": [
+            "wf-1"
+          ]
+        },
+        "group_by": [
+          "metric_key"
+        ],
+        "time_bucket": "day",
+        "include_unallocated_bucket": true,
+        "page": {
+          "limit": 50,
+          "order": "group_key_asc",
+          "cursor": null
+        }
+      }
+    },
+    {
+      "id": "query.positive.resolve_at_as_of",
+      "schema": "query",
+      "expect": "valid",
+      "note": "Unpinned snapshot request with null cursor.",
+      "base": "query.positive.pinned",
+      "patch": [
+        {"op":"replace","path":"/snapshot","value":{"mode":"resolve_at_as_of","as_of_utc":"2026-10-02T00:00:00Z"}}
+      ]
+    },
+    {
+      "id": "query.positive.pinned_cursor",
+      "schema": "query",
+      "expect": "valid",
+      "note": "Cursor structurally allowed with pinned snapshot.",
+      "base": "query.positive.pinned",
+      "patch": [
+        {"op":"replace","path":"/page/cursor","value":{"token":"tok_synthetic-1","bound_snapshot_id":"snap-synthetic-1","query_hash":"sha256:9999999999999999999999999999999999999999999999999999999999999999"}}
+      ]
+    },
+    {
+      "id": "query.positive.denominator_ref",
+      "schema": "query",
+      "expect": "valid",
+      "note": "Explicit denominator reference.",
+      "base": "query.positive.pinned",
+      "patch": [
+        {"op":"replace","path":"/denominator","value":{"kind":"approved_design","definition_ref":{"id":"def-design","version":"1.0.0","content_hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
+      ]
+    },
+    {
+      "id": "query.positive.empty_filters_no_bucket",
+      "schema": "query",
+      "expect": "valid",
+      "note": "No filters, no grouping, no time bucket.",
+      "base": "query.positive.pinned",
+      "patch": [
+        {"op":"replace","path":"/filters","value":{}},
+        {"op":"replace","path":"/group_by","value":[]},
+        {"op":"replace","path":"/time_bucket","value":"none"}
+      ]
+    },
+    {
+      "id": "query.positive.max_bounds",
+      "schema": "query",
+      "expect": "valid",
+      "note": "Exactly at the filter, page and group-by limits.",
+      "base": "query.positive.pinned",
+      "patch": [
+        {"op":"generate_ids","path":"/filters/workflow_id","count":50,"prefix":"wf-"},
+        {"op":"replace","path":"/page/limit","value":500},
+        {"op":"replace","path":"/group_by","value":["workflow_id","run_id","order_id","design_version_id"]}
+      ]
+    },
+    {
+      "id": "query.neg.currency_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Currency is required.",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/currency"}
+      ]
+    },
+    {
+      "id": "query.neg.currency_lowercase",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/currency",
+      "patch": [
+        {"op":"replace","path":"/currency","value":"usd"}
+      ]
+    },
+    {
+      "id": "query.neg.currency_too_long",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/currency",
+      "patch": [
+        {"op":"replace","path":"/currency","value":"USDX"}
+      ]
+    },
+    {
+      "id": "query.neg.currency_null",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/currency",
+      "patch": [
+        {"op":"replace","path":"/currency","value":null}
+      ]
+    },
+    {
+      "id": "query.neg.expected_scope_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Unscoped query.",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/expected_scope"}
+      ]
+    },
+    {
+      "id": "query.neg.tenant_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/expected_scope",
+      "patch": [
+        {"op":"remove","path":"/expected_scope/tenant_id"}
+      ]
+    },
+    {
+      "id": "query.neg.project_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/expected_scope",
+      "patch": [
+        {"op":"remove","path":"/expected_scope/project_id"}
+      ]
+    },
+    {
+      "id": "query.neg.scope_assertion_authorized",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Scope may not claim authorization.",
+      "base": "query.positive.pinned",
+      "error_at": "/expected_scope/scope_assertion",
+      "patch": [
+        {"op":"replace","path":"/expected_scope/scope_assertion","value":"authorized"}
+      ]
+    },
+    {
+      "id": "query.neg.policy_refs_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/policy_refs"}
+      ]
+    },
+    {
+      "id": "query.neg.allocation_policy_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/policy_refs",
+      "patch": [
+        {"op":"remove","path":"/policy_refs/allocation_policy_ref"}
+      ]
+    },
+    {
+      "id": "query.neg.snapshot_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/snapshot"}
+      ]
+    },
+    {
+      "id": "query.neg.snapshot_pinned_no_fingerprint",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/snapshot",
+      "patch": [
+        {"op":"remove","path":"/snapshot/snapshot_fingerprint"}
+      ]
+    },
+    {
+      "id": "query.neg.snapshot_resolve_with_id",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/snapshot",
+      "patch": [
+        {"op":"replace","path":"/snapshot","value":{"mode":"resolve_at_as_of","as_of_utc":"2026-10-02T00:00:00Z","snapshot_id":"snap-synthetic-1"}}
+      ]
+    },
+    {
+      "id": "query.neg.snapshot_mode_latest",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/snapshot",
+      "patch": [
+        {"op":"replace","path":"/snapshot/mode","value":"latest"}
+      ]
+    },
+    {
+      "id": "query.neg.cursor_with_unpinned_snapshot",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Structural cursor-requires-pinned rule.",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"replace","path":"/snapshot","value":{"mode":"resolve_at_as_of","as_of_utc":"2026-10-02T00:00:00Z"}},
+        {"op":"replace","path":"/page/cursor","value":{"token":"tok_synthetic-1","bound_snapshot_id":"snap-synthetic-1","query_hash":"sha256:9999999999999999999999999999999999999999999999999999999999999999"}}
+      ]
+    },
+    {
+      "id": "query.neg.cursor_token_bad_chars",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/cursor",
+      "patch": [
+        {"op":"replace","path":"/page/cursor","value":{"token":"bad token!","bound_snapshot_id":"snap-synthetic-1","query_hash":"sha256:9999999999999999999999999999999999999999999999999999999999999999"}}
+      ]
+    },
+    {
+      "id": "query.neg.cursor_missing_query_hash",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/cursor",
+      "patch": [
+        {"op":"replace","path":"/page/cursor","value":{"token":"tok_synthetic-1","bound_snapshot_id":"snap-synthetic-1"}}
+      ]
+    },
+    {
+      "id": "query.neg.cursor_zero_hash",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/cursor",
+      "patch": [
+        {"op":"replace","path":"/page/cursor","value":{"token":"tok_synthetic-1","bound_snapshot_id":"snap-synthetic-1","query_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}}
+      ]
+    },
+    {
+      "id": "query.neg.unknown_key_top",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"add","path":"/extra_key","value":"x"}
+      ]
+    },
+    {
+      "id": "query.neg.unknown_key_period",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/period",
+      "patch": [
+        {"op":"add","path":"/period/extra_key","value":"x"}
+      ]
+    },
+    {
+      "id": "query.neg.unknown_key_page",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page",
+      "patch": [
+        {"op":"add","path":"/page/extra_key","value":1}
+      ]
+    },
+    {
+      "id": "query.neg.unknown_key_metric",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/metrics/0",
+      "patch": [
+        {"op":"add","path":"/metrics/0/extra_key","value":"x"}
+      ]
+    },
+    {
+      "id": "query.neg.unknown_filter_dimension",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/filters",
+      "patch": [
+        {"op":"add","path":"/filters/tenant_id","value":["t-1"]}
+      ]
+    },
+    {
+      "id": "query.neg.page_limit_zero",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/limit",
+      "patch": [
+        {"op":"replace","path":"/page/limit","value":0}
+      ]
+    },
+    {
+      "id": "query.neg.page_limit_negative",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/limit",
+      "patch": [
+        {"op":"replace","path":"/page/limit","value":-1}
+      ]
+    },
+    {
+      "id": "query.neg.page_limit_fraction",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/limit",
+      "patch": [
+        {"op":"replace","path":"/page/limit","value":1.5}
+      ]
+    },
+    {
+      "id": "query.neg.page_limit_501",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Unbounded page.",
+      "base": "query.positive.pinned",
+      "error_at": "/page/limit",
+      "patch": [
+        {"op":"replace","path":"/page/limit","value":501}
+      ]
+    },
+    {
+      "id": "query.neg.page_order_other",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/page/order",
+      "patch": [
+        {"op":"replace","path":"/page/order","value":"newest_first"}
+      ]
+    },
+    {
+      "id": "query.neg.filter_51_values",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Unbounded filter.",
+      "base": "query.positive.pinned",
+      "error_at": "/filters/workflow_id",
+      "patch": [
+        {"op":"generate_ids","path":"/filters/workflow_id","count":51,"prefix":"wf-"}
+      ]
+    },
+    {
+      "id": "query.neg.filter_empty_array",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/filters/workflow_id",
+      "patch": [
+        {"op":"replace","path":"/filters/workflow_id","value":[]}
+      ]
+    },
+    {
+      "id": "query.neg.filter_duplicates",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/filters/workflow_id",
+      "patch": [
+        {"op":"replace","path":"/filters/workflow_id","value":["wf-1","wf-1"]}
+      ]
+    },
+    {
+      "id": "query.neg.filter_bad_metric",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/filters/metric_key",
+      "patch": [
+        {"op":"add","path":"/filters/metric_key","value":["revenue"]}
+      ]
+    },
+    {
+      "id": "query.neg.group_by_5",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Unbounded group-by.",
+      "base": "query.positive.pinned",
+      "error_at": "/group_by",
+      "patch": [
+        {"op":"replace","path":"/group_by","value":["workflow_id","run_id","order_id","design_version_id","metric_key"]}
+      ]
+    },
+    {
+      "id": "query.neg.group_by_duplicates",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/group_by",
+      "patch": [
+        {"op":"replace","path":"/group_by","value":["run_id","run_id"]}
+      ]
+    },
+    {
+      "id": "query.neg.group_by_unknown_dimension",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/group_by",
+      "patch": [
+        {"op":"replace","path":"/group_by","value":["tenant_id"]}
+      ]
+    },
+    {
+      "id": "query.neg.sources_empty",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/sources",
+      "patch": [
+        {"op":"replace","path":"/sources","value":[]}
+      ]
+    },
+    {
+      "id": "query.neg.sources_65",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/sources",
+      "patch": [
+        {"op":"repeat_item","path":"/sources","count":65}
+      ]
+    },
+    {
+      "id": "query.neg.metrics_8",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/metrics",
+      "patch": [
+        {"op":"repeat_item","path":"/metrics","count":8}
+      ]
+    },
+    {
+      "id": "query.neg.environments_9",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/environments",
+      "patch": [
+        {"op":"generate_ids","path":"/environments","count":9,"prefix":"env_"}
+      ]
+    },
+    {
+      "id": "query.neg.metric_unknown",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/metrics/0",
+      "patch": [
+        {"op":"replace","path":"/metrics/0/metric_key","value":"revenue"}
+      ]
+    },
+    {
+      "id": "query.neg.bucket_week",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/time_bucket",
+      "patch": [
+        {"op":"replace","path":"/time_bucket","value":"week"}
+      ]
+    },
+    {
+      "id": "query.neg.unallocated_false",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/include_unallocated_bucket",
+      "patch": [
+        {"op":"replace","path":"/include_unallocated_bucket","value":false}
+      ]
+    },
+    {
+      "id": "query.neg.fx_sourced",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/fx_conversion",
+      "patch": [
+        {"op":"replace","path":"/fx_conversion","value":"sourced"}
+      ]
+    },
+    {
+      "id": "query.neg.period_offset_time",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/period/start_utc",
+      "patch": [
+        {"op":"replace","path":"/period/start_utc","value":"2026-09-01T00:00:00+02:00"}
+      ]
+    },
+    {
+      "id": "query.neg.period_bad_interval",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/period/interval",
+      "patch": [
+        {"op":"replace","path":"/period/interval","value":"closed"}
+      ]
+    },
+    {
+      "id": "query.neg.period_bad_timezone",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/period/timezone",
+      "patch": [
+        {"op":"replace","path":"/period/timezone","value":"bad zone"}
+      ]
+    },
+    {
+      "id": "query.neg.denominator_unknown_kind",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Unknown denominator kind.",
+      "base": "query.positive.pinned",
+      "error_at": "/denominator",
+      "patch": [
+        {"op":"replace","path":"/denominator","value":{"kind":"bogus","definition_ref":{"id":"d","version":"1","content_hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
+      ]
+    },
+    {
+      "id": "query.neg.denominator_none_with_ref",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/denominator",
+      "patch": [
+        {"op":"replace","path":"/denominator","value":{"kind":"none","definition_ref":{"id":"d","version":"1","content_hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
+      ]
+    },
+    {
+      "id": "query.neg.denominator_ref_missing_definition",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/denominator",
+      "patch": [
+        {"op":"replace","path":"/denominator","value":{"kind":"order"}}
+      ]
+    },
+    {
+      "id": "query.neg.denominator_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/denominator"}
+      ]
+    },
+    {
+      "id": "query.neg.bad_hash_short",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Bad source/definition hash.",
+      "base": "query.positive.pinned",
+      "error_at": "/policy_refs/accounting_policy_ref/content_hash",
+      "patch": [
+        {"op":"replace","path":"/policy_refs/accounting_policy_ref/content_hash","value":"sha256:abc"}
+      ]
+    },
+    {
+      "id": "query.neg.bad_hash_uppercase",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/snapshot/snapshot_fingerprint",
+      "patch": [
+        {"op":"replace","path":"/snapshot/snapshot_fingerprint","value":"sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+      ]
+    },
+    {
+      "id": "query.neg.bad_hash_zero_filled",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/policy_refs/schema_policy_ref/content_hash",
+      "patch": [
+        {"op":"replace","path":"/policy_refs/schema_policy_ref/content_hash","value":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+      ]
+    },
+    {
+      "id": "query.neg.bad_hash_wrong_algorithm",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/metrics/0/definition_ref/content_hash",
+      "patch": [
+        {"op":"replace","path":"/metrics/0/definition_ref/content_hash","value":"md5:1111111111111111111111111111111111111111111111111111111111111111"}
+      ]
+    },
+    {
+      "id": "query.neg.ref_empty_id",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Empty reference.",
+      "base": "query.positive.pinned",
+      "error_at": "/period/timezone_policy_ref/id",
+      "patch": [
+        {"op":"replace","path":"/period/timezone_policy_ref/id","value":""}
+      ]
+    },
+    {
+      "id": "query.neg.ref_empty_version",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/metrics/0/definition_ref/version",
+      "patch": [
+        {"op":"replace","path":"/metrics/0/definition_ref/version","value":""}
+      ]
+    },
+    {
+      "id": "query.neg.ref_missing_hash",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/policy_refs/accounting_policy_ref",
+      "patch": [
+        {"op":"remove","path":"/policy_refs/accounting_policy_ref/content_hash"}
+      ]
+    },
+    {
+      "id": "query.neg.ref_null",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/policy_refs/accounting_policy_ref",
+      "patch": [
+        {"op":"replace","path":"/policy_refs/accounting_policy_ref","value":null}
+      ]
+    },
+    {
+      "id": "query.neg.source_known_without_time",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Known watermark needs a time.",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/0/watermark",
+      "patch": [
+        {"op":"remove","path":"/sources/0/watermark/watermark_utc"}
+      ]
+    },
+    {
+      "id": "query.neg.source_known_without_cursor_key",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Cursor must be explicit (null allowed).",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/0/watermark",
+      "patch": [
+        {"op":"remove","path":"/sources/0/watermark/cursor"}
+      ]
+    },
+    {
+      "id": "query.neg.source_known_with_reason",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Known must not carry a reason.",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/0/watermark",
+      "patch": [
+        {"op":"add","path":"/sources/0/watermark/reason","value":"missing_source"}
+      ]
+    },
+    {
+      "id": "query.neg.source_unknown_with_time",
+      "schema": "query",
+      "expect": "invalid",
+      "note": "Unknown must not carry a time.",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/1/watermark",
+      "patch": [
+        {"op":"add","path":"/sources/1/watermark/watermark_utc","value":"2026-10-01T12:00:00Z"}
+      ]
+    },
+    {
+      "id": "query.neg.source_unknown_without_reason",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/1/watermark",
+      "patch": [
+        {"op":"remove","path":"/sources/1/watermark/reason"}
+      ]
+    },
+    {
+      "id": "query.neg.source_unknown_bad_reason",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/1/watermark",
+      "patch": [
+        {"op":"replace","path":"/sources/1/watermark/reason","value":"whatever"}
+      ]
+    },
+    {
+      "id": "query.neg.source_state_maybe",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/1/watermark",
+      "patch": [
+        {"op":"replace","path":"/sources/1/watermark/state","value":"maybe"}
+      ]
+    },
+    {
+      "id": "query.neg.source_watermark_missing",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/sources/1",
+      "patch": [
+        {"op":"remove","path":"/sources/1/watermark"}
+      ]
+    },
+    {
+      "id": "query.neg.schema_version_wrong",
+      "schema": "query",
+      "expect": "invalid",
+      "base": "query.positive.pinned",
+      "error_at": "/schema_version",
+      "patch": [
+        {"op":"replace","path":"/schema_version","value":"ReportingQuery/1.0.0"}
+      ]
+    },
+    {
+      "id": "manifest.positive.full",
+      "schema": "manifest",
+      "expect": "valid",
+      "note": "Exact zero, unknown null, known and unknown watermarks, unknown ratios with denominator reasons, JSON and CSV files.",
+      "data": {
+        "schema_version": "ReportingExportManifest/0.1.0-proposed",
+        "export_id": "exp-synthetic-1",
+        "query_ref": {
+          "query_id": "q-synthetic-1",
+          "query_schema_version": "ReportingQuery/0.1.0-proposed",
+          "query_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "snapshot": {
+          "snapshot_id": "snap-synthetic-1",
+          "as_of_utc": "2026-10-02T00:00:00Z",
+          "snapshot_fingerprint": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        },
+        "scope": {
+          "tenant_id": "tenant-synthetic",
+          "project_id": "project-synthetic"
+        },
+        "period": {
+          "start_utc": "2026-09-01T00:00:00Z",
+          "end_utc": "2026-10-01T00:00:00Z",
+          "interval": "start_inclusive_end_exclusive",
+          "basis": "recognized_at_utc",
+          "timezone": "UTC",
+          "timezone_policy_ref": {
+            "id": "tzpolicy-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        },
+        "currency": "USD",
+        "environments": [
+          "env_alpha"
+        ],
+        "billing_modes": [
+          "mode_alpha"
+        ],
+        "policy_refs": {
+          "accounting_policy_ref": {
+            "id": "acct-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "allocation_policy_ref": {
+            "id": "alloc-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          "metric_definition_set_ref": {
+            "id": "metrics-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "schema_policy_ref": {
+            "id": "schemapol-synthetic",
+            "version": "1.0.0",
+            "content_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        },
+        "source_watermarks": [
+          {
+            "source_id": "src-a",
+            "watermark": {
+              "state": "known",
+              "watermark_utc": "2026-10-01T12:00:00Z",
+              "cursor": "cur-1"
+            }
+          },
+          {
+            "source_id": "src-c",
+            "watermark": {
+              "state": "known",
+              "watermark_utc": "2026-10-01T12:00:00Z",
+              "cursor": null
+            }
+          },
+          {
+            "source_id": "src-b",
+            "watermark": {
+              "state": "unknown",
+              "reason": "missing_source"
+            }
+          }
+        ],
+        "precision": {
+          "representation": "decimal_string",
+          "json_number_amounts": false,
+          "max_fraction_digits": 2,
+          "rounding_applied": false
+        },
+        "presentation_rounding": {
+          "applies_to_exact_values": false,
+          "owner": "consumer_display_only"
+        },
+        "totals": [
+          {
+            "metric_key": "gross_sales",
+            "definition_ref": {
+              "id": "def-gross",
+              "version": "1.0.0",
+              "content_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+            },
+            "amount": {
+              "state": "known",
+              "value": "0"
+            },
+            "unallocated_amount": {
+              "state": "known",
+              "value": "0"
+            },
+            "valuation_basis": {
+              "actual": {
+                "state": "known",
+                "value": "0"
+              },
+              "estimated": {
+                "state": "known",
+                "value": "0"
+              },
+              "provider_confirmed": {
+                "state": "known",
+                "value": "0"
+              }
+            },
+            "reconciliation_state": "reconciled",
+            "coverage": {
+              "completeness": "complete",
+              "known_count": 3,
+              "partial_count": 0,
+              "unknown_count": 0,
+              "missing_source_ids": []
+            }
+          },
+          {
+            "metric_key": "cash",
+            "definition_ref": {
+              "id": "def-cash",
+              "version": "1.0.0",
+              "content_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+            },
+            "amount": {
+              "state": "unknown",
+              "value": null,
+              "reason": "missing_source"
+            },
+            "unallocated_amount": {
+              "state": "unknown",
+              "value": null,
+              "reason": "not_yet_resolved"
+            },
+            "valuation_basis": {
+              "actual": {
+                "state": "unknown",
+                "value": null,
+                "reason": "missing_source"
+              },
+              "estimated": {
+                "state": "unknown",
+                "value": null,
+                "reason": "missing_source"
+              },
+              "provider_confirmed": {
+                "state": "unknown",
+                "value": null,
+                "reason": "missing_source"
+              }
+            },
+            "reconciliation_state": "unknown",
+            "coverage": {
+              "completeness": "unknown",
+              "known_count": 0,
+              "partial_count": 0,
+              "unknown_count": 2,
+              "missing_source_ids": [
+                "src-b"
+              ]
+            }
+          },
+          {
+            "metric_key": "direct_costs",
+            "definition_ref": {
+              "id": "def-direct",
+              "version": "1.0.0",
+              "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "amount": {
+              "state": "known",
+              "value": "12.50"
+            },
+            "unallocated_amount": {
+              "state": "known",
+              "value": "1.25"
+            },
+            "valuation_basis": {
+              "actual": {
+                "state": "known",
+                "value": "10.00"
+              },
+              "estimated": {
+                "state": "known",
+                "value": "2.50"
+              },
+              "provider_confirmed": {
+                "state": "known",
+                "value": "0"
+              }
+            },
+            "reconciliation_state": "partially_reconciled",
+            "coverage": {
+              "completeness": "partial",
+              "known_count": 5,
+              "partial_count": 1,
+              "unknown_count": 0,
+              "missing_source_ids": [
+                "src-b"
+              ]
+            }
+          }
+        ],
+        "ratios": [
+          {
+            "ratio_id": "ratio-1",
+            "numerator_metric_key": "direct_costs",
+            "denominator": {
+              "kind": "order",
+              "definition_ref": {
+                "id": "def-order",
+                "version": "1.0.0",
+                "content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            "value": {
+              "state": "unknown",
+              "value": null,
+              "reason": "denominator_missing"
+            }
+          },
+          {
+            "ratio_id": "ratio-2",
+            "numerator_metric_key": "direct_costs",
+            "denominator": {
+              "kind": "workflow",
+              "definition_ref": {
+                "id": "def-wf",
+                "version": "1.0.0",
+                "content_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              }
+            },
+            "value": {
+              "state": "unknown",
+              "value": null,
+              "reason": "denominator_zero"
+            }
+          }
+        ],
+        "observed_facts": [
+          {
+            "fact_id": "fact-1",
+            "kind": "source_row",
+            "provenance_ids": [
+              "prov-1"
+            ]
+          }
+        ],
+        "assumptions": [
+          {
+            "assumption_id": "asm-1",
+            "code": "assume_alpha",
+            "policy_ref": {
+              "id": "asmpol-synthetic",
+              "version": "1.0.0",
+              "content_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          }
+        ],
+        "provenance": [
+          {
+            "provenance_id": "prov-1",
+            "source_id": "src-a",
+            "object_ref": {
+              "object_store_id": "store-synthetic",
+              "object_key": "prov/prov-1.json"
+            },
+            "content_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          }
+        ],
+        "drilldown_refs": [
+          {
+            "ref_id": "dd-1",
+            "snapshot_id": "snap-synthetic-1",
+            "object_ref": {
+              "object_store_id": "store-synthetic",
+              "object_key": "drill/dd-1.json"
+            }
+          }
+        ],
+        "serialization_policy": {
+          "json_canonicalization": "rfc8785_jcs",
+          "row_order": "group_key_asc",
+          "csv_formula_safety": "neutralize_leading_formula_characters",
+          "csv_encoding": "utf-8"
+        },
+        "files": {
+          "json": {
+            "object_ref": {
+              "object_store_id": "store-synthetic",
+              "object_key": "exp/exp-1.json"
+            },
+            "byte_size": 1024,
+            "content_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "row_count": 3,
+            "media_type": "application/json"
+          },
+          "csv": {
+            "object_ref": {
+              "object_store_id": "store-synthetic",
+              "object_key": "exp/exp-1.csv"
+            },
+            "byte_size": 1024,
+            "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "row_count": 3,
+            "media_type": "text/csv"
+          }
+        }
+      }
+    },
+    {
+      "id": "manifest.positive.csv_only_empty_arrays",
+      "schema": "manifest",
+      "expect": "valid",
+      "note": "Only CSV; all optional collections empty.",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"remove","path":"/files/json"},
+        {"op":"replace","path":"/ratios","value":[]},
+        {"op":"replace","path":"/observed_facts","value":[]},
+        {"op":"replace","path":"/assumptions","value":[]},
+        {"op":"replace","path":"/provenance","value":[]},
+        {"op":"replace","path":"/drilldown_refs","value":[]}
+      ]
+    },
+    {
+      "id": "manifest.positive.json_only",
+      "schema": "manifest",
+      "expect": "valid",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"remove","path":"/files/csv"}
+      ]
+    },
+    {
+      "id": "manifest.positive.exact_large_decimal",
+      "schema": "manifest",
+      "expect": "valid",
+      "note": "Decimal strings keep digits a JS Number would lose.",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"replace","path":"/totals/2/amount/value","value":"123456789012345678901234567890.123456789"},
+        {"op":"replace","path":"/totals/2/unallocated_amount/value","value":"0.000000000000000000000000000001"}
+      ]
+    },
+    {
+      "id": "manifest.positive.zero_forms",
+      "schema": "manifest",
+      "expect": "valid",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"replace","path":"/totals/2/amount/value","value":"0.00"}
+      ]
+    },
+    {
+      "id": "manifest.positive.ratio_known",
+      "schema": "manifest",
+      "expect": "valid",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"replace","path":"/ratios/0/value","value":{"state":"known","value":"0.25"}}
+      ]
+    },
+    {
+      "id": "manifest.positive.unknown_every_reason",
+      "schema": "manifest",
+      "expect": "valid",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"replace","path":"/totals/1/amount","value":{"state":"unknown","value":null,"reason":"definition_unavailable"}},
+        {"op":"replace","path":"/totals/1/unallocated_amount","value":{"state":"unknown","value":null,"reason":"missing_attribution"}}
+      ]
+    },
+    {
+      "id": "manifest.positive.all_watermarks_unknown",
+      "schema": "manifest",
+      "expect": "valid",
+      "base": "manifest.positive.full",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks","value":[{"source_id":"src-b","watermark":{"state":"unknown","reason":"partial_source"}}]}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_exponent",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"1e5"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_plus_sign",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"+5"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_negative_zero",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"-0"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_negative_zero_scaled",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"-0.00"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_leading_zero",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"01"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_trailing_dot",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"1."}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_leading_dot",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":".5"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_space",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":" 1"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_comma",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"1,5"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_hex",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"0x10"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_nan",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"NaN"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_empty",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":""}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_double_sign",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"--1"}
+      ]
+    },
+    {
+      "id": "manifest.neg.decimal_too_long",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Wrong decimal / signed amount form.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":"111111111111111111111111111111111111111111111111111111111111111111111111111111111"}
+      ]
+    },
+    {
+      "id": "manifest.neg.amount_json_number",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Amounts are never JSON numbers.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":12.5}
+      ]
+    },
+    {
+      "id": "manifest.neg.amount_bare_number",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount","value":12.5}
+      ]
+    },
+    {
+      "id": "manifest.neg.amount_bare_string",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount","value":"12.50"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_amount_zero_string",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Unknown must never be zero.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/1/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/1/amount/value","value":"0"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_amount_missing_value",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/1/amount",
+      "patch": [
+        {"op":"remove","path":"/totals/1/amount/value"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_amount_missing_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/1/amount",
+      "patch": [
+        {"op":"remove","path":"/totals/1/amount/reason"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_amount_bad_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/1/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/1/amount/reason","value":"because"}
+      ]
+    },
+    {
+      "id": "manifest.neg.known_amount_null",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"replace","path":"/totals/0/amount/value","value":null}
+      ]
+    },
+    {
+      "id": "manifest.neg.known_amount_with_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"add","path":"/totals/0/amount/reason","value":"missing_source"}
+      ]
+    },
+    {
+      "id": "manifest.neg.amount_state_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/amount",
+      "patch": [
+        {"op":"remove","path":"/totals/0/amount/state"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unallocated_amount_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0",
+      "patch": [
+        {"op":"remove","path":"/totals/0/unallocated_amount"}
+      ]
+    },
+    {
+      "id": "manifest.neg.valuation_basis_missing_bucket",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/valuation_basis",
+      "patch": [
+        {"op":"remove","path":"/totals/0/valuation_basis/estimated"}
+      ]
+    },
+    {
+      "id": "manifest.neg.scope_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Unscoped manifest.",
+      "base": "manifest.positive.full",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/scope"}
+      ]
+    },
+    {
+      "id": "manifest.neg.project_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/scope",
+      "patch": [
+        {"op":"remove","path":"/scope/project_id"}
+      ]
+    },
+    {
+      "id": "manifest.neg.currency_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/currency"}
+      ]
+    },
+    {
+      "id": "manifest.neg.currency_lowercase",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/currency",
+      "patch": [
+        {"op":"replace","path":"/currency","value":"usd"}
+      ]
+    },
+    {
+      "id": "manifest.neg.policy_refs_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/policy_refs"}
+      ]
+    },
+    {
+      "id": "manifest.neg.accounting_policy_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/policy_refs",
+      "patch": [
+        {"op":"remove","path":"/policy_refs/accounting_policy_ref"}
+      ]
+    },
+    {
+      "id": "manifest.neg.snapshot_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "",
+      "patch": [
+        {"op":"remove","path":"/snapshot"}
+      ]
+    },
+    {
+      "id": "manifest.neg.snapshot_fingerprint_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/snapshot",
+      "patch": [
+        {"op":"remove","path":"/snapshot/snapshot_fingerprint"}
+      ]
+    },
+    {
+      "id": "manifest.neg.snapshot_with_mode",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Manifest snapshot is always resolved, no mode key.",
+      "base": "manifest.positive.full",
+      "error_at": "/snapshot",
+      "patch": [
+        {"op":"add","path":"/snapshot/mode","value":"pinned"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_key_top",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "",
+      "patch": [
+        {"op":"add","path":"/extra_key","value":"x"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_key_total",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0",
+      "patch": [
+        {"op":"add","path":"/totals/0/extra_key","value":"x"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_key_coverage",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage",
+      "patch": [
+        {"op":"add","path":"/totals/0/coverage/extra_key","value":1}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_key_file",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json",
+      "patch": [
+        {"op":"add","path":"/files/json/extra_key","value":"x"}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_key_files",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files",
+      "patch": [
+        {"op":"add","path":"/files/xml","value":{"object_ref":{"object_store_id":"store-synthetic","object_key":"exp/exp-1.xml"},"byte_size":1024,"content_hash":"sha256:1111111111111111111111111111111111111111111111111111111111111111","row_count":3,"media_type":"text/csv"}}
+      ]
+    },
+    {
+      "id": "manifest.neg.unknown_key_object_ref",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/provenance/0/object_ref",
+      "patch": [
+        {"op":"add","path":"/provenance/0/object_ref/url","value":"x"}
+      ]
+    },
+    {
+      "id": "manifest.neg.count_negative_known",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Negative counts.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/known_count",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/known_count","value":-1}
+      ]
+    },
+    {
+      "id": "manifest.neg.count_negative_partial",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/partial_count",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/partial_count","value":-1}
+      ]
+    },
+    {
+      "id": "manifest.neg.count_negative_unknown",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/unknown_count",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/unknown_count","value":-1}
+      ]
+    },
+    {
+      "id": "manifest.neg.count_fraction",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/known_count",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/known_count","value":1.5}
+      ]
+    },
+    {
+      "id": "manifest.neg.count_above_safe_integer",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/known_count",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/known_count","value":9007199254740992}
+      ]
+    },
+    {
+      "id": "manifest.neg.count_string",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/known_count",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/known_count","value":"3"}
+      ]
+    },
+    {
+      "id": "manifest.neg.byte_size_negative",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/byte_size",
+      "patch": [
+        {"op":"replace","path":"/files/json/byte_size","value":-1}
+      ]
+    },
+    {
+      "id": "manifest.neg.row_count_negative",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/csv/row_count",
+      "patch": [
+        {"op":"replace","path":"/files/csv/row_count","value":-1}
+      ]
+    },
+    {
+      "id": "manifest.neg.max_fraction_digits_31",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/precision/max_fraction_digits",
+      "patch": [
+        {"op":"replace","path":"/precision/max_fraction_digits","value":31}
+      ]
+    },
+    {
+      "id": "manifest.neg.max_fraction_digits_negative",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/precision/max_fraction_digits",
+      "patch": [
+        {"op":"replace","path":"/precision/max_fraction_digits","value":-1}
+      ]
+    },
+    {
+      "id": "manifest.neg.totals_empty",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals",
+      "patch": [
+        {"op":"replace","path":"/totals","value":[]}
+      ]
+    },
+    {
+      "id": "manifest.neg.totals_65",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Unbounded totals.",
+      "base": "manifest.positive.full",
+      "error_at": "/totals",
+      "patch": [
+        {"op":"repeat_item","path":"/totals","count":65}
+      ]
+    },
+    {
+      "id": "manifest.neg.source_watermarks_empty",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks","value":[]}
+      ]
+    },
+    {
+      "id": "manifest.neg.source_watermarks_65",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks",
+      "patch": [
+        {"op":"repeat_item","path":"/source_watermarks","count":65}
+      ]
+    },
+    {
+      "id": "manifest.neg.missing_source_ids_65",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/1/coverage/missing_source_ids",
+      "patch": [
+        {"op":"generate_ids","path":"/totals/1/coverage/missing_source_ids","count":65,"prefix":"src-"}
+      ]
+    },
+    {
+      "id": "manifest.neg.missing_source_ids_duplicates",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/1/coverage/missing_source_ids",
+      "patch": [
+        {"op":"replace","path":"/totals/1/coverage/missing_source_ids","value":["src-b","src-b"]}
+      ]
+    },
+    {
+      "id": "manifest.neg.provenance_ids_17",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/observed_facts/0/provenance_ids",
+      "patch": [
+        {"op":"generate_ids","path":"/observed_facts/0/provenance_ids","count":17,"prefix":"prov-"}
+      ]
+    },
+    {
+      "id": "manifest.neg.provenance_ids_empty",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/observed_facts/0/provenance_ids",
+      "patch": [
+        {"op":"replace","path":"/observed_facts/0/provenance_ids","value":[]}
+      ]
+    },
+    {
+      "id": "manifest.neg.observed_facts_129",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/observed_facts",
+      "patch": [
+        {"op":"repeat_item","path":"/observed_facts","count":129}
+      ]
+    },
+    {
+      "id": "manifest.neg.ratios_33",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios",
+      "patch": [
+        {"op":"repeat_item","path":"/ratios","count":33}
+      ]
+    },
+    {
+      "id": "manifest.neg.environments_9",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/environments",
+      "patch": [
+        {"op":"generate_ids","path":"/environments","count":9,"prefix":"env_"}
+      ]
+    },
+    {
+      "id": "manifest.neg.bad_hash_query_short",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Bad source/query hash.",
+      "base": "manifest.positive.full",
+      "error_at": "/query_ref/query_hash",
+      "patch": [
+        {"op":"replace","path":"/query_ref/query_hash","value":"sha256:abc"}
+      ]
+    },
+    {
+      "id": "manifest.neg.bad_hash_query_zero",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/query_ref/query_hash",
+      "patch": [
+        {"op":"replace","path":"/query_ref/query_hash","value":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+      ]
+    },
+    {
+      "id": "manifest.neg.bad_hash_file_uppercase",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/content_hash",
+      "patch": [
+        {"op":"replace","path":"/files/json/content_hash","value":"sha256:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"}
+      ]
+    },
+    {
+      "id": "manifest.neg.bad_hash_provenance_no_prefix",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/provenance/0/content_hash",
+      "patch": [
+        {"op":"replace","path":"/provenance/0/content_hash","value":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
+      ]
+    },
+    {
+      "id": "manifest.neg.bad_hash_fingerprint_65_hex",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/snapshot/snapshot_fingerprint",
+      "patch": [
+        {"op":"replace","path":"/snapshot/snapshot_fingerprint","value":"sha256:66666666666666666666666666666666666666666666666666666666666666666"}
+      ]
+    },
+    {
+      "id": "manifest.neg.bad_hash_file_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/csv",
+      "patch": [
+        {"op":"remove","path":"/files/csv/content_hash"}
+      ]
+    },
+    {
+      "id": "manifest.neg.ref_empty_id",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Empty reference.",
+      "base": "manifest.positive.full",
+      "error_at": "/policy_refs/accounting_policy_ref/id",
+      "patch": [
+        {"op":"replace","path":"/policy_refs/accounting_policy_ref/id","value":""}
+      ]
+    },
+    {
+      "id": "manifest.neg.ref_empty_version",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/definition_ref/version",
+      "patch": [
+        {"op":"replace","path":"/totals/0/definition_ref/version","value":""}
+      ]
+    },
+    {
+      "id": "manifest.neg.ref_empty_query_id",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/query_ref/query_id",
+      "patch": [
+        {"op":"replace","path":"/query_ref/query_id","value":""}
+      ]
+    },
+    {
+      "id": "manifest.neg.ref_empty_object_key",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/provenance/0/object_ref/object_key",
+      "patch": [
+        {"op":"replace","path":"/provenance/0/object_ref/object_key","value":""}
+      ]
+    },
+    {
+      "id": "manifest.neg.ref_empty_store",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/provenance/0/object_ref/object_store_id",
+      "patch": [
+        {"op":"replace","path":"/provenance/0/object_ref/object_store_id","value":""}
+      ]
+    },
+    {
+      "id": "manifest.neg.object_key_url",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "No URLs.",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/object_ref/object_key",
+      "patch": [
+        {"op":"replace","path":"/files/json/object_ref/object_key","value":"https://example.invalid/exp.json?sig=abc"}
+      ]
+    },
+    {
+      "id": "manifest.neg.object_key_query",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/object_ref/object_key",
+      "patch": [
+        {"op":"replace","path":"/files/json/object_ref/object_key","value":"exp/exp-1.json?sig=abc"}
+      ]
+    },
+    {
+      "id": "manifest.neg.object_key_dotdot",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/object_ref/object_key",
+      "patch": [
+        {"op":"replace","path":"/files/json/object_ref/object_key","value":"exp/../exp-1.json"}
+      ]
+    },
+    {
+      "id": "manifest.neg.object_key_double_slash",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/object_ref/object_key",
+      "patch": [
+        {"op":"replace","path":"/files/json/object_ref/object_key","value":"exp//exp-1.json"}
+      ]
+    },
+    {
+      "id": "manifest.neg.object_key_leading_slash",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/object_ref/object_key",
+      "patch": [
+        {"op":"replace","path":"/files/json/object_ref/object_key","value":"/exp-1.json"}
+      ]
+    },
+    {
+      "id": "manifest.neg.ref_null",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/drilldown_refs/0/object_ref",
+      "patch": [
+        {"op":"replace","path":"/drilldown_refs/0/object_ref","value":null}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_known_without_time",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Known vs unknown watermark.",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0/watermark",
+      "patch": [
+        {"op":"remove","path":"/source_watermarks/0/watermark/watermark_utc"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_known_without_cursor_key",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0/watermark",
+      "patch": [
+        {"op":"remove","path":"/source_watermarks/0/watermark/cursor"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_known_with_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0/watermark",
+      "patch": [
+        {"op":"add","path":"/source_watermarks/0/watermark/reason","value":"missing_source"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_unknown_with_time",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/2/watermark",
+      "patch": [
+        {"op":"add","path":"/source_watermarks/2/watermark/watermark_utc","value":"2026-10-01T12:00:00Z"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_unknown_without_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/2/watermark",
+      "patch": [
+        {"op":"remove","path":"/source_watermarks/2/watermark/reason"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_unknown_bad_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/2/watermark",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks/2/watermark/reason","value":"whatever"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_state_maybe",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/2/watermark",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks/2/watermark/state","value":"maybe"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_time_offset",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0/watermark",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks/0/watermark/watermark_utc","value":"2026-10-01T14:00:00+02:00"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_time_no_zone",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0/watermark",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks/0/watermark/watermark_utc","value":"2026-10-01T12:00:00"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_cursor_bad_chars",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0/watermark",
+      "patch": [
+        {"op":"replace","path":"/source_watermarks/0/watermark/cursor","value":"bad cursor!"}
+      ]
+    },
+    {
+      "id": "manifest.neg.watermark_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/source_watermarks/0",
+      "patch": [
+        {"op":"remove","path":"/source_watermarks/0/watermark"}
+      ]
+    },
+    {
+      "id": "manifest.neg.coverage_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0",
+      "patch": [
+        {"op":"remove","path":"/totals/0/coverage"}
+      ]
+    },
+    {
+      "id": "manifest.neg.coverage_completeness_other",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/coverage/completeness",
+      "patch": [
+        {"op":"replace","path":"/totals/0/coverage/completeness","value":"mostly"}
+      ]
+    },
+    {
+      "id": "manifest.neg.reconciliation_state_other",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/reconciliation_state",
+      "patch": [
+        {"op":"replace","path":"/totals/0/reconciliation_state","value":"settled"}
+      ]
+    },
+    {
+      "id": "manifest.neg.denominator_unknown_kind",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Denominator unknown kind.",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/denominator",
+      "patch": [
+        {"op":"replace","path":"/ratios/0/denominator/kind","value":"bogus"}
+      ]
+    },
+    {
+      "id": "manifest.neg.denominator_none_kind",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "A ratio must name its denominator.",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/denominator",
+      "patch": [
+        {"op":"replace","path":"/ratios/0/denominator","value":{"kind":"none"}}
+      ]
+    },
+    {
+      "id": "manifest.neg.denominator_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0",
+      "patch": [
+        {"op":"remove","path":"/ratios/0/denominator"}
+      ]
+    },
+    {
+      "id": "manifest.neg.denominator_definition_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/denominator",
+      "patch": [
+        {"op":"remove","path":"/ratios/0/denominator/definition_ref"}
+      ]
+    },
+    {
+      "id": "manifest.neg.ratio_value_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0",
+      "patch": [
+        {"op":"remove","path":"/ratios/0/value"}
+      ]
+    },
+    {
+      "id": "manifest.neg.ratio_unknown_with_zero",
+      "schema": "manifest",
+      "expect": "invalid",
+      "note": "Zero/missing denominator must be null, not 0.",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/value",
+      "patch": [
+        {"op":"replace","path":"/ratios/0/value/value","value":"0"}
+      ]
+    },
+    {
+      "id": "manifest.neg.ratio_unknown_without_reason",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/value",
+      "patch": [
+        {"op":"remove","path":"/ratios/0/value/reason"}
+      ]
+    },
+    {
+      "id": "manifest.neg.ratio_value_number",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/value",
+      "patch": [
+        {"op":"replace","path":"/ratios/0/value","value":0.25}
+      ]
+    },
+    {
+      "id": "manifest.neg.ratio_numerator_unknown_metric",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/ratios/0/numerator_metric_key",
+      "patch": [
+        {"op":"replace","path":"/ratios/0/numerator_metric_key","value":"revenue"}
+      ]
+    },
+    {
+      "id": "manifest.neg.metric_unknown",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/totals/0/metric_key",
+      "patch": [
+        {"op":"replace","path":"/totals/0/metric_key","value":"revenue"}
+      ]
+    },
+    {
+      "id": "manifest.neg.precision_rounding_applied",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/precision/rounding_applied",
+      "patch": [
+        {"op":"replace","path":"/precision/rounding_applied","value":true}
+      ]
+    },
+    {
+      "id": "manifest.neg.precision_json_numbers",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/precision/json_number_amounts",
+      "patch": [
+        {"op":"replace","path":"/precision/json_number_amounts","value":true}
+      ]
+    },
+    {
+      "id": "manifest.neg.precision_representation",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/precision/representation",
+      "patch": [
+        {"op":"replace","path":"/precision/representation","value":"float"}
+      ]
+    },
+    {
+      "id": "manifest.neg.presentation_rounding_exact",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/presentation_rounding/applies_to_exact_values",
+      "patch": [
+        {"op":"replace","path":"/presentation_rounding/applies_to_exact_values","value":true}
+      ]
+    },
+    {
+      "id": "manifest.neg.csv_safety_none",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/serialization_policy/csv_formula_safety",
+      "patch": [
+        {"op":"replace","path":"/serialization_policy/csv_formula_safety","value":"none"}
+      ]
+    },
+    {
+      "id": "manifest.neg.csv_safety_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/serialization_policy",
+      "patch": [
+        {"op":"remove","path":"/serialization_policy/csv_formula_safety"}
+      ]
+    },
+    {
+      "id": "manifest.neg.files_empty",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files",
+      "patch": [
+        {"op":"replace","path":"/files","value":{}}
+      ]
+    },
+    {
+      "id": "manifest.neg.files_json_wrong_media",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/json/media_type",
+      "patch": [
+        {"op":"replace","path":"/files/json/media_type","value":"text/csv"}
+      ]
+    },
+    {
+      "id": "manifest.neg.files_csv_wrong_media",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/files/csv/media_type",
+      "patch": [
+        {"op":"replace","path":"/files/csv/media_type","value":"application/json"}
+      ]
+    },
+    {
+      "id": "manifest.neg.assumption_policy_missing",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/assumptions/0",
+      "patch": [
+        {"op":"remove","path":"/assumptions/0/policy_ref"}
+      ]
+    },
+    {
+      "id": "manifest.neg.assumption_free_text",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/assumptions/0",
+      "patch": [
+        {"op":"add","path":"/assumptions/0/text","value":"free text"}
+      ]
+    },
+    {
+      "id": "manifest.neg.fact_without_provenance",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/observed_facts/0",
+      "patch": [
+        {"op":"remove","path":"/observed_facts/0/provenance_ids"}
+      ]
+    },
+    {
+      "id": "manifest.neg.schema_version_wrong",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/schema_version",
+      "patch": [
+        {"op":"replace","path":"/schema_version","value":"ReportingExportManifest/1.0.0"}
+      ]
+    },
+    {
+      "id": "manifest.neg.query_schema_version_wrong",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/query_ref/query_schema_version",
+      "patch": [
+        {"op":"replace","path":"/query_ref/query_schema_version","value":"ReportingQuery/1.0.0"}
+      ]
+    },
+    {
+      "id": "manifest.neg.period_offset_time",
+      "schema": "manifest",
+      "expect": "invalid",
+      "base": "manifest.positive.full",
+      "error_at": "/period/end_utc",
+      "patch": [
+        {"op":"replace","path":"/period/end_utc","value":"2026-10-01T02:00:00+02:00"}
+      ]
+    }
+  ]
+}
