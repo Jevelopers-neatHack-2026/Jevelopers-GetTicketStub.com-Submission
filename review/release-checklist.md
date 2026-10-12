@@ -29,4 +29,15 @@ Until every applicable line passes, `collateralPackageReadiness.decision` remain
 - [ ] Confirm current rights, consent, selected wording, provenance, brand, accessibility, and human approvals apply to the exact submission bytes and public destinations.
 - [ ] Record explicit submitter authorization and the exact final decision. The package builder does not publish, upload, or submit.
 
+### Input status to carry into the next review
+
+Record these as status only. None of them ticks a line above, and the earlier source approvals, pins and history stay in place. Producer receipts are linked in `review/releases/v0.1.0-rehearsal.md`.
+
+- [ ] Known team, project and repository locator are pending ledger rows (`CLAIM-X-DEST-*`) from a mutable issue record. Locator confirmation by its route owner, the submitter name, demo URL and official post URL are still missing.
+- [ ] CFO.ai: the authentic plan is available (integration-evals revision 2) and owner acceptance is preserved. Finance finding `CFO-R2-001` is unresolved, with no waiver, and the cost-intelligence export is pending. Do not copy financial figures into this checklist.
+- [ ] Entire: static public source is available. That is source availability, not runtime results, and SPN-02 stays `PENDING`.
+- [ ] Agent capture is cancelled, and this checklist authorizes none. A human records and a human submits; any future upload needs its own separate, explicit authorization.
+- [ ] The Discord cutoff is not verified in the recorded sources; refresh it from the live official source.
+- [ ] Required candidate validation: rebind provenance, inventory and package checksums for the edited files, regenerate the manifest, and run the full test suite on that exact candidate. Each step stays pending until exact candidate receipts establish completion. Nothing here claims a test pass, a PR, or a release approval.
+
 Until every applicable line passes, `externalSubmissionReadiness.decision` remains `BLOCKED`. At the checked organizer source, the official post URL was not supplied and the final cutoff remained pending a Discord announcement; update those fields from the live official source before submission. The actual product demo, team/name/project/public URL values, and authentic per-sponsor results remain unavailable in this rehearsal package.
