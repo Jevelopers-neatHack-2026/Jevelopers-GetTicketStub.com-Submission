@@ -5457,6 +5457,116 @@ test('a fresh controller completion survives a waited SQLite writer lock without
   assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0);
 });
 
+test('a stale completion refresh does not start a second transaction after the parent runtime deadline', async t => {
+  const temporary = temporaryDatabase('bounded-completion-parent-deadline-');
+  const store = openStore(temporary.databasePath, Date.now, 250);
+  let blocker = null;
+  t.after(async () => {
+    await blocker?.cleanup();
+    store.close();
+    temporary.cleanup();
+  });
+  const lease = createRunningWorkflow(store, 'completion-parent-deadline');
+  makeAdmission(store, lease, SINGLE_PLAN, '{}', lease.workflowId + ':first-admission');
+  const originalComplete = store._localControllerComplete.bind(store);
+  const attempted = [];
+  const callTimesMsAfterDeadline = [];
+  const deadlineNs = process.hrtime.bigint() + 100_000_000n;
+  let firstError = null;
+  let stateBeforeFirstAttempt = null;
+  let stateAfterRejectedAttempt = null;
+  let checkpointAfterRejectedAttempt = null;
+  store._localControllerComplete = (...args) => {
+    attempted.push(args[1]);
+    callTimesMsAfterDeadline.push(Number(process.hrtime.bigint() - deadlineNs) / 1e6);
+    if (attempted.length === 1) {
+      stateBeforeFirstAttempt = snapshotDatabase(temporary.databasePath);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 140);
+      const stateBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2);
+      const state = new Int32Array(stateBuffer);
+      const worker = new Worker(`
+        const { workerData } = require('node:worker_threads');
+        const { DatabaseSync } = require('node:sqlite');
+        const state = new Int32Array(workerData.stateBuffer);
+        let db;
+        try {
+          db = new DatabaseSync(workerData.databasePath, { timeout: 1000 });
+          db.exec('BEGIN IMMEDIATE');
+          Atomics.store(state, 0, 1);
+          Atomics.notify(state, 0);
+          Atomics.wait(state, 1, 0, workerData.holdMs);
+          db.exec('ROLLBACK');
+          db.close();
+          db = null;
+          Atomics.store(state, 0, 2);
+          Atomics.notify(state, 0);
+        } catch {
+          Atomics.store(state, 0, -1);
+          Atomics.notify(state, 0);
+          throw new Error('synthetic SQLite writer failed');
+        } finally {
+          try { if (db?.isTransaction) db.exec('ROLLBACK'); } catch {}
+          try { db?.close(); } catch {}
+        }
+      `, { eval: true, workerData: {
+        databasePath: temporary.databasePath, stateBuffer, holdMs: 200
+      } });
+      const exited = new Promise(resolve => worker.once('exit', resolve));
+      const setupDeadline = Date.now() + 5_000;
+      while (Atomics.load(state, 0) !== 1) {
+        const current = Atomics.load(state, 0);
+        if (current === -1) throw new Error('The synthetic SQLite writer failed.');
+        const remaining = setupDeadline - Date.now();
+        if (remaining <= 0 || Atomics.wait(state, 0, current, remaining) === 'timed-out') {
+          throw new Error('The synthetic SQLite writer exceeded its setup bound.');
+        }
+      }
+      blocker = { exited, cleanup: () => worker.terminate() };
+    }
+    try {
+      return originalComplete(...args);
+    } catch (error) {
+      if (attempted.length === 1) {
+        firstError = error;
+        stateAfterRejectedAttempt = snapshotDatabase(temporary.databasePath);
+        checkpointAfterRejectedAttempt = store.getCheckpoint(lease.workflowId);
+      }
+      throw error;
+    }
+  };
+
+  const result = await runBoundedLocalPlan({
+    store,
+    workflowId: lease.workflowId,
+    ownerId: lease.ownerId,
+    fence: lease.fence,
+    busyTimeoutMs: 250,
+    runtimeDeadlineNs: deadlineNs
+  });
+  await blocker?.exited;
+
+  assert.ok(callTimesMsAfterDeadline[0] < 0, 'the first completion begins before the parent deadline');
+  assert.ok(process.hrtime.bigint() >= deadlineNs, 'the parent deadline expires while completion is blocked');
+  assert.ok(store.getWorkflow(lease.workflowId).leaseExpiresAtMs > Date.now(), 'the workflow lease remains valid');
+  assert.equal(result.status, 'stopped');
+  assert.equal(result.reason, 'LOCAL_COMPLETION_BUSY');
+  assert.equal(attempted.length, 1, 'no second completion transaction starts after parent deadline expiry');
+  assert.equal(callTimesMsAfterDeadline.length, 1);
+  assert.equal(firstError?.code, 'CONCURRENT_MODIFICATION');
+  assert.equal(stateAfterRejectedAttempt, stateBeforeFirstAttempt,
+    'the stale completion transaction rolls back without changing durable state');
+  assert.equal(snapshotDatabase(temporary.databasePath), stateAfterRejectedAttempt,
+    'deadline rejection does not debit, reserve, or persist another completion');
+  const checkpoint = store.getCheckpoint(lease.workflowId);
+  assert.equal(checkpoint.data.pendingStepId, 'only');
+  assert.equal(checkpoint.data.completedResultsJson, '{}');
+  assert.deepEqual(checkpoint, checkpointAfterRejectedAttempt,
+    'the post-rejection checkpoint and budget remain unchanged');
+  assert.equal(store.listEvents({ workflowId: lease.workflowId })
+    .filter(event => event.type === 'private_local_step_completed').length, 0);
+  assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0);
+});
+
 test('unmarked stale completion clocks and caller marker injection are rejected without writes', async t => {
   const temporary = temporaryDatabase('bounded-unmarked-completion-clock-');
   const clock = mutableClock(60_000);

@@ -967,6 +967,9 @@ export async function runBoundedLocalPlan(input) {
             const retryElapsed = elapsedNow(elapsedAtStart, initialMono);
             const retryClockReason = checkClockBudget(byteRecord.state, retryWallNow, retryElapsed, limitSet);
             if (retryClockReason) return controllerStop(retryClockReason, workflowId, checkpointSequence);
+            if (hasBusyTimeout && !completionRetryWindowAvailable(fields, retrySnapshot, retryWallNow, retryElapsed, limitSet)) {
+              return controllerStop('LOCAL_COMPLETION_BUSY', workflowId, checkpointSequence);
+            }
             const retryBudget = Object.freeze({
               ...byteRecord.state,
               lastWallMs: retryWallNow,
