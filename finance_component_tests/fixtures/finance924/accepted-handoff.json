@@ -1,0 +1,129 @@
+{
+  "status": "FINANCE_OWNER_ACCEPTED_SYNTHETIC_CONFORMANCE_ONLY",
+  "producerHead": "924cdd2b5489681434790b5d1d7aac138198ccfd",
+  "producerTree": "88c0bcaeaaee050678ca59261229c5f9ad1bfd13",
+  "candidateCheckout": "4ce2b986c5aa068d5ace66cf2cadb6848c5f8f7a",
+  "candidateRun": 38248332764,
+  "artifactId": 11747500337,
+  "actualMerge": "06dafe24183c0243b30e5b851b3a6ff218bd88d1",
+  "actualMergeTree": "88c0bcaeaaee050678ca59261229c5f9ad1bfd13",
+  "mainRun": 38249053428,
+  "mainVerification": "pending; candidate acceptance remains separately identified",
+  "independentReviewSha256": "59977ebcb04a7c2d2a97830d05c7930098b57ceeb3391c85199218aad1b87387",
+  "files": {
+    "producer-v2-pagination-page.json": {
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08-pagination924-candidate-artifacts/reporting/producer-v2-pagination-page.json",
+      "sha256": "0b69c52a47e13cb181c0abcf388a15753ed9673dc74b583da0a0d305330e4423"
+    },
+    "producer-v2-refusals-page.json": {
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08-pagination924-candidate-artifacts/reporting/producer-v2-refusals-page.json",
+      "sha256": "eefdaa7f7f55ce9f5340d63e0fe527a63dd12126f9ccf030b950af6fbfe74953"
+    }
+  },
+  "api": {
+    "imports": [
+      "@jevelopers/cost-intelligence",
+      "@jevelopers/cost-intelligence/reporting"
+    ],
+    "querySummary": "overloaded1.0.0 legacy or2.0.0 expanded query -> Promise<ApiResult<matchingFinancialSummaryPage>>",
+    "querySummaryV2": "FinancialSummaryQueryV2 -> Promise<ApiResult<FinancialSummaryPageV2>>",
+    "readVerifiedSummarySnapshotV2": "schemaVersion1.0.0 hash-only descriptor -> Promise<ApiResult<2.0.0 FIRSTpage>>, v2-created snapshots only",
+    "readVerifiedSummarySnapshot": "same descriptor -> Promise<ApiResult<1.0.0 FIRSTpage>>, v1-created representable UUID/singlecurrency snapshots only",
+    "createReportingSnapshotReader": "readVerifiedSnapshot({scope,snapshotId,queryContentHash,summaryContentHash}) -> Promise<legacyFirstPage|null>; no economiccallerdata, exportstillrequires independentexportpermission",
+    "resultEnvelope": "{ok:true,value:page}|{ok:false,error:{schemaVersion,module,operation,code,retryable,safe_message,diagnostic_ref}}",
+    "v2PageFields": [
+      "schemaVersion",
+      "requestId",
+      "snapshotId",
+      "queryContentHash",
+      "summaryContentHash",
+      "asOf",
+      "timezone",
+      "period",
+      "scope",
+      "filters",
+      "watermark",
+      "summary",
+      "details",
+      "detailCount",
+      "hasMore",
+      "nextCursor",
+      "canonicalSummaries",
+      "canonicalMappingStatus"
+    ],
+    "money": "exactdecimalstringsscale0..18, separated currencies/no FX inference; ReportingAmount unknown/partial withnullable totals; simulated amounts remain separate",
+    "limits": {
+      "pageSize": "integer1..500",
+      "cursor": "opaque base64url max2048",
+      "sourceRows": "50000",
+      "lineage": "32links/33nodes",
+      "period": "UTC endexclusive, IANA timezonevalidation"
+    }
+  },
+  "authority": {
+    "canonicalOperation": "reporting.querySummary",
+    "canonicalPermission": "finance.summary.read",
+    "principalKinds": [
+      "user",
+      "service"
+    ],
+    "scope": [
+      "tenantId",
+      "projectId",
+      "actorId",
+      "environment",
+      "billingMode"
+    ],
+    "currentProof": "trustedContext.resolve exactscope andfinanceAuthority.authorizeCurrent exactoperation/permission; active membership/service revision, currentverified/expiresproof rechecked beforelookup/replay andafter waits/commit/disclosure",
+    "optionalProductAdapter": "ci-finance-host-action-mapping-1.0.0; explicit configuredFinance-owned mapping only, not automaticalias",
+    "hostActionMapping": {
+      "finance.read": {
+        "operation": "reporting.querySummary",
+        "permission": "finance.summary.read"
+      },
+      "finance.export": {
+        "operation": "integrations.exportSummary",
+        "permission": "finance.summary.export"
+      }
+    },
+    "denials": [
+      "read-only grant cannot export",
+      "roles/staffplatform implyno project grant",
+      "guest/anonymous denied",
+      "caller actor/tenant orsource-mode guesses cannot establish stableFinance scope",
+      "wrongaudience/project/environment/economic/evidence mapping or revoked/stalemembership denied"
+    ],
+    "modeMeaning": "Requested billingMode/env only validatedscope selectors; NEVER proof actual providercharges/cash/revenue/paidrun. Synthetic live-billing fixture expense isnot genuine providerbilling acceptance.",
+    "grantArtifactStatus": "ExistingactualPGfixtures use identified syntheticservice grants; realProduct mountedcurrent session/project mapping and grants remain absent; no issuerpermission fabricated"
+  },
+  "cursor": {
+    "consumerTreatment": "opaque token, never generate/alter/resign; HMACprivatehostkey grantsnoauthority",
+    "follow": "same normalizedquery/filter/groupings/period/timezone/policy/encoding/pageSize andsnapshotId, setcursor=priornextCursor; stophasMorefalse/nextCursornull",
+    "signedBinding": [
+      "snapshotId",
+      "queryHash",
+      "offset",
+      "pageSize",
+      "version2"
+    ],
+    "normalizedQueryBinding": "all5scope fields includingactor; exactencoding, period/timezone/filter/groupings/policy/pageSize, asOf; arrayfilter/grouping sort; transportrequestId/idempotencyKey excluded",
+    "aggregateStability": "snapshotId/queryContentHash/summaryContentHash/asOf/watermark frozen; detailslice varies. Lateledger revisions leavefrozen snapshot unchanged; normalizedquerychange rejects",
+    "readerDistinction": "hash-only snapshotreader rebuildsoriginal FIRSTpage withstored pageSize, notcontinuationpage; export mayusefullaggregate evenfirstpagehasMoretrue",
+    "hashSemantics": "recursive sortedobject canonicalJSON/arrayorder retained; v2summaryContentHash=hash(summaryProjection), v1=hash(canonicalFinancialSummary), snapshotId=hash(fullprivatefrozencontent); page requestIdnot economicfingerprint",
+    "rotationAndCleanup": "hostsigner rotation invalidatescursor; refreshedauthorizedfirstpage possible onlystoredsnapshot stillavailable. These capturedcursors cannot replayafter disposablePGcontainer cleanup inanotherhost"
+  },
+  "errorCodes": {
+    "VALIDATION_ERROR": "malformedquery/timezone/period/cursor, cursorwithoutsnapshot, tampered/off-grid/wrongpageSizetoken",
+    "UNSUPPORTED_VERSION": "unsupportedwireencoding",
+    "FORBIDDEN_SCOPE": "denied/stale/wrongactor/grant/scope orfiltersscope mismatch",
+    "IDEMPOTENCY_CONFLICT": "snapshot usedwithdifferentnormalizedquery/asOf binding",
+    "SOURCE_UNAVAILABLE": "unwired/missing/corrupt/private/overbound/invalidlineage/storage/snapshot source; partialeconomiccoverage stays explicitunknown/partialsuccessfulsummary if sourceintact, neverfakecompletezero"
+  },
+  "scope": "Actual synthetic PG three pages/six unique details USD+EUR; nine actual typed refusals. No real provider charge, production issuer, export adoption or consumer ACK. Historical Finance22 accepted packet unchanged.",
+  "counterQualification": "revoked_after_commit proves refusal afterCOMMIT; uninstrumented override counters do not prove zero SQL reads",
+  "consumerTargets": {
+    "dashboard": "f8323a918bd9ab66af121e5b4066fe6678fac518",
+    "integrationEvals": "59df31706612fbff869b7c6cf04ba8f9969ddcdf",
+    "ack": "pending for these exact new bytes; use same fixtures"
+  }
+}

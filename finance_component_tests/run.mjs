@@ -8,6 +8,12 @@ import { verifySource, buildSource, fileManifest, recordEvaluator } from './cust
 import { expectedFiles, expectedCases, validateReceipt, sanitizedJson } from './receipt.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
+if (process.argv[2] === '--candidate-924-fixtures') {
+  assert.equal(process.argv.length, 4, 'Candidate fixture mode accepts exactly one output path');
+  const { runCandidate924 } = await import('./candidate924.mjs');
+  await runCandidate924(process.argv[3]);
+  process.exit(process.exitCode ?? 0);
+}
 const [sourceArg, outputArg] = process.argv.slice(2);
 assert.ok(sourceArg && outputArg, 'Usage: node finance_component_tests/run.mjs SOURCE OUTPUT');
 const source = resolve(sourceArg);
