@@ -23,8 +23,12 @@ shared-contracts and retrieval pins remain unchanged; the print runtime is separ
 
 ## Reproduction
 
-The `print-component` job in `.github/workflows/verification.yml` stages the exact
-producer checkout and runs `bash component_tests/print-ci.sh`. Build installation
+The unconditional `print-component` job in `.github/workflows/verification.yml`
+runs on pull requests, main pushes and manual dispatch. It selects the explicit
+TEST-ONLY guarded mock profile, stages the exact producer checkout, and runs
+`bash component_tests/guarded-print-ci.sh`. All thirty-three genuine Linux cases
+must pass: seventeen lifetime/native and sixteen original owner protocol/process
+cases. Build installation
 uses the source's checksum-verified Node 24.21.0 archive and npm 11.19.0. Actual
 execution uses the exact amd64 Noble Playwright image from the source profile,
 its existing browser revision 1248/version 156.0.8078.4, and the producer's exact
@@ -34,7 +38,11 @@ UID/GID, zero capabilities, no new privileges, docker-default AppArmor, private
 IPC, 1 GiB shared memory, no network, a read-only root/source, and owned writable
 temporary/evidence storage. No host security policy is changed.
 
-Within that environment the actual evaluator adds its unchanged Bubblewrap PID
+The separate default-false manual input `legacy_print_containment=true` selects
+`print-component-legacy-characterization` and runs the complete unchanged thirteen
+cases via `bash component_tests/print-ci.sh`. It retains honest nonzero failures,
+with no continue-on-error or converted pass. In that legacy characterization the
+actual evaluator adds its ordinary Bubblewrap PID
 and network isolation, read-only checkout, isolated HOME/TMPDIR and bounded
 process group lifecycle. Both security boundaries must operate together. The
 consumer does not claim they are compatible without a real successful run.
@@ -42,7 +50,7 @@ In particular, Bubblewrap's recreated `/dev` may affect the producer's shared
 memory observation; an actual rejection must remain a failure, without policy
 exceptions or timeout increases.
 
-The focused invocation is:
+The focused legacy characterization invocation is:
 
 ```sh
 IE_PRINT_SOURCE=/approved/print-production \
@@ -57,6 +65,21 @@ These variables describe existing files inside the approved runtime; setting the
 does not establish runtime authority. `node-runtime.json` uses the existing
 `ContractRuntime` path/SHA-256 schema. The producer independently verifies runtime
 versions, executable bytes, browser bytes and effective Linux security facts.
+
+## CI criterion mapping
+
+| Existing obligation | Current mandatory evidence | Interpretation |
+| --- | --- | --- |
+| Original negative evaluator and all eight producer protocol controls | Guarded `print-component` executes the original owner path and identical response, retention, cleanup, SQL and hash oracles; positive control also executes actual compose | Test-only mock protocol compatibility |
+| Lifetime, creator death, interruption, races and actual active compose | All thirty-three combined cases, including authenticated pending/start/key/DB-WAL-SHM phase and death evidence | Test-only contained execution and custody |
+| Four portable sanitizer/privacy checks | Four unchanged explicit node IDs in mandatory `tooling` | Privacy behavior remains required |
+| Harmless command under the original nested Bubblewrap boundary | Complete thirteen-case default-false manual legacy job and preserved failed receipts | Unsupported on the observed runner; failure remains failure |
+
+No selected release, ART-03/ART-04/IE-05D, domain, supplier, permission or default-CLI
+criterion is waived or relabeled. Scope is technical test-only compatibility and
+CI repair. Paid/provider execution, source-policy changes and product release
+remain outside this profile. Final exact-head review and fresh normal CI are
+required before merge.
 
 ## Observables and limitations
 
@@ -80,8 +103,12 @@ control and cannot pass `print-preflight`. Cleanup retains `owner.json`; its
 isolated HOME disposal follows completed process teardown.
 
 A missing runtime or failed baseline is an error, never a skipped or mocked pass.
-The CI artifact `print-component-<commit>` retains the run/release audit when
-available, actual container inspections, JUnit and diagnostics. Local macOS
+The normal CI artifact `print-guarded-development-<commit>` retains the run/release
+audit when available, actual container inspections, both suites' JUnits and
+diagnostics. The manual legacy artifact `print-component-<commit>` preserves its
+complete characterization and actual failures. All four unchanged sanitizer/privacy
+tests are also mandatory in the ordinary tooling job through explicit node IDs.
+Local macOS
 execution is characterization only and cannot establish Linux acceptance.
 The initial implementation's local execution was blocked (owner exit 1 and cleanup
 failure under existing macOS containment); Docker had no running daemon. Linux
@@ -153,23 +180,24 @@ Raw inspections and requested IDs are retained before validation. Teardown check
 the returned immutable ID and ownership before removing only that ID. Unknown or
 live termination produces ERROR/quarantine and preserves staging; even successful
 canary staging is kept as diagnostics. Root-owned evidence is archived without
-disposing unknown containers. The original print job, tests and acceptance
-failure remain intact. Local Docker has no daemon: these Linux tests are
-**unexecuted until a real job receipt exists**. Independent review, hostile-test
-results and an explicit reviewed role profile are required before any subsequent
-official backend integration or feasibility claim.
+disposing unknown containers. The original thirteen legacy tests, manual job and
+historical failures remain intact. The initial local characterization had no
+running Docker daemon and could not establish these Linux effects. The actual
+Linux receipts described below establish only the explicit test profile; official
+producer/domain runtime acceptance remains a separate hold.
 
 ## Explicit guarded evaluator development path
 
-The additional `guarded_print_protocol=true` workflow-dispatch input runs the
-experimental `print-guarded-protocol-development` job. Ordinary CLI execution and
-`contained_command` remain unchanged. The immutable evaluator/process settings
+The normal `print-component` job runs the explicit TEST-ONLY guarded profile.
+The former manual `guarded_print_protocol` selector is removed because this
+component check is unconditional on PR/main/manual events. Ordinary CLI execution
+and current-main `contained_command` remain unchanged. The immutable evaluator/process settings
 accept an explicit test invocation object, default `None`; environment variables
-cannot choose this path. The new job first reruns all nine original lifecycle
-cases, then runs the original evaluator fixture and eight producer protocol
+cannot choose this path. The job first reruns all nine original lifecycle
+cases and eight native regressions, then runs the original evaluator fixture and eight producer protocol
 controls through fresh containers. No skips, exception-to-pass conversion or
-producer implementation replacement is added. The original `print-component`
-job retains its failing nested Bubblewrap reproduction.
+producer implementation replacement is added. The explicit manual legacy job
+retains the complete nested Bubblewrap reproduction and its genuine failures.
 
 The host evaluator commits the same typed synthetic negative configuration with
 `/ms-playwright` as the original image's browser path. Its existence and exact
@@ -274,7 +302,7 @@ Owner-writable control receipts use bounded nonblocking nofollow regular-file
 reads. Stdin and stdout share one nonblocking selector and absolute deadline;
 a stalled Docker input consumer cannot postpone it. Guarded host Docker commands
 use a fixed sanitized environment, and Node receives its exact allowlisted
-environment. The development job separately prepares the unchanged image digest
+environment. The TEST-ONLY component job separately prepares the unchanged image digest
 with three bounded 180-second pulls and records each failed attempt. Its 30-minute
 setup/test job budget leaves all 30-second owner and five-second reap bounds intact.
 The earlier combined run `38238794152` was cancelled during image pull before any
@@ -351,6 +379,14 @@ The successor records capped global operation/attempt counts, exports no row
 values, and binds the actual database path to the pinned command, request digest,
 and original protocol/host/positive-source hashes. The original acceptance oracle,
 5 ms requested quantum and deadline remain unchanged.
+The `9e9a147` Linux dispatch `38257737320` passed all thirty-three cases: seventeen
+lifecycle/native and sixteen guarded cases. Artifact `11750464719` has ZIP SHA-256
+`7c0c3da1738b476474aaafbbad3d56246c75c2db4806c2ce79c2d5cd8e1b6aa3`.
+The original positive-command active receipt observed an actual unfinished attempt,
+null outcome, one `execution_started`, the request-bound fixture key, authenticated
+stopped Node/held pidfd and matching DB/WAL/SHM identities at 25.356 seconds; its
+creator-death assertion passed. This is actual synthetic test/offline/simulated
+execution, with no real authorization or product/domain acceptance grant.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,
@@ -362,11 +398,12 @@ at `f0937ad` and the separately failing legacy workflow remain historical facts,
 not proof for the new backend. No revised owner runtime profile, ART-03/ART-04
 acceptance, paid execution authority or product release is claimed.
 
-Promotion proposal: after independent whole-candidate security approval and a
-fresh Linux dispatch passes every original lifecycle/protocol assertion plus all
-new process, deadline, active-compose and custody assertions, select this explicit
-test backend in the normal `print-component` job. Keep the legacy nested
-Bubblewrap path as an explicit manual characterization with its historical red
-results. A subsequent ordinary PR check must pass the promoted combined component
-job before merge. Producer/domain profile approval and ART-03/ART-04/IE-05D owner
-acceptance remain separate holds; this candidate does not grant them.
+Following the actual complete Linux proof, this workflow selects the explicit
+test backend in normal `print-component` CI and preserves the legacy nested
+Bubblewrap path as default-false manual characterization with all historical red
+results. Exact final workflow/current-base review and a fresh ordinary PR run
+must pass the combined component job and existing required verification before
+merge. This does not alter the production CLI, optional hook defaults, current-main
+offline-read containment, fixture/capability bytes, or original protocol oracles.
+Producer/domain profile approval and ART-03/ART-04/IE-05D owner acceptance remain
+separate holds; this candidate does not grant them.
