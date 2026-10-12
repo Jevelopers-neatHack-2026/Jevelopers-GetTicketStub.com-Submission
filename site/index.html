@@ -302,7 +302,7 @@ a{color:inherit}
 .board-copy h2.out{opacity:0;transform:translateY(-14px)}
 .tally{font-family:var(--cond);font-weight:900;font-size:clamp(40px,5vw,80px);line-height:.8;text-align:right;font-variant-numeric:tabular-nums;text-shadow:0 4px 30px rgba(0,0,0,.6)}
 .tally small{display:block;white-space:nowrap;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.1em;margin-top:8px}
-.finale{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 var(--gutter);pointer-events:none;opacity:0;transition:opacity .3s}
+.finale{position:absolute;inset:0;display:grid;place-items:safe center;align-content:safe center;overflow-y:auto;max-height:100dvh;text-align:center;padding:0 var(--gutter);pointer-events:none;opacity:0;transition:opacity .3s}
 .finale .eyebrow{font-family:var(--mono);font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:var(--foil);padding:6px 12px 5px;border-radius:999px}
 .finale.on{opacity:1;pointer-events:auto}
 .finale:before{content:"";position:absolute;inset:0;background:radial-gradient(62% 62% at 50% 52%,rgba(23,20,15,.9),rgba(23,20,15,.62) 70%,rgba(23,20,15,.18))}
