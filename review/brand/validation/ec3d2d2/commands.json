@@ -1,0 +1,117 @@
+{
+  "testedSource": "ec3d2d29f4acb7ffb4b55d51b657d5cfa2016c3d",
+  "workingTreeBefore": "clean",
+  "runtime": "v24.15.0",
+  "executionMode": "local source and synthetic fixtures; loopback HTTP tests only; no font/CDN/provider response fetched",
+  "scope": "LP-06 draft source/build consistency; no brand/publication/visual acceptance",
+  "records": [
+    {
+      "name": "brand-tests",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "--test",
+        "tests/brand.test.mjs"
+      ],
+      "startedAt": "2026-10-12T16:25:31.628538+00:00",
+      "endedAt": "2026-10-12T16:25:34.701798+00:00",
+      "exitCode": 0,
+      "logs": {
+        "stdout": {
+          "path": "brand-tests.stdout.log",
+          "sha256": "5ce6754c959106e02b74f6dc84d35d2ff06f0e5d45820340098fb775e1542cc0",
+          "bytes": 2300
+        },
+        "stderr": {
+          "path": "brand-tests.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "all-tests",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "--test",
+        "tests/brand.test.mjs",
+        "tests/content-proof.test.mjs",
+        "tests/cta.test.mjs",
+        "tests/foundation.test.mjs",
+        "tests/metadata.test.mjs",
+        "tests/privacy.test.mjs",
+        "tests/scroll.test.mjs",
+        "tests/ux.test.mjs"
+      ],
+      "startedAt": "2026-10-12T16:25:34.701879+00:00",
+      "endedAt": "2026-10-12T16:25:38.220631+00:00",
+      "exitCode": 0,
+      "logs": {
+        "stdout": {
+          "path": "all-tests.stdout.log",
+          "sha256": "93bf9cb8186becc4237fb68d8a4f2bd3603d37c9bbcce8fdb9efd9636e800c94",
+          "bytes": 14296
+        },
+        "stderr": {
+          "path": "all-tests.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "brand-draft",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--suite",
+        "brand",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T16:25:38.220694+00:00",
+      "endedAt": "2026-10-12T16:25:38.598799+00:00",
+      "exitCode": 0,
+      "logs": {
+        "stdout": {
+          "path": "brand-draft.stdout.log",
+          "sha256": "24468f932cb05a5f9774b52a2f0133bc13a67ae57bd5b336188ca1b6dd8b4382",
+          "bytes": 208
+        },
+        "stderr": {
+          "path": "brand-draft.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "brand-release",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--suite",
+        "brand",
+        "--mode",
+        "release"
+      ],
+      "startedAt": "2026-10-12T16:25:38.598854+00:00",
+      "endedAt": "2026-10-12T16:25:38.879350+00:00",
+      "exitCode": 1,
+      "logs": {
+        "stdout": {
+          "path": "brand-release.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "stderr": {
+          "path": "brand-release.stderr.log",
+          "sha256": "470bb5711a9c2b2115db1c2dbb5c276a7eb08f455f3f881476e8a29be160c453",
+          "bytes": 198
+        }
+      }
+    }
+  ],
+  "artifactManifestSha256": "389e41ab3e2f32b9169cd70db129b01466a329dde74e1c6874ebbdba1df56470",
+  "releaseState": "BLOCKED: actual brand release command exits 1; upstream publishable subset empty and approvals/consumer/font decisions pending",
+  "previousDevelopmentChecks": "Default Node 24.19.0: 29 brand tests passed. Precommit pinned Node 24.15.0: 29 brand and 164 complete tests passed; draft exit0/release exit1. Initial raw pinned logs remain in scratch brand-validation; they are not relabeled as this exact committed-source execution."
+}
