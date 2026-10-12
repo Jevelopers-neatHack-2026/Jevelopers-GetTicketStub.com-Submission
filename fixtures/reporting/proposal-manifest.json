@@ -47,8 +47,8 @@
     "src/reporting/schema-v1.ts": "9ff3f4a0aca9b81fb00ad79a399c84df07237ab3947ea8f832f7a156a66d79e2",
     "src/reporting/schema-v2.ts": "0400a033d1bf13cf047cda507639126b362e99c1bb26348ad3b233758aa38fdb",
     "src/reporting/snapshots.ts": "75eedc5ca2bc4c057f1895ee130db70abe7ce9ab646ca97943c5ca0f8ff07a64",
-    "tests/reporting/reporting.test.mjs": "ed9bbed953f9fe02e75e72a19e0e267c09f93f892b21617f4b20ee1c157d4f82",
-    "tests/reporting/semantic-regressions.test.mjs": "e42e9ebf91af58e76a3e2da32ef97838e295397fd19f1a270e106ae6c21ad445",
+    "tests/reporting/reporting.test.mjs": "388dbc5dba1588474db98d79662f7c290c3f33edeca73db95f0c41bff05319bb",
+    "tests/reporting/semantic-regressions.test.mjs": "9c8191e6546b8060ee102063434e4f4b6b8349254a1c3b704b10a84b08503fb1",
     ".github/workflows/ci.yml": "a0b4c5a14796ea333bbc47e7d9ca245915255686dcedb64aab827d5e787fbbf0"
   },
   "schemaHashes": {
@@ -68,7 +68,8 @@
       "registered": 8,
       "passed": 8,
       "failed": 0,
-      "independentReview": false
+      "independentReview": false,
+      "qualification": "8 author source-port tests; final mutated payloads validated first, negative mismatch control; not PG or independent review"
     },
     "newPostgreSQLControls": "five new domain subtests pending hosted PostgreSQL;28domain+1parent=29expectedregistered, not yet executed",
     "localPostgres": "Docker daemon metadata read-only, no retry",
@@ -77,6 +78,14 @@
       "passed": 13,
       "failed": 0,
       "exitCode": 0
+    },
+    "d43HostedPostgres": {
+      "runId": "38241277916",
+      "registered": 29,
+      "passed": 27,
+      "failed": 2,
+      "skipped": 0,
+      "failure": "one reversal fixture domain subtest plus enclosing parent; final identity mapping mismatch rejected by immutable public ledger boundary"
     }
   },
   "missingSources": [
@@ -104,5 +113,7 @@
     "maximumNodes": 33,
     "invalidLineage": "SOURCE_UNAVAILABLE",
     "axis": "immutable terminal original economic type and signed polarity; reversal-of-reversal retains receipt/payout axis"
-  }
+  },
+  "supersededFixtureValidationRevision": "d43b336abc7267a8bb34ca9d3dc344f863d01bf4",
+  "fixtureRepair": "Reversal sourceIdentity.revisionSubjectId and postingMapping.sourceLineId changed together; final payload validated before public PG append and provisional source-event construction/hash. Negative mismatch control retained."
 }

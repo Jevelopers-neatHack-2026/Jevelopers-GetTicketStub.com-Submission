@@ -79,9 +79,12 @@ test('caller request mutation during authorization cannot redirect the private q
 test('provisional public cash reversal ancestry preserves receipt and payout signed axes',async()=>{
  for(const [classification,base,reversed,restored,axis] of [['operating_revenue','7','-2','1','cashReceipts'],['operating_expense','-7','2','-1','cashPayouts'],['payout_transfer','7','-2','1','cashPayouts']]){
   const s=scope(),q=query(s);const original=event(appendRequest(s,'axis-original',{eventType:'cash_movement',classification,amount:base}));
-  const reversal=event(appendRequest(s,'axis-reversal',{eventType:'reversal',classification,amount:reversed,subject:'axis-original',reverses:original.eventId}));
-  const restore=event(appendRequest(s,'axis-restored',{eventType:'reversal',classification,amount:restored,subject:'axis-original',reverses:reversal.eventId}));
-  reversal.payload.sourceIdentity.sourceObjectId+='-reverse';reversal.payload.sourceIdentity.revisionSubjectId+='-reverse';restore.payload.sourceIdentity.sourceObjectId+='-restore';restore.payload.sourceIdentity.revisionSubjectId+='-restore';
+  const reversalRequest=appendRequest(s,'axis-reversal',{eventType:'reversal',classification,amount:reversed,subject:'axis-original',reverses:original.eventId});
+  reversalRequest.sourceIdentity.sourceObjectId+='-reverse';reversalRequest.sourceIdentity.revisionSubjectId+='-reverse';
+  assert.equal(root.validateLedgerAppendRequestBoundary(reversalRequest).ok,false,'mismatched source-line identity must be rejected before constructing source facts');
+  reversalRequest.postingMapping.sourceLineId=reversalRequest.sourceIdentity.revisionSubjectId;const reversal=event(reversalRequest);
+  const restoreRequest=appendRequest(s,'axis-restored',{eventType:'reversal',classification,amount:restored,subject:'axis-original',reverses:reversal.eventId});
+  restoreRequest.sourceIdentity.sourceObjectId+='-restore';restoreRequest.sourceIdentity.revisionSubjectId+='-restore';restoreRequest.postingMapping.sourceLineId=restoreRequest.sourceIdentity.revisionSubjectId;const restore=event(restoreRequest);
   const node=(e,depth,reversesId)=>({eventId:e.eventId,eventType:e.economicEventType,reversesId,scope:s,ingestedAt:'2026-10-12T22:00:00.000Z',financialEffect:true,payload:e.payload,depth,cycle:false});
   original.economicLineage=[node(original,0,null)];reversal.economicLineage=[node(reversal,0,original.eventId),node(original,1,null)];restore.economicLineage=[node(restore,0,reversal.eventId),node(reversal,1,original.eventId),node(original,2,null)];
   const result=await root.querySummaryV2(q,portsFor(q,[original,reversal,restore]));assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.value.summary.currencies[0].metrics[axis].knownSubtotal,'6');assert.equal(result.value.summary.budgets[0].ledgerExpense,'0');
