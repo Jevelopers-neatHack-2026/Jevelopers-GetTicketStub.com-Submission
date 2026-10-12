@@ -13,6 +13,10 @@ import { sendJevOnce } from '../../../src/adapters/jev/http-transport.js';
 import { runPrivateJevTestAttempt } from '../../decisions/jev-adapter.contract/private-orchestrator.js';
 import { recordSyntheticMetric } from '../../decisions/jev-adapter.contract/synthetic-metrics.js';
 import { createOperationsWorker } from '../../../src/worker/private/worker.js';
+import {
+  createOps04FailureDetails, ops04ReadErrorKind, parseOps04FailureDetails,
+  throwAfterOps04FailureCapture
+} from '../ops04-failure-diagnostics.js';
 
 const [databasePath, phase, markerPath, resultPath, metricsPath, mode = 'combined', expectedWorkflowId] = process.argv.slice(2);
 if (!['before-marker', 'after-marker-before-bytes', 'after-write', 'response-before-observation', 'observation-before-checkpoint', 'failure-after-runner-pause', 'failure-runner-marker-missing', 'failure-runner-marker-partial'].includes(phase)
@@ -29,11 +33,12 @@ const phaseCaptureStages = new Set([
   'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
   'restart_loop_settled', 'restart_store_closed',
   'store_close_started', 'store_closed', 'runner_escalation_sent',
-  'fixture_finally_started', 'fixture_finally_complete'
+  'fixture_failure', 'fixture_finally_started', 'fixture_finally_complete'
 ]);
 let phaseCaptureCount = 0;
 let phaseCaptureBytes = 0;
 let phaseCaptureComplete = true;
+let phaseFailureCaptureAttempted = false;
 function capturePhase(stage, details) {
   if (!phaseCaptureEnabled) return true;
   if (!phaseCaptureStages.has(stage) || phaseCaptureCount >= 16) {
@@ -42,19 +47,28 @@ function capturePhase(stage, details) {
   }
   let phaseDetails = {};
   if (details !== undefined) {
-    if (!['stop_settled', 'restart_stop_settled'].includes(stage)
-        || !details || typeof details !== 'object' || Array.isArray(details)
-        || Object.keys(details).sort().join(',') !== 'childrenReaped,stopped,storeClosed'
-        || !['childrenReaped', 'storeClosed', 'stopped'].every(key => typeof details[key] === 'boolean')) {
-      phaseCaptureComplete = false;
-      return false;
+    if (stage === 'fixture_failure') {
+      const failureDetails = parseOps04FailureDetails(details);
+      if (!failureDetails) {
+        phaseCaptureComplete = false;
+        return false;
+      }
+      phaseDetails = failureDetails;
+    } else {
+      if (!['stop_settled', 'restart_stop_settled'].includes(stage)
+          || !details || typeof details !== 'object' || Array.isArray(details)
+          || Object.keys(details).sort().join(',') !== 'childrenReaped,stopped,storeClosed'
+          || !['childrenReaped', 'storeClosed', 'stopped'].every(key => typeof details[key] === 'boolean')) {
+        phaseCaptureComplete = false;
+        return false;
+      }
+      phaseDetails = {
+        stopped: details.stopped,
+        childrenReaped: details.childrenReaped,
+        storeClosed: details.storeClosed
+      };
     }
-    phaseDetails = {
-      stopped: details.stopped,
-      childrenReaped: details.childrenReaped,
-      storeClosed: details.storeClosed
-    };
-  } else if (['stop_settled', 'restart_stop_settled'].includes(stage)) {
+  } else if (['stop_settled', 'restart_stop_settled', 'fixture_failure'].includes(stage)) {
     phaseCaptureComplete = false;
     return false;
   }
@@ -80,6 +94,15 @@ function capturePhase(stage, details) {
     phaseCaptureComplete = false;
     return false;
   }
+}
+
+function captureFixtureFailure(boundary, observations = {}) {
+  if (!phaseCaptureEnabled || phaseFailureCaptureAttempted) return false;
+  phaseFailureCaptureAttempted = true;
+  phaseCaptureComplete = false;
+  const details = createOps04FailureDetails(boundary, observations);
+  if (!details) return false;
+  return capturePhase('fixture_failure', details);
 }
 
 const groupReadyPath = process.env.OPS_CI1_GROUP_READY_FILE;
@@ -481,25 +504,45 @@ t:
   await operationsLoop;
   capturePhase('loop_settled');
   if (!stopped.stopped || !stopped.childrenReaped || !stopped.storeClosed || sinkCalls !== 1) {
+    captureFixtureFailure('SHUTDOWN_STOP_INVARIANT', {
+      workerStopped: stopped.stopped,
+      ownedChildrenReaped: stopped.childrenReaped,
+      storeClosed: stopped.storeClosed,
+      sinkCalledOnce: sinkCalls === 1
+    });
     throw new Error('Combined worker, child, and telemetry shutdown did not finish within its owner bounds.');
   }
   const telemetry = exporter.diagnostics();
   if (telemetry.cursor !== 0 || telemetry.pendingRecords <= 0) {
+    captureFixtureFailure('TELEMETRY_BACKLOG_INVARIANT', {
+      cursorIsZero: telemetry.cursor === 0,
+      pendingRecordsIsPositive: telemetry.pendingRecords > 0
+    });
     throw new Error('The telemetry outage did not retain its cursor and pending event records.');
   }
-  const stoppedOps = new DatabaseSync(databasePath, { readOnly: true });
-  const stoppedWork = stoppedOps.prepare(
-    'SELECT job_id, state, generation, fence_token FROM operations_work WHERE idempotency_key=?'
-  ).get(`jev-composition-${phase}`);
-  const stoppedCounters = stoppedOps.prepare(
-    'SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1'
-  ).get();
-  const attemptsAfterStop = Number(stoppedOps.prepare(
-    'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?'
-  ).get(workflowId).count);
-  const holdsAfterStop = Number(stoppedOps.prepare(
-    'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=? AND authority_hold_ref IS NOT NULL'
-  ).get(workflowId).count);
+  let stoppedOps;
+  let stoppedWork;
+  let stoppedCounters;
+  let attemptsAfterStop;
+  let holdsAfterStop;
+  try {
+    stoppedOps = new DatabaseSync(databasePath, { readOnly: true });
+    stoppedWork = stoppedOps.prepare(
+      'SELECT job_id, state, generation, fence_token FROM operations_work WHERE idempotency_key=?'
+    ).get(`jev-composition-${phase}`);
+    stoppedCounters = stoppedOps.prepare(
+      'SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1'
+    ).get();
+    attemptsAfterStop = Number(stoppedOps.prepare(
+      'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?'
+    ).get(workflowId).count);
+    holdsAfterStop = Number(stoppedOps.prepare(
+      'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=? AND authority_hold_ref IS NOT NULL'
+    ).get(workflowId).count);
+  } catch (error) {
+    captureFixtureFailure('POSTSTOP_READ', { errorKind: ops04ReadErrorKind(error) });
+    throw error;
+  }
   stoppedOps.close();
   summary.telemetryCursor = telemetry.cursor;
   summary.telemetryPendingRecords = telemetry.pendingRecords;
@@ -514,6 +557,11 @@ t:
   summary.authorityHoldCountAfterStop = holdsAfterStop;
   if (stoppedWork?.state !== 'queued' || Number(stoppedCounters.in_flight) !== 0
       || attemptsAfterStop !== summary.attemptCount) {
+    captureFixtureFailure('QUEUE_ACCOUNTING_INVARIANT', {
+      workIsQueued: stoppedWork?.state === 'queued',
+      inFlightIsZero: Number(stoppedCounters.in_flight) === 0,
+      attemptsUnchanged: attemptsAfterStop === summary.attemptCount
+    });
     throw new Error('Worker cleanup changed queue accounting or provider-attempt history.');
   }
   capturePhase('shutdown_verified');
@@ -561,6 +609,8 @@ t:
   }
 }
 }
+} catch (error) {
+  throwAfterOps04FailureCapture(error, () => captureFixtureFailure('OTHER_BOUNDARY'));
 } finally {
   capturePhase('fixture_finally_started');
   releasePhase();
