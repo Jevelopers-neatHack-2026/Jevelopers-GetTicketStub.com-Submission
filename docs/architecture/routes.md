@@ -78,6 +78,7 @@ Mutating routes check `Origin` (`checkOrigin`); the access column is what the se
 | `/api/agent` | POST | public | demo: 204 |
 | `/api/files/[name]` | GET | public (content-hashed name) | |
 | `/api/dev/email-preview` | GET | dev only; 404 in production | |
+| `/api/fulfillment/prodigi/callbacks/[token]` | POST | Prodigi (capability token in the path) | off unless `TICKETSTUB_PRODIGI_CALLBACKS=sandbox`: 404. A wrong token is a 404. Callbacks are untrusted hints; only an authenticated read changes state. See `docs/operations/prodigi-callbacks-runbook.md` |
 
 ## Route-state matrix
 

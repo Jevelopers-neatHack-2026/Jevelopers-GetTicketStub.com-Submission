@@ -69,6 +69,7 @@ The [runtime workflow](.github/workflows/runtime.yml) runs these on pull request
 | Document | What it covers |
 | --- | --- |
 | [Preview runtime and providers](docs/operations/preview-runtime.md) | Toolchain, build and start, Plus Launch settings, runtime mode, direct and OpenRouter provider settings, verification |
+| [Prodigi sandbox callbacks](docs/operations/prodigi-callbacks-runbook.md) | The off-by-default callback route, durable store and job worker, settings, and the owner steps before callback registration |
 | [Studio module](src/customer/studio/README.md) | Routes, real versus simulated behaviour, storage, brand rules |
 | [Ownership](docs/architecture/OWNERSHIP.md) | Repository responsibilities and interfaces |
 | [Acceptance view](docs/architecture/ACCEPTANCE.md) | Relevant acceptance criteria |
