@@ -10,6 +10,7 @@ import {
 	rm,
 	readdir,
 	symlink,
+	rename,
 } from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
@@ -23,6 +24,8 @@ import {
 	payloadHash,
 	configurationSchema,
 	requestSchema,
+	cleanup,
+	OwnerFailure,
 } from "../../scripts/integration-evals/protocol.js";
 import type { OwnerRequest } from "../../scripts/integration-evals/protocol.js";
 
@@ -118,8 +121,12 @@ async function given() {
 	const invoke = (
 		command = "run",
 		input: unknown = request,
-		env = environment,
+		env: NodeJS.ProcessEnv = environment,
 		target = cli,
+		options: {
+			readonly imports?: readonly string[];
+			readonly onBoundary?: (message: unknown) => Promise<void>;
+		} = {},
 	) =>
 		new Promise<{
 			readonly code: number | null;
@@ -129,14 +136,19 @@ async function given() {
 		}>((resolve, reject) => {
 			const child = spawn(
 				process.execPath,
-				target === cli ? [target, command] : [target],
+				[
+					...(options.imports ?? []).flatMap((path) => ["--import", path]),
+					target,
+					...(target === cli ? [command] : []),
+				],
 				{
 					cwd: checkout,
 					env,
-					stdio: ["pipe", "pipe", "pipe"],
+					stdio: ["pipe", "pipe", "pipe", "ipc"],
 					timeout: 30000,
 				},
 			);
+			assert.ok(child.stdin && child.stdout && child.stderr);
 			let stdout = "",
 				stderr = "";
 			child.stdout.setEncoding("utf8");
@@ -148,6 +160,20 @@ async function given() {
 				stderr += chunk;
 			});
 			child.on("error", reject);
+			child.on("message", (message: unknown) => {
+				if (!options.onBoundary) {
+					child.kill("SIGKILL");
+					reject(new Error("Unexpected child barrier"));
+					return;
+				}
+				options.onBoundary(message).then(
+					() => child.send("resume"),
+					(error: unknown) => {
+						child.kill("SIGKILL");
+						reject(error);
+					},
+				);
+			});
 			child.stdin.on("error", (error) => {
 				if (!("code" in error) || error.code !== "EPIPE") reject(error);
 			});
@@ -242,13 +268,30 @@ test("owner command executes original quarantined bytes, measures zero publicati
 			mapping["canonical_records"] &&
 			mapping["profile"],
 	);
+	const ownedNames = await readdir(fixture.owned);
+	const marker = await readFile(join(fixture.owned, "owner.json"));
 	const cleanup = await fixture.invoke("cleanup");
 	assert.equal(cleanup.code, 0, cleanup.stderr);
 	assert.equal(record.parse(JSON.parse(cleanup.stdout))["status"], "removed");
-	assert.deepEqual(await readdir(fixture.staging), ["unrelated.json"]);
+	assert.deepEqual(
+		record.parse(JSON.parse(cleanup.stdout))["removed"],
+		ownedNames.filter((name) => name !== "owner.json"),
+	);
+	assert.deepEqual((await readdir(fixture.staging)).sort(), [
+		`pp-${fixture.request.namespace}`,
+		"unrelated.json",
+	]);
+	assert.deepEqual(await readdir(fixture.owned), ["owner.json"]);
+	assert.deepEqual(await readFile(join(fixture.owned, "owner.json")), marker);
 	const repeated = await fixture.invoke("cleanup");
 	assert.equal(repeated.code, 0);
-	assert.equal(record.parse(JSON.parse(repeated.stdout))["status"], "absent");
+	assert.deepEqual(record.parse(JSON.parse(repeated.stdout)), {
+		status: "removed",
+		namespace: fixture.request.namespace,
+		removed: [],
+		retained: ["owner.json"],
+	});
+	assert.deepEqual(await readFile(join(fixture.owned, "owner.json")), marker);
 });
 
 test("safe counterpart reaches real compose success and hashes actual published product files", async () => {
@@ -513,7 +556,7 @@ test("cleanup safely removes an actually interrupted subprocess namespace", asyn
 	assert.ok(claimed);
 	const cleanup = await fixture.invoke("cleanup");
 	assert.equal(cleanup.code, 0, cleanup.stderr);
-	assert.deepEqual(await readdir(fixture.staging), []);
+	assert.deepEqual(await readdir(fixture.owned), ["owner.json"]);
 });
 
 test("corrupt owned fixture bytes fail source verification and cannot report product rejection", async () => {
@@ -547,4 +590,264 @@ test("cleanup refuses a corrupt partial marker and a symlink namespace without d
 	await symlink(other, fixture.owned);
 	assert.notEqual((await fixture.invoke("cleanup")).code, 0);
 	assert.equal(await readFile(join(other, "sentinel"), "utf8"), "keep");
+});
+
+const raceHook = join(
+	checkout,
+	"dist/tests/fixtures/integration-evals/cleanup-race-hook.js",
+);
+const cleanupNames = [
+	"owner.json",
+	"evaluation.json",
+	"mapping.json",
+	"state.sqlite",
+	"trace.json",
+] as const;
+async function givenCleanup(fixture: Awaited<ReturnType<typeof given>>) {
+	await mkdir(fixture.owned);
+	for (const name of cleanupNames)
+		await writeFile(join(fixture.owned, name), `OWNED ${name}\0bytes\n`);
+	await writeFile(
+		join(fixture.owned, "owner.json"),
+		JSON.stringify({
+			owner: "print-production",
+			namespace: fixture.request.namespace,
+			run_id: fixture.request.run_id,
+			request_sha256: digest(JSON.stringify(fixture.request)),
+		}),
+	);
+}
+for (const boundary of ["bind", "unlink", "second-unlink"] as const)
+	for (const ancestor of ["owned", "staging", "home"] as const)
+		for (const replacement of ["symlink", "directory"] as const)
+			test(`cleanup preserves foreign bytes when ${ancestor} is replaced by ${replacement} at ${boundary}`, async () => {
+				await using fixture = await given();
+				await givenCleanup(fixture);
+				const foreign = await realpath(
+					await mkdtemp(join(tmpdir(), "pp-owner-foreign-")),
+				);
+				const target =
+					ancestor === "owned"
+						? fixture.owned
+						: ancestor === "staging"
+							? fixture.staging
+							: fixture.root;
+				const suffix =
+					ancestor === "owned"
+						? ""
+						: ancestor === "staging"
+							? `pp-${fixture.request.namespace}`
+							: `artifacts/pp-${fixture.request.namespace}`;
+				const foreignOwned = join(foreign, suffix);
+				await mkdir(foreignOwned, { recursive: true });
+				const bytes = new Map(
+					[...cleanupNames, "sentinel"].map((name) => [
+						name,
+						Buffer.from(`FOREIGN ${name}\0actual sentinel bytes\n`),
+					]),
+				);
+				for (const [name, content] of bytes)
+					await writeFile(join(foreignOwned, name), content);
+				let fired = 0;
+				try {
+					const when = await fixture.invoke(
+						"cleanup",
+						fixture.request,
+						{
+							...fixture.environment,
+							OWNER_RACE_BOUNDARY: boundary,
+							OWNER_RACE_ROOT: fixture.owned,
+						},
+						cli,
+						{
+							imports: [raceHook],
+							async onBoundary(message) {
+								assert.equal(record.parse(message)["boundary"], boundary);
+								fired++;
+								await rename(target, target + "-preserved");
+								if (replacement === "symlink") await symlink(foreign, target);
+								else await rename(foreign, target);
+							},
+						},
+					);
+					assert.equal(
+						fired,
+						1,
+						"destructive boundary must actually be reached",
+					);
+					for (const [name, content] of bytes)
+						assert.deepEqual(
+							await readFile(
+								join(
+									replacement === "symlink" ? foreign : target,
+									suffix,
+									name,
+								),
+							),
+							content,
+							`foreign ${name} must survive even when cleanup fails`,
+						);
+					if (boundary === "bind") {
+						assert.notEqual(when.code, 0);
+						assert.equal(when.stdout, "");
+						assert.match(when.stderr, /OWNED_ROOT_CHANGED/);
+					} else {
+						assert.equal(when.code, 0, when.stderr);
+						assert.deepEqual(
+							await readdir(join(target + "-preserved", suffix)),
+							["owner.json"],
+						);
+					}
+				} finally {
+					await rm(foreign, { recursive: true, force: true });
+					await rm(target + "-preserved", { recursive: true, force: true });
+				}
+			});
+
+test("cleanup preserves foreign content on an unlink failure after ancestor substitution", async () => {
+	await using fixture = await given();
+	await givenCleanup(fixture);
+	const foreign = join(fixture.root, "foreign");
+	await mkdir(foreign);
+	for (const name of cleanupNames)
+		await writeFile(join(foreign, name), `FOREIGN ${name}\0bytes`);
+	let fired = false;
+	const when = await fixture.invoke(
+		"cleanup",
+		fixture.request,
+		{
+			...fixture.environment,
+			OWNER_RACE_ROOT: fixture.owned,
+			OWNER_RACE_BOUNDARY: "unlink",
+			OWNER_RACE_FAIL: "1",
+		},
+		cli,
+		{
+			imports: [raceHook],
+			async onBoundary() {
+				fired = true;
+				await rename(fixture.owned, fixture.owned + "-preserved");
+				await symlink(foreign, fixture.owned);
+			},
+		},
+	);
+	assert.ok(fired);
+	assert.notEqual(when.code, 0);
+	assert.equal(when.stdout, "");
+	for (const name of cleanupNames)
+		assert.equal(
+			await readFile(join(foreign, name), "utf8"),
+			`FOREIGN ${name}\0bytes`,
+		);
+	assert.deepEqual(
+		(await readdir(fixture.owned + "-preserved")).sort(),
+		[...cleanupNames].sort(),
+	);
+});
+
+test("concurrent cleanup fails while the first cleanup holds its namespace lock", async () => {
+	await using fixture = await given();
+	await givenCleanup(fixture);
+	let fired = false;
+	const when = await fixture.invoke(
+		"cleanup",
+		fixture.request,
+		{
+			...fixture.environment,
+			OWNER_RACE_ROOT: fixture.owned,
+			OWNER_RACE_BOUNDARY: "unlink",
+		},
+		cli,
+		{
+			imports: [raceHook],
+			async onBoundary() {
+				fired = true;
+				const concurrent = await fixture.invoke("cleanup");
+				assert.notEqual(concurrent.code, 0);
+				assert.equal(concurrent.stdout, "");
+				assert.match(concurrent.stderr, /CLEANUP_BUSY/);
+				for (const name of cleanupNames)
+					assert.ok((await readdir(fixture.owned)).includes(name));
+			},
+		},
+	);
+	assert.ok(fired);
+	assert.equal(when.code, 0, when.stderr);
+	assert.equal((await fixture.invoke("cleanup")).code, 0);
+});
+
+for (const boundary of ["marker-before", "marker-during"] as const)
+	test(`cleanup preserves uncertainty when run is interrupted at ${boundary}`, async () => {
+		await using fixture = await given();
+		const interrupted = await fixture.invoke(
+			"run",
+			fixture.request,
+			{ ...fixture.environment, OWNER_RACE_BOUNDARY: boundary },
+			cli,
+			{ imports: [raceHook] },
+		);
+		assert.equal(interrupted.signal, "SIGKILL");
+		const expected = boundary === "marker-before" ? [] : ["owner.json"];
+		assert.deepEqual(await readdir(fixture.owned), expected);
+		const when = await fixture.invoke("cleanup");
+		assert.notEqual(when.code, 0);
+		assert.equal(when.stdout, "");
+		assert.deepEqual(await readdir(fixture.owned), expected);
+		if (boundary === "marker-during")
+			assert.equal(
+				(await readFile(join(fixture.owned, "owner.json"))).length,
+				0,
+			);
+	});
+
+test("cleanup rejects in-process use before changing cwd or namespace bytes", async () => {
+	await using fixture = await given();
+	await givenCleanup(fixture);
+	const originalCwd = process.cwd();
+	await assert.rejects(
+		cleanup(fixture.request),
+		(error: unknown) =>
+			error instanceof OwnerFailure &&
+			error.code === "CLEANUP_PROCESS_REQUIRED",
+	);
+	assert.equal(process.cwd(), originalCwd);
+	assert.deepEqual(
+		(await readdir(fixture.owned)).sort(),
+		[...cleanupNames].sort(),
+	);
+});
+
+test("cleanup preserves its interrupted lock and reports repeat uncertainty", async () => {
+	await using fixture = await given();
+	await givenCleanup(fixture);
+	const before = new Map(
+		await Promise.all(
+			cleanupNames.map(
+				async (name) =>
+					[name, await readFile(join(fixture.owned, name))] as const,
+			),
+		),
+	);
+	const interrupted = await fixture.invoke(
+		"cleanup",
+		fixture.request,
+		{
+			...fixture.environment,
+			OWNER_RACE_ROOT: fixture.owned,
+			OWNER_RACE_BOUNDARY: "cleanup-interrupted",
+		},
+		cli,
+		{ imports: [raceHook] },
+	);
+	assert.equal(interrupted.signal, "SIGKILL");
+	const when = await fixture.invoke("cleanup");
+	assert.notEqual(when.code, 0);
+	assert.equal(when.stdout, "");
+	assert.match(when.stderr, /CLEANUP_BUSY/);
+	assert.deepEqual(
+		(await readdir(fixture.owned)).sort(),
+		[".cleanup-lock", ...cleanupNames].sort(),
+	);
+	for (const [name, bytes] of before)
+		assert.deepEqual(await readFile(join(fixture.owned, name)), bytes);
 });
