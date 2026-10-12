@@ -25,15 +25,11 @@ MD_STATUS = {
 }
 SUMS_NAME = "SHA256SUMS"
 SUM_LINE = re.compile(r"^([0-9a-f]{64}) [ *](.+)$")
+CRITERION_ID = re.compile(r"^[A-Z][A-Z0-9]*-[0-9]+$")
 MD_HEADING = re.compile(r"^### ([A-Z][A-Z0-9]*-[0-9]+)(?:\s|$)")
-MD_STATE = re.compile(r"^- \[([ xX])\] \*\*([^*]+)\*\*")
+MD_ANY_HEADING = re.compile(r"^#{1,3} ")
+MD_STATE = re.compile(r"^\s*[-*+] \[([ xX])\] \*\*([^*]*)\*\*")
 CHUNK = 1 << 20
-
-
-def _show(text):
-    """Escape and bound untrusted text before it reaches an error message."""
-    shown = ascii(str(text))[1:-1]
-    return shown if len(shown) <= 120 else shown[:117] + "..."
 
 
 class Report:
@@ -118,37 +114,46 @@ def audit_manifest(report, root, sums_path):
         digest, rel = match.groups()
         report.counts["manifest_entries"] += 1
         if rel in seen:
-            report.err("duplicate-entry", rel_sums, "%s repeats %s from line %d" % (where, _show(rel), seen[rel]))
+            report.err("duplicate-entry", rel_sums, "%s repeats the path on line %d" % (where, seen[rel]))
             continue
         seen[rel] = number
         bad = _safe_member(rel)
         if bad:
-            report.err(bad, rel_sums, "%s has unsafe path %s" % (where, _show(rel)))
+            report.err(bad, rel_sums, "%s has an unsafe path" % where)
             continue
         target = os.path.join(base, *rel.split("/"))
         # Any symlinked component whose resolution leaves the manifest dir is an escape.
         if not _inside(base, os.path.realpath(target)):
-            report.err("symlink-escape", rel_sums, "%s resolves outside the manifest directory: %s" % (where, _show(rel)))
+            report.err("symlink-escape", rel_sums, "%s resolves outside the manifest directory" % where)
             continue
         if not os.path.lexists(target):
-            report.err("missing-file", rel_sums, "%s names missing file %s" % (where, _show(rel)))
+            report.err("missing-file", rel_sums, "%s names a missing file" % where)
             continue
         if not os.path.isfile(target):
-            report.err("not-regular-file", rel_sums, "%s names non-regular file %s" % (where, _show(rel)))
+            report.err("not-regular-file", rel_sums, "%s names a non-regular file" % where)
             continue
         try:
             actual = _hash(target)
         except OSError:
-            report.err("file-unreadable", rel_sums, "%s cannot read %s" % (where, _show(rel)))
+            report.err("file-unreadable", rel_sums, "%s names an unreadable file" % where)
             continue
         if actual != digest:
-            report.err("hash-mismatch", rel_sums, "%s hash differs for %s" % (where, _show(rel)))
+            report.err("hash-mismatch", rel_sums, "%s hash differs from the file" % where)
 
 
-def find_manifests(evidence_dir):
+def find_manifests(report, root, evidence):
+    """Collect SHA256SUMS paths; symlinked directories are errors, never skipped."""
+    evidence_dir = os.path.join(root, evidence)
+    if os.path.islink(evidence_dir):
+        report.err("symlink-dir", evidence, "evidence root is a symlink")
+        return []
     found = []
     for dirpath, dirnames, filenames in os.walk(evidence_dir, followlinks=False):
         dirnames.sort()
+        for name in dirnames:
+            full = os.path.join(dirpath, name)
+            if os.path.islink(full):
+                report.err("symlink-dir", os.path.relpath(full, root), "evidence directory is a symlink")
         if SUMS_NAME in filenames:
             found.append(os.path.join(dirpath, SUMS_NAME))
     return sorted(found)
@@ -158,11 +163,27 @@ def _nonempty_strings(value):
     return isinstance(value, list) and bool(value) and all(isinstance(v, str) and v.strip() for v in value)
 
 
+class _DuplicateKey(ValueError):
+    pass
+
+
+def _no_duplicates(pairs):
+    seen = set()
+    for key, _ in pairs:
+        if key in seen:
+            raise _DuplicateKey()
+        seen.add(key)
+    return dict(pairs)
+
+
 def audit_json(report, path, rel):
     try:
         with open(path, "rb") as fh:
-            data = json.loads(fh.read().decode("utf-8"))
-    except (OSError, ValueError):
+            data = json.loads(fh.read().decode("utf-8"), object_pairs_hook=_no_duplicates)
+    except _DuplicateKey:
+        report.err("duplicate-key", rel, "JSON object repeats a key")
+        return {}
+    except (OSError, ValueError, RecursionError):
         report.err("json-unreadable", rel, "cannot parse checklist JSON")
         return {}
     if not isinstance(data, dict) or not isinstance(data.get("criteria"), list):
@@ -170,26 +191,31 @@ def audit_json(report, path, rel):
         return {}
     if data.get("allowed_statuses") != list(STATUSES):
         report.err("allowed-states", rel, "allowed_statuses must equal %s" % ", ".join(STATUSES))
+    if not data["criteria"]:
+        report.err("empty-checklist", rel, "criteria list is empty")
     result = {}
     for index, crit in enumerate(data["criteria"]):
         report.counts["criteria_json"] += 1
-        cid = crit.get("id") if isinstance(crit, dict) else None
-        if not isinstance(cid, str) or not cid.strip():
-            report.err("json-shape", rel, "criterion %d lacks a string id" % index)
+        spot = "criterion[%d]" % index
+        if not isinstance(crit, dict):
+            report.err("json-shape", rel, spot + " is not an object")
+            continue
+        cid = crit.get("id")
+        if not isinstance(cid, str) or not CRITERION_ID.match(cid):
+            report.err("invalid-id", rel, spot + " has a missing or malformed id")
             continue
         if cid in result:
             report.err("duplicate-id", rel, "duplicate criterion id", cid)
             continue
         status = crit.get("status")
-        if status not in STATUSES:
-            report.err("unknown-state", rel, "status %s is not allowed" % _show(status), cid)
+        if not isinstance(status, str) or status not in STATUSES:
+            report.err("unknown-state", rel, "status is not an allowed value", cid)
             result[cid] = None
             continue
         result[cid] = status
         report.status_counts[status] += 1
         if status == "verified":
-            refs = crit.get("evidence_refs")
-            if not _nonempty_strings(refs):
+            if not _nonempty_strings(crit.get("evidence_refs")):
                 report.err("verified-missing-evidence", rel, "verified entry needs nonempty evidence_refs", cid)
             if not _nonempty_strings(crit.get("tested_revision_refs")):
                 report.err("verified-missing-revisions", rel, "verified entry needs nonempty tested_revision_refs", cid)
@@ -204,32 +230,37 @@ def audit_markdown(report, path, rel):
         report.err("markdown-unreadable", rel, "cannot read checklist Markdown")
         return {}
     result = {}
-    for i, line in enumerate(lines):
-        head = MD_HEADING.match(line)
+    heads = [i for i, line in enumerate(lines) if MD_ANY_HEADING.match(line)]
+    heads.append(len(lines))
+    for pos, i in enumerate(heads[:-1]):
+        head = MD_HEADING.match(lines[i])
         if not head:
             continue
         cid = head.group(1)
         report.counts["criteria_markdown"] += 1
-        state = None
-        for follow in lines[i + 1:i + 6]:
-            state = MD_STATE.match(follow)
-            if state or follow.startswith("#"):
-                break
         if cid in result:
             report.err("duplicate-id", rel, "duplicate criterion heading", cid)
             continue
-        if not state:
+        states = [m for m in (MD_STATE.match(l) for l in lines[i + 1:heads[pos + 1]]) if m]
+        if not states:
             report.err("unknown-state", rel, "no status line under heading", cid)
             result[cid] = None
             continue
+        if len(states) > 1:
+            report.err("duplicate-status", rel, "criterion has more than one status line", cid)
+            result[cid] = None
+            continue
+        state = states[0]
         status = MD_STATUS.get(state.group(2).strip().lower())
         if status is None:
-            report.err("unknown-state", rel, "status %s is not allowed" % _show(state.group(2)), cid)
+            report.err("unknown-state", rel, "status is not an allowed value", cid)
             result[cid] = None
             continue
         if (state.group(1) != " ") != (status == "verified"):
-            report.err("checkbox-mismatch", rel, "checkbox disagrees with status %s" % status, cid)
+            report.err("checkbox-mismatch", rel, "checkbox disagrees with the status", cid)
         result[cid] = status
+    if not result:
+        report.err("empty-checklist", rel, "no criterion headings found")
     return result
 
 
@@ -249,8 +280,8 @@ def run(root, evidence="evidence", checklist_json="planning/acceptance-checklist
     report = Report()
     evidence_dir = os.path.join(root, evidence)
     if os.path.isdir(evidence_dir):
-        manifests = find_manifests(evidence_dir)
-        if not manifests:
+        manifests = find_manifests(report, root, evidence)
+        if not manifests and not report.errors:
             report.err("no-manifests", evidence, "no SHA256SUMS manifests found")
         for sums in manifests:
             audit_manifest(report, root, sums)

@@ -23,15 +23,20 @@ Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. 
 | `malformed-entry` | Line is not `<64 lowercase hex>  <path>` |
 | `duplicate-entry` | Same path listed twice in one manifest |
 | `path-traversal`, `unsafe-path` | `..`, absolute, backslash, empty or `.` segments, NUL |
+| `symlink-dir` | The evidence root or any directory under it is a symlink; it is reported, never silently skipped |
 | `symlink-escape` | Manifest or listed path resolves outside the manifest directory (or outside the repo for the manifest itself) |
 | `missing-file`, `not-regular-file`, `file-unreadable` | Listed file absent, not a regular file, or unreadable |
 | `hash-mismatch` | SHA-256 differs from the manifest |
-| `duplicate-id`, `unknown-state`, `allowed-states` | Duplicate criterion ID; status outside `planned, in_progress, blocked, verified, deferred`; JSON `allowed_statuses` altered |
+| `duplicate-key` | A JSON object repeats a key (ambiguous; rejected without reading either value) |
+| `duplicate-status` | A Markdown criterion has more than one status line, even if they agree |
+| `empty-checklist` | The JSON `criteria` list or the Markdown criterion set is empty |
+| `invalid-id`, `json-shape`, `json-unreadable` | Missing, non-string or malformed criterion ID (`ABC-12` form); non-object criterion, wrong top-level type; unparseable JSON |
+| `duplicate-id`, `unknown-state`, `allowed-states` | Duplicate criterion ID; missing, non-string or disallowed status; status outside `planned, in_progress, blocked, verified, deferred`; JSON `allowed_statuses` altered |
 | `checklist-disagreement` | An ID is in only one of Markdown/JSON, or the statuses differ |
 | `checkbox-mismatch` | Markdown `[x]` is not exactly the `verified` state |
 | `verified-missing-evidence`, `verified-missing-revisions` | A verified entry lacks nonempty `evidence_refs` or `tested_revision_refs` |
 
-Markdown criteria are `### ID title` headings followed by a `- [ ] **Status** ...` line. Errors never echo file contents or malformed lines; only codes, line numbers, IDs and escaped, length-bounded manifest paths.
+Markdown criteria are `### ID title` headings; the whole block up to the next heading is scanned and must hold exactly one `- [ ] **Status** ...` line. Errors never echo file contents, status values, manifest paths or arbitrary IDs; only fixed messages, codes, line numbers, positional indexes, and criterion IDs that match the `ABC-12` form.
 
 ## Limits
 

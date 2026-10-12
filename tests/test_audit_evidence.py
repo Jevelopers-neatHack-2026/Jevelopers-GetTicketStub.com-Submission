@@ -124,7 +124,7 @@ class Manifest(Fixture):
                 fh.write("o")
             os.symlink(out, os.path.join(self.root, "evidence/a/dirlink"))
             self.sums("evidence/a", [("dirlink/f.txt", hashlib.sha256(b"o").hexdigest())])
-            self.assertEqual(self.codes(), ["symlink-escape"])
+            self.assertEqual(self.codes(), ["symlink-dir", "symlink-escape"])
 
     def test_symlinked_manifest_escape(self):
         with tempfile.TemporaryDirectory() as out:
@@ -196,6 +196,127 @@ class Checklist(Fixture):
             text = fh.read().replace("[x]", "[ ]")
         self.write("planning/acceptance-checklist.md", text)
         self.assertEqual(self.codes(), ["checkbox-mismatch"])
+
+
+class Hardening(Fixture):
+    JSON = "planning/acceptance-checklist.json"
+    MD = "planning/acceptance-checklist.md"
+
+    def md_text(self):
+        with open(os.path.join(self.root, self.MD)) as fh:
+            return fh.read()
+
+    def test_duplicate_json_status_key(self):
+        self.write(self.JSON, '{"allowed_statuses": %s, "criteria": [{"id": "AAA-01", '
+                   '"status": "verified", "status": "planned"}]}' % json.dumps(list(ae.STATUSES)))
+        r = self.audit()
+        self.assertIn("duplicate-key", [e["code"] for e in r["errors"]])
+        self.assertFalse(r["ok"])
+
+    def test_duplicate_json_top_level_key(self):
+        self.write(self.JSON, '{"criteria": [], "criteria": [{"id": "AAA-01"}]}')
+        self.assertIn("duplicate-key", self.codes())
+
+    def test_contradictory_second_markdown_status(self):
+        self.write(self.MD, self.md_text().replace(
+            "- [ ] **Planned** | P0 | Role", "- [ ] **Planned** | P0 | Role\n- Verify: x\n\nnote\n"
+            "- [x] **Verified** | P0 | Role", 1))
+        r = self.audit()
+        self.assertIn(("AAA-01", "duplicate-status"), [(e.get("id"), e["code"]) for e in r["errors"]])
+
+    def test_identical_duplicate_markdown_status(self):
+        line = "- [ ] **Planned** | P0 | Role"
+        self.write(self.MD, self.md_text().replace(line, line + "\n" + line, 1))
+        self.assertIn("duplicate-status", self.codes())
+
+    def test_symlinked_evidence_dir_not_skipped(self):
+        os.makedirs(os.path.join(self.root, "evidence", "real"))
+        self.write("evidence/real/f.txt", "z")
+        self.sums("evidence/real", [("f.txt", None)])
+        os.symlink(os.path.join(self.root, "evidence", "real"), os.path.join(self.root, "evidence", "linked"))
+        r = self.audit()
+        self.assertFalse(r["ok"])
+        self.assertEqual([e["code"] for e in r["errors"]], ["symlink-dir"])
+        self.assertEqual(r["counts"]["manifests"], 2)
+
+    def test_symlinked_evidence_root(self):
+        real = os.path.join(self.root, "realevidence")
+        os.rename(os.path.join(self.root, "evidence"), real)
+        os.symlink(real, os.path.join(self.root, "evidence"))
+        r = self.audit()
+        self.assertEqual([e["code"] for e in r["errors"]], ["symlink-dir"])
+
+    def test_unknown_state_never_echoed(self):
+        self.checklist([crit("AAA-01", "sk-SECRET-STATE")])
+        self.write(self.MD, self.md_text())
+        self.assertIn("unknown-state", self.codes())
+        self.assertNotIn("SECRET", json.dumps(self.audit()))
+
+    def test_unknown_markdown_state_never_echoed(self):
+        self.write(self.MD, self.md_text().replace("**Planned**", "**sk-SECRET-MD**"))
+        r = self.audit()
+        self.assertIn("unknown-state", [e["code"] for e in r["errors"]])
+        self.assertNotIn("SECRET", json.dumps(r))
+
+    def test_arbitrary_id_never_echoed(self):
+        self.checklist([crit("sk-SECRET-ID"), crit("sk-SECRET-ID")])
+        r = self.audit()
+        self.assertIn("invalid-id", [e["code"] for e in r["errors"]])
+        self.assertNotIn("SECRET", json.dumps(r))
+
+    def test_manifest_path_never_echoed(self):
+        d = hashlib.sha256(b"hello").hexdigest()
+        self.sums("evidence/a", [("sk-SECRET-missing.txt", d), ("../sk-SECRET-up", d)])
+        self.assertNotIn("SECRET", json.dumps(self.audit()))
+
+    def test_empty_json_criteria(self):
+        self.write(self.JSON, json.dumps({"allowed_statuses": list(ae.STATUSES), "criteria": []}))
+        self.assertIn("empty-checklist", self.codes())
+
+    def test_empty_markdown_checklist(self):
+        self.write(self.MD, "# Checklist\n")
+        codes = self.codes()
+        self.assertIn("empty-checklist", codes)
+        self.assertIn("checklist-disagreement", codes)
+
+    def test_both_empty_still_fails(self):
+        self.checklist([])
+        r = self.audit()
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["error_counts"]["empty-checklist"], 2)
+
+    def test_invalid_primitive_types_do_not_crash(self):
+        bad_ids = [1, None, ["AAA-01"], {"a": 1}, True, "", "bad id"]
+        bad_status = [1, None, ["planned"], {"a": 1}, True, ""]
+        entries = [{"id": i, "status": "planned"} for i in bad_ids]
+        entries += [{"id": "AAA-%02d" % (n + 10), "status": st} for n, st in enumerate(bad_status)]
+        entries += [None, 5, "str", [1]]
+        self.write(self.JSON, json.dumps({"allowed_statuses": list(ae.STATUSES), "criteria": entries}))
+        r = self.audit()
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["error_counts"]["invalid-id"], len(bad_ids))
+        self.assertEqual(r["error_counts"]["unknown-state"] - 0, len(bad_status))
+        self.assertEqual(r["error_counts"]["json-shape"], 4)
+
+    def test_malformed_top_level_types(self):
+        for text in ("[]", "null", '"x"', '{"criteria": {}}', '{"criteria": "x"}', "{", "\xff"):
+            self.write(self.JSON, text)
+            self.assertFalse(self.audit()["ok"], text)
+
+    def test_invalid_utf8_checklists(self):
+        for rel in (self.JSON, self.MD):
+            with open(os.path.join(self.root, rel), "wb") as fh:
+                fh.write(b"\xff\xfe")
+        self.assertFalse(self.audit()["ok"])
+
+    def test_deeply_nested_json_does_not_crash(self):
+        self.write(self.JSON, "[" * 100000)
+        self.assertFalse(self.audit()["ok"])
+
+    def test_evidence_ref_type_errors(self):
+        for refs in ("url", {"a": "b"}, [1], [None], [[]]):
+            self.checklist([crit("AAA-01", "verified", refs, ["rev"])])
+            self.assertIn("verified-missing-evidence", self.codes(), refs)
 
 
 class NoPromotion(Fixture):
