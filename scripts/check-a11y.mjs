@@ -206,6 +206,17 @@ try {
   await page.eval(`document.body.focus(); 0`);
   const tearInView = (w, h) => page.eval(`(() => { const r = document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')?.getBoundingClientRect(); return !!r && r.width > 0 && r.top >= 0 && r.left >= 0 && r.right <= ${w} + 1 && r.bottom <= ${h} + 1 && getComputedStyle(document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')).position === "fixed"; })()`);
   const isStrip = `/Tear off and pin/.test(e.textContent || "")`;
+  await open(`/studio/${DEMO}`, 1440, 900, { desktop: true });
+  await page.eval(`document.body.focus(); 0`);
+  if (await tabTo(isStrip)) {
+    await page.key("Enter");
+    await page.waitFor(`!!document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')`, 3000);
+  }
+  check("tear @1440: the stage fills the viewport", await tearInView(1440, 900));
+  await page.key("Escape");
+
+  await open(`/studio/${DEMO}`, 390, 844);
+  await page.eval(`document.body.focus(); 0`);
   check("studio @390: the tear strip can be reached by Tab", await tabTo(isStrip));
   await page.key("Enter");
   check("tear: focus lands on the tear handle (a slider)", await page.waitFor(`document.activeElement && document.activeElement.getAttribute("role") === "slider"`, 3000));
@@ -230,15 +241,6 @@ try {
     await page.waitFor(noDialog, 3000);
     return opened;
   })());
-
-  await open(`/studio/${DEMO}`, 1440, 900, { desktop: true });
-  await page.eval(`document.body.focus(); 0`);
-  if (await tabTo(isStrip)) {
-    await page.key("Enter");
-    await page.waitFor(`!!document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')`, 3000);
-  }
-  check("tear @1440: the stage fills the viewport", await tearInView(1440, 900));
-  await page.key("Escape");
 
   // the wall: move a stub with the arrow keys, lift it, pin it back
   await open("/wall", 1280, 800);
