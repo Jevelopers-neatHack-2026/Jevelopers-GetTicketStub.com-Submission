@@ -16,6 +16,7 @@ const OBSERVATION_HASH_DOMAIN = 'event-intelligence:source-identity-question-gro
 const FIELD_REF_HASH_DOMAIN = 'event-intelligence:source-identity-question-field:v1\0';
 
 const MAX_SOURCES = 8;
+const MAX_STATUS_MENTIONS_PER_SOURCE = 32;
 const MAX_CANDIDATES = 23;
 const MAX_COMPARISONS = 256;
 const MAX_TRANSITIONS = 64;
@@ -54,7 +55,9 @@ const ROOT_ARRAY_KEYS = new Set(['sources', 'facts', 'entityCandidates', 'occurr
 
 export class SourceIdentityQuestionPreparationError extends Error {
   constructor(code = 'INVALID_INPUT') {
-    super('Source identity question preparation input is invalid or outside its local bounds.');
+    super(code === 'VISIBLE_STATUS_REVIEW_REQUIRED'
+      ? 'Source-level status evidence requires review before identity question preparation.'
+      : 'Source identity question preparation input is invalid or outside its local bounds.');
     this.name = 'SourceIdentityQuestionPreparationError';
     this.code = code;
   }
@@ -229,6 +232,23 @@ function projectEvidenceSummaries(rawSources) {
     byId.set(evidenceId, Object.freeze({ evidenceId, contentHash, duplicateGroupId, retrievedAt, expiresAt, positionCount }));
   }
   return byId;
+}
+
+function assertSelectedStatusEvidenceSupported(rawSources, usedEvidenceIds, sourceById) {
+  for (const source of safeArray(rawSources, MAX_SOURCES)) {
+    const evidence = dataValue(source, 'evidence');
+    if (evidence === null) continue;
+    const evidenceId = dataValue(evidence, 'evidenceId');
+    if (!usedEvidenceIds.has(evidenceId)) continue;
+    const extraction = dataValue(source, 'extraction');
+    if (dataValue(extraction, 'sourceHash') !== `sha256:${sourceById.get(evidenceId).contentHash}`) {
+      fail('SOURCE_BINDING_FAILED');
+    }
+    const mentions = safeArray(dataValue(extraction, 'statusMentions'), MAX_STATUS_MENTIONS_PER_SOURCE);
+    // A source-level notice cannot be assigned to either occurrence by this
+    // adapter. Refuse before producing a projection that would omit it.
+    if (mentions.length > 0) fail('VISIBLE_STATUS_REVIEW_REQUIRED');
+  }
 }
 
 function findCandidates(rawCandidates, pair) {
@@ -697,6 +717,7 @@ function serializedJsonByteLength(value) {
  * Build a local-only identity question plan from an explicitly selected pair in a
  * maintained source-identity composition. The result does not attest the caller's
  * object, authorize a tenant, revalidate retention, or dispatch a question.
+ * Visible status notices in selected sources require review before preparation.
  */
 export function prepareIdentityQuestionFromComposition(composition, rawOptions) {
   try {
@@ -707,12 +728,14 @@ export function prepareIdentityQuestionFromComposition(composition, rawOptions) 
     const candidates = rawCandidates.map((candidate) => projectCandidate(candidate, sourceById));
     const selectedClaims = candidates.reduce((total, candidate) => total + candidate.factCount, 0);
     if (selectedClaims > MAX_FACTS) fail('RESOURCE_LIMIT_EXCEEDED');
+    const usedEvidenceIds = new Set(candidates.flatMap((candidate) => FACT_FIELDS
+      .flatMap((field) => candidate.facts[field].flatMap((claim) => claim.supports.map((support) => support.evidenceId)))));
+    assertSelectedStatusEvidenceSupported(root.sources.value, usedEvidenceIds, sourceById);
 
     const selectedLinks = selectedTransitions(root.transitionLinks.value);
     const decision = checkSelectedDecision(candidates, selectedLinks, root.occurrenceDecisions.value, pair, sourceById);
     const unresolvedTransitions = unresolvedForPair(root.unresolvedTransitions.value, pair);
     const { observations, selectedProjection, observationGroups, totalTextBytes } = observationsFor(pair, candidates, languageDescriptors, sourceById);
-    const usedEvidenceIds = new Set(selectedProjection.flatMap((candidate) => candidate.facts.flatMap((claim) => claim.supports.map((support) => support.evidenceId))));
     if (Object.keys(languageDescriptors).some((evidenceId) => !usedEvidenceIds.has(evidenceId))) fail('INVALID_INPUT');
     const observationRefs = observations.map((observation) => observation.observationRef);
     const targetRef = deriveQuestionTargetRef(QUESTION_ID, observationRefs, { candidateRefs: pair });

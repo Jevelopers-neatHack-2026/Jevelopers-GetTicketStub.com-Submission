@@ -21,7 +21,7 @@ function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function eventPage({ city, startDate, status = 'https://schema.org/EventScheduled', name = 'Garden Light Festival', rawNameJson }) {
+function eventPage({ city, startDate, status = 'https://schema.org/EventScheduled', name = 'Garden Light Festival', rawNameJson, visibleMarkup = '' }) {
   const event = {
     '@type': 'Event',
     name,
@@ -39,7 +39,7 @@ function eventPage({ city, startDate, status = 'https://schema.org/EventSchedule
     assert.notEqual(nameOffset, -1);
     json = `${json.slice(0, nameOffset)}${rawNameJson}${json.slice(nameOffset + nameToken.length)}`;
   }
-  return Buffer.from(`<!doctype html><script type="application/ld+json">${json}</script>`);
+  return Buffer.from(`<!doctype html><script type="application/ld+json">${json}</script>${visibleMarkup}`);
 }
 
 function document(bytes, url) {
@@ -184,6 +184,111 @@ function groupCoreFor(group) {
     claims: group.claims
   };
 }
+
+for (const notice of [
+  'Cancelled: Garden Light Festival will not take place.',
+  'Rescheduled: Garden Light Festival has moved to 14 October.',
+  'The event is not cancelled.'
+]) {
+  test(`visible status requires review without changing stale structured claims: ${notice}`, async (t) => {
+    const bytes = eventPage({ city: 'Seattle', startDate: '2027-08-01', visibleMarkup: `<p>${notice}</p>` });
+    const composition = await compose(t, [
+      { bytes, url: 'https://events.example.test/seattle' },
+      { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+    ]);
+    const mentions = composition.sources[0].extraction.statusMentions;
+    assert.equal(mentions.length, 1);
+    assert.equal(mentions[0].normalizedValue, notice);
+    const { startByte, endByte } = mentions[0].source.locator;
+    assert.equal(bytes.subarray(startByte, endByte).toString('utf8'), mentions[0].rawValue);
+    assert.deepEqual(composition.occurrenceCandidates.map((candidate) => candidate.facts.status.map((claim) => claim.value)), [['scheduled'], ['scheduled']]);
+    const original = JSON.stringify(composition);
+    const pair = composition.occurrenceCandidates.map((candidate) => candidate.candidateId);
+    assert.throws(() => prepare(composition, pair), (error) => {
+      assert.ok(error instanceof SourceIdentityQuestionPreparationError);
+      assert.equal(error.code, 'VISIBLE_STATUS_REVIEW_REQUIRED');
+      assert.equal(error.message, 'Source-level status evidence requires review before identity question preparation.');
+      return true;
+    });
+    assert.equal(JSON.stringify(composition), original, 'the notice, byte provenance, and structured claims remain available for review');
+  });
+}
+
+test('an ambiguous visible notice on a two-edition page refuses preparation without assigning an occurrence', async (t) => {
+  const events = ['2026', '2027'].map((edition) => ({
+    '@type': 'Event', name: 'Garden Light Festival', series: 'Garden Light Tour', edition,
+    startDate: `${edition}-08-01`, endDate: `${edition}-08-02`, eventStatus: 'https://schema.org/EventScheduled',
+    location: { name: 'Hall Seattle', address: { addressLocality: 'Seattle' } }
+  }));
+  const notice = 'The event is cancelled.';
+  const bytes = Buffer.from(`<!doctype html><script type="application/ld+json">${JSON.stringify({ '@graph': events })}</script><p>${notice}</p>`);
+  const composition = await compose(t, [{ bytes, url: 'https://events.example.test/editions' }]);
+  assert.equal(composition.occurrenceCandidates.length, 2);
+  assert.deepEqual(composition.occurrenceCandidates.flatMap((candidate) => candidate.facts.edition.map((claim) => claim.value)).sort(), ['2026', '2027']);
+  assert.deepEqual(composition.occurrenceCandidates.map((candidate) => candidate.facts.status.map((claim) => claim.value)), [['scheduled'], ['scheduled']]);
+  const mentions = composition.sources[0].extraction.statusMentions;
+  assert.equal(mentions.length, 1);
+  assert.equal(mentions[0].normalizedValue, notice);
+  const { startByte, endByte } = mentions[0].source.locator;
+  assert.equal(bytes.subarray(startByte, endByte).toString('utf8'), mentions[0].rawValue);
+  const original = JSON.stringify(composition);
+  assert.throws(() => prepare(composition, composition.occurrenceCandidates.map((candidate) => candidate.candidateId)), {
+    name: 'SourceIdentityQuestionPreparationError', code: 'VISIBLE_STATUS_REVIEW_REQUIRED'
+  });
+  assert.equal(JSON.stringify(composition), original);
+});
+
+test('a visible notice in an unrelated source does not block the selected pair', async (t) => {
+  const composition = await compose(t, [
+    { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
+    { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' },
+    { bytes: eventPage({ city: 'Portland', startDate: '2027-08-03', visibleMarkup: '<p>The event is cancelled.</p>' }), url: 'https://events.example.test/portland' }
+  ]);
+  assert.equal(composition.sources[2].extraction.statusMentions.length, 1);
+  const pair = [candidateForCity(composition, 'Seattle').candidateId, candidateForCity(composition, 'Vancouver').candidateId];
+  const selectedLanguages = Object.fromEntries(composition.sources.slice(0, 2).map((source) => [source.evidence.evidenceId, 'en']));
+  const result = prepare(composition, pair, selectedLanguages);
+  assert.equal(selectedQuestion(result.plan).eligible, true);
+  assertBlockedPlan(result.plan, pair);
+  assert.equal(result.sourceIdentityBinding.sourceEvidence.length, 2);
+});
+
+test('selected status metadata is hash-bound, descriptor-safe, and bounded before entry access', async (t) => {
+  const composition = await compose(t, [
+    { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
+    { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+  ]);
+  const pair = composition.occurrenceCandidates.map((candidate) => candidate.candidateId);
+  const original = composition.sources[0].extraction;
+  assert.equal(original.sourceHash, `sha256:${composition.sources[0].evidence.contentHash}`);
+  assert.deepEqual(original.statusMentions, []);
+  const reject = (extraction, code = 'INVALID_INPUT') => assert.throws(() => prepare(cloneComposition(composition, {
+    sources: [{ ...composition.sources[0], extraction }, ...composition.sources.slice(1)]
+  }), pair), { name: 'SourceIdentityQuestionPreparationError', code });
+  reject(undefined);
+  reject(null);
+  reject({ sourceHash: original.sourceHash });
+  reject({ ...original, statusMentions: null });
+  reject({ ...original, statusMentions: {} });
+  reject({ ...original, sourceHash: `sha256:${'0'.repeat(64)}` }, 'SOURCE_BINDING_FAILED');
+
+  let trapCount = 0;
+  const trap = () => { trapCount += 1; throw new Error('caller code must not run'); };
+  const traps = { get: trap, getPrototypeOf: trap, ownKeys: trap, getOwnPropertyDescriptor: trap };
+  reject(new Proxy(original, traps));
+  reject({ ...original, statusMentions: new Proxy([], traps) });
+  reject(Object.defineProperty({ sourceHash: original.sourceHash }, 'statusMentions', { enumerable: true, get: trap }));
+  reject(Object.defineProperty({ statusMentions: [] }, 'sourceHash', { enumerable: true, get: trap }));
+  const accessorEntries = Object.defineProperty([], '0', { enumerable: true, get: trap });
+  reject({ ...original, statusMentions: accessorEntries });
+  reject({ ...original, statusMentions: new Array(2) });
+  const oversized = Object.defineProperty(new Array(33), '0', { enumerable: true, get: trap });
+  reject({ ...original, statusMentions: oversized }, 'RESOURCE_LIMIT_EXCEEDED');
+  reject({ ...original, statusMentions: new Array(0xffffffff) }, 'RESOURCE_LIMIT_EXCEEDED');
+  const opaqueMention = new Proxy({}, traps);
+  reject({ ...original, statusMentions: Array(32).fill(opaqueMention) }, 'VISIBLE_STATUS_REVIEW_REQUIRED');
+  assert.equal(trapCount, 0, 'neither input accessors nor status text/proxy contents are executed');
+});
 
 test('prepares the explicitly selected composer pair while retaining date, city, status, and source provenance', async (t) => {
   const leftBytes = eventPage({ city: 'Seattle', startDate: '2027-08-01', status: 'https://schema.org/EventCancelled' });
