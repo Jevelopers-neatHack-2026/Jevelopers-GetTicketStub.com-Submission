@@ -1,5 +1,5 @@
 // One entry point for the product checks, with evidence.
-//   npm run verify:product -- --suite <foundation|access|approval|order-auth|research|creative|review|capabilities|messages|a11y|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
+//   npm run verify:product -- --suite <foundation|access|approval|order-auth|finance-context|research|creative|review|capabilities|messages|a11y|agent|download|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
@@ -20,6 +20,8 @@ const guard = join(root, "scripts/lib/fixture-network-guard.mjs");
 const DEV_ONLY_CHECKS = [];
 const STAFF_EMAIL = "verify-staff@example.com";
 const MEMBER_EMAIL = "verify-member@example.com";
+/** A throwaway issuer key for the finance-context suite: random per run, never the published fixture key. */
+const FINANCE_CONTEXT_SECRET = randomBytes(32).toString("hex");
 
 // ---- arguments ----
 const SUITES = {
@@ -40,6 +42,8 @@ const SUITES = {
     needs: [".next/BUILD_ID", "scripts/check-order-auth.mjs", "fixtures/order-authorization/index.json", "fixtures/order-authorization/verify.mjs"],
     run: (ctx) => script("scripts/check-order-auth.mjs", [ctx.base], ctx.env),
   },
+  // GT-08 finance handoff (GT-FIN-001..003): the /2 context, finance grants, selected project and verifier parity against a server that holds a CONTEXT_SECRET.
+  "finance-context": { server: true, serverEnv: { CONTEXT_SECRET: FINANCE_CONTEXT_SECRET }, needs: [".next/BUILD_ID", "scripts/check-finance-context.mjs", "fixtures/context/verify.mjs", "fixtures/context/corpus.mjs"], run: (ctx) => script("scripts/check-finance-context.mjs", [ctx.base], { CONTEXT_SECRET: FINANCE_CONTEXT_SECRET, CHECK_STAFF_EMAIL: STAFF_EMAIL }) },
   research: { server: false, needs: ["scripts/smoke-ticketmaster.mjs", "scripts/fixtures/ticketmaster-discovery-event.json"], run: () => script("scripts/smoke-ticketmaster.mjs") },
   creative: { server: false, needs: ["scripts/check-creative-adapter.mjs", "src/customer/studio/creative/fixtures"], run: () => script("scripts/check-creative-adapter.mjs") },
   review: { server: false, needs: ["scripts/check-review-versions.mjs", "src/customer/studio/facts/corrections.ts"], run: () => script("scripts/check-review-versions.mjs") },
@@ -47,6 +51,10 @@ const SUITES = {
   messages: { server: false, needs: ["scripts/check-messages.mjs", "src/customer/feedback-messages/messages.ts"], run: () => script("scripts/check-messages.mjs") },
   // GT-11: axe-core, overflow, keyboard, dialog focus and reduced motion in a real headless Chrome (needs Chrome or Edge, or CHROME_PATH).
   a11y: { server: true, needs: [".next/BUILD_ID", "scripts/check-a11y.mjs", "scripts/lib/cdp.mjs", "scripts/lib/contrast.mjs", "node_modules/axe-core/axe.min.js"], run: (ctx) => script("scripts/check-a11y.mjs", [ctx.base, evidenceDir]) },
+  // GT-04: the agent proposes typed actions, the owner applies them, the result goes back; plus a forced failure and its recovery.
+  agent: { server: true, needs: [".next/BUILD_ID", "scripts/check-agent.mjs", "scripts/lib/cdp.mjs", "src/customer/studio/agent/protocol.ts"], run: (ctx) => script("scripts/check-agent.mjs", [ctx.base, evidenceDir]) },
+  // The exact stub download (#16): the real Download button in headless Chrome, the PNG against the on-screen stub (needs Chrome or Edge, or CHROME_PATH).
+  download: { server: true, needs: [".next/BUILD_ID", "scripts/check-download.mjs", "scripts/lib/cdp.mjs"], run: (ctx) => script("scripts/check-download.mjs", [ctx.base, evidenceDir]) },
   production: { server: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: (ctx) => script("scripts/smoke-production.mjs", [], { SMOKE_BASE_URL: ctx.base }) },
   // Storage that cannot be written: the server starts with TICKETSTUB_DB under a file, so every OS refuses it.
   degraded: { server: true, unwritableStorage: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: degraded },
@@ -270,8 +278,8 @@ async function foundation({ base }) {
   } catch {
     /* asserted below */
   }
-  record("health is 200 with ok, version, mode and time", health.status === 200 && body.ok === true && typeof body.version === "string" && body.mode === "demo" && !Number.isNaN(Date.parse(body.time)), health.text.slice(0, 120));
-  record("health is uncached and carries nothing else", health.headers.get("cache-control") === "no-store" && Object.keys(body).sort().join() === "mode,ok,persistence,storage,time,version" && body.storage === "ok" && body.persistence === "configured", Object.keys(body).join());
+  record("health is 200 with ok, version, commit, mode and time", health.status === 200 && body.ok === true && typeof body.version === "string" && (body.commit === null || /^[0-9a-f]{7,40}$/.test(body.commit)) && body.mode === "demo" && !Number.isNaN(Date.parse(body.time)), health.text.slice(0, 120));
+  record("health is uncached and carries nothing else", health.headers.get("cache-control") === "no-store" && Object.keys(body).sort().join() === "commit,mode,ok,persistence,storage,time,version" && body.storage === "ok" && body.persistence === "configured", Object.keys(body).join());
 
   // admin: anonymous and non-staff never learn it exists; staff get reload and deep links
   const member = client(base);
@@ -692,8 +700,8 @@ try {
     record("fixture mode refuses outbound network", probe.out.trim() === "ETICKETSTUB_FIXTURE_NETWORK", probe.out.trim());
     const ctx = {};
     if (suite.server) {
-      let extra = {};
-      if (suite.env) extra = ctx.env = suite.env();
+      let extra = { ...(suite.serverEnv ?? {}) };
+      if (suite.env) extra = ctx.env = { ...extra, ...suite.env() };
       if (suite.unwritableStorage) {
         // A path under a file is not creatable on any OS, whoever runs it.
         const blocker = join(tmp, "not-a-directory");

@@ -49,7 +49,14 @@ export const MESSAGES = {
   signin_expired: { message: "That sign-in link has run out. Each one works once and lasts 15 minutes.", action: SEND_NEW },
   already_claimed: { message: "Someone already claimed this stub. Ask the organizer for your own link.", action: START },
   variant_not_orderable: { message: "That size and finish isn't orderable yet. Choose another, or keep it as a preview.", action: WALL },
+  amount_mismatch: { message: "The price changed since you last looked. Reload to see the current price, then pay again.", action: RELOAD },
+  checkout_closed: { message: "That checkout has closed, and nothing more was charged. Start again.", action: RELOAD },
+  payment_unavailable: { message: "We couldn't start the payment. Nothing was charged, so try again in a moment.", action: RETRY, retryable: true },
+  payments_off: { message: "Payments aren't switched on here yet. Nothing was charged.", action: WALL },
+  bad_signature: { message: "We couldn't verify that request, so it was ignored. Nothing was changed.", action: RETRY, retryable: true },
   unreadable_link: { message: "We couldn't read that link. Paste the event page address, or search for the event by name.", action: RETRY, retryable: true },
+  unsupported_url: { message: "That link can't be read. Paste a public event page address that starts with http or https, with no username or password.", action: RETRY, retryable: true },
+  unsupported_input: { message: "Uploads and extra sources aren't supported yet. Paste one event page link instead.", action: RETRY, retryable: true },
   demo_only: { message: "This preview only knows its demo events. Try neatHack, The Pale Hours or Harbour FC.", action: RETRY, retryable: true },
   context_unavailable: { message: "Signed context isn't set up on this server yet, so nothing can use it. Your stubs are unaffected.", action: RETRY, retryable: true },
   signing_unavailable: { message: "Signing isn't set up on this server yet, so this can't be approved right now. Your stub is unaffected.", action: RETRY, retryable: true },
@@ -68,6 +75,7 @@ export const MESSAGES = {
   // Storage and limits
   storage_unavailable: { message: "Saving is off on this preview. Your stub stays on this device, and you can keep working.", action: RETRY, retryable: true },
   art_limit: { message: "You've made a lot of art today. Procedural art still works, and new art comes back tomorrow." },
+  backup_running: { message: "A backup is already being made. Wait for it to finish, then try again.", action: RETRY, retryable: true },
 
   // Providers (research, art and the agent). Their detail never reaches a person.
   provider_unavailable: { message: PROVIDER_DOWN, action: RETRY, retryable: true },

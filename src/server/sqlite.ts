@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { safeEqual } from "./crypto";
 import { DatabaseSync } from "node:sqlite";
-import type { Order } from "@/customer/pages/commerce";
+import type { Order, OrderPayment } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
 import { artUnavailable, retainArt } from "@/customer/studio/versions/retention";
 import { EVENT_RETENTION_MS, EVENT_SCHEMA, type StoredEvent, type TicketstubEvent } from "./events";
@@ -326,6 +326,25 @@ export class SqliteStorage implements Storage {
       accountId, email,
     );
     return rows.map((r) => JSON.parse(r.data as string) as Order);
+  }
+
+  async getOrder(id: string): Promise<{ order: Order; accountId: string | null; email: string | null } | null> {
+    const r = this.get("SELECT account_id, email, data FROM orders WHERE id = ?", id);
+    if (!r) return null;
+    return { order: JSON.parse(r.data as string) as Order, accountId: (r.account_id as string | null) ?? null, email: (r.email as string | null) ?? null };
+  }
+
+  async updateOrderPayment(id: string, apply: (order: Order) => OrderPayment | null): Promise<{ before: Order; after: Order } | null> {
+    return this.tx(() => {
+      const r = this.get("SELECT data FROM orders WHERE id = ?", id);
+      if (!r) return null;
+      const before = JSON.parse(r.data as string) as Order;
+      const payment = apply(before);
+      if (!payment) return { before, after: before };
+      const after: Order = { ...before, payment };
+      this.run("UPDATE orders SET data = ? WHERE id = ?", JSON.stringify(after), id);
+      return { before, after };
+    });
   }
 
   async upsertShare(ownerKey: string, stub: Stub, newToken: string, now: number): Promise<string> {
