@@ -5,6 +5,7 @@ import tls from "node:tls";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
+import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "./url-policy.mjs";
 import { resolveSystemHost } from "./dns-resolver.mjs";
@@ -32,8 +33,10 @@ const ACCEPT = [
   "text/html", "application/xhtml+xml", "text/plain", "application/json",
   "application/ld+json", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif",
 ].join(", ");
+const SVG_ASSET_ACCEPT = "image/svg+xml";
+const SVG_ASSET_MAX_BYTES = 128 * 1024;
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
-const SUPPORTED_MIME = new Set(ACCEPT.split(", "));
+const SUPPORTED_MIME = new Set([...ACCEPT.split(", "), SVG_ASSET_ACCEPT]);
 const ABORTED_GETTER = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
 const ADD_EVENT_LISTENER = EventTarget.prototype.addEventListener;
 const REMOVE_EVENT_LISTENER = EventTarget.prototype.removeEventListener;
@@ -255,7 +258,7 @@ function makeHostHeader(hostname, port, protocol) {
   return port === defaultPort ? host : `${host}:${port}`;
 }
 
-function requestOnce(validated, address, context, seam) {
+function requestOnce(validated, address, context, seam, accept = ACCEPT) {
   const { url, hostname, port } = validated;
   const secure = url.protocol === "https:";
   const agent = secure
@@ -279,7 +282,7 @@ function requestOnce(validated, address, context, seam) {
     agent,
     headers: {
       host: makeHostHeader(hostname, port, url.protocol),
-      accept: ACCEPT,
+      accept,
       "accept-encoding": "gzip",
       "user-agent": "event-intelligence-controlled-retrieval/0.1",
       connection: "close",
@@ -304,10 +307,12 @@ function requestOnce(validated, address, context, seam) {
   });
 }
 
-function parseMime(contentType) {
+function parseMime(contentType, mode = "document") {
   if (typeof contentType !== "string" || contentType.length > 256) throw new RetrievalError("UNSUPPORTED_MEDIA");
   const mime = contentType.split(";", 1)[0].trim().toLowerCase();
-  if (!SUPPORTED_MIME.has(mime)) throw new RetrievalError("UNSUPPORTED_MEDIA");
+  if (!SUPPORTED_MIME.has(mime) || (mode === "svg-asset" ? mime !== SVG_ASSET_ACCEPT : mime === SVG_ASSET_ACCEPT)) {
+    throw new RetrievalError("UNSUPPORTED_MEDIA");
+  }
   return mime;
 }
 
@@ -324,11 +329,12 @@ function readContentLength(value, maximum) {
   if (!Number.isSafeInteger(length) || length > maximum) throw new RetrievalError("RESOURCE_LIMIT");
 }
 
-async function consumeBody(response, mime, context, fetcherState, lifecycle, onDecodeStart) {
+async function consumeBody(response, mime, context, fetcherState, lifecycle, onDecodeStart, mode = "document") {
   throwIfStopped(context);
   const encoding = String(response.headers["content-encoding"] ?? "identity").toLowerCase().trim();
   if (encoding !== "identity" && encoding !== "gzip") throw new RetrievalError("UNSUPPORTED_MEDIA");
-  const maximum = mime.startsWith("image/") || mime === "application/pdf"
+  const configuredMediaLimit = lifecycle?.options.decodedMediaBytesPerResponse ?? DEFAULT_RUN_LIMITS.decodedMediaBytesPerRequest;
+  const maximum = mode === "svg-asset" ? Math.min(SVG_ASSET_MAX_BYTES, configuredMediaLimit) : mime.startsWith("image/") || mime === "application/pdf"
     ? lifecycle?.options.decodedMediaBytesPerResponse ?? DEFAULT_RUN_LIMITS.decodedMediaBytesPerRequest
     : lifecycle?.options.decodedTextBytesPerResponse ?? DEFAULT_RUN_LIMITS.decodedTextBytesPerRequest;
   const wireMaximum = DEFAULT_RUN_LIMITS.wireBytesPerRequest;
@@ -471,7 +477,41 @@ function imageSize(body, mime) {
   return Object.freeze({ width, height });
 }
 
-function validateFinalBody(body, declaredMime) {
+function validateFinalBody(body, declaredMime, mode = "document") {
+  if (mode === "svg-asset") {
+    if (declaredMime !== SVG_ASSET_ACCEPT || body.byteLength > SVG_ASSET_MAX_BYTES) {
+      throw new RetrievalError(body.byteLength > SVG_ASSET_MAX_BYTES ? "RESOURCE_LIMIT" : "UNSUPPORTED_MEDIA");
+    }
+    let text;
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(body); }
+    catch { throw new RetrievalError("UNSUPPORTED_MEDIA"); }
+    // The source asset inspector validates the complete XML document. This
+    // transport check only establishes a bounded SVG root signature while
+    // tolerating the XML declaration and prolog comments it can parse. Decode
+    // the whole bounded body so a multibyte code point crossing the old prefix
+    // boundary is not mistaken for malformed UTF-8.
+    let signature = text.replace(/^\uFEFF/, "");
+    while (true) {
+      signature = signature.replace(/^[\x20\t\r\n]+/, "");
+      if (signature.startsWith("<?xml")) {
+        const declaration = /^<\?xml\b[^?]*\?>/i.exec(signature);
+        if (!declaration) throw new RetrievalError("UNSUPPORTED_MEDIA");
+        signature = signature.slice(declaration[0].length);
+        continue;
+      }
+      if (signature.startsWith("<!--")) {
+        const end = signature.indexOf("-->", 4);
+        if (end < 0 || signature.slice(4, end).includes("--")) throw new RetrievalError("UNSUPPORTED_MEDIA");
+        signature = signature.slice(end + 3);
+        continue;
+      }
+      break;
+    }
+    if (!/^<svg(?:[\x20\t\r\n]|>)/i.test(signature)) {
+      throw new RetrievalError("UNSUPPORTED_MEDIA");
+    }
+    return undefined;
+  }
   const detected = detectMime(body);
   const accepted = declaredMime === "application/xhtml+xml"
     ? detected === "text/html"
@@ -493,6 +533,15 @@ export class SafeFetcher {
   }
 
   async fetch(input, options = {}) {
+    return this.#fetch(input, options, "document");
+  }
+
+  /** Fetch one bounded SVG response for host-controlled asset inspection. */
+  async fetchSvgAsset(input, options = {}) {
+    return this.#fetch(input, options, "svg-asset");
+  }
+
+  async #fetch(input, options, mode) {
     let externalSignal;
     let context;
     let closeContext = () => {};
@@ -560,7 +609,8 @@ export class SafeFetcher {
         }
         hop.dispatchIntent = true;
         try {
-          result = await requestOnce(validated, chosenAddress, context, this.#seam);
+          result = await requestOnce(validated, chosenAddress, context, this.#seam,
+            mode === "svg-asset" ? SVG_ASSET_ACCEPT : ACCEPT);
         } catch (error) {
           await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "no_response" }));
           if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
@@ -586,11 +636,14 @@ export class SafeFetcher {
           throw error;
         }
         if (REDIRECT_CODES.has(response.statusCode)) {
-          const location = response.headers.location;
           response.destroy();
           finishTransport();
           await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "redirect" }));
           throwIfStopped(context);
+          // Asset acquisition has one request and cannot follow a redirect. In
+          // particular, no destination DNS lookup or socket may be started.
+          if (mode === "svg-asset") throw new RetrievalError("REDIRECT_LIMIT");
+          const location = response.headers.location;
           if (redirects >= DEFAULT_RUN_LIMITS.redirectsPerFetch) throw new RetrievalError("REDIRECT_LIMIT");
           if (typeof location !== "string" || location.length > 8_192) throw new RetrievalError("POLICY_DENIED");
           let next;
@@ -612,7 +665,7 @@ export class SafeFetcher {
             throw new RetrievalError("TRANSPORT_FAILURE");
           }
           let mime;
-          try { mime = parseMime(response.headers["content-type"]); }
+          try { mime = parseMime(response.headers["content-type"], mode); }
           catch (error) {
             await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "content_type_rejected" }));
             throwIfStopped(context);
@@ -623,7 +676,7 @@ export class SafeFetcher {
             body = await consumeBody(response, mime, context, this.#state, lifecycle, async () => {
               decodeStarted = true;
               await lifecycle?.hooks.onDecodeStart?.(Object.freeze({ hopIndex, mime }));
-            });
+            }, mode);
           } catch (error) {
             if (!decodeStarted) await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "body_decode_not_started" }));
             throw error;
@@ -632,7 +685,7 @@ export class SafeFetcher {
           hop.decodedBytes = body.byteLength;
           await lifecycle?.hooks.onBodyComplete?.(Object.freeze({ hopIndex, decodedBytes: body.byteLength }));
           throwIfStopped(context);
-          const dimensions = validateFinalBody(body, mime);
+          const dimensions = validateFinalBody(body, mime, mode);
           const fetched = Object.freeze({
             url: validated.url.toString(),
             contentType: mime,
@@ -646,6 +699,9 @@ export class SafeFetcher {
             finalUrl: validated.url.href,
             redirectChain,
             hops,
+            mode,
+            lifecycleBound: lifecycle !== null,
+            bodyHash: createHash("sha256").update(body).digest("hex"),
           });
           returnedBody = true;
           return fetched;

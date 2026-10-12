@@ -1,14 +1,35 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { types as utilTypes } from 'node:util';
 import { SafeFetcher, RetrievalError } from '../security/controlled-fetch.mjs';
-import { runWithSafeFetchLifecycle, safeFetchProvenance } from '../security/internal/fetch-lifecycle.mjs';
+import {
+  createControlledSvgIngestWitness,
+  runWithSafeFetchLifecycle,
+  safeFetchProvenance,
+} from '../security/internal/fetch-lifecycle.mjs';
 import { composeSourceIdentity, SourceIdentityCompositionError } from '../discovery/identity/from-extraction.mjs';
 import { compareEntityIdentity } from '../discovery/entities/identity.mjs';
 import { compareOccurrenceIdentity } from '../discovery/occurrences/identity.mjs';
 import { parseAndValidateUrl } from '../security/url-policy.mjs';
+import { inspectSafeAssetBytes, SAFE_ASSET_POLICY_VERSION, SAFE_ASSET_LIMITS } from '../security/assets/inspect.mjs';
+import {
+  createPrivateAssetReleaseAuthority as createReleaseAuthorityState,
+  hasThenableBehavior,
+  isPrivateAssetReleaseController,
+  privateAssetReleaseAuthorityForController,
+  privateAssetReleaseControllerMatches,
+  revokePrivateAssetReleaseController,
+  subscribeToSupportedNativePromise,
+} from './private-asset-release.mjs';
 
 const PRIVATE_DRAFT_SCHEMA = 'ei-private-retrieval-draft/v1';
 const MAX_ADMISSIONS = 8;
+const STOP_PERSIST_CLEANUP_MS = 500;
+const PRE_STOP_UNRESOLVED_CLEANUP_MS = 100;
+const ABORTABLE_CLEANUP_MS = 250;
+const STOP_RECOVERY_ENVELOPE_MS = STOP_PERSIST_CLEANUP_MS + ABORTABLE_CLEANUP_MS;
+const ASSET_ACQUISITION_POLICY_VERSION = 'ei-private-svg-acquisition/1';
+const SVG_SOURCE_MAX_BYTES = 128 * 1024;
 const MAX_SELECTED_EVIDENCE = 8;
 const MAX_SELECTED_FACTS = 128;
 const MAX_AGGREGATE_IDENTITY_CANDIDATES = 23;
@@ -145,7 +166,8 @@ function urlHasSensitiveMaterial(value) {
 function snapshotRunInput(value) {
   const input = plainDataRecord(value, new Set([
     'frontier', 'evidenceStore', 'safeFetcher', 'request', 'runId', 'seeds', 'limits',
-    'retentionHandleFor', 'authorizeCurrent', 'signal',
+    'retentionHandleFor', 'authorizeCurrent', 'assetAcquisitionPolicyFor',
+    'assetAcquisitionReleaseAuthorityFor', 'signal',
   ]));
   if (!input || typeof input.runId !== 'string' || input.runId.length < 1 || input.runId.length > 96
     || input.request === null || (typeof input.request !== 'object' && typeof input.request !== 'function')
@@ -198,11 +220,156 @@ function snapshotRunInput(value) {
     'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt',
     'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]);
+  const controlledAssetEvidenceStore = exactMethods(input.evidenceStore, [
+    'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'revalidateControlledAssetRelease',
+  ]);
+  const assetSourceBindingStore = exactMethods(input.evidenceStore, ['readAssetSourceCandidateBinding']);
   if (!frontier || !evidenceStore || !(input.safeFetcher instanceof SafeFetcher)) fail();
+  if (input.assetAcquisitionPolicyFor !== undefined && typeof input.assetAcquisitionPolicyFor !== 'function') fail();
+  if (input.assetAcquisitionReleaseAuthorityFor !== undefined
+    && typeof input.assetAcquisitionReleaseAuthorityFor !== 'function') fail();
+  if (input.assetAcquisitionReleaseAuthorityFor !== undefined && input.assetAcquisitionPolicyFor === undefined) fail();
   return {
     ...input, seeds, limits, frontier, evidenceStore,
+    controlledAssetEvidenceStore,
+    assetSourceBindingStore,
+    assetReleaseFinalizationStore: exactMethods(input.evidenceStore, [
+      'finalizeControlledAssetRelease', 'discardControlledAssetRelease',
+    ]),
     workerId: `private-retrieval-${randomUUID()}`,
   };
+}
+
+function normalizeAssetAcquisitionPolicy(value) {
+  if (value === null || value === undefined) return null;
+  const policy = plainDataRecord(value, new Set(['schemaVersion', 'policyVersion', 'policyId', 'allowedOrigins']));
+  if (!policy || policy.schemaVersion !== 1 || policy.policyVersion !== ASSET_ACQUISITION_POLICY_VERSION
+    || typeof policy.policyId !== 'string' || !/^[A-Za-z0-9._:-]{1,96}$/.test(policy.policyId)) fail();
+  const origins = ownArray(policy.allowedOrigins, 32);
+  if (!origins || origins.length === 0) fail();
+  const normalizedOrigins = origins.map((origin) => {
+    if (typeof origin !== 'string' || origin.length > 512 || urlHasSensitiveMaterial(origin)) fail();
+    let parsed;
+    try { parsed = new URL(origin); } catch { fail(); }
+    if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password
+      || parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.origin !== origin) fail();
+    return parsed.origin;
+  }).sort();
+  if (new Set(normalizedOrigins).size !== normalizedOrigins.length) fail();
+  return Object.freeze({
+    schemaVersion: 1,
+    policyVersion: ASSET_ACQUISITION_POLICY_VERSION,
+    policyId: policy.policyId,
+    allowedOrigins: Object.freeze(normalizedOrigins),
+  });
+}
+
+/**
+ * Creates a host-owned, one-shot release authority for one tenant, logical run,
+ * immutable asset policy, and run deadline. Keep the returned controller in the
+ * host authorization layer and call revoke() synchronously when any bound
+ * authority changes. A revoke before the store's synchronous projection denies
+ * release; a revoke after it reports after_release. This is opt-in only.
+ */
+export function createPrivateAssetReleaseAuthority({ tenantId, runId, policy, expiresAtMonotonic }) {
+  const normalizedPolicy = normalizeAssetAcquisitionPolicy(policy);
+  if (!normalizedPolicy) fail();
+  const maximumExpiry = performance.now() + 30_000;
+  const selectedExpiry = expiresAtMonotonic;
+  if (!Number.isFinite(selectedExpiry) || selectedExpiry <= performance.now() || selectedExpiry > maximumExpiry) fail();
+  return createReleaseAuthorityState({
+    tenantId,
+    runId,
+    policyDigest: digestJson(normalizedPolicy),
+    expiresAtMonotonic: selectedExpiry,
+  });
+}
+
+function assetPolicyAllowsUrl(policy, value) {
+  if (!policy || urlHasSensitiveMaterial(value)) return false;
+  try {
+    const parsed = parseAndValidateUrl(value).url;
+    return parsed.href === value && policy.allowedOrigins.includes(parsed.origin);
+  } catch {
+    return false;
+  }
+}
+
+function assetBindingFromStoredCandidate(policy, stored, candidateId) {
+  const metadata = stored?.metadata;
+  const source = stored?.source;
+  const candidate = stored?.candidate;
+  const matches = source?.assetSource?.candidates?.filter((entry) => entry.candidateId === candidateId) ?? [];
+  if (!policy || !metadata || !source || metadata.state !== 'available'
+    || metadata.representation !== 'asset-source-excerpt' || !/^[a-f0-9]{64}$/.test(metadata.contentHash ?? '')
+    || !/^[a-f0-9]{64}$/.test(metadata.derivationDigest ?? '') || source.contentHash !== metadata.contentHash
+    || source.redirectChain?.length !== 0 || source.assetSource?.sourceUrl !== source.sourceUrl
+    || source.assetSource.derivationDigest !== metadata.derivationDigest || matches.length !== 1 || !candidate
+    || candidate.candidateId !== candidateId || candidate.positionIndex !== matches[0].positionIndex
+    || candidate.sourceForm !== matches[0].sourceForm || candidate.field !== matches[0].field
+    || candidate.fetchSuggestion !== matches[0].fetchSuggestion || candidate.quarantineReason !== null
+    || candidate.excerptHash !== matches[0].excerptHash
+    || JSON.stringify(candidate.locator) !== JSON.stringify(matches[0].locator)
+    || typeof candidate.value !== 'string' || candidate.value.length < 1 || candidate.value.length > 8_192
+    || hashBytes(Buffer.from(candidate.value, 'utf8')) !== candidate.excerptHash
+    || !assetPolicyAllowsUrl(policy, candidate.fetchSuggestion)
+    || typeof candidate.field !== 'string' || candidate.field.length < 1 || candidate.field.length > 160) return null;
+  const excerpt = candidate.value;
+  if (excerpt.length < 1 || excerpt.length > 8_192) return null;
+  let sourceUrl;
+  try { parseAndValidateUrl(source.sourceUrl); sourceUrl = source.sourceUrl; } catch { return null; }
+  return Object.freeze({
+    schemaVersion: 1,
+    policyVersion: ASSET_ACQUISITION_POLICY_VERSION,
+    policyId: policy.policyId,
+    sourceEvidenceId: stored.evidenceId,
+    sourceEvidenceVersion: metadata.version,
+    sourceContentHash: metadata.contentHash,
+    sourceDerivationDigest: metadata.derivationDigest,
+    sourceUrl,
+    candidateId: candidate.candidateId,
+    positionIndex: candidate.positionIndex,
+    sourceForm: candidate.sourceForm,
+    sourceLocator: Object.freeze({ ...candidate.locator }),
+    excerptHash: candidate.excerptHash,
+    field: candidate.field,
+    value: excerpt,
+    assetUrl: candidate.fetchSuggestion,
+  });
+}
+
+function assetSuggestionSourceRef(binding) {
+  return Object.freeze({
+    evidenceId: binding.sourceEvidenceId,
+    contentHash: binding.sourceContentHash,
+    locator: Object.freeze({ ...binding.sourceLocator }),
+    field: binding.field,
+    value: binding.assetUrl,
+  });
+}
+
+function sameSourceReference(left, right) {
+  return left?.evidenceId === right?.evidenceId && left?.contentHash === right?.contentHash
+    && left?.field === right?.field && left?.value === right?.value
+    && JSON.stringify(left?.locator) === JSON.stringify(right?.locator);
+}
+
+function findAssetBindingForCandidate(candidate, snapshot, verifiedCompletionProofs, policy) {
+  if (!policy || candidate.seed || candidate.depth < 1 || candidate.sourceRefs.length !== 1) return null;
+  const observations = snapshot.observations.filter((observation) => observation.kind === 'link'
+    && observation.targetCandidateId === candidate.candidateId);
+  if (observations.length !== 1) return null;
+  const observation = observations[0];
+  const proof = verifiedCompletionProofs.get(observation.parentCandidateId);
+  if (!proof || proof.receipt.candidate.candidateId !== observation.parentCandidateId) return null;
+  const observationRefs = observation.sourceRefs ?? [];
+  if (observationRefs.length !== 1 || candidate.canonicalUrl !== observation.canonicalUrl
+    || candidate.suppliedUrl !== observation.suppliedUrl
+    || !sameSourceReference(candidate.sourceRefs[0], observationRefs[0])) return null;
+  const bindings = (proof.receipt.assetSuggestions ?? []).filter((binding) => binding.assetUrl === candidate.suppliedUrl
+    && sameSourceReference(assetSuggestionSourceRef(binding), observationRefs[0])
+    && proof.receipt.evidenceIds.includes(binding.sourceEvidenceId));
+  return bindings.length === 1 ? bindings[0] : null;
 }
 
 function signalAborted(signal) {
@@ -241,19 +408,75 @@ async function awaitAbortableHostCallback(callback, args, signal, abortError) {
   return awaitAbortableOperation(() => callback(...args), signal, abortError);
 }
 
+async function awaitControlledAssetPreparation(operation, signal, abortError, onLateSuccess) {
+  if (signalAborted(signal)) throw abortError();
+  let abandoned = false;
+  let onAbort;
+  const preparation = new Promise((resolve) => {
+    let pending;
+    try { pending = operation(); }
+    catch (error) { resolve({ kind: 'rejected', error }); return; }
+    const fulfilled = (value) => {
+      try {
+        if (abandoned || signalAborted(signal)) {
+          abandoned = true;
+          try { onLateSuccess(value); } catch { /* Revocation remains fail-closed. */ }
+          resolve({ kind: 'late_success' });
+          return;
+        }
+        resolve({ kind: 'resolved', value });
+      } catch (error) {
+        resolve({ kind: 'rejected', error });
+      }
+    };
+    const rejected = (error) => {
+      try {
+        resolve({ kind: abandoned || signalAborted(signal) ? 'late_rejection' : 'rejected', error });
+      } catch (signalError) {
+        resolve({ kind: 'rejected', error: signalError });
+      }
+    };
+    if (!subscribeToSupportedNativePromise(pending, fulfilled, rejected)) resolve({ kind: 'invalid' });
+  });
+  const aborted = new Promise((resolve) => {
+    onAbort = () => {
+      abandoned = true;
+      resolve({ kind: 'aborted' });
+    };
+    addAbortListener(signal, onAbort);
+    if (signalAborted(signal)) onAbort();
+  });
+  try {
+    const outcome = await Promise.race([preparation, aborted]);
+    if (outcome.kind === 'aborted') throw abortError();
+    if (outcome.kind === 'rejected') throw outcome.error;
+    if (outcome.kind !== 'resolved') throw new RetrievalError('EVIDENCE_INVALID');
+    if (signalAborted(signal)) {
+      abandoned = true;
+      try { onLateSuccess(outcome.value); } catch { /* Revocation remains fail-closed. */ }
+      throw abortError();
+    }
+    // Keep the opaque result nested so promise resolution never adopts a value
+    // returned by the host adapter.
+    return Object.freeze({ value: outcome.value });
+  } finally {
+    removeAbortListener(signal, onAbort);
+  }
+}
+
 async function awaitBoundedCleanup(operation, timeoutMs = 250) {
   let timer;
-  const pending = Promise.resolve().then(operation).catch(() => {});
-  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); });
-  try { await Promise.race([pending, timeout]); }
+  const pending = Promise.resolve().then(operation).then(() => true, () => true);
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); });
+  try { return await Promise.race([pending, timeout]); }
   finally { clearTimeout(timer); }
 }
 
-async function awaitAbortableCleanup(operation, timeoutMs = 250) {
+async function awaitAbortableCleanup(operation, timeoutMs = 250, waitMs = timeoutMs + 25) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    await awaitBoundedCleanup(() => operation(controller.signal), timeoutMs + 25);
+    await awaitBoundedCleanup(() => operation(controller.signal), waitMs);
   } finally {
     clearTimeout(timer);
     if (!controller.signal.aborted) controller.abort();
@@ -300,8 +523,14 @@ function limitationFor(code) {
   return 'source_unavailable';
 }
 
-function validateProvenance(document, provenance, initialUrl, hops) {
+function hashBytes(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function validateProvenance(document, provenance, initialUrl, hops, mode = 'document') {
   if (!provenance || provenance.requestedUrl !== initialUrl || provenance.finalUrl !== document.url
+    || provenance.mode !== mode || provenance.lifecycleBound !== true
+    || provenance.bodyHash !== hashBytes(document.bytes)
     || !Array.isArray(provenance.redirectChain) || provenance.redirectChain.length !== document.redirects
     || !Array.isArray(provenance.hops) || provenance.hops.length !== document.redirects + 1
     || provenance.hops.length !== hops.length || provenance.hops.some((hop, index) => {
@@ -619,7 +848,7 @@ function reconstructCompletedLegacyReceipt(receipt, snapshot, candidateId, compl
   return null;
 }
 
-function receiptCandidate(candidate, bindSuppliedUrl = false) {
+function receiptCandidate(candidate, bindSuppliedUrl = false, assetAcquisition) {
   if (bindSuppliedUrl && (typeof candidate.suppliedUrl !== 'string' || candidate.suppliedUrl.length < 1
     || candidate.suppliedUrl.length > 8_192 || urlHasSensitiveMaterial(candidate.suppliedUrl))) {
     throw new PrivateRetrievalError('INVALID_INPUT');
@@ -631,6 +860,7 @@ function receiptCandidate(candidate, bindSuppliedUrl = false) {
     depth: candidate.depth,
     seed: candidate.seed,
     sourceRefs: Object.freeze(candidate.sourceRefs.map((reference) => Object.freeze({ ...reference }))),
+    ...(assetAcquisition ? { assetAcquisition } : {}),
   });
 }
 
@@ -674,7 +904,7 @@ function aggregateIdentity(candidateResults) {
 
 function projection(identity, selectedEvidence, selectedFacts, progress, limitations, omittedLinkCandidates,
   truncatedSuggestionCount, sourceLinkCandidateOmittedCount, sourceLinkCandidateOmittedCountLowerBound,
-  sourceLinkCandidateOmittedCountComplete) {
+  sourceLinkCandidateOmittedCountComplete, assetCandidateIds = new Set(), assetAcquisitions = undefined) {
   const facts = selectedFacts;
   const evidenceById = new Map(selectedEvidence.map((item) => [item.metadata.evidenceId, item]));
   const sources = [...evidenceById.values()].map((item) => Object.freeze({
@@ -736,7 +966,8 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
       kind: 'entity_identity', candidateIds: decision.candidateIds, reasonCodes: decision.reasonCodes, decision,
     })),
   ]);
-  const linkCandidates = progress.candidates.filter((candidate) => candidate.depth > 0).map((candidate) => Object.freeze({
+  const linkCandidates = progress.candidates.filter((candidate) => candidate.depth > 0
+    && !assetCandidateIds.has(candidate.candidateId)).map((candidate) => Object.freeze({
     candidateId: candidate.candidateId,
     url: candidate.canonicalUrl,
     depth: candidate.depth,
@@ -756,6 +987,7 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
     unresolvedTransitions: identity.unresolvedTransitions,
     sources: Object.freeze(sources),
     linkCandidates: Object.freeze(linkCandidates),
+    ...(assetAcquisitions !== undefined ? { assetAcquisitions: Object.freeze([...assetAcquisitions]) } : {}),
     omittedLinkCandidates: Object.freeze(omittedLinkCandidates.map((suggestion) => Object.freeze({
       url: suggestion.url,
       sourceRefs: suggestion.sourceRefs,
@@ -787,7 +1019,10 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
  */
 export async function runPrivateRetrieval(value) {
   const input = snapshotRunInput(value);
-  const runConfigHash = digestJson({ runId: input.runId, seeds: input.seeds, limits: input.limits });
+  let runConfigHash = digestJson({ runId: input.runId, seeds: input.seeds, limits: input.limits });
+  let assetPolicy = null;
+  let assetReleaseController = null;
+  let assetReleaseAuthority = null;
   const limitations = new Set([
     'source_authority_not_evaluated', 'rights_not_evaluated', 'billable_usage_unknown', 'provider_and_external_egress_not_measured',
   ]);
@@ -796,6 +1031,10 @@ export async function runPrivateRetrieval(value) {
   const evidenceIds = new Set();
   const verifiedCompletionProofs = new Map();
   const omittedLinkCandidates = [];
+  const assetAcquisitionResults = [];
+  const assetAcquisitionReceipts = new Map();
+  const assetReleaseRoleReferences = new Map();
+  const assetCandidateIds = new Set();
   let truncatedSuggestionCount = 0;
   let sourceLinkCandidateOmittedCountLowerBound = 0;
   let sourceLinkCandidateOmittedCountComplete = true;
@@ -814,12 +1053,31 @@ export async function runPrivateRetrieval(value) {
   let externalAbort = false;
   let stopCause = null;
   let deadlineStopStarted = false;
+  let stopPersistenceStarted = false;
+  let cleanupEnvelopeDeadline = Number.NaN;
   let runFailure = null;
+  let assetReleaseAuthorityRevoked = false;
+  const discardedAssetReleaseChecks = new WeakSet();
   const abortError = () => new RetrievalError(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : 'CANCELED');
+  const beginCleanupEnvelope = () => {
+    if (!Number.isFinite(cleanupEnvelopeDeadline)) {
+      cleanupEnvelopeDeadline = performance.now() + STOP_RECOVERY_ENVELOPE_MS;
+    }
+  };
+  const remainingCleanupMs = () => Number.isFinite(cleanupEnvelopeDeadline)
+    ? Math.max(0, cleanupEnvelopeDeadline - performance.now()) : 0;
+  const awaitRunCleanup = (operation, maximumWaitMs = ABORTABLE_CLEANUP_MS) => {
+    const remaining = remainingCleanupMs();
+    if (remaining <= 0) return Promise.resolve(false);
+    const timeoutMs = Math.min(maximumWaitMs, remaining);
+    const waitMs = Math.min(timeoutMs + 25, remaining);
+    return awaitAbortableCleanup(operation, timeoutMs, waitMs);
+  };
   const persistStop = (reason) => {
+    stopPersistenceStarted = true;
     if (!runCreated) return;
     const cleanup = new AbortController();
-    const timer = setTimeout(() => cleanup.abort(), 500);
+    const timer = setTimeout(() => cleanup.abort(), STOP_PERSIST_CLEANUP_MS);
     const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason, cleanup.signal))
       .catch(() => {}).finally(() => {
         clearTimeout(timer);
@@ -827,13 +1085,40 @@ export async function runPrivateRetrieval(value) {
       });
     localStopPromise = Promise.all([localStopPromise, pending]).then(() => undefined);
   };
+  const revokeAssetReleaseAuthority = (reason) => {
+    if (!assetReleaseController || assetReleaseAuthorityRevoked) return;
+    assetReleaseAuthorityRevoked = true;
+    revokePrivateAssetReleaseController(assetReleaseController, reason);
+  };
+  const releaseCheckFromPreparation = (value) => {
+    try {
+      if (!value || typeof value !== 'object' || utilTypes.isProxy(value)) return null;
+      const record = plainDataRecord(value, new Set(['releaseCheck', 'candidateIds']));
+      if (!record || !Object.hasOwn(record, 'releaseCheck')) return null;
+      const check = record.releaseCheck;
+      return check && typeof check === 'object' ? check : null;
+    } catch { return null; }
+  };
+  const discardAssetReleaseCheck = (releaseCheck) => {
+    if (!releaseCheck || discardedAssetReleaseChecks.has(releaseCheck)) return false;
+    discardedAssetReleaseChecks.add(releaseCheck);
+    try {
+      return input.assetReleaseFinalizationStore.discardControlledAssetRelease(evidenceScope, releaseCheck) === true;
+    } catch { return false; }
+  };
+  const discardAssetReleasePreparation = (value) =>
+    discardAssetReleaseCheck(releaseCheckFromPreparation(value));
   const abortForStop = (reason) => {
     if (stopCause === null) stopCause = reason;
+    beginCleanupEnvelope();
     if (!controller.signal.aborted) controller.abort();
+    revokeAssetReleaseAuthority(`run_stopped:${reason}`);
   };
   const triggerDeadline = () => {
     if (stopCause === null) stopCause = 'deadline';
+    beginCleanupEnvelope();
     if (!controller.signal.aborted) controller.abort();
+    revokeAssetReleaseAuthority('run_deadline');
     if (!deadlineStopStarted) {
       deadlineStopStarted = true;
       persistStop('deadline');
@@ -856,11 +1141,201 @@ export async function runPrivateRetrieval(value) {
     checkDeadline();
     return await awaitAbortableOperation(operation, controller.signal, abortError);
   };
+  const currentAssetPolicyMatches = async () => {
+    if (!assetPolicy || !assetReleaseController || !assetReleaseAuthority
+      || !input.assetAcquisitionPolicyFor || !authorized(input, 'asset-acquisition')
+      || !privateAssetReleaseControllerMatches(assetReleaseController, {
+        runId: input.runId,
+        policyDigest: digestJson(assetPolicy),
+        deadlineAtMonotonic,
+      })) return false;
+    try {
+      const valueNow = await awaitAbortableHostCallback(input.assetAcquisitionPolicyFor, [input.request,
+        Object.freeze({ runId: input.runId })], controller.signal, abortError);
+      const current = normalizeAssetAcquisitionPolicy(valueNow);
+      return current !== null && digestJson(current) === digestJson(assetPolicy);
+    } catch {
+      return false;
+    }
+  };
+  const forgetAcquiredAssetPlan = (candidateId) => {
+    assetAcquisitionReceipts.delete(candidateId);
+    assetReleaseRoleReferences.delete(candidateId);
+    const index = assetAcquisitionResults.findIndex((entry) => entry.candidate.frontierCandidateId === candidateId);
+    if (index >= 0) assetAcquisitionResults.splice(index, 1);
+  };
+  const openCurrentAssetSource = async (binding) => {
+    if (!assetPolicy || !await currentAssetPolicyMatches()) return null;
+    try {
+      const handle = await awaitOperation(() => input.evidenceStore.lookupEvidence(
+        evidenceScope, binding.sourceEvidenceId, controller.signal,
+      ));
+      if (!input.assetSourceBindingStore) return null;
+      const stored = await awaitOperation(() => input.assetSourceBindingStore.readAssetSourceCandidateBinding(
+        evidenceScope, handle, binding.candidateId, input.request, controller.signal,
+      ));
+      const actualBinding = assetBindingFromStoredCandidate(assetPolicy, stored, binding.candidateId);
+      if (!actualBinding || JSON.stringify(actualBinding) !== JSON.stringify(binding)) return null;
+      return { handle, stored };
+    } catch {
+      if (controller.signal.aborted) throw abortError();
+      return null;
+    }
+  };
+  const rememberAcquiredAssetPlan = async (receipt) => {
+    const binding = receipt?.candidate?.assetAcquisition;
+    const acquisition = receipt?.assetAcquisition;
+    if (!binding || !acquisition) return true;
+    assetCandidateIds.add(receipt.candidate.candidateId);
+    if (!input.controlledAssetEvidenceStore || !await currentAssetPolicyMatches()) {
+      limitations.add('asset_acquisition_reopen_unavailable');
+      return false;
+    }
+    const source = await openCurrentAssetSource(binding);
+    if (!source) {
+      limitations.add('asset_source_candidate_reopen_failed');
+      return false;
+    }
+    let original;
+    let transformed;
+    let inspection;
+    let checkedTransformed;
+    try {
+      const originalHandle = await awaitOperation(() => input.evidenceStore.lookupEvidence(
+        evidenceScope, acquisition.originalEvidence.evidenceId, controller.signal,
+      ));
+      const transformedHandle = await awaitOperation(() => input.evidenceStore.lookupEvidence(
+        evidenceScope, acquisition.transformedEvidence.evidenceId, controller.signal,
+      ));
+      original = await awaitOperation(() => input.controlledAssetEvidenceStore.readControlledAssetBytes(
+        evidenceScope, originalHandle, input.request, controller.signal,
+      ));
+      transformed = await awaitOperation(() => input.controlledAssetEvidenceStore.readControlledAssetBytes(
+        evidenceScope, transformedHandle, input.request, controller.signal,
+      ));
+      if (original.metadata.version !== acquisition.originalEvidence.version
+        || original.metadata.contentHash !== acquisition.originalEvidence.contentHash
+        || original.bytes.byteLength !== acquisition.originalEvidence.byteLength
+        || transformed.metadata.version !== acquisition.transformedEvidence.version
+        || transformed.metadata.contentHash !== acquisition.transformedEvidence.contentHash
+        || transformed.bytes.byteLength !== acquisition.transformedEvidence.byteLength
+        || hashBytes(original.bytes) !== acquisition.sourceBytesHash
+        || hashBytes(transformed.bytes) !== acquisition.transformedBytesHash) {
+        limitations.add('asset_acquisition_reopen_hash_mismatch');
+        return false;
+      }
+      inspection = inspectSafeAssetBytes(original.bytes, { contentType: 'image/svg+xml', signal: controller.signal });
+      if (inspection.action !== 'transformed' || inspection.policyVersion !== SAFE_ASSET_POLICY_VERSION
+        || inspection.sourceHash !== acquisition.sourceBytesHash
+        || inspection.transformedHash !== acquisition.transformedBytesHash) {
+        limitations.add('asset_acquisition_reinspection_failed');
+        return false;
+      }
+      checkedTransformed = inspection.copyTransformedBytes();
+      if (!inspection.matchesTransformedBytes(checkedTransformed)
+        || !Buffer.from(checkedTransformed).equals(Buffer.from(transformed.bytes))) {
+        limitations.add('asset_acquisition_reinspection_failed');
+        return false;
+      }
+      if (!await currentAssetPolicyMatches()) {
+        limitations.add('asset_acquisition_policy_changed');
+        return false;
+      }
+      // The policy callback may be asynchronous. Recheck the synchronous
+      // stage capability after it resolves so a revocation during that await
+      // cannot mint or refresh a released local plan.
+      if (!authorized(input, 'asset-acquisition')) {
+        limitations.add('authorization_revoked');
+        return false;
+      }
+      const bindingHash = digestJson({
+        runId: input.runId,
+        configHash: runConfigHash,
+        frontierCandidateId: receipt.candidate.candidateId,
+        binding,
+        sourceEvidence: {
+          evidenceId: source.stored.metadata.evidenceId,
+          version: source.stored.metadata.version,
+          contentHash: source.stored.metadata.contentHash,
+          derivationDigest: source.stored.metadata.derivationDigest,
+        },
+        originalEvidence: acquisition.originalEvidence,
+        transformedEvidence: acquisition.transformedEvidence,
+      });
+      const questionPlan = Object.freeze({
+        questionId: 'Q-EI-BRAND-ROLE:v1',
+        status: 'blocked',
+        candidateBindingHash: bindingHash,
+        execution: 'not_dispatched',
+        observerMetadata: null,
+        observerMetadataProvenance: 'absent',
+        rights: 'unknown',
+        permission: 'unknown',
+        roleClassification: null,
+        reasonCodes: Object.freeze([
+          'observer_metadata_unavailable', 'decision_port_contract_unavailable', 'rights_not_evaluated',
+        ]),
+      });
+      const result = Object.freeze({
+        schemaVersion: 1,
+        status: 'blocked_local_inspection_only',
+        candidateBindingHash: bindingHash,
+        candidate: Object.freeze({
+          frontierCandidateId: receipt.candidate.candidateId,
+          assetSourceCandidateId: binding.candidateId,
+          sourceEvidenceId: binding.sourceEvidenceId,
+          assetUrl: binding.assetUrl,
+          field: binding.field,
+          excerptHash: binding.excerptHash,
+        }),
+        sourceEvidence: Object.freeze({
+          evidenceId: source.stored.metadata.evidenceId,
+          version: source.stored.metadata.version,
+          contentHash: source.stored.metadata.contentHash,
+          derivationDigest: source.stored.metadata.derivationDigest,
+        }),
+        acquiredEvidence: Object.freeze({
+          fetchedSource: Object.freeze({ ...acquisition.originalEvidence }),
+          transformed: Object.freeze({ ...acquisition.transformedEvidence }),
+          sourceBytesHash: acquisition.sourceBytesHash,
+          transformedBytesHash: acquisition.transformedBytesHash,
+          inspectionPolicyVersion: acquisition.inspectionPolicyVersion,
+          storedBytesReopenedAndVerified: true,
+        }),
+        acceptedExternalAssetVersion: null,
+        questionPlan,
+      });
+      assetCandidateIds.add(receipt.candidate.candidateId);
+      const existing = assetAcquisitionResults.findIndex((entry) => entry.candidate.frontierCandidateId
+        === receipt.candidate.candidateId);
+      if (existing < 0) assetAcquisitionResults.push(result);
+      else assetAcquisitionResults[existing] = result;
+      assetReleaseRoleReferences.set(receipt.candidate.candidateId, Object.freeze({
+        candidateId: receipt.candidate.candidateId,
+        evidence: Object.freeze([
+          Object.freeze({ handle: originalHandle, metadata: original.metadata }),
+          Object.freeze({ handle: transformedHandle, metadata: transformed.metadata }),
+        ]),
+      }));
+      assetAcquisitionReceipts.set(receipt.candidate.candidateId, receipt);
+      return true;
+    } catch {
+      limitations.add('asset_acquisition_reopen_unavailable');
+      return false;
+    } finally {
+      original?.bytes?.fill(0);
+      transformed?.bytes?.fill(0);
+      checkedTransformed?.fill(0);
+      inspection?.dispose?.();
+    }
+  };
   armDeadline();
   const onExternalAbort = () => {
     externalAbort = true;
     if (stopCause === null) stopCause = 'cancelled';
+    beginCleanupEnvelope();
     if (!controller.signal.aborted) controller.abort();
+    revokeAssetReleaseAuthority('run_cancelled');
     persistStop('cancelled');
   };
   if (input.signal !== undefined) {
@@ -872,6 +1347,59 @@ export async function runPrivateRetrieval(value) {
     if (controller.signal.aborted) return incompleteResult(input.runId, stopCause === 'deadline' ? 'incomplete' : 'cancelled',
       [stopCause === 'deadline' ? 'deadline_exceeded' : 'cancelled']);
     if (!authorized(input, 'start')) return incompleteResult(input.runId, 'denied', ['authorization_denied']);
+    if (input.assetAcquisitionPolicyFor) {
+      const policyValue = await awaitAbortableHostCallback(input.assetAcquisitionPolicyFor, [input.request,
+        Object.freeze({ runId: input.runId })], controller.signal, abortError);
+      assetPolicy = normalizeAssetAcquisitionPolicy(policyValue);
+      if (assetPolicy) {
+        runConfigHash = digestJson({
+          schema: 'ei-private-retrieval-config/asset-acquisition-v2',
+          runId: input.runId,
+          seeds: input.seeds,
+          limits: input.limits,
+          assetAcquisitionPolicy: assetPolicy,
+          releaseProtocol: 'one-shot-synchronous-projection/v1',
+        });
+        if (!input.controlledAssetEvidenceStore || !input.assetSourceBindingStore || !input.assetReleaseFinalizationStore) {
+          limitations.add('asset_acquisition_store_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        if (!input.assetAcquisitionReleaseAuthorityFor) {
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        const policyDigest = digestJson(assetPolicy);
+        let issued;
+        try {
+          issued = await awaitAbortableHostCallback(input.assetAcquisitionReleaseAuthorityFor, [input.request,
+            Object.freeze({
+              runId: input.runId,
+              policy: assetPolicy,
+              policyDigest,
+              deadlineAtMonotonic,
+            })], controller.signal, abortError);
+        } catch {
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        if (!isPrivateAssetReleaseController(issued)
+          || !privateAssetReleaseControllerMatches(issued, {
+            runId: input.runId,
+            policyDigest,
+            deadlineAtMonotonic,
+          })) {
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        assetReleaseController = issued;
+        assetReleaseAuthority = privateAssetReleaseAuthorityForController(issued);
+        if (!assetReleaseAuthority) {
+          revokePrivateAssetReleaseController(issued, 'invalid_host_capability');
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+      }
+    }
     scope = await awaitOperation(() => input.frontier.scopeForAuthenticatedRequest(input.request));
     evidenceScope = await awaitOperation(() => input.evidenceStore.scopeForAuthenticatedRequest(input.request));
     const initial = await awaitOperation(() => {
@@ -879,6 +1407,7 @@ export async function runPrivateRetrieval(value) {
         runId: input.runId,
         seeds: input.seeds,
         limits: input.limits,
+        ...(assetPolicy ? { privateRunConfigHash: runConfigHash } : {}),
       }, controller.signal);
       void Promise.resolve(creating).then(() => {
         runCreated = true;
@@ -913,6 +1442,7 @@ export async function runPrivateRetrieval(value) {
         } catch {
           if (controller.signal.aborted) break;
           runFailure = 'frontier_unavailable';
+          beginCleanupEnvelope();
           if (!controller.signal.aborted) controller.abort();
           break;
         }
@@ -961,12 +1491,11 @@ export async function runPrivateRetrieval(value) {
         },
         legacyReceipt: receipt.omissionMetadataVersion !== 1,
         receipt: {
-          candidate: {
-            candidateId: receipt.candidate.candidateId,
-            depth: receipt.candidate.depth,
-          },
+          candidate: receipt.candidate,
           outcome: receipt.outcome,
           suggestions: receipt.suggestions,
+          assetSuggestions: receipt.assetSuggestions ?? [],
+          evidenceIds: receipt.evidenceIds ?? [],
           truncatedCount,
         },
       });
@@ -1068,12 +1597,32 @@ export async function runPrivateRetrieval(value) {
           return;
         }
         const expectedCandidate = frontierBinding.candidate ?? candidate;
+        const expectedAssetBinding = findAssetBindingForCandidate(expectedCandidate, snapshot,
+          verifiedCompletionProofs, assetPolicy);
+        if (expectedAssetBinding) {
+          assetCandidateIds.add(candidate.candidateId);
+          if (!await openCurrentAssetSource(expectedAssetBinding)) {
+            limitations.add('asset_source_candidate_reopen_failed');
+            if (candidate.state === 'leased' && frontierBinding.claim.state === 'leased') {
+              try {
+                await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
+                  leaseToken: frontierBinding.claim.leaseToken,
+                  reason: candidate.admittedAttemptCount > 0
+                    ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
+                }, controller.signal));
+              } catch { /* The active lease remains conservative when resolution is unavailable. */ }
+            } else {
+              runFailure = 'private_receipt_unavailable';
+            }
+            return;
+          }
+        }
         let receipt;
         try {
           receipt = await awaitOperation(() => input.evidenceStore.readPrivateRunReceipt(evidenceScope, {
             runId: input.runId,
             configHash: runConfigHash,
-            candidate: receiptCandidate(expectedCandidate, frontierBinding.bindingVersion === 1),
+            candidate: receiptCandidate(expectedCandidate, frontierBinding.bindingVersion === 1, expectedAssetBinding),
           }, input.request, controller.signal));
         } catch (error) {
           const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
@@ -1231,6 +1780,7 @@ export async function runPrivateRetrieval(value) {
           return;
         }
         retainReceipt(replayReceipt);
+        if (replayReceipt.candidate.assetAcquisition) await rememberAcquiredAssetPlan(replayReceipt);
       }
     };
 
@@ -1272,7 +1822,26 @@ export async function runPrivateRetrieval(value) {
       if (typeof frontierBinding.candidate.suppliedUrl !== 'string' || urlHasSensitiveMaterial(frontierBinding.candidate.suppliedUrl)) {
         throw new PrivateRetrievalError('INVALID_INPUT');
       }
-      const candidateBinding = receiptCandidate(frontierBinding.candidate, true);
+      let assetBinding;
+      const candidateSnapshot = await readActiveSnapshot();
+      assetBinding = findAssetBindingForCandidate(frontierBinding.candidate, candidateSnapshot,
+        verifiedCompletionProofs, assetPolicy);
+      let assetSourceEvidenceHandle;
+      if (assetBinding) {
+        assetCandidateIds.add(candidate.candidateId);
+        const source = await openCurrentAssetSource(assetBinding);
+        if (!source) {
+          limitations.add('asset_source_candidate_reopen_failed');
+          await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
+            leaseToken: claim.leaseToken,
+            reason: candidate.admittedAttemptCount > 0 ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
+          }, controller.signal));
+          return;
+        }
+        assetSourceEvidenceHandle = source.handle;
+        candidateEvidenceIds.add(assetBinding.sourceEvidenceId);
+      }
+      const candidateBinding = receiptCandidate(frontierBinding.candidate, true, assetBinding);
       const receiptBinding = Object.freeze({
         runId: input.runId,
         configHash: runConfigHash,
@@ -1305,9 +1874,11 @@ export async function runPrivateRetrieval(value) {
       let completeDocument;
       let selectedOutcome = 'failed';
       let selectedSuggestions = [];
+      let assetSuggestionBindings = [];
       let selectedResult;
       let pdfRecord;
       let assetRecord;
+      let assetCompletion;
       let failure = null;
       const stateForHop = (index) => hopRecords[index];
       const checkNoBlockingStop = async () => {
@@ -1322,6 +1893,8 @@ export async function runPrivateRetrieval(value) {
       const hooks = {
         async beforeHop({ url, hopIndex }) {
           if (urlHasSensitiveMaterial(url)) throw new RetrievalError('POLICY_DENIED');
+          if (assetBinding && (hopIndex !== 0 || url !== assetBinding.assetUrl
+            || !await currentAssetPolicyMatches())) throw new RetrievalError('POLICY_DENIED');
           await checkNoBlockingStop();
           const attemptKey = `hop:${claim.leaseToken}:${hopIndex}:${randomUUID()}`;
           let admissionOperationStarted = false;
@@ -1377,6 +1950,7 @@ export async function runPrivateRetrieval(value) {
         async onDispatchIntent({ hopIndex }) {
           const record = stateForHop(hopIndex);
           if (!record) throw new RetrievalError('CANCELED');
+          if (assetBinding && !await currentAssetPolicyMatches()) throw new RetrievalError('POLICY_DENIED');
           await checkNoBlockingStop();
           await awaitOperation(() => input.frontier.markTransportDispatchIntent(scope, input.runId, {
             leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
@@ -1432,13 +2006,179 @@ export async function runPrivateRetrieval(value) {
           gzipReadableHighWaterMark: GZIP_CHUNK_BYTES,
           gzipWritableHighWaterMark: GZIP_CHUNK_BYTES,
           totalMilliseconds: Math.min(30_000, fetchRemainingMs),
-        }, () => SafeFetcher.prototype.fetch.call(input.safeFetcher, suppliedUrl, { signal: controller.signal }));
+        }, () => assetBinding
+          ? SafeFetcher.prototype.fetchSvgAsset.call(input.safeFetcher, suppliedUrl, { signal: controller.signal })
+          : SafeFetcher.prototype.fetch.call(input.safeFetcher, suppliedUrl, { signal: controller.signal }));
         const provenance = safeFetchProvenance(completeDocument);
-        if (!validateProvenance(completeDocument, provenance, candidate.canonicalUrl, hopRecords)) {
+        if (!validateProvenance(completeDocument, provenance, assetBinding?.assetUrl ?? candidate.canonicalUrl, hopRecords,
+          assetBinding ? 'svg-asset' : 'document')) {
           limitations.add('transport_provenance_unavailable');
           throw new RetrievalError('TRANSPORT_FAILURE');
         }
-        if (completeDocument.contentType === 'application/pdf') {
+        if (assetBinding) {
+          await checkNoBlockingStop();
+          if (!await currentAssetPolicyMatches()) throw new RetrievalError('POLICY_DENIED');
+          const inspection = inspectSafeAssetBytes(completeDocument.bytes, {
+            contentType: 'image/svg+xml', signal: controller.signal,
+          });
+          try {
+            if (inspection.action !== 'transformed' || inspection.policyVersion !== SAFE_ASSET_POLICY_VERSION
+              || inspection.sourceHash !== hashBytes(completeDocument.bytes)) {
+              limitations.add(inspection.action === 'review'
+                ? 'asset_inspection_review_required' : 'asset_inspection_rejected');
+              selectedOutcome = 'failed';
+            } else {
+              const transformedBytes = inspection.copyTransformedBytes();
+              try {
+                if (!inspection.matchesTransformedBytes(transformedBytes)
+                  || hashBytes(transformedBytes) !== inspection.transformedHash
+                  || transformedBytes.byteLength > SAFE_ASSET_LIMITS.maxTransformedBytes) {
+                  limitations.add('asset_inspection_rejected');
+                  selectedOutcome = 'failed';
+                } else {
+                  const retentionHandle = await awaitAbortableHostCallback(input.retentionHandleFor, [input.request,
+                    Object.freeze({
+                      runId: input.runId,
+                      sourceUrl: assetBinding.assetUrl,
+                      canonicalUrl: assetBinding.assetUrl,
+                      representation: 'controlled-asset-bytes',
+                      sourceEvidenceId: assetBinding.sourceEvidenceId,
+                      sourceEvidenceVersion: assetBinding.sourceEvidenceVersion,
+                      sourceContentHash: assetBinding.sourceContentHash,
+                    })], controller.signal, abortError);
+                  await checkNoBlockingStop();
+                  if (!retentionHandle || typeof retentionHandle !== 'object') throw new RetrievalError('POLICY_DENIED');
+                  const verifyDurableAttempt = async () => {
+                    if (controller.signal.aborted || !await currentAssetPolicyMatches()) return false;
+                    const currentSnapshot = await readActiveSnapshot();
+                    const currentCandidate = currentSnapshot.candidates.find((entry) => entry.candidateId === candidate.candidateId);
+                    const currentAttempts = currentSnapshot.attempts.filter((entry) => entry.candidateId === candidate.candidateId);
+                    if (!currentCandidate || currentCandidate.state !== 'leased' || currentCandidate.seed
+                      || currentCandidate.admittedAttemptCount !== 1 || currentAttempts.length !== 1
+                      || currentAttempts[0].attemptKey !== hopRecords[0]?.attemptKey
+                      || currentAttempts[0].kind !== 'initial' || currentAttempts[0].canonicalUrl !== candidate.canonicalUrl
+                      || hopRecords.length !== 1 || hopRecords[0].state !== 'body_complete'
+                      || hopRecords[0].url !== assetBinding.assetUrl) return false;
+                    const currentBinding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+                      scope, input.runId, candidate.candidateId, controller.signal,
+                    ));
+                    if (!currentBinding || currentBinding.claim.state !== 'leased'
+                      || currentBinding.claim.leaseToken !== claim.leaseToken
+                      || currentBinding.claim.claimKey !== claim.claimKey
+                      || currentBinding.candidate?.candidateId !== candidate.candidateId
+                      || currentBinding.candidate?.canonicalUrl !== candidate.canonicalUrl
+                      || currentBinding.candidate?.seed !== false
+                      || currentBinding.candidate?.suppliedUrl !== assetBinding.assetUrl) return false;
+                    const pending = await awaitOperation(() => input.evidenceStore.readPrivateRunReceipt(
+                      evidenceScope, receiptBinding, input.request, controller.signal,
+                    ));
+                    return pending.state === 'pending'
+                      && JSON.stringify(pending.candidate) === JSON.stringify(candidateBinding)
+                      && pending.claim.leaseToken === claim.leaseToken
+                      && pending.claim.claimKey === claim.claimKey;
+                  };
+                  const provenanceForRole = (role) => Object.freeze({
+                    schemaVersion: assetBinding.schemaVersion,
+                    policyVersion: assetBinding.policyVersion,
+                    policyId: assetBinding.policyId,
+                    role,
+                    inspectionPolicyVersion: SAFE_ASSET_POLICY_VERSION,
+                    sourceEvidenceId: assetBinding.sourceEvidenceId,
+                    sourceEvidenceVersion: assetBinding.sourceEvidenceVersion,
+                    sourceContentHash: assetBinding.sourceContentHash,
+                    sourceDerivationDigest: assetBinding.sourceDerivationDigest,
+                    sourceUrl: assetBinding.sourceUrl,
+                    candidateId: assetBinding.candidateId,
+                    positionIndex: assetBinding.positionIndex,
+                    sourceForm: assetBinding.sourceForm,
+                    sourceLocator: assetBinding.sourceLocator,
+                    excerptHash: assetBinding.excerptHash,
+                    field: assetBinding.field,
+                    value: assetBinding.value,
+                    assetUrl: assetBinding.assetUrl,
+                    sourceBytesHash: inspection.sourceHash,
+                    transformedBytesHash: inspection.transformedHash,
+                  });
+                  const commonIngest = {
+                    document: completeDocument,
+                    retentionHandle,
+                    retentionCeiling: {
+                      evidence: assetSourceEvidenceHandle,
+                      version: assetBinding.sourceEvidenceVersion,
+                      contentHash: assetBinding.sourceContentHash,
+                    },
+                  };
+                  let originalStored;
+                  let transformedStored;
+                  try {
+                    const originalProvenance = provenanceForRole('fetched-source');
+                    const originalWitness = createControlledSvgIngestWitness(
+                      completeDocument, originalProvenance, async () => verifyDurableAttempt(),
+                    );
+                    if (!originalWitness) throw new RetrievalError('TRANSPORT_FAILURE');
+                    originalStored = await awaitOperation(() => input.controlledAssetEvidenceStore.ingestControlledAssetEvidence(
+                      evidenceScope, { ...commonIngest, provenance: originalProvenance, witness: originalWitness },
+                      input.request, controller.signal,
+                    ));
+                    const transformedProvenance = provenanceForRole('transformed');
+                    const transformedWitness = createControlledSvgIngestWitness(
+                      completeDocument, transformedProvenance, async () => verifyDurableAttempt(),
+                    );
+                    if (!transformedWitness) throw new RetrievalError('TRANSPORT_FAILURE');
+                    transformedStored = await awaitOperation(() => input.controlledAssetEvidenceStore.ingestControlledAssetEvidence(
+                      evidenceScope, { ...commonIngest, provenance: transformedProvenance, witness: transformedWitness },
+                      input.request, controller.signal,
+                    ));
+                    if (originalStored?.outcome !== 'stored' || transformedStored?.outcome !== 'stored') {
+                      throw new RetrievalError('TRANSPORT_FAILURE');
+                    }
+                    if (!await currentAssetPolicyMatches()) throw new RetrievalError('POLICY_DENIED');
+                    await checkNoBlockingStop();
+                    const originalEvidence = Object.freeze({
+                      evidenceId: originalStored.metadata.evidenceId,
+                      version: originalStored.metadata.version,
+                      contentHash: originalStored.metadata.contentHash,
+                      byteLength: completeDocument.bytes.byteLength,
+                    });
+                    const transformedEvidence = Object.freeze({
+                      evidenceId: transformedStored.metadata.evidenceId,
+                      version: transformedStored.metadata.version,
+                      contentHash: transformedStored.metadata.contentHash,
+                      byteLength: transformedBytes.byteLength,
+                    });
+                    if (originalEvidence.contentHash !== inspection.sourceHash
+                      || transformedEvidence.contentHash !== inspection.transformedHash) {
+                      throw new RetrievalError('TRANSPORT_FAILURE');
+                    }
+                    assetCompletion = Object.freeze({
+                      schemaVersion: 1,
+                      policyVersion: assetBinding.policyVersion,
+                      inspectionPolicyVersion: inspection.policyVersion,
+                      binding: assetBinding,
+                      sourceBytesHash: inspection.sourceHash,
+                      transformedBytesHash: inspection.transformedHash,
+                      originalEvidence,
+                      transformedEvidence,
+                    });
+                    candidateEvidenceIds.add(originalEvidence.evidenceId);
+                    candidateEvidenceIds.add(transformedEvidence.evidenceId);
+                    selectedOutcome = 'no_links';
+                  } catch (error) {
+                    if (controller.signal.aborted) throw error;
+                    if (error?.code === 'POLICY_DENIED') throw error;
+                    limitations.add('asset_evidence_storage_failed');
+                    assetCompletion = undefined;
+                    selectedOutcome = 'failed';
+                  }
+                }
+              } finally {
+                transformedBytes.fill(0);
+              }
+            }
+          } finally {
+            inspection.dispose?.();
+          }
+        } else if (completeDocument.contentType === 'application/pdf') {
           const retentionHandle = await awaitAbortableHostCallback(input.retentionHandleFor, [input.request, Object.freeze({
             runId: input.runId, sourceUrl: suppliedUrl, canonicalUrl: completeDocument.url,
           })], controller.signal, abortError);
@@ -1537,6 +2277,47 @@ export async function runPrivateRetrieval(value) {
               if (asset.outcome === 'stored') {
                 assetRecord = { evidenceId: asset.metadata.evidenceId, role: 'asset-source-excerpt' };
                 candidateEvidenceIds.add(asset.metadata.evidenceId);
+            if (assetPolicy && input.limits.maxDepth > candidate.depth
+              && selectedSuggestions.length < maxSuggestionsPerCompletion
+              && await currentAssetPolicyMatches()) {
+              const materializedAssetSource = await awaitOperation(() => input.evidenceStore.materializeSelected(
+                evidenceScope, { evidence: [asset.evidence], facts: [] }, input.request, controller.signal,
+              ));
+              const storedAssetSource = materializedAssetSource.evidence.length === 1
+                && materializedAssetSource.facts.length === 0 ? materializedAssetSource.evidence[0] : null;
+              const assetCandidates = storedAssetSource?.source?.assetSource?.candidates ?? [];
+              const currentSnapshot = await readActiveSnapshot();
+              const occupiedUrls = new Set([
+                ...input.seeds.map((seed) => {
+                  try { return parseAndValidateUrl(seed.url).url.href; } catch { return null; }
+                }),
+                ...currentSnapshot.candidates.map((entry) => entry.canonicalUrl),
+                ...selectedSuggestions.map((suggestion) => suggestion.url),
+              ].filter((url) => typeof url === 'string'));
+              for (const sourceCandidate of assetCandidates) {
+                if (selectedSuggestions.length >= maxSuggestionsPerCompletion) break;
+                if (sourceCandidate.quarantineReason !== null || typeof sourceCandidate.fetchSuggestion !== 'string'
+                  || occupiedUrls.has(sourceCandidate.fetchSuggestion)
+                  || assetSuggestionBindings.some((binding) => binding.assetUrl === sourceCandidate.fetchSuggestion)
+                  || !assetPolicyAllowsUrl(assetPolicy, sourceCandidate.fetchSuggestion)) continue;
+                const stored = await awaitOperation(() => input.assetSourceBindingStore.readAssetSourceCandidateBinding(
+                  evidenceScope, asset.evidence, sourceCandidate.candidateId, input.request, controller.signal,
+                ));
+                const binding = assetBindingFromStoredCandidate(assetPolicy, stored, sourceCandidate.candidateId);
+                if (!binding || binding.sourceEvidenceId !== asset.metadata.evidenceId
+                  || binding.sourceEvidenceVersion !== asset.metadata.version
+                  || binding.sourceContentHash !== asset.metadata.contentHash
+                  || binding.sourceDerivationDigest !== asset.metadata.derivationDigest
+                  || occupiedUrls.has(binding.assetUrl)) continue;
+                selectedSuggestions.push({
+                  url: binding.assetUrl,
+                  sourceRefs: [assetSuggestionSourceRef(binding)],
+                });
+                assetSuggestionBindings.push(binding);
+                occupiedUrls.add(binding.assetUrl);
+              }
+              if (assetSuggestionBindings.length > 0) selectedOutcome = 'links_observed';
+            }
               } else {
                 limitations.add(`asset_source_${asset.code.toLowerCase()}`);
               }
@@ -1564,7 +2345,7 @@ export async function runPrivateRetrieval(value) {
             if (record.state === 'reserved') {
               // The beforeHop hook did not complete, so no DNS/socket/body path began.
               if (controller.signal.aborted) {
-                await awaitAbortableCleanup((signal) => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
+                await awaitRunCleanup((signal) => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
                   leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
                 }, signal));
               } else {
@@ -1574,7 +2355,7 @@ export async function runPrivateRetrieval(value) {
               }
             } else if (record.state === 'dispatch_intent' || record.state === 'response_received') {
               if (controller.signal.aborted) {
-                await awaitAbortableCleanup((signal) => input.frontier.markTransportHopUnknown(scope, input.runId, {
+                await awaitRunCleanup((signal) => input.frontier.markTransportHopUnknown(scope, input.runId, {
                   leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
                 }, signal));
               } else {
@@ -1591,10 +2372,10 @@ export async function runPrivateRetrieval(value) {
       if (controller.signal.aborted) {
         const hasAdmissions = claimProgress.admissionMayHaveBeenPersisted
           || candidate.admittedAttemptCount > 0 || hopRecords.length > 0;
-        await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
+        await awaitRunCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
           leaseToken: claim.leaseToken,
           reason: hasAdmissions ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-        }, signal));
+        }, signal), stopPersistenceStarted ? PRE_STOP_UNRESOLVED_CLEANUP_MS : ABORTABLE_CLEANUP_MS);
         throw abortError();
       }
 
@@ -1624,6 +2405,9 @@ export async function runPrivateRetrieval(value) {
       const candidateSuggestions = failure ? [] : selectedSuggestions;
       const boundedSuggestions = boundCompletionSuggestions(candidateSuggestions, maxSuggestionsPerCompletion);
       const acceptedSuggestions = boundedSuggestions.suggestions;
+      const acceptedAssetSuggestions = failure ? [] : assetSuggestionBindings.filter((binding) =>
+        acceptedSuggestions.some((suggestion) => suggestion.url === binding.assetUrl
+          && suggestion.sourceRefs.some((reference) => sameSourceReference(reference, assetSuggestionSourceRef(binding)))));
       const omittedSuggestions = boundedSuggestions.omittedSuggestions;
       const truncatedCount = omittedSuggestions.length;
       const candidateSourceLinkCandidatesOmittedCount = failure ? 0 : selectedSourceLinkCandidatesOmittedCount;
@@ -1649,6 +2433,8 @@ export async function runPrivateRetrieval(value) {
           sourceLinkCandidatesOmittedCount: candidateSourceLinkCandidatesOmittedCount,
           limitations: candidateLimitations,
           identity: candidateIdentity,
+          ...(acceptedAssetSuggestions.length > 0 ? { assetSuggestions: acceptedAssetSuggestions } : {}),
+          ...(assetCompletion ? { assetAcquisition: assetCompletion } : {}),
         },
         selection: { evidence: evidenceHandles, facts: factHandles },
       }, input.request, controller.signal));
@@ -1685,6 +2471,8 @@ export async function runPrivateRetrieval(value) {
           limitations.add('legacy_receipt_fanout_recovery_unverified');
         }
         runFailure = 'private_receipt_unavailable';
+      } else if (persistedReceipt.candidate.assetAcquisition) {
+        await rememberAcquiredAssetPlan(persistedReceipt);
       }
     };
 
@@ -1724,11 +2512,20 @@ export async function runPrivateRetrieval(value) {
           const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
           limitations.add(limitationFor(code));
           if (code === 'CANCELED' || code === 'DEADLINE_EXCEEDED' || controller.signal.aborted) {
-            await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
-              leaseToken: claim.leaseToken,
-              reason: claimProgress.admissionMayHaveBeenPersisted
-                ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-            }, signal));
+            // The deadline stop and a second unresolved write can contend for
+            // the same SQLite writer lock. Let the separately bounded stop
+            // attempt finish first, then spend only the remaining shared
+            // cleanup budget on one recovery write.
+            const remaining = remainingCleanupMs();
+            const stopSettled = remaining > 0
+              && await awaitBoundedCleanup(() => localStopPromise, remaining);
+            if (stopSettled) {
+              await awaitRunCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
+                leaseToken: claim.leaseToken,
+                reason: claimProgress.admissionMayHaveBeenPersisted
+                  ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
+              }, signal));
+            }
             break;
           }
           if (code === 'INVALID_INPUT') {
@@ -1821,18 +2618,171 @@ export async function runPrivateRetrieval(value) {
       limitations.add('final_selected_snapshot_mismatch');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
+    // Plans are cached while processing durable receipts. Reopen each source
+    // candidate and both role-separated encrypted asset records after final
+    // materialization, then bind the result to the selected source snapshot.
+    // This adds no transport work and shares the run's completed frontier.
+    for (const [candidateId, receipt] of [...assetAcquisitionReceipts]) {
+      let current = false;
+      try { current = await rememberAcquiredAssetPlan(receipt); }
+      catch { current = false; }
+      const plan = assetAcquisitionResults.find((entry) => entry.candidate.frontierCandidateId === candidateId);
+      const source = plan && materialized.evidence.find((item) => item.metadata.evidenceId === plan.sourceEvidence.evidenceId);
+      const sourceCandidateMatches = source
+        && source.metadata.version === plan.sourceEvidence.version
+        && source.metadata.contentHash === plan.sourceEvidence.contentHash
+        && source.metadata.derivationDigest === plan.sourceEvidence.derivationDigest
+        && source.source.assetSource?.candidates?.filter((candidate) =>
+          candidate.candidateId === plan.candidate.assetSourceCandidateId
+          && candidate.field === plan.candidate.field
+          && candidate.excerptHash === plan.candidate.excerptHash
+          && candidate.fetchSuggestion === plan.candidate.assetUrl).length === 1;
+      if (!current || !plan || !sourceCandidateMatches) {
+        forgetAcquiredAssetPlan(candidateId);
+        limitations.add('asset_acquisition_final_revalidation_failed');
+      }
+    }
     const sourceLinkCandidateOmittedCount = sourceLinkCandidateOmittedCountComplete
       ? sourceLinkCandidateOmittedCountLowerBound : null;
-    const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations,
+    let finalEvidence = materialized.evidence;
+    if (assetPolicy) {
+      const assetGroups = assetAcquisitionResults.map((result) =>
+        assetReleaseRoleReferences.get(result.candidate.frontierCandidateId)).filter(Boolean);
+      if (assetGroups.length !== assetAcquisitionResults.length) {
+        for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+        limitations.add('asset_acquisition_reopen_unavailable');
+      }
+      const revalidationInput = {
+        runId: input.runId,
+        policyDigest: digestJson(assetPolicy),
+        releaseController: assetReleaseController,
+        evidence: materialized.evidence.map((item) => ({ handle: item.handle, metadata: item.metadata })),
+        facts: factHandles,
+        assetGroups,
+        beforeFinalization: async () => {
+          if (!await currentAssetPolicyMatches()) {
+            for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+            limitations.add('asset_acquisition_policy_changed');
+            return [];
+          }
+          return assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId);
+        },
+        finalizeHostAuthority: () => {
+          checkDeadline();
+          if (controller.signal.aborted) return { releaseAuthorized: false, candidateIds: [] };
+          if (!authorized(input, 'release')) return { releaseAuthorized: false, candidateIds: [] };
+          if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
+            for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+            limitations.add('authorization_revoked');
+          }
+          checkDeadline();
+          return {
+            releaseAuthorized: true,
+            candidateIds: assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId),
+          };
+        },
+      };
+      let preparation;
+      try {
+        preparation = await awaitControlledAssetPreparation(
+          () => input.controlledAssetEvidenceStore.revalidateControlledAssetRelease(
+            evidenceScope, revalidationInput, input.request, controller.signal,
+          ),
+          controller.signal,
+          abortError,
+          (lateValue) => {
+            revokeAssetReleaseAuthority('late_asset_release_preparation');
+            discardAssetReleasePreparation(lateValue);
+          },
+        );
+      } catch (error) {
+        revokeAssetReleaseAuthority('asset_release_preparation_failed');
+        throw error;
+      }
+      let revalidated = null;
+      try {
+        if (!utilTypes.isProxy(preparation.value)) {
+          const copied = plainDataRecord(preparation.value, new Set(['releaseCheck', 'candidateIds']));
+          const candidateIds = copied && ownArray(copied.candidateIds, 8);
+          if (copied && candidateIds && copied.releaseCheck && typeof copied.releaseCheck === 'object') {
+            revalidated = Object.freeze({ releaseCheck: copied.releaseCheck, candidateIds: Object.freeze(candidateIds) });
+          }
+        }
+      } catch { /* malformed adapter result fails closed below */ }
+      if (!revalidated) {
+        revokeAssetReleaseAuthority('invalid_asset_release_preparation');
+        discardAssetReleasePreparation(preparation.value);
+        throw new RetrievalError('EVIDENCE_INVALID');
+      }
+
+      try {
+        checkDeadline();
+        if (controller.signal.aborted) throw abortError();
+      } catch (error) {
+        revokeAssetReleaseAuthority('asset_release_preparation_expired');
+        discardAssetReleaseCheck(revalidated.releaseCheck);
+        throw error;
+      }
+
+      const activeCandidateIds = new Set(revalidated.candidateIds);
+      for (const candidateId of [...assetAcquisitionReceipts.keys()]) {
+        if (!activeCandidateIds.has(candidateId)) forgetAcquiredAssetPlan(candidateId);
+      }
+      const finalized = input.assetReleaseFinalizationStore.finalizeControlledAssetRelease(
+        evidenceScope,
+        revalidated.releaseCheck,
+        input.request,
+        controller.signal,
+        {
+          releaseController: assetReleaseController,
+          runId: input.runId,
+          policyDigest: digestJson(assetPolicy),
+          deadlineAtMonotonic,
+          candidateIds: revalidated.candidateIds,
+          project: ({ currentEvidenceMetadata }) => {
+            checkDeadline();
+            if (controller.signal.aborted) throw abortError();
+            const currentMetadata = new Map(currentEvidenceMetadata.map((metadata) => [metadata.evidenceId, metadata]));
+            finalEvidence = materialized.evidence.map((item) => {
+              const metadata = currentMetadata.get(item.metadata.evidenceId);
+              if (!metadata) throw new RetrievalError('final_selected_snapshot_mismatch');
+              return Object.freeze({ ...item, metadata });
+            });
+            return projection(identity, finalEvidence, materialized.facts, finalSnapshot, limitations,
+              omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
+              sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete,
+              assetCandidateIds, assetAcquisitionResults);
+          },
+        },
+      );
+      if (hasThenableBehavior(finalized)) {
+        revokeAssetReleaseAuthority('asynchronous_asset_projection_denied');
+        discardAssetReleaseCheck(revalidated.releaseCheck);
+        throw new RetrievalError('EVIDENCE_INVALID');
+      }
+      return finalized;
+    }
+    checkDeadline();
+    if (controller.signal.aborted) {
+      limitations.add('cancelled');
+      return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
+    }
+    if (!authorized(input, 'release')) {
+      limitations.add('authorization_revoked');
+      return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
+    }
+    const draft = projection(identity, finalEvidence, materialized.facts, finalSnapshot, limitations,
       omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
-      sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete);
+      sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete,
+      assetCandidateIds, assetAcquisitionResults);
     return draft;
   } catch (error) {
     const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
     limitations.add(limitationFor(code));
     if (code === 'DEADLINE_EXCEEDED') {
       triggerDeadline();
-      await awaitBoundedCleanup(() => localStopPromise);
+      const remaining = remainingCleanupMs();
+      if (remaining > 0) await awaitBoundedCleanup(() => localStopPromise, remaining);
       return incompleteResult(input.runId, 'incomplete', [...limitations, 'deadline_exceeded']);
     }
     if (code === 'CANCELED' || externalAbort) return incompleteResult(input.runId, 'cancelled', [...limitations, 'cancelled']);

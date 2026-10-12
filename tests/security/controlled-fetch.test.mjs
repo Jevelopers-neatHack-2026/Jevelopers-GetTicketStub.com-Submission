@@ -6,6 +6,7 @@ import test from "node:test";
 import { performance } from "node:perf_hooks";
 import { SafeFetcher } from "../../src/security/controlled-fetch.mjs";
 import { RetrievalError } from "../../src/security/errors.mjs";
+import { inspectSafeAssetBytes } from "../../src/security/assets/inspect.mjs";
 import { DnsWireResolver } from "../../src/security/internal/dns-wire.mjs";
 import { runWithSafeFetchLifecycle } from "../../src/security/internal/fetch-lifecycle.mjs";
 import {
@@ -220,6 +221,77 @@ test("redirected image assets use the same pinned transport and resource policy"
   assert.equal(result.image.width, 8);
   assert.equal(result.image.height, 6);
   assert.equal(fixture.dials.length, 2);
+});
+
+test('controlled SVG fetch is one-hop and never resolves or dials a redirect target', async (t) => {
+  const paths = [];
+  let resolverCalls = 0;
+  const fixture = await fixtureFetcher(t, (request, response) => {
+    paths.push(request.url);
+    respond(response, 302, { location: 'http://fixture.example.test/second.svg' });
+  }, {
+    resolveOverride: () => {
+      resolverCalls += 1;
+      return Object.freeze({ addresses: Object.freeze(['127.0.0.1']), aliases: Object.freeze([]) });
+    },
+  });
+
+  await assert.rejects(
+    runWithSafeFetchLifecycle(fixture.fetcher, {}, {}, () => fixture.fetcher.fetchSvgAsset(fixture.url('/first.svg'))),
+    { code: 'REDIRECT_LIMIT' },
+  );
+  assert.deepEqual(paths, ['/first.svg']);
+  assert.equal(resolverCalls, 1);
+  assert.equal(fixture.dials.length, 1);
+});
+
+test('controlled SVG fetch rejects deceptive MIME and honors a lower decoded media cap', async (t) => {
+  const deceptive = await fixtureFetcher(t, (_request, response) => {
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, '<svg/>');
+  });
+  await assert.rejects(deceptive.fetcher.fetchSvgAsset(deceptive.url('/deceptive.svg')), { code: 'UNSUPPORTED_MEDIA' });
+  assert.equal(deceptive.dials.length, 1);
+
+  const expanded = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${' '.repeat(256)}</svg>`);
+  const compressed = gzipSync(expanded);
+  const bounded = await fixtureFetcher(t, (_request, response) => {
+    respond(response, 200, {
+      'content-type': 'image/svg+xml',
+      'content-encoding': 'gzip',
+      'content-length': String(compressed.byteLength),
+    }, compressed);
+  });
+  await assert.rejects(
+    runWithSafeFetchLifecycle(bounded.fetcher, {}, { decodedMediaBytesPerResponse: 64 },
+      () => bounded.fetcher.fetchSvgAsset(bounded.url('/expanded.svg'))),
+    { code: 'RESOURCE_LIMIT' },
+  );
+  assert.equal(bounded.dials.length, 1);
+});
+
+test('SVG transport decodes a bounded full prolog while the inspector still rejects that unsupported syntax', async (t) => {
+  const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
+  const commentPrefix = `${xmlDeclaration}<!--`;
+  const asciiBeforeMultibyte = 'a'.repeat(1023 - Buffer.byteLength(commentPrefix));
+  const source = Buffer.from(`${commentPrefix}${asciiBeforeMultibyte}é--><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>`);
+  assert.equal(Buffer.byteLength(`${commentPrefix}${asciiBeforeMultibyte}`), 1023,
+    'the two-byte UTF-8 character straddles the former 1024-byte prefix boundary');
+  const fixture = await fixtureFetcher(t, (_request, response) => {
+    respond(response, 200, { 'content-type': 'image/svg+xml; charset=utf-8' }, source);
+  });
+
+  const fetched = await runWithSafeFetchLifecycle(fixture.fetcher, {}, {},
+    () => fixture.fetcher.fetchSvgAsset(fixture.url('/prolog.svg')));
+  assert.deepEqual(Buffer.from(fetched.bytes), source, 'the bounded transport validates UTF-8 across the whole response');
+  const inspection = inspectSafeAssetBytes(fetched.bytes, { contentType: 'image/svg+xml' });
+  try {
+    assert.equal(inspection.action, 'reject');
+    assert.equal(inspection.diagnostics[0].code, 'SVG_UNSUPPORTED_DECLARATION');
+  } finally {
+    inspection.dispose?.();
+    fetched.bytes.fill(0);
+  }
+  assert.equal(fixture.dials.length, 1);
 });
 
 test("stops a redirect loop at the immutable per-fetch limit", async (t) => {

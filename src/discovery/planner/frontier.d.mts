@@ -64,6 +64,8 @@ export interface FrontierRunInput {
   readonly runId: string;
   readonly seeds: readonly FrontierSeedInput[];
   readonly limits?: FrontierLimits;
+  /** Optional private retrieval policy binding; omission preserves the historical default-off config hash. */
+  readonly privateRunConfigHash?: string;
 }
 
 export interface FrontierCandidate {

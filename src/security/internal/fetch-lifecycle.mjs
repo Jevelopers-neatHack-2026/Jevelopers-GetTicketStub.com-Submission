@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash } from 'node:crypto';
 
 const contexts = new AsyncLocalStorage();
 const provenDocuments = new WeakMap();
+const controlledSvgIngestWitnesses = new WeakMap();
 const LIFECYCLE_HOOKS = new Set([
   'beforeHop', 'onDispatchIntent', 'onResponseHeaders', 'onKnownZero', 'onDecodeStart', 'onBodyComplete',
 ]);
@@ -59,6 +61,9 @@ export function recordSafeFetchProvenance(document, provenance) {
   const copied = Object.freeze({
     requestedUrl: provenance.requestedUrl,
     finalUrl: provenance.finalUrl,
+    mode: provenance.mode === 'svg-asset' ? 'svg-asset' : 'document',
+    lifecycleBound: provenance.lifecycleBound === true,
+    bodyHash: provenance.bodyHash,
     redirectChain: Object.freeze([...provenance.redirectChain]),
     hops: Object.freeze(provenance.hops.map((hop) => Object.freeze({
       url: hop.url,
@@ -75,4 +80,44 @@ export function recordSafeFetchProvenance(document, provenance) {
 export function safeFetchProvenance(document) {
   if (!document || typeof document !== 'object') return null;
   return provenDocuments.get(document) ?? null;
+}
+
+export function isCompletedControlledSvgFetch(document, expectedUrl) {
+  const provenance = safeFetchProvenance(document);
+  if (!provenance || provenance.mode !== 'svg-asset' || provenance.lifecycleBound !== true
+    || provenance.requestedUrl !== expectedUrl || provenance.finalUrl !== expectedUrl
+    || provenance.redirectChain.length !== 0 || provenance.hops.length !== 1) return false;
+  const hop = provenance.hops[0];
+  if (hop.url !== expectedUrl || hop.statusCode !== 200 || hop.dispatchIntent !== true
+    || hop.responseReceived !== true || hop.bodyComplete !== true
+    || hop.decodedBytes !== document.bytes?.byteLength || document.contentType !== 'image/svg+xml'
+    || document.url !== expectedUrl || document.redirects !== 0 || !(document.bytes instanceof Uint8Array)) return false;
+  return provenance.bodyHash === createHash('sha256').update(document.bytes).digest('hex');
+}
+
+/**
+ * Trusted internal composition capability. The production private-retrieval
+ * path mints this only after it has admitted and durably completed the exact
+ * same-run transport. These helpers are not part of the package export map;
+ * direct source imports are trusted server code. The store accepts the
+ * original document object plus this non-copyable token, then asks the bound
+ * verifier to re-check the frontier and pending receipt.
+ */
+export function createControlledSvgIngestWitness(document, binding, verify) {
+  if (!isCompletedControlledSvgFetch(document, binding?.assetUrl) || typeof verify !== 'function') return null;
+  let bindingJson;
+  try { bindingJson = JSON.stringify(binding); } catch { return null; }
+  if (typeof bindingJson !== 'string' || bindingJson.length > 32_768) return null;
+  const witness = Object.freeze(Object.create(null));
+  controlledSvgIngestWitnesses.set(witness, { document, bindingJson, verify });
+  return witness;
+}
+
+export async function verifyControlledSvgIngestWitness(witness, document, binding, stage) {
+  const entry = controlledSvgIngestWitnesses.get(witness);
+  if (!entry || entry.document !== document || typeof stage !== 'string'
+    || entry.bindingJson !== JSON.stringify(binding)
+    || !isCompletedControlledSvgFetch(document, binding?.assetUrl)) return false;
+  try { return await entry.verify(stage) === true; }
+  catch { return false; }
 }
