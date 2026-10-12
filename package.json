@@ -65,7 +65,7 @@
     "test:recovery": "npm run build --silent && node scripts/with-postgres.mjs recovery",
     "test:release": "npm run build --silent && node scripts/with-postgres.mjs release",
     "test:reporting": "npm run build --silent && node scripts/run-suite.mjs reporting",
-    "test:security": "npm run build --silent && node scripts/run-suite.mjs security",
+    "test:security": "npm run build --silent && node scripts/with-postgres.mjs security",
     "test:smoke": "npm run build --silent && node scripts/run-suite.mjs smoke",
     "test:traceability": "npm run build --silent && node scripts/run-suite.mjs traceability",
     "test:unit": "npm run build --silent && node scripts/run-suite.mjs unit"

@@ -11,7 +11,7 @@ import {
   validateLedgerAppendRequestBoundary,
   validateLedgerProjectionRequestBoundary,
 } from '../../dist/index.js';
-import { assertDisposableMarker, databaseConfigFromEnvironment, DISPOSABLE_MARKER } from '../../scripts/test-db-lifecycle.mjs';
+import { assertDisposableMarker, databaseConfigFromEnvironment, runtimeDatabaseConfigFromEnvironment, DISPOSABLE_MARKER } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Pool } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -21,6 +21,16 @@ const producerRevision = 'a'.repeat(40);
 
 function randomId(prefix) {
   return `${prefix}-${randomUUID()}`;
+}
+
+function apiObserverPool(max) {
+  const observer = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: Math.min(max, 6) });
+  const runtime = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max });
+  return {
+    query: (...args) => observer.query(...args),
+    connect: () => runtime.connect(),
+    end: async () => { await Promise.all([observer.end(), runtime.end()]); },
+  };
 }
 
 function contentHash(label) {
@@ -132,6 +142,19 @@ function makePorts(pool, scope, clock) {
     database: { connect: () => pool.connect() },
     trustedContext: { resolve: async () => ({ ...scope }) },
     clock: { now: () => new Date(clock.value) },
+    // Synthetic service authority for isolated PostgreSQL regressions; this is not a production trust root.
+    financeAuthority: { authorizeCurrent: async request => JSON.stringify(request.requestedScope) !== JSON.stringify(scope)
+      ? { status: 'denied', decisionId: 'synthetic-ledger-foreign-scope', operation: request.operation, permission: request.permission }
+      : ({
+        status: 'allowed', decisionId: `synthetic-ledger-grant:${request.operation}`,
+        operation: request.operation, permission: request.permission, scope: request.requestedScope,
+        principal: {
+          kind: 'service', actorId: request.requestedScope.actorId, serviceStatus: 'active',
+          serviceGrantRevision: 'synthetic-ledger-fixture-1',
+        },
+        verifiedAt: new Date(clock.value).toISOString(),
+        expiresAt: new Date(new Date(clock.value).getTime() + 60_000).toISOString(),
+      }) },
   };
 }
 
@@ -176,7 +199,7 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     synthetic: true, environment: 'test', billing_mode: 'simulated', evidence_mode: 'mocked', external_calls: 0,
   });
   assert.ok(process.env.CI_TEST_DB_HOST, 'ledger suite requires the disposable PostgreSQL harness');
-  const pool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 24 });
+  const pool = apiObserverPool(24);
   const clock = { value: fixedTime };
   const image = JSON.parse(await readFile(join(root, 'postgres-test-image.json'), 'utf8'));
   let postgresVersion = '';
@@ -190,7 +213,7 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(postgresVersion.slice(0, 2), '16', 'ledger acceptance must run on PostgreSQL 16');
     const health = await pool.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 5,
+    assert.equal(Number(health.rows[0].required_migrations_present), 6,
       'the additive pricing history migration extends the complete foundation set');
 
     const scope = makeScope('union');
@@ -271,6 +294,111 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(denied.ok, false);
     if (!denied.ok) assert.equal(denied.error.code, 'FORBIDDEN_SCOPE');
     assert.equal(connects, 0, 'forged billing mode must be rejected before opening a database transaction');
+
+    const privacyScope = makeScope('privacy-boundary');
+    let privacyConnects = 0;
+    const privacyPorts = {
+      ...makePorts(pool, privacyScope, clock),
+      database: { connect: async () => { privacyConnects++; return pool.connect(); } },
+    };
+    const privateMarker = 'CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY';
+    const signedReferenceRequest = makeRequest(privacyScope, {
+      sourceRefs: [evidenceRef(`https://evidence.example.invalid/raw?token=${privateMarker}`)],
+    });
+    const signedReference = await appendLedgerEvent(signedReferenceRequest, privacyPorts);
+    assert.equal(signedReference.ok, false, 'signed evidence URLs reject before hashing or persistence');
+    if (!signedReference.ok) {
+      assert.equal(signedReference.error.code, 'VALIDATION_ERROR');
+      assert.doesNotMatch(JSON.stringify(signedReference.error), /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+    }
+    const dynamicLabelRequest = makeRequest(privacyScope, {
+      usage: { completeness: 'complete', missingFields: [], units: [
+        { name: privateMarker, quantity: '3', scale: 0, relation: 'standalone' },
+      ] },
+    });
+    const dynamicLabel = await appendLedgerEvent(dynamicLabelRequest, privacyPorts);
+    assert.equal(dynamicLabel.ok, false, 'unreviewed dynamic quantity labels are rejected rather than projected');
+    if (!dynamicLabel.ok) assert.doesNotMatch(JSON.stringify(dynamicLabel.error), /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+    const sensitiveDimensionRequest = makeRequest(privacyScope, {
+      dimensions: { feature: privateMarker },
+    });
+    const sensitiveDimension = await appendLedgerEvent(sensitiveDimensionRequest, privacyPorts);
+    assert.equal(sensitiveDimension.ok, false, 'sensitive source text cannot be copied into supported financial dimensions');
+    if (!sensitiveDimension.ok) assert.doesNotMatch(JSON.stringify(sensitiveDimension.error), /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+    assert.equal(privacyConnects, 0, 'unsafe source refs, measures, and dimensions open no database connection');
+    const unsafeStoredRows = await pool.query(
+      `SELECT event_payload, source_refs, dimensions, quantity_units
+       FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[])`,
+      [ [signedReferenceRequest.eventId, dynamicLabelRequest.eventId, sensitiveDimensionRequest.eventId] ],
+    );
+    assert.deepEqual(unsafeStoredRows.rows, [], 'rejected supported records leave no event, evidence, dimension, or measure values in storage');
+    const unsafeBoundaryArtifacts = JSON.stringify({ signedReference, dynamicLabel, sensitiveDimension, rows: unsafeStoredRows.rows });
+    assert.doesNotMatch(unsafeBoundaryArtifacts, /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+
+    const safePrivacyEvent = makeRequest(privacyScope, {
+      sourceRefs: [evidenceRef('evidence:opaque-finance-ref-01')],
+      dimensions: { repo: 'finance/platform', feature: 'usage metering' },
+      usage: { completeness: 'complete', missingFields: [], units: [
+        { name: 'tokens', quantity: '3', scale: 0, relation: 'standalone' },
+      ] },
+    });
+    const safePrivacyAppend = await appendLedgerEvent(safePrivacyEvent, privacyPorts);
+    assert.equal(safePrivacyAppend.ok, true, safePrivacyAppend.ok ? '' : safePrivacyAppend.error.safe_message);
+    const persistedPrivacyFacts = await pool.query(
+      `SELECT source_refs, quantity_units, dimensions, event_payload
+       FROM cost_intelligence.financial_ledger_events WHERE event_id = $1`, [safePrivacyEvent.eventId],
+    );
+    assert.equal(persistedPrivacyFacts.rows.length, 1);
+    const safeArtifacts = JSON.stringify({ response: safePrivacyAppend, persisted: persistedPrivacyFacts.rows });
+    assert.doesNotMatch(safeArtifacts, /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+    assert.match(safeArtifacts, /evidence:opaque-finance-ref-01/);
+    assert.match(safeArtifacts, /usage metering/);
+    assert.match(safeArtifacts, /tokens/);
+
+    const approvedCompatibilityCases = [
+      ['input-with-output-missing', makeRequest(privacyScope, {
+        usage: { completeness: 'incomplete', missingFields: ['output'], units: [
+          { name: 'input', quantity: '10', scale: 0, relation: 'standalone' },
+        ] },
+      })],
+      ['unknown-all', makeRequest(privacyScope, {
+        eventType: 'usage_observation', classification: 'usage_memo', financialEffect: false,
+        valuation: 'unknown', amount: null,
+        usage: { completeness: 'unknown', missingFields: ['all'], units: [] },
+      })],
+      ['unknown-usage-identity', makeRequest(privacyScope, {
+        eventType: 'usage_observation', classification: 'usage_memo', financialEffect: false,
+        valuation: 'unknown', amount: null,
+        usage: { completeness: 'unknown', missingFields: ['usage', 'providerAttemptId', 'billableAttemptId'], units: [] },
+      })],
+      ['cache-write-tokens', makeRequest(privacyScope, {
+        usage: { completeness: 'complete', missingFields: [], units: [
+          { name: 'cache_write_tokens', quantity: '4', scale: 0, relation: 'standalone' },
+        ] },
+      })],
+    ];
+    const approvedCompatibilityArtifacts = [];
+    for (const [label, request] of approvedCompatibilityCases) {
+      const appended = await appendLedgerEvent(request, privacyPorts);
+      assert.equal(appended.ok, true, `${label} is reviewed financial evidence and remains accepted`);
+      const persisted = await pool.query(
+        'SELECT event_payload, source_refs, quantity_units FROM cost_intelligence.financial_ledger_events WHERE event_id = $1',
+        [request.eventId],
+      );
+      assert.equal(persisted.rows.length, 1, `${label} persists as an immutable supported event`);
+      const projection = await rebuildLedgerProjection({
+        schemaVersion: '1.0.0', requestId: `projection-${label}-${randomUUID()}`, scope: privacyScope, asOf: '2026-10-11T03:00:00.000Z',
+      }, privacyPorts);
+      assert.equal(projection.ok, true, `${label} remains available in the scoped financial projection`);
+      approvedCompatibilityArtifacts.push({ response: appended, projection, rows: persisted.rows });
+    }
+    const approvedCompatibilityJson = JSON.stringify(approvedCompatibilityArtifacts);
+    assert.doesNotMatch(approvedCompatibilityJson, /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+    assert.match(approvedCompatibilityJson, /"name":"input"/);
+    assert.match(approvedCompatibilityJson, /"name":"cache_write_tokens"/);
+    assert.match(approvedCompatibilityJson, /"missingFields":\["all"\]/);
+    assert.match(approvedCompatibilityJson, /providerAttemptId/);
+    assert.match(approvedCompatibilityJson, /billableAttemptId/);
 
     const idempotencyScope = makeScope('idempotency-contention');
     const idempotencyPorts = makePorts(pool, idempotencyScope, clock);
@@ -606,7 +734,7 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
 
 test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage, mappings, snapshots, and quarantine', async () => {
   assert.ok(process.env.CI_TEST_DB_HOST, 'ledger review regressions require the disposable PostgreSQL harness');
-  const pool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 24 });
+  const pool = apiObserverPool(24);
   const clock = { value: fixedTime };
   try {
     const marker = await pool.query('SELECT marker FROM ci_test.disposable_database_marker');
@@ -1451,7 +1579,7 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
       knownSubtotal: normalizeDecimal(row.known_subtotal), totalQuantity: normalizeDecimal(row.total_quantity),
       completeness: row.quantity_completeness,
     })), snapshot.quantities);
-    const reconnectPool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 2 });
+    const reconnectPool = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max: 2 });
     try {
       const reconnectSnapshot = await project(snapshotScope, makePorts(reconnectPool, snapshotScope, clock), snapshotRequest.asOf);
       assert.equal(reconnectSnapshot.projectionHash, snapshot.projectionHash);
@@ -1595,7 +1723,10 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
     let forbiddenConnects = 0;
     const forbiddenPorts = {
       ...makePorts(pool, forbiddenScope, clock),
-      trustedContext: { resolve: async () => null },
+      financeAuthority: { authorizeCurrent: async request => ({
+        status: 'denied', decisionId: 'synthetic-revoked-grant',
+        operation: request.operation, permission: request.permission,
+      }) },
       database: { connect: async () => { forbiddenConnects++; return pool.connect(); } },
     };
     const forbiddenPayload = makeRequest(forbiddenScope, { eventId: 'forbidden-quarantine-event' });

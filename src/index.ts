@@ -64,5 +64,5 @@ export { querySummary, validateFinancialSummaryPageBoundary, FinancialSummaryFil
 export type { FinancialSummaryFilters, FinancialSummaryQuery, FinancialSummaryPage } from './reporting/index.js';
 export { startReconciliation, getReconciliation, ReconciliationRequestSchema, ReconciliationRunSchema, ReconciliationResultSchema } from './reconciliation/index.js';
 export type { ReconciliationRequest, ReconciliationRun, ReconciliationResult } from './reconciliation/index.js';
-export { exportSummary, validateExportRequestBoundary, ExportRequestSchema, ExportManifestSchema } from './integrations/index.js';
-export type { ExportRequest, ExportManifest } from './integrations/index.js';
+export { exportSummary, validateExportRequestBoundary, projectSafeFinancialSummary, safeCsvCell, serializeSafeFinancialSummaryCsv, ExportRequestSchema, ExportManifestSchema } from './integrations/index.js';
+export type { ExportRequest, ExportManifest, SafeFinancialMetricRow, SafeFinancialSummaryProjection } from './integrations/index.js';

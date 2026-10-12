@@ -45,7 +45,7 @@ export const FinancialEventSchema = Type.Union([
 export type FinancialEvent = Static<typeof FinancialEventSchema>;
 
 export async function ingestFinancial(request: FinancialEvent, ports: RuntimePorts): Promise<ApiResult<PostingReceipt>> {
-  return blockedBoundary<FinancialEvent, PostingReceipt>({ module: 'ledger', operation: 'ingestFinancial', schema: FinancialEventSchema, request, ports, unavailableCode: 'SOURCE_UNAVAILABLE', safeMessage: 'Financial posting is not available until the accounting leaf is delivered.', retryable: true });
+  return blockedBoundary<FinancialEvent, PostingReceipt>({ module: 'ledger', operation: 'ingestFinancial', authorityOperation: 'ledger.ingestFinancial', schema: FinancialEventSchema, request, ports, unavailableCode: 'SOURCE_UNAVAILABLE', safeMessage: 'Financial posting is not available until the accounting leaf is delivered.', retryable: true });
 }
 
 export { PostingReceiptSchema };

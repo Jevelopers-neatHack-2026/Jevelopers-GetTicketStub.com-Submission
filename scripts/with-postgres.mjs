@@ -20,6 +20,14 @@ const containerName = `ci-test-${runId}`;
 const password = randomBytes(32).toString('base64url');
 const user = 'ci_test_user';
 const database = 'ci_test';
+const runtimePassword = randomBytes(32).toString('base64url');
+let runtimeRoleName = null;
+let runtimeRoleCreated = false;
+let runtimeDatabaseConfig = null;
+const migratorPassword = randomBytes(32).toString('base64url');
+let migratorRoleName = null;
+let migratorRoleCreated = false;
+let migratorDatabaseConfig = null;
 let connectionConfig;
 let originalOverrideUrl = null;
 let previousDatabaseName = null;
@@ -48,7 +56,7 @@ function checked(command, args, options = {}) {
   return result.stdout.trim();
 }
 function sanitize(value) {
-  const secrets = [password, connectionConfig?.password];
+  const secrets = [password, runtimePassword, migratorPassword, connectionConfig?.password];
   if (originalOverrideUrl) {
     try {
       const parsed = new URL(originalOverrideUrl);
@@ -194,12 +202,28 @@ try {
   }
 
   migrations = await applyMigrations(dbClient);
+  runtimeRoleName = `ci_runtime_${randomBytes(6).toString('hex')}`;
+  await dbClient.query(
+    `CREATE ROLE "${runtimeRoleName}" LOGIN PASSWORD '${runtimePassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS`,
+  );
+  await dbClient.query(`GRANT ci_finance_runtime TO "${runtimeRoleName}"`);
+  runtimeRoleCreated = true;
+  runtimeDatabaseConfig = { ...connectionConfig, user: runtimeRoleName, password: runtimePassword, connectionString: undefined };
+  migratorRoleName = `ci_migrator_${randomBytes(6).toString('hex')}`;
+  await dbClient.query(
+    `CREATE ROLE "${migratorRoleName}" LOGIN PASSWORD '${migratorPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS`,
+  );
+  await dbClient.query(`GRANT ci_finance_migrator TO "${migratorRoleName}"`);
+  migratorRoleCreated = true;
+  migratorDatabaseConfig = { ...connectionConfig, user: migratorRoleName, password: migratorPassword, connectionString: undefined };
   await dbClient.end();
   dbClient = undefined;
   const previousConfig = ['migrations', 'integration', 'release'].includes(suite) ? await createPreviousFixtureDatabase() : null;
   const childEnv = {
     PATH: process.env.PATH ?? '', CI: '1', NODE_ENV: 'test',
     ...environmentConfig('CI_TEST_DB', connectionConfig),
+    ...environmentConfig('CI_TEST_DB_RUNTIME', runtimeDatabaseConfig),
+    ...environmentConfig('CI_TEST_DB_MIGRATOR', migratorDatabaseConfig),
     ...(previousConfig ? environmentConfig('CI_TEST_PREVIOUS_DB', previousConfig) : {}),
     CI_TEST_MIGRATIONS: JSON.stringify(migrations),
     ...(previousMigrations ? { CI_TEST_PREVIOUS_MIGRATIONS: JSON.stringify(previousMigrations) } : {}),
@@ -216,6 +240,36 @@ try {
   console.error(sanitize(error?.message ?? error));
 } finally {
   if (dbClient) await dbClient.end().catch(() => {});
+  if (runtimeRoleCreated && runtimeRoleName && connectionConfig) {
+    try {
+      const admin = await connectWithRetry(namedDatabaseConfig('postgres'));
+      try {
+        await admin.query(`REVOKE ci_finance_runtime FROM "${runtimeRoleName}"`);
+        await admin.query(`DROP ROLE "${runtimeRoleName}"`);
+        runtimeRoleCreated = false;
+      } finally {
+        await admin.end();
+      }
+    } catch (error) {
+      finalStatus = 'failed';
+      console.error(`Restricted runtime role cleanup failed: ${sanitize(error?.message ?? error)}`);
+    }
+  }
+  if (migratorRoleCreated && migratorRoleName && connectionConfig) {
+    try {
+      const admin = await connectWithRetry(namedDatabaseConfig('postgres'));
+      try {
+        await admin.query(`REVOKE ci_finance_migrator FROM "${migratorRoleName}"`);
+        await admin.query(`DROP ROLE "${migratorRoleName}"`);
+        migratorRoleCreated = false;
+      } finally {
+        await admin.end();
+      }
+    } catch (error) {
+      finalStatus = 'failed';
+      console.error(`Restricted migration role cleanup failed: ${sanitize(error?.message ?? error)}`);
+    }
+  }
   if (previousDatabaseCreated) {
     try {
       await dropPreviousFixtureDatabase();
@@ -248,6 +302,8 @@ try {
     migrations: migrationHashes, freshMigrationResults: migrations, previousMigrationResults: previousMigrations,
     previousFixtureLoaded, previousDatabaseCreated: previousDatabaseName !== null,
     previousDatabaseCleaned,
+    runtimeRole: runtimeRoleName ? { name: runtimeRoleName, privileges: 'ci_finance_runtime; non-owner; non-superuser; no-bypassrls' } : null,
+    migrationRole: migratorRoleName ? { name: migratorRoleName, privileges: 'ci_finance_migrator; separate login; non-superuser; scoped migration administration' } : null,
     markerValidated,
     containerStarted: dockerStarted, containerCleaned, sanitizedLog: dockerStarted ? `artifacts/test-database/${suite}-${runId}.log` : null,
     testExitCode, offline: flags.includes('--offline'), externalCalls: 0, recordedAt: new Date().toISOString(),

@@ -575,6 +575,8 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     if (!evidenceRef || !ports.contractTimeAuthority) {
       return unknownEstimate(parsed, estimatedAt, effectiveAt, 'authoritative_contract_time_evidence');
     }
+    const evidenceAuthorization = await authorizePricingOperation(parsed.scope, ports, 'estimate', parsed.requestId, 'pricing.estimateV2');
+    if (evidenceAuthorization) return failure(evidenceAuthorization);
     try {
       const resolved = await ports.contractTimeAuthority.resolve(parsed.scope, evidenceRef);
       if (!resolved || resolved.verified !== true || !sameReference(resolved.reference, evidenceRef)
@@ -612,6 +614,8 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     if (evidenceRef.contract !== 'PricingUsageDimensionEvidence' || !ports.dimensionEvidenceAuthority) {
       return unknownEstimate(parsed, estimatedAt, effectiveAt, 'authoritative_pricing_dimensions');
     }
+    const evidenceAuthorization = await authorizePricingOperation(parsed.scope, ports, 'estimate', parsed.requestId, 'pricing.estimateV2');
+    if (evidenceAuthorization) return failure(evidenceAuthorization);
     try {
       const evidence = await ports.dimensionEvidenceAuthority.resolve({
         scope: parsed.scope,
@@ -657,6 +661,8 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     });
     const usageEventHash = await hashPricingContent(parsed.usageEvent);
     if (usageEventId) {
+      const replayAuthorization = await authorizePricingOperation(parsed.scope, ports, 'estimate', parsed.requestId, 'pricing.estimateV2');
+      if (replayAuthorization) return failure(replayAuthorization);
       const replay = await lookupPricingEstimateReplay({
         requestId: parsed.requestId,
         idempotencyKey: parsed.idempotencyKey,
@@ -677,6 +683,8 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     }
 
     // Catalog visibility is evaluated at this valuation's clock. Effective time remains economic time.
+    const catalogAuthorization = await authorizePricingOperation(parsed.scope, ports, 'estimate', parsed.requestId, 'pricing.estimateV2');
+    if (catalogAuthorization) return failure(catalogAuthorization);
     const snapshot = await loadPricingCatalog(
       parsed.scope,
       String(event.provider ?? ''),
@@ -731,6 +739,8 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     if (ports.boundEvidenceAuthority) {
       for (const group of rule.partitionGroups) {
         if (group.conservativeBound === null) continue;
+        const evidenceAuthorization = await authorizePricingOperation(parsed.scope, ports, 'estimate', parsed.requestId, 'pricing.estimateV2');
+        if (evidenceAuthorization) return failure(evidenceAuthorization);
         try {
           const decision = await ports.boundEvidenceAuthority.resolve({
             scope: parsed.scope,
@@ -827,6 +837,8 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     }
 
     if (!usageEventId || result.rateCardRef === null || result.pricingRuleRef === null) return success(result);
+    const persistAuthorization = await authorizePricingOperation(parsed.scope, ports, 'estimate', parsed.requestId, 'pricing.estimateV2');
+    if (persistAuthorization) return failure(persistAuthorization);
     const persisted = await persistPricingEstimate({
       requestId: parsed.requestId,
       idempotencyKey: parsed.idempotencyKey,
@@ -866,6 +878,7 @@ export async function estimate(request: EstimateRequestV1, ports: RuntimePorts):
   return blockedBoundary<EstimateRequestV1, EstimateResultV1>({
     module: 'pricing',
     operation: 'estimate',
+    authorityOperation: 'pricing.estimate',
     schema: EstimateRequestV1Schema,
     request: validation.value,
     ports,

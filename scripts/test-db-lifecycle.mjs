@@ -18,3 +18,11 @@ export function databaseConfigFromEnvironment(prefix = 'CI_TEST_DB') {
   }
   return { host, port, user, password, database, connectionTimeoutMillis: 5000 };
 }
+
+export function runtimeDatabaseConfigFromEnvironment(prefix = 'CI_TEST_DB_RUNTIME') {
+  return databaseConfigFromEnvironment(prefix);
+}
+
+export function migratorDatabaseConfigFromEnvironment(prefix = 'CI_TEST_DB_MIGRATOR') {
+  return databaseConfigFromEnvironment(prefix);
+}

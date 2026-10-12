@@ -38,8 +38,8 @@ export const ReconciliationResultSchema = Type.Object({
 export type ReconciliationResult = Static<typeof ReconciliationResultSchema>;
 
 export async function startReconciliation(request: ReconciliationRequest, ports: RuntimePorts): Promise<ApiResult<ReconciliationRun>> {
-  return blockedBoundary<ReconciliationRequest, ReconciliationRun>({ module: 'reconciliation', operation: 'startReconciliation', schema: ReconciliationRequestSchema, request, ports, unavailableCode: 'RECONCILIATION_PENDING', safeMessage: 'Reconciliation cannot start until its source adapters and matching rules are delivered.', retryable: true });
+  return blockedBoundary<ReconciliationRequest, ReconciliationRun>({ module: 'reconciliation', operation: 'startReconciliation', authorityOperation: 'reconciliation.startReconciliation', schema: ReconciliationRequestSchema, request, ports, unavailableCode: 'RECONCILIATION_PENDING', safeMessage: 'Reconciliation cannot start until its source adapters and matching rules are delivered.', retryable: true });
 }
 export async function getReconciliation(request: ReconciliationRequest, ports: RuntimePorts): Promise<ApiResult<ReconciliationResult>> {
-  return blockedBoundary<ReconciliationRequest, ReconciliationResult>({ module: 'reconciliation', operation: 'getReconciliation', schema: ReconciliationRequestSchema, request, ports, unavailableCode: 'RECONCILIATION_PENDING', safeMessage: 'Reconciliation results are unavailable until its source adapters and matching rules are delivered.', retryable: true });
+  return blockedBoundary<ReconciliationRequest, ReconciliationResult>({ module: 'reconciliation', operation: 'getReconciliation', authorityOperation: 'reconciliation.getReconciliation', schema: ReconciliationRequestSchema, request, ports, unavailableCode: 'RECONCILIATION_PENDING', safeMessage: 'Reconciliation results are unavailable until its source adapters and matching rules are delivered.', retryable: true });
 }
