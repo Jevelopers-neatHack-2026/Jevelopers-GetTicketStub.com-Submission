@@ -113,10 +113,12 @@ def audit(
                 Obligation(
                     id=criterion.id,
                     issue=criterion.implementation_issue_refs[0],
-                    state=row.status,
+                    state=Status.BLOCKED if evidence_blockers.get(criterion.id) else row.status,
                     cases=row.case_ids,
                     owner=criterion.owner_role,
-                    next_action="Owner review of authentic boundary evidence and composed pins",
+                    next_action="; ".join(evidence_blockers[criterion.id])
+                    if evidence_blockers.get(criterion.id)
+                    else "Owner review of authentic boundary evidence and composed pins",
                 )
             )
     return ReleaseAudit(

@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from integration_evals.artifacts import digest, load_record
+from integration_evals import evidence_index as evidence_index_module
+from integration_evals.artifacts import digest, load_record, read_bytes
 from integration_evals.cli import app
 from integration_evals.diagnostics import replay_comparisons
 from integration_evals.errors import InvalidArtifactError
@@ -315,6 +316,34 @@ def test_real_offline_execution_and_comparison_replay_join_same_original(tmp_pat
     assert all(a.bytes_checked for a in output.artifacts)
 
 
+def test_master_release_obligation_retains_missing_image_review_reasons(
+    synthetic_failure: tuple[Run, Suite], tmp_path: Path
+) -> None:
+    run, suite, _ = image_sample(synthetic_failure, tmp_path)
+    history = History(runs=(run,))
+    built = index(history, suite, tmp_path)
+    tracker = load_record(REPOSITORY / "planning/acceptance-checklist.json", Tracker)
+    original_tracker = tracker.model_dump_json()
+    requirements = load_record(REPOSITORY / "planning/requirements.json", Requirements)
+    receipt = audit(history, tracker, requirements, suite, evidence_index=built)
+    master = next(row for row in receipt.obligations if row.id == "ART-01")
+    indexed = next(row for row in built.requirements if row.requirement == "ART-01")
+    expected = {
+        "producer-authenticity-and-permission-authority-unverified",
+        "permission-redaction-reviewer-access-unreviewed",
+        "gpt-image-owner-qualification-missing",
+        "gpt-image-generation-edit-chain-missing",
+    }
+    assert master.state is Status.BLOCKED
+    assert set(master.next_action.split("; ")) == expected == set(indexed.blockers)
+    assert indexed.canonical_status is Status.PLANNED
+    assert tracker.model_dump_json() == original_tracker
+    assert sum(c.status is Status.VERIFIED for c in tracker.criteria) == 3
+    assert sum(c.status is Status.PLANNED for c in tracker.criteria) == 44
+    assert set(receipt.exclusions) == {"BUD-04", "LIVE-01", "LIVE-02", "LIVE-03"}
+    assert not set(receipt.exclusions).intersection(row.id for row in receipt.obligations)
+
+
 def test_changed_fingerprint_cannot_create_flake_record(
     synthetic_failure: tuple[Run, Suite], tmp_path: Path
 ) -> None:
@@ -457,6 +486,24 @@ def test_missing_image_metadata_and_broken_edit_chain_stay_blocked(
     )
     row = next(r for r in output.requirements if r.requirement == "IE-07.AC5")
     assert "gpt-image-generation-edit-chain-missing" in row.blockers
+
+
+def test_image_properties_cannot_use_bytes_changed_after_archive_hash_check(
+    synthetic_failure: tuple[Run, Suite], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, suite, records = image_sample(synthetic_failure, tmp_path)
+    changed = PNG[:16] + (2).to_bytes(4, "big") + PNG[20:]
+    qualifier = records.images[0].model_copy(update={"width": 2})
+    records = records.model_copy(update={"images": (qualifier, records.images[1])})
+
+    def changed_second_read(path: Path) -> bytes:
+        return changed if path.name == "generate.png" else read_bytes(path)
+
+    # Initial report_validation reads the actual width-1 bytes and accepts their original digest.
+    # Only the later image-property read changes to width-2 bytes matching the forged qualifier.
+    monkeypatch.setattr(evidence_index_module, "read_bytes", changed_second_read)
+    with pytest.raises(InvalidArtifactError, match="image_digest_mismatch"):
+        _ = index(History(runs=(run,)), suite, tmp_path, records)
 
 
 def test_public_commands_write_full_index_without_changing_authority(

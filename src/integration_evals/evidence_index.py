@@ -234,7 +234,18 @@ def _image(
         image.parent_design_version == image.design_version
     ):
         fail("image_parent_mismatch", item.id)
+    _image_bytes(item, image, root)
+    for reference in (image.input_permission, image.usage, image.provider_receipt):
+        if reference is not None:
+            _reference(reference, review_root)
+
+
+def _image_bytes(item: Evidence, image: ImageQualification, root: Path) -> None:
+    """Bind media properties and leakage checks to the exact bytes parsed on this read."""
     data = read_bytes(confined_path(root, item.path))
+    if digest(data) != item.sha256:
+        fail("image_digest_mismatch", item.id)
+    reject_leaks(data, item.id)
     if (
         len(data) < PNG_HEADER_BYTES
         or data[:8] != b"\x89PNG\r\n\x1a\n"
@@ -242,9 +253,6 @@ def _image(
         or unpack(">II", data[16:24]) != (image.width, image.height)
     ):
         fail("image_media_mismatch", item.id)
-    for reference in (image.input_permission, image.usage, image.provider_receipt):
-        if reference is not None:
-            _reference(reference, review_root)
 
 
 def index_artifacts(
