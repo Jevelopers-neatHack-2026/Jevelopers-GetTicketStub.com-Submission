@@ -24,7 +24,7 @@ Run composed evaluations only against the app-owned, pinned integration workspac
 
 ## Historical architecture material
 
-The [Architecture Kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) is a dated planning snapshot. Treat it as historical intent, not a report of current implementation. For current behavior, inspect the tested source revisions and the dated evidence referenced by the master checklist. The organization is preparing a maintained current-state companion; this repository does not establish a competing architecture source.
+The [Architecture Kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) is a dated planning snapshot. Treat it as historical intent, not a report of current implementation. For current behavior, inspect the tested source revisions and the dated evidence referenced by the master checklist. The maintained [current-state companion](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture/CURRENT-STATE.md) describes the implemented system; this repository does not establish a competing architecture source.
 
 ## Contributor handoff
 
