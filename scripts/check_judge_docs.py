@@ -47,6 +47,7 @@ def main():
     prose = (ROOT / 'README.md').read_text()
     prose = re.sub(r'```.*?```', '', prose, flags=re.S)
     prose = re.sub(r'!?\[([^\]]*)\]\([^)]+\)', r'\1', prose)
+    prose = re.sub(r'<img\b[^>]*\balt="([^"]*)"[^>]*>', r'\1', prose)
     prose = re.sub(r'<[^>]*>', '', prose)
     print(f'README: {len(prose.split())} words including image alt text, excluding code.')
     if args.public_links:

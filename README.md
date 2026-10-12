@@ -57,8 +57,8 @@ flowchart TD
 
 | Tool | Job | Proof and limits |
 | --- | --- | --- |
-| neatlogs | Show the steps in an agent run. | [Trace screenshots](docs/judges/EVIDENCE.md#neatlogs): live runs reported; exact code binding unverified. |
-| Entire | Map the code and record coding context. | [Public code graph](docs/judges/EVIDENCE.md#entire); checkpoint contents stay private. |
+| neatlogs | Show the steps in an agent run. | [Trace screenshots](docs/judges/EVIDENCE.md#neatlogs): reported live runs; code version unconfirmed. |
+| Entire | Map the code and record coding context. | [Public code graph](docs/judges/EVIDENCE.md#entire); coding session notes stay private. |
 | cfo.ai | Plan prices, costs, and funding. | [Business plan and workbook](docs/judges/EVIDENCE.md#cfoai); forecasts, not sales. |
 
 ## What you can judge today
@@ -83,6 +83,6 @@ Open the local address printed in the terminal. Choose **The Pale Hours**, confi
 
 [Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary Wright](https://github.com/zwright8) · [@lajefahemp-collab](https://github.com/lajefahemp-collab). Brand and studio design: Lars.
 
-[Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Original commits and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
+[Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 
-Original development history stays in the source repos. This collection keeps exact commit links. Its source snapshots may be newer than the tested evidence.
+The source repos keep the original history. Each code copy links to its commit—a saved version of code. Newer copies may go beyond the tested evidence.
