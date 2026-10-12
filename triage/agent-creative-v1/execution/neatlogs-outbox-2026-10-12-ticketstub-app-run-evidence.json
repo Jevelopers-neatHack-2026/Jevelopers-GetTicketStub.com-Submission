@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-10-12T00:42:48Z",
+  "evidenceClass": "live-synthetic-application-run",
+  "producer": {
+    "repository": "Jevelopers-neatHack-2026/getticketstub.com",
+    "commit": "11fc10a3cc9ec0ee33aebbd0b3b7abeeb220f0a5",
+    "build": "next build (production) on localhost",
+    "runtimeMode": "sandbox (procedural art, no AI provider)",
+    "settings": [
+      "TICKETSTUB_HARNESS_EXPORT=neatlogs",
+      "TICKETSTUB_OPS_ENVIRONMENT=development"
+    ]
+  },
+  "harnessVendoredFrom": "0e81df17cff8a5a0d917e9240e784f2f382be79c",
+  "request": "POST /api/art with a synthetic event (title 'Synthetic harness check')",
+  "serverLog": [
+    "[harness] export on: workflow agent-harness.ticketstub-events, readback on"
+  ],
+  "outboxRows": [
+    {
+      "eventType": "art_requested",
+      "traceId": "4b72d2f3d71f61e3ed402e40bc5c1d58",
+      "state": "verified",
+      "generation": 0,
+      "lastStatus": "readback_verified",
+      "sendAttempts": 1
+    },
+    {
+      "eventType": "art_ready",
+      "traceId": "fb1ab087dff112d9e5b838e92d464074",
+      "state": "verified",
+      "generation": 0,
+      "lastStatus": "readback_verified",
+      "sendAttempts": 1
+    }
+  ]
+}

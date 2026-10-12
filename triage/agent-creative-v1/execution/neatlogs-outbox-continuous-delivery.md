@@ -9,4 +9,10 @@ Code: agent-harness `ff642c0825c6d6dd2b6ca99d0ef357159ebaf8cb` (branch `launch/n
 
 The scripts used scratch databases and a fresh random tokenization key for the cursor run. The hand-off run used the `AGENT_HARNESS_TELEMETRY_KEY` generated into the local `.env`. Both evidence files were scanned against every configured credential value before commit. Offline: 68/68 Neatlogs tests pass (47 existing, 13 outbox, 8 intake); the full suite fails only `OPS04_REAL_SIGTERM_JEV_TELEMETRY`, which fails identically on `origin/main`.
 
-Not covered here: events from the deployed TicketStub app. That needs the getticketstub.com hand-off change, the host settings in GoDaddy secret storage, and a publish, which are owner steps.
+## TicketStub application run
+
+[Evidence](neatlogs-outbox-2026-10-12-ticketstub-app-run-evidence.json). The production build of getticketstub.com `11fc10a3cc9ec0ee33aebbd0b3b7abeeb220f0a5` (PR getticketstub.com#62, harness files vendored from `0e81df1`) ran on localhost in sandbox mode with `TICKETSTUB_HARNESS_EXPORT=neatlogs`. One `POST /api/art` went through the app's own `recordEvent()` and produced `art_requested` (`4b72d2f3d71f61e3ed402e40bc5c1d58`) and `art_ready` (`fb1ab087dff112d9e5b838e92d464074`). The server's background drain sent both and its Public API readback settled both as `verified`, generation 0, one send each.
+
+An earlier run on the same code, before it was committed, was read back independently with the service-account token. Both traces were finalized under workflow `agent-harness.ticketstub-events`, with tags `ticketstub`, `ticketstub@<commit>` and `environment:development` and one shared session token. The inputs contained only type, time, mode, actor kind, fields and tokens, and not the raw `x-request-id`.
+
+Not covered here: the deployed GoDaddy app. That needs the settings in GoDaddy secret storage and a publish, which are owner steps.
