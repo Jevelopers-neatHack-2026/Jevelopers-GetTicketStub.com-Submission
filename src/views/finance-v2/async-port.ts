@@ -52,11 +52,19 @@ export type FinanceV2Fault =
   | Readonly<{ outcome: 'unauthorized' | 'restricted' | 'missing' }>
   | Readonly<{ outcome: 'error'; kind: FinanceV2FaultKind; retryable: boolean }>;
 
-/** Maps a thrown port failure to a typed fault from its numeric `status` or `code` only. Messages and bodies are never read, so nothing secret can be echoed. */
+/** Maps readable `status`, `code` or `name` metadata to a typed fault. Messages and bodies are never read or shown. */
 export function classifyFinanceV2Fault(error: unknown): FinanceV2Fault {
-  const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined;
-  const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
-  if (code === 'TIMEOUT' || (typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'TimeoutError')) return { outcome: 'error', kind: 'timeout', retryable: true };
+  const field = (key: 'status' | 'code' | 'name'): unknown => {
+    try {
+      return typeof error === 'object' && error !== null ? (error as Record<string, unknown>)[key] : undefined;
+    } catch {
+      // An unreadable field must neither escape nor discard other readable classification metadata.
+      return undefined;
+    }
+  };
+  const status = field('status');
+  const code = field('code');
+  if (code === 'TIMEOUT' || field('name') === 'TimeoutError') return { outcome: 'error', kind: 'timeout', retryable: true };
   if (status === 401) return { outcome: 'unauthorized' };
   if (status === 403) return { outcome: 'restricted' };
   if (status === 404) return { outcome: 'missing' };
@@ -83,8 +91,13 @@ export type FinanceV2PortResolution =
 export function resolveFinanceV2Port(mode: FinanceV2DataMode, port: unknown): FinanceV2PortResolution {
   if (mode !== 'SYNTHETIC_PROPOSAL') return { status: 'unavailable', reason: 'integrated-port-not-accepted' };
   if (port === undefined || port === null) return { status: 'unavailable', reason: 'no-port' };
-  if (typeof port !== 'object' || (port as { kind?: unknown }).kind !== 'SYNTHETIC_PROPOSAL' || typeof (port as { read?: unknown }).read !== 'function') return { status: 'unavailable', reason: 'port-kind-mismatch' };
-  return { status: 'available', port: port as FinanceV2SyntheticReadPort };
+  try {
+    if (typeof port !== 'object' || (port as { kind?: unknown }).kind !== 'SYNTHETIC_PROPOSAL' || typeof (port as { read?: unknown }).read !== 'function') return { status: 'unavailable', reason: 'port-kind-mismatch' };
+    return { status: 'available', port: port as FinanceV2SyntheticReadPort };
+  } catch {
+    // An unreadable injected port is unavailable; never let its metadata escape during rendering.
+    return { status: 'unavailable', reason: 'port-kind-mismatch' };
+  }
 }
 
 export type FinanceV2ReadOptions = Readonly<{
@@ -223,7 +236,11 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
     if (!active) return undefined;
     const { options: o, trail: trailNow, cursor: cursorNow } = latest.current;
     const resolved = resolveFinanceV2Port(o.mode, o.port);
-    if (resolved.status !== 'available') return undefined;
+    if (resolved.status !== 'available') {
+      // The host can replace or invalidate metadata between render and setup. Settle instead of leaving a read with no timer.
+      setSettled({ key: readKey, attempt, state: { phase: 'unavailable', reason: resolved.reason } });
+      return () => { setSettled(null); };
+    }
     const controller = new AbortController();
     let live = true;
     const finish = (state: FinanceV2ReadState) => { if (!live) return; live = false; clearTimeout(timer); setSettled({ key: readKey, attempt, state }); };
@@ -241,6 +258,8 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
         if (!live) return;
         finish(interpret(answer, o, trailNow, cursorNow, evidence));
       } catch (error) {
+        // A cancelled or settled generation must not inspect a late rejection.
+        if (!live) return;
         finish(fromFault(classifyFinanceV2Fault(error)));
       }
     })();
