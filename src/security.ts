@@ -1423,7 +1423,9 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 function fingerprintMessage(keyVersion: string, purpose: string, canonicalIdentity: string): ArrayBuffer {
   const encoded = new TextEncoder().encode(`${FINGERPRINT_DOMAIN}\n${keyVersion}\n${purpose}\n${canonicalIdentity}`);
-  return encoded.buffer as ArrayBuffer;
+  const exact = new Uint8Array(encoded.byteLength);
+  exact.set(encoded);
+  return exact.buffer as ArrayBuffer;
 }
 
 function toBase64Url(bytes: Uint8Array): string {
