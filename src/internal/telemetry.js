@@ -539,6 +539,9 @@ export function createTelemetryExporter(options) {
   return new TelemetryExporter(options);
 }
 
+// The fixed event allowlist, exposed so downstream mappers can be checked for drift.
+export const TELEMETRY_EVENT_TYPES = Object.freeze([...EVENT_TYPES]);
+
 export const TELEMETRY_LIMITS = Object.freeze({
   defaults: DEFAULT_LIMITS,
   maximums: Object.freeze({

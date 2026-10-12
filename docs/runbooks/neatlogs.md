@@ -81,7 +81,34 @@ Readback results:
 
 Only `verified` sets `deliveryConfirmed: true` in evidence. The completion marker may or may not be stored as a span by the receiver. Both are accepted, and `markerStored` records which happened.
 
-The durable telemetry cursor (`TelemetryExporter`) is **not** advanced by this path. Its sink contract is limited to 500 ms and retries on timeout, so wiring a network sink there needs a durable "sent, awaiting readback" state first. That is follow-up work.
+The synthetic verifier path above does not use the durable telemetry cursor (`TelemetryExporter`). The runtime path below does.
+
+## Runtime path: durable exporter → outbox → OTLP sender
+
+This is how a trace of a real harness workflow reaches Neatlogs. It is off by default.
+
+1. **Opt-in.** `loadNeatlogsTelemetryOptIn({ enabled: true, env, envFile, scrubEnv })` returns `{ enabled: false }` unless `enabled` is exactly `true`. When it is enabled, it loads settings through the same strict `loadNeatlogsConfig`, scrubs the five names from `scrubEnv`, and refuses to start without an ingest key. No new settings are added.
+2. **Exporter.** `createNeatlogsOperationsTelemetry({ databasePath, outboxDirectory })` builds the existing `TelemetryExporter` on its own store connection. It is passed to `createOperationsWorker({ telemetry })`, the worker's existing injection point.
+   - The worker itself is unchanged and still makes no network calls.
+   - Records are the existing `agent-harness.telemetry.v1` projection with its fixed event allowlist. Policy drops are unchanged; for example, `private_local_step_*` events are dropped.
+   - Tokens use a random HMAC key for each process. A run's events share one session (the workflow token). Tokens cannot be linked across runs.
+3. **Outbox sink.** `createNeatlogsOutboxSink({ directory })` is the exporter's sink. It validates the batch with the mapper, then writes it atomically to `batch-<first>-<last>.json` (mode 0600, fsync, rename). The sink does no network I/O, so it fits the bounded sink contract. The cursor advances only after the batch is on disk.
+   - If a retry after a timeout carries a page that grew in the meantime, only the new suffix is written.
+   - A stored record that differs from the retried one is refused.
+4. **Drain.** `drainNeatlogsOutbox({ directory, config, tags, forbidden, readback })` processes each `pending_send` batch in five steps:
+   1. It captures the batch through the pinned SDK.
+   2. It plans the batch with `planNeatlogsExport`.
+   3. It scans the encoded body for the run's raw identifiers and the configured credentials. A hit marks the batch `blocked`, and no request is made.
+   4. It sends the batch with `sendNeatlogsPlan`.
+   5. It writes the send result back to the batch file.
+
+   After that:
+   - `outcome_unknown`, `not_accepted`, `aborted` and `not_configured` stay `pending_send`. A later drain resends the same deterministic IDs.
+   - With `readback`, accepted batches are verified with `readbackNeatlogsPlan`. The plan is re-derived from the stored records, not trusted from the file. The resulting state (`verified`, `pending`, `missing`, `mismatch`, `readback_failed`) is persisted without the project UUID.
+   - Tags are `agent-harness@<sha>`, `evidence:runtime` and `harness-mode:<mode>`. The drain refuses `evidence:synthetic`.
+5. **Mapper allowlist.** The SDK mapper now accepts every event type on the durable telemetry allowlist, including the `operations_work_*` types. A test asserts that the two lists are equal.
+
+The cursor now advances when the batch is durably in the outbox. "Sent, awaiting readback" is the batch file's state.
 
 ## Commands
 
@@ -117,6 +144,28 @@ npm run test:neatlogs-live
 ```
 
 The tool seeds synthetic canaries (fake private URL, email, token, customer and error text) into the durable workflow's raw fields. It refuses to send if any canary appears in the encoded export body, and it refuses to write evidence that contains a canary or a configured credential value. Evidence is labeled `offline-fixture` or `live-synthetic`. Never point this tool at customer workflows.
+
+### Runtime application trace
+
+```bash
+# Offline: run one genuine worker job (mock dependency mode, local-pure operations only) and fill the outbox. No network.
+node tools/neatlogs-runtime-trace.mjs --mode run --outbox /tmp/neatlogs-outbox \
+  --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-offline.json
+
+# Live: the same run, then drain the outbox (send + Public API readback).
+node tools/neatlogs-runtime-trace.mjs --mode send-and-readback --env-file .env --outbox /tmp/neatlogs-outbox \
+  --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-live.json
+
+# Resume: send pending batches and read back accepted ones in an existing outbox.
+node tools/neatlogs-runtime-trace.mjs --mode drain --env-file .env --outbox /tmp/neatlogs-outbox \
+  --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-drain.json
+```
+
+The tool runs the workflow through the normal in-process entry point: `createOperationsWorker` → `submitSyntheticWork` → owned runner child → `runBoundedLocalPlan`.
+- `submitSyntheticWork` is the worker's only intake today. Its scope strings carry no authority.
+- The plan uses only `number.add` and `text.concat`. The registry marks provider, network and shell operations unavailable, so no model or provider call is possible.
+- Evidence is labeled `live-runtime-application` or `offline-runtime-application`, with `harnessMode: mock`.
+- Evidence contains no credential, project UUID or raw run identifier. Every raw job, workflow, scope, owner and event ID of the run is scanned for before anything is written or sent.
 
 ## Dashboard check
 
