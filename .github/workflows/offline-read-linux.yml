@@ -38,6 +38,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/contract-types" --ignore-scripts --no-audit --no-fund typescript@5.9.3
           sudo apt-get update && sudo apt-get install --yes bubblewrap libseccomp2
       - name: Record identity and require unprivileged namespace startup
+        id: namespace_startup
         shell: bash
         run: |
           evidence="$PWD/reports/runs/offline-read-linux22"
@@ -73,8 +74,9 @@ jobs:
           test "$probe_status" -eq 0
       - name: Run actual containment owner lifetime and diagnostic scenarios as runner
         run: |
-          env -i PATH="$PATH" HOME="$HOME" CI=true .venv/bin/python -m pytest tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py tests/test_processes.py tests/test_owner_output.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py tests/test_evidence_index_execution.py tests/test_history_archive.py --junitxml=reports/runs/offline-read-linux22/native-junit.xml
+          env -i PATH="$PATH" HOME="$HOME" CI=true IE_PROCESS_EVIDENCE="$PWD/reports/runs/offline-read-linux22/write-probes" .venv/bin/python -m pytest tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py tests/test_processes.py tests/test_owner_output.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py tests/test_evidence_index_execution.py tests/test_history_archive.py --junitxml=reports/runs/offline-read-linux22/native-junit.xml
       - name: Run complete source and installed canonical checks as runner
+        if: ${{ !cancelled() && steps.namespace_startup.outcome == 'success' }}
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"

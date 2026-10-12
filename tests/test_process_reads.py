@@ -1,4 +1,5 @@
 import errno
+import json
 import os
 import socket
 import sys
@@ -94,6 +95,10 @@ def test_offline_command_cannot_write_outside_task_directory(tmp_path: Path, loc
     if location == "symlink":
         addressed = writable / "link"
         addressed.symlink_to(target)
+    host_exists_before = target.is_file()
+    host_bytes_before = addressed.read_text()
+    assert host_exists_before
+    assert host_bytes_before == "immutable-input"
     output = tmp_path / "stdout"
     program = """import errno,pathlib,sys
 print('runtime-started',flush=True)
@@ -101,10 +106,11 @@ print('write-attempted',flush=True)
 try:
  pathlib.Path(sys.argv[1]).write_text('bad')
 except OSError as error:
+ print(f'write-denied:{error.errno}',flush=True)
  if error.errno not in (errno.EPERM,errno.EACCES,errno.EROFS):
   raise
- print(f'write-denied:{error.errno}',flush=True)
 else:
+ print('write-succeeded',flush=True)
  raise RuntimeError('outside write unexpectedly succeeded')
 """
     # When the actual contained runtime attempts to overwrite the input.
@@ -120,13 +126,35 @@ else:
                 checkout, os.environ, b"", stream, 5, offline=True, writable_directory=writable
             ),
         )
-    # Then the real write attempt reports an expected denial and leaves the input unchanged.
-    lines = output.read_text().splitlines()
-    assert lines[:2] == ["runtime-started", "write-attempted"]
-    assert len(lines) == 3
-    assert lines[2] in {f"write-denied:{code}" for code in (errno.EPERM, errno.EACCES, errno.EROFS)}
-    assert result == 0
-    assert target.read_text() == "immutable-input"
+    # Then retain the actual syscall outcome and host integrity before checking the denial oracle.
+    stdout = output.read_text()
+    host_exists_after = target.is_file()
+    host_bytes_after = target.read_text() if host_exists_after else "<missing>"
+    observation = {
+        "location": location,
+        "exit_code": result,
+        "stdout": stdout,
+        "host_exists_before": host_exists_before,
+        "host_bytes_before": host_bytes_before,
+        "host_exists_after": host_exists_after,
+        "host_bytes_after": host_bytes_after,
+    }
+    captured = json.dumps(observation, indent=2)
+    _ = (tmp_path / "write-observation.json").write_text(captured)
+    evidence = os.environ.get("IE_PROCESS_EVIDENCE")
+    if evidence is not None:
+        destination = Path(evidence)
+        destination.mkdir(parents=True, exist_ok=True)
+        _ = (destination / f"{tmp_path.name}.json").write_text(captured)
+    lines = stdout.splitlines()
+    assert host_exists_after, observation
+    assert host_bytes_after == "immutable-input", observation
+    assert lines[:2] == ["runtime-started", "write-attempted"], observation
+    assert len(lines) == 3, observation
+    assert lines[2] in {
+        f"write-denied:{code}" for code in (errno.EPERM, errno.EACCES, errno.EROFS)
+    }, observation
+    assert result == 0, observation
 
 
 @pytest.mark.parametrize("root", [Path("/"), Path.home(), Path.home().parent])
