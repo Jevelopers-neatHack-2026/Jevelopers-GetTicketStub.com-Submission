@@ -8,6 +8,7 @@ import { looksLikeLink } from "@/customer/start/make";
 import { CHROME_HTML, FOOT_HTML, HERO_HTML, REST_HTML } from "./markup";
 import { mountLanding } from "./landing.script";
 import { landingMode, readMotionPref, writeMotionPref } from "./motion";
+import { MotionOffContext } from "./MotionContext";
 import "./landing.css";
 
 /** Where the "Make yours" form sends a night: a pasted link is researched (?url=), anything typed is searched (?q=). */
@@ -24,6 +25,7 @@ export function Landing({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   // bumped by the Motion switch: the landing unmounts and mounts again in the new mode, without a reload
   const [run, setRun] = useState(0);
+  const [motionOff, setMotionOff] = useState(false);
   const refocus = useRef(false); // the switch is rebuilt with the page: keyboard focus goes back to the new one
 
   useEffect(() => {
@@ -33,6 +35,7 @@ export function Landing({ children }: { children: ReactNode }) {
     const hosts = Array.from(el.querySelectorAll<HTMLElement>(".lp-host"));
     if (hosts.length !== PARTS.length) return;
     const mode = landingMode();
+    setMotionOff(mode.still);
     el.dataset.motion = mode.still ? "off" : mode.no3d ? "2d" : "3d";
     if (mode.reason) el.dataset.lite = mode.reason;
     else delete el.dataset.lite;
@@ -60,10 +63,17 @@ export function Landing({ children }: { children: ReactNode }) {
       toggle?.removeEventListener("click", flip);
       reducedMotion.removeEventListener("change", followSystem);
       stop();
+      const input = el.querySelector<HTMLInputElement>("#maker #ev");
+      const draft = input ? { value: input.value, start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection } : null;
       // the script rebuilt parts of the DOM; hand it back as served so a remount (strict mode, back navigation) starts clean
       hosts.forEach((h, i) => {
         h.innerHTML = PARTS[i];
       });
+      const restoredInput = el.querySelector<HTMLInputElement>("#maker #ev");
+      if (draft && restoredInput) {
+        restoredInput.value = draft.value;
+        if (draft.start !== null && draft.end !== null) restoredInput.setSelectionRange(draft.start, draft.end, draft.direction ?? "none");
+      }
       el.classList.remove("ready", "no3d", "still");
     };
   }, [router, run]);
@@ -73,7 +83,7 @@ export function Landing({ children }: { children: ReactNode }) {
       <div className="lp-host" dangerouslySetInnerHTML={{ __html: PARTS[0] }} />
       <main id="top">
         <div className="lp-host" dangerouslySetInnerHTML={{ __html: PARTS[1] }} />
-        {children}
+        <MotionOffContext.Provider value={motionOff}>{children}</MotionOffContext.Provider>
         <div className="lp-host" dangerouslySetInnerHTML={{ __html: PARTS[2] }} />
       </main>
       <div className="lp-host" dangerouslySetInnerHTML={{ __html: PARTS[3] }} />

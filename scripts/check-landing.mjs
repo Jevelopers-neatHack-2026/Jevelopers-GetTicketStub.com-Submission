@@ -1,6 +1,7 @@
 // Production landing regression suite. Requires Node 22 and a production build.
 // npm run build && node scripts/check-landing.mjs [--base http://127.0.0.1:PORT]
-// Optional: --build-root PATH (for a separately served build), --evidence-dir PATH.
+// Optional: --build-root CHECKOUT (production build and source), --source-root CHECKOUT
+// (reviewed assets when source is separate), --evidence-dir PATH.
 // All browser traffic is confined to loopback. The built-in server inherits no provider credentials.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,9 +16,10 @@ const args = process.argv.slice(2);
 const option = (name, fallback) => { const i = args.indexOf(name); return i < 0 ? fallback : args[i + 1]; };
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const buildRoot = resolve(option("--build-root", repo));
+const sourceRoot = resolve(option("--source-root", buildRoot));
 const evidenceDir = resolve(option("--evidence-dir", join(repo, "artifacts", "landing-browser")));
 mkdirSync(evidenceDir, { recursive: true });
-const result = { suite: "production-landing", buildId: null, base: null, assertions: [], scenarios: [], screenshots: [], limitations: [], threeChunks: [], startedAt: new Date().toISOString() };
+const result = { suite: "production-landing", buildId: null, buildRoot, sourceRoot, base: null, assertions: [], scenarios: [], screenshots: [], limitations: [], threeChunks: [], startedAt: new Date().toISOString() };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function check(name, ok, detail) {
   result.assertions.push({ name, passed: Boolean(ok), ...(detail === undefined ? {} : { detail }) });
@@ -63,7 +65,7 @@ try {
   const url = new URL(base);
   if (!/^https?:$/.test(url.protocol) || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) throw new Error("--base must be a loopback HTTP URL");
   base = url.origin; result.base = base;
-  await checkSocialMetadata(base, check);
+  await checkSocialMetadata(base, check, { buildRoot, sourceRoot });
   browser = await launchBrowser();
   result.limitations.push("The shared CDP launcher passes --disable-gpu. Physical GPU fidelity, performance, and hardware compositor behavior require a separate hardware-browser run. Any positive Three test below uses a simulated detector and identifies the real browser renderer separately.");
 
@@ -265,6 +267,91 @@ try {
     check('positive 3D: disposed renderer stops drawing', await three.eval('window.__landingEvidence.draws') === drawCount, await state(three));
     await close(three,{allowThree:true});
   } else result.limitations.push('The available browser cannot create a real WebGL context even without a performance caveat. Real Three rendering under a simulated positive detector remains unexercised.');
+
+  const embedded = await open('embedded-studio-motion', {pref:'on',hints:{softwareGL:true}});
+  async function observeSample(page, selector) {
+    check(`${page.entry.name}: showcase exists`, await page.waitFor(`!!document.querySelector(${JSON.stringify(selector)})`,5000));
+    await page.eval(`(() => {const f=document.querySelector(${JSON.stringify(selector)});f.scrollIntoView({block:'center',behavior:'instant'});window.__sampleMotionEvents=0;f.addEventListener('pointermove',e=>{if(!e.isTrusted)window.__sampleMotionEvents++});})()`);
+    await sleep(250);
+  }
+  const sample = (page,selector) => page.eval(`(() => {const f=document.querySelector(${JSON.stringify(selector)}),t=f.querySelector(':scope > div'),s=getComputedStyle(t);return {transform:s.transform,events:window.__sampleMotionEvents,style:t.getAttribute('style')};})()`);
+  await embedded.eval(`(() => {window.__embeddedVibrations=[];window.__embeddedScrolls=[];Object.defineProperty(navigator,'vibrate',{configurable:true,value:p=>{window.__embeddedVibrations.push(p);return true}});const scroll=Element.prototype.scrollIntoView;Element.prototype.scrollIntoView=function(options){if(this.closest('#start'))window.__embeddedScrolls.push(options);return scroll.call(this,options)};})()`);
+  await observeSample(embedded,'#start figure');
+  const onBefore = await sample(embedded,'#start figure'); await sleep(600); const onAfter = await sample(embedded,'#start figure');
+  check('embedded studio: on mode actually sways visible sample', onAfter.events-onBefore.events>2 && onBefore.transform!==onAfter.transform,{before:onBefore,after:onAfter});
+  const makeButton = async page => page.eval(`(() => {const b=[...document.querySelectorAll('#start button')].find(b=>b.textContent.trim()==='Make my stub');b.dataset.motionTestMake='';})()`);
+  await makeButton(embedded); await pointer(embedded,'[data-motion-test-make]');
+  check('embedded studio: motion on permits press haptic', await embedded.eval('window.__embeddedVibrations.length>0'));
+  await embedded.eval(`document.querySelector('#start input').focus()`); await embedded.type('Browser fixture night');
+  await activate(embedded,'Enter'); await expected(embedded,'off','embedded studio: local toggle disables motion');
+  check('embedded studio: input survives disabling motion', await embedded.eval(`document.querySelector('#start input').value === 'Browser fixture night'`));
+  await embedded.eval(`document.querySelector('#start figure').scrollIntoView({block:'center',behavior:'instant'})`); await sleep(250);
+  await embedded.eval('window.__sampleMotionEvents=0');
+  const offBefore = await sample(embedded,'#start figure'); await sleep(600); const offAfter = await sample(embedded,'#start figure');
+  check('embedded studio: local off stops synthetic sway', offAfter.events===0,offAfter);
+  check('embedded studio: local off keeps real sample transform still', offBefore.transform===offAfter.transform && offBefore.style===offAfter.style,{before:offBefore,after:offAfter});
+  const embeddedCSS = await embedded.eval(`(() => {const root=document.querySelector('#start'),elements=[root,...root.querySelectorAll('*')];return {count:elements.length,transitions:elements.flatMap(e=>getComputedStyle(e).transitionDuration.split(',').map(v=>parseFloat(v))),running:root.getAnimations({subtree:true}).filter(a=>a.playState==='running' && Number(a.effect.getComputedTiming().activeDuration)>0).map(a=>a.animationName)};})()`);
+  check('embedded studio: local off suppresses component transitions and CSS animations', embeddedCSS.count>10 && embeddedCSS.transitions.every(d=>d<=.00001) && embeddedCSS.running.length===0,embeddedCSS);
+  await activate(embedded,'Enter'); await expected(embedded,'2d','embedded studio: local toggle resumes motion');
+  check('embedded studio: input survives enabling motion', await embedded.eval(`document.querySelector('#start input').value === 'Browser fixture night'`));
+  await embedded.eval(`document.querySelector('#start figure').scrollIntoView({block:'center',behavior:'instant'})`); await sleep(250);
+  const resumedBefore = await sample(embedded,'#start figure'); await sleep(600); const resumedAfter = await sample(embedded,'#start figure');
+  check('embedded studio: enabling motion restores real sway', resumedAfter.events-resumedBefore.events>2 && resumedBefore.transform!==resumedAfter.transform,{before:resumedBefore,after:resumedAfter});
+  await activate(embedded,'Enter'); await expected(embedded,'off','embedded studio: disable before intake');
+  await embedded.eval(`document.querySelector('#start input').select();window.__embeddedVibrations=[]`);
+  await embedded.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Backspace',code:'Backspace',windowsVirtualKeyCode:8});
+  await embedded.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Backspace',code:'Backspace',windowsVirtualKeyCode:8});
+  await makeButton(embedded); await pointer(embedded,'[data-motion-test-make]');
+  check('embedded studio: local off suppresses press haptic', await embedded.eval('window.__embeddedVibrations.length===0'));
+  await embedded.eval(`(() => {window.__embeddedScrolls=[];const b=[...document.querySelectorAll('#start button')].find(b=>b.textContent.trim()==='The Pale Hours');b.dataset.motionTestDemo='';})()`);
+  await pointer(embedded,'[data-motion-test-demo]');
+  const intakeScrolls = await embedded.eval('window.__embeddedScrolls');
+  check('embedded studio: local off intake scroll is automatic', intakeScrolls.some(s=>s?.behavior==='auto') && !intakeScrolls.some(s=>s?.behavior==='smooth'),intakeScrolls);
+  check('embedded studio: local off fixture prints and opens studio', await embedded.waitFor(`location.pathname==='/studio/demo-pale'`,30000));
+  check('embedded studio: local off suppresses printing haptics', await embedded.eval('window.__embeddedVibrations.length===0'),await embedded.eval('window.__embeddedVibrations'));
+  await embedded.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+  await embedded.goto(`${base}/make`,{settle:100}); await observeSample(embedded,'figure[data-size="lg"]');
+  await embedded.eval('window.__sampleMotionEvents=0');
+  const standaloneBefore = await sample(embedded,'figure[data-size="lg"]'); await sleep(600); const standaloneAfter = await sample(embedded,'figure[data-size="lg"]');
+  check('standalone make: OS reduction stops sample sway', standaloneAfter.events===0 && standaloneBefore.transform===standaloneAfter.transform,{before:standaloneBefore,after:standaloneAfter});
+  await embedded.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]}); await sleep(250);
+  const standaloneResumeBefore = await sample(embedded,'figure[data-size="lg"]'); await sleep(600); const standaloneResumeAfter = await sample(embedded,'figure[data-size="lg"]');
+  check('standalone make: OS motion permission resumes sample sway', standaloneResumeAfter.events-standaloneResumeBefore.events>2 && standaloneResumeBefore.transform!==standaloneResumeAfter.transform,{before:standaloneResumeBefore,after:standaloneResumeAfter});
+  await close(embedded);
+
+  const rawDraft = await open('raw-maker-draft', {pref:'on',hints:{softwareGL:true}});
+  await pointer(rawDraft,'.cta-foot[href="#make"]');
+  check('raw maker: existing CTA exposes and focuses intake', await rawDraft.waitFor(`document.activeElement?.id==='ev' && !document.querySelector('#finale').inert`,5000));
+  await rawDraft.type('Raw maker fixture night, fixture venue');
+  for (let i=0;i<3;i++) await rawDraft.key('ArrowLeft',{shift:true});
+  const draftBefore = await rawDraft.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,start:e.selectionStart,end:e.selectionEnd,direction:e.selectionDirection};})()`);
+  check('raw maker: trusted typing and selection establish draft', draftBefore.value==='Raw maker fixture night, fixture venue' && draftBefore.end-draftBefore.start===3,draftBefore);
+  for (const mode of ['off','2d']) {
+    await activate(rawDraft,'Enter'); const s = await expected(rawDraft,mode,`raw maker: toggle to ${mode}`);
+    const draftAfter = await rawDraft.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,start:e.selectionStart,end:e.selectionEnd,direction:e.selectionDirection};})()`);
+    check(`raw maker: ${mode} remount retains draft and selection`, JSON.stringify(draftBefore)===JSON.stringify(draftAfter),{before:draftBefore,after:draftAfter});
+    const preview = await rawDraft.eval(`({title:document.querySelector('#finCard .tc-a')?.textContent,typing:document.querySelector('#finale').classList.contains('typing')})`);
+    check(`raw maker: ${mode} remount retains draft preview`, preview.typing && preview.title?.includes('Raw maker fixture night'),preview);
+    check(`raw maker: ${mode} remount restores toggle focus`,s.focused,s);
+  }
+  await close(rawDraft);
+
+  const leavingDemo = await open('printing-settle-navigation', {pref:'on',hints:{softwareGL:true}});
+  await leavingDemo.goto(`${base}/search`,{settle:100});
+  await pointer(leavingDemo,'a[aria-label="TicketStub home"]');
+  check('printing cleanup: real home navigation mounts landing', await leavingDemo.waitFor(`location.pathname==='/' && document.querySelector('.lp')?.classList.contains('ready')`,5000));
+  await leavingDemo.eval(`(() => {const b=[...document.querySelectorAll('#start button')].find(b=>b.textContent.trim()==='Harbour FC');b.dataset.motionTestSettle='';window.__lateWallWrites=0;window.addEventListener('ticketstub:wall-changed',()=>window.__lateWallWrites++);})()`);
+  await pointer(leavingDemo,'[data-motion-test-settle]');
+  check('printing cleanup: local fixture reaches visible ink-settle phase', await leavingDemo.waitFor(`document.querySelector('[aria-label="Printing your stub"]')?.textContent.includes('Letting the ink settle')`,30000));
+  const beforeLeaving = await leavingDemo.eval(`({wall:localStorage.getItem('ticketstub.wall.v1'),writes:window.__lateWallWrites})`);
+  await leavingDemo.eval('history.back()');
+  check('printing cleanup: back returns to the preceding search route',await leavingDemo.waitFor(`location.pathname==='/search' && !document.querySelector('[aria-label="Printing your stub"]')`,5000));
+  // Observe beyond the visible settle callback and subsequent studio-navigation window, after a real unmount.
+  await sleep(1800);
+  const afterLeaving = await leavingDemo.eval(`({path:location.pathname,wall:localStorage.getItem('ticketstub.wall.v1'),writes:window.__lateWallWrites})`);
+  check('printing cleanup: no late studio navigation after leaving settle phase',afterLeaving.path==='/search',afterLeaving.path);
+  check('printing cleanup: abandoned fixture never writes a finished stub',beforeLeaving.wall===afterLeaving.wall && beforeLeaving.writes===afterLeaving.writes,{before:beforeLeaving,after:afterLeaving});
+  await close(leavingDemo);
 
   const layout = await open('responsive-accessibility-and-lifecycle', { pref:'off' });
   for (const width of [320,375,390,520,768,1100,1101,1280]) {

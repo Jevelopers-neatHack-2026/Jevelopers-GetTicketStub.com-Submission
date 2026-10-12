@@ -193,7 +193,7 @@
 :where(.lp-host) .nav .logo{flex-shrink:0;white-space:nowrap;min-height:44px;min-width:44px}
 @media (max-width:520px){:where(.lp-host) .nav .logo{font-size:0;gap:0;min-height:44px;min-width:44px}:where(.lp-host) .nav .logo small{display:none}}
 /* motion off: nothing on the landing animates or transitions; reveals land in their final state */
-:where(.lp).still :where(.lp-host) *,:where(.lp).still :where(.lp-host) *::before,:where(.lp).still :where(.lp-host) *::after{
+:where(.lp).still *,:where(.lp).still *::before,:where(.lp).still *::after{
   animation:none!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important}
 :where(.lp).still :where(.lp-host) .loop-stubs.on{display:none}
 

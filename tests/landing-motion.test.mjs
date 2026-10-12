@@ -87,27 +87,32 @@ for (const hints of [{ connection: { saveData: true } }, { connection: { effecti
 
 // Render the real component with deterministic hooks; its effect, click handler and cleanup run unchanged.
 function landingEnv() {
-  let effect, cleanup, run = 0, refIndex = 0, stopped = 0;
-  const refs = [], listeners = new Map(), changes = new Set(), modes = [], focus = [];
+  let effect, cleanup, refIndex = 0, stateIndex = 0, stopped = 0;
+  const states = [0, false];
+  const refs = [], listeners = new Map(), changes = new Set(), modes = [], focus = [], drafts = [];
+  const emptyInput = () => ({ value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
+  let rawInput = emptyInput();
+  const hosts = Array.from({length:4}, (_,i) => ({ set innerHTML(_) { if (i===0) rawInput=emptyInput(); } }));
   let pref = 'auto', reduced = false;
   const toggle = { setAttribute(k, v) { this[k] = v; }, focus(o) { focus.push(o); }, addEventListener(k, v) { listeners.set(k, v); }, removeEventListener(k) { listeners.delete(k); } };
-  const el = { dataset: {}, classList: { remove() {} }, querySelector: () => toggle, querySelectorAll: () => [{}, {}, {}, {}] };
+  const el = { dataset: {}, classList: { remove() {} }, querySelector: sel => sel === '#maker #ev' ? rawInput : toggle, querySelectorAll: () => hosts };
   const exports = {};
   vm.runInNewContext(compile('Landing.tsx'), { exports, window: { matchMedia: () => ({ addEventListener(_, cb) { changes.add(cb); }, removeEventListener(_, cb) { changes.delete(cb); } }) }, document: { activeElement: toggle }, require(id) {
     if (id === 'react') return {
       useRef(initial) { const i = refIndex++; return refs[i] ??= { current: i === 0 ? el : initial }; },
-      useState: () => [run, fn => { run = fn(run); }], useEffect: cb => { effect = cb; },
+      useState: () => { const i = stateIndex++; return [states[i], next => { states[i] = typeof next === "function" ? next(states[i]) : next; }]; }, useEffect: cb => { effect = cb; },
     };
     if (id === 'react/jsx-runtime') return { jsx: () => null, jsxs: () => null };
     if (id === 'next/navigation') return { useRouter: () => ({ push() {} }) };
+    if (id === './MotionContext') return { MotionOffContext: { Provider: 'motion-provider' } };
     if (id === './motion') return { readMotionPref: () => pref, writeMotionPref: v => { pref = v; }, landingMode: () => ({ still: pref === 'off' || (pref === 'auto' && reduced), no3d: pref !== 'on', reason: pref === 'on' ? '' : 'motion off' }) };
-    if (id === './landing.script') return { mountLanding: ctx => { modes.push(ctx.mode); return () => { stopped++; }; } };
+    if (id === './landing.script') return { mountLanding: ctx => { modes.push(ctx.mode); drafts.push(rawInput.value); return () => { stopped++; }; } };
     if (id === './markup') return { CHROME_HTML: '', HERO_HTML: '', REST_HTML: '', FOOT_HTML: '' };
     return {};
   } });
-  const render = () => { cleanup?.(); refIndex = 0; exports.Landing({ children: null }); cleanup = effect(); };
+  const render = () => { cleanup?.(); refIndex = 0; stateIndex = 0; exports.Landing({ children: null }); cleanup = effect(); };
   render();
-  return { render, el, toggle, modes, focus, changes, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => run, stopped: () => stopped, cleanup: () => cleanup() };
+  return { render, el, toggle, modes, focus, changes, drafts, input:()=>rawInput, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
 }
 test('Landing effect follows system changes only in auto, reflects aria-pressed and restores switch focus', () => {
   const env = landingEnv();
@@ -117,9 +122,11 @@ test('Landing effect follows system changes only in auto, reflects aria-pressed 
   env.render();
   assert.equal(env.toggle['aria-pressed'], 'true');
   assert.equal(env.el.dataset.motion, 'off');
+  assert.equal(env.motionOff(), true);
   env.click(); env.render();
   assert.equal(env.toggle['aria-pressed'], 'false');
   assert.equal(env.el.dataset.motion, '3d');
+  assert.equal(env.motionOff(), false);
   assert.equal(Object.hasOwn(env.el.dataset, 'lite'), false);
   assert.equal(env.focus.length, 2);
   assert.ok(env.focus.every(o => o.preventScroll));
@@ -131,4 +138,21 @@ test('Landing effect follows system changes only in auto, reflects aria-pressed 
   env.cleanup();
   assert.equal(env.changes.size, 0);
   assert.equal(env.stopped(), 4);
+});
+
+test('Landing host rebuild keeps the maker draft and selection while focus returns to its Motion switch', () => {
+  const env = landingEnv();
+  const original = env.input();
+  original.value = 'Nova Riot, Dublin, July 12';
+  original.setSelectionRange(5,15,'backward');
+  for (let i=0;i<2;i++) {
+    env.click(); env.render();
+    assert.notEqual(env.input(),original,'the host was rebuilt');
+    assert.equal(env.input().value,'Nova Riot, Dublin, July 12');
+    assert.deepEqual([env.input().selectionStart,env.input().selectionEnd,env.input().selectionDirection],[5,15,'backward']);
+    assert.equal(env.drafts.at(-1),'Nova Riot, Dublin, July 12','the new initializer receives the preserved value');
+  }
+  assert.equal(env.focus.length,2);
+  assert.ok(env.focus.every(options=>options.preventScroll));
+  env.cleanup();
 });

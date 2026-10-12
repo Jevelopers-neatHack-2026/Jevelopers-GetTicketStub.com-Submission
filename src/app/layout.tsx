@@ -59,7 +59,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light" className={`${fraunces.variable} ${interTight.variable}`}>
+    <html lang="en" data-theme="light" data-runtime-mode={process.env.TICKETSTUB_RUNTIME_MODE === "live" ? "live" : "demo"} className={`${fraunces.variable} ${interTight.variable}`}>
       <body>
         <NavFrame notice={process.env.TICKETSTUB_RUNTIME_MODE !== "live" ? <DemoPill /> : null}>
           {children}

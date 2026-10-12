@@ -220,13 +220,16 @@ export function mountLanding(ctx) {
       let t0 = 0;
       const status = byId('finStatus'); let printT = 0;
       let proofs = 0;
-      const show = (d, loud) => { st.classList.remove('flipped'); TS.paint(st, d); st.insertAdjacentHTML('beforeend', '<i class="ts-sweep" aria-hidden="true"></i>');
-        if (TS.still){ return; }
+      const show = (d, loud, quiet = false) => { st.classList.remove('flipped'); TS.paint(st, d); st.insertAdjacentHTML('beforeend', '<i class="ts-sweep" aria-hidden="true"></i>');
+        if (TS.still || quiet){ return; }
         st.classList.add('printing'); status.classList.add('on'); status.lastChild.textContent = 'Printing proof…';
         clearTimeout(printT); printT = setTimeout(() => { st.classList.remove('printing'); status.classList.remove('on'); status.lastChild.textContent = 'Proof ready';
           if (loud || proofs === 0){ TSMotion && TSMotion.shutter(st); TS.buzz([18, 40, 28]); }
           proofs++; }, 900); };
       const upd = () => { const v = ev.value.trim(); fin.classList.toggle('typing', !!v); show(v ? fromText(v) : BLANK); };
+      // A motion remount restores the existing draft before this initializer runs. Paint it without another proof cycle.
+      const initial = ev.value.trim();
+      if (initial){ fin.classList.add('typing'); show(fromText(initial), false, true); }
       listen(ev, 'input', () => { clearTimeout(t0); t0 = setTimeout(upd, 60); });
       listen(ev, 'change', upd);
       const chips = [...qsa('.fin-try button')];

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../../", import.meta.url);
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const PRIVATE = "zq_private_metadata_127";
 const decode = (text) => text.replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
@@ -22,10 +24,10 @@ export function metadataPageStatus(path) {
 }
 
 /** Verify production output for every page route using only the fixture server. */
-export async function checkSocialMetadata(base, check, { expectedOrigin = "https://getticketstub.com" } = {}) {
+export async function checkSocialMetadata(base, check, { expectedOrigin = "https://getticketstub.com", buildRoot = repoRoot, sourceRoot = buildRoot } = {}) {
   const origin = new URL(base);
   if (!["127.0.0.1", "localhost", "[::1]"].includes(origin.hostname)) throw new Error("metadata checks require a loopback fixture server");
-  const manifest = JSON.parse(readFileSync(new URL(".next/server/app-paths-manifest.json", root), "utf8"));
+  const manifest = JSON.parse(readFileSync(resolve(buildRoot, ".next/server/app-paths-manifest.json"), "utf8"));
   const routes = Object.keys(manifest).filter((path) => path.endsWith("/page") && !path.startsWith("/_"))
     .map(metadataPagePath);
   check("metadata: production manifest contains public and shared routes", routes.includes("/") && routes.includes(`/s/${PRIVATE}`));
@@ -79,6 +81,6 @@ export async function checkSocialMetadata(base, check, { expectedOrigin = "https
     const bytes = Buffer.from(await response.arrayBuffer());
     check(`metadata ${name}: image returns PNG`, response.status === 200 && /image\/png/.test(response.headers.get("content-type") ?? "") && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a");
     check(`metadata ${name}: served dimensions are 1200 by 630`, bytes.length >= 24 && bytes.readUInt32BE(16) === 1200 && bytes.readUInt32BE(20) === 630);
-    check(`metadata ${name}: served bytes match reviewed asset`, bytes.equals(readFileSync(new URL(`src/app/${name}`, root))));
+    check(`metadata ${name}: served bytes match reviewed asset`, bytes.equals(readFileSync(resolve(sourceRoot, `src/app/${name}`))));
   }
 }
