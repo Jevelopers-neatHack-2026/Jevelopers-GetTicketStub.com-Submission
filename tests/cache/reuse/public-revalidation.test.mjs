@@ -415,6 +415,77 @@ test('source retention is fixed at bind, private purge scrubs bytes, and renewal
   assert.equal(f.env.state.requests.length, 2);
 });
 
+for (const mode of ['stable-earliest', 'retained-source', 'private-source-permission', 'public-fact-permission']) {
+  test(`final public binding grant cannot outlive accepted authority: ${mode}`, async (t) => {
+    // The store/evidence clock and grants are synthetic. Publication, private
+    // link, full-original evidence, native HTTP and reopen use real components.
+    const permissionUntil = { private: null, public: null };
+    const f = await publicRevalidationFixture(t, { storeOptions: {
+      verifyPermission: ({ reference, contentHash, version, use, nowMs }) => {
+        const domain = reference === 'SYNTHETIC_PUBLIC_FACT_RIGHTS' ? 'public' : 'private';
+        assert.equal(use, domain === 'public' ? 'fact_read' : 'cache_read');
+        assert.ok([hash(BODY), PUBLIC_HASH].includes(contentHash));
+        return { status: 'valid', reference, contentHash, version, use,
+          validUntilMs: permissionUntil[domain] ?? nowMs + 60_000 };
+      },
+    } });
+    const origin = Date.now();
+    const earlier = origin + 10_000;
+    const later = origin + 30_000;
+    if (mode === 'private-source-permission') permissionUntil.private = later;
+    else if (mode === 'public-fact-permission') permissionUntil.public = later;
+    else f.authority.retainedUntil = mode === 'stable-earliest' ? earlier : later;
+    let bindReads = 0;
+    f.authority.phaseHook = async (phase) => {
+      if (phase !== 'bind') return;
+      bindReads += 1;
+      if (bindReads !== 2) return;
+      if (mode === 'private-source-permission') permissionUntil.private = earlier;
+      else if (mode === 'public-fact-permission') permissionUntil.public = earlier;
+      else f.authority.retainedUntil = earlier;
+    };
+    const before = f.snapshot();
+    if (mode === 'stable-earliest') {
+      assert.equal((await f.bind()).status, 'bound');
+      assert.equal(f.snapshot().sources[0].expiresAtMs, earlier);
+      assert.equal(f.snapshot().sources[0].binding.expiresAtMs, earlier);
+    } else {
+      await rejects(f.bind(), ['REVALIDATION_DENIED']);
+      assert.deepEqual(f.snapshot().sources, []);
+    }
+    assert.equal(bindReads, 2, 'final grant is checked with a bounded pair of source reads');
+    assert.ok(Date.now() < earlier, 'both grants are still valid during binding');
+    assert.deepEqual(f.snapshot().observations, before.observations);
+    assert.deepEqual(f.snapshot().responses, []);
+    assert.equal(f.env.state.requests.length, 1);
+
+    // A later grant after reopen must not revive the expired original claim,
+    // nor create a binding that was refused before its first durable insert.
+    await f.reopen();
+    f.authority.phaseHook = null;
+    f.authority.retainedUntil = origin + 50_000;
+    permissionUntil.private = origin + 50_000;
+    permissionUntil.public = origin + 50_000;
+    f.env.state.offset = 15_000;
+    assert.ok(earlier < Date.now() + f.env.state.offset && Date.now() + f.env.state.offset < later);
+    const admission = await f.env.admit();
+    await rejects(f.refresh(admission.admissionRef), mode === 'stable-earliest'
+      ? ['REVALIDATION_DENIED'] : ['REVALIDATION_PROVENANCE']);
+    const after = f.snapshot();
+    assert.equal(f.env.state.requests.length, 1, 'refusal precedes a second native HTTP request');
+    assert.deepEqual(after.observations, before.observations);
+    assert.deepEqual(after.responses, []);
+    assert.equal(after.eligible, 1, 'private refresh authority cannot retract approved public facts');
+    if (mode === 'stable-earliest') {
+      assert.deepEqual(after.sources, [{ purged: 1, expiresAtMs: earlier, payloadBytes: 0 }]);
+    } else assert.deepEqual(after.sources, []);
+    assert.equal(after.flights[0].state, 'active');
+    assert.equal(after.flights[0].usage, 'unknown');
+    assert.equal(after.flights[0].localRefresh, undefined);
+    assert.equal(f.env.state.financeCalls, 0);
+  });
+}
+
 test('public invalidation and hard-retention purge scrub new private rows while historical receipts stay minimal', async (t) => {
   const f = await publicRevalidationFixture(t);
   await f.bind();

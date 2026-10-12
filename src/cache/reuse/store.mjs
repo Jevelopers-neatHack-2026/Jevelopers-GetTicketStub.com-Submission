@@ -4335,6 +4335,10 @@ export function createScopedReuseStore(options) {
         retainedUntil = await context.retain(binding, 'bind');
         permissionUntil = await publicRefreshPermissions(info, request, target, binding, context);
       }
+      // Every accepted grant must cover the exact immutable retention claim.
+      // A second narrowing cannot silently preserve the first, longer expiry;
+      // refuse before persistence instead of chasing changing grants in a loop.
+      if (Math.min(retainedUntil, permissionUntil) < binding.expiresAtMs) revalidationFail('REVALIDATION_DENIED');
       await publicRefreshGuard(info, request, ref, context)();
       const sealed = sealBounded(target.linkKey.key, target.linkKey.keyId, target.privateKeys.partitionHash,
         'public_refresh_source', ref, binding);
