@@ -1,6 +1,6 @@
-# Event intelligence: what the studio built, and how your module replaces it
+# Ticketmaster research adapter: current app behavior and unaccepted handoff
 
-For the event-intelligence owner. The studio's `/api/research` now looks Ticketmaster and Live Nation links up through the Ticketmaster Discovery API v2 and returns the result in your `EventIntelligencePackage` shape, next to the EventData the studio already uses. Nothing here is a canonical schema; it follows the only concrete target that exists today (see "Which shape we matched").
+**Observed app source:** `getticketstub.com` `main` at [`138e4b9019c0f5a55ad5e3f586d129216b680e4d`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/tree/138e4b9019c0f5a55ad5e3f586d129216b680e4d), audited 2026-10-12. The app-native landing change did not change the research adapter or route. **Related component source:** [`event-intelligence` main at `ef69133bb38320793e02f8530accdd67e59f90e3`](https://github.com/Jevelopers-neatHack-2026/event-intelligence/tree/ef69133bb38320793e02f8530accdd67e59f90e3). This page describes the app-owned `/api/research` adapter and its local response shape. The app has no event-intelligence package import or runtime service call. Its optional `eventIntelligencePackage` field is locally assembled compatibility data, not an accepted package binding or proof of a consumer integration. The detailed mapping below was written against a creative-engine compatibility proposal; the exact comparison target is identified in [Which shape we matched](#which-shape-we-matched).
 
 ## What we built
 
@@ -58,9 +58,9 @@ Every fact is `provenance: "live"`, `source: "Ticketmaster"`, `sourceUrl` = the 
 
 ## Which shape we matched
 
-Your `main` and the `impl/ei-*` branches do not define an `EventIntelligencePackage` wire schema. `docs/contracts/research-contract-handoff.md` says so explicitly, and the shared-contracts catalog lists it only as a proposed contract with a common envelope. The one concrete shape is the creative-engine proposal at commit `65b8036194b3b962e1fd34f7193d54791cf07c88` (`src/contracts/creative/v1.d.mts`, normalized `schema_version` `"1.1"`), which your handoff doc names as "a useful compatibility target". We matched that, and we ran our output through that commit's `validateResearchPackage` and `assessResearchReadiness` (result: valid, `ready`). Key names for facts reuse your review-history fields where they exist: `event_name`, `event_date`, `venue`, `event_status`.
+At the observed event-intelligence revision, [`docs/contracts/research-contract-handoff.md`](https://github.com/Jevelopers-neatHack-2026/event-intelligence/blob/ef69133bb38320793e02f8530accdd67e59f90e3/docs/contracts/research-contract-handoff.md) says that no local canonical wire schema is authorized. The repository includes an offline compatibility candidate copied from an open shared-contracts proposal, but its own documentation identifies that snapshot as unapproved and says the checks are not acceptance. The app's package-shaped output follows the creative-engine proposal at commit `65b8036194b3b962e1fd34f7193d54791cf07c88` (`src/contracts/creative/v1.d.mts`, normalized `schema_version` `"1.1"`); that proposal is a compatibility target only, not the current `creative-engine` main contract or an accepted shared schema. The saved-sample check may establish only its stated offline result. It does not show that the current event-intelligence package consumes the app's output, that a canonical contract was released, or that live provider evidence was accepted. Key names for facts reuse review-history fields where they exist: `event_name`, `event_date`, `venue`, and `event_status`.
 
-If your canonical schema lands differently, only `ticketmasterPackage.ts` changes.
+If owners approve a different canonical schema, reassess the app mapper, route envelope, source identity, placeholder values, evidence semantics, tests, and consumer together. A one-file replacement is not established by this compatibility mapping.
 
 ## Package mapping
 

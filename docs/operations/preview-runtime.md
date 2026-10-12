@@ -9,9 +9,9 @@ detailed build, deployment, runtime-mode and provider settings.
 The existing Next.js App Router studio from PR [#5](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/5) is the runtime for the
 deployment fix ([#21](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/21)). Its routes and brand assets are preserved. This is a
 hackathon prototype; integrating it does not complete [#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7), [#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1), or the product
-release criteria. PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) adds magic-link identity, SQLite storage and file-backed artwork; target-host persistence and real email acceptance remain pending.
-The fix merged in PR [#22](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/22) and was verified on the Plus Launch
-preview at `660cc5e`; [#21](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/21) is closed with that evidence.
+release criteria. PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) adds magic-link identity, SQLite storage and file-backed artwork. The fix merged in PR [#22](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/22) and its historical Plus Launch preview receipt names build `660cc5e`; [#21](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/21) is closed with that dated evidence.
+
+The separate deployed auth/storage checklist reports that `/api/health` returned `storage: "ok"`, `persistence: "configured"`, and `mode: "live"` on 2026-10-12. That response confirms the running app's configured storage path and reports its build identifier; it does not independently attest the source revision or prove survival across restart/redeploy or a restore. The checklist still shows real-email acceptance and restart/redeploy/backup/restore steps pending. See [the current operator checklist](deployed-auth-storage-runbook.md) for its dated observations and outstanding steps.
 
 ## Toolchain
 
@@ -44,8 +44,13 @@ Configure the repository root as the working directory, `main` as the source,
 Node 22.23.3, install command `npm ci`, build command `npm run build`, and start
 command `npm start`. This is a Node server deployment, not a static export.
 Keep `.next`, `public`, and installed runtime dependencies available to the
-start process. No application secrets or environment variables are required
-for the demo preview; the platform supplies `PORT`.
+start process. Set the ordinary environment variable `APP_URL` to the exact
+public HTTPS origin for this environment (for example, the Preview hostname
+for Preview and the canonical site hostname for Publish). Do not include a
+path, credentials, query, or fragment. Public browser requests on routes that
+check `Origin`, as well as security links and receipts, use this configured
+authority; `Host` and forwarded-host headers do not replace it. The demo does
+not require provider secrets, and the platform supplies `PORT`.
 
 After a change is merged to `main`, select **Update Preview** to pull the merged `main`
 revision, then **Retry build**. Verify the build log and preview home page,
@@ -61,17 +66,24 @@ fetching is disabled. The visible banner identifies demo mode. Try the home
 page's neatHack, The Pale Hours, or Harbour FC shortcuts. Checkout remains
 sandbox; wallet passes and QR codes remain simulated. Magic-link sign-in and
 server-side saving use SQLite when storage is available; production sign-in
-requires email delivery unless sandbox mail is explicitly enabled. Keep
-`TICKETSTUB_SANDBOX_MAIL` unset on the deployed site. Demo mode gates AI and
-Ticketmaster calls; it does not disable Resend delivery when a mail key is set.
-Use synthetic data until the complete deployment is verified.
+requires email delivery unless sandbox mail is explicitly enabled. The source
+shows a sandbox link only when `NODE_ENV !== "production"` or
+`TICKETSTUB_SANDBOX_MAIL=1`; this is independent of `TICKETSTUB_RUNTIME_MODE`.
+Keep `TICKETSTUB_SANDBOX_MAIL` unset on deployed Preview and Publish. Demo mode
+gates AI and Ticketmaster calls; it does not disable Resend delivery when a
+mail key is set. Use synthetic data until the complete deployment is verified.
 
-`TICKETSTUB_RUNTIME_MODE=live` (set consistently at build and start) restores
-the original prototype's external research/provider paths. Any other value,
-including the `demo` default in [`.env.example`](../../.env.example), keeps
-demo mode. Live mode is for separately reviewed, authorized development only:
-the original routes lack the production identity, budget and URL access
-controls tracked in [#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13). It is not a production deployment recommendation.
+`TICKETSTUB_RUNTIME_MODE=live` (set consistently at build and start) enables
+selected external research/provider paths. Any other value, including the
+`demo` default in [`.env.example`](../../.env.example), keeps demo mode. Live
+mode is for separately reviewed, authorized development only. Identity,
+origin, byte limits, rate limits, spend controls and provider behavior are
+route-specific; do not infer a universal guard from this mode switch. In
+particular, the current research route lacks an origin check, caller-capability
+check and route-level limiter, while `/api/art` uses `req.json()` without an
+explicit route-level byte ceiling. See the [HTTP API reference](../api/HTTP-API.md),
+[identity guide](../architecture/identity.md), and [origin boundary guide](http-boundaries.md).
+Live mode is not a production deployment recommendation.
 
 The optional server-only `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` enable the
 original direct-provider paths in that mode; setting keys alone never enables
@@ -204,9 +216,9 @@ complete sponsor integration.
 
 Setting keys does not enable external calls. Keep `TICKETSTUB_RUNTIME_MODE=demo`
 for preview. For reviewed live development set it consistently at build and
-start, then rebuild/restart after configuration changes. Existing production
-limitations above still apply, including unfinished identity, budget, and URL
-controls. Do not enable this as an unattended production service.
+start, then rebuild/restart after configuration changes. The route-specific
+production limitations above still apply. Do not enable this as an unattended
+production service.
 
 References: [OpenRouter Chat API](https://openrouter.ai/docs/api/reference/overview)
 and [provider routing](https://openrouter.ai/docs/guides/routing/provider-selection).
