@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './capture-test.mjs';
 import { createHash } from 'node:crypto';
 import { canonical } from '../../../src/controls/schema.mjs';
 import AxeBuilder from '@axe-core/playwright';

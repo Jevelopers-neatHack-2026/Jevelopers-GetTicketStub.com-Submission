@@ -1,3 +1,5 @@
+Current staged composition details and remaining full original-scope dependencies are in [composition controls integration](controls/composition-integration.md). Final qualification waits corrected coherent backend integration and exact-head checks/review.
+
 Current actual Apply→CE09 consumer details and boundaries are in [actual saved-artwork inspection](controls/actual-inspection.md). Earlier checkpoint statements below retain their historical scope; they do not describe current inspection as unimplemented.
 
 # Structured controls and actual local Apply integration

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './capture-test.mjs';
 import AxeBuilder from '@axe-core/playwright';
 
 test('presentation-only inspection scenarios retain stable references, unknown costs and keyboard/focus semantics without requests', async ({ page, request }, testInfo) => {

@@ -7,3 +7,5 @@
 The controls workflow runs on Node 22.23.3 and 24.15.0. It caches and installs the root, example, and locked `src/models/codec-runtime` dependency sets before the full build, aggregate offline checks, and existing Chromium plus axe roundtrip. Codec install scripts remain disabled. The existing native controls tests decode fixture PNG, JPEG, and WebP bytes with the installed codec; the installed controls consumer verifies its package boundary and SQLite behavior without loading the codec.
 
 This package gate verifies a locally packed tarball and consumer compatibility. It does not publish a registry package or close external producer, application, host, or release acceptance.
+
+The staged composition controls modules are exported through the existing `creative-engine/controls` subpath, so the inventory stays at 14. [Composition integration](controls/composition-integration.md) describes its new closed types and independent installed producer/store/preview consumer. Serialized build/aggregate wiring and corrected-backend qualification remain pending; prior package results do not qualify new code.

@@ -1,0 +1,407 @@
+import { test, expect } from './capture-test.mjs';
+import AxeBuilder from '@axe-core/playwright';
+const counts=async request=>(await request.get('/api/counters')).json();
+async function refresh(page,expected){const response=page.waitForResponse('**/api/composition/current');await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();const view=(await(await response).json()).view;expect(view.status).toBe('current');if(expected)expect(view.projection.base.revision_sha256).toBe(expected.revision_sha256);await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');}
+async function initialize(page){await expect(page.locator('#composition-status')).toContainText('not initialized');await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Initialize reviewed composition'}).click();const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);}
+async function apply(page){await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();const response=page.waitForResponse('**/api/composition/apply');await page.keyboard.press('Enter');const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);}
+test.beforeEach(async({page,request})=>{await request.post('/__fixture/reset',{data:{lock_logo:false}});await page.goto('/composition.html');});
+test('definitive stale non-admission survives reload and permits reviewed renewal plus fresh Apply',async({page,request},info)=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();
+  await request.post('/__fixture/state',{data:{advance_ms:60001}});
+  const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();const rejected=(await(await response).json()).result;
+  expect(rejected).toMatchObject({ok:false,status:'stale',code:'stale_version',approval:false,purchase:false,recovery:'not_admitted'});
+  await expect(page.locator('#operation-status')).toContainText('stale');await expect(page.locator('#composition-error')).toBeHidden();
+  await page.reload();await expect(page.locator('#composition-status')).toContainText('authority is stale');await expect(page.locator('#operation-status')).toContainText(`${rejected.action_id}: stale`);
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeEnabled();
+  await renew(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);
+  expect(await counts(request)).toMatchObject({composition_previews:2,composition_revalidations:1,image_calls:0,jev_calls:0,reservations:0});
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(Object.keys(cached).sort()).toEqual(['action','scope']);expect(JSON.stringify(cached)).not.toContain('draft');
+  await page.screenshot({path:info.outputPath('stale-reload-renew-fresh-apply.png'),fullPage:true});
+});
+test('superseded initialization has durable non-admission after reload and does not block fresh composition Apply',async({page,request})=>{
+  await expect(page.locator('#composition-status')).toContainText('not initialized');await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();
+  const initial=(await(await request.get('/api/composition/current')).json()).view;
+  const other={action_version:'creative-composition-initialize/1.0',action_id:'other-tab-initialize',intent:'initialize',review_sha256:initial.review.review_sha256};
+  expect((await(await request.post('/api/composition/apply',{data:other})).json()).result.ok).toBe(true);
+  const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Initialize reviewed composition'}).click();const rejected=(await(await response).json()).result;
+  expect(rejected).toMatchObject({ok:false,status:'stale',approval:false,purchase:false,recovery:'not_admitted'});
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await expect(page.locator('#operation-status')).toContainText(`${rejected.action_id}: stale`);
+  await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeEnabled();await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);
+  expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});
+});
+test('lost definitive rejection response reconciles its durable non-admission before enabling renewal',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();await request.post('/__fixture/state',{data:{advance_ms:60001}});
+  await page.route('**/api/composition/apply',async route=>{const response=await route.fetch();expect((await response.json()).result.recovery).toBe('not_admitted');await route.abort();},{times:1});
+  await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('outcome remains unknown');
+  await page.reload();await expect(page.locator('#operation-status')).toContainText(': stale');await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeEnabled();
+  expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,jev_calls:0,reservations:0});
+});
+test('null lookup and a caller-written terminal cache cannot clear a transport-unknown action after reload',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  // Abort BEFORE admission. No server rejection or operation outcome is known.
+  await page.route('**/api/composition/apply',route=>route.abort(),{times:1});await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('outcome remains unknown');
+  const cached=await page.evaluate(()=>{const key='creative-composition-reviewed-action/1',value=JSON.parse(sessionStorage.getItem(key));value.terminal={ok:false,status:'stale',code:'stale_version',action_id:value.action.action_id,approval:false,purchase:false,recovery:'not_admitted'};sessionStorage.setItem(key,JSON.stringify(value));return value;});
+  expect((await(await request.post('/api/composition/lookup',{data:{action_id:cached.action.action_id}})).json()).result).toBeNull();
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await page.getByRole('button',{name:'Read composition history',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('outcome remains unknown');
+  const after=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(after.action.action_id).toBe(cached.action.action_id);expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,reservations:0});
+});
+test('closed refusal of a changed duplicate preserves a genuine pending action across reload until authoritative completion',async({page,request},info)=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await request.post('/__fixture/state',{data:{block:'composition-preview'}});
+  const submitted=page.waitForRequest('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();const original=(await submitted).postDataJSON();
+  try {
+    await expect.poll(async()=>{const result=(await(await request.post('/api/composition/lookup',{data:{action_id:original.action_id}})).json()).result;return result?.status==='unknown'&&!!result.backend_job_id;}).toBe(true);
+    await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await expect(page.locator('#operation-status')).toContainText('outcome unknown');
+    // Feed the browser the genuine public backend refusal for a changed duplicate
+    // of its held identity. No failure envelope or full backend is fabricated.
+    await page.route('**/api/composition/retry',async route=>{const changed={...original,draft:{categories:{name_size:'small'},exact:{}}};const response=await route.fetch({url:new URL('/api/composition/apply',route.request().url()).href,method:'POST',postData:JSON.stringify(changed)});expect((await response.json()).result).toMatchObject({ok:false,status:'failed',code:'conflict',recovery:'unknown'});await route.fulfill({response});},{times:1});
+    await page.getByRole('button',{name:'Retry existing Apply',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('outcome unknown');await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();
+    await page.reload();await expect(page.locator('#operation-status')).toContainText('outcome unknown');await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeDisabled();
+    const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(cached.action.action_id).toBe(original.action_id);expect(Object.keys(cached).sort()).toEqual(['action','scope']);
+    await request.post('/__fixture/state',{data:{release:true}});
+    await expect.poll(async()=>((await(await request.post('/api/composition/lookup',{data:{action_id:original.action_id}})).json()).result)?.ok).toBe(true);
+    await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');await refresh(page);
+    expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});await page.screenshot({path:info.outputPath('pending-refusal-reload-recovered.png'),fullPage:true});
+  } finally {await request.post('/__fixture/state',{data:{release:true}});}
+});
+test('read-only categorical review displays actual mapped before/after units and exact approved asset before keyboard Apply', async ({page,request}) => {
+  await initialize(page);const current=(await(await request.get('/api/composition/current')).json()).view;
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByLabel('Approved logo position',{exact:true}).selectOption('bottom');
+  const before=await counts(request), response=page.waitForResponse('**/api/composition/review');
+  await page.getByRole('button',{name:'Review draft',exact:true}).focus();await page.keyboard.press('Enter');
+  const review=(await(await response).json()).review;
+  await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();
+  await expect(page.locator('#review-summary')).toContainText('24 pt → 36 pt');
+  await expect(page.locator('#review-summary')).toContainText('approved asset asset-1');
+  await expect(page.locator('#review-summary')).toContainText('normalized 0–1000');
+  await expect(page.locator('#review-binding')).toContainText(current.projection.base.revision_sha256);
+  await expect(page.locator('#review-binding')).toContainText(current.projection.base.preview_sha256);
+  expect(review.changes).toHaveLength(2);expect(await counts(request)).toEqual({...before,composition_assertions:before.composition_assertions+2,composition_resolves:before.composition_resolves+2});
+  expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+  const saved=page.waitForResponse('**/api/composition/apply');await page.keyboard.press('Enter');expect((await(await saved).json()).result.ok).toBe(true);
+});
+test('old server review cannot revive an edited draft or steal focus', async ({page,request}) => {
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('small');
+  let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});
+  await page.route('**/api/composition/review',async route=>{const response=await route.fetch();entered();await blocked;await route.fulfill({response});},{times:1});
+  await page.getByRole('button',{name:'Review draft',exact:true}).click();await started;
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByLabel('Name size',{exact:true}).focus();release();
+  await page.waitForLoadState('networkidle');await expect(page.locator('#apply-review')).toBeHidden();
+  await expect(page.getByLabel('Name size',{exact:true})).toBeFocused();expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,jev_calls:0,reservations:0});
+  await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.locator('#review-summary')).toContainText('24 pt → 36 pt');
+});
+test('forged server review asset cannot render or enable Apply', async ({page,request}) => {
+  await initialize(page);await page.getByLabel('Approved logo position',{exact:true}).selectOption('bottom');
+  await page.route('**/api/composition/review',async route=>{const response=await route.fetch(),body=await response.json();body.review.changes[0].asset_id='forged-asset';await route.fulfill({response,json:body});},{times:1});
+  await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('Draft review unavailable or invalid');
+  await expect(page.locator('#apply-review')).toBeHidden();await expect(page.locator('#composition-error')).toBeFocused();
+  expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,jev_calls:0,reservations:0});expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+});
+test('keyboard reviewed initialization then all categorical options and q01 produce real exact previews, axe and screenshot',async({page,request},info)=>{
+  const posts=[];page.on('request',r=>{if(r.method()==='POST')posts.push(r.url());});
+  await expect(page.getByRole('button',{name:'Initialize reviewed composition'})).toBeDisabled();expect(await counts(request)).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:0});
+  await initialize(page);const initial=(await(await request.get('/api/composition/current')).json()).view.projection.base;
+  for(const field of ['name_size','layout','logo_position'])expect(await page.locator(`#category-${field}`).isVisible()).toBe(true);
+  for(const value of ['small','large','medium']){await page.getByLabel('Name size',{exact:true}).focus();await page.keyboard.press(value==='small'?'s':value==='large'?'l':'m');const before=await counts(request);await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeEnabled();expect(await counts(request)).toEqual(before);await apply(page);await expect(page.getByLabel('Name size',{exact:true})).toHaveValue(value);}
+  await page.getByLabel('Layout',{exact:true}).focus();await page.keyboard.press('s');await expect(page.getByLabel('Stacked layout emphasis')).toBeVisible();await page.getByLabel('Stacked layout emphasis').selectOption('balanced');await apply(page);
+  await page.getByLabel('Stacked layout emphasis').focus();await page.keyboard.press('n');await apply(page);await expect(page.getByLabel('Stacked layout emphasis')).toHaveValue('name');
+  await page.getByLabel('Layout',{exact:true}).selectOption('centered');await apply(page);await expect(page.getByLabel('Stacked layout emphasis')).toBeHidden();
+  for(const value of ['bottom','top']){await page.getByLabel('Approved logo position',{exact:true}).selectOption(value);await apply(page);await expect(page.getByLabel('Approved logo position',{exact:true})).toHaveValue(value);}
+  const final=(await(await request.get('/api/composition/current')).json()).view.projection.base;expect(final.artwork_sha256).toBe(initial.artwork_sha256);expect(final.design_version_id).toBe(initial.design_version_id);expect(final.revision_sha256).not.toBe(initial.revision_sha256);
+  expect(await counts(request)).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:8});
+  expect(await page.locator('#composition-preview').evaluate(i=>i.complete&&i.naturalWidth===128&&i.naturalHeight===128)).toBe(true);expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+  await page.screenshot({path:info.outputPath('categorical-composition.png'),fullPage:true});expect(posts.filter(x=>x.endsWith('/api/composition/apply'))).toHaveLength(9);
+});
+for(const[kind,input]of [['text',{text:'Taylor Sample'}],['text_size',{size:'31.125',unit:'px'}],['layout',{x_milli:'150',y_milli:'230',width_milli:'650',height_milli:'120'}],['logo',{x_milli:'60',y_milli:'790',width_milli:'130',height_milli:'130'}]])test(`exact ${kind} keyboard Apply, loaded image, reload and identical retry`,async({page,request},info)=>{
+  await initialize(page);const old=(await(await request.get('/api/composition/current')).json()).view;await page.getByLabel('Edit mode').selectOption(kind);
+  for(const[id,value]of Object.entries(input)){if(id==='unit')await page.locator(`#exact-${id}`).selectOption(value);else await page.locator(`#exact-${id}`).fill(value);}
+  const unchanged=await counts(request);await page.getByRole('button',{name:'Review draft',exact:true}).focus();await page.keyboard.press('Enter');await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();expect(await counts(request)).toEqual({...unchanged,composition_assertions:unchanged.composition_assertions+2,composition_resolves:unchanged.composition_resolves+2});const response=page.waitForResponse('**/api/composition/apply');await page.keyboard.press('Enter');const result=(await(await response).json()).result;expect(result.ok).toBe(true);expect(result.parent_revision_sha256).toBe(old.projection.base.revision_sha256);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);
+  const saved=(await(await request.get('/api/composition/current')).json()).view;expect(saved.preview.preview_sha256).not.toBe(old.preview.preview_sha256);expect(saved.projection.base.artwork_sha256).toBe(old.projection.base.artwork_sha256);expect(saved.projection.base.revision_sha256).not.toBe(old.projection.base.revision_sha256);
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await page.getByRole('button',{name:'Read existing operation'}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');await page.getByRole('button',{name:'Retry existing Apply'}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});
+  await page.screenshot({path:info.outputPath(`exact-${kind}.png`),fullPage:true});
+});
+test('lost HTTP completion reconciles one saved revision after reload; mismatched preview and stale authority fail closed',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  await page.route('**/api/composition/apply',async route=>{await route.fetch();await route.abort();},{times:1});await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('Response unavailable');
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await page.getByRole('button',{name:'Read existing operation'}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');expect(await counts(request)).toMatchObject({composition_previews:1});
+  await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.locator('#composition-editor')).toBeHidden();
+});
+test('revoked permissions and locked logo never complete Apply, hostile view extras never render',async({page,request})=>{
+  await request.post('/__fixture/reset',{data:{lock_logo:true}});await page.goto('/composition.html');await initialize(page);await expect(page.getByLabel('Approved logo position',{exact:true})).toBeDisabled();
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();await request.post('/__fixture/state',{data:{revoke:true}});await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#operation-status')).not.toContainText('Composition saved');expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0});
+  await page.route('**/api/composition/current',async route=>{const response=await route.fetch(),data=await response.json();data.view.script='<script>attack()</script>';await route.fulfill({response,json:data});},{times:1});
+  const rejected=page.waitForResponse('**/api/composition/current');await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await rejected;
+  await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-editor')).toBeHidden();
+});
+
+test('both original artwork styles use genuine parent edits; lost response recovers one immutable child with opaque cache',async({page,request},info)=>{
+  await initialize(page);const original=(await(await request.get('/api/history')).json()).selection;
+  await page.getByLabel('Artwork style',{exact:true}).selectOption('vibrant');await page.getByRole('button',{name:'Review artwork style',exact:true}).click();expect(await counts(request)).toMatchObject({image_calls:0,reservations:0});
+  await page.route('**/api/artwork/apply',async route=>{await route.fetch();await route.abort();},{times:1});await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('Artwork response unavailable');
+  await page.reload();await expect(page.locator('#composition-status')).toContainText('not initialized');await page.getByRole('button',{name:'Read existing artwork style operation',exact:true}).click();await expect(page.locator('#style-status')).toContainText('Saved artwork');
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-artwork-reviewed-action/1')));expect(Object.keys(cached).sort()).toEqual(['action_id','scope']);
+  const history=(await(await request.get('/api/history')).json()).result.items;const child=history.find(x=>x.parent_version_id===original.design_version_id);expect(child).toBeTruthy();expect(child.artifact.content_hash).not.toBe(history.find(x=>x.design_version_id===original.design_version_id).artifact.content_hash);
+  await page.getByRole('button',{name:'Retry existing artwork style Apply',exact:true}).click();await expect(page.locator('#style-status')).toContainText('Saved artwork');expect(await counts(request)).toMatchObject({image_calls:1,jev_calls:0,reservations:1});
+  await page.getByLabel('Artwork style',{exact:true}).selectOption('calm');await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+  const secondResponse=page.waitForResponse('**/api/artwork/apply');await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();
+  const second=(await(await secondResponse).json()).recovery;expect(second).toMatchObject({ok:true,recovery:'terminal',status:'completed'});
+  expect(second.result.design_version.design_version_id).not.toBe(child.design_version_id);expect(second.result.design_version.artifact.content_hash).not.toBe(child.artifact.content_hash);
+  await expect(page.locator('#style-status')).toContainText(second.result.design_version.design_version_id);await expect(page.locator('#composition-status')).toContainText('not initialized');
+  const nextHistory=await(await request.get('/api/history')).json();expect(nextHistory.selection.design_version_id).toBe(second.result.design_version.design_version_id);
+  expect(nextHistory.result.items.find(item=>item.design_version_id===nextHistory.selection.design_version_id).parent_version_id).toBe(child.design_version_id);
+  expect(await counts(request)).toMatchObject({image_calls:2,jev_calls:0,reservations:2});
+  await initialize(page);await page.screenshot({path:info.outputPath('post-style-fresh-composition.png'),fullPage:true});
+});
+
+test('composition Apply during an awaited artwork hash never caches an unsubmitted style identity',async({page,request})=>{
+  await initialize(page);
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');
+  await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeVisible();
+  await page.getByLabel('Artwork style',{exact:true}).selectOption('vibrant');
+  await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+  let artworkPosts=0;
+  page.on('request',request=>{if(new URL(request.url()).pathname==='/api/artwork/apply')artworkPosts++;});
+  await page.evaluate(()=>{
+    const digest=crypto.subtle.digest;
+    let release;
+    const blocked=new Promise(resolve=>{release=resolve;});
+    globalThis.styleDigestRace={entered:false,finished:0,release(){release();},restore(){crypto.subtle.digest=digest;}};
+    crypto.subtle.digest=async function(...args){
+      if(!styleDigestRace.entered){styleDigestRace.entered=true;await blocked;}
+      const result=await Reflect.apply(digest,this,args);
+      styleDigestRace.finished++;
+      return result;
+    };
+  });
+  try {
+    await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();
+    await expect.poll(()=>page.evaluate(()=>styleDigestRace.entered)).toBe(true);
+    await request.post('/__fixture/state',{data:{block:'composition-preview'}});
+    const submitted=page.waitForRequest('**/api/composition/apply');
+    const response=page.waitForResponse('**/api/composition/apply');
+    await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();
+    const original=(await submitted).postDataJSON();
+    await expect.poll(async()=>((await(await request.post('/api/composition/lookup',{data:{action_id:original.action_id}})).json()).result)?.status).toBe('unknown');
+    await page.evaluate(()=>styleDigestRace.release());
+    await expect.poll(()=>page.evaluate(()=>styleDigestRace.finished)).toBe(2);
+    expect(await page.evaluate(()=>sessionStorage.getItem('creative-artwork-reviewed-action/1'))).toBeNull();
+    expect(artworkPosts).toBe(0);
+    await page.evaluate(()=>styleDigestRace.restore());
+    await request.post('/__fixture/state',{data:{release:true}});
+    const completed=(await(await response).json()).result;expect(completed.ok).toBe(true);
+    await expect(page.locator('#operation-status')).toContainText(completed.revision_id);
+    await refresh(page,completed);
+    await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeEnabled();
+    await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeEnabled();
+    expect(await counts(request)).toMatchObject({image_calls:0,reservations:0,composition_previews:1});
+    // A fresh deliberate review still admits exactly one artwork edit.
+    await page.getByLabel('Artwork style',{exact:true}).selectOption('vibrant');
+    await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+    const saved=page.waitForResponse('**/api/artwork/apply');
+    await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();
+    expect((await(await saved).json()).recovery.status).toBe('completed');
+    await expect(page.locator('#style-status')).toContainText('Saved artwork');
+    expect(artworkPosts).toBe(1);
+    expect(await counts(request)).toMatchObject({image_calls:1,reservations:1});
+  } finally {
+    await page.evaluate(()=>{styleDigestRace.release();styleDigestRace.restore();});
+    await request.post('/__fixture/state',{data:{release:true}});
+  }
+});
+
+test('lost stale artwork refusal survives reload and read/retry before fresh style and composition review are enabled',async({page,request},info)=>{
+  await initialize(page);await page.getByLabel('Artwork style',{exact:true}).selectOption('vibrant');await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+  let rejected;
+  await page.route('**/api/artwork/apply',async route=>{
+    const original=route.request().postDataJSON();
+    const winner=(await(await request.post('/api/artwork/apply',{data:{...original,action_id:`${original.action_id}-other`}})).json()).recovery;
+    expect(winner).toMatchObject({ok:true,status:'completed',recovery:'terminal'});
+    const response=await route.fetch();rejected=(await response.json()).recovery;
+    expect(rejected).toMatchObject({ok:false,status:'rejected',code:'stale_version',recovery:'not_admitted'});await route.abort();
+  },{times:1});
+  await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('Artwork response unavailable');
+  await page.reload();await expect(page.locator('#composition-status')).toContainText('not initialized');await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeDisabled();
+  const readResponse=page.waitForResponse('**/api/artwork/status');await page.getByRole('button',{name:'Read existing artwork style operation',exact:true}).click();
+  expect((await(await readResponse).json()).recovery).toEqual(rejected);await expect(page.locator('#style-status')).toContainText('not admitted (stale_version)');
+  await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeEnabled();
+  await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();await expect(page.getByRole('button',{name:'Initialize reviewed composition'})).toBeEnabled();
+  await page.getByRole('button',{name:'Retry existing artwork style Apply',exact:true}).click();await expect(page.locator('#style-status')).toContainText('not admitted (stale_version)');
+  expect(await counts(request)).toMatchObject({image_calls:1,reservations:1});
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-artwork-reviewed-action/1')));expect(Object.keys(cached).sort()).toEqual(['action_id','scope']);expect(cached.action_id).toBe(rejected.action_id);
+  await page.getByLabel('Artwork style',{exact:true}).selectOption('calm');await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+  const freshResponse=page.waitForResponse('**/api/artwork/apply');await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();
+  const fresh=(await(await freshResponse).json()).recovery;expect(fresh.status).toBe('completed');expect(fresh.action_id).not.toBe(rejected.action_id);
+  await expect(page.locator('#style-status')).toContainText(fresh.result.design_version.design_version_id);await initialize(page);
+  expect(await counts(request)).toMatchObject({image_calls:2,reservations:2});await page.screenshot({path:info.outputPath('style-stale-recovery-fresh-review.png'),fullPage:true});
+});
+
+test('unknown artwork before admission and a forged terminal cache retain all new edit locks after reload',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Artwork style',{exact:true}).selectOption('vibrant');await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+  await page.route('**/api/artwork/apply',route=>route.abort(),{times:1});await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('Artwork response unavailable');
+  const cached=await page.evaluate(()=>{const key='creative-artwork-reviewed-action/1',value=JSON.parse(sessionStorage.getItem(key));value.terminal={recovery:'not_admitted',status:'rejected'};sessionStorage.setItem(key,JSON.stringify(value));return value;});
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');
+  for(const label of ['Read existing artwork style operation','Retry existing artwork style Apply']){
+    await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('#style-status')).toContainText('outcome unknown');
+    await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeDisabled();
+  }
+  const status=(await(await request.post('/api/artwork/status',{data:{action_id:cached.action_id}})).json()).recovery;
+  expect(status).toMatchObject({recovery:'unknown',status:'unknown'});expect(status.operation_id).toBeUndefined();
+  expect(await counts(request)).toMatchObject({image_calls:0,reservations:0});
+});
+
+test('rejected duplicate of an admitted pending artwork cannot unlock after reload or repeat a reservation',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Artwork style',{exact:true}).selectOption('vibrant');await page.getByRole('button',{name:'Review artwork style',exact:true}).click();
+  await request.post('/__fixture/state',{data:{block:'native-post-ack'}});const sent=page.waitForRequest('**/api/artwork/apply');await page.getByRole('button',{name:'Apply reviewed artwork style',exact:true}).click();const original=(await sent).postDataJSON();
+  try{
+    await expect.poll(async()=>{const read=(await(await request.post('/api/artwork/status',{data:{action_id:original.action_id}})).json()).recovery;return read?.recovery==='unknown'&&!!read.backend_job_id;}).toBe(true);
+    await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');
+    await page.route('**/api/artwork/retry',async route=>{const response=await route.fetch({url:new URL('/api/artwork/apply',route.request().url()).href,method:'POST',postData:JSON.stringify({...original,action_version:'creative-apply/9.0'})});expect((await response.json()).recovery).toMatchObject({status:'unknown',recovery:'unknown'});await route.fulfill({response});},{times:1});
+    await page.getByRole('button',{name:'Retry existing artwork style Apply',exact:true}).click();await expect(page.locator('#style-status')).toContainText('outcome unknown');
+    await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeDisabled();
+    await request.post('/__fixture/state',{data:{release:true}});
+    await expect.poll(async()=>((await(await request.post('/api/artwork/status',{data:{action_id:original.action_id}})).json()).recovery)?.status).toBe('completed');
+    await page.getByRole('button',{name:'Read existing artwork style operation',exact:true}).click();await expect(page.locator('#style-status')).toContainText('Saved artwork');
+    await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeEnabled();expect(await counts(request)).toMatchObject({image_calls:1,reservations:1});
+  }finally{await request.post('/__fixture/state',{data:{release:true}});}
+});
+
+test('delayed old current success and error cannot replace a refreshed stale context or steal focus',async({page,request})=>{
+  await initialize(page);let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});
+  await page.route('**/api/composition/current',async route=>{const response=await route.fetch();entered();await blocked;await route.fulfill({response});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await started;await request.post('/__fixture/state',{data:{advance_ms:60001}});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForLoadState('networkidle');await expect(page.locator('#composition-status')).toContainText('authority is stale');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();
+});
+
+test('changed preview bytes and caller-supplied scope reject without current image or dispatched edit',async({page,request})=>{
+  await initialize(page);await page.route('**/api/composition/preview?**',async route=>{const response=await route.fetch(),bytes=await response.body();bytes[bytes.length-1]^=1;await route.fulfill({response,body:bytes});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-preview')).toBeHidden();
+  await refresh(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  await page.route('**/api/composition/apply',route=>{const body=route.request().postDataJSON();return route.continue({postData:JSON.stringify({...body,tenant_id:'forged'})});},{times:1});await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('failed');expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,reservations:0});
+});
+
+
+async function renew(page) {
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();
+  await expect(page.locator('#composition-history-status')).toContainText('Identity-only history');
+  await page.getByRole('button',{name:'Review fresh authority renewal',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Apply reviewed authority renewal',exact:true})).toBeFocused();
+  const response=page.waitForResponse('**/api/composition/apply');await page.keyboard.press('Enter');const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#composition-identity')).toContainText(result.revision_sha256);
+  await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');
+}
+
+test('expired current preview stays hidden; metadata history and explicit keyboard renewal require a new reviewed Apply',async({page,request},info)=>{
+  await initialize(page);const old=(await(await request.get('/api/composition/current')).json()).view.projection.base;
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.locator('#apply-review')).toBeHidden();
+  const before=await counts(request);const history=(await(await request.get('/api/composition/history')).json()).view;expect(JSON.stringify(history)).not.toContain('preview');expect(history.identity.current.revision_sha256).toBe(old.revision_sha256);expect(await counts(request)).toEqual(before);
+  await renew(page);const fresh=(await(await request.get('/api/composition/current')).json()).view;expect(fresh.projection.base.revision_sha256).not.toBe(old.revision_sha256);expect(fresh.projection.base.artwork_sha256).toBe(old.artwork_sha256);await expect(page.locator('#apply-review')).toBeHidden();await expect(page.getByLabel('Name size',{exact:true})).toHaveValue('medium');
+  expect(await counts(request)).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:1,composition_revalidations:1});
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);expect(await counts(request)).toMatchObject({composition_previews:2,composition_revalidations:1});
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.locator('#composition-history li')).toHaveCount(3);expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);await page.screenshot({path:info.outputPath('renewed-history-fresh-apply.png'),fullPage:true});
+});
+
+test('public same-design restore changes selection, keeps history identity, and requires explicit fresh renewal',async({page,request})=>{
+  await initialize(page);const selected=(await(await request.get('/api/history')).json()).selection;
+  const restored=(await(await request.post('/api/restore',{data:{design_version_id:selected.design_version_id,expected_selection_revision:selected.revision,action_id:'browser-same-design-restore'}})).json());expect(restored.ok).toBe(true);
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.locator('#composition-history-status')).toContainText('Selection compatibility: changed');await expect(page.locator('#composition-preview')).toBeHidden();
+  await renew(page);expect(await counts(request)).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:1,composition_revalidations:1});await expect(page.locator('#apply-review')).toBeHidden();
+});
+
+test('pending composition cancellation is authoritative and read-only status never duplicates work',async({page,request})=>{
+  await initialize(page);const old=(await(await request.get('/api/composition/current')).json()).view.projection.base;
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  await request.post('/__fixture/state',{data:{block:'composition-preview'}});const applyResponse=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Cancel existing operation',exact:true})).toBeEnabled();
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1'))),action_id=cached.action.action_id;
+  let backend_job_id;
+  await expect.poll(async()=>{const read=(await(await request.post('/api/composition/lookup',{data:{action_id}})).json()).result;
+    if(read?.status!=='unknown'||read.action_id!==action_id||!read.backend_job_id)return false;
+    const marker=(await(await request.get(`/__fixture/composition-wait?action_id=${encodeURIComponent(action_id)}`)).json());backend_job_id=read.backend_job_id;
+    return marker.mode==='mock'&&marker.live_calls===0&&marker.held&&marker.action_id===action_id&&marker.backend_job_id===backend_job_id;
+  },{message:'Exact public action/job must reach its held MOCK preview stage before lookup and cancellation'}).toBe(true);
+  expect(backend_job_id).toBeTruthy();
+  await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('unknown');expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0});
+  await page.getByRole('button',{name:'Cancel existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('cancelled');
+  await request.post('/__fixture/state',{data:{release:true}});const result=(await(await applyResponse).json()).result;expect(result.ok).toBe(false);await refresh(page);
+  expect((await(await request.get('/api/composition/current')).json()).view.projection.base.revision_sha256).toBe(old.revision_sha256);expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});const completed=await counts(request);await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('cancelled');expect(await counts(request)).toEqual(completed);
+});
+
+
+test('lost renewal response reconciles the same durable child after reload without another preview or renewal',async({page,request})=>{
+  await initialize(page);await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Review fresh authority renewal',exact:true}).click();
+  await page.route('**/api/composition/apply',async route=>{await route.fetch();await route.abort();},{times:1});await page.getByRole('button',{name:'Apply reviewed authority renewal',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('Response unavailable');await expect(page.locator('#review-draft')).toBeDisabled();await expect(page.locator('#composition-editor')).toBeHidden();
+  await page.reload();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await page.getByRole('button',{name:'Retry existing Apply',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');expect(await counts(request)).toMatchObject({composition_previews:1,composition_revalidations:1,image_calls:0,jev_calls:0,reservations:0});
+  const cache=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(Object.keys(cache).sort()).toEqual(['action','scope']);expect(Object.keys(cache.action).sort()).toEqual(['action_id','action_version']);
+});
+
+
+test('invalid version, changed identity and actual alternate MOCK principals cannot dispatch another child',async({page,request})=>{
+  await initialize(page);let reviewed;
+  await page.route('**/api/composition/apply',async route=>{reviewed=route.request().postDataJSON();const first=await route.fetch(),replay=await route.fetch();const a=(await first.json()).result,b=(await replay.json()).result;expect(a.ok).toBe(true);expect(b.revision_sha256).toBe(a.revision_sha256);await route.fulfill({response:first});},{times:1});
+  await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);expect(await counts(request)).toMatchObject({composition_previews:1});
+  const changed=structuredClone(reviewed);changed.draft.categories.name_size='small';expect((await(await request.post('/api/composition/apply',{data:changed})).json()).result.code).toBe('conflict');
+  const unknown={...reviewed,action_id:'browser-unknown-version',action_version:'creative-composition-apply/2.0'};expect((await(await request.post('/api/composition/apply',{data:unknown})).json()).result.code).toBe('unsupported_version');
+  for(const principal of ['other-tenant','other-actor']){
+    const denied=(await(await request.post('/api/composition/apply',{data:reviewed,headers:{'x-mock-controls-principal':principal}})).json()).result;expect(denied.ok).toBe(false);
+    const status=(await(await request.post('/api/composition/lookup',{data:{action_id:reviewed.action_id},headers:{'x-mock-controls-principal':principal}})).json()).result;expect(status).toBeNull();
+  }
+  expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});
+});
+
+test('well-formed cross-scope projection and hostile identity history never become displayed authority',async({page,request})=>{
+  await initialize(page);await page.route('**/api/composition/current',async route=>{const response=await route.fetch(),data=await response.json();data.view.projection.base.tenant_id='other_fixture_tenant';const body={...data.view.projection};delete body.projection_sha256;data.view.projection.projection_sha256=await page.evaluate(async body=>{const canonical=x=>Array.isArray(x)?`[${x.map(canonical).join(',')}]`:x&&typeof x==='object'?`{${Object.keys(x).sort().map(k=>`${JSON.stringify(k)}:${canonical(x[k])}`).join(',')}}`:JSON.stringify(x);const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(body)));return `sha256:${Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('')}`;},body);await route.fulfill({response,json:data});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-preview')).toBeHidden();await refresh(page);
+  await page.route('**/api/composition/history?**',async route=>{const response=await route.fetch(),data=await response.json();data.view.identity.preview_access={bytes_base64:'AAAA'};await route.fulfill({response,json:data});},{times:1});await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.locator('#composition-history-status')).toContainText('unavailable');await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0});
+});
+
+
+for(const outcome of ['success','error'])test(`delayed old history ${outcome} never enables stale renewal or steals focus`,async({page,request})=>{
+  await initialize(page);let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});
+  await page.route('**/api/composition/history?**',async route=>{const response=await route.fetch();entered();await blocked;if(outcome==='success')await route.fulfill({response});else await route.abort();},{times:1});
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await started;
+  await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForLoadState('networkidle');await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();await expect(page.locator('#composition-history li')).toHaveCount(0);await expect(page.locator('#composition-preview')).toBeHidden();
+});
+
+test('delayed preview bytes never revive a refreshed stale image or steal focus',async({page,request})=>{
+  await initialize(page);let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});
+  await page.route('**/api/composition/preview?**',async route=>{const response=await route.fetch();entered();await blocked;await route.fulfill({response});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await started;await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForLoadState('networkidle');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();
+});
+
+test('late pending lookup cannot downgrade an authoritative cancellation terminal',async({page,request})=>{
+  await initialize(page);await request.post('/__fixture/state',{data:{block:'composition-preview'}});await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();const applyResponse=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();
+  let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});await page.route('**/api/composition/lookup',async route=>{const response=await route.fetch();expect((await response.json()).result.status).toBe('unknown');entered();await blocked;await route.fulfill({response});},{times:1});
+  await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await started;await page.getByRole('button',{name:'Cancel existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('cancelled');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForTimeout(50);await expect(page.locator('#operation-status')).toContainText('cancelled');await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();
+  await request.post('/__fixture/state',{data:{release:true}});expect((await(await applyResponse).json()).result.status).toBe('cancelled');await expect(page.locator('#operation-status')).toContainText('cancelled');expect(await counts(request)).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:1});
+});
+
+
+test('trusted scope refresh clears former action UI and rejects cross-scope current rendering',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);
+  await page.route('**/api/schema',async route=>{const response=await route.fetch(),data=await response.json();data.schema.tenant_id='other_fixture_tenant';await route.fulfill({response,json:data});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.locator('#operation-status')).toHaveText('No composition operation submitted in this scope.');await expect(page.getByRole('button',{name:'Read existing operation',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeDisabled();expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0});
+});
+
+
+test('mixed-case public history renders binary pages with keyboard continuation and zero read effects',async({page,request})=>{
+  await initialize(page);const ids=['Z_history','a_history','A_history','_history','z_history','B_history','b_history','C_history','c_history','D_history','d_history'];let last;
+  for(let i=0;i<ids.length;i++){
+    const current=(await(await request.get('/api/composition/current')).json()).view;
+    const body={action_version:'creative-composition-apply/1.0',action_id:ids[i],projection_sha256:current.projection.projection_sha256,intent:'apply',draft:{categories:{name_size:i%2?'small':'large'},exact:{}}};
+    last=(await(await request.post('/api/composition/apply',{data:body})).json()).result;expect(last.ok).toBe(true);
+  }
+  await refresh(page,last);const full=(await(await request.get('/api/composition/history?limit=20')).json()).view;expect(full.ok).toBe(true);
+  const expected=full.identity.revisions.map(r=>r.revision_id);expect(expected).toEqual([...expected].sort());expect(expected).toHaveLength(12);
+  const before=await counts(request);const historyResponse=page.waitForResponse(r=>r.url().includes('/api/composition/history?limit=10'));
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();await page.keyboard.press('Enter');expect((await(await historyResponse).json()).view.ok).toBe(true);await expect(page.locator('#composition-history li')).toHaveCount(10);
+  const next=page.getByRole('button',{name:'Read more composition history',exact:true});await expect(next).toBeVisible();await next.focus();const nextResponse=page.waitForResponse(r=>r.url().includes('after_revision_id='));await page.keyboard.press('Enter');expect((await(await nextResponse).json()).view.ok).toBe(true);await expect(page.locator('#composition-history li')).toHaveCount(12);
+  const actual=await page.locator('#composition-history li').allTextContents();expect(actual.map(x=>x.split(' · ')[0])).toEqual(expected);await expect(next).toBeHidden();expect(await counts(request)).toEqual(before);expect(before).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:11});
+});

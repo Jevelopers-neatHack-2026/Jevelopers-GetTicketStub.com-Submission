@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { ACTION_VERSIONS, SCHEMA_VERSIONS, canonical, isRecord, validId, equalVersions, activeQuestions, snapshotControlJson } from './schema.mjs';
 import { assertSupportedRuntime } from './runtime.mjs';
+import { ARTWORK_NON_ADMISSION_CODES } from './artwork-recovery.mjs';
 
 assertSupportedRuntime();
 
@@ -84,6 +85,10 @@ export class ApplyStore {
         action_hash TEXT NOT NULL, operation_id TEXT);
       CREATE TABLE IF NOT EXISTS control_completions (operation_id TEXT PRIMARY KEY REFERENCES control_jobs(operation_id),
         completion_hash TEXT NOT NULL, receipt TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS control_artwork_rejections_v1 (
+        tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, actor_id TEXT NOT NULL, action_id TEXT NOT NULL,
+        action_hash TEXT NOT NULL, code TEXT NOT NULL, receipt_hash TEXT NOT NULL,
+        PRIMARY KEY(tenant_id,project_id,action_id));
       CREATE UNIQUE INDEX IF NOT EXISTS one_open_apply ON control_jobs(tenant_id,project_id)
         WHERE status IN ('queued','ready'); PRAGMA user_version=1;`);
   }
@@ -125,7 +130,22 @@ export class ApplyStore {
       return result;
     }
   }
-  apply(ctx, body) {
+  nonAdmission(ctx, actionId) {
+    ctx = snapshotControlJson(ctx); trusted(ctx);
+    if (!validId(actionId)) reject('validation');
+    this.state(ctx, 'can_read');
+    const row = this.db.prepare('SELECT * FROM control_artwork_rejections_v1 WHERE tenant_id=? AND project_id=? AND action_id=?')
+      .get(ctx.tenant_id, ctx.project_id, actionId);
+    if (!row) return null;
+    const { receipt_hash, ...receipt } = row;
+    if (row.actor_id !== ctx.actor_id) reject('permission');
+    if (hash(receipt) !== receipt_hash || !/^[a-f0-9]{64}$/.test(row.action_hash) || !ARTWORK_NON_ADMISSION_CODES.includes(row.code) ||
+        this.db.prepare('SELECT 1 FROM control_jobs WHERE tenant_id=? AND project_id=? AND action_id=?').get(ctx.tenant_id, ctx.project_id, actionId)) reject('unavailable');
+    return { code: row.code, action_id: row.action_id };
+  }
+  apply(ctx, body) { return this.admit(ctx, body, false); }
+  applyReviewedArtwork(ctx, body) { return this.admit(ctx, body, true); }
+  admit(ctx, body, reviewedArtwork) {
     // Hashes only in audit; never persist invalid payloads, source strings or credentials.
     let actionHash;
     try { actionHash = hash(body); } catch { actionHash = hash(null); }
@@ -133,25 +153,42 @@ export class ApplyStore {
       try { ctx = snapshotControlJson(ctx); } catch { reject('permission'); }
       try { body = snapshotControlJson(body); } catch { reject('validation'); }
       trusted(ctx);
-      envelope(body);
-      if (body.tenant_id !== ctx.tenant_id || body.project_id !== ctx.project_id) reject('permission');
-      const prior = this.db.prepare('SELECT * FROM control_jobs WHERE tenant_id=? AND project_id=? AND action_id=?').get(ctx.tenant_id, ctx.project_id, body.action_id);
-      const state = this.state(ctx, prior?.status === 'completed' ? 'can_read' : 'can_apply');
-      if (prior) {
-        if (prior.actor_id !== ctx.actor_id) reject('permission');
-        if (prior.action_hash !== actionHash) reject('action_conflict', state.schema.expected_versions);
-        return { ok: prior.status !== 'cancelled', code: prior.status === 'cancelled' ? 'cancelled' : 'replayed', operation_id: prior.operation_id, status: prior.status, replayed: true };
+      const scoped = isRecord(body) && validId(body.action_id) && body.tenant_id === ctx.tenant_id && body.project_id === ctx.project_id;
+      const prior = scoped ? this.db.prepare('SELECT * FROM control_jobs WHERE tenant_id=? AND project_id=? AND action_id=?').get(ctx.tenant_id, ctx.project_id, body.action_id) : null;
+      // The same BEGIN IMMEDIATE protects both journals across connections.
+      // Every entry point honors a rejection recorded by reviewed artwork Apply.
+      if (scoped && this.db.prepare('SELECT 1 FROM control_artwork_rejections_v1 WHERE tenant_id=? AND project_id=? AND action_id=?').get(ctx.tenant_id, ctx.project_id, body.action_id)) {
+        reject(this.nonAdmission(ctx, body.action_id).code);
       }
-      const tasks = validateDraft(body, state);
-      if (this.db.prepare("SELECT 1 FROM control_jobs WHERE tenant_id=? AND project_id=? AND status IN ('queued','ready')").get(ctx.tenant_id, ctx.project_id)) reject('conflict', state.schema.expected_versions);
-      const id = `op_${randomUUID()}`;
-      const operation = { operation_version: 'creative-control-operation/1.0', kind: 'creative.control.apply',
-        logical_operation_id: id, action_id: body.action_id, tenant_id: ctx.tenant_id, project_id: ctx.project_id,
-        actor_id: ctx.actor_id, brief_id: body.brief_id, expected_versions: body.expected_versions,
-        draft_hash: body.draft_hash, control_schema_hash: body.control_schema_hash, tasks, approval: false, purchase: false };
-      this.db.prepare('INSERT INTO control_jobs VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, ctx.tenant_id, ctx.project_id, ctx.actor_id, body.action_id,
-        actionHash, body.draft_hash, canonical(body), canonical(operation), 'queued');
-      return { ok: true, code: 'accepted', operation_id: id, status: 'queued', replayed: false };
+      try {
+        envelope(body);
+        if (!scoped) reject('permission');
+        const state = this.state(ctx, prior?.status === 'completed' ? 'can_read' : 'can_apply');
+        if (prior) {
+          if (prior.actor_id !== ctx.actor_id) reject('permission');
+          if (prior.action_hash !== actionHash) reject('action_conflict', state.schema.expected_versions);
+          if (prior.status === 'failed') return { ok: false, code: 'failed', operation_id: prior.operation_id, status: 'failed', replayed: true, retryable: false };
+          return { ok: prior.status !== 'cancelled', code: prior.status === 'cancelled' ? 'cancelled' : 'replayed', operation_id: prior.operation_id, status: prior.status, replayed: true };
+        }
+        const tasks = validateDraft(body, state);
+        if (reviewedArtwork && (tasks.length !== 1 || tasks[0].kind !== 'artwork.edit')) reject('invalid_intent');
+        if (this.db.prepare("SELECT 1 FROM control_jobs WHERE tenant_id=? AND project_id=? AND status IN ('queued','ready')").get(ctx.tenant_id, ctx.project_id)) reject('conflict', state.schema.expected_versions);
+        const id = `op_${randomUUID()}`;
+        const operation = { operation_version: 'creative-control-operation/1.0', kind: 'creative.control.apply',
+          logical_operation_id: id, action_id: body.action_id, tenant_id: ctx.tenant_id, project_id: ctx.project_id,
+          actor_id: ctx.actor_id, brief_id: body.brief_id, expected_versions: body.expected_versions,
+          draft_hash: body.draft_hash, control_schema_hash: body.control_schema_hash, tasks, approval: false, purchase: false };
+        this.db.prepare('INSERT INTO control_jobs VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, ctx.tenant_id, ctx.project_id, ctx.actor_id, body.action_id,
+          actionHash, body.draft_hash, canonical(body), canonical(operation), 'queued');
+        return { ok: true, code: 'accepted', operation_id: id, status: 'queued', replayed: false };
+      } catch (error) {
+        if (!reviewedArtwork || !scoped || prior || !(error instanceof Rejection) || !ARTWORK_NON_ADMISSION_CODES.includes(error.code)) throw error;
+        this.state(ctx, 'can_read');
+        const receipt = { tenant_id: ctx.tenant_id, project_id: ctx.project_id, actor_id: ctx.actor_id, action_id: body.action_id, action_hash: actionHash, code: error.code };
+        this.db.prepare('INSERT INTO control_artwork_rejections_v1 VALUES(?,?,?,?,?,?,?)')
+          .run(receipt.tenant_id, receipt.project_id, receipt.actor_id, receipt.action_id, receipt.action_hash, receipt.code, hash(receipt));
+        return { ok: false, code: error.code, retryable: false, ...(error.current ? { current_versions: error.current } : {}) };
+      }
     });
   }
   /** Recheck just before releasing a handoff. No billable tool or production publication. */
@@ -162,6 +199,7 @@ export class ApplyStore {
       const job = this.db.prepare('SELECT * FROM control_jobs WHERE operation_id=? AND tenant_id=? AND project_id=? AND actor_id=?').get(operationId, ctx.tenant_id, ctx.project_id, ctx.actor_id);
       if (!job) reject('permission');
       if (job.status === 'cancelled') reject('cancelled');
+      if (job.status === 'failed') reject('failed');
       if (job.status === 'completed') reject('already_completed');
       const body = JSON.parse(job.payload);
       const tasks = validateDraft(body, state);
@@ -216,6 +254,7 @@ export class ApplyStore {
       const job = this.db.prepare('SELECT * FROM control_jobs WHERE operation_id=? AND tenant_id=? AND project_id=? AND actor_id=?').get(operationId, ctx.tenant_id, ctx.project_id, ctx.actor_id);
       if (!job) reject('permission');
       if (job.status === 'completed') reject('already_completed');
+      if (job.status === 'failed') reject('failed');
       this.db.prepare("UPDATE control_jobs SET status='cancelled' WHERE operation_id=?").run(operationId);
       return { ok: true, code: 'cancelled', operation_id: operationId, status: 'cancelled' };
     });
