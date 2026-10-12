@@ -1,5 +1,7 @@
 # Direct OpenAI Images adapter
 
+For a supported offline command that retains correlated generation/edit API results, immutable bytes and declared fault cases, see [Offline generation/edit API fixtures](offline-api-fixtures.md).
+
 Checked against the official Images generation and edit references on 2026-10-11:
 
 - [Create image](https://developers.openai.com/api/reference/resources/images/methods/generate)

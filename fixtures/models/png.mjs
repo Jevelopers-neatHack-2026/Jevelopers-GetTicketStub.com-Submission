@@ -23,7 +23,8 @@ export function chunk(name, data) {
   return result;
 }
 
-export function makePng({ width = 16, height = 16, transparent = false } = {}) {
+export function makePng({ width = 16, height = 16, transparent = false, blue = 127 } = {}) {
+  if (!Number.isInteger(blue) || blue < 0 || blue > 255) throw new TypeError("Synthetic blue channel must be an integer byte.");
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
@@ -37,7 +38,7 @@ export function makePng({ width = 16, height = 16, transparent = false } = {}) {
       const offset = start + 1 + x * 4;
       rows[offset] = (x * 13) & 0xff;
       rows[offset + 1] = (y * 17) & 0xff;
-      rows[offset + 2] = 127;
+      rows[offset + 2] = blue;
       rows[offset + 3] = transparent && x === 0 && y === 0 ? 0 : 255;
     }
   }

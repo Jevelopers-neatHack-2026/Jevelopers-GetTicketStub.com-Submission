@@ -63,6 +63,10 @@ async function mockEvidence() {
     "docs/providers/openai-images.md",
     "tests/models/openai-images.test.mjs",
     "tests/models/creative-api-integration.test.mjs",
+    "fixtures/models/creative-api-fixture.mjs",
+    "fixtures/models/creative-api-scenarios.mjs",
+    "scripts/creative-api-fixture.mjs",
+    "tests/models/creative-api-fixture-consumer.test.mjs",
     "tests/models/public-consumer.mts",
   ];
   const inputs = {};
@@ -86,6 +90,7 @@ async function mockEvidence() {
     input_sha256: inputs,
     runner_contract: "This file inventories bounded implementation inputs. Passing tests are determined by the exit status of make check TARGET=image-adapter MODE=mock; direct invocation does not claim test success.",
     transport_boundary: "Provider behavior is exercised only by intercepted offline fixtures.",
+    offline_api_packet_command: "node scripts/creative-api-fixture.mjs --scenario all --out <fresh-directory>",
   };
 }
 
