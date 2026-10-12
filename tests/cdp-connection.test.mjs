@@ -4,15 +4,15 @@ import { connect } from '../scripts/lib/cdp.mjs';
 
 // Deterministic synthetic transport controls; these make no browser or network request.
 function opening() {
-  let socket;
+  const instances = [];
   class Socket {
-    constructor(url) { this.url = url; this.sent = []; this.closeCalls = 0; socket = this; }
+    constructor(url) { this.url = url; this.sent = []; this.closeCalls = 0; instances.push(this); }
     send(data) { if (this.sendError) throw this.sendError; this.sent.push(JSON.parse(data)); }
     close() { this.closeCalls++; }
     message(message) { this.onmessage?.({ data: JSON.stringify(message) }); }
   }
   const promise = connect('ws://127.0.0.1/devtools/synthetic', Socket);
-  return { socket, promise };
+  return { socket: instances[0], promise };
 }
 
 async function connected() {
