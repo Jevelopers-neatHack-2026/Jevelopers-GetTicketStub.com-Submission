@@ -309,7 +309,7 @@ test('command strings are metadata and are never executed', () => {
 test('CLI does not block on a FIFO and rejects it safely', { skip: process.platform === 'win32' }, () => {
   const fifo = join(dir, 'pipe.json');
   const made = spawnSync('mkfifo', [fifo]);
-  if (made.status !== 0) return; // mkfifo unavailable: nothing to test
+  assert.equal(made.status, 0, 'mkfifo must be available for the FIFO regression');
   try {
     const res = spawnSync(process.execPath, [CLI, fifo], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
     assert.equal(res.error, undefined, 'CLI hung or failed to run');
