@@ -9,7 +9,7 @@ import { createSqliteTelemetryOutbox, USAGE_PROFILE } from "creative-engine/tele
 import { validateDecisionRequest, validateDecisionResult, decisionExecutionTargetHash } from "creative-engine/contracts/decision-port/v1";
 import { validateMeteredAttempt } from "creative-engine/contracts/metering";
 import { createJevDecisionPort } from "../vendor/agent-harness/src/decisions/index.js";
-import { getRequestContext, requireCapability, issueContextV2 } from "../context";
+import { getRequestContext, requireCreativeCommissioningContext, assertCreativeCommissioningCurrent } from "../context";
 import { HttpError } from "../http";
 import { deployedCommit } from "../commit";
 import { creativeHostConfig, currentProjectAuthority, providerCredentialPort, financeConnectionOptions, CreativeHostError } from "./config.mjs";
@@ -55,11 +55,8 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
   const applicationCommit = deployedCommit(env, env.TICKETSTUB_BUILD_COMMIT);
   if (!opaque(applicationProjectId) || ENVIRONMENT[env.TICKETSTUB_OPS_ENVIRONMENT] !== config.environment || !/^[a-f0-9]{40}$/.test(applicationCommit ?? "")) fail();
   const platform = await getRequestContext(req);
-  requireCapability(platform, "admin.view");
-  const financeContext = issueContextV2(platform).context;
-  if (!financeContext.capabilities.includes("finance.command.reservation") || !["live", "paid_test"].includes(financeContext.economicMode)) throw new HttpError(403, "permission_denied", "This account cannot commission creative execution.");
   const scoped = await getRequestContext(req, { id: applicationProjectId, kind: "stub" });
-  requireCapability(scoped, "stub.write");
+  requireCreativeCommissioningContext(platform, scoped);
   if (platform.actor.kind !== "account" || scoped.actor.kind !== "account" || platform.actor.id !== scoped.actor.id || scoped.revoked) fail("creative_authority_unavailable");
   const applicationOwnerId = scoped.tenant.id;
   const actorId = platform.actor.id;
@@ -68,18 +65,17 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
   const assertAuthorityCurrent = () => {
     // The final send fence is synchronous: no permit await can make a registry
     // snapshot stand in for current grant/delegation/permission/profile state.
-    if (req.signal.aborted || Date.parse(scoped.expiresAt) <= Date.now() || canonicalHash(authority()) !== requestAuthorityHash) {
+    assertCreativeCommissioningCurrent(req, { platform, scoped });
+    if (canonicalHash(authority()) !== requestAuthorityHash) {
       fail("creative_authority_unavailable");
     }
   };
   const currentContext = async () => {
     if (req.signal.aborted) throw new CreativeHostError("creative_cancelled", 409);
     const freshPlatform = await getRequestContext(req);
-    requireCapability(freshPlatform, "admin.view");
     const fresh = await getRequestContext(req, { id: applicationProjectId, kind: "stub" });
-    requireCapability(fresh, "stub.write");
-    const financial = issueContextV2(freshPlatform).context;
-    if (!financial.capabilities.includes("finance.command.reservation") || fresh.actor.kind !== "account" || fresh.actor.id !== actorId ||
+    requireCreativeCommissioningContext(freshPlatform, fresh);
+    if (fresh.actor.kind !== "account" || fresh.actor.id !== actorId ||
         fresh.tenant.id !== applicationOwnerId || fresh.membershipRevision !== scoped.membershipRevision || fresh.revoked) fail("creative_authority_unavailable");
     return fresh;
   };

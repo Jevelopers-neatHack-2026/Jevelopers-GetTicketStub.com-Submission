@@ -191,7 +191,7 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
     const financialScope = { tenantId: entry.tenant_id, projectId: entry.project_id, environment: "test", billingMode: "live", actorId: entry.finance_service.actor_id };
     // The external Finance owner provisions the policy as seeded data. Every
     // reservation and lifecycle call below uses the actual application ports.
-    const policy = await changeBudgetPolicy({ schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: randomUUID(), scope: financialScope, currency: "USD", limitAmount: "20.00",
+    const policy = await changeBudgetPolicy({ schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: randomUUID(), scope: financialScope, currency: "USD", limitAmount: "50.00",
       expectedPolicyRevision: 0, actorReference: "offline-finance-owner", reasonReference: "offline-policy-provision", sourceAuthorityRef: entry.finance_service.source_authority_ref }, {
       database: runtime, clock: { now: () => new Date() }, trustedContext: { resolve: async (scope) => scope },
       financeAuthority: { authorizeCurrent: async (request) => ({ status: "allowed", decisionId: "offline-owner-provision", operation: request.operation, permission: request.permission,
@@ -430,21 +430,61 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
     // synchronous job fence, after async permits have completed. The host's
     // uncached registry check must close this last send boundary.
     const originalPrepare = host.store.db.prepare.bind(host.store.db);
-    let finalRegistryChange;
+    let finalAuthorityChange;
     t.mock.method(host.store.db, "prepare", (sql) => {
       const statement = originalPrepare(sql);
-      if (finalRegistryChange && String(sql).includes("SELECT dispatch_intent_ref,context_fence_json,billable_attempt_id") && new Error().stack.includes("assertDispatchCurrent")) {
+      if (finalAuthorityChange && String(sql).includes("SELECT dispatch_intent_ref,context_fence_json,billable_attempt_id") && new Error().stack.includes("assertDispatchCurrent")) {
         const originalGet = statement.get.bind(statement);
-        statement.get = (...args) => { const result = originalGet(...args); const change = finalRegistryChange; finalRegistryChange = undefined; change(entry); writeRegistry(); return result; };
+        statement.get = (...args) => { const result = originalGet(...args); const change = finalAuthorityChange; finalAuthorityChange = undefined; change(entry); writeRegistry(); return result; };
       }
       return statement;
     });
-    finalRegistryChange = (record) => { record.finance_service.grant_revision = "changed-at-final-owner-fence"; };
+    finalAuthorityChange = (record) => { record.finance_service.grant_revision = "changed-at-final-owner-fence"; };
     const finalRevocation = await POST(request({ projectId: entry.application_project_id, operation: "edit", actionId: randomUUID(),
       payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan("offline-final-fence", "image.edit"), decision_request: decisionRequest } }));
-    assert.ok(finalRevocation.status >= 400); assert.equal(finalRegistryChange, undefined, "the actual owned final fence was traversed");
+    assert.ok(finalRevocation.status >= 400); assert.equal(finalAuthorityChange, undefined, "the actual owned final fence was traversed");
     assert.equal(decisionWrites.length, 2); assert.equal(dispatches.length, 1, "a changed final delegation cannot reach provider writes");
     entry = JSON.parse(savedAuthority); writeRegistry();
+    // The same final owner read injects a real application authority change,
+    // after the last awaited permit/Finance operation. No session result or
+    // reservation response is mocked. The storage methods below execute their
+    // owned synchronous SQLite transactions before returning their promises.
+    const storage = getStorage(); const sessionHash = hashToken(cookie);
+    const restoreSession = async () => { await storage.deleteSession(sessionHash); await storage.createSession(sessionHash, account.id, Date.now(), Date.now() + 60 * 60_000); };
+    let wallRevision = Date.now();
+    const authorityChanges = [
+      { name: "session-revoked", change: () => { void storage.deleteSession(sessionHash); }, restore: restoreSession },
+      { name: "session-expired", change: () => { storage.db.prepare("UPDATE sessions SET expires_at=? WHERE token_hash=?").run(Date.now() - 1, sessionHash); }, restore: restoreSession },
+      { name: "staff-list-removed", change: () => { delete process.env.ADMIN_EMAILS; }, restore: async () => { process.env.ADMIN_EMAILS = account.email; } },
+      { name: "membership-revised", change: () => { void storage.syncStaff(account.id, false); void storage.syncStaff(account.id, true); }, restore: async () => {} },
+      { name: "ownership-tombstoned", change: () => { wallRevision = Math.max(wallRevision + 1, Date.now()); void storage.syncWall(account.id, [], [stub.id], wallRevision); },
+        restore: async () => { wallRevision += 1; await storage.syncWall(account.id, [{ ...stub, updatedAt: wallRevision }], [], wallRevision); } },
+    ];
+    for (const provider of ["typesafe", "openrouter"]) for (const scenario of authorityChanges) {
+      const actionId = randomUUID();
+      finalAuthorityChange = scenario.change;
+      const blocked = await POST(request({ projectId: entry.application_project_id, operation: "edit", actionId,
+        payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan(`offline-final-${provider}-${scenario.name}`, "image.edit"),
+          ...(provider === "typesafe" ? { decision_request: decisionRequest } : {}) } }));
+      try {
+        assert.ok(blocked.status >= 400, `${provider}/${scenario.name} must fail closed`);
+        assert.equal(finalAuthorityChange, undefined, `${provider}/${scenario.name} must traverse the actual final fence`);
+        assert.equal(decisionWrites.length, 2); assert.equal(dispatches.length, 1, `${provider}/${scenario.name} cannot write to either provider`);
+        const dispatch = host.store.db.prepare(`SELECT d.billable_attempt_id,d.reservation_ref,d.provider_name FROM creative_dispatch_intents d
+          JOIN creative_jobs j ON j.tenant_id=d.tenant_id AND j.project_id=d.project_id AND j.job_id=d.job_id
+          WHERE j.tenant_id=? AND j.project_id=? AND j.action_id=?`).get(entry.tenant_id, entry.project_id, actionId);
+        assert.ok(dispatch, `${provider}/${scenario.name} must have its actual admitted dispatch`); assert.equal(dispatch.provider_name, provider);
+        const retained = JSON.parse(host.store.db.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(dispatch.billable_attempt_id).state);
+        assert.equal(retained.reservation_id, dispatch.reservation_ref); assert.equal(retained.state, "held_for_reconciliation");
+        const history = await admin.query(`SELECT event_type,held_amount::text,consumed_amount::text,released_amount::text
+          FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1 AND reservation_id=$2 ORDER BY event_sequence`, [entry.tenant_id, dispatch.reservation_ref]);
+        assert.deepEqual(history.rows.map((row) => row.event_type), ["authorized", "dispatched"], "a real Finance hold cannot be settled or released after final revocation");
+        assert.ok(Number(history.rows.at(-1).held_amount) > 0); assert.equal(Number(history.rows.at(-1).consumed_amount), 0); assert.equal(Number(history.rows.at(-1).released_amount), 0);
+        assert.equal((await host.store.listDesignVersions({ scope: { tenant_id: entry.tenant_id, project_id: entry.project_id }, brief_id: entry.brief_id, limit: 100 })).items.length, 1,
+          `${provider}/${scenario.name} cannot publish another artifact`);
+      } finally { await scenario.restore(); }
+    }
+    t.diagnostic("Both provider paths denied final-fence session revocation/expiry, staff-list removal, membership revision and ownership tombstone; all 10 real PostgreSQL holds retained, zero extra provider writes.");
     usage = null;
     const missing = await POST(request({ ...input, operation: "edit", actionId: randomUUID(), payload: { brief_id: entry.brief_id,
       design_version_id: baseDesign.design_version_id, plan: plan("offline-missing-usage", "image.edit") } }));

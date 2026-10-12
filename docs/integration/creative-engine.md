@@ -16,6 +16,10 @@ capacity ledger is created. SQLite stores mapping/recovery evidence; PostgreSQL 
 Commissioning requires a current staff session, existing project ownership, explicit platform Finance
 reservation capability and separate owner-issued delegation/eligibility/Research records on a private volume.
 Requests cannot install these records. Guests and customer art capability alone receive no Finance authority.
+After asynchronous permits, both provider send paths synchronously reread the storage-owned live session,
+current staff list, membership revision and stub ownership using the same context issuer rules. Backends
+without that snapshot fail closed. Registry evidence is reread at the same final fence; separate application,
+registry and Finance authorities do not form an atomic cross-system snapshot.
 Cancellation, deadline, rights/current brief/selection, active lease, target and immutable publication fences
 remain inside the engine. Errors never become simulated creative success.
 
