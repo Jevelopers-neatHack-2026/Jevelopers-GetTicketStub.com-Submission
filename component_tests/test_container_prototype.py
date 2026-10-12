@@ -1,14 +1,17 @@
 import json
 import os
+import platform
 import select
 import signal
-from contextlib import closing
+from contextlib import ExitStack
+from pathlib import Path
 from time import monotonic
 
 import pytest
 
 from component_tests.container_binding import bind_owner
 from component_tests.container_driver import driver
+from component_tests.container_pidfd import open_pidfd
 from component_tests.container_reap import recover
 from component_tests.container_records import OwnerReceipt, Record
 
@@ -31,18 +34,40 @@ class Result(Record):
 )
 def test_creator_sigkill_ends_only_its_namespace(stage: str) -> None:
     # Given an independent live sentinel and one invocation stopped at a lifecycle checkpoint.
-    with driver() as sentinel, driver() as subject:
+    with driver() as sentinel, driver() as subject, ExitStack() as handles:
         _ = sentinel.advance("owner-detached")
         event = subject.advance(stage)
         observed_at = monotonic()
-        pidfd = os.pidfd_open(event.client_pid) if event.client_pid else None
+        client = (
+            handles.enter_context(os.fdopen(open_pidfd(event.client_pid), "rb", buffering=0))
+            if event.client_pid
+            else None
+        )
+        if client is not None:
+            pidfd = client.fileno()
+            fdinfo = Path(f"/proc/self/fdinfo/{pidfd}").read_text()
+            _ = (subject.configuration.directory / "pidfd-runtime.json").write_text(
+                json.dumps(
+                    {
+                        "python_has_pidfd_open": hasattr(os, "pidfd_open"),
+                        "libc": platform.libc_ver(),
+                        "kernel": platform.release(),
+                        "client_pid": event.client_pid,
+                        "descriptor_target": str(Path(f"/proc/self/fd/{pidfd}").readlink()),
+                        "fdinfo": fdinfo,
+                        "inheritable": os.get_inheritable(pidfd),
+                    }
+                )
+            )
+            fields = dict(line.split(":", 1) for line in fdinfo.splitlines())
+            assert int(fields["Pid"].strip()) == event.client_pid
+            assert not os.get_inheritable(pidfd)
         # When only the captured creator PID receives SIGKILL.
         subject.process.kill()
         assert subject.result() == -signal.SIGKILL
-        if pidfd is not None:
-            with closing(os.fdopen(pidfd, "rb", buffering=0)) as client:
-                readable, _, _ = select.select([client], [], [], 5)
-                assert readable, "Owned Docker client remained live after creator death"
+        if client is not None:
+            readable, _, _ = select.select([client], [], [], 5)
+            assert readable, "Owned Docker client remained live after creator death"
         # Then the actual container is stopped/created, and the unrelated namespace survives.
         docker = subject.docker()
         inspected = docker.inspect(subject.configuration.name)
