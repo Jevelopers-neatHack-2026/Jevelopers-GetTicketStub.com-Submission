@@ -193,6 +193,10 @@ def find_manifests(report, root, evidence):
             full = os.path.join(dirpath, name)
             if os.path.islink(full):
                 report.err("symlink-dir", os.path.relpath(full, root), "evidence directory is a symlink")
+            elif name == SUMS_NAME:
+                report.err("not-regular-input", os.path.relpath(full, root), "manifest path is a directory")
+        if SUMS_NAME in dirnames:
+            dirnames.remove(SUMS_NAME)  # reserved name: reported above, never descended
         if SUMS_NAME in filenames:
             found.append(os.path.join(dirpath, SUMS_NAME))
     return sorted(found)

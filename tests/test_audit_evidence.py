@@ -240,6 +240,23 @@ class Hardening(Fixture):
         self.assertEqual([e["code"] for e in r["errors"]], ["symlink-dir"])
         self.assertEqual(r["counts"]["manifests"], 2)
 
+    def test_manifest_name_as_directory_beside_valid_sibling(self):
+        os.makedirs(os.path.join(self.root, "evidence", "b", "SHA256SUMS", "nested"))
+        self.write("evidence/b/SHA256SUMS/nested/SHA256SUMS", "")
+        r = self.audit()
+        self.assertFalse(r["ok"])
+        self.assertEqual([e["code"] for e in r["errors"]], ["not-regular-input"])
+        self.assertEqual(r["counts"]["manifests"], 1)  # valid sibling audited, directory not descended
+
+    def test_manifest_name_as_symlinked_directory_fails_closed(self):
+        os.makedirs(os.path.join(self.root, "evidence", "real"))
+        os.makedirs(os.path.join(self.root, "evidence", "b"))
+        os.symlink(os.path.join(self.root, "evidence", "real"),
+                   os.path.join(self.root, "evidence", "b", "SHA256SUMS"))
+        r = self.audit()
+        self.assertFalse(r["ok"])
+        self.assertIn("symlink-dir", r["error_counts"])
+
     def test_symlinked_evidence_root(self):
         real = os.path.join(self.root, "realevidence")
         os.rename(os.path.join(self.root, "evidence"), real)
