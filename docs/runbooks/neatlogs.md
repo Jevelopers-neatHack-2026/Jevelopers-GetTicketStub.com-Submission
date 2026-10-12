@@ -221,17 +221,17 @@ The tool seeds synthetic canaries (fake private URL, email, token, customer and 
 ### Runtime application trace
 
 ```bash
-# Offline: run one genuine worker job (mock dependency mode, local-pure operations only) and fill the outbox. No network.
-node tools/neatlogs-runtime-trace.mjs --mode run --outbox /tmp/neatlogs-outbox \
+# Offline: run one genuine worker job into a fresh outbox. No network.
+node tools/neatlogs-runtime-trace.mjs --mode run --outbox /tmp/neatlogs-outbox-fresh \
   --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-offline.json
 
-# Live: the same run, then drain the outbox (send + Public API readback).
-node tools/neatlogs-runtime-trace.mjs --mode send-and-readback --env-file .env --outbox /tmp/neatlogs-outbox \
+# Live: a new local-pure run into another fresh outbox, then send + Public API readback.
+node tools/neatlogs-runtime-trace.mjs --mode send-and-readback --env-file .env --outbox /tmp/neatlogs-outbox-live-fresh \
   --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-live.json
 
 # Resume: send pending batches and read back accepted ones in an existing outbox.
 # Add --recover to re-send bounded-404 `missing` traces once under the next generation.
-node tools/neatlogs-runtime-trace.mjs --mode drain --env-file .env --outbox /tmp/neatlogs-outbox \
+node tools/neatlogs-runtime-trace.mjs --mode drain --env-file .env --outbox /tmp/neatlogs-outbox-fresh \
   --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-drain.json
 ```
 
@@ -242,6 +242,8 @@ The tool runs the workflow through the normal in-process entry point: `createOpe
 - Evidence contains no credential, project UUID or raw run identifier. Every raw job, workflow, scope, owner and event ID of the run is scanned for before anything is written or sent.
 
 The CLI runs a streamed inventory and bounded summary preflight **before starting a worker, listing all batch names or draining**. Its local retained-file limit is 128 by default; `--max-retained-batches <1..1024>` selects a different finite limit and also configures admission for the tool's local worker run. An existing directory above the selected limit is preserved and refused. An operator may select a larger supported limit and retry after reviewing the directory; the CLI never removes or relabels records to make space.
+
+`run` and `send-and-readback` require a missing or empty outbox. Every new local run creates a fresh SQLite sequence namespace and a fresh tokenization key, so reusing retained sequence numbers could reject new telemetry even below the file limit. A batch or a valid cursor without batches makes the directory ineligible for a fresh run. The tool returns exit 1 with `inspection.complete: true`, `execution.status: refused`, `execution.reasonCode: OUTBOX_REQUIRES_FRESH_WORKFLOW`, `run: null`, and `deliveryConfirmed: false`; it creates no runtime source directory, starts no worker, sends nothing and leaves all retained files unchanged. Use `drain` for existing batches, and a distinct fresh directory for another workflow.
 
 | CLI limit | Behavior |
 |---|---|
@@ -256,6 +258,12 @@ Store `--evidence` outside the outbox, as the examples do. A path inside the out
 When the output path is usable, an inventory or output-budget refusal writes a bounded receipt and exits 1: `inspection.complete: false`, a fixed `inspection.reasonCode`, `retainedBatchCount: null`, `batches: []`, `batchEvidenceSource: incomplete_outbox_inspection`, and `deliveryConfirmed: false`. Empty summaries mean the inspection is incomplete; they do not assert an empty directory. A refusal at `phase: preflight` starts no worker, makes no provider request and leaves every outbox file and the drain cursor unchanged. The tool inspects again after a local run and after a drain. A later refusal is labeled `after_run`, `drain` or `after_drain` and keeps any already returned `drainPage`; it does not claim that earlier work never occurred. The selected evidence path is atomically replaced; use distinct evidence paths to retain history. Malformed data and prior failed results do not become successful provider observations.
 
 For a complete network-mode inspection, `drainPage` records only the at-most-32 batch visits from this invocation. `batches` covers every retained batch after that page, labeled `batchEvidenceSource: persisted_outbox_snapshot`, with `inspection.complete: true` and the exact bounded `retainedBatchCount`. It includes previously stored results and does not claim a fresh provider observation for them. `deliveryConfirmed` keeps the complete-count rule: there must be at least one retained batch, the summary count must match the inspected file count, and every retained readback result must be `verified`. An incomplete page, an unresolved row, an over-budget inspection or a cursor by itself cannot establish complete delivery. Evidence and stdout remain JSON with their existing fields and additive inspection metadata; the evidence file uses compact JSON to respect the published byte budget.
+
+A fresh workflow also has to prove its own export before the tool drains or reports success. The job must be completed; exporter pending records must be zero and uncapped; the last exporter error must be null; at least one record must have reached the file sink; and the cursor must account for the delivered records plus explicit policy drops. The fixed local workflow normally delivers four records and intentionally filters four other events. Those policy drops alone are not an export failure. `execution.telemetryComplete` records this check separately from remote delivery, so an older verified batch cannot establish success for a new run. Offline `run` exits 0 only after completed execution and complete local export, while its `deliveryConfirmed` remains false.
+
+When local admission leaves pending records (for example a fresh run with a one-file cap), `execution.status` is `incomplete`, the reason is `RUNTIME_EXPORT_INCOMPLETE`, and the CLI exits 1 without sending or moving the drain cursor. A thrown worker, stop, flush or read error yields `RUNTIME_WORKFLOW_FAILED` with export unproven. Neither case deletes the source. `execution.sourceState` in evidence and stdout gives the retained directory under the process temporary root, identifies it as `private_diagnostics_only`, and states `automaticReplaySupported: false`. The directory is created with private permissions and kept outside the outbox; it may contain raw runtime identifiers and must not be published or committed. Only its bounded location and state are included in the sanitized receipt, never SQLite row contents. If export is proven complete, source cleanup is recorded as `removed_after_complete_export`; a cleanup error is reported separately and cannot become success.
+
+Retained SQLite is diagnostic/recovery input, not an automatically replayable queue. The current telemetry factory destroys its per-process tokenization key on close. Reopening it with a new key would not preserve projected identities, so increasing the file cap or starting another workflow is not a supported replay of pending source records. Keep that original failed receipt and private source for an explicit recovery decision. `drain` only processes records already persisted in the file outbox: `execution.status: not_requested` and `run: null` make clear that it neither resumes a SQLite workflow nor proves all source events from an earlier incomplete run were exported. Its retained-batch readback result does not replace that earlier incomplete-execution record.
 
 This inspection is not an atomic snapshot or a cross-process lease. Use the same external serialization required for writers and drainers; a changing directory can be refused, but this does not fence another process. The limits bound the tool's retained inventory and serialized artifacts, not all host disk usage, exact process RSS or hard filesystem/stdout latency. Synthetic retained-state and intercepted-transport tests qualify these local controls only, without establishing live delivery, Finance authority or global acceptance.
 

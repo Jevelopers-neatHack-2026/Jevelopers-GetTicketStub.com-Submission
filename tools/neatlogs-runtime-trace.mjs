@@ -131,6 +131,7 @@ function boundedInventory(directory, maxRetainedBatches, allowMissing) {
     throw error;
   }
   const names = new Set();
+  let cursorPresent = false;
   const handle = opendirSync(directory, { bufferSize: 32 });
   try {
     let entry;
@@ -147,10 +148,10 @@ function boundedInventory(directory, maxRetainedBatches, allowMissing) {
       if (stats.size < 1 || stats.size > (cursor ? MAX_CURSOR_BYTES : MAX_BATCH_FILE_BYTES)) {
         throw new InspectionError('OUTBOX_FILE_LIMIT');
       }
-      if (cursor) validateCursor(path);
+      if (cursor) { validateCursor(path); cursorPresent = true; }
       else names.add(entry.name);
     }
-    return names;
+    return { names, cursorPresent };
   } finally {
     handle.closeSync();
   }
@@ -159,8 +160,9 @@ function boundedInventory(directory, maxRetainedBatches, allowMissing) {
 function inspectOutbox(directory, maxRetainedBatches, allowMissing = false) {
   try {
     // No full directory listing, batch parsing or drain may precede this scan.
-    const names = boundedInventory(directory, maxRetainedBatches, allowMissing);
-    if (names === null) return { batches: [], paths: [], count: 0 };
+    const inventory = boundedInventory(directory, maxRetainedBatches, allowMissing);
+    if (inventory === null) return { batches: [], paths: [], count: 0, fresh: true };
+    const { names, cursorPresent } = inventory;
     const count = names.size;
     const batches = [];
     const paths = [];
@@ -178,7 +180,7 @@ function inspectOutbox(directory, maxRetainedBatches, allowMissing = false) {
       paths.push(basename(result.path));
     }
     if (names.size !== 0) throw new InspectionError('OUTBOX_INVENTORY_CHANGED');
-    return { batches, paths, count };
+    return { batches, paths, count, fresh: count === 0 && !cursorPresent };
   } catch (error) {
     if (error instanceof InspectionError) throw error;
     if (error?.code === 'OUTBOX_INVENTORY_LIMIT_REACHED') throw new InspectionError(error.code);
@@ -234,14 +236,28 @@ export const RUNTIME_PLAN_JSON = JSON.stringify({
   ]
 });
 
-export function isCompleteDeliveryEvidence({ network, batches, batchCount, inspectionComplete = true }) {
+export function isCompleteDeliveryEvidence({ network, batches, batchCount,
+  inspectionComplete = true, executionComplete = true }) {
   return network === true
     && inspectionComplete === true
+    && executionComplete === true
     && Array.isArray(batches)
     && Number.isSafeInteger(batchCount)
     && batches.length > 0
     && batches.length === batchCount
     && batches.every(batch => batch?.readback?.status === 'verified');
+}
+
+function completeRuntimeExport(run) {
+  const telemetry = run?.telemetry;
+  return run?.jobState === 'completed'
+    && telemetry?.pendingRecords === 0
+    && telemetry.pendingCapped === false
+    && telemetry.lastErrorCode === null
+    && Number.isSafeInteger(telemetry.deliveredRecords) && telemetry.deliveredRecords > 0
+    && Number.isSafeInteger(telemetry.policyDroppedRecords) && telemetry.policyDroppedRecords >= 0
+    && Number.isSafeInteger(telemetry.cursor)
+    && telemetry.cursor === telemetry.deliveredRecords + telemetry.policyDroppedRecords;
 }
 
 function usage(message) {
@@ -321,6 +337,7 @@ export async function runRuntimeWorkflow({ outboxDirectory, databaseDirectory,
       telemetry: Object.freeze({
         cursor: diagnostics.cursor,
         pendingRecords: diagnostics.pendingRecords,
+        pendingCapped: diagnostics.pendingCapped,
         deliveredRecords: diagnostics.deliveredRecords,
         policyDroppedRecords: diagnostics.policyDroppedRecords,
         lastErrorCode: diagnostics.lastErrorCode
@@ -410,6 +427,7 @@ function stdoutSummary(evidence) {
     send: evidence.batches.map(batch => batch.send?.status ?? null),
     readback: evidence.batches.map(batch => batch.readback?.status ?? null),
     deliveryConfirmed: evidence.deliveryConfirmed,
+    execution: evidence.execution,
     inspectionComplete: evidence.inspection.complete,
     reasonCode: evidence.inspection.reasonCode
   };
@@ -483,6 +501,12 @@ async function main() {
     } : null,
     tags,
     run: null,
+    execution: {
+      status: mode === 'drain' ? 'not_requested' : 'not_started', reasonCode: null,
+      telemetryComplete: mode === 'drain' ? null : false,
+      sourceState: { disposition: 'not_created', directory: null,
+        purpose: 'private_diagnostics_only', automaticReplaySupported: false }
+    },
     batches: [],
     inspection: {
       complete: false, phase: 'preflight', reasonCode: null, retainedBatchCount: null,
@@ -502,22 +526,59 @@ async function main() {
     if (network) evidence.batchEvidenceSource = 'persisted_outbox_snapshot';
   };
   try {
-    useSnapshot(inspectOutbox(outbox, maxRetainedBatches, mode !== 'drain'));
+    const initial = inspectOutbox(outbox, maxRetainedBatches, mode !== 'drain');
+    useSnapshot(initial);
     serializeOutputs(evidence); // All retained output budgets pass before any side effect.
     if (mode !== 'drain') {
-      const databaseDirectory = mkdtempSync(join(tmpdir(), 'neatlogs-runtime-'));
-      try {
-        const run = await runRuntimeWorkflow({ outboxDirectory: outbox, databaseDirectory, maxRetainedBatches });
-        forbidden = run.forbidden;
-        evidence.run = { jobState: run.jobState, results: run.results, telemetry: run.telemetry, rawIdentifiersScanned: forbidden.length };
-      } finally {
-        rmSync(databaseDirectory, { recursive: true, force: true });
+      // This example creates a fresh SQLite sequence namespace and HMAC key.
+      // Retained batches (including cursor-only history) belong to a different
+      // source: do not collide with them or borrow their verified readback.
+      if (!initial.fresh) {
+        evidence.execution.status = 'refused';
+        evidence.execution.reasonCode = 'OUTBOX_REQUIRES_FRESH_WORKFLOW';
+      } else {
+        // Keep private raw source state outside the inspected/exported outbox.
+        if (within(physicalDirectoryPath(outbox), physicalDirectoryPath(tmpdir()))) {
+          throw new InspectionError('RUNTIME_STATE_DIRECTORY_INVALID');
+        }
+        let databaseDirectory;
+        try {
+          databaseDirectory = mkdtempSync(join(tmpdir(), 'neatlogs-runtime-'));
+          evidence.execution.sourceState = { ...evidence.execution.sourceState,
+            disposition: 'retained', directory: databaseDirectory };
+          const run = await runRuntimeWorkflow({ outboxDirectory: outbox, databaseDirectory, maxRetainedBatches });
+          forbidden = run.forbidden;
+          evidence.run = { jobState: run.jobState, results: run.results, telemetry: run.telemetry,
+            rawIdentifiersScanned: forbidden.length };
+          evidence.execution.telemetryComplete = completeRuntimeExport(run);
+          evidence.execution.status = evidence.execution.telemetryComplete ? 'completed' : 'incomplete';
+          evidence.execution.reasonCode = evidence.execution.telemetryComplete ? null : 'RUNTIME_EXPORT_INCOMPLETE';
+        } catch {
+          // A thrown start/stop/flush/read error leaves export completion
+          // unproven. Preserve any source directory already created, without
+          // serializing error messages, database rows or raw run identities.
+          evidence.execution.status = 'failed';
+          evidence.execution.reasonCode = 'RUNTIME_WORKFLOW_FAILED';
+          evidence.execution.telemetryComplete = false;
+        }
+        if (evidence.execution.telemetryComplete) {
+          try {
+            rmSync(databaseDirectory, { recursive: true, force: true });
+            evidence.execution.sourceState = { ...evidence.execution.sourceState,
+              disposition: 'removed_after_complete_export', directory: null };
+          } catch {
+            evidence.execution.status = 'failed';
+            evidence.execution.reasonCode = 'RUNTIME_STATE_CLEANUP_FAILED';
+            evidence.execution.sourceState.disposition = 'cleanup_failed';
+          }
+        }
+        phase = 'after_run';
+        useSnapshot(inspectOutbox(outbox, maxRetainedBatches, true));
+        serializeOutputs(evidence);
       }
-      phase = 'after_run';
-      useSnapshot(inspectOutbox(outbox, maxRetainedBatches));
-      serializeOutputs(evidence);
     }
-    if (network) {
+    const executionComplete = mode === 'drain' || evidence.execution.status === 'completed';
+    if (network && executionComplete) {
       const options = {};
       if (values['max-polls']) options.maxPolls = Number(values['max-polls']);
       if (values['poll-interval-ms']) options.pollIntervalMs = Number(values['poll-interval-ms']);
@@ -540,7 +601,8 @@ async function main() {
       network,
       batches: evidence.batches,
       batchCount: evidence.inspection.retainedBatchCount,
-      inspectionComplete: evidence.inspection.complete
+      inspectionComplete: evidence.inspection.complete,
+      executionComplete
     });
     serialized = serializeOutputs(evidence);
   } catch (error) {
@@ -572,7 +634,7 @@ async function main() {
     process.stdout.write(`${serialized.stdout}\n`, error => error ? rejectWrite(error) : resolveWrite());
   });
   const succeeded = evidence.inspection.complete
-    && (mode === 'run' ? evidence.run?.jobState === 'completed' : evidence.deliveryConfirmed);
+    && (mode === 'run' ? evidence.execution.status === 'completed' : evidence.deliveryConfirmed);
   process.exitCode = succeeded ? 0 : 1;
 }
 

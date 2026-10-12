@@ -3,13 +3,15 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync,
-  rmSync, symlinkSync, writeFileSync
+  renameSync, rmSync, symlinkSync, writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { createNeatlogsOutboxSink } from '../../../src/observability/private/neatlogs-outbox.js';
+import { DurableWorkflowStore } from '../../../src/internal/durable-store.js';
+import { isCompleteDeliveryEvidence } from '../../../tools/neatlogs-runtime-trace.mjs';
 
 const TOOL = fileURLToPath(new URL('../../../tools/neatlogs-runtime-trace.mjs', import.meta.url));
 const REVISION = 'b'.repeat(40);
@@ -63,10 +65,12 @@ function snapshot(directory) {
 
 function cli(directory, { mode = 'drain', args = [], evidencePath, forbidListing = false,
   noReadback = false, fakePost = false, observeFile = null, allowWorker = false,
-  overflowAfterPost = false } = {}) {
+  overflowAfterPost = false, refuseBatchWrites = false, failWorkerStart = false } = {}) {
   const id = ++invocation;
   evidencePath ??= join(scratch, `evidence-${id}.json`);
   const receiptPath = join(scratch, `child-${id}.json`);
+  const runtimeTemporaryRoot = join(scratch, `runtime-temp-${id}`);
+  mkdirSync(runtimeTemporaryRoot);
   const guard = `
     import fs from 'node:fs';
     import net from 'node:net';
@@ -75,7 +79,8 @@ function cli(directory, { mode = 'drain', args = [], evidencePath, forbidListing
     import { syncBuiltinESMExports } from 'node:module';
     const directory = ${JSON.stringify(directory)};
     const receipt = { realNetworkAttempts: 0, fakePosts: 0, fullListings: 0,
-      directoryReads: 0, directoryCloses: 0, observedFileReads: 0, subprocessStarts: 0 };
+      directoryReads: 0, directoryCloses: 0, observedFileReads: 0, subprocessStarts: 0,
+      runtimeDirectories: [], runtimeCleanups: [], refusedBatchWrites: 0 };
     const deny = () => { receipt.realNetworkAttempts += 1; throw new Error('real network forbidden'); };
     globalThis.fetch = async (url, init) => {
       if (${fakePost} && new URL(url).pathname === '/v1/traces' && init?.method === 'POST') {
@@ -109,6 +114,31 @@ function cli(directory, { mode = 'drain', args = [], evidencePath, forbidListing
       if (String(args[0]) === ${JSON.stringify(observeFile)}) receipt.observedFileReads += 1;
       return originalReadFile(...args);
     };
+    const originalTemporary = fs.mkdtempSync;
+    fs.mkdtempSync = (...args) => {
+      const path = originalTemporary(...args);
+      if (String(args[0]).includes('/neatlogs-runtime-')) receipt.runtimeDirectories.push(path);
+      return path;
+    };
+    const originalRemove = fs.rmSync;
+    fs.rmSync = (path, ...args) => {
+      const observed = receipt.runtimeDirectories.includes(path)
+        ? { directory: path, databaseExistedBefore: fs.existsSync(path + '/workflow.sqlite') } : null;
+      const result = originalRemove(path, ...args);
+      if (observed) {
+        observed.directoryExistsAfter = fs.existsSync(path);
+        receipt.runtimeCleanups.push(observed);
+      }
+      return result;
+    };
+    const originalOpenFile = fs.openSync;
+    fs.openSync = (...args) => {
+      if (${refuseBatchWrites} && String(args[0]).startsWith(directory + '/batch-') && args[1] === 'wx') {
+        receipt.refusedBatchWrites += 1;
+        throw Object.assign(new Error('synthetic local admission write refused'), { code: 'ENOSPC' });
+      }
+      return originalOpenFile(...args);
+    };
     const originalRename = fs.renameSync;
     let overflowInjected = false;
     fs.renameSync = (...args) => {
@@ -124,6 +154,7 @@ function cli(directory, { mode = 'drain', args = [], evidencePath, forbidListing
       const original = childProcess[key];
       childProcess[key] = (...args) => {
         receipt.subprocessStarts += 1;
+        if (${failWorkerStart}) throw Object.assign(new Error('synthetic local worker start refused'), { code: 'EAGAIN' });
         if (${allowWorker}) return original(...args);
         throw new Error('unexpected subprocess');
       };
@@ -136,7 +167,7 @@ function cli(directory, { mode = 'drain', args = [], evidencePath, forbidListing
     '--mode', mode, '--outbox', directory, '--evidence', evidencePath,
     '--component-revision', REVISION, '--max-polls', '1', '--poll-interval-ms', '0', ...args
   ], { encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024,
-    env: { PATH: process.env.PATH, TMPDIR: tmpdir(), NODE_NO_WARNINGS: '1',
+    env: { PATH: process.env.PATH, TMPDIR: runtimeTemporaryRoot, NODE_NO_WARNINGS: '1',
       NEATLOGS_INGEST_KEY: INGEST_KEY,
       ...(noReadback ? {} : { NEATLOGS_READ_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID }) } });
   assert.equal(child.error, undefined);
@@ -497,4 +528,178 @@ test('the actual offline CLI still runs the local worker and publishes bounded n
   assert.equal(result.evidence.evidenceClass, 'offline-runtime-application');
   assert.ok(result.evidence.batches.length > 0);
   assert.ok(result.evidence.batches.every(batch => Object.keys(batch).length === 1 && typeof batch.path === 'string'));
+});
+
+function refusedFreshWorkflow(result) {
+  assert.equal(result.child.status, 1, result.child.stderr);
+  assert.equal(result.evidence.inspection.complete, true);
+  assert.equal(result.evidence.execution.status, 'refused');
+  assert.equal(result.evidence.execution.reasonCode, 'OUTBOX_REQUIRES_FRESH_WORKFLOW');
+  assert.equal(result.evidence.execution.telemetryComplete, false);
+  assert.deepEqual(result.evidence.execution.sourceState, { disposition: 'not_created', directory: null,
+    purpose: 'private_diagnostics_only', automaticReplaySupported: false });
+  assert.equal(result.evidence.run, null);
+  assert.equal(result.evidence.deliveryConfirmed, false);
+  assert.equal(result.output.deliveryConfirmed, false);
+  assert.equal(result.output.execution.reasonCode, 'OUTBOX_REQUIRES_FRESH_WORKFLOW');
+  assert.equal(result.receipt.subprocessStarts, 0);
+  assert.equal(result.receipt.fakePosts, 0);
+  assert.deepEqual(result.receipt.runtimeDirectories, []);
+  assert.deepEqual(result.receipt.runtimeCleanups, []);
+  assert.equal(result.evidence.drainPage, undefined);
+}
+
+test('fresh workflow modes refuse retained history before work at capacity and below capacity, including sequence collisions', () => {
+  for (const mode of ['run', 'send-and-readback']) {
+    for (const [sequence, limit] of [[1, 1], [1, 128], [1000, 1], [1000, 128]]) {
+      const directory = seed(`fresh-refusal-${mode}-${sequence}-${limit}`, 1);
+      if (sequence !== 1) {
+        const batch = JSON.parse(readFileSync(batchPath(directory, 1), 'utf8'));
+        batch.firstSequence = sequence;
+        batch.lastSequence = sequence;
+        batch.records = [record(sequence)];
+        writeFileSync(batchPath(directory, 1), JSON.stringify(batch));
+        renameSync(batchPath(directory, 1), batchPath(directory, sequence));
+      }
+      const before = snapshot(directory);
+      const result = cli(directory, { mode, allowWorker: true,
+        args: ['--max-retained-batches', String(limit)] });
+      refusedFreshWorkflow(result);
+      assert.deepEqual(snapshot(directory), before);
+      // The unchanged retained history remains drainable. This synthetic
+      // verified fixture proves neither this refused run nor a live provider.
+      const drained = cli(directory, { args: ['--max-retained-batches', String(limit)] });
+      assert.equal(drained.child.status, 0, drained.child.stderr);
+      assert.equal(drained.evidence.deliveryConfirmed, true);
+      assert.equal(drained.evidence.execution.status, 'not_requested');
+      assert.equal(drained.receipt.subprocessStarts, 0);
+    }
+  }
+});
+
+test('a valid cursor without retained batches is history and cannot admit a fresh SQLite sequence namespace', () => {
+  for (const mode of ['run', 'send-and-readback']) {
+    const directory = join(scratch, `cursor-only-${mode}`);
+    mkdirSync(directory);
+    writeFileSync(join(directory, 'drain-cursor.json'), JSON.stringify({
+      schema: 'agent-harness.neatlogs.outbox-drain-cursor.v1', lastBatch: 'batch-0000000000000001-0000000000000001.json'
+    }));
+    const before = snapshot(directory);
+    refusedFreshWorkflow(cli(directory, { mode, allowWorker: true }));
+    assert.deepEqual(snapshot(directory), before);
+  }
+});
+
+test('a successful fresh offline run proves its export, accepts intentional policy drops and refuses a second fresh run', () => {
+  const directory = join(scratch, 'fresh-then-reuse');
+  const first = cli(directory, { mode: 'run', allowWorker: true });
+  assert.equal(first.child.status, 0, first.child.stderr);
+  assert.equal(first.evidence.execution.status, 'completed');
+  assert.equal(first.evidence.execution.telemetryComplete, true);
+  assert.equal(first.evidence.execution.sourceState.disposition, 'removed_after_complete_export');
+  assert.equal(first.evidence.execution.sourceState.directory, null);
+  assert.equal(first.evidence.run.telemetry.pendingRecords, 0);
+  assert.equal(first.evidence.run.telemetry.pendingCapped, false);
+  assert.equal(first.evidence.run.telemetry.lastErrorCode, null);
+  assert.equal(first.evidence.run.telemetry.deliveredRecords, 4);
+  assert.equal(first.evidence.run.telemetry.policyDroppedRecords, 4);
+  assert.equal(first.evidence.run.telemetry.cursor, 8);
+  assert.equal(first.receipt.runtimeCleanups.length, 1);
+  assert.equal(first.receipt.runtimeCleanups[0].databaseExistedBefore, true);
+  assert.equal(first.receipt.runtimeCleanups[0].directoryExistsAfter, false);
+  const before = snapshot(directory);
+  for (const mode of ['run', 'send-and-readback']) {
+    refusedFreshWorkflow(cli(directory, { mode, allowWorker: true, noReadback: true, fakePost: true }));
+    assert.deepEqual(snapshot(directory), before);
+  }
+});
+
+function retainedSource(result) {
+  assert.equal(result.child.status, 1, result.child.stderr);
+  assert.equal(result.evidence.execution.telemetryComplete, false);
+  assert.equal(result.evidence.deliveryConfirmed, false);
+  assert.equal(result.output.deliveryConfirmed, false);
+  assert.equal(result.receipt.fakePosts, 0);
+  assert.deepEqual(result.receipt.runtimeCleanups, []);
+  assert.equal(result.receipt.runtimeDirectories.length, 1);
+  const state = result.evidence.execution.sourceState;
+  assert.equal(state.disposition, 'retained');
+  assert.equal(state.purpose, 'private_diagnostics_only');
+  assert.equal(state.automaticReplaySupported, false);
+  assert.equal(state.directory, result.receipt.runtimeDirectories[0]);
+  assert.equal(lstatSync(state.directory).mode & 0o777, 0o700);
+  assert.ok(existsSync(join(state.directory, 'workflow.sqlite')));
+  assert.equal(result.evidence.drainPage, undefined);
+  assert.ok(Buffer.byteLength(result.evidenceText) <= 8 * 1024 * 1024);
+  assert.ok(Buffer.byteLength(result.child.stdout) <= 64 * 1024);
+  return state.directory;
+}
+
+test('fresh cap-one backpressure keeps pending SQLite events and cannot turn partial export into success', () => {
+  for (const mode of ['run', 'send-and-readback']) {
+    const directory = join(scratch, `fresh-cap-one-${mode}`);
+    const result = cli(directory, { mode, allowWorker: true, noReadback: true, fakePost: true,
+      args: ['--max-retained-batches', '1'] });
+    const stateDirectory = retainedSource(result);
+    assert.equal(result.evidence.execution.status, 'incomplete');
+    assert.equal(result.evidence.execution.reasonCode, 'RUNTIME_EXPORT_INCOMPLETE');
+    assert.equal(result.evidence.run.jobState, 'completed');
+    assert.equal(result.evidence.run.telemetry.deliveredRecords, 3);
+    assert.equal(result.evidence.run.telemetry.policyDroppedRecords, 4);
+    assert.equal(result.evidence.run.telemetry.pendingRecords, 1);
+    assert.equal(result.evidence.run.telemetry.pendingCapped, false);
+    assert.equal(result.evidence.run.telemetry.lastErrorCode, 'TELEMETRY_SINK_UNAVAILABLE');
+    assert.equal(existsSync(join(directory, 'drain-cursor.json')), false);
+    const store = DurableWorkflowStore.open({ databasePath: join(stateDirectory, 'workflow.sqlite') });
+    try {
+      const pending = store.readEventPage({ afterSequence: result.evidence.run.telemetry.cursor, limit: 64 }).events;
+      assert.equal(pending.length, 1);
+      assert.equal(pending[0].sequence, 8);
+      assert.equal(pending[0].type, 'operations_work_completed');
+      for (const row of store.readEventPage({ afterSequence: 0, limit: 64 }).events) {
+        assert.ok(!result.evidenceText.includes(row.eventId));
+        assert.ok(!result.child.stdout.includes(row.eventId));
+      }
+    } finally { store.close(); }
+    const sourceBefore = snapshot(stateDirectory);
+    refusedFreshWorkflow(cli(directory, { mode: 'run', allowWorker: true }));
+    const drained = cli(directory, { noReadback: true, fakePost: true, args: ['--max-retained-batches', '2'] });
+    assert.equal(drained.child.status, 1, drained.child.stderr);
+    assert.equal(drained.receipt.fakePosts, 1);
+    assert.equal(drained.evidence.execution.status, 'not_requested');
+    assert.equal(drained.evidence.run, null);
+    assert.equal(drained.evidence.deliveryConfirmed, false);
+    assert.deepEqual(snapshot(stateDirectory), sourceBefore);
+  }
+});
+
+test('fresh filesystem admission failure retains unknown source progress in both workflow modes', () => {
+  for (const mode of ['run', 'send-and-readback']) {
+    const directory = join(scratch, `fresh-admission-write-failure-${mode}`);
+    const result = cli(directory, { mode, allowWorker: true, noReadback: true, fakePost: true,
+      refuseBatchWrites: true });
+    retainedSource(result);
+    assert.equal(result.evidence.execution.reasonCode, 'RUNTIME_EXPORT_INCOMPLETE');
+    assert.ok(result.receipt.refusedBatchWrites > 0);
+    assert.equal(result.evidence.run.telemetry.pendingRecords, 8);
+    assert.equal(result.evidence.run.telemetry.deliveredRecords, 0);
+    assert.equal(result.evidence.run.telemetry.lastErrorCode, 'TELEMETRY_SINK_UNAVAILABLE');
+    assert.equal(result.evidence.inspection.retainedBatchCount, 0);
+    assert.deepEqual(snapshot(directory), []);
+  }
+});
+
+test('a worker failure before returned export diagnostics preserves the SQLite source as unproven', () => {
+  const directory = join(scratch, 'fresh-worker-start-failure');
+  const result = cli(directory, { mode: 'run', allowWorker: true, failWorkerStart: true });
+  retainedSource(result);
+  assert.equal(result.evidence.execution.status, 'failed');
+  assert.equal(result.evidence.execution.reasonCode, 'RUNTIME_WORKFLOW_FAILED');
+  assert.equal(result.evidence.run, null);
+});
+
+test('retained verified batches cannot override an explicitly incomplete current execution', () => {
+  const input = { network: true, batches: [{ readback: { status: 'verified' } }], batchCount: 1 };
+  assert.equal(isCompleteDeliveryEvidence({ ...input, executionComplete: false }), false);
+  assert.equal(isCompleteDeliveryEvidence({ ...input, executionComplete: true }), true);
 });
