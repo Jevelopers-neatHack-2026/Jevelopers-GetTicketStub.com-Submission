@@ -316,6 +316,24 @@ export function orderGate(v: Variant | undefined, mode: RuntimeMode): OrderGate 
   return { ok: true, sandbox: v.sku === null };
 }
 
+export type AuthorizationGate = { ok: true; sku: string | null } | { ok: false; message: string };
+
+/**
+ * May a purchase authorization be issued, or still honoured, for this variant with this provider? It starts from orderGate (so a
+ * preview never passes in live mode and an unavailable variant never passes at all) and adds the provider rule: "sandbox" exists
+ * only outside live mode and carries no SKU; a real provider needs a confirmed SKU from that supplier and a live runtime.
+ * No variant carries a confirmed SKU today, so no live authorization can be issued yet.
+ */
+export function authorizationGate(v: Variant | undefined, provider: string, mode: RuntimeMode): AuthorizationGate {
+  const gate = orderGate(v, mode);
+  if (!gate.ok || !v) return { ok: false, message: gate.ok ? "That combination isn't on our list." : gate.message };
+  if (provider === "sandbox") {
+    return mode === "live" ? { ok: false, message: "Sandbox orders can't be authorized on a live server." } : { ok: true, sku: v.sku };
+  }
+  if (mode === "live" && v.status === "orderable" && v.sku !== null && v.supplier?.toLowerCase() === provider) return { ok: true, sku: v.sku };
+  return { ok: false, message: "We haven't confirmed a printer SKU for that choice with this provider, so it can't be authorized." };
+}
+
 // ---- Stored selections ----
 
 export interface StoredSelection {

@@ -70,7 +70,7 @@ export function sizeFor(material: Material, asked: unknown): Size {
 }
 
 /** The binding for the stub as it is now at `size`, or null when it cannot be bound (no selected version, art file gone). */
-function bindingNow(stub: Stub, size: Size) {
+export function bindingNow(stub: Stub, size: Size) {
   const v = stub.versions.find((x) => x.id === stub.currentVersionId);
   const art = v && artFor(v.art);
   return art ? bindStub(stub, size, art) : null;
