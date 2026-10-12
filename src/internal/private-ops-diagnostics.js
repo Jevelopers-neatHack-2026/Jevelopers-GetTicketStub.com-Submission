@@ -22,7 +22,7 @@ let runnerWriter = null;
 const PHASES = new Set([
   'runner_start', 'store_open', 'resource_ceilings', 'claim_read', 'controller',
   'initial_snapshot', 'initial_admission', 'loop_snapshot', 'completion',
-  'completion_resolution', 'next_admission', 'store_close', 'other'
+  'completion_resolution', 'admission_resolution', 'next_admission', 'store_close', 'other'
 ]);
 const REASONS = new Set([
   'CHECKPOINT_UNSUPPORTED', 'CONTROLLER_INPUT_INVALID', 'EXTERNAL_OUTCOME_UNRESOLVED',
@@ -33,7 +33,7 @@ const REASONS = new Set([
   'CONTROLLER_CHECKPOINT_TOO_LARGE', 'BUDGET_CHECKPOINT_INCONSISTENT',
   'CLOCK_INCONSISTENT', 'INVALID_DEADLINE', 'LOCAL_RESULT_DUPLICATE',
   'LOCAL_RESULT_INVALID', 'LOCAL_STEP_NOT_PENDING', 'LOCAL_COMPLETION_BUSY',
-  'LOCAL_COMPLETION_OUTCOME_UNKNOWN'
+  'LOCAL_COMPLETION_OUTCOME_UNKNOWN', 'LOCAL_ADMISSION_BUSY', 'LOCAL_ADMISSION_OUTCOME_UNKNOWN'
 ]);
 const ERROR_CODES = new Set([
   'STORE_BUSY', 'STORE_WRITE_FAILED', 'STORE_OPEN_FAILED', 'STORE_CLOSED',
@@ -48,6 +48,7 @@ const OPERATIONS = new Set([
   '_operationsClaim', '_operationsReadClaim', '_operationsFinish', '_operationsCancel',
   '_operationsGetScopedJob', '_operationsReadPage', '_operationsHealth',
   '_operationsRetentionRequest', '_localControllerSnapshot', '_localControllerResolveCompletion', '_localControllerAdmit',
+  '_localControllerResolveAdmission',
   '_localControllerComplete', 'createWorkflow', 'getWorkflow', 'getCheckpoint',
   'acquireLease', 'renewLease', 'releaseLease', 'transitionWorkflow',
   'requestCancellation', 'recordDispatchIntent', 'recordTransportAttempt',

@@ -5,7 +5,10 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
-import { buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics } from './failure-diagnostics.js';
+import {
+  buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics,
+  parseOps02RaceDiagnostics, parseOps06ClosePhaseDiagnostics
+} from './failure-diagnostics.js';
 import { validateOps04PublicPhaseMetrics } from './ops04-failure-diagnostics.js';
 import { parseOperationsCaptureFromTap } from '../../src/internal/private-ops-diagnostics.js';
 
@@ -268,6 +271,30 @@ const c02ControlReadDiagnostics = parseC02ControlReadDiagnostics(hasCompleteC02C
   bytes: metrics.c02ControlReadFailureBytes,
   diagnosticsComplete: metrics.c02ControlReadDiagnosticsComplete
 } : null);
+const ops02RaceMetricKeys = [
+  'ops02RaceDiagnosticLines', 'ops02RaceDiagnosticCount',
+  'ops02RaceDiagnosticBytes', 'ops02RaceDiagnosticsComplete'
+];
+const hasCompleteOps02RaceChannel = metrics !== null && typeof metrics === 'object'
+  && !Array.isArray(metrics) && ops02RaceMetricKeys.every(key => Object.hasOwn(metrics, key));
+const ops02RaceDiagnostics = parseOps02RaceDiagnostics(hasCompleteOps02RaceChannel ? {
+  lines: metrics.ops02RaceDiagnosticLines,
+  count: metrics.ops02RaceDiagnosticCount,
+  bytes: metrics.ops02RaceDiagnosticBytes,
+  diagnosticsComplete: metrics.ops02RaceDiagnosticsComplete
+} : null);
+const ops06ClosePhaseMetricKeys = [
+  'ops06ClosePhaseDiagnosticLines', 'ops06ClosePhaseDiagnosticCount',
+  'ops06ClosePhaseDiagnosticBytes', 'ops06ClosePhaseDiagnosticsComplete'
+];
+const hasCompleteOps06ClosePhaseChannel = metrics !== null && typeof metrics === 'object'
+  && !Array.isArray(metrics) && ops06ClosePhaseMetricKeys.every(key => Object.hasOwn(metrics, key));
+const ops06ClosePhaseDiagnostics = parseOps06ClosePhaseDiagnostics(hasCompleteOps06ClosePhaseChannel ? {
+  lines: metrics.ops06ClosePhaseDiagnosticLines,
+  count: metrics.ops06ClosePhaseDiagnosticCount,
+  bytes: metrics.ops06ClosePhaseDiagnosticBytes,
+  diagnosticsComplete: metrics.ops06ClosePhaseDiagnosticsComplete
+} : null);
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
   phase: 'operation-suite',
@@ -278,13 +305,21 @@ const suiteDiagnostics = buildSafeFailureDiagnostics({
   stdout: testResult.stdout,
   stderr: testResult.stderr,
   missingCases: tapSummary.missingLocalCases,
-  c02ControlReadDiagnostics
+  c02ControlReadDiagnostics, ops02RaceDiagnostics, ops06ClosePhaseDiagnostics
 });
 const publicMetrics = { ...(metrics ?? {}) };
 delete publicMetrics.c02ControlReadFailureLines;
 delete publicMetrics.c02ControlReadFailureCount;
 delete publicMetrics.c02ControlReadFailureBytes;
 delete publicMetrics.c02ControlReadDiagnosticsComplete;
+delete publicMetrics.ops02RaceDiagnosticLines;
+delete publicMetrics.ops02RaceDiagnosticCount;
+delete publicMetrics.ops02RaceDiagnosticBytes;
+delete publicMetrics.ops02RaceDiagnosticsComplete;
+delete publicMetrics.ops06ClosePhaseDiagnosticLines;
+delete publicMetrics.ops06ClosePhaseDiagnosticCount;
+delete publicMetrics.ops06ClosePhaseDiagnosticBytes;
+delete publicMetrics.ops06ClosePhaseDiagnosticsComplete;
 
 let runbookArtifact = null;
 let runbookRecoveryArtifact = null;
@@ -426,6 +461,10 @@ const diagnosticsIncludedInUpload = diagnosticMembers.every(artifact =>
 const resourceMetricsComplete = metrics !== null
   && metrics.c02ControlReadDiagnosticsComplete === true
   && c02ControlReadDiagnostics.complete === true
+  && metrics.ops02RaceDiagnosticsComplete === true
+  && ops02RaceDiagnostics.complete === true && ops02RaceDiagnostics.recordCount > 0
+  && metrics.ops06ClosePhaseDiagnosticsComplete === true
+  && ops06ClosePhaseDiagnostics.complete === true && ops06ClosePhaseDiagnostics.recordCount === 1
   && ops04PhaseMetrics.valid === true
   && ops04PhaseMetrics.failureCount === 0
   && metrics.ci1PhaseCaptureOverflow === false

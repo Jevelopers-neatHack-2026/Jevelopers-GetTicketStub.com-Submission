@@ -54,6 +54,8 @@ Each operation definition has a semantic version, and the registry has an explic
 
 Local evaluation is in-process. `runBoundedLocalPlan` uses only the static registry, persists an allowance before executing a pure step, and atomically commits a validated result with the next checkpoint/event/outbox. Each new admission is fenced to the current workflow revision and checkpoint sequence, live lease, cancellation state, external-attempt barrier, plan, registry, limits, and base checkpoint. Completion repeats the fresh state and fence checks. A committed result is returned as private synthetic evidence while the workflow remains running; it does not promote workflow status or imply canonical approval.
 
+Admission BUSY recovery is private to `_localControllerAdmit`. It is eligible only for a raw native SQLite primary BUSY from that operation after the transaction is known inactive; rollback failure, unknown transaction state, and mapped error lookalikes are ineligible. A read-only resolver compares the stable event ID, revision, checkpoint sequence and hash, event, and outbox: an exact commit is accepted once, an unchanged pending state may retry within the existing three-call and time bounds, and any partial or mismatched state stops as unknown. A retry keeps the same event ID and admission counters; it refreshes only elapsed wall-clock fields after the pending state and current authority have been rechecked. This path neither adds an operation attempt nor retries an external effect.
+
 ## Limits, clocks, and diagnostics
 
 The default finite ceilings are fixed in limits.js. Callers may lower them through JSON limit configuration; plan content cannot raise them.
