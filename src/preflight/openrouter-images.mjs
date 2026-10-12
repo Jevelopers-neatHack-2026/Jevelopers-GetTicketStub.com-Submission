@@ -118,6 +118,47 @@ export function validateOpenRouterImageTarget(cellId, target) {
   }
 }
 
+/**
+ * Re-validates a target and returns a canonical digest over exactly the fields the binding uses (the target's
+ * identity is compared by reference at dispatch, so its content must be pinned separately). Fields the validator and
+ * the binding never read are not hashed; anything that cannot be validated or hashed fails closed.
+ */
+function targetContentDigest(cellId, target) {
+  try {
+    validateOpenRouterImageTarget(cellId, target);
+    return canonicalHash({ service: target.service, endpoint: target.endpoint, model: target.model,
+      sdk: { name: target.sdk.name, version: target.sdk.version }, configuration: target.configuration,
+      configuration_sha256: target.configuration_sha256 });
+  } catch {
+    throw error('unsupported_image_configuration', 'The OpenRouter image target changed or cannot be canonically hashed.');
+  }
+}
+
+function deepFreeze(value) {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Reflect.ownKeys(value)) deepFreeze(value[key]);
+  }
+  return value;
+}
+
+/**
+ * The host never receives the caller's live target: it gets a deep-frozen structured clone, so a caller mutating its
+ * object while the host awaits (and restoring it before the digest check) cannot change what the host acts on. The
+ * clone keeps non-JSON extra fields (Date, NaN, undefined); a target holding something structuredClone cannot copy
+ * (a function, a symbol value) fails closed, and so does a clone whose binding digest differs from the original's.
+ */
+function freezeTargetCopy(cellId, target, digestOfTarget) {
+  let copy;
+  try {
+    copy = deepFreeze(structuredClone(target));
+    if (targetContentDigest(cellId, copy) !== digestOfTarget) throw new TypeError('target copy');
+  } catch {
+    throw error('unsupported_image_configuration', 'The OpenRouter image target cannot be copied for the host port.');
+  }
+  return copy;
+}
+
 function safeCredentialEvidence(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || typeof value.ref !== 'string' || !SAFE_REF.test(value.ref)
@@ -330,47 +371,101 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
     // dispatch cannot reach the host port without a credential that was resolved for this grant and deadline.
     const preparedState = new WeakMap();
     adapter.prepare = async (input) => {
-      validateOpenRouterImageTarget(input.cell_id, input.target);
-      if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
-        || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
-        || Date.parse(input.deadline_at) <= readClock(now)) {
+      // Binding fields are snapshotted once, before any await. The host receives these values (scope as a frozen copy)
+      // and nothing after the first await reads them from `input`, so neither the caller nor the host port can move
+      // the binding to another project by mutating a live object. The target keeps identity semantics for dispatch,
+      // so its content is pinned by a canonical digest instead and re-checked after each await.
+      const { cell_id, target, grant_ref, deadline_at } = input;
+      validateOpenRouterImageTarget(cell_id, target);
+      if (typeof grant_ref !== 'string' || !SAFE_REF.test(grant_ref)
+        || typeof deadline_at !== 'string' || !Number.isFinite(Date.parse(deadline_at))
+        || Date.parse(deadline_at) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
-      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
-        target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
+      let scope;
+      let hostScope;
+      try {
+        // Each ref is read exactly once; a throwing getter or a non-record scope fails closed.
+        const liveScope = input.scope;
+        if (!isRecord(liveScope)) throw new TypeError('scope');
+        const account_ref = liveScope.account_ref;
+        const project_ref = liveScope.project_ref;
+        if (typeof account_ref !== 'string' || typeof project_ref !== 'string') throw new TypeError('scope refs');
+        scope = Object.freeze({ account_ref, project_ref });
+        // The host keeps seeing any other scope fields (tenant, budget) as before, but as a frozen copy.
+        hostScope = Object.freeze({ ...liveScope, account_ref, project_ref });
+      } catch {
+        throw error('credential_unavailable', 'A billable credential needs a provider account and project scope.');
+      }
+      const targetDigest = targetContentDigest(cell_id, target);
+      const hostTarget = freezeTargetCopy(cell_id, target, targetDigest);
+      const assertTargetUnchanged = () => {
+        if (targetContentDigest(cell_id, target) !== targetDigest) {
+          throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was validated.');
+        }
+      };
+      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope,
+        target: hostTarget, grantRef: grant_ref, deadlineAt: deadline_at, now });
       const credential = Object.freeze({ token });
+      assertTargetUnchanged();
       // The credential await may outlast the deadline (or the clock may fault), so re-check before the host prepare.
-      if (Date.parse(input.deadline_at) <= readClock(now)) {
+      if (Date.parse(deadline_at) <= readClock(now)) {
         throw error('preflight_deadline_passed', 'The approved operation deadline passed while the credential was resolved.');
       }
-      const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
+      const hostPrepared = dispatchPort.prepare
+        ? await dispatchPort.prepare({ ...input, cell_id, target: hostTarget, configuration: hostTarget.configuration, grant_ref, deadline_at,
+          scope: hostScope, credential }) : undefined;
+      assertTargetUnchanged();
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, grant_ref: input.grant_ref,
-        scope: Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref }), deadline_at: input.deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id, target, hostTarget, targetDigest, grant_ref, scope, hostScope, deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
-      validateOpenRouterImageTarget(input.cell_id, input.target);
-      const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
-      if (!state || state.cell_id !== input.cell_id || state.target !== input.target
-        || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at
-        || !isRecord(input.scope) || input.scope.account_ref !== state.scope?.account_ref
-        || input.scope.project_ref !== state.scope?.project_ref) {
+      // One snapshot of the caller's input: each own enumerable property is read exactly once (so a getter cannot
+      // answer differently for the checks and for the host), and only `args` is used from here on.
+      let args;
+      try {
+        if (!isRecord(input)) throw new TypeError('input');
+        args = { ...input };
+      } catch {
+        throw error('credential_unavailable', 'The dispatch input could not be read.');
+      }
+      validateOpenRouterImageTarget(args.cell_id, args.target);
+      const state = isRecord(args.prepared) ? preparedState.get(args.prepared) : undefined;
+      let accountRef;
+      let projectRef;
+      try {
+        if (isRecord(args.scope)) { accountRef = args.scope.account_ref; projectRef = args.scope.project_ref; }
+      } catch { accountRef = undefined; projectRef = undefined; }
+      if (!state || state.cell_id !== args.cell_id || state.target !== args.target
+        || state.grant_ref !== args.grant_ref || state.deadline_at !== args.deadline_at
+        || !isRecord(args.scope) || accountRef !== state.scope.account_ref || projectRef !== state.scope.project_ref) {
         throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, scope, and target.');
       }
-      // A prepared value is single use: it is consumed before the host port can run, so a replay is refused.
-      preparedState.delete(input.prepared);
+      // A prepared value is single use: it is consumed before the host port can run, so a replay is refused. That
+      // includes a refusal below: a target whose content moved since prepare consumes the value and fails closed.
+      preparedState.delete(args.prepared);
       const remaining = Date.parse(state.deadline_at) - readClock(now);
       if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
       // The runner passes its cancellation signal (operator abort combined with the operation deadline) as
       // `metering.signal`. The host port gets that signal combined with this adapter's own deadline timeout.
-      const callerSignal = input.metering?.signal;
+      const callerSignal = args.metering?.signal;
       if (callerSignal !== undefined && !(callerSignal instanceof AbortSignal)) {
         throw error('adapter_unavailable', 'The runner cancellation signal must be a native AbortSignal.');
       }
       const timeout = AbortSignal.timeout(Math.min(remaining, 120_000));
-      return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
-        signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout });
+      // The bound fields come from the prepared state after the spread, as in prepare: the host sees the values that
+      // were checked and bound, never a re-read of the caller's input. The host gets the frozen target copy made at prepare.
+      const hostArgs = { ...args, cell_id: state.cell_id, target: state.hostTarget, configuration: state.hostTarget.configuration,
+        grant_ref: state.grant_ref, deadline_at: state.deadline_at, scope: state.hostScope,
+        prepared: state.hostPrepared, credential: state.credential,
+        signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout };
+      // The target content check runs last, immediately before the host port. It confirms the caller's target object
+      // still matches what was validated; the host only ever receives the frozen copy, never that live object.
+      if (targetContentDigest(state.cell_id, state.target) !== state.targetDigest) {
+        throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
+      }
+      return dispatchPort.dispatch(hostArgs);
     };
   } else {
     adapter.dispatch = async () => {
