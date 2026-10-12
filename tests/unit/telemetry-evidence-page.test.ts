@@ -336,3 +336,56 @@ test("verification returns false without throwing for malformed or mutated pages
 	);
 	assert.equal(verifyEvidencePage(page), true);
 });
+
+test("verification never invokes getters at the root or nested levels", () => {
+	using f = fixture();
+	seedJob(f);
+	const page = readEvidencePage(f.outbox, scope);
+	let calls = 0;
+	const getter = (value: unknown) => ({
+		enumerable: true,
+		configurable: true,
+		get: () => {
+			calls++;
+			return value;
+		},
+	});
+	const rootAfter = Object.defineProperty(
+		{ ...page },
+		"after",
+		getter(page.after),
+	);
+	const integrityGetter = Object.defineProperty(
+		{ ...page },
+		"integrity",
+		getter(page.integrity),
+	);
+	const nestedIntegrity = {
+		...page,
+		integrity: Object.defineProperty(
+			{ ...page.integrity },
+			"payloadDigest",
+			getter(page.integrity.payloadDigest),
+		),
+	};
+	const nestedObservation = {
+		...page,
+		observations: [
+			Object.defineProperty(
+				{ ...page.observations[0] },
+				"sequence",
+				getter(page.observations[0]?.sequence),
+			),
+			...page.observations.slice(1),
+		],
+	};
+	for (const malformed of [
+		rootAfter,
+		integrityGetter,
+		nestedIntegrity,
+		nestedObservation,
+	])
+		assert.equal(verifyEvidencePage(malformed as never), false);
+	assert.equal(calls, 0);
+	assert.equal(verifyEvidencePage(page), true);
+});

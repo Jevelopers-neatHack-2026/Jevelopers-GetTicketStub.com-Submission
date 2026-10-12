@@ -126,11 +126,27 @@ export function evidencePayloadDigest(payload: EvidencePagePayload): Digest {
 /** True when the commitment matches the exact payload fields of the page. */
 export function verifyEvidencePage(page: EvidencePage): boolean {
 	try {
-		const { integrity, ...payload } = page;
+		// Untrusted input: read own data descriptors only, so no getter at any
+		// depth runs before canonicalJson has rejected accessors.
+		if (typeof page !== "object" || page === null) return false;
+		const proto = Object.getPrototypeOf(page);
+		if (proto !== Object.prototype && proto !== null) return false;
+		const payload: Record<string, unknown> = {};
+		let integrity: unknown;
+		for (const key of Reflect.ownKeys(page)) {
+			if (typeof key !== "string") return false;
+			const descriptor = Object.getOwnPropertyDescriptor(page, key);
+			if (descriptor === undefined || !("value" in descriptor)) return false;
+			if (key === "integrity") integrity = descriptor.value;
+			else payload[key] = descriptor.value;
+		}
+		canonicalJson(integrity);
+		const commitment = integrity as EvidencePage["integrity"];
 		return (
-			integrity.algorithm === "sha256" &&
-			integrity.canonicalization === "json-sorted-keys-v1" &&
-			integrity.payloadDigest === evidencePayloadDigest(payload)
+			commitment.algorithm === "sha256" &&
+			commitment.canonicalization === "json-sorted-keys-v1" &&
+			commitment.payloadDigest ===
+				evidencePayloadDigest(payload as EvidencePagePayload)
 		);
 	} catch {
 		return false;
