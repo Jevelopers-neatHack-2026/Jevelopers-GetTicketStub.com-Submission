@@ -111,7 +111,8 @@ function harness(options = {}) {
     },
     makeReceipts(browser) {
       const { ordinal } = browser;
-      const collector = { data: empty(), async start() { trace.push([ordinal, "start"]); if (options.startFails === ordinal) throw new Error("SECRET_CANARY"); },
+      const collector = { data: empty(), async start() { trace.push([ordinal, "start"]); if (options.startFails === ordinal) throw new Error("SECRET_CANARY");
+        if (options.startHeld === ordinal) await new Promise((resolve) => { collector.releaseStart = resolve; }); },
         snapshot() { trace.push([ordinal, "snapshot"]); return options.malformedSnapshot === ordinal ? { actions: null } : this.data; },
         stop() { trace.push([ordinal, "stop"]); if (options.stopFails === ordinal) throw new Error("SECRET_CANARY"); } };
       collectors[ordinal - 1] = collector;
@@ -126,6 +127,7 @@ function harness(options = {}) {
     },
     async version() { return { status: "recorded", product: "SyntheticControl/1.0" }; },
     removed(path) { return options.removalFails || !path ? "unavailable" : "confirmed_absent"; },
+    collectorSetupTimeoutMs: options.startHeld ? 5 : 2000,
   });
   return { manager, trace, collectors, browsers, cleanup() { rmSync(directory, { recursive: true, force: true }); } };
 }
@@ -197,6 +199,25 @@ test("late shutdown events and violations remain in the aggregate and invalidate
     assert.equal(record.sessions[1].passed, false); assert.equal(record.passed, false);
     assert.deepEqual(record.downloadReceipts.events, [{ event: "late_producer", producerId: "late", browserSessionId: "cold-390-1" }]);
     assert.deepEqual(record.downloadReceipts.violations, [{ code: "producer_after_terminal", browserSessionId: "cold-390-1" }]);
+  } finally { h.cleanup(); }
+});
+
+test("an unanswered collector setup times out once, closes its browser and still attempts every later session", async () => {
+  const h = harness({ startHeld: 2 });
+  try {
+    const record = await runAll(h);
+    assert.equal(h.browsers.length, 5);
+    assert.equal(record.sessions[1].setup, "failed");
+    assert.ok(record.sessions[1].faults.includes("collector_setup_failed"));
+    assert.equal(record.sessions[1].shutdown, "confirmed_process_exit");
+    assert.equal(record.sessions[1].collectorStopped, true);
+    assert.equal(record.sessions[1].passed, false);
+    assert.ok(record.sessions.slice(2).every((session) => session.passed));
+    assert.equal(record.passed, false);
+    h.collectors[1].releaseStart();
+    await Promise.resolve();
+    assert.deepEqual(h.manager.snapshot(), record, "late setup completion cannot revise the failed outcome");
+    assert.equal(h.trace.filter(([ordinal, action]) => ordinal === 2 && action === "start").length, 1);
   } finally { h.cleanup(); }
 });
 

@@ -74,10 +74,11 @@ function profileRemoval(profilePath) {
 /** Preserve each collector through its browser shutdown, then aggregate without dropping duplicate/late events. */
 export class DownloadBrowserSessions {
   constructor(directory, plan, { launch = launchBrowser, makeReceipts = (browser, path) => new DownloadReceipts(browser, path),
-    identify = observeBrowserIdentity, version = (browser) => browserProvenance(browser.conn), removed = profileRemoval } = {}) {
+    identify = observeBrowserIdentity, version = (browser) => browserProvenance(browser.conn), removed = profileRemoval,
+    collectorSetupTimeoutMs = 2000 } = {}) {
     this.directory = directory;
     this.expected = [...new Set(plan.map(browserSessionIdForPair))];
-    this.dependencies = { launch, makeReceipts, identify, version, removed };
+    this.dependencies = { launch, makeReceipts, identify, version, removed, collectorSetupTimeoutMs };
     this.entries = new Map();
     this.profiles = new Set();
     this.processes = new Set();
@@ -97,7 +98,8 @@ export class DownloadBrowserSessions {
       throw new Error("unexpected_or_duplicate_browser_session");
     }
     const record = { sessionId, mode: sessionId === "baseline" ? "baseline_shared" : "cold_browser", launchOrdinal: this.entries.size + 1,
-      setup: "starting", shutdown: "not_attempted", collectorSnapshot: "not_recorded", collectorStopped: false, faults: [] };
+      setup: "starting", collectorSetupTimeoutMs: this.dependencies.collectorSetupTimeoutMs,
+      shutdown: "not_attempted", collectorSnapshot: "not_recorded", collectorStopped: false, faults: [] };
     const entry = { record, browser: null, receipts: null, profilePath: null, snapshot: null, closed: false };
     this.entries.set(sessionId, entry);
     let stage = "browser_launch_failed";
@@ -107,7 +109,7 @@ export class DownloadBrowserSessions {
       stage = "collector_setup_failed";
       record.directory = mkdtempSync(join(this.directory, `native-downloads-${sessionId}-`));
       entry.receipts = this.dependencies.makeReceipts(entry.browser, record.directory);
-      await entry.receipts.start();
+      await bounded(Promise.resolve().then(() => entry.receipts.start()), record.collectorSetupTimeoutMs);
       stage = "browser_identity_failed";
       const identity = await this.dependencies.identify(entry.browser, startedAt);
       record.identity = identity.evidence;
