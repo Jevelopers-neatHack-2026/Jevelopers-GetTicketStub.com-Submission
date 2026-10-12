@@ -52,6 +52,54 @@ test("decision execution target rejects bounded-data violations before executing
   }
 });
 
+test("DecisionPort timestamps validate the calendar and explicit offset before a target is hashed", async () => {
+  const request = await fixture("decision-port/request.json");
+  for (const deadline of [
+    "2026-02-30T12:00:00Z",
+    "2026-04-31T12:00:00Z",
+    "2023-02-29T12:00:00Z",
+    "1900-02-29T12:00:00Z",
+    "2026-13-01T12:00:00Z",
+    "2026-01-01T24:00:00Z",
+    "2026-01-01T12:60:00Z",
+    "2026-01-01T12:00:60Z",
+    "2026-10-10T12:00:00",
+    "2026-10-10T12:05",
+    "2026-10-10T12:00:00+24:00",
+    "2026-10-10T12:00:00+05:60",
+    "2026-10-10t12:00:00Z",
+    "2026-10-10T12:00:00Z\n",
+  ]) {
+    const invalid = clone(request);
+    invalid.deadline_at = deadline;
+    expectCode("invalid_datetime", () => validateDecisionRequest(invalid, { trustedScope }));
+    expectCode("invalid_datetime", () => decisionExecutionTargetHash(invalid, { trustedScope }));
+  }
+
+  for (const deadline of [
+    "0099-02-28T12:05Z",
+    "2000-02-29T12:05:00.12345678901234+05:30",
+    "1900-03-01T12:05:00.12345678901234-0000",
+  ]) {
+    assert.equal(deadline.length <= 40, true);
+    const valid = clone(request);
+    valid.deadline_at = deadline;
+    const targetHash = decisionExecutionTargetHash(valid, { trustedScope });
+    const checked = validateDecisionRequest(valid, { trustedScope });
+    assert.equal(checked.deadline_at, deadline, "validation preserves the exact timestamp bytes");
+    assert.equal(decisionExecutionTargetHash(checked, { trustedScope }), targetHash,
+      "timestamp validation must not change the canonical request hash");
+  }
+
+  const fortyCharacters = "2000-02-29T12:05:00.12345678901234+05:30";
+  assert.equal(fortyCharacters.length, 40);
+  const bounded = clone(request);
+  bounded.deadline_at = fortyCharacters;
+  assert.equal(validateDecisionRequest(bounded, { trustedScope }), bounded);
+  bounded.deadline_at += "0";
+  expectCode("out_of_bounds", () => validateDecisionRequest(bounded, { trustedScope }));
+});
+
 function expectCode(code, callback) {
   assert.throws(callback, (error) => error instanceof ContractError && error.code === code);
 }
