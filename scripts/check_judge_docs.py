@@ -17,7 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--public-links', action='store_true')
     args = parser.parse_args()
-    files = [ROOT / 'README.md', *sorted((ROOT / 'docs/judges').glob('*.md')),
+    files = [ROOT / 'README.md', ROOT / 'REPOSITORIES.md', *sorted((ROOT / 'docs/judges').glob('*.md')),
              ROOT / 'docs/assets/submission/README.md']
     errors, external, count = [], set(), 0
     for path in files:

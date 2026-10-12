@@ -162,6 +162,39 @@ class SnapshotTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(RuntimeError):
                 sync.safe_path(path)
 
+    def test_statistics_count_pinned_text_binary_symlinks_and_history(self):
+        (self.source / 'code.py').write_bytes(b'# comment\r\n\r\nprint(1)')
+        (self.source / 'README.md').write_text('one\ntwo\n')
+        (self.source / 'empty.ts').write_bytes(b'')
+        (self.source / 'binary.js').write_bytes(b'a\0b\n')
+        (self.source / 'non-utf8').write_bytes(b'\xff\n')
+        (self.source / 'link.py').symlink_to('code.py')
+        commit(self.source)
+        (self.source / 'tests').mkdir()
+        (self.source / 'tests' / 'check.ts').write_text('// test\n')
+        sha = commit(self.source)
+        # Later history and local edits must not inflate a pinned count.
+        (self.source / 'later.py').write_text('later\n')
+        commit(self.source)
+        output = self.base / 'export'
+        sync.export_tree(self.source, sha, output)
+        stats = sync.collection_statistics(self.source, sha, output)
+        self.assertEqual(stats['commits'], 2)
+        self.assertEqual(stats['text_files'], 4)
+        self.assertEqual(stats['text_lines'], 6)
+        self.assertEqual(stats['source_files'], 3)
+        self.assertEqual(stats['source_file_lines'], 4)
+        self.assertEqual(stats['binary_or_non_utf8_files'], 2)
+        self.assertEqual(stats['symlinks'], 1)
+
+    def test_statistics_reject_shallow_history(self):
+        (self.source / 'file').write_text('hello')
+        sha = commit(self.source)
+        shallow = self.base / 'shallow'
+        sync.run('git', 'clone', '--quiet', '--depth=1', self.source.as_uri(), str(shallow))
+        with self.assertRaisesRegex(RuntimeError, 'Complete source history'):
+            sync.collection_statistics(shallow, sha, shallow)
+
 
 if __name__ == '__main__':
     unittest.main()

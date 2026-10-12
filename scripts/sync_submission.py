@@ -21,6 +21,41 @@ TARGET = 'Jevelopers-GetTicketStub.com-Submission'
 REMOTE = f'https://github.com/{ORG}/{TARGET}.git'
 MANAGED = ('repositories', 'sources.json', 'REPOSITORIES.md')
 PUBLIC_API = False
+SOURCE_SUFFIXES = frozenset(('.py .js .jsx .mjs .cjs .ts .tsx .mts .cts .go .rs .java '
+                             '.c .h .cc .cpp .hpp .cs .rb .php .sh .bash .zsh .sql .css '
+                             '.scss .sass .html .vue .svelte .swift .kt .kts .r').split())
+
+
+def collection_statistics(git_dir, revision, snapshot):
+    """Count pinned files and complete reachable history, never uncommitted source files."""
+    if run('git', '-C', str(git_dir), 'rev-parse', '--is-shallow-repository').strip() != 'false':
+        raise RuntimeError('Complete source history is required for commit counts')
+    commits = run('git', '-C', str(git_dir), 'rev-list', '--count', revision).strip()
+    stats = dict(commits=int(commits), text_files=0, text_lines=0, source_files=0,
+                 source_file_lines=0, binary_or_non_utf8_files=0, symlinks=0, file_bytes=0)
+    # The snapshot is exported from a Git tree. Do not follow symlinks or count their targets twice.
+    for path in sorted(snapshot.rglob('*')):
+        if path.is_symlink():
+            stats['symlinks'] += 1
+            continue
+        if not path.is_file():
+            continue
+        content = path.read_bytes()
+        stats['file_bytes'] += len(content)
+        try:
+            content.decode('utf-8')
+            if b'\0' in content:
+                raise ValueError('binary')
+        except (UnicodeDecodeError, ValueError):
+            stats['binary_or_non_utf8_files'] += 1
+            continue
+        lines = content.count(b'\n') + int(bool(content) and not content.endswith(b'\n'))
+        stats['text_files'] += 1
+        stats['text_lines'] += lines
+        if path.suffix.lower() in SOURCE_SUFFIXES:
+            stats['source_files'] += 1
+            stats['source_file_lines'] += lines
+    return stats
 
 
 def run(*args, cwd=None, data=None, binary=False):
@@ -149,24 +184,48 @@ def fetch_source(repo, temporary, stage):
     run('git', 'init', '--bare', '--quiet', str(source))
     print(f'Fetching {name} ({branch})', flush=True)
     run('git', '-C', str(source), '-c', 'core.hooksPath=/dev/null', 'fetch', '--quiet',
-        '--depth=1', f'https://github.com/{ORG}/{name}.git', f'refs/heads/{branch}')
+        f'https://github.com/{ORG}/{name}.git', f'refs/heads/{branch}')
     sha = run('git', '-C', str(source), 'rev-parse', 'FETCH_HEAD').strip()
     count = export_tree(source, sha, stage / 'repositories' / name)
     return {'name': name, 'path': f'repositories/{name}', 'url': current['html_url'],
             'branch': branch, 'commit': sha,
             'tree': run('git', '-C', str(source), 'rev-parse', f'{sha}^{{tree}}').strip(),
             'committed_at': run('git', '-C', str(source), 'show', '-s', '--format=%cI', sha).strip(),
-            'description': current.get('description') or '', 'tracked_files': count}
+            'description': current.get('description') or '', 'tracked_files': count,
+            'statistics': collection_statistics(source, sha, stage / 'repositories' / name)}
 
 
 def write_index(stage, entries):
     (stage / 'sources.json').write_text(json.dumps({
-        'schema_version': 1, 'organization': ORG, 'strategy': 'public-default-branch-snapshots',
+        'schema_version': 2, 'organization': ORG, 'strategy': 'public-default-branch-snapshots',
+        'statistics_method': {
+            'version': 1,
+            'commits': 'All commits reachable from each pinned source commit, including merges. Sum is per repository, not globally deduplicated.',
+            'lines': 'Physical LF-delimited lines plus a final unterminated line, in UTF-8 files without NUL bytes. Includes blanks, comments, tests and generated files; no content deduplication.',
+            'source_suffixes': sorted(SOURCE_SUFFIXES),
+            'scope': 'Only collected source trees. Excludes submission presentation, private repositories, unmerged branches and local edits. Symlinks are counted separately and never followed.'},
         'repositories': entries}, indent=2) + '\n')
     lines = ['# Source repository index', '',
              'Each folder contains actual tracked source files at the linked commit. '
-             'Original authorship, event-dated commits, and full development history remain in the source repositories.', '',
-             '| Repository | Purpose | Branch | Source commit |', '| --- | --- | --- | --- |']
+             'Original authorship, event-dated commits, and full development history remain in the source repositories.', '']
+    if all('statistics' in repo for repo in entries):
+        total = lambda key: sum(repo['statistics'][key] for repo in entries)
+        lines += ['## Collection at a glance', '',
+                  f"**{len(entries):,} public repositories · {sum(r['tracked_files'] for r in entries):,} tracked files · "
+                  f"{total('source_file_lines'):,} source-file lines · {total('commits'):,} source commits**", '',
+                  f"There are {total('text_lines'):,} lines across all text files. Source-file lines include "
+                  'comments, blank lines, tests, and generated code. They are not a count of unique, hand-written code.', '',
+                  'Commits count all history leading to each linked version, including merges. They are summed per repo, '
+                  'not deduplicated across repos or limited to the event dates. These are project-scale measures, '
+                  'not a score for quality, effort, or event eligibility. The submission repo’s own commits are excluded.', '',
+                  '[Counting method and limits](docs/judges/COLLECTION.md). Counts refresh with every source sync.', '',
+                  '| Repository | Files | Source-file lines | Source commits |', '| --- | ---: | ---: | ---: |']
+        for repo in entries:
+            stats = repo['statistics']
+            lines.append(f"| [{repo['name']}]({repo['path']}/) | {repo['tracked_files']:,} | "
+                         f"{stats['source_file_lines']:,} | [{stats['commits']:,}]({repo['url']}/commits/{repo['commit']}) |")
+        lines += ['', '## Pinned source versions', '']
+    lines += ['| Repository | Purpose | Branch | Source commit |', '| --- | --- | --- | --- |']
     for repo in entries:
         description = repo['description'].replace('|', '\\|').replace('\n', ' ')
         lines.append(f"| [{repo['name']}]({repo['path']}/) | {description} | `{repo['branch']}` | "

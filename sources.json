@@ -1,7 +1,49 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "organization": "Jevelopers-neatHack-2026",
   "strategy": "public-default-branch-snapshots",
+  "statistics_method": {
+    "version": 1,
+    "commits": "All commits reachable from each pinned source commit, including merges. Sum is per repository, not globally deduplicated.",
+    "lines": "Physical LF-delimited lines plus a final unterminated line, in UTF-8 files without NUL bytes. Includes blanks, comments, tests and generated files; no content deduplication.",
+    "source_suffixes": [
+      ".bash",
+      ".c",
+      ".cc",
+      ".cjs",
+      ".cpp",
+      ".cs",
+      ".css",
+      ".cts",
+      ".go",
+      ".h",
+      ".hpp",
+      ".html",
+      ".java",
+      ".js",
+      ".jsx",
+      ".kt",
+      ".kts",
+      ".mjs",
+      ".mts",
+      ".php",
+      ".py",
+      ".r",
+      ".rb",
+      ".rs",
+      ".sass",
+      ".scss",
+      ".sh",
+      ".sql",
+      ".svelte",
+      ".swift",
+      ".ts",
+      ".tsx",
+      ".vue",
+      ".zsh"
+    ],
+    "scope": "Only collected source trees. Excludes submission presentation, private repositories, unmerged branches and local edits. Symlinks are counted separately and never followed."
+  },
   "repositories": [
     {
       "name": ".github",
@@ -12,7 +54,17 @@
       "tree": "6c96047921406fe7be678409ec0df8d4e228bec2",
       "committed_at": "2026-10-12T13:16:50-04:00",
       "description": "Org profile plus shared contribution, governance and evidence standards for the Jevelopers neatHack 2026 program",
-      "tracked_files": 68
+      "tracked_files": 68,
+      "statistics": {
+        "commits": 48,
+        "text_files": 59,
+        "text_lines": 12493,
+        "source_files": 3,
+        "source_file_lines": 791,
+        "binary_or_non_utf8_files": 9,
+        "symlinks": 0,
+        "file_bytes": 1744195
+      }
     },
     {
       "name": "agent-harness",
@@ -23,7 +75,17 @@
       "tree": "04d706d2bbdab0d511db97eca660e35563d1a1cb",
       "committed_at": "2026-10-12T13:09:29-04:00",
       "description": "Durable workflow execution, fencing and recovery runtime for the Agent & Creative v1 subsystem (Node 22, SQLite)",
-      "tracked_files": 223
+      "tracked_files": 223,
+      "statistics": {
+        "commits": 169,
+        "text_files": 213,
+        "text_lines": 77526,
+        "source_files": 145,
+        "source_file_lines": 71101,
+        "binary_or_non_utf8_files": 10,
+        "symlinks": 0,
+        "file_bytes": 5943845
+      }
     },
     {
       "name": "brand-kit",
@@ -34,7 +96,17 @@
       "tree": "9b4e5bffc559494731cfdcc23c5df7582792736c",
       "committed_at": "2026-10-12T13:14:03-04:00",
       "description": "TicketStub master brand kit: logo system, DTCG design tokens, fonts, brand board and usage guidelines.",
-      "tracked_files": 117
+      "tracked_files": 117,
+      "statistics": {
+        "commits": 19,
+        "text_files": 108,
+        "text_lines": 18273,
+        "source_files": 43,
+        "source_file_lines": 8880,
+        "binary_or_non_utf8_files": 9,
+        "symlinks": 0,
+        "file_bytes": 4744742
+      }
     },
     {
       "name": "cost-intelligence",
@@ -45,7 +117,17 @@
       "tree": "14198fbe95c7578b0e343bcc821652f4e9b21604",
       "committed_at": "2026-10-12T13:07:58-04:00",
       "description": "TypeScript package for usage-cost metering, pricing, budget reservations, ledger, reconciliation and summaries.",
-      "tracked_files": 229
+      "tracked_files": 229,
+      "statistics": {
+        "commits": 87,
+        "text_files": 228,
+        "text_lines": 78611,
+        "source_files": 95,
+        "source_file_lines": 28633,
+        "binary_or_non_utf8_files": 1,
+        "symlinks": 0,
+        "file_bytes": 4355749
+      }
     },
     {
       "name": "creative-engine",
@@ -56,7 +138,17 @@
       "tree": "392544cdf5ce1feef543561a893edbafd31f159f",
       "committed_at": "2026-10-12T12:59:49-04:00",
       "description": "Typed creative API runtime for image generation, edits, versioned designs, inspection, metering and contract checks",
-      "tracked_files": 337
+      "tracked_files": 337,
+      "statistics": {
+        "commits": 133,
+        "text_files": 330,
+        "text_lines": 94116,
+        "source_files": 211,
+        "source_file_lines": 77900,
+        "binary_or_non_utf8_files": 7,
+        "symlinks": 0,
+        "file_bytes": 8452783
+      }
     },
     {
       "name": "event-intelligence",
@@ -67,7 +159,17 @@
       "tree": "962cba90be2846c14490105c55722971bf241529",
       "committed_at": "2026-10-12T13:01:26-04:00",
       "description": "Sourced event facts and research cache: bounded retrieval, evidence provenance and privacy boundaries",
-      "tracked_files": 324
+      "tracked_files": 324,
+      "statistics": {
+        "commits": 221,
+        "text_files": 305,
+        "text_lines": 140575,
+        "source_files": 189,
+        "source_file_lines": 86403,
+        "binary_or_non_utf8_files": 19,
+        "symlinks": 0,
+        "file_bytes": 7162213
+      }
     },
     {
       "name": "fulfillment-connectors",
@@ -78,7 +180,17 @@
       "tree": "72be231da9f282510f63c0dde0ea363c30811509",
       "committed_at": "2026-10-12T13:27:20-04:00",
       "description": "Provider-neutral fulfillment connector runtime: supplier quote normalization, order submission and shipment status.",
-      "tracked_files": 147
+      "tracked_files": 147,
+      "statistics": {
+        "commits": 127,
+        "text_files": 137,
+        "text_lines": 51325,
+        "source_files": 77,
+        "source_file_lines": 45889,
+        "binary_or_non_utf8_files": 10,
+        "symlinks": 0,
+        "file_bytes": 9222879
+      }
     },
     {
       "name": "getticketstub.com",
@@ -89,7 +201,17 @@
       "tree": "2b9d89d2dec8cb2e702f6ab20d0d00c1122a9e5f",
       "committed_at": "2026-10-12T13:17:51-04:00",
       "description": "Customer ticket-stub studio app (Next.js): event intake, design, approval and print or digital handoff",
-      "tracked_files": 719
+      "tracked_files": 719,
+      "statistics": {
+        "commits": 229,
+        "text_files": 665,
+        "text_lines": 94669,
+        "source_files": 394,
+        "source_file_lines": 70381,
+        "binary_or_non_utf8_files": 54,
+        "symlinks": 0,
+        "file_bytes": 15294734
+      }
     },
     {
       "name": "integration-evals",
@@ -100,7 +222,17 @@
       "tree": "33255e685cd74cc7221831a5963b93348b67d6e3",
       "committed_at": "2026-10-12T13:28:39-04:00",
       "description": "Cross-component integration verification, synthetic fixtures, and sanitized evidence for the getticketstub v1 release",
-      "tracked_files": 529
+      "tracked_files": 529,
+      "statistics": {
+        "commits": 186,
+        "text_files": 519,
+        "text_lines": 204560,
+        "source_files": 226,
+        "source_file_lines": 28817,
+        "binary_or_non_utf8_files": 10,
+        "symlinks": 0,
+        "file_bytes": 22840713
+      }
     },
     {
       "name": "landing-page-repo",
@@ -111,7 +243,17 @@
       "tree": "f846b2c412b65bba07b2f0cee7b5657c611c7913",
       "committed_at": "2026-10-12T13:10:58-04:00",
       "description": "Static TicketStub public landing page: product story, approved example, and demo CTA served at / by getticketstub.com.",
-      "tracked_files": 329
+      "tracked_files": 329,
+      "statistics": {
+        "commits": 78,
+        "text_files": 272,
+        "text_lines": 24745,
+        "source_files": 32,
+        "source_file_lines": 10211,
+        "binary_or_non_utf8_files": 57,
+        "symlinks": 0,
+        "file_bytes": 16717841
+      }
     },
     {
       "name": "marketing-material",
@@ -122,7 +264,17 @@
       "tree": "5b8eccb7c6928b9cb80fae34c11e1f4d26242626",
       "committed_at": "2026-10-12T13:02:26-04:00",
       "description": "Launch collateral, evidence-backed messaging, and demo narrative for the getticketstub commemorative-ticket product.",
-      "tracked_files": 374
+      "tracked_files": 374,
+      "statistics": {
+        "commits": 171,
+        "text_files": 238,
+        "text_lines": 274794,
+        "source_files": 25,
+        "source_file_lines": 8300,
+        "binary_or_non_utf8_files": 136,
+        "symlinks": 0,
+        "file_bytes": 51311649
+      }
     },
     {
       "name": "print-production",
@@ -133,7 +285,17 @@
       "tree": "ab5c3a4437f63fea03c2d162be2e1efe6145b64e",
       "committed_at": "2026-10-12T05:52:17-04:00",
       "description": "Deterministic print composition, preflight, exports and production manifests for event ticket artifacts.",
-      "tracked_files": 319
+      "tracked_files": 319,
+      "statistics": {
+        "commits": 114,
+        "text_files": 315,
+        "text_lines": 51075,
+        "source_files": 245,
+        "source_file_lines": 41643,
+        "binary_or_non_utf8_files": 4,
+        "symlinks": 0,
+        "file_bytes": 11478914
+      }
     },
     {
       "name": "shared-contracts",
@@ -144,7 +306,17 @@
       "tree": "ccf41253598aa024ea1f594432a05ec6e46dd454",
       "committed_at": "2026-10-12T13:16:54-04:00",
       "description": "Canonical JSON Schemas, generated types, offline validators and compatibility fixtures for neatHack 2026 services",
-      "tracked_files": 25
+      "tracked_files": 25,
+      "statistics": {
+        "commits": 32,
+        "text_files": 25,
+        "text_lines": 6408,
+        "source_files": 5,
+        "source_file_lines": 1608,
+        "binary_or_non_utf8_files": 0,
+        "symlinks": 0,
+        "file_bytes": 360870
+      }
     },
     {
       "name": "team-dashboard",
@@ -155,7 +327,17 @@
       "tree": "7dc688c55df321ed56a11b46b514ca533484d9df",
       "committed_at": "2026-10-12T13:17:00-04:00",
       "description": "Typed React module for getticketstub.com's admin finance area: costs, revenue, budgets, drilldowns and reports.",
-      "tracked_files": 191
+      "tracked_files": 191,
+      "statistics": {
+        "commits": 82,
+        "text_files": 191,
+        "text_lines": 43733,
+        "source_files": 119,
+        "source_file_lines": 14185,
+        "binary_or_non_utf8_files": 0,
+        "symlinks": 0,
+        "file_bytes": 3397774
+      }
     }
   ]
 }

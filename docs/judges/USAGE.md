@@ -1,6 +1,6 @@
 # Timothy Wayne Gregg's coding-agent usage
 
-[Back to evidence](EVIDENCE.md) · [Original report (PDF, 198 pages, 580 KB)](../assets/submission/timothy-wayne-gregg-token-usage-2026-10-12.pdf)
+[Back to evidence](EVIDENCE.md) · [Latest report (PDF, 198 pages, 580 KB)](../assets/submission/timothy-wayne-gregg-token-usage-2026-10-12-143507.pdf)
 
 **Attribution:** Timothy Wayne Gregg (`completedottech`) supplied this report and identified it as his token usage on October 12, 2026. That identity comes from his statement. The report itself uses local account labels and says identity confidence is low. Its Jevelopers title does not make these totals team-wide.
 
@@ -8,20 +8,20 @@ Tokens are small pieces of text processed by a model. These records describe loc
 
 ## What the report records
 
-The window runs from **October 10 at 6:09:05 a.m. to October 12 at 1:52:27 p.m., Eastern time (UTC−04:00)**. This is a saved snapshot of active logs.
+The window runs from **October 10 at 6:09:05 a.m. to October 12 at 2:34:36 p.m., Eastern time (UTC−04:00)**. This is a saved snapshot of active logs. It extends beyond the website cutoff recorded in the [rules checklist](RULES-CHECKLIST.md); the controlling Discord deadline remains unverified. Do not treat the full window as confirmed event-eligible work.
 
 | Measure | Reported value | PDF page |
 | --- | --- | --- |
-| Tokens processed | 28.28 billion | 1 |
-| Usage records | 209,218 | 1 |
-| Cached reads: earlier input used again | 27,481,583,880 tokens; 97.1875% of all tokens | 182 |
-| Output tokens | 134,717,433 | 182 |
+| Tokens processed | 28.32 billion | 1 |
+| Usage records | 209,429 | 1 |
+| Cached reads: earlier input used again | 27,520,275,848 tokens; 97.1878% of all tokens | 182 |
+| Output tokens | 134,816,002 | 182 |
 | Recorded session IDs | 753 | 3 |
-| Estimated value at API prices | $8,481.91 USD | 1 |
+| Estimated value at API prices | $8,503.11 USD | 1 |
 
-The four non-overlapping token categories on page 182 add to **28,276,867,771**. Reasoning is already part of output. The two cache-write time groups are already part of cache writes. Adding either again would overcount.
+The four non-overlapping token categories on page 182 add to **28,316,587,424**. Reasoning is already part of output. The two cache-write time groups are already part of cache writes. Adding either again would overcount.
 
-Page 6 separates 194,227 Codex records and 14,991 Claude Code records. Together they match the cover total. A usage record is not proof of a separate completed task. Session IDs are not a count of agents or people.
+Page 6 separates 194,438 Codex records and 14,991 Claude Code records. Together they match the cover total. A usage record is not proof of a separate completed task. Session IDs are not a count of agents or people.
 
 ## How to read the estimate
 
@@ -37,8 +37,12 @@ Repeated input makes up most of the token count. More tokens alone do not prove 
 - This later snapshot does not independently audit the earlier Day 2 post. Do not add their overlapping totals together.
 - Usage records do not establish code authorship, event eligibility, or a complete live customer result. See the [rules checklist](RULES-CHECKLIST.md).
 
+## Earlier snapshot
+
+The [earlier supplied PDF](../assets/submission/timothy-wayne-gregg-token-usage-2026-10-12.pdf), through 1:52:27 p.m., is retained for history. It reported 28.28 billion tokens and 209,218 records. The latest report supersedes it; do not add the two overlapping snapshots together. Crystal’s [separate ledger](CRYSTAL-USAGE.md) has a different date range and evidence source. No combined team total is claimed.
+
 ## File integrity
 
-The supplied PDF is retained unchanged. Its filename now identifies Timothy; the report's internal title is preserved. [The asset manifest](../assets/submission/ASSET-MANIFEST.json) records its size and SHA-256 file fingerprint.
+Both supplied PDFs are retained unchanged. The latest source filename ends in `20261012-143507-designed-report.pdf`. Its filename now identifies Timothy; the report's internal title is preserved. [The asset manifest](../assets/submission/ASSET-MANIFEST.json) records its size and SHA-256 file fingerprint.
 
-We checked the cited text, visually inspected the cover and key evidence pages, and scanned all extracted text for secrets. The PDF contains local workspace paths and session IDs, but no embedded files or JavaScript. No raw logs or private checkpoint contents were added.
+We checked the cited text, visually inspected the latest cover, token breakdown, and scope page, and scanned all extracted text for secrets. The PDF contains local workspace paths and session IDs, but no embedded files or JavaScript. No raw logs or private checkpoint contents were added.

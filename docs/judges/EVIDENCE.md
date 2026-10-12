@@ -77,13 +77,17 @@ The reviewer workbook has four blank-safe formula corrections made through the C
 
 The posts prove public updates, not every product claim in their copy. Day 1’s printing language is not proof of physical fulfillment. Day 2’s usage and cost figures are owner reports, not audited metrics. We did not verify the linked stream or its recordings and do not count them as the final demo.
 
-**Timothy's usage report:** Timothy Wayne Gregg (`completedottech`) supplied a later October 12 report covering his local coding-agent usage. It records 28.28 billion tokens and 209,218 usage records; 97.19% of tokens were cached reads. Its $8,481.91 figure is an API-price estimate, not actual spend. Attribution to Timothy is owner-provided; these are not team-wide totals. [Read the short summary and original PDF](USAGE.md), including scope, counter mismatches, and pricing limits. It does not prove a completed live product task or independently audit the Day 2 post.
+**Timothy's usage report:** Timothy Wayne Gregg (`completedottech`) supplied a later October 12 report covering his local coding-agent usage. It records 28.32 billion tokens and 209,429 usage records; 97.19% of tokens were cached reads. Its $8,503.11 figure is an API-price estimate, not actual spend. Attribution to Timothy is owner-provided; these are not team-wide totals. [Read the short summary and original PDF](USAGE.md), including scope, counter mismatches, and pricing limits. It does not prove a completed live product task or independently audit the Day 2 post.
+
+**Crystal's usage ledger:** the team supplied pasted ledger text and the credit **Crystal (lajefa)**. It reports 128,391,680 tokens and 1,137 calls across May 19–October 12, including pre-event work. [Read the attributed summary](CRYSTAL-USAGE.md). The $87.11 API-price estimate and $80 subscription claim are not audited spending. No original file, raw logs, or bills were provided. These figures are kept separate from Timothy's; no combined team total is claimed.
 
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
 
 **Still missing:** a verified final demo quote-post of the official launch post. The two build posts predate that launch and do not satisfy this step. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
 
 ## Code history
+
+[Repository, file, line, and source-commit counts](../../REPOSITORIES.md#collection-at-a-glance) describe the pinned collection. [Counting rules](COLLECTION.md) separate source history from submission snapshots and explain included tests, generated code, and pre-event history.
 
 [Source provenance](SOURCE-PROVENANCE.json) records the inspected original commits, GitHub account attribution, and author/committer dates. All 14 inspected source tips are dated October 12. Original histories remain in those public repositories; the submission repository records snapshots.
 

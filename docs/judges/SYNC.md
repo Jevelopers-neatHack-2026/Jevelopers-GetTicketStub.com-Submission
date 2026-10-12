@@ -15,6 +15,8 @@ python3 scripts/sync_submission.py --publish
 
 The script discovers all public repositories in `Jevelopers-neatHack-2026` except this submission repository, fetches each default branch, scans the complete staged snapshot for secrets, verifies each copied Git tree against its source, refreshes the index and manifest, and commits and pushes only when something changed. New public repositories are picked up automatically. Files removed upstream are removed from the next snapshot. Refresh after merging the work you want judges to see.
 
+It fetches complete history for each selected branch to count source commits accurately. Repository, file, text-line, source-file-line, and commit counts are generated in the same manifest and index. [Counting rules](COLLECTION.md) explain what each number includes. Full history may take longer to fetch than the earlier shallow snapshots; only files at the selected commit are copied into the collection.
+
 If the signed-in account has used its GitHub API quota, public metadata can use the separate unauthenticated quota:
 
 ```sh

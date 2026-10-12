@@ -87,6 +87,6 @@ Open the local address printed in the terminal. Choose **The Pale Hours**, confi
 
 [Day 1 build post](https://x.com/CompleteTechLLC/status/2109089580159004778) · [Day 2 build post](https://x.com/CompleteTechLLC/status/2109407386289189284)
 
-[Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
+[Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Repo, line, and commit counts](REPOSITORIES.md#collection-at-a-glance) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 
 The source repos keep the original history. Each code copy links to its commit—a saved version of code. Newer copies may go beyond the tested evidence.
