@@ -27,12 +27,15 @@ The maintainer accepted the **reduced repository-guidance scope** on 2026-10-12 
 - **Reduced scope:** at the user's direction, [#11](https://github.com/Jevelopers-neatHack-2026/.github/issues/11) (security reporting) and [#13](https://github.com/Jevelopers-neatHack-2026/.github/issues/13) (sixth form and private routing) were closed **not planned**, with possible later addition. See the scope addenda on [#16](https://github.com/Jevelopers-neatHack-2026/.github/issues/16#issuecomment-6116512227) and [#3](https://github.com/Jevelopers-neatHack-2026/.github/issues/3#issuecomment-6116512413). This is deferred scope, not a passed check: the original twelve-leaf security baseline is not complete, no private reporting route is confirmed, and only five active issue forms exist. Do not send sensitive details through a public issue.
 - **Gate and epic:** [#16](https://github.com/Jevelopers-neatHack-2026/.github/issues/16) (`GH-11`) and [#3](https://github.com/Jevelopers-neatHack-2026/.github/issues/3) are closed for the same reduced scope; the [epic closure receipt](https://github.com/Jevelopers-neatHack-2026/.github/issues/3#issuecomment-6122142963) preserves the exclusions. Earlier pending-acceptance assessments remain historical.
 - **Published sources:** the pull-request template (`GH-PR-TEMPLATE@1.0.0`) and five active issue forms (`GH-ISSUE-FORMS@1.0.0`) were published by [PR #19](https://github.com/Jevelopers-neatHack-2026/.github/pull/19) and [PR #20](https://github.com/Jevelopers-neatHack-2026/.github/pull/20).
-- **Limits:** native GitHub UI behavior beyond the dated client check, hosted Actions and platform isolation, repository settings, adoption by other repositories, master acceptance, product release and security are not verified or claimed. This repository has no root `.github/workflows` installation; downstream workflow execution, private-workflow access, fork isolation and secret behaviour are unverified.
+- **Workflow sources:** `.github/workflows/docs-check.yml` provides a reusable Markdown link check. `.github/workflows/governance-checks.yml` calls it and runs the offline governance validator and fixture tests for pull requests targeting `main`, pushes to `main`, and manual dispatch. These files define source behavior; their presence does not by itself prove a successful hosted run, required-check configuration, or consumer adoption.
+- **Limits:** a local validator or fixture result shows only what its command exercised. It does not establish a GitHub-hosted run's outcome, reusable-workflow access, token/fork/secret isolation, required-check enforcement, or consumer adoption. For hosted execution, link the exact PR and run and record caller/source revisions and inspected results; substantiate settings and adoption separately. Local issue-form validation does not render GitHub's native UI; document UI behavior with a dated preview for the relevant form version. Master acceptance, product release, and private security routing require their own authoritative evidence.
 - **Acceptance:** master acceptance IDs and their status are owned by [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals). A merged documentation change, local fixture result or mock check does not verify one.
+
+**Organization adoption audit (2026-10-12):** the [human-readable governance and profile status addendum](adoption/observations/governance-status-addendum-2026-10-12.md) and [machine-readable organization adoption observations](adoption/observations/organization-adoption-2026-10-12.json) record the public-tree snapshot at 17:16:34 UTC and a separate repository metadata/settings observation at 17:19:49 UTC. They describe only those recorded revisions and times, not later repository state.
 
 **Historical snapshot, superseded where it differs:** at public revision [4129e71](https://github.com/Jevelopers-neatHack-2026/.github/commit/4129e71f42a51d42803b1020e146f54108cf2f93) (observed 2026-10-11 02:48:39 UTC) `GH-03-I` (#13) and `GH-07` (#11) were open and blocked, and `GH-01` and `GH-04` were still awaiting acceptance. The scope change above supersedes that open/blocked state; the snapshot is kept as dated evidence.
 
-Earlier detail: [status and boundaries](docs/status.md) and the [governance release assessment](adoption/governance-release-record.md) are dated records that predate the final acceptance above. Use the linked maintainer decisions for the later disposition; their acceptance does not retroactively supply a missing historical PR review receipt.
+**Dated references:** [status and boundaries](docs/status.md), the [governance gap register](adoption/governance-register.json), and the [governance release assessment](adoption/governance-release-record.md) are dated records. The register and release assessment remain historical snapshots; consult the adoption addendum and observation JSON for the dated organization audit, and recheck live evidence before acting.
 
 ## Start here
 
@@ -43,32 +46,31 @@ Earlier detail: [status and boundaries](docs/status.md) and the [governance rele
 | Work as a coding agent | [AGENTS.md](AGENTS.md) and [agent guidance](standards/agent-contributors.md) |
 | Record evidence | [Acceptance and evidence rules](standards/acceptance-evidence.md) and the [evidence record](templates/evidence-record.md) |
 | Adopt guidance in a repository | [Bootstrap checklist](adoption/repository-bootstrap.md) and [adoption record](templates/adoption-record.md) |
+| Bootstrap, maintain, hand off or retire governance | [Governance lifecycle](standards/governance-lifecycle.md) |
+| Review the organization adoption audit | [Status addendum](adoption/observations/governance-status-addendum-2026-10-12.md) and [exact observations](adoption/observations/organization-adoption-2026-10-12.json) |
 
 ## Checks
 
-The reusable link-check workflow has offline tests against synthetic checkouts. From the repository root (Python 3.9 or newer and Node on `PATH`), create an isolated virtual environment and install the pinned test dependencies once. Dependency installation may download packages; it is setup, not an offline check.
+The root caller in `.github/workflows/governance-checks.yml` invokes the reusable `.github/workflows/docs-check.yml` with repository-wide Markdown scope and runs the local governance validator and offline fixture suite on pull requests to `main`, pushes to `main`, and manual dispatch. The workflow files are source configuration. Their presence does not establish a hosted result or required-check enforcement; verify each claim against the exact PR, Actions run, source/caller revisions, and settings evidence.
+
+From the repository root, use Python 3.10 or newer and Node on `PATH` to create a virtual environment and install the pinned test dependency. Dependency installation may download the package; it is setup, not an offline check.
 
 ```sh
-CHECKS_VENV="$(mktemp -d)"
-python3 -m venv "$CHECKS_VENV"
-"$CHECKS_VENV/bin/python" -m pip install -r automation-design/tests/requirements.txt
+python3 -m venv .venv
+.venv/bin/python -m pip install --no-input -r automation-design/tests/requirements.txt
+.venv/bin/python scripts/validate_governance.py
+.venv/bin/python -m unittest discover -s automation-design/tests -v
 ```
 
-Then run the offline suite in the same shell:
-
-```sh
-"$CHECKS_VENV/bin/python" -m unittest discover -s automation-design/tests -v
-```
-
-It runs the checker extracted from the workflow YAML and validates the source, fixture and starter policy. It is not a GitHub Actions run. See the [local fixture](automation-design/fixtures/reusable-workflow/README.md) for what it covers and leaves unverified.
+The validator checks the documented repository-specific subset of issue forms, workflow files, records, links, and related governance sources. The test suite exercises the checker and security-surface fixtures offline. Neither command renders issue forms in GitHub, checks live label availability, verifies destination settings, or supplies a hosted Actions result. See the [validator limits and supported rules](automation-design/reusable-workflows.md#offline-governance-validator) and the [local fixture](automation-design/fixtures/reusable-workflow/README.md).
 
 ## Docs
 
 | Area | Documents |
 |---|---|
-| Status and gates | [Current status and boundaries](docs/status.md) · [Governance release assessment](adoption/governance-release-record.md) |
-| Inventory | [Governance inventory](adoption/governance-inventory.md) · [Repository gap register](adoption/governance-register.json) |
-| Standards | [Acceptance and evidence](standards/acceptance-evidence.md) · [Architecture linking](standards/architecture-linking.md) · [Releases and versioning](standards/releases-versioning.md) · [Label planning](standards/labels-planning.md) · [Security and secret handling](standards/security-secret-handling.md) |
+| Status and gates | [2026-10-12 governance status addendum](adoption/observations/governance-status-addendum-2026-10-12.md) · [Earlier status and boundaries (dated)](docs/status.md) · [Earlier governance release assessment (dated)](adoption/governance-release-record.md) |
+| Inventory | [2026-10-12 organization adoption observations](adoption/observations/organization-adoption-2026-10-12.json) · [Governance inventory](adoption/governance-inventory.md) · [Historical governance gap register (dated)](adoption/governance-register.json) |
+| Standards | [Governance lifecycle](standards/governance-lifecycle.md) · [Acceptance and evidence](standards/acceptance-evidence.md) · [Architecture linking](standards/architecture-linking.md) · [Releases and versioning](standards/releases-versioning.md) · [Label planning](standards/labels-planning.md) · [Security and secret handling](standards/security-secret-handling.md) |
 | Templates | [Contributor templates](templates/README.md) · [Issue forms](templates/issue-forms.md) · [Release record](templates/release-record.md) · [Backlog audit](templates/backlog-audit.md) |
 | Workflows | [Reusable workflow design](automation-design/reusable-workflows.md) · [Examples](automation-design/examples/README.md) · [Workflow starter](workflow-templates/docs-check.yml) |
 | Security | [Pending security policy draft](community/SECURITY.pending.md) |
@@ -81,6 +83,7 @@ It runs the checker extracted from the workflow YAML and validates the source, f
 |---|---|
 | [`profile/`](profile/) | Organization entry point and its existing TicketStub artwork |
 | [`.github/`](.github/) | Published pull-request template and five active issue forms |
+| [`.github/workflows/`](.github/workflows/) | Reusable Markdown link check and this repository's governance-validation caller |
 | [`standards/`](standards/) | Contribution, evidence, architecture, release and security guidance |
 | [`templates/`](templates/) | Reusable documentation contracts and worked examples |
 | [`adoption/`](adoption/) | Bootstrap instructions and dated rollout observations |

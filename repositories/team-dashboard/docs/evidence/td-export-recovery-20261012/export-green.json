@@ -1,0 +1,51 @@
+{
+  "mode": "TEST_BUILT isolated hooks/ports; not React/browser or Finance execution",
+  "runtime": "v22.16.0",
+  "transpilerVersion": "5.8.3",
+  "sourceGitBlob": "9da55f8ebfc984690cf808042250d656ac42ca78",
+  "results": [
+    {
+      "name": "unreadable kind getter resolves unavailable",
+      "outcome": "pass"
+    },
+    {
+      "name": "unreadable prepare getter resolves unavailable",
+      "outcome": "pass"
+    },
+    {
+      "name": "unreadable revoked port resolves unavailable",
+      "outcome": "pass"
+    },
+    {
+      "name": "integrated mode never inspects supplied port",
+      "outcome": "pass"
+    },
+    {
+      "name": "throwing prototype settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "revoked rejection settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "classifier failure settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "401 settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "403 settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "500 settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    }
+  ],
+  "passed": 10,
+  "failed": 0,
+  "skipped": 0
+}

@@ -1,17 +1,17 @@
 # Reusable workflow guidance
 
-This package contains examples, a copyable starter, and a local consumer fixture. It installs no workflow in the repository root, configures no Actions setting, and creates no required check. The checked-in guidance and local fixture can be reviewed without a GitHub Actions run; consumer-specific platform execution and settings remain unverified adoption evidence and cannot be claimed from this fixture.
+This package contains examples, a copyable starter, a local consumer fixture, and two root workflows. `.github/workflows/docs-check.yml` is the reusable Markdown checker; `.github/workflows/governance-checks.yml` calls it from the same commit and runs the offline governance validator and fixture tests on pull requests targeting `main`, pushes to `main`, or manual dispatch. Both workflows grant only `contents: read`, check out with credentials disabled, and bound runnable jobs. Workflow files and local checks describe candidate source behavior; hosted success, Actions settings, and required-check enforcement need separate evidence for the exact revision.
 
 ## Check recommendations and status
 
 | Check | Status in this package | Owner role | Meaningful pass condition | Failure condition |
 |---|---|---|---|---|
-| Markdown relative-link check | Starter and local fixture | Repository docs maintainer; CI owner reviews | Every supported relative file link in scanned Markdown resolves within the checkout; output reports files checked and zero broken links | Broken or escaping path, invalid scope, empty required docs directory, or checker error |
+| Markdown relative-link check | Installed reusable source, root caller, starter, and local fixture | Repository docs maintainer; CI owner reviews | Every supported relative file link in scanned Markdown resolves within the checkout; output reports files checked and zero broken links | Broken or escaping path, invalid scope, empty required docs directory, or checker error |
 | Repository lint, unit tests, build | Recommendation only | Repository engineering owner and CI maintainer | Each repository's documented lint/test/build commands pass on the exact candidate revision | Any required command fails, is skipped, or has no recorded result |
 | Contract compatibility | Recommendation only; integration-evals owns integrated gate | Producer and consumer contract owners | Local contract validation passes against the exact catalog revision and consumer fixtures; integrated result is linked separately | Catalog/version mismatch, unreviewed producer/consumer change, missing fixture, or absent integrated result |
 | Evidence artifact hygiene | Recommendation only; no artifact upload configured | Evidence owner and repository maintainer | If an artifact is required, it is produced from the tested revision, contains the declared result/provenance, has a digest and limited retention/access, and is scrubbed of secrets and private data | Missing artifact, mismatched revision/digest, excessive access/retention, sensitive content, or fabricated evidence |
 
-“Starter” means a workflow copied from workflow-templates into an adopting repository. “Example” means files under automation-design/examples for review. “Configured” means an adopter installed a caller or copied workflow on its own default branch and intentionally enabled it. “Verified” requires an actual authorized run on an exact source and caller revision with a run URL and inspected result. None of the automation in this package is configured or verified on GitHub.
+“Starter” means a workflow copied from workflow-templates into an adopting repository. “Example” means files under automation-design/examples for review. The root caller is source in this repository revision, and its `uses: ./.github/workflows/docs-check.yml` resolves to the reusable source at that same commit. “Configured” for a consumer means the consumer installed a caller or copied workflow on its own default branch and intentionally enabled it. “Verified” requires an actual authorized run on an exact source and caller revision with a run URL and inspected result. A local check or installed file does not establish a hosted run or consumer adoption.
 
 The documentation starter checks a deliberately small Markdown link syntax: inline relative links whose target is a file or directory in the checkout. It skips external URLs and does not validate anchors, reference-style links, generated-site routing, or private links. It resolves and checks the requested scan root and each scanned Markdown file before reading; a docs/ symlink or file link resolving outside the checkout fails closed. A repository owner should replace or extend the check if its documentation format needs more coverage.
 
@@ -49,7 +49,7 @@ The caller at automation-design/examples/caller/.github/workflows/docs-check.yml
 
 The caller is pinned to a placeholder until its maintainer chooses the exact immutable source SHA. Record that SHA together with the caller SHA, contract version, fixture revision, exact local command, outputs, limitations, and reviewer. Add optional inputs/outputs compatibly within v1; an incompatible input/output change requires a new contract version, refreshed fixture, and caller review. A pinned caller does not silently move to a new source revision.
 
-The fixture proves only local checker behavior and static policy checks. It does not prove workflow-call resolution, Actions access settings, token behavior on the platform, fork isolation, secrets isolation, runner billing, artifact retention, status-check enforcement, or successful GitHub execution. Those remain pending platform evidence.
+The fixture proves only local checker behavior and static policy checks. Local validation can inspect the source workflow and caller, but it does not prove hosted workflow-call resolution, Actions access settings, token behavior on the platform, fork isolation, secrets isolation, runner billing, artifact retention, status-check enforcement, or successful GitHub execution. Confirm those conditions with platform evidence tied to the exact candidate revision.
 
 ## Adoption checklist
 
@@ -63,7 +63,20 @@ Before copying or calling a workflow:
 6. Record the actual run URL, caller commit, called workflow commit, command/result, logs reviewed, artifact URL/digest/retention/access if any, and remaining limits. A configured file without an actual run is not verified.
 7. Roll back by removing or reverting the caller from the destination default branch and restoring the previous destination revision. Recheck required-check settings after removal so they do not require an absent check.
 
-No GitHub run URL, caller installation, source access grant, Actions setting, required check, artifact, or adoption is asserted by this package. The exact platform follow-up is to have a named repository owner authorize a destination, verify its visibility and Actions policy, install a reviewed caller pinned to a full source SHA, run a non-secret fixture, inspect the run and logs, and record immutable evidence. Live/provider use still needs separate explicit authority.
+The root caller is present in this candidate source revision. Source presence alone does not establish a GitHub run, consumer installation, source access grant, Actions setting, required check, artifact, or adoption. The platform follow-up is to have a named repository owner authorize a destination, verify its visibility and Actions policy, install a reviewed caller pinned to a full source SHA, run a non-secret fixture, inspect the run and logs, and record immutable evidence. Live/provider use still needs separate explicit authority.
+
+## Offline governance validator
+
+Run the governance validator and offline fixture suite from a repository checkout with Python 3.10 or newer and the exact dependency pin:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install --no-input -r automation-design/tests/requirements.txt
+.venv/bin/python scripts/validate_governance.py
+.venv/bin/python -m unittest discover -s automation-design/tests -v
+```
+
+The validator checks the active GitHub issue-form properties/types used by this repository, duplicate field IDs and form names, YAML duplicate keys, chooser configuration, unique-key governance JSON structure and reference joins, dated observation snapshot counts and states, workflow token/runner/trigger/action-pin policy and secret declarations/references, release/PR template prerequisites, supported relative Markdown file links, HTML image `alt` presence, and profile asset references. Its workflow secret check rejects non-empty `secrets` keys and scans YAML string values for explicit `${{ ... }}` expressions, plus unwrapped `if` expressions, for a root `secrets` identifier. It recognizes direct, dot, index, and function-argument uses, compares that identifier without regard to ASCII case, and skips single-quoted expression literals (GitHub escapes a literal apostrophe as `''`). This is a targeted identifier scan, not a complete GitHub Actions expression parser and not evidence of hosted secret isolation. See GitHub's official [contexts](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts) and [expressions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions) references. As a repository-profile rule, the validator requires IDs for interactive issue-form elements even though GitHub's schema does not require them. GitHub currently documents the form schema as public preview, so this offline subset must be reviewed against the current schema before future form changes. It does not validate GitHub's hosted issue-form rendering, labels available in GitHub, all Markdown/CommonMark or GitHub-Flavored Markdown behavior, generated anchors, reference-style links, Mermaid syntax, arbitrary integration-evals acceptance schemas, or live Actions behavior. It deliberately does not decide whether a GitHub label exists or whether a source file has been enabled as a setting.
 
 ## Official references
 
@@ -72,3 +85,5 @@ No GitHub run URL, caller installation, source access grant, Actions setting, re
 - [Calling reusable workflows, inputs, outputs, and secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
 - [Sharing actions and workflows from a private repository](https://docs.github.com/en/actions/how-tos/reuse-automations/share-with-your-organization)
 - [Default community-health files](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file)
+- [Current issue form schema](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema)
+- [Supported keywords for reusable-workflow caller jobs](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#supported-keywords-for-jobs-that-call-a-reusable-workflow)

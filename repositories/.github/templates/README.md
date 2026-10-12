@@ -11,6 +11,20 @@ documented convention; none configures reviews, branch protection or required ch
 The rest of this page covers the pull request template. Issue-form fields, labels and the pending
 security route are documented in [issue forms](issue-forms.md); the evidence, release, backlog-audit
 and adoption records in this directory are linked from the [repository README](../README.md#docs).
+The [governance lifecycle](../standards/governance-lifecycle.md) explains how a destination adopts,
+maintains, hands off, or retires shared guidance.
+
+## Offline validation and workflow sources
+
+The repository caller at `.github/workflows/governance-checks.yml` invokes the reusable Markdown
+check at `.github/workflows/docs-check.yml` and runs the repository-specific governance validator
+and offline fixture tests on pull requests targeting `main`, pushes to `main`, and manual dispatch.
+Run `.venv/bin/python scripts/validate_governance.py` and
+`.venv/bin/python -m unittest discover -s automation-design/tests -v` after the setup in the
+[repository check instructions](../README.md#checks). The validator checks the documented local
+issue-form and governance-source subset; it does not preview GitHub's native issue forms, confirm
+live label availability, prove destination adoption, or report a hosted Actions result. See the
+[validator's scope and limits](../automation-design/reusable-workflows.md#offline-governance-validator).
 
 ## How the pull request template reaches a repository
 

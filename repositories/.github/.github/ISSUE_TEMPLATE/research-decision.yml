@@ -4,7 +4,6 @@ description: A bounded question that ends in a recorded decision.
 title: '[<PREFIX>-NN][P#] Decide <question>'
 labels:
 - type:docs
-- question
 body:
 - type: markdown
   attributes:

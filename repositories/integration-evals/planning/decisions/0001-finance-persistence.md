@@ -34,7 +34,9 @@ Connection notes (from the provider docs):
 
 ## Recommendation
 
-**Option C: Neon Postgres 16, on a paid tier that includes a PITR window (Launch or higher), in a North America region near the host.**
+**Original recommendation:** Option C: Neon Postgres 16, on a paid tier that includes a PITR window (Launch or higher), in a North America region near the host.
+
+**Owner resolution:** Decision 0003 rows P1-P3 later accepted Neon Postgres 16 on Launch and the production/preview settings in the Status line. The alternatives and technical rationale below preserve the review that informed that direction; provider selection is no longer open. The decision did not create an account, accept terms, configure a database, enter secrets, or pass LIVE-02.
 
 - Keep finance data in its own database, separate from the customer-app SQLite. This keeps single data ownership (ARC-02) and leaves the app's storage migration as a separate decision.
 - Use the **direct** endpoint for migrations, and the direct endpoint or a small app-side `pg` pool for the ledger at hackathon volumes. Use the pooled endpoint only after the ledger and pricing suites pass against it.
@@ -53,7 +55,7 @@ SQLite (A) and MySQL (B) are rejected because they would discard the tested corr
 
 ## Owner actions
 
-1. **Decide:** Neon (recommended), Supabase, or another option. Also decide the plan tier and region.
+1. **Selection question resolved by 0003/P1-P3:** Neon Postgres 16 on Launch, with production in `aws-us-east-1` unless the owner confirms a western host origin (then `aws-us-west-2`); production scale-to-zero is disabled, preview keeps it on, and PITR history is set to 7 days. These accepted choices are not yet provisioned.
 2. **Account and terms:** create the provider organization under the company identity and accept its terms of service and data processing addendum yourself. Agents must not do this. Check current pricing and set a spend cap or alert.
 3. **Create** project `cost-intelligence`, Postgres **16**, with two databases or branches (`preview`, `production`). Each gets a least-privilege application role (no CREATEDB, no superuser) and a separate migration role. **Do not** add the disposable-database marker. **Disable scale to zero on the `production` compute** (requires a paid plan); decide whether `preview` keeps it.
 4. **Secrets:** *(superseded by the Status line: the name is decided as `FINANCE_DATABASE_URL`; entering the values remains an owner action.)* Put the connection strings into GoDaddy Preview and Publish environment variables under a production name such as `FINANCE_DATABASE_URL` (the name is final once the adapter PR fixes it). Never use `CI_TEST_DATABASE_URL` for this, and never paste values into issues or evidence.

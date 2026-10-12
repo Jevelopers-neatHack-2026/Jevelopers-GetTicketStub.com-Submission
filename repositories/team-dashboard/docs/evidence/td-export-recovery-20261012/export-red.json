@@ -1,0 +1,57 @@
+{
+  "mode": "TEST_BUILT isolated hooks/ports; not React/browser or Finance execution",
+  "runtime": "v22.16.0",
+  "transpilerVersion": "5.8.3",
+  "sourceGitBlob": "c81ac3c22cef427ab14417a08bdecdf5f54d94d1",
+  "results": [
+    {
+      "name": "unreadable kind getter resolves unavailable",
+      "outcome": "fail",
+      "failureKind": "Error"
+    },
+    {
+      "name": "unreadable prepare getter resolves unavailable",
+      "outcome": "fail",
+      "failureKind": "Error"
+    },
+    {
+      "name": "unreadable revoked port resolves unavailable",
+      "outcome": "fail",
+      "failureKind": "TypeError"
+    },
+    {
+      "name": "integrated mode never inspects supplied port",
+      "outcome": "pass"
+    },
+    {
+      "name": "throwing prototype settles immediately without an unhandled rejection",
+      "outcome": "fail",
+      "failureKind": "ERR_ASSERTION"
+    },
+    {
+      "name": "revoked rejection settles immediately without an unhandled rejection",
+      "outcome": "fail",
+      "failureKind": "ERR_ASSERTION"
+    },
+    {
+      "name": "classifier failure settles immediately without an unhandled rejection",
+      "outcome": "fail",
+      "failureKind": "ERR_ASSERTION"
+    },
+    {
+      "name": "401 settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "403 settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    },
+    {
+      "name": "500 settles immediately without an unhandled rejection",
+      "outcome": "pass"
+    }
+  ],
+  "passed": 4,
+  "failed": 6,
+  "skipped": 0
+}

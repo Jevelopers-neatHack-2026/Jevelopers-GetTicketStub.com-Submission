@@ -2,8 +2,6 @@
 name: Backlog / acceptance audit
 description: Audit criterion-to-evidence coverage before a release gate.
 title: '[<PREFIX>-NN][P#] Audit <scope> acceptance coverage'
-labels:
-- type:chore
 body:
 - type: markdown
   attributes:

@@ -20,7 +20,7 @@ const leafPaths = Object.freeze({
   adapters: ['tests/adapters/adapters.test.mjs'],
   budgets: ['tests/budgets/authorization.test.mjs', 'tests/budgets/contention.test.mjs', 'tests/budgets/lifecycle.test.mjs'],
   contracts: ['tests/contracts/shared-contracts.test.mjs', 'tests/contracts/api-contract-shapes.test.mjs'],
-  evidence: ['tests/evidence/evidence.test.mjs'],
+  evidence: ['tests/evidence/evidence.test.mjs', 'tests/evidence/postgres-model.test.mjs', 'tests/evidence/stored-lineage-model.test.mjs'],
   exports: ['tests/exports/public-exports.test.mjs', 'tests/exports/csv-encoding.test.mjs'],
   integration: [...foundationTestFiles, ...databaseTestFiles],
   ledger: ['tests/ledger/ledger.test.mjs'],
@@ -33,11 +33,21 @@ const leafPaths = Object.freeze({
   reporting: ['tests/reporting/reporting.test.mjs'],
   security: ['tests/security/security.test.mjs'],
   smoke: ['tests/smoke/api-boundaries.test.mjs', 'tests/smoke/postgres-cleanup.test.mjs'],
-  traceability: ['tests/traceability/release-gates.test.mjs', 'tests/evidence/evidence.test.mjs'],
+  traceability: ['tests/traceability/release-gates.test.mjs', 'tests/traceability/migration-policy.test.mjs', 'tests/traceability/stored-lineage-migration-policy.test.mjs', 'tests/evidence/evidence.test.mjs', 'tests/evidence/postgres-model.test.mjs', 'tests/evidence/stored-lineage-model.test.mjs'],
   unit: foundationTestFiles,
 });
 
 const documentedSelectors = Object.freeze({
+  reconciliation: Object.freeze({
+    coverage: ['tests/reconciliation/coverage.test.mjs'],
+    'coverage-postgres': ['tests/reconciliation/coverage-pg.test.mjs'],
+  }),
+  traceability: Object.freeze({ 'migration-policy': ['tests/traceability/migration-policy.test.mjs', 'tests/traceability/stored-lineage-migration-policy.test.mjs'] }),
+  evidence: Object.freeze({
+    postgres: ['tests/evidence/postgres-reader.test.mjs', 'tests/evidence/stored-lineage-postgres.test.mjs'],
+    'stored-lineage': ['tests/evidence/stored-lineage-model.test.mjs'],
+    'stored-lineage-postgres': ['tests/evidence/stored-lineage-postgres.test.mjs'],
+  }),
   exports: Object.freeze({ postgres: ['tests/exports/query-export-pg.test.mjs'] }),
   budgets: Object.freeze({
     authorization: ['tests/budgets/authorization.test.mjs'],
@@ -69,6 +79,10 @@ export function suitePlan(name, existingFiles, selector) {
   const requiredDomain = name === 'integration' || name === 'release' ? requiredDomainSuites : [];
   const requiredFiles = [...requestedFiles];
   if (selector === undefined && (name === 'integration' || name === 'release')) {
+    // The model/default reader tests cannot substitute for actual storage qualification.
+    requiredFiles.push(...documentedSelectors.evidence.postgres);
+    // Coverage remains required alongside the separate full reconciliation leaf.
+    requiredFiles.push(...documentedSelectors.reconciliation.coverage, ...documentedSelectors.reconciliation['coverage-postgres']);
     for (const suite of requiredDomain) {
       const suiteFiles = leafPaths[suite] ?? [];
       if (suiteFiles.length === 0) requiredFiles.push(`tests/${suite}/`);

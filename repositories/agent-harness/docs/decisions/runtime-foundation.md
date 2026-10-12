@@ -2,6 +2,8 @@
 
 **Status:** implementation decision for the internal foundation increment. Public contract compatibility and integrated runtime acceptance remain pending.
 
+This is a decision record for the original foundation increment, not a current inventory of every module on `main`. Later private controller, JEV, development-driver, Neatlogs, and operations work adds surfaces documented in the [ownership view](../architecture/OWNERSHIP.md) and maintained runbooks. Read the scope phrases below as applying to the increment recorded here; use current source and linked guides for present-day module inventory and acceptance state.
+
 ## Runtime and package
 
 Use dependency-light ECMAScript modules on Node 22. The validated toolchain is Node 22.23.3 with npm 10.9.9, recorded in the read-only toolchain manifest in the execution evidence archive (`node22-toolchain.json`). Its official archive checksum was verified there. The .node-version file, CI, and package engines pin the validated Node 22 line; the package accepts Node >=22.23.3 <23. The EI and CE supervisors have accepted ESM with .d.ts declarations. Their conformance and producer/consumer compatibility are still pending.
@@ -10,7 +12,7 @@ The runtime uses Node's built-in node:sqlite API and adds no third-party runtime
 
 The runtime APIs used here exist by Node 22.18; this package deliberately requires the tested Node 22.23.3 patch or later within Node 22. Local tests use Node 22.23.3/npm 10.9.9. This is not evidence of the deployment server's exact Node 22 patch, SQLite build, or process/filesystem limits. Server compatibility and operational sizing remain pending. The runtime has no third-party dependencies; TypeScript 5.9.3 is pinned as a development-only compiler for the `.d.ts` consumer check. The local bootstrap supports offline npm installation when that locked compiler package is already in the npm cache. CI uses the pinned Node toolchain and lockfile.
 
-The package root is explicitly experimental and internal. It exports typed safe errors, strict local configuration, and internal durable-store primitives. It does not export ResearchPort, CreativePort, DecisionPort, AuthorizationPort, MeteringPort, ArtifactPort, ClockPort, PlannerPort, or locally invented replacements. The maintained shared-contracts catalog at revision c4caaccc2ea63b273eeac17ed89af8ac64f6bbde describes proposed contracts and does not contain generated public bindings. Canonical bindings, fixtures, and actual EI/CE consumer signoff must arrive before a public compatibility claim.
+At the initial foundation increment, the package root was explicitly experimental and internal: it exported typed safe errors, strict local configuration, and internal durable-store primitives. Later commits added separately bounded `/ticketstub`, `/decisions`, and `/development` subpath exports; see the current [`package.json`](../../package.json) and the [TypeSafe host integration](typesafe-host-integration.md). None of those local exports establishes a hosted product API or acceptance of a canonical shared contract. The shared-contracts catalog revision `c4caaccc2ea63b273eeac17ed89af8ac64f6bbde` is the source reviewed for the original increment; it is not a current moving catalog pin. Use the maintained [contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md) and accepted producer/consumer records for current contract state.
 
 ## Data ownership and scope
 
@@ -22,7 +24,7 @@ The package root is explicitly experimental and internal. It exports typed safe 
 | Authority/hold reference | External authority remains owner | Opaque reference only; lease lifecycle never releases or settles it |
 | Result and artifact bytes/hash | Their producing capability remains the content owner; the harness stores an immutable internal copy/reference | Does not create an artwork approval authority or replace canonical artifact manifests |
 
-No UI, provider adapter, dispatch code, Neatlogs integration, approval authority, financial ledger, budget reservation service, or extra service boundary is introduced. Configuration requires explicit mode, model, deadline, attempt, elapsed-time, and cost bounds. Unknown environment properties are ignored for additive compatibility; required values are never silently selected. Live mode is rejected because canonical ports and external authorities are not integrated. The image variables in .env.example state an access preference only and do not configure an engine adapter.
+The initial increment introduced no UI, provider adapter, dispatch code, Neatlogs integration, approval authority, financial ledger, budget reservation service, or extra service boundary. Later work added private JEV and Neatlogs prerequisites without adding these authorities. Configuration requires explicit mode, model, deadline, attempt, elapsed-time, and cost bounds. Unknown environment properties are ignored for additive compatibility; required values are never silently selected. Live mode remains rejected in the private local controller because canonical ports and external authorities are not integrated. The image variables in `.env.example` state an access preference only and do not configure an engine adapter.
 
 ## Durable state and ordering
 

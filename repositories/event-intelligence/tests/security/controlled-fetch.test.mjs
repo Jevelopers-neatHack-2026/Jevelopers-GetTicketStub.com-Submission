@@ -121,6 +121,67 @@ test("fetches over a direct pinned socket and sends no ambient credentials or pr
   assert.deepEqual(fixture.dials[0], { peer: "127.0.0.1", address: "127.0.0.1", port: fixture.server.port });
 });
 
+test("a resolver answer change after validation keeps the current dial pinned and blocks a fresh private answer", async (t) => {
+  // The minted local seam treats this real loopback server as the approved
+  // destination analogue; it does not make loopback a production destination.
+  let currentAnswer = "127.0.0.1";
+  const resolverAnswers = [];
+  let requests = 0;
+  let sockets = 0;
+  let dispatchIntents = 0;
+  const fixture = await fixtureFetcher(t, (_request, response) => {
+    requests += 1;
+    respond(response, 200, { "content-type": "text/plain" }, "original vetted destination");
+  }, {
+    resolveOverride(hostname) {
+      assert.equal(hostname, "fixture.example.test");
+      resolverAnswers.push(currentAnswer);
+      return Object.freeze({ addresses: Object.freeze([currentAnswer]), aliases: Object.freeze([]) });
+    },
+  });
+  fixture.server.server.on("connection", () => { sockets += 1; });
+
+  const socketAttempts = [];
+  let nativeSocketCalls = 0;
+  const originalConnect = net.connect;
+  net.connect = function guardedConnect(options, ...argumentsAfterOptions) {
+    socketAttempts.push({ address: options?.host, port: options?.port });
+    // Record before the native call and deny every non-fixture socket even if
+    // a regression attempts to dial the rebinding answer without validation.
+    assert.equal(options?.host, "127.0.0.1", "a forbidden address must never reach a native socket");
+    assert.equal(options?.port, fixture.server.port, "only the controlled fixture port may be dialed");
+    nativeSocketCalls += 1;
+    return Reflect.apply(originalConnect, this, [options, ...argumentsAfterOptions]);
+  };
+  try {
+    const result = await runWithSafeFetchLifecycle(fixture.fetcher, {
+      onDispatchIntent() {
+        dispatchIntents += 1;
+        assert.deepEqual(resolverAnswers, ["127.0.0.1"], "change the answer after the first resolution is validated");
+        assert.equal(socketAttempts.length, 0, "change the answer before any socket is created");
+        currentAnswer = "10.0.0.7";
+      },
+    }, {}, () => fixture.fetcher.fetch(fixture.url("/before-rebinding")));
+
+    assert.equal(Buffer.from(result.bytes).toString("utf8"), "original vetted destination");
+    assert.equal(dispatchIntents, 1);
+    assert.deepEqual(resolverAnswers, ["127.0.0.1"], "the in-flight request must not resolve its hostname again");
+    assert.deepEqual(fixture.dials, [{ peer: "127.0.0.1", address: "127.0.0.1", port: fixture.server.port }]);
+
+    await assert.rejects(fixture.fetcher.fetch(fixture.url("/after-rebinding")), { code: "POLICY_DENIED" });
+    assert.deepEqual(resolverAnswers, ["127.0.0.1", "10.0.0.7"], "a fresh request observes the changed private answer");
+    assert.deepEqual(socketAttempts, [{ address: "127.0.0.1", port: fixture.server.port }]);
+    assert.equal(fixture.dials.length, 1);
+    assert.equal(sockets, 1);
+    assert.equal(requests, 1);
+    assert.equal(nativeSocketCalls, 1);
+  } finally {
+    net.connect = originalConnect;
+    t.diagnostic(JSON.stringify({ mode: "controlled-loopback", resolverAnswers, dispatchIntents,
+      socketAttempts, nativeSocketCalls, acceptedSockets: sockets, requests }));
+  }
+});
+
 test("only the exact factory-minted test options identity activates the local fixture seam", async (t) => {
   const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "fixture"));
   const result = await fixture.fetcher.fetch(fixture.url("/original"));

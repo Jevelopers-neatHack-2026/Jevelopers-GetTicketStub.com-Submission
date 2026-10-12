@@ -420,6 +420,112 @@ for (const change of ['unavailable', 'expired', 'foreign_scope', 'membership_rev
   });
 }
 
+for (const lookup of ['posting', 'reverse']) {
+  for (const kind of ['user', 'service']) {
+    test(`${lookup} lookup refuses changed ${kind} revisions despite retained authority response mutation`, async () => {
+      // These allowed same-scope decisions exercise revision continuity only.
+      // The zero-hop control does not mutate; the other cases overwrite a raw
+      // response after validation in the former implementation's async gap.
+      for (const hops of [0, 2, 3, 4]) {
+        const revisionField = kind === 'user' ? 'membershipRevision' : 'serviceGrantRevision';
+        const retained = {
+          status: 'allowed', decisionId: 'synthetic-retained-decision',
+          operation: 'ledger.readSnapshot', permission: 'ledger.snapshot.read', scope: scopeA,
+          principal: kind === 'user'
+            ? { kind, actorId: scopeA.actorId, membershipStatus: 'active', membershipRevision: '' }
+            : { kind, actorId: scopeA.actorId, serviceStatus: 'active', serviceGrantRevision: '' },
+          verifiedAt: now, expiresAt: '2026-10-12T05:31:00.000Z',
+        };
+        const issuedRevisions = [];
+        const reads = [];
+        let mutations = 0;
+        const later = remaining => queueMicrotask(() => {
+          if (remaining > 1) later(remaining - 1);
+          else {
+            retained.principal[revisionField] = 'synthetic-retained-alias';
+            mutations++;
+          }
+        });
+        const base = store([record(scopeA), observation(scopeA)]);
+        const runtime = { clock,
+          store: Object.fromEntries(['getPosting', 'listByLogicalOperation', 'findByReference'].map(method => [method, async (...args) => {
+            reads.push(method);
+            return base[method](...args);
+          }])),
+          financeAuthority: { async authorizeCurrent(input) {
+            retained.operation = input.operation;
+            retained.permission = input.permission;
+            retained.scope = input.requestedScope;
+            const revision = `synthetic-valid-grant-${issuedRevisions.length + 1}`;
+            retained.principal[revisionField] = revision;
+            issuedRevisions.push(revision);
+            if (hops > 0) later(hops);
+            return retained;
+          } },
+        };
+        const result = lookup === 'posting'
+          ? await lookupPostingEvidence(request(scopeA, { eventId: 'evt-expense-1' }), runtime)
+          : await lookupByOperationalReference(request(scopeA, { reference: { status: 'resolved', kind: 'logical_operation', namespace: 'cost-intelligence', id: 'op-1' } }), runtime);
+        assert.equal(result.ok, false, `${hops} queued microtasks must not conceal a revision change`);
+        assert.equal(result.error.code, 'FORBIDDEN_SCOPE');
+        assert.equal(Object.hasOwn(result, 'value'), false, 'no previously read evidence is disclosed');
+        assert.deepEqual(issuedRevisions, ['synthetic-valid-grant-1', 'synthetic-valid-grant-2'], 'renewal compares two distinct issued revisions');
+        const expectedReads = lookup === 'posting' ? ['getPosting'] : ['findByReference'];
+        assert.deepEqual(reads, expectedReads, 'the changed revision prevents every later protected read');
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(mutations, hops === 0 ? 0 : 2, 'the mutation cases actually changed both retained responses');
+        assert.equal(retained.principal[revisionField], hops === 0 ? 'synthetic-valid-grant-2' : 'synthetic-retained-alias');
+        assert.deepEqual(reads, expectedReads, 'late mutations do not resume a denied lookup');
+      }
+    });
+  }
+}
+
+for (const lookup of ['posting', 'reverse']) {
+  for (const malformedPart of ['response', 'principal', 'scope']) {
+    test(`${lookup} lookup rejects malformed ${malformedPart} own keys before any evidence read`, async () => {
+      for (const kind of ['user', 'service']) {
+        const calls = [];
+        const runtime = { clock, store: store([], { calls }), financeAuthority: {
+          async authorizeCurrent(input) {
+            const issued = await authority().authorizeCurrent(input);
+            if (kind === 'service') issued.principal = {
+              kind, actorId: scopeA.actorId, serviceStatus: 'active', serviceGrantRevision: 's1',
+            };
+            // An own __proto__ field is invalid data. Snapshotting must retain
+            // that fact instead of promoting its value into a prototype.
+            const ownPrototype = value => Object.fromEntries([['__proto__', value]]);
+            if (malformedPart === 'response') return ownPrototype(issued);
+            return { ...issued, [malformedPart]: ownPrototype(issued[malformedPart]) };
+          },
+        } };
+        const result = lookup === 'posting'
+          ? await lookupPostingEvidence(request(scopeA, { eventId: 'evt-expense-1' }), runtime)
+          : await lookupByOperationalReference(request(scopeA, { reference: { status: 'resolved', kind: 'logical_operation', namespace: 'cost-intelligence', id: 'op-1' } }), runtime);
+        assert.equal(result.ok, false);
+        assert.equal(result.error.code, 'SOURCE_UNAVAILABLE');
+        assert.equal(Object.hasOwn(result, 'value'), false);
+        assert.deepEqual(calls, [], 'malformed authority never starts a protected read');
+      }
+    });
+  }
+}
+
+test('uncopyable raw authority returns only a safe unavailable envelope', async () => {
+  const calls = [];
+  const runtime = { clock, store: store([], { calls }), financeAuthority: {
+    async authorizeCurrent(input) {
+      return { ...await authority().authorizeCurrent(input), unexpected: () => 'SYNTHETIC_PRIVATE_CALLBACK' };
+    },
+  } };
+  const result = await lookupPostingEvidence(request(scopeA, { eventId: 'evt-expense-1' }), runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'SOURCE_UNAVAILABLE');
+  assert.equal(Object.hasOwn(result, 'value'), false);
+  assert.equal(JSON.stringify(result).includes('SYNTHETIC_PRIVATE_CALLBACK'), false);
+  assert.deepEqual(calls, []);
+});
+
 test('caller mutation during authorization cannot substitute evidence scope or posting identity', async () => {
   const submitted = request({ ...scopeA }, { eventId: 'evt-expense-1' });
   const seen = [];

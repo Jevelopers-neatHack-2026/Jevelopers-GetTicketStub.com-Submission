@@ -108,7 +108,7 @@ export class InspectionControlsAdapter {
     } catch { return rejected('unavailable'); }
   }
   async execute(principal, row) {
-    const key = `${row.tenant_id}/${row.project_id}/${row.action_id}`;
+    const key = canonical([row.tenant_id, row.project_id, row.action_id]);
     if (this.inflight.has(key)) return this.inflight.get(key);
     const work = this.invoke(principal, row); this.inflight.set(key, work);
     try { return await work; } finally { this.inflight.delete(key); }

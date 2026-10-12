@@ -1,0 +1,82 @@
+// TEST_BUILT isolated callback execution; NOT React/browser/Finance execution.
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const ts = require('typescript');
+const sourcePath = process.argv[2];
+if (!sourcePath) throw new Error('Usage: node probe-export.cjs <export-port.ts>');
+const source = fs.readFileSync(sourcePath);
+const js = ts.transpileModule(source.toString(), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+const results = [];
+function brokenProxy() { return new Proxy({}, { getPrototypeOf() { throw new Error('TEST_BUILT prototype failure'); } }); }
+function revokedProxy() { const p = Proxy.revocable({}, {}); p.revoke(); return p.proxy; }
+function throwingPort(key) { return Object.defineProperty({ kind: 'SYNTHETIC_EXPORT_CONFORMANCE_ONLY', prepare: async () => null }, key, { get() { throw new Error('TEST_BUILT unreadable port'); } }); }
+function runtime(classifierThrows = false) {
+  const states = [], cleanups = [], timers = new Set();
+  const hooks = {
+    useState(initial) { return [initial, (value) => { states.push(value); }]; },
+    useRef(value) { return { current: value }; },
+    useEffect(fn) { const c = fn(); if (c) cleanups.push(c); },
+    useLayoutEffect(fn) { fn(); },
+  };
+  const modules = {
+    react: hooks,
+    '../../access/permissions': { FINANCE_READ: 'finance.read', FINANCE_EXPORT: 'finance.export' },
+    './async-port': { classifyFinanceV2Fault(error) {
+      if (classifierThrows) throw new Error('TEST_BUILT classifier failure');
+      try { return { outcome: error?.status === 401 ? 'unauthorized' : error?.status === 403 ? 'restricted' : 'error' }; }
+      catch { return { outcome: 'error' }; }
+    } },
+    './export-check': { FINANCE_V2_FORMAT_FILE: { json: 'summary.json', csv: 'metrics.csv' }, checkPreparedExport: async () => ({ ok: false, kind: 'error', code: 'SOURCE_UNAVAILABLE' }) },
+  };
+  const exports = {};
+  vm.runInNewContext(js, {
+    exports, require(name) { if (!modules[name]) throw new Error(`Unexpected import ${name}`); return modules[name]; },
+    AbortController, structuredClone,
+    setTimeout(fn, ms) { const t = setTimeout(fn, ms); timers.add(t); return t; },
+    clearTimeout,
+    setInterval() { throw new Error('Unexpected interval without a render'); }, clearInterval,
+  }, { filename: sourcePath });
+  return { exports, states, cleanups, close() { cleanups.forEach(fn => fn()); timers.forEach(clearTimeout); } };
+}
+async function check(name, fn) {
+  try { await fn(); results.push({ name, outcome: 'pass' }); }
+  catch (e) { results.push({ name, outcome: 'fail', failureKind: e.code || e.name || 'error' }); }
+}
+(async () => {
+  for (const [name, make] of [['kind getter', () => throwingPort('kind')], ['prepare getter', () => throwingPort('prepare')], ['revoked port', revokedProxy]]) {
+    await check(`unreadable ${name} resolves unavailable`, () => {
+      const r = runtime(); try { const answer = r.exports.resolveFinanceV2ExportPort('SYNTHETIC_PROPOSAL', make()); assert.equal(answer.status, 'unavailable'); assert.equal(answer.reason, 'port-kind-mismatch'); } finally { r.close(); }
+    });
+  }
+  await check('integrated mode never inspects supplied port', () => {
+    const r = runtime(); try { assert.equal(r.exports.resolveFinanceV2ExportPort('INTEGRATED', revokedProxy()).reason, 'integrated-port-not-accepted'); } finally { r.close(); }
+  });
+  for (const [name, make, expected, classifierThrows] of [
+    ['throwing prototype', brokenProxy, 'failed', false], ['revoked rejection', revokedProxy, 'failed', false],
+    ['classifier failure', () => ({}), 'failed', true],
+    ['401', () => ({ status: 401 }), 'unauthorized', false], ['403', () => ({ status: 403 }), 'FORBIDDEN_SCOPE', false],
+    ['500', () => ({ status: 500 }), 'failed', false],
+  ]) {
+    await check(`${name} settles immediately without an unhandled rejection`, async () => {
+      const r = runtime(classifierThrows), escaped = [];
+      const listener = (error) => { escaped.push(error); }; process.on('unhandledRejection', listener);
+      try {
+        const scope = { tenantId: 'synthetic-tenant', projectId: 'synthetic-project', environment: 'test', billingMode: 'simulated', actorId: 'synthetic-actor' };
+        const api = r.exports.usePreparedExport({ mode: 'SYNTHETIC_PROPOSAL', port: { kind: 'SYNTHETIC_EXPORT_CONFORMANCE_ONLY', prepare: async () => { throw make(); } },
+          access: () => ({ revision: '1', scope, capabilities: ['finance.read', 'finance.export'], expiresAt: '2099-01-01T00:00:00Z' }),
+          authorization: { revision: '1', token: async () => 'TEST_BUILT_TOKEN' }, scope, expectedSnapshotId: 'test', expectedQueryContentHash: 'test', expectedSummaryContentHash: 'test',
+          page: { asOf: '2026-01-01T00:00:00Z', timezone: 'UTC', period: { start: '2025-01-01T00:00:00Z', end: '2026-01-01T00:00:00Z' }, summary: { currencies: [] } }, firstPage: true });
+        api.prepare(); await new Promise(resolve => setTimeout(resolve, 30));
+        assert.equal(escaped.length, 0);
+        assert.equal(r.states.at(-1).state.phase, 'failed'); assert.equal(r.states.at(-1).state.code, expected);
+        assert.equal(api.download(), null);
+      } finally { r.close(); process.off('unhandledRejection', listener); }
+    });
+  }
+  const report = { mode: 'TEST_BUILT isolated hooks/ports; not React/browser or Finance execution', runtime: process.version, transpilerVersion: ts.version,
+    sourceGitBlob: crypto.createHash('sha1').update(`blob ${source.length}\0`).update(source).digest('hex'),
+    results, passed: results.filter(x => x.outcome === 'pass').length, failed: results.filter(x => x.outcome === 'fail').length, skipped: 0 };
+  console.log(JSON.stringify(report, null, 2)); process.exitCode = report.failed ? 1 : 0;
+})();

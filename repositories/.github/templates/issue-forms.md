@@ -4,9 +4,10 @@ The published `GH-ISSUE-FORMS@1.0.0` contract is tracked by
 [GH-03-I](https://github.com/Jevelopers-neatHack-2026/.github/issues/13). It provides five active
 forms and keeps a security draft outside the chooser because no private reporting destination or
 responsible owner is confirmed. The current main source is a partial publication, not six-form
-acceptance. This review branch also disables blank issue submissions while that route is unresolved;
-the five active forms retain their redaction warning. This change does not provide a private report
-route or make the form fields safe for vulnerability details.
+acceptance. The chooser at [default-branch commit `2f61f8551ecf38170f0c5b225305c950c7c3b222`](https://github.com/Jevelopers-neatHack-2026/.github/commit/2f61f8551ecf38170f0c5b225305c950c7c3b222)
+disables blank issue submissions while that route is unresolved; the five active forms retain their
+redaction warning. This does not provide a private report route or make the form fields safe for
+vulnerability details.
 The execution-policy pack version is `1.1.0`; it is separate from this form-contract version.
 
 The chooser configuration and five active forms are in [`.github/ISSUE_TEMPLATE/`](../.github/ISSUE_TEMPLATE/).
@@ -14,12 +15,12 @@ The parked security draft is [`pending/security.yml`](pending/security.yml).
 
 | Form | State | File | Labels configured | Type-specific prompts |
 | --- | --- | --- | --- | --- |
-| Feature | Active in published source | [`feature.yml`](../.github/ISSUE_TEMPLATE/feature.yml) | `type:implementation`, `enhancement` | user outcome |
-| Bug | Active in published source | [`bug.yml`](../.github/ISSUE_TEMPLATE/bug.yml) | `type:bug`, `bug` | sanitized repro, expected vs actual, environment/revision, regression scope |
+| Feature | Active in published source | [`feature.yml`](../.github/ISSUE_TEMPLATE/feature.yml) | `type:implementation` | user outcome |
+| Bug | Active in published source | [`bug.yml`](../.github/ISSUE_TEMPLATE/bug.yml) | — (none configured) | sanitized repro, expected vs actual, environment/revision, regression scope |
 | Integration | Active in published source | [`integration.yml`](../.github/ISSUE_TEMPLATE/integration.yml) | `type:implementation`, `cross-repo` | producer, consumers, contract/version, handoff tests |
-| Research / decision | Active in published source | [`research-decision.yml`](../.github/ISSUE_TEMPLATE/research-decision.yml) | `type:docs`, `question` | question, alternatives, bounded experiment/budget, decision owner/output, follow-on |
-| Security | **Pending; not in chooser** | [`pending/security.yml`](pending/security.yml) | `type:bug` (draft only) | non-sensitive coordination warning, no-secret confirmation |
-| Backlog / acceptance audit | Active in published source | [`backlog-audit.yml`](../.github/ISSUE_TEMPLATE/backlog-audit.yml) | `type:chore` | criterion-to-evidence coverage, gaps, release impact |
+| Research / decision | Active in published source | [`research-decision.yml`](../.github/ISSUE_TEMPLATE/research-decision.yml) | `type:docs` | question, alternatives, bounded experiment/budget, decision owner/output, follow-on |
+| Security | **Pending; not in chooser** | [`pending/security.yml`](pending/security.yml) | `type:bug` (draft only; availability unverified) | non-sensitive coordination warning, no-secret confirmation |
+| Backlog / acceptance audit | Active in published source | [`backlog-audit.yml`](../.github/ISSUE_TEMPLATE/backlog-audit.yml) | — (none configured) | criterion-to-evidence coverage, gaps, release impact |
 
 ## Common fields and required inputs
 
@@ -33,16 +34,29 @@ where appropriate, and triage still reviews the response.
 
 ## Labels
 
-Each form's YAML lists its exact requested labels in the table above. `cross-repo` is configured on the
-integration form; it is not only a triage-applied label. A form does not assign labels based on dropdown
-answers: priority and required-for-v1 remain body values, while triage applies those labels after review.
+The table shows optional auto-label metadata currently configured in each active form. `cross-repo` is
+configured on the integration form; it is not only a triage-applied label. A form does not assign labels
+based on dropdown answers: priority and required-for-v1 remain body values, while triage applies those
+labels after review.
+
+A partial read-only check of current public issue label objects at approximately 2026-10-12 17:29 UTC
+confirmed `type:docs` on [issue #9](https://github.com/Jevelopers-neatHack-2026/.github/issues/9),
+`type:implementation` on [issue #14](https://github.com/Jevelopers-neatHack-2026/.github/issues/14),
+and `cross-repo` on [issue #12](https://github.com/Jevelopers-neatHack-2026/.github/issues/12). The
+full label catalog was unavailable, so this sample does not establish whether other labels exist.
+`type:chore`, `type:bug`, `bug`, `enhancement`, and `question` are unknown from this check, not known
+absent. Those unverified optional auto-labels were removed from the active form metadata: Feature and
+Research retain only their confirmed type label, while Bug and Backlog / acceptance audit configure no
+labels. Integration's two configured labels were both confirmed. No form fields, IDs, or body text
+changed; this is not a GitHub label or setting change and does not change the `GH-ISSUE-FORMS@1.0.0`
+contract version. The pending security draft remains inactive; its `type:bug` label is also unverified.
 
 GitHub does not add a configured label that is absent from the destination repository. Before adopting
 forms locally, check every configured label in that destination and omit an unsupported optional label
-or route it through that repository's approved label process. A read-only inventory on 2026-10-11 UTC found
-the eight configured labels in each of the fourteen organization repositories. That snapshot does not
-guarantee future or other-repository availability. For other cross-repository issues, triage may apply
-`cross-repo` when applicable and present locally.
+or route it through that repository's approved label process. An earlier read-only inventory on
+2026-10-11 UTC found eight configured labels in each of fourteen organization repositories; this is a
+dated snapshot, not a current full catalog or a guarantee of future or other-repository availability.
+For other cross-repository issues, triage may apply `cross-repo` when applicable and present locally.
 
 ## Security reporting remains blocked
 
@@ -78,13 +92,12 @@ for GitHub's native preview.
 
 ## Versioned publication and adoption record
 
-The five forms were published as `GH-ISSUE-FORMS@1.0.0` on the `.github` default branch. This review
-branch contains a chooser hardening candidate; it has not been published or assigned a new contract
-version. Once a reviewed change reaches the default branch, record its full merge SHA and use
-immutable links such as
-`https://github.com/Jevelopers-neatHack-2026/.github/blob/<40-character-commit-sha>/.github/ISSUE_TEMPLATE/feature.yml`
-when a consumer copies a form. Inherited defaults still follow the source default branch and are not
-version-pinned by GitHub.
+The five forms and hardened chooser are present on the `.github` default branch at
+`2f61f8551ecf38170f0c5b225305c950c7c3b222`; this does not complete the closed `GH-03-I` acceptance
+criteria or publish a security route. No new form-contract version is claimed for the chooser change.
+When a consumer copies a form, record the reviewed full source SHA and use an immutable link such as
+`https://github.com/Jevelopers-neatHack-2026/.github/blob/<40-character-commit-sha>/.github/ISSUE_TEMPLATE/feature.yml`.
+Inherited defaults still follow the source default branch and are not version-pinned by GitHub.
 
 For each destination, record the contract version, source repository and full SHA/blob links, adoption
 mode (inherit or copy), destination repository/default branch/visibility, local override decision,

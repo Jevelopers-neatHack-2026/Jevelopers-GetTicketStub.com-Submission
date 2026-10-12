@@ -1,0 +1,1534 @@
+{
+  "schema_version": "1.0",
+  "observed_at": "2026-10-12T17:16:34Z",
+  "head_metadata_observed_at": "2026-10-12T17:19:49Z",
+  "settings_observed_at": "2026-10-12T17:19:49Z",
+  "observer": "governance adoption audit",
+  "scope": {
+    "organization": "Jevelopers-neatHack-2026",
+    "inventory_source": "GitHub organization repository inventory; current public metadata checked; private identity withheld",
+    "repository_count": 16,
+    "metadata_inspected": 16,
+    "public_tree_inspected": 15,
+    "private_source_unavailable": 1,
+    "public_consumer_count": 14,
+    "private_details_withheld": true
+  },
+  "summary": {
+    "public_repository_records": 15,
+    "private_metadata_records": 1,
+    "verified_adopted_consumers": 0,
+    "workflow_files_inspected": 48,
+    "shared_workflow_callers": 0,
+    "workflow_definitions": 0
+  },
+  "authoring_runtime": {
+    "model": "gpt-6-luna",
+    "reasoning_effort": "max",
+    "service_tier": "priority",
+    "route": "Fast",
+    "pack_version": "1.1.0",
+    "usage": null,
+    "cost": null,
+    "receipt_path": "unavailable (no per-call execution receipt exposed)",
+    "metadata_source": "task delegation routing instruction"
+  },
+  "latest_default_branch_heads": [
+    {
+      "name": ".github",
+      "head_sha": "07d750dfb7feeecdeca7d3d1a2363663d7f3517f",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "shared-contracts",
+      "head_sha": "91736a026c02a3206cb7666ebfbe6134692e5a24",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "Jevelopers-GetTicketStub.com-Submission",
+      "head_sha": "37ff6999a09da7707cc30a1fc9cfcacca429ce5f",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "integration-evals",
+      "head_sha": "56018576a9450a2bb46aa55ed3b2f9d9ae97e50d",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "landing-page-repo",
+      "head_sha": "dda1b5d48e71ed9c111b82111676b7ef033fe5ef",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "cost-intelligence",
+      "head_sha": "50910da5999fc099558ecf07c075488fd4cfd1be",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "creative-engine",
+      "head_sha": "5b0f354dd8871550345863aef4017b7bbba3bd86",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "event-intelligence",
+      "head_sha": "ef69133bb38320793e02f8530accdd67e59f90e3",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "agent-harness",
+      "head_sha": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "marketing-material",
+      "head_sha": "79ae21607eb4d98188f85ce3c42b8be6eb5688bc",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "team-dashboard",
+      "head_sha": "97e35e7f669f368b26c9884c48e7c181a26438b8",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "getticketstub.com",
+      "head_sha": "138e4b9019c0f5a55ad5e3f586d129216b680e4d",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "fulfillment-connectors",
+      "head_sha": "a1c04e6424626475c7c6db3d397cc6e3392c1600",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "print-production",
+      "head_sha": "89b5dd63c0a23dc27e62cfc235daa40dfe6d2002",
+      "observed_at": "2026-10-12T17:19:49Z"
+    },
+    {
+      "name": "brand-kit",
+      "head_sha": "6222a745195e9f15a14069e79210ad45daa16c94",
+      "observed_at": "2026-10-12T17:19:49Z"
+    }
+  ],
+  "repositories": [
+    {
+      "name": ".github",
+      "visibility": "public",
+      "role": "governance_source",
+      "default_branch": "main",
+      "head_sha": "2f61f8551ecf38170f0c5b225305c950c7c3b222",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/.github/tree/2f61f8551ecf38170f0c5b225305c950c7c3b222",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "present",
+          "paths": [
+            "CONTRIBUTING.md"
+          ]
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "present",
+          "paths": [
+            ".github/ISSUE_TEMPLATE/backlog-audit.yml",
+            ".github/ISSUE_TEMPLATE/bug.yml",
+            ".github/ISSUE_TEMPLATE/config.yml",
+            ".github/ISSUE_TEMPLATE/feature.yml",
+            ".github/ISSUE_TEMPLATE/integration.yml",
+            ".github/ISSUE_TEMPLATE/research-decision.yml"
+          ]
+        },
+        "pull_request_template": {
+          "status": "present",
+          "paths": [
+            ".github/pull_request_template.md"
+          ]
+        },
+        "workflow_files": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "present",
+          "paths": [
+            "adoption/governance-register.json"
+          ]
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        ".github/pull_request_template.md",
+        "adoption/governance-register.json",
+        "automation-design/examples/caller/.github/workflows/docs-check.yml",
+        "automation-design/examples/reusable/.github/workflows/docs-check.yml",
+        "automation-design/fixtures/reusable-workflow/.github/workflows/docs-check.yml",
+        "docs/architecture/OWNERSHIP.md",
+        "templates/adoption-record.md",
+        "templates/examples/adoption-existing-private.md",
+        "templates/examples/adoption-new-repository.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 0,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": true,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_applicable"
+    },
+    {
+      "name": "shared-contracts",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "7251a09c4eaddbb1232d444fd931a01c266095ac",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/tree/7251a09c4eaddbb1232d444fd931a01c266095ac",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/entire-graph.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 1,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "Jevelopers-GetTicketStub.com-Submission",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "70d03263da98e0ccc392ff20958618473a99f589",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/tree/70d03263da98e0ccc392ff20958618473a99f589",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "absent",
+          "paths": []
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "absent",
+          "paths": []
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "repositories/.github/.github/ISSUE_TEMPLATE/backlog-audit.yml",
+        "repositories/.github/.github/ISSUE_TEMPLATE/bug.yml",
+        "repositories/.github/.github/ISSUE_TEMPLATE/config.yml",
+        "repositories/.github/.github/ISSUE_TEMPLATE/feature.yml",
+        "repositories/.github/.github/ISSUE_TEMPLATE/integration.yml",
+        "repositories/.github/.github/ISSUE_TEMPLATE/research-decision.yml",
+        "repositories/.github/.github/pull_request_template.md",
+        "repositories/.github/AGENTS.md",
+        "repositories/.github/CONTRIBUTING.md",
+        "repositories/.github/adoption/governance-register.json",
+        "repositories/.github/automation-design/examples/caller/.github/workflows/docs-check.yml",
+        "repositories/.github/automation-design/examples/reusable/.github/workflows/docs-check.yml",
+        "repositories/.github/automation-design/fixtures/reusable-workflow/.github/workflows/docs-check.yml",
+        "repositories/.github/docs/architecture/OWNERSHIP.md",
+        "repositories/.github/templates/adoption-record.md",
+        "repositories/.github/templates/examples/adoption-existing-private.md",
+        "repositories/.github/templates/examples/adoption-new-repository.md",
+        "repositories/agent-harness/.github/workflows/entire-graph.yml",
+        "repositories/agent-harness/.github/workflows/provider-readiness.yml",
+        "repositories/agent-harness/.github/workflows/runtime-foundation.yml",
+        "repositories/agent-harness/AGENTS.md",
+        "repositories/agent-harness/docs/architecture/OWNERSHIP.md",
+        "repositories/brand-kit/docs/architecture/OWNERSHIP.md",
+        "repositories/cost-intelligence/.github/workflows/ci.yml",
+        "repositories/cost-intelligence/.github/workflows/entire-graph.yml",
+        "repositories/cost-intelligence/AGENTS.md",
+        "repositories/cost-intelligence/docs/api/security.md",
+        "repositories/cost-intelligence/docs/architecture/OWNERSHIP.md",
+        "repositories/creative-engine/.github/workflows/api.yml",
+        "repositories/creative-engine/.github/workflows/contracts.yml",
+        "repositories/creative-engine/.github/workflows/controls.yml",
+        "repositories/creative-engine/.github/workflows/entire-graph.yml",
+        "repositories/creative-engine/AGENTS.md",
+        "repositories/creative-engine/docs/architecture/OWNERSHIP.md",
+        "repositories/event-intelligence/.github/workflows/asset-permissions.yml",
+        "repositories/event-intelligence/.github/workflows/asset-source-discovery.yml",
+        "repositories/event-intelligence/.github/workflows/bounded-frontier.yml",
+        "repositories/event-intelligence/.github/workflows/correction-cache-binding.yml",
+        "repositories/event-intelligence/.github/workflows/entire-graph.yml",
+        "repositories/event-intelligence/.github/workflows/evidence.yml",
+        "repositories/event-intelligence/.github/workflows/extraction.yml",
+        "repositories/event-intelligence/.github/workflows/immutable-history.yml",
+        "repositories/event-intelligence/.github/workflows/occurrence-identity.yml",
+        "repositories/event-intelligence/.github/workflows/offline-eval-projection.yml",
+        "repositories/event-intelligence/.github/workflows/pdf-derived-evidence.yml",
+        "repositories/event-intelligence/.github/workflows/question-registry.yml",
+        "repositories/event-intelligence/.github/workflows/safe-assets.yml",
+        "repositories/event-intelligence/.github/workflows/scoped-reuse.yml",
+        "repositories/event-intelligence/.github/workflows/selected-evidence.yml",
+        "repositories/event-intelligence/.github/workflows/source-identity.yml",
+        "repositories/event-intelligence/.github/workflows/text-pdf.yml",
+        "repositories/event-intelligence/.github/workflows/verify.yml",
+        "repositories/event-intelligence/AGENTS.md",
+        "repositories/event-intelligence/docs/architecture/OWNERSHIP.md",
+        "repositories/fulfillment-connectors/.github/workflows/ci.yml",
+        "repositories/fulfillment-connectors/.github/workflows/entire-graph.yml",
+        "repositories/fulfillment-connectors/AGENTS.md",
+        "repositories/fulfillment-connectors/docs/architecture/OWNERSHIP.md",
+        "repositories/fulfillment-connectors/docs/security.md",
+        "repositories/getticketstub.com/.github/workflows/entire-graph.yml",
+        "repositories/getticketstub.com/.github/workflows/runtime.yml",
+        "repositories/getticketstub.com/AGENTS.md",
+        "repositories/getticketstub.com/docs/architecture/OWNERSHIP.md",
+        "repositories/integration-evals/.github/workflows/app-recovery-component.yml",
+        "repositories/integration-evals/.github/workflows/canonical-v0101.yml",
+        "repositories/integration-evals/.github/workflows/entire-graph.yml",
+        "repositories/integration-evals/.github/workflows/evidence-audit.yml",
+        "repositories/integration-evals/.github/workflows/finance-component.yml",
+        "repositories/integration-evals/.github/workflows/finance-export-fixtures.yml",
+        "repositories/integration-evals/.github/workflows/finance924-fixtures.yml",
+        "repositories/integration-evals/.github/workflows/fulfillment-component.yml",
+        "repositories/integration-evals/.github/workflows/offline-read-linux.yml",
+        "repositories/integration-evals/.github/workflows/rerun-report.yml",
+        "repositories/integration-evals/.github/workflows/verification.yml",
+        "repositories/integration-evals/AGENTS.md",
+        "repositories/integration-evals/docs/architecture/OWNERSHIP.md",
+        "repositories/landing-page-repo/docs/architecture/OWNERSHIP.md",
+        "repositories/marketing-material/docs/architecture/OWNERSHIP.md",
+        "repositories/print-production/.github/workflows/entire-graph.yml",
+        "repositories/print-production/.github/workflows/runtime.yml",
+        "repositories/print-production/AGENTS.md",
+        "repositories/print-production/docs/architecture/OWNERSHIP.md",
+        "repositories/shared-contracts/.github/workflows/entire-graph.yml",
+        "repositories/shared-contracts/AGENTS.md",
+        "repositories/shared-contracts/docs/architecture/OWNERSHIP.md",
+        "repositories/team-dashboard/.github/workflows/dashboard-validation.yml",
+        "repositories/team-dashboard/.github/workflows/entire-graph.yml",
+        "repositories/team-dashboard/AGENTS.md",
+        "repositories/team-dashboard/docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 0,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "integration-evals",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "56018576a9450a2bb46aa55ed3b2f9d9ae97e50d",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/56018576a9450a2bb46aa55ed3b2f9d9ae97e50d",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/app-recovery-component.yml",
+            ".github/workflows/canonical-v0101.yml",
+            ".github/workflows/decision-failure-component.yml",
+            ".github/workflows/entire-graph.yml",
+            ".github/workflows/evidence-audit.yml",
+            ".github/workflows/finance-component.yml",
+            ".github/workflows/finance-export-fixtures.yml",
+            ".github/workflows/finance924-fixtures.yml",
+            ".github/workflows/fulfillment-component.yml",
+            ".github/workflows/offline-read-linux.yml",
+            ".github/workflows/rerun-report.yml",
+            ".github/workflows/verification.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 12,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "landing-page-repo",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "f8a8b511aaebd8ce2d469306f36a013ea8b9d4c8",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/tree/f8a8b511aaebd8ce2d469306f36a013ea8b9d4c8",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "absent",
+          "paths": []
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 0,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "cost-intelligence",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "50910da5999fc099558ecf07c075488fd4cfd1be",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/tree/50910da5999fc099558ecf07c075488fd4cfd1be",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/ci.yml",
+            ".github/workflows/entire-graph.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/api/security.md",
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 2,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "creative-engine",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "5b0f354dd8871550345863aef4017b7bbba3bd86",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/creative-engine/tree/5b0f354dd8871550345863aef4017b7bbba3bd86",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/api.yml",
+            ".github/workflows/contracts.yml",
+            ".github/workflows/controls.yml",
+            ".github/workflows/entire-graph.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 4,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "event-intelligence",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "ef69133bb38320793e02f8530accdd67e59f90e3",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence/tree/ef69133bb38320793e02f8530accdd67e59f90e3",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/asset-permissions.yml",
+            ".github/workflows/asset-source-discovery.yml",
+            ".github/workflows/bounded-frontier.yml",
+            ".github/workflows/correction-cache-binding.yml",
+            ".github/workflows/entire-graph.yml",
+            ".github/workflows/evidence.yml",
+            ".github/workflows/extraction.yml",
+            ".github/workflows/immutable-history.yml",
+            ".github/workflows/occurrence-identity.yml",
+            ".github/workflows/offline-eval-projection.yml",
+            ".github/workflows/pdf-derived-evidence.yml",
+            ".github/workflows/question-registry.yml",
+            ".github/workflows/safe-assets.yml",
+            ".github/workflows/scoped-reuse.yml",
+            ".github/workflows/selected-evidence.yml",
+            ".github/workflows/source-identity.yml",
+            ".github/workflows/text-pdf.yml",
+            ".github/workflows/verify.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 18,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "agent-harness",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/tree/fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/entire-graph.yml",
+            ".github/workflows/provider-readiness.yml",
+            ".github/workflows/runtime-foundation.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 3,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "marketing-material",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "79ae21607eb4d98188f85ce3c42b8be6eb5688bc",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/tree/79ae21607eb4d98188f85ce3c42b8be6eb5688bc",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "absent",
+          "paths": []
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 0,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "team-dashboard",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "e7e9aece87eac258369ed551cb9800282575cc45",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard/tree/e7e9aece87eac258369ed551cb9800282575cc45",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/dashboard-validation.yml",
+            ".github/workflows/entire-graph.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 2,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "getticketstub.com",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "b5573270af362295c126e8b0be61b64f748c09a5",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/tree/b5573270af362295c126e8b0be61b64f748c09a5",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/entire-graph.yml",
+            ".github/workflows/runtime.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 2,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "fulfillment-connectors",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "a1c04e6424626475c7c6db3d397cc6e3392c1600",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/tree/a1c04e6424626475c7c6db3d397cc6e3392c1600",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/ci.yml",
+            ".github/workflows/entire-graph.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md",
+        "docs/security.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 2,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "print-production",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "89b5dd63c0a23dc27e62cfc235daa40dfe6d2002",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/print-production/tree/89b5dd63c0a23dc27e62cfc235daa40dfe6d2002",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "present",
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "present",
+          "paths": [
+            ".github/workflows/entire-graph.yml",
+            ".github/workflows/runtime.yml"
+          ]
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 2,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    },
+    {
+      "name": "brand-kit",
+      "visibility": "public",
+      "role": "consumer",
+      "default_branch": "main",
+      "head_sha": "3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4",
+      "observed_at": "2026-10-12T17:16:34Z",
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/tree/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4",
+      "tree_status": "complete",
+      "artifacts": {
+        "agents_md": {
+          "status": "absent",
+          "paths": []
+        },
+        "contributing": {
+          "status": "absent",
+          "paths": []
+        },
+        "code_of_conduct": {
+          "status": "absent",
+          "paths": []
+        },
+        "security": {
+          "status": "absent",
+          "paths": []
+        },
+        "support": {
+          "status": "absent",
+          "paths": []
+        },
+        "ownership_docs": {
+          "status": "present",
+          "paths": [
+            "docs/architecture/OWNERSHIP.md"
+          ]
+        },
+        "issue_forms": {
+          "status": "absent",
+          "paths": []
+        },
+        "pull_request_template": {
+          "status": "absent",
+          "paths": []
+        },
+        "workflow_files": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_record": {
+          "status": "absent",
+          "paths": []
+        },
+        "adoption_register": {
+          "status": "absent",
+          "paths": []
+        },
+        "codeowners": {
+          "status": "absent",
+          "paths": []
+        }
+      },
+      "nested_paths": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "local_overrides": false,
+      "workflow_audit": {
+        "status": "inspected",
+        "workflow_file_count": 0,
+        "parse_status": "complete",
+        "invalid_yaml_count": 0,
+        "shared_workflow_caller_count": 0,
+        "workflow_definition_count": 0
+      },
+      "settings": {
+        "branch_protected": false,
+        "branch_protection_detail": "access_denied",
+        "ruleset_count": 0,
+        "label_catalogue": "access_denied",
+        "inherited_profile_effective": "unknown"
+      },
+      "adoption_status": "not_verified"
+    }
+  ]
+}

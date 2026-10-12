@@ -1,0 +1,57 @@
+name: Receipt metadata
+on:
+  pull_request:
+    paths:
+      - 'scripts/check-consumer-receipt.mjs'
+      - 'tests/consumer-receipt*.test.mjs'
+      - 'docs/receipt-checker.md'
+      - '.github/workflows/receipt-metadata.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/check-consumer-receipt.mjs'
+      - 'tests/consumer-receipt*.test.mjs'
+      - 'docs/receipt-checker.md'
+      - '.github/workflows/receipt-metadata.yml'
+permissions:
+  contents: read
+jobs:
+  receipt-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.23.3', '24.21.0']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Record exact checkout and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/receipt-evidence"
+          {
+            git rev-parse HEAD
+            node --version
+            sha256sum scripts/check-consumer-receipt.mjs tests/consumer-receipt*.test.mjs
+          } | tee "$RUNNER_TEMP/receipt-evidence/identity.txt"
+      - name: Check syntax and receipt regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/check-consumer-receipt.mjs
+          node --test --test-reporter=tap tests/consumer-receipt.test.mjs tests/consumer-receipt-duplicates.test.mjs \
+            | tee "$RUNNER_TEMP/receipt-evidence/tests.tap"
+      - name: Preserve evidence including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: receipt-metadata-${{ matrix.node }}-${{ github.sha }}
+          path: ${{ runner.temp }}/receipt-evidence
+          if-no-files-found: error
+          retention-days: 30

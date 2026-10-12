@@ -1,0 +1,51 @@
+name: Governance validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: governance-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Reusable Markdown link check
+    uses: ./.github/workflows/docs-check.yml
+    with:
+      scope: repository
+    permissions:
+      contents: read
+
+  validate:
+    name: Governance files and fixture contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install validator dependency
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --no-input -r automation-design/tests/requirements.txt
+      - name: Validate governance package
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: .venv/bin/python scripts/validate_governance.py
+      - name: Run offline contract and security tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: .venv/bin/python -m unittest discover -s automation-design/tests -v

@@ -1,4 +1,5 @@
 import { canonicalHash } from "../contracts/validation.mjs";
+import { runSqliteDatabaseOperationSync, sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
 import { InspectionError, isSafePublicInspectionReference } from "./deterministic.mjs";
 
 export const REPAIR_LIMITS = Object.freeze({ maxRepairs: 2, maxElapsedMs: 60_000, maxSimulatedUnits: 3 });
@@ -173,7 +174,24 @@ export function inspectionRepairFenceCurrent(database, now, rawScope, proof, { r
 export function createSqliteInspectionRepairController(options) {
   const database = options?.database;
   const now = options?.now ?? (() => Date.now());
-  makeTables(database);
+  const owner = options?.owner ?? database;
+  if (options?.initializeTables !== false) {
+    if (database?.isTransaction === true) fail("transaction_unavailable", "database",
+      "Repair controller schema initialization cannot borrow a caller-owned transaction.");
+    runSqliteDatabaseOperationSync({ database, owner, work: () => makeTables(database),
+      identityError: () => new InspectionError("storage_unavailable", "database", "Repair controller SQLite identity is unavailable."),
+      conflictError: () => new InspectionError("transaction_unavailable", "database",
+        "Repair controller schema initialization conflicts with active SQLite work.") });
+  } else if (!database || typeof database.exec !== "function" || typeof database.prepare !== "function") {
+    fail("storage_unavailable", "database", "A trusted synchronous SQLite connection is required.");
+  }
+
+  function withAdmission(work) {
+    return runSqliteDatabaseOperationSync({ database, owner, work,
+      identityError: () => new InspectionError("storage_unavailable", "database", "Repair controller SQLite identity is unavailable."),
+      conflictError: () => new InspectionError("transaction_unavailable", "database",
+        "Repair controller work conflicts with another SQLite owner.") });
+  }
 
   function getState({ scope: rawScope, inspection_id }) {
     const scope = validateScope(rawScope);
@@ -344,6 +362,10 @@ export function createSqliteInspectionRepairController(options) {
   }
 
   function recordRepairOutcomeInPublication(input) {
+    if (database.isTransaction !== true || !sqliteDatabaseOperationOwnedBy(database, owner,
+      () => new InspectionError("storage_unavailable", "database", "Repair controller SQLite identity is unavailable."))) {
+      fail("transaction_unavailable", "database", "Repair completion must share the active SQLite publication owner.");
+    }
     if (database.isTransaction !== true) fail("transaction_unavailable", "database",
       "Repair completion must share the version publication transaction.");
     const scope = validateScope(input?.scope);
@@ -390,7 +412,17 @@ export function createSqliteInspectionRepairController(options) {
     return inspectionRepairFenceCurrent(database, now, input?.scope, input?.proof);
   }
 
-  return Object.freeze({ startInspection, recordRepairClaim, recordRepairOutcome, recordRepairOutcomeInPublication,
-    isClaimCurrent, cancelInspection, getState,
+  const admitted = (method, { publication = false } = {}) => (...args) => {
+    if (publication && (database.isTransaction !== true || !sqliteDatabaseOperationOwnedBy(database, owner,
+      () => new InspectionError("storage_unavailable", "database", "Repair controller SQLite identity is unavailable.")))) {
+      fail("transaction_unavailable", "database", "Repair completion must share the active SQLite publication owner.");
+    }
+    return withAdmission(() => method(...args));
+  };
+
+  return Object.freeze({ startInspection: admitted(startInspection), recordRepairClaim: admitted(recordRepairClaim),
+    recordRepairOutcome: admitted(recordRepairOutcome),
+    recordRepairOutcomeInPublication: admitted(recordRepairOutcomeInPublication, { publication: true }),
+    isClaimCurrent: admitted(isClaimCurrent), cancelInspection: admitted(cancelInspection), getState: admitted(getState),
     limits: REPAIR_LIMITS });
 }

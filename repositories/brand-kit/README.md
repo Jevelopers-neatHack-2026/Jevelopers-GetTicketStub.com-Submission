@@ -16,7 +16,7 @@ The master brand for TicketStub: logo, colour, type, tokens and voice, in one pl
   <a href="fonts/"><img alt="Fonts: Fraunces and Inter Tight under SIL OFL 1.1" src="https://img.shields.io/badge/fonts-SIL%20OFL%201.1-7CC6D2?style=flat-square&labelColor=17140F"></a>
 </p>
 
-[Status](#status) · [What's here](#whats-here) · [Tokens](#use-the-tokens) · [Rebuild logos](#rebuild-the-logos) · [Docs](#docs) · [Related](#related-repositories)
+[Status](#status) · [What's here](#whats-here) · [Quickstart](#quickstart) · [Tokens](#use-the-tokens) · [Validation](#testing-and-validation) · [Docs](#docs) · [Related](#related-repositories)
 
 **Illustrative positioning for review.** The following copy describes a planned experience. Supported ticket formats, automation, pricing and fulfillment require product and marketing evidence before public use; see the [claim register](docs/claims-register.md).
 
@@ -45,6 +45,8 @@ The core identity lives here, but it has not been ratified or released. [Local r
 - The edition and foil-source references point to getticketstub.com source revision `43bb721f00de1c616e8e8d27efbb87c6bf75bcbf`. These documentation links establish source availability; they do not approve the pending direction changes in PR #3 or certify deployed product behavior.
 - The [architecture views](docs/architecture/OWNERSHIP.md) describe intended boundaries; they do not establish completed product functionality, passing implementation tests, connected sponsor tools or live financial activity.
 
+- **Governance and release differ:** [BK-07 #8](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8) is closed for the implemented governance process. Asset ratification, remaining reviewer appointments and distribution approval remain separate decisions.
+
 ## What's here
 
 | Path | Contents |
@@ -59,6 +61,22 @@ The core identity lives here, but it has not been ratified or released. [Local r
 | [`references/`](references/) | Reference-only WebP images with unknown rights, excluded from distribution; see [provenance](docs/provenance.md) |
 | [`tools/build_logos.py`](tools/build_logos.py) | Regenerates every logo SVG from the Fraunces outlines |
 
+## Quickstart
+
+The full offline check suite uses Git, Make and the locked Python asset packages, because `make test` also imports the logo and asset validators. Use the recorded Python **3.12.14 / Linux x86_64** profile. There is no root npm package or product server. From a clone:
+
+```sh
+git clone https://github.com/Jevelopers-neatHack-2026/brand-kit.git
+cd brand-kit
+python3.12 -m venv .venv-assets
+.venv-assets/bin/python -m pip install --only-binary=:all: --require-hashes -r tools/assets/requirements.txt
+make check PYTHON=.venv-assets/bin/python
+```
+
+Open [index.html](index.html) in a browser to review the brand board. It requests Google Fonts; network access and font delivery are separate from the offline checks. The [standing brand constraints](docs/brand-governance.md#standing-constraints) prohibit self-hosting brand fonts in product integrations. Bundled TTFs and their OFL notices remain source/provenance material; their presence is not a deployment instruction.
+
+The initial package install may need registry access; the checks then run offline. The [locked packages](tools/assets/requirements.txt) are fonttools, uharfbuzz and Pillow. Asset generation additionally needs Inkscape **1.2.2** with the exact build string in the [pinned toolchain](tools/assets/toolchain.json); follow the asset setup below before those targets. The optional Tailwind integration check needs Node 18 or newer and npm, as declared by [the development fixture](tools/tokens-dev/package.json); browser checks use the separate [locked browser tools](tools/browser-dev/package.json). These optional installs may need registry/CDN access.
+
 ## Use the tokens
 
 ```css
@@ -69,24 +87,46 @@ The core identity lives here, but it has not been ratified or released. [Local r
 <section class="ts-night">…</section>  <!-- switches this subtree to the night stage -->
 ```
 
-The Tailwind preset (Tailwind 3.4.x) reads the same CSS variables. `tokens.css` no longer loads web fonts; opt in with `@import "brand-kit/tokens/external-fonts-google.css";` (it contacts Google, see the [token profile](docs/token-profile.md#external-fonts)). Regenerate with `make build-tokens`; never hand-edit the generated files. These are local integration examples. Distribution requires the exact approved subset and immutable version from [BK-03B](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14); the current export allowlist is empty. Runtime fonts must remain externally hosted under the [recorded user constraint](docs/brand-governance.md#standing-constraints).
+The examples assume a locally available `brand-kit/` path resolved by your project; it is not a published npm package. The Tailwind preset (Tailwind 3.4.x) reads the same CSS variables. `tokens.css` no longer loads web fonts; opt in with `@import "brand-kit/tokens/external-fonts-google.css";` (it contacts Google, see the [token profile](docs/token-profile.md#external-fonts)). Regenerate with `make build-tokens`; never hand-edit the generated files. These are local integration examples. Distribution requires the exact approved subset and immutable version from [BK-03B](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14); the current export allowlist is empty. Runtime fonts must remain externally hosted under the [recorded user constraint](docs/brand-governance.md#standing-constraints).
 
 ## Rebuild the logos
 
-The SVGs in `logo/` are generated. Follow the [pinned asset toolchain and local review instructions](docs/asset-exports.md#pinned-setup), including the exact Python and Inkscape versions, instead of editing vectors by hand ([logo usage](docs/logo.md)).
+The SVGs in `logo/` are generated. Follow the [pinned asset toolchain and local review instructions](docs/asset-exports.md#pinned-setup), including the exact Python and Inkscape versions, instead of editing vectors by hand ([logo usage](docs/logo.md)). Reuse the Python environment from the quickstart and provision the exact native renderer before running:
 
 ```sh
-python3.12 -m venv .venv-assets
-.venv-assets/bin/python -m pip install --only-binary=:all: --require-hashes -r tools/assets/requirements.txt
+inkscape --version
 make build-assets PYTHON=.venv-assets/bin/python
 make check-assets PYTHON=.venv-assets/bin/python
 ```
 
 The build shapes the source Fraunces font with HarfBuzz, requires byte parity with all 14 canonical SVGs, and writes only local review artifacts under `build/asset-review/`. Its two-build check records reproducibility; it does not approve identity, rights or distribution. The source font remains build input, and no self-hosted runtime font delivery is added. The [asset guide](docs/asset-exports.md#commands-and-exit-semantics) documents the guarded legacy SVG rebuild and the supported output matrix.
 
+## Testing and validation
+
+| Command | Checks | Dependencies and limits |
+|---|---|---|
+| `make check` | Inventory, local links, governance/provenance structure, token determinism, computed contrast, guideline source snapshots and unit tests | Use `PYTHON=.venv-assets/bin/python` after the quickstart install; passing does not approve an asset or release |
+| `make check-inventory` / `make check-links` | Tracked-file coverage and supported local Markdown/HTML links | External URLs are reported as unchecked |
+| `make check-governance` | Required governance-document structure | Does not verify reviewer identity or approval |
+| `make check-provenance-register` | Provenance shape, coverage and recorded hashes | Explicit unknown rights may pass this structural check |
+| `make check-tokens` | Token rules, deterministic regeneration, output drift and token tests | No npm required; does not certify browser accessibility or consumer adoption |
+| `make check-accessibility` / `make check-guidelines` | Computed contrast, draft usage structure, reviewed source hashes and negative cases | Separate browser, rights and accountable approval evidence remains required |
+| `make test` | Python unit tests for the source validators | Requires the quickstart Python packages; includes intentional failing fixtures, so use the final test result |
+| `make check-tokens-tailwind` | Actual Tailwind build against the locked development fixture | Runs `npm ci`; requires Node/npm and access to missing dependencies |
+| `make check-accessibility-browser` / `make check-consumers-browser` | Local browser inspection with the pinned fixture tools | Requires the browser setup in the [accessibility](docs/accessibility.md) and [consumer](docs/consumers.md) guides; not an owner ACK |
+| `make check-assets` | Two-build asset reproducibility and negative cases | Requires the exact separate asset toolchain; source identity and rights stay unapproved |
+| `make check-package` / `make package-brand-review` | Distribution structure and an explicitly unapproved local review archive | Archive operations require a clean committed candidate; see [distribution](docs/distribution.md) |
+| `make check-consumers-local` / `make check-consumers` | Local source comparison / external owner-receipt gate | A byte comparison is separate from accepted consumer integration |
+| `make check-links-external` | External URL probes | Network-dependent; response availability is not approval or provenance |
+| `make check-provenance` / `make check-brand-release` / `make package-brand` | Production export, overall brand release and production archive eligibility | Fail closed while their required rights, approvals, receipts or export subset are missing |
+
+There are no product-service environment variables. Make accepts `PYTHON` for the interpreter, `ASSET_OUTPUT` for local asset output and `BRAND_OUTPUT` for archive output; the defaults and commands are in the [Makefile](Makefile). The optional Google font stylesheet changes network behavior when a consumer explicitly imports it. Editing one of the four tracked public guideline sources requires a deliberate source-hash update and independent review; those hashes do not grant public-claim approval. See [guidelines](docs/usage.md), [inventory checks](docs/inventory-checks.md), [token profile](docs/token-profile.md) and [provenance](docs/provenance.md) for the detailed boundaries.
+
 ## Docs
 
 - [Source-of-truth index](docs/source-of-truth.md) · [Inventory checks](docs/inventory-checks.md) (`make check-inventory`, `make check-links`) · [Token profile](docs/token-profile.md) (`make build-tokens`, `make check-tokens`)
+- [Brand governance](docs/brand-governance.md) · [Provenance and export eligibility](docs/provenance.md)
+- [Asset exports](docs/asset-exports.md) · [Distribution](docs/distribution.md) · [Accessibility](docs/accessibility.md) · [Consumer evidence](docs/consumers.md)
 - [Identity decision packet](docs/identity-decision-packet.md) · [Channel usage and examples](docs/usage.md) · [Public claim register](docs/claims-register.md)
 - [Logo usage](docs/logo.md) · [Voice](docs/voice.md) · [Imagery and AI art](docs/imagery.md) · [Motion, sound and haptics](docs/motion-sound-haptics.md) · [Foil and holo material](docs/material-foil.md)
 - [Repository responsibilities](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md)
@@ -102,6 +142,10 @@ This kit covers the master brand: app UI, logo, marketing and packaging. Stub ed
 
 ## Contributing
 
-Follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Brand direction changes go through [BK-07 #8](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8) governance. No licence is declared for the repository itself; the bundled fonts carry their own OFL terms.
+Follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Brand direction changes go through the [brand-governance process](docs/brand-governance.md); edit canonical sources and regenerate their outputs. Documentation clarifications need a reviewer other than the author. Preserve existing source paths, asset provenance and pending owner decisions.
+
+## License
+
+No licence is declared for the repository itself. The bundled fonts carry their own [Fraunces OFL](fonts/Fraunces-OFL.txt) and [Inter Tight OFL](fonts/InterTight-OFL.txt) terms; those licences do not cover unrelated logos, reference artwork or other repository content.
 
 Historical workflow attribution from the original source: brandkit skill workflow, curated by Collective Brain (collectivebrain.de) and WhiteFox Automations (whitefox-automations.com). This attribution is not a sponsor or endorsement claim; its public use remains subject to the [claim register](docs/claims-register.md).

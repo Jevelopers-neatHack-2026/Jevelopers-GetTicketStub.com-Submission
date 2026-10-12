@@ -17,6 +17,23 @@ Keep these identities separate:
 - A contract version is owned by shared-contracts and recorded by each producer/consumer.
 - An assembled product release is owned by integration-evals and its release owner, and records every selected component.
 
+## Release lifecycle
+
+Use these terms when a repository has a release process. They describe decision and evidence state; they do not set a version policy, authorize publication, or create GitHub protection.
+
+| State | Meaning and minimum evidence |
+|---|---|
+| Policy proposed | A version/tag/changelog convention is a suggestion awaiting the repository owner's decision. Do not describe it as the repository's adopted policy. |
+| Candidate | A specific source revision and any built artifact are identified. Record the intended version, artifact identity, tests, runtime/configuration, dependencies, and known limitations. |
+| Eligible for release review | Required local gates have actual results, compatibility and migration have been reviewed, and required consumer/owner acknowledgments are recorded. Eligibility is not publication authority. |
+| Authorized | The owner with publication authority explicitly approves the identified candidate, destination, and release operation. Current repository/tag/workflow settings are checked. |
+| Published | The actual release/tag/artifact exists. Record its immutable source SHA, artifact digest, publication date, and destination. A merge or green CI run alone is not publication. |
+| Post-release verified | The required post-release checks ran against the published artifact/version and exact environment; record their actual outcomes, evidence, reviewer role, and limitations. Product acceptance still follows the integration-evals process. |
+| Blocked | A required owner decision, check, artifact, approval, credential, or configuration is missing, failed, skipped, or unknown. Record the owner role and exact unblock condition. |
+| Deprecated, withdrawn, or superseded | The owner has stopped recommending or supporting the version or candidate. Record replacement, consumer impact, migration or rollback path, effective revision/date, and unresolved actions. Preserve prior evidence. |
+
+The lifecycle may require repeated review or correction; never promote a candidate just because a version string exists. The applicable owner decides which states and checks fit their repository and records any stricter local release policy.
+
 ## Release record and gates
 
 Use templates/release-record.md. Before declaring a release ready, confirm:

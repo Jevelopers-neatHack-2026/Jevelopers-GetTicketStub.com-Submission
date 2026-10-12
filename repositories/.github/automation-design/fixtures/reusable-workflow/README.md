@@ -2,7 +2,7 @@
 
 This fixture contains synthetic Markdown only. Its nested workflow file is a byte-for-byte copy of the illustrative reusable source. It is not installed as a root workflow and has no GitHub run evidence.
 
-From the repository root (Python 3.9 or newer and Node on `PATH`), create an isolated virtual environment and install the pinned test dependencies once. Dependency installation may download packages; it is setup, not an offline check.
+From the repository root (Python 3.10 or newer and Node on `PATH`), create an isolated virtual environment and install the pinned test dependencies once. Dependency installation may download packages; it is setup, not an offline check.
 
 ```sh
 CHECKS_VENV="$(mktemp -d)"

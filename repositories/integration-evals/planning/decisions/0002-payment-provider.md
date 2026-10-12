@@ -9,7 +9,7 @@
 
 Source observations below are pinned to [getticketstub.com `6de6fdf`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/tree/6de6fdf60ae5365c2fe4b4ab65a43c62a2ab6ca7) and [cost-intelligence `bc570fb`](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/tree/bc570fbb9db005c727c90c0a83fd6b4f99caebe7), observed 2026-10-12 UTC. They describe those revisions, not later main-branch changes or operational acceptance.
 
-- **Tracker update, read 2026-10-12 UTC:** [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27) now records a dated owner direction for Dodo Payments on all-digital orders and Stripe with Link on physical orders ([#64](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/64)); it also reports Dodo test-mode progress in candidate [#66](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/66). These are current tracker statements, not this memo's verification of authorization, eligibility, account setup, implementation or acceptance. The earlier Stripe Checkout alternative below requires reconciliation with the owners and provider eligibility review before implementation. Link works with several Stripe integrations, including Checkout; "Stripe with Link" alone does not select hosted Checkout. This memo does not approve Dodo for physical goods or select a new provider.
+- **Tracker update, read 2026-10-12 UTC:** [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27) now records a dated owner direction for Dodo Payments on all-digital orders and Stripe with Link on physical orders ([#64](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/64)); it also reports Dodo test-mode progress in candidate [#66](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/66). The tracker statements are mutable and do not verify account eligibility, setup, implementation or operational acceptance. The later owner-delegated decision in [0003/P4](0003-owner-delegated-decisions-2026-10-12.md#1-payments-and-finance-closes-the-owner-points-of-0001-and-0002) selects the precise physical-order path: hosted Stripe Checkout with Link; Dodo remains digital-only. The explicit selection resolves the earlier integration choice; it does not activate an account, run a provider, approve live processing, or establish that Dodo is configured. Link alone would not identify which Stripe integration to use. This memo does not approve Dodo for physical goods or select a new provider.
 
 - **At the pinned app revision, no payment integration exists.**
   - `src/customer/pages/commerce.ts`: "Nothing here calls a payment, print or shipping API".
@@ -19,7 +19,7 @@ Source observations below are pinned to [getticketstub.com `6de6fdf`](https://gi
   - Analytics reserves `purchase` and `refund` for an authoritative payment confirmation.
 - **No server-side authorized quote exists.** `src/app/api/orders/route.ts` takes `totalMinor` and each line's `totalMinor` from the request body and only range-checks them. `quoteId` is an optional client string that nothing looks up. Quotes are computed in the browser (`quote()` in `commerce.ts`, "a quote is not an authorization"). `FulfillmentQuote` / `OrderAuthorization` exist only in architecture-kit docs. Today the amount *does* come from the browser.
 - **The receipt email is sent at order creation.** `POST /api/orders` calls `sendMail(..., receiptMail(order, ...))` right after `createOrder`, before any payment exists.
-- **Stripe appears only in docs.** The architecture kit cites Stripe for webhook duplicates and ordering [S5] and for payout mapping [S6]. CFO.ai plan r2 assumes Stripe's US card rate but says it is "not a selected integrated payment provider".
+- **Stripe appears only in the pinned app snapshot and planning records.** The architecture kit cites Stripe for webhook duplicates and ordering [S5] and for payout mapping [S6]. CFO.ai plan r2 assumes Stripe's US card rate and, at the time of that snapshot, says it is "not a selected integrated payment provider". Owner-delegated decision 0003/P4 later selects the physical-order Checkout path; neither historical plan supplies an implementation or live authorization.
 - **We sell physical goods.** Printed stubs ship through Prodigi or fulfillment-connectors. Payment confirmation must gate a supplier order, and an `OrderAuthorization` binds the quote, bundle hash, amount and currency (FUL-02).
 - **Host:** one Next.js process on GoDaddy Plus Launch. Preview and Publish share `/private`, so they share the app's SQLite file (`/private/ticketstub.sqlite`). The host's bot filter returned 403 to command-line requests (#27), and a webhook sender is a non-browser client.
 - **The ledger cannot post yet.** `cost-intelligence` `ingestFinancial` is a `blockedBoundary` stub until the accounting leaf is delivered, and `0003_financial_ledger.sql` has no dispute or chargeback classification (see Dependencies).
@@ -37,24 +37,24 @@ All four providers' fees vary by product and region; check current pricing for e
 
 The merchant-of-record options (B-D) would cover a future digital-only product, such as a downloadable print file. They cannot sell the shipped print, which is the core SKU.
 
-## Earlier alternative — pending owner reconciliation
+## Earlier alternative — resolved by 0003
 
-**Earlier recommendation: Option A, Stripe Checkout, hosted page, `mode=payment`, one Checkout Session per checkout attempt on a server-authorized quote.** The following rationale and Stripe-specific design remain conditional on reconciliation with the newer tracker direction; they are not an accepted or implementation-ready specification.
+When this section was first recorded, the Stripe Checkout recommendation was still conditional on owner reconciliation. Decision 0003/P4 later selected hosted Stripe Checkout with `mode=payment` and Link for physical orders; Dodo remains the provider for digital-only orders. Decision 0003/P5 selected Stripe Tax (`automatic_tax`) for physical Checkout Sessions. These choices resolve the earlier direction questions. They do not activate an account, configure tax or keys, create a server-authorized quote, run the processor, or authorize live checkout. The rationale and Stripe-specific design below remain guidance, not verified implementation.
 
 - It is the only *reviewed* option that sells shipped goods.
 - It matches the existing architecture references.
 - Hosted Checkout collects card details on Stripe; fetched Charge snapshots can still contain sensitive card metadata. Minimize retained fields as in step 2.
-- Enable Stripe Tax only after the owner decides the tax posture.
+- **Resolution of the original tax question:** 0003/P5 selects Stripe Tax for physical Checkout Sessions. The owner must configure addresses, product/shipping tax codes and jurisdiction registrations before any live tax collection; the selection itself does not establish registration or legal review.
 - Revisit an MoR (B) only for a separate digital-only SKU.
 
-## Consequences (if the Stripe Checkout alternative is selected)
+## Earlier implementation consequences, with execution still pending
 
 - We are the seller of record. We are responsible for disputes (including evidence deadlines, usually 7-21 days), refunds policy, customer support, and sales-tax nexus.
 - New production secrets: a restricted key and a `whsec_` endpoint secret per environment. Test and live keys stay separate (billing mode `sandbox` vs `live`; FIN-10). Preview must never hold live keys.
 - The webhook route must be reachable by Stripe through the host's bot filter. A 403 counts as a failed delivery. Verify this before launch, or route webhooks to a host that accepts them.
 - The app DB needs payment columns and inbox tables (below). Sales, fees, refunds, disputes and payouts post to the finance ledger as distinct linked entries (architecture section 7; FIN-09), once the ledger can post.
 
-## Implementation plan (once chosen; prerequisites first)
+## Implementation plan (direction decided; prerequisites remain)
 
 0. **Prerequisite: server-priced quote store.**
    - Persist a server-priced quote / `OrderAuthorization` (amount, currency, line prices, bundle hash, capability version, expiry) computed on the server, not in the browser.
@@ -113,22 +113,22 @@ The merchant-of-record options (B-D) would cover a future digital-only product, 
 - `cost-intelligence`: `ingestFinancial` must be delivered, and `0003_financial_ledger.sql` needs a dispute/chargeback classification (today: `sale`, `sale_refund`, ... but no dispute). This is for its owners to add; this memo does not edit it.
 - The quote store in step 0, approved refund allocation/remaining authorization rules, fulfillment-connectors durable dispatch/recovery contract in step 4, and notification outbox/delivery dedupe. The app must consume the owning implementations; this memo implements none of them.
 
-## Owner actions
+## Owner actions and recorded decisions
 
-1. **Reconcile:** confirm the dated Dodo/all-digital and Stripe-with-Link/physical direction in #27, provider eligibility and implementation ownership. Decide whether the earlier hosted Checkout alternative here applies; Link alone is not that choice. If Stripe Checkout is chosen, decide whether Stripe Tax is enabled and in which jurisdictions you register. No provider acceptance or live approval is recorded by this memo.
-2. **Account and terms (only if selected):** create or activate the Stripe account under the company legal entity yourself. That includes business verification, bank account for payouts, the Stripe Services Agreement, and the statement descriptor. Agents must not accept terms or enter bank details. Check current pricing.
+1. **Direction question resolved by 0003/P4-P5:** 0003/P4 selects hosted Stripe Checkout with Link for physical orders, and Dodo for digital-only orders; 0003/P5 selects `automatic_tax`. Link alone would not identify the Checkout integration, so retain this exact selected path. Implementation ownership, account eligibility/configuration, jurisdiction registration, and all prelaunch checks remain to be completed. No live approval is recorded.
+2. **Account and terms (not yet performed):** create or activate the Stripe account under the company legal entity yourself. That includes business verification, bank account for payouts, the Stripe Services Agreement, and the statement descriptor. Agents must not accept terms or enter bank details. Check current pricing.
 3. **Policies and disputes:**
    - Publish refund, shipping and support-contact policies on the site; Checkout links to them.
-   - **Name a dispute-evidence owner** who watches dispute notices and submits evidence (or accepts) before each deadline, usually 7-21 days. Approve the proposed open-dispute hold, refund allocation/remaining authorization and reversal-review policy before implementation.
+   - CompleteDotTech (Finance and reliability) is the dispute-evidence owner, and 0003/P6 accepts the proposed open-dispute hold, partial-refund hold pending approved allocation/renewed authorization, and append-only reversal review. The owner still needs to enable notifications and respond to disputes before their deadlines.
 4. **Keys and refunds:**
-   - **Decide where refunds are issued.** Recommended: the Stripe Dashboard only, so the app key needs Refunds read only. If the app issues refunds, it needs Refunds write and a separate review.
+   - 0003/P7 selects refunds in the Stripe Dashboard only; the app key receives Refunds read, never Refunds write. This decision did not create keys or run a refund.
    - Create **test-mode** restricted keys first. Scope: Checkout Sessions write (create; includes read for `line_items`), PaymentIntents read, Charges read, Refunds read, **Disputes read**, **Balance transactions read** (needed for the sale-fee posting in step 6; dispute fees are already on the Dispute object). No Webhook Endpoints permission: register endpoints in the Dashboard.
    - Register the test webhook endpoint, and give the `whsec_` value to the GoDaddy **Preview** environment only.
    - Issue live keys only after LIVE-01 passes and you approve launch.
    - Never paste keys into issues, chat or evidence.
 5. **Host:** confirm with GoDaddy that `POST /api/payments/stripe/webhook` from Stripe's published IPs bypasses the bot filter.
-6. **Preview processor:** decide whether Preview may run the payment processor against the shared `/private` DB (mode-matched claims make it safe in principle), or must not until Preview and Publish storage are split. Default: not allowed.
-7. **Then, after direction/eligibility reconciliation and prerequisite approval:** authorize the quote-store and implementation PRs in getticketstub.com and the LIVE-01 sandbox suite. A separate launch approval is needed to switch to live keys.
+6. **Preview processor:** 0003/P8 keeps the processor disabled in Preview until Preview and Publish storage are split. The current shared `/private` database is not a basis for enabling Preview payment processing.
+7. **Then, after implementation prerequisites:** authorize the quote-store and implementation work in getticketstub.com and run the LIVE-01 sandbox suite against exact revisions. The accepted direction is not implementation or acceptance evidence. A separate launch approval is required before live keys or live processing.
 
 ## Sources
 

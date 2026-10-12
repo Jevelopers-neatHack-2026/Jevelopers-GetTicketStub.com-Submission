@@ -18,10 +18,12 @@ Fictional branch and commit examples (no corresponding issue, PR, merge, or test
 
 | Contribution | Branch | Commit subject |
 |---|---|---|
-| Feature | feat/example-export-favorites | feat: export saved favorites (example) |
-| Bug | fix/example-reject-expired-quote | fix(orders): reject expired quote (example) |
-| Documentation | docs/gh-02-branch-review-guidance | docs: clarify branch-to-review evidence (GH-02 example) |
-| Cross-repository integration | integration/example-contract-handoff | integration: add contract handoff fixture (example) |
+| Feature | `feat/issue-123-component` | `feat: implement the scoped component` |
+| Bug | `fix/issue-456-bug` | `fix: correct the reported behavior` |
+| Documentation | `docs/update-architecture` | `docs: clarify the architecture boundary` |
+| Dependency maintenance | `chore/dependency-maintenance` | `chore: update the reviewed dependency` |
+| Security hardening | `security/credential-hardening` | `security: restrict credential exposure` |
+| Cross-repository integration | `integration/example-contract-handoff` | `integration: add contract handoff fixture` |
 
 Use a repository's established naming policy if one exists. Lowercase branch names make examples easy to type. Preserve the canonical issue key in the pull-request body. A branch name is a convention, not evidence that the repository enforces it.
 
@@ -56,13 +58,38 @@ Before requesting review, inspect the diff, check for secrets and unrelated file
 
 Use a neutral reference such as Refs #N for issue links in every PR. Do not use an auto-closing keyword. The authorized supervisor closes the local issue only after the exact candidate is merged and the required post-merge evidence is recorded. A merged documentation PR does not verify a master acceptance item; integration-evals updates its status after evidence review.
 
-## 5. Review, merge, and verify
+## 5. Review states and change-type guidance
+
+Use the following terms consistently in PR descriptions and handoffs. `Blocked` and `Verified` are process descriptions, not native GitHub PR states or claims that a setting exists.
+
+| Term | Meaning |
+|---|---|
+| Draft | The author is still preparing the change; reviewers should not treat it as a final review request. |
+| Ready for review | The author has supplied the scope, issue links, planned and executed checks, and known gaps, and has requested review. It does not mean approved. |
+| Approved | When the destination's actual process calls for human approval, an authorized maintainer has submitted an approving GitHub review on the current candidate. This term does not set a review count or add a universal approval requirement. An independent model review or checkbox is not a GitHub approval. |
+| Blocked | A named dependency, required check, owner decision, or review remains unresolved. Record the unblock condition and owner role; do not describe the PR as ready to merge. |
+| Merged | GitHub records the merge commit. This makes the change part of the destination branch but does not by itself establish product or master acceptance. |
+| Verified | The scoped claim has the required evidence and review on the exact relevant revision. The authoritative acceptance owner records any master status change separately. |
+
+Tailor review to the change. Ask for roles that own the affected decision; the destination's configured rules determine which approvals are actually required.
+
+| Change type | Review focus |
+|---|---|
+| Documentation-only | Check facts against their owner source, link targets and headings, status language, accessibility, and that guidance does not imply an unconfigured control or unverified behavior. |
+| Application code or behavior | Check acceptance scope, tests and negative cases, inputs and failure handling, compatibility, security/privacy effects, migration, and rollback where relevant. |
+| Security-sensitive | Follow any actual destination rule or owner decision for security review; do not create a universal required reviewer from this guidance. Inspect exposure paths, permissions, secret handling, untrusted input, and evidence redaction. Keep sensitive details in a confirmed private channel. If the route is unconfirmed, block only a disclosure or credential action that requires it; safe, non-sensitive hardening and review can proceed within the authorized scope. |
+| Workflow or automation | Inspect triggers, permissions, action revisions, untrusted pull-request context, caller access, secrets, generated artifacts, and failure behavior. Validate locally where possible; a successful source check does not prove a consumer's hosted run or settings. |
+| Contract or API change | Request review from the canonical contract owner and affected producer and consumer roles. Check schema/version compatibility, fixtures, migration/deprecation, exact source revisions, and consumer acknowledgment. A producer test alone is not integrated acceptance. |
+
+## 6. Merge, verify, and maintain
 
 An implementation author does not review their own work as the independent review. The reviewer inspects the whole exact diff, surrounding source, acceptance criteria, tests, and dependency evidence. Distinguish an independent model review from a genuine GitHub maintainer approval and from configured branch protection. A review comment is not evidence that a protection rule required it.
 
 Capture base SHA, head SHA, and candidate merge commit/tree when available. If a commit, rebase, conflict resolution, base, or candidate changes in a way that affects the reviewed result, get review on the current exact candidate and rerun affected checks. Keep blocking findings open until corrected or reasoned by an authorized independent owner.
 
 Only an authorized maintainer merges, under the repository's actual protection and merge rules. Do not bypass a required review/check or claim enforcement when no live setting was inspected. After merge, verify the merge commit and any applicable installation or behavior. Keep an issue open while its accepted evidence is missing.
+
+For repository onboarding, ownership transfer, ongoing maintenance, and archival, follow the [governance lifecycle](governance-lifecycle.md). Follow the [release standard](releases-versioning.md) for version or publication decisions.
 
 ## Worked samples
 

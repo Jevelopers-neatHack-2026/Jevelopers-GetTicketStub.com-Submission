@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { constants, openSync, closeSync, fchmodSync, statSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { z } from "zod";
+import { enableDurabilityWal } from "./durability-wal.js";
 
 export const digestSchema = z
 	.string()
@@ -157,9 +158,9 @@ export class DurabilityDatabase {
 			throw new DurabilityError("STORAGE");
 		}
 		try {
-			this.sql.exec(
-				"PRAGMA busy_timeout=10000; PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
-			);
+			this.sql.exec("PRAGMA busy_timeout=10000; PRAGMA foreign_keys=ON;");
+			enableDurabilityWal(this.sql);
+			this.sql.exec("PRAGMA synchronous=FULL;");
 			this.transaction(() => {
 				this.sql.exec(schema);
 				const stored = this.sql

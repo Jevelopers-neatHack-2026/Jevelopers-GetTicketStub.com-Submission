@@ -8,6 +8,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.0.0';
 const pricingV2Version = '2.0.0';
 const combinedValidators = Object.freeze({
+  CoverageDryRunRequestSchema: 'validateCoverageDryRunRequestBoundary',
+  CoverageDryRunReadRequestSchema: 'validateCoverageDryRunReadRequestBoundary',
+  CoverageImportRecordSchema: 'validateCoverageImportRecordBoundary',
   UsageObservationSchema: 'validateUsageObservationBoundary',
   EstimateRequestSchema: 'validateEstimateRequestBoundary',
   EstimateRequestV2Schema: 'validateEstimateRequestV2Boundary',
@@ -54,6 +57,9 @@ const pricingV2Names = [
   ['SourceReferenceSchema', 'SourceReferenceSchema'], ['PricingPartitionGroupSchema', 'PricingPartitionGroupSchema'],
 ].map(([name, exportName]) => ({ module: 'pricing', name, exportName, schema: api[exportName], version: pricingV2Version }));
 entries.push(...pricingV2Names);
+for (const name of ['CoverageSnapshotReferenceSchema', 'CoverageImportRecordSchema', 'CoverageDryRunRequestSchema', 'CoverageDryRunReadRequestSchema', 'CoverageDryRunSummarySchema', 'CoverageDryRunPageSchema']) {
+  entries.push({ module: 'reconciliation', name, exportName: name, schema: api[name], version: name === 'CoverageImportRecordSchema' || name === 'CoverageSnapshotReferenceSchema' ? '1.0.0' : '2.0.0' });
+}
 for (const name of ['ReportingExportRequestSchema', 'ReportingExportManifestSchema', 'ReportingExportReceiptSchema']) {
   entries.push({ module: 'integrations', name, exportName: name, schema: api[name], version: '2.0.0' });
 }
@@ -84,7 +90,7 @@ for (const entry of entries) {
 const contractLock = JSON.parse(await readFile(join(root, 'contracts.lock.json'), 'utf8'));
 const manifest = {
   schema_version: version,
-  schema_versions: { pricing: [version, pricingV2Version], reporting: [version, '2.0.0'], integrations: [version, '2.0.0'] },
+  schema_versions: { pricing: [version, pricingV2Version], reporting: [version, '2.0.0'], integrations: [version, '2.0.0'], reconciliation: [version, '2.0.0'] },
   package: '@jevelopers/cost-intelligence',
   shared_contracts: {
     package: contractLock.producer.package,

@@ -17,7 +17,7 @@ export async function loadOwners(harness, creative) {
     png: await load(join(creative,'fixtures/models/png.mjs')),
   };
 }
-export function createCase(owners, id, { deadlineOffset = 5000, clockOffset = 0 } = {}) {
+export function createCase(owners, id, { deadlineOffset = 5000, clockOffset = 0, routeTransport } = {}) {
   const {inspection: ce, contracts, fixture: har, versions, png} = owners;
   const brief = structuredClone(versions.createBrief()); brief.permissions.items[0].status = 'granted';
   const scope = versions.DEFAULT_SCOPE;
@@ -46,7 +46,7 @@ export function createCase(owners, id, { deadlineOffset = 5000, clockOffset = 0 
     target_binding_sha256:har.contracts.decisionExecutionTargetHash(request)});
   input.attempt = {...fixture.attempt,tenant_id:request.tenant_id,project_id:request.project_id,
     logical_operation_id:request.logical_operation_id,billable_attempt_id:request.billable_attempt_id,correlation_id:request.correlation_id};
-  const routeContext = {...context('route'),linked_request_id:request.request_id,linked_billable_attempt_id:request.billable_attempt_id,
+  const routeContext = {...context('route'),...(routeTransport?{transport_attempt_id:routeTransport}:{}),linked_request_id:request.request_id,linked_billable_attempt_id:request.billable_attempt_id,
     plan_ref:plan.plan_ref,inspection_subject_hash:plan.inspection_subject_hash};
   const consume = result => ce.createInspectionRouteBatch(plan,request,result,trustedScope,routeContext);
   const criteria = request.questions.visual_quality.criteria;

@@ -50,20 +50,20 @@
       "path": "repositories/.github",
       "url": "https://github.com/Jevelopers-neatHack-2026/.github",
       "branch": "main",
-      "commit": "07d750dfb7feeecdeca7d3d1a2363663d7f3517f",
-      "tree": "6c96047921406fe7be678409ec0df8d4e228bec2",
-      "committed_at": "2026-10-12T13:16:50-04:00",
+      "commit": "c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c",
+      "tree": "e042c347e59c7101466c09ef4393350114bd2c98",
+      "committed_at": "2026-10-12T15:40:40-04:00",
       "description": "Org profile plus shared contribution, governance and evidence standards for the Jevelopers neatHack 2026 program",
-      "tracked_files": 68,
+      "tracked_files": 76,
       "statistics": {
-        "commits": 48,
-        "text_files": 59,
-        "text_lines": 12493,
-        "source_files": 3,
-        "source_file_lines": 791,
+        "commits": 51,
+        "text_files": 67,
+        "text_lines": 16508,
+        "source_files": 5,
+        "source_file_lines": 2701,
         "binary_or_non_utf8_files": 9,
         "symlinks": 0,
-        "file_bytes": 1744195
+        "file_bytes": 1961010
       }
     },
     {
@@ -71,20 +71,20 @@
       "path": "repositories/agent-harness",
       "url": "https://github.com/Jevelopers-neatHack-2026/agent-harness",
       "branch": "main",
-      "commit": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
-      "tree": "04d706d2bbdab0d511db97eca660e35563d1a1cb",
-      "committed_at": "2026-10-12T13:09:29-04:00",
+      "commit": "2dd61d52c94bede16251ef92e6f9ba325dd3b958",
+      "tree": "7be22b12ab453ae379d0ab381a199cabe79bd12b",
+      "committed_at": "2026-10-12T14:10:04-04:00",
       "description": "Durable workflow execution, fencing and recovery runtime for the Agent & Creative v1 subsystem (Node 22, SQLite)",
-      "tracked_files": 223,
+      "tracked_files": 225,
       "statistics": {
-        "commits": 169,
-        "text_files": 213,
-        "text_lines": 77526,
-        "source_files": 145,
-        "source_file_lines": 71101,
+        "commits": 177,
+        "text_files": 215,
+        "text_lines": 78959,
+        "source_files": 147,
+        "source_file_lines": 72502,
         "binary_or_non_utf8_files": 10,
         "symlinks": 0,
-        "file_bytes": 5943845
+        "file_bytes": 6029512
       }
     },
     {
@@ -92,20 +92,20 @@
       "path": "repositories/brand-kit",
       "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit",
       "branch": "main",
-      "commit": "6222a745195e9f15a14069e79210ad45daa16c94",
-      "tree": "9b4e5bffc559494731cfdcc23c5df7582792736c",
-      "committed_at": "2026-10-12T13:14:03-04:00",
+      "commit": "e254df5444f0bfedd5526b0e148b0cdf36cbd31f",
+      "tree": "32e3904a8d901b9c6cf75ca1e65829fe98df03f0",
+      "committed_at": "2026-10-12T14:13:06-04:00",
       "description": "TicketStub master brand kit: logo system, DTCG design tokens, fonts, brand board and usage guidelines.",
       "tracked_files": 117,
       "statistics": {
-        "commits": 19,
+        "commits": 26,
         "text_files": 108,
-        "text_lines": 18273,
+        "text_lines": 18539,
         "source_files": 43,
-        "source_file_lines": 8880,
+        "source_file_lines": 9051,
         "binary_or_non_utf8_files": 9,
         "symlinks": 0,
-        "file_bytes": 4744742
+        "file_bytes": 4769333
       }
     },
     {
@@ -113,20 +113,20 @@
       "path": "repositories/cost-intelligence",
       "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence",
       "branch": "main",
-      "commit": "50910da5999fc099558ecf07c075488fd4cfd1be",
-      "tree": "14198fbe95c7578b0e343bcc821652f4e9b21604",
-      "committed_at": "2026-10-12T13:07:58-04:00",
+      "commit": "3b5daed11e7b55a67ef3fe823d5d7f5f1f3d4e23",
+      "tree": "316eaa6a6db0686958c08cc0679d497a130d8338",
+      "committed_at": "2026-10-12T15:56:32-04:00",
       "description": "TypeScript package for usage-cost metering, pricing, budget reservations, ledger, reconciliation and summaries.",
-      "tracked_files": 229,
+      "tracked_files": 267,
       "statistics": {
-        "commits": 87,
-        "text_files": 228,
-        "text_lines": 78611,
-        "source_files": 95,
-        "source_file_lines": 28633,
+        "commits": 98,
+        "text_files": 266,
+        "text_lines": 85673,
+        "source_files": 122,
+        "source_file_lines": 33813,
         "binary_or_non_utf8_files": 1,
         "symlinks": 0,
-        "file_bytes": 4355749
+        "file_bytes": 4822178
       }
     },
     {
@@ -134,20 +134,20 @@
       "path": "repositories/creative-engine",
       "url": "https://github.com/Jevelopers-neatHack-2026/creative-engine",
       "branch": "main",
-      "commit": "5b0f354dd8871550345863aef4017b7bbba3bd86",
-      "tree": "392544cdf5ce1feef543561a893edbafd31f159f",
-      "committed_at": "2026-10-12T12:59:49-04:00",
+      "commit": "052e4f4735dcf3cf0e7db6d1ce533a6851736b39",
+      "tree": "1f2a0cce1ee50695ae64536c5e5279c132249ffc",
+      "committed_at": "2026-10-12T14:49:15-04:00",
       "description": "Typed creative API runtime for image generation, edits, versioned designs, inspection, metering and contract checks",
-      "tracked_files": 337,
+      "tracked_files": 374,
       "statistics": {
-        "commits": 133,
-        "text_files": 330,
-        "text_lines": 94116,
-        "source_files": 211,
-        "source_file_lines": 77900,
+        "commits": 175,
+        "text_files": 367,
+        "text_lines": 101384,
+        "source_files": 244,
+        "source_file_lines": 84794,
         "binary_or_non_utf8_files": 7,
         "symlinks": 0,
-        "file_bytes": 8452783
+        "file_bytes": 9064381
       }
     },
     {
@@ -155,20 +155,20 @@
       "path": "repositories/event-intelligence",
       "url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence",
       "branch": "main",
-      "commit": "ef69133bb38320793e02f8530accdd67e59f90e3",
-      "tree": "962cba90be2846c14490105c55722971bf241529",
-      "committed_at": "2026-10-12T13:01:26-04:00",
+      "commit": "15355c3b57f85606829b97bda02e488ad0775bbc",
+      "tree": "0beca3213a9ce98ddb400da27d5b48e282a4b414",
+      "committed_at": "2026-10-12T15:58:05-04:00",
       "description": "Sourced event facts and research cache: bounded retrieval, evidence provenance and privacy boundaries",
-      "tracked_files": 324,
+      "tracked_files": 326,
       "statistics": {
-        "commits": 221,
-        "text_files": 305,
-        "text_lines": 140575,
-        "source_files": 189,
-        "source_file_lines": 86403,
+        "commits": 239,
+        "text_files": 307,
+        "text_lines": 141659,
+        "source_files": 191,
+        "source_file_lines": 87374,
         "binary_or_non_utf8_files": 19,
         "symlinks": 0,
-        "file_bytes": 7162213
+        "file_bytes": 7231978
       }
     },
     {
@@ -197,20 +197,20 @@
       "path": "repositories/getticketstub.com",
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
       "branch": "main",
-      "commit": "138e4b9019c0f5a55ad5e3f586d129216b680e4d",
-      "tree": "2b9d89d2dec8cb2e702f6ab20d0d00c1122a9e5f",
-      "committed_at": "2026-10-12T13:17:51-04:00",
+      "commit": "aec83af65ee75be80246d88782c8f8ce00a10c31",
+      "tree": "ea5ec7e413708a0e72c12d55648ca0b7ecf1be5e",
+      "committed_at": "2026-10-12T15:54:14-04:00",
       "description": "Customer ticket-stub studio app (Next.js): event intake, design, approval and print or digital handoff",
-      "tracked_files": 719,
+      "tracked_files": 722,
       "statistics": {
-        "commits": 229,
-        "text_files": 665,
-        "text_lines": 94669,
+        "commits": 239,
+        "text_files": 668,
+        "text_lines": 94819,
         "source_files": 394,
         "source_file_lines": 70381,
         "binary_or_non_utf8_files": 54,
         "symlinks": 0,
-        "file_bytes": 15294734
+        "file_bytes": 15347225
       }
     },
     {
@@ -218,20 +218,20 @@
       "path": "repositories/integration-evals",
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals",
       "branch": "main",
-      "commit": "f187722613c61e14e3f4087a66d07b2b1e6820f7",
-      "tree": "33255e685cd74cc7221831a5963b93348b67d6e3",
-      "committed_at": "2026-10-12T13:28:39-04:00",
+      "commit": "7b44ab9ab8b779102a26db9d1932ba1d43404fb1",
+      "tree": "e93e76c7859d2bc61c777214c65c7fd5a1c257da",
+      "committed_at": "2026-10-12T15:49:58-04:00",
       "description": "Cross-component integration verification, synthetic fixtures, and sanitized evidence for the getticketstub v1 release",
-      "tracked_files": 529,
+      "tracked_files": 533,
       "statistics": {
-        "commits": 186,
-        "text_files": 519,
-        "text_lines": 204560,
-        "source_files": 226,
-        "source_file_lines": 28817,
+        "commits": 192,
+        "text_files": 523,
+        "text_lines": 204790,
+        "source_files": 230,
+        "source_file_lines": 29024,
         "binary_or_non_utf8_files": 10,
         "symlinks": 0,
-        "file_bytes": 22840713
+        "file_bytes": 22867500
       }
     },
     {
@@ -281,20 +281,20 @@
       "path": "repositories/print-production",
       "url": "https://github.com/Jevelopers-neatHack-2026/print-production",
       "branch": "main",
-      "commit": "89b5dd63c0a23dc27e62cfc235daa40dfe6d2002",
-      "tree": "ab5c3a4437f63fea03c2d162be2e1efe6145b64e",
-      "committed_at": "2026-10-12T05:52:17-04:00",
+      "commit": "30fab55daf4b2c7b4655ad1ad72a276eb89a772d",
+      "tree": "de2b28a033b4628c0ebe73380137b42c8786bacb",
+      "committed_at": "2026-10-12T15:41:52-04:00",
       "description": "Deterministic print composition, preflight, exports and production manifests for event ticket artifacts.",
-      "tracked_files": 319,
+      "tracked_files": 327,
       "statistics": {
-        "commits": 114,
-        "text_files": 315,
-        "text_lines": 51075,
-        "source_files": 245,
-        "source_file_lines": 41643,
+        "commits": 123,
+        "text_files": 323,
+        "text_lines": 52046,
+        "source_files": 251,
+        "source_file_lines": 42418,
         "binary_or_non_utf8_files": 4,
         "symlinks": 0,
-        "file_bytes": 11478914
+        "file_bytes": 11514542
       }
     },
     {
@@ -302,20 +302,20 @@
       "path": "repositories/shared-contracts",
       "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts",
       "branch": "main",
-      "commit": "91736a026c02a3206cb7666ebfbe6134692e5a24",
-      "tree": "ccf41253598aa024ea1f594432a05ec6e46dd454",
-      "committed_at": "2026-10-12T13:16:54-04:00",
+      "commit": "532e455377ad368f3632d915027e6c89ce45cdd6",
+      "tree": "b2091741f213c5a44c8f026294fa36fb73e758dc",
+      "committed_at": "2026-10-12T15:34:46-04:00",
       "description": "Canonical JSON Schemas, generated types, offline validators and compatibility fixtures for neatHack 2026 services",
-      "tracked_files": 25,
+      "tracked_files": 35,
       "statistics": {
-        "commits": 32,
-        "text_files": 25,
-        "text_lines": 6408,
-        "source_files": 5,
-        "source_file_lines": 1608,
+        "commits": 38,
+        "text_files": 35,
+        "text_lines": 7191,
+        "source_files": 8,
+        "source_file_lines": 1959,
         "binary_or_non_utf8_files": 0,
         "symlinks": 0,
-        "file_bytes": 360870
+        "file_bytes": 395161
       }
     },
     {
@@ -323,20 +323,20 @@
       "path": "repositories/team-dashboard",
       "url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard",
       "branch": "main",
-      "commit": "97e35e7f669f368b26c9884c48e7c181a26438b8",
-      "tree": "7dc688c55df321ed56a11b46b514ca533484d9df",
-      "committed_at": "2026-10-12T13:17:00-04:00",
+      "commit": "7d861af7dd655d97c6cf8c90a9c87cf34e6e8a86",
+      "tree": "c38b43dd74e1b86fdf6669d85d8fbdabcf015477",
+      "committed_at": "2026-10-12T15:51:29-04:00",
       "description": "Typed React module for getticketstub.com's admin finance area: costs, revenue, budgets, drilldowns and reports.",
-      "tracked_files": 191,
+      "tracked_files": 200,
       "statistics": {
-        "commits": 82,
-        "text_files": 191,
-        "text_lines": 43733,
-        "source_files": 119,
-        "source_file_lines": 14185,
+        "commits": 97,
+        "text_files": 200,
+        "text_lines": 44632,
+        "source_files": 122,
+        "source_file_lines": 14784,
         "binary_or_non_utf8_files": 0,
         "symlinks": 0,
-        "file_bytes": 3397774
+        "file_bytes": 3455864
       }
     }
   ]

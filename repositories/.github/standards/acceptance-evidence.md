@@ -68,7 +68,7 @@ The evidence owner selects retention and access according to the actual storage 
 
 ## Fictional examples with supporting records
 
-These four complete schema demonstrations are fictional training cases, not Jevelopers program evidence. Their illustrative outcomes explain how a record would read if the scenario occurred; the actual outcome in each record is N/A because no command ran. UNKNOWN and N/A fields are intentional and are not evidence. No fictional SHA, URL, date, reviewer, artifact digest, or cost is supplied.
+These five complete schema demonstrations are fictional training cases, not Jevelopers program evidence. Their illustrative outcomes explain how a record would read if the scenario occurred; the actual outcome in each record is N/A because no command ran. UNKNOWN and N/A fields are intentional and are not evidence. No fictional SHA, URL, date, reviewer, artifact digest, or cost is supplied.
 
 ### Sample A — documentation-only
 

@@ -1,6 +1,6 @@
 # Contribution guidance
 
-These are proposed shared working practices. Preserve each repository's local ownership, contributor instructions, agent instructions, and accepted design. If guidance conflicts, stop at the boundary, record the exact conflict and source revisions, and ask the owning maintainers to resolve it.
+These are proposed shared working practices. Preserve each repository's local ownership, contributor instructions, agent instructions, and accepted design. If guidance conflicts, stop at the boundary, record the exact conflict and source revisions, and ask the owning maintainers to resolve it. Follow the [governance lifecycle](standards/governance-lifecycle.md) for adoption, enforcement, handoff, and archival; a shared policy does not configure destination controls.
 
 ## Distribution and local ownership
 
@@ -10,11 +10,11 @@ When this `.github` repository is public, GitHub can display supported default c
 
 ## Branches, commits, and review
 
-Use a focused branch and pull request. The suggested naming grammar is type/issue-key-short-summary, for example docs/gh-02-branch-review-guidance, fix/bug-123-reject-expired-token, or integration/ie-09a-contract-handoff. This is a proposed convention, not evidence of configured enforcement. Keep the issue key in the body even when an upstream repository uses a different key format.
+Use a focused branch and pull request. Suggested names include `feat/issue-123-component`, `fix/issue-456-bug`, `docs/update-architecture`, `chore/dependency-maintenance`, and `security/credential-hardening`. A repository may use another established grammar; these examples are a proposed convention, not evidence of configured enforcement. Keep the issue key in the body even when an upstream repository uses a different key format.
 
 Write a concise imperative commit subject. Add a body when it explains why, test evidence, a migration, or a limitation. Do not rewrite another contributor's history. Whether a pull request is squashed or retains commits is a maintainer decision for that repository.
 
-Describe the behavior and exact scope, non-goals, dependencies, acceptance IDs, provider mode, actual validation commands/results, tested revision, evidence links, skips, and unresolved items. Mark tests planned separately from tests executed. Identify the accountable reviewer role; contract changes also need review from affected producer and consumer roles. Review checkboxes are author claims until the corresponding evidence and actual GitHub approval are inspected.
+Describe the behavior and exact scope, non-goals, dependencies, acceptance IDs, provider mode, actual validation commands/results, tested revision, evidence links, skips, and unresolved items. Mark tests planned separately from tests executed. Identify the accountable reviewer role; contract changes also need review from affected producer and consumer roles. Review checkboxes are author claims until the corresponding evidence and actual GitHub approval are inspected. Follow the [review-state and change-type guidance](standards/contribution-workflow.md#5-review-states-and-change-type-guidance); configured approvals remain destination-specific.
 
 Use neutral references such as Refs #N for issue links in every pull request; do not use an auto-closing keyword. The authorized supervisor closes the local issue only after the exact candidate is merged and required post-merge evidence is recorded. A merged documentation pull request does not verify a master acceptance ID. The owner in integration-evals records authoritative status there after evidence review.
 
@@ -30,4 +30,4 @@ Provider calls, purchases, publication, account changes, and other external effe
 
 A repository owner maintains its own version policy and release record. Contract compatibility follows the shared-contracts catalog. A release requires exact component SHAs, artifact digests, actual commands and outcomes, and rollback guidance. The central product release remains integration-evals-owned.
 
-Recommended review, label, and workflow practices are not configured protections. Report a setting as configured or verified only with current repository evidence. This repository does not install active Actions workflows or alter GitHub settings. See [release guidance](standards/releases-versioning.md), [label planning](standards/labels-planning.md), and [workflow adoption guidance](automation-design/reusable-workflows.md).
+Recommended review, label, and workflow practices are not configured protections. Report a setting as configured or verified only with current repository evidence. The shared source defines `.github/workflows/docs-check.yml` as its reusable documentation check and `.github/workflows/governance-checks.yml` as this repository's caller. Their source definitions do not prove a hosted run succeeded or that another repository adopted them; a destination must call the reusable workflow and verify its own permissions and results. This repository does not alter GitHub settings. See [release guidance](standards/releases-versioning.md), [label planning](standards/labels-planning.md), [workflow adoption guidance](automation-design/reusable-workflows.md), and the [ownership boundaries](docs/architecture/OWNERSHIP.md).

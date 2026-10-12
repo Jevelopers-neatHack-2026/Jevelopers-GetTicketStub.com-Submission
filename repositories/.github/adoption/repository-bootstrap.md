@@ -1,6 +1,8 @@
 # Repository governance bootstrap
 
-Use this checklist for one new or existing repository. It plans deliberate adoption; it does not certify a repository, copy every document, or change GitHub settings.
+Use this checklist for one new or existing repository. It plans deliberate adoption; it does not certify a repository, copy every document, or change GitHub settings. The [governance lifecycle](../standards/governance-lifecycle.md) defines the separate proposed, published, available, adopted, enforced, and retired states used here.
+
+For the dated cross-repository baseline and its public gap matrix, see the [2026-10-12 governance status addendum](observations/governance-status-addendum-2026-10-12.md) and [machine-readable observation](observations/organization-adoption-2026-10-12.json). It is a pinned audit, not a substitute for a destination-specific current check.
 
 ## 1. Establish local ownership and sources
 
@@ -8,7 +10,7 @@ Before copying:
 
 - Confirm the destination owner role, repository visibility, default branch, intended contributors, and whether the repo will consume shared defaults or local copies. Record the exact observed destination SHA and date; if unavailable, say unknown.
 - Read the destination README, OWNERSHIP.md, ACCEPTANCE.md, CONTRIBUTING.md, AGENTS.md files, SECURITY.md, tests/build manifest, and local architecture decisions. Preserve useful local instructions.
-- Resolve canonical architecture, contract, and acceptance sources through standards/architecture-linking.md. Identify which local views may be adapted without becoming duplicate sources.
+- Resolve canonical architecture, contract, and acceptance sources through ../standards/architecture-linking.md. Identify which local views may be adapted without becoming duplicate sources.
 - Identify a maintainer who can review local adoption. Do not infer an assignee, license, CODEOWNERS rule, or settings owner from an organization role.
 
 If sources conflict, leave the destination file untouched until its owner resolves the conflict. Record both source revisions, the disputed requirement, affected roles, and a concrete decision request.
@@ -26,11 +28,12 @@ Record each item as applicable, copied, linked, configured, verified, blocked, d
 - Label taxonomy guidance and per-repository label inventory. Do not reference an absent label from a form.
 - Release/version and evidence records with repository-specific authority left to the destination owner.
 - Workflow recommendations, starter/caller status, exact source revision, and local run evidence. A workflow example is not a deployed caller.
+- Dependency-maintenance posture, including whether to use Dependabot or a reviewed equivalent, the approved scope, and the responsible owner role. Record a proposed choice as pending until the destination owner approves it; do not enable automation from this checklist alone.
 - Source-of-truth links, cross-repository gates, producer/consumer roles, and blocker conditions.
 
 ## 3. Place files deliberately
 
-For a public repository, GitHub may display supported community-health defaults from a public organization .github repository when no local equivalent exists. It does not copy them into a clone. A local file overrides the default. This does not distribute agent instructions, CODEOWNERS, licenses, workflow callers, or settings.
+GitHub may display supported community-health defaults from a public organization `.github` repository in eligible public or private destination repositories when no local equivalent exists. Confirm the destination's actual behavior; the default is not copied into a clone, and a local file overrides it. This does not distribute agent instructions, `CODEOWNERS`, licenses, workflow callers, or settings.
 
 For a destination that needs a durable local copy:
 
@@ -41,7 +44,7 @@ For a destination that needs a durable local copy:
 5. Commit the local change through the destination's normal review process. Record the resulting PR and merge revision only after they exist.
 6. Recheck inherited defaults and local overrides on that destination's default branch.
 
-A private .github repository is not a source for public organization's community-health defaults. A public .github repository still does not place files in a clone. GitHub's organization workflow-template source is a separate mechanism under .github/workflow-templates and requires reader access to its source. Reusable workflow execution additionally requires an installed workflow file, explicit caller, correct host/caller visibility, allowed access settings, and an actual run. An issue or pull-request template in this package has no repository-level effect until it is on the applicable default branch or copied to a destination.
+A private `.github` repository is not a source for an organization's public community-health defaults. A public `.github` repository still does not place files in a clone. GitHub's organization workflow-template source is a separate mechanism: templates belong in the `workflow-templates/` directory at the root of the `.github` source repository (not in a nested `.github/workflow-templates/` path) and require reader access to that source. Reusable workflow execution additionally requires an installed workflow file, explicit caller, correct host/caller visibility, allowed access settings, and an actual run. An issue or pull-request template in this package has no repository-level effect until it is on the applicable default branch or copied to a destination.
 
 Agent instructions must be local where the agent reads them. CODEOWNERS and license decisions must be made in each repository where they apply. Workflow callers and permission settings are local. Do not change repository visibility to obtain inheritance.
 
@@ -66,7 +69,7 @@ Named owners, licenses, CODEOWNERS, and security contacts require an explicit te
 
 ## 5. Adoption evidence
 
-Use templates/adoption-record.md. Record:
+Use ../templates/adoption-record.md. Record:
 
 - source repository and full source SHA;
 - destination URL, visibility, default branch, full destination SHA, PR/merge revision, and observation date;
@@ -76,4 +79,4 @@ Use templates/adoption-record.md. Record:
 - local deviations with owner role, rationale, review/expiry date;
 - unknown settings, missing owners, security route, labels, and next action.
 
-Do not say all fourteen repositories comply from one sample. An adoption record establishes only what was inspected on that destination revision.
+Do not make organization-wide compliance claims from a sample. An adoption record establishes only what was inspected on that destination revision.

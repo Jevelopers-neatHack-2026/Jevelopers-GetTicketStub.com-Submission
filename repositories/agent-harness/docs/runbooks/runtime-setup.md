@@ -57,17 +57,17 @@ The owner creates a fresh private `TMPDIR` and registry for every route, then re
 
 `make verify` takes `CASE`, `FIXTURE` and `MODE`. Only `MODE=mock` is supported. Each case prints its own scope note, and unsupported cases exit `2`. Passing a case is internal prerequisite evidence only, not acceptance.
 
-| Command | Runs | Still pending |
+| Command | Runs | What this command does not establish |
 | --- | --- | --- |
 | `make verify CASE=AH-01 MODE=mock FIXTURE=internal-boundary` | `tests/runtime/foundation.test.js` | Canonical compatibility |
 | `make verify CASE=AH-03 MODE=mock FIXTURE=state-crash-matrix` | `tests/runtime/durability.test.js` | Global AH-03 acceptance |
 | `make verify CASE=AH-03 MODE=mock FIXTURE=lease-migration` | `tests/runtime/durability.test.js` | Global AH-03 acceptance |
-| `make verify CASE=AH-10 MODE=mock FIXTURE=internal-redaction-outage` | `tests/observability/verify-fixture.js` | Neatlogs, Entire and cross-repository acceptance |
-| `make verify CASE=AH-10 MODE=mock FIXTURE=neatlogs-sdk-local` | `npm run test:neatlogs-sdk` | Live Neatlogs, Entire and cross-repository acceptance |
+| `make verify CASE=AH-10 MODE=mock FIXTURE=internal-redaction-outage` | `tests/observability/verify-fixture.js` | Full AH-10 and cross-repository acceptance; this fixture makes no Neatlogs or Entire call. |
+| `make verify CASE=AH-10 MODE=mock FIXTURE=neatlogs-sdk-local` | `npm run test:neatlogs-sdk` | Service delivery, Entire provenance, and full AH-10 integration; this target is local SDK capture only. |
 | `make verify CASE=LOCAL-BOUNDED MODE=mock FIXTURE=private-local-controller` | Local controller, planning and recovery tests | Full AH-04/AH-08, canonical, Finance, tenant, planner and live acceptance |
 | `make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline` | `tests/decisions/jev-adapter.contract/verify-offline.js` | Canonical DecisionPort, Finance, tenant authority, provider access, live conformance, evaluation and release gates |
 
-The AH-10 and ACV1-AH05 fixtures, and the Neatlogs SDK tests, write TAP traces and JSON manifests under `.runtime-artifacts/`, which Git ignores. See [AH-10 internal telemetry evidence](../evidence-and-provenance.md), [JEV provider wire conformance](../decisions/provider-conformance.md) and [Neatlogs local SDK mapping conformance](../decisions/neatlogs-sdk-conformance.md) for what each manifest records.
+The AH-10 and ACV1-AH05 fixtures, and the Neatlogs SDK tests, write TAP traces and JSON manifests under `.runtime-artifacts/`, which Git ignores. The master tracker at [integration-evals revision `5601857`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/56018576a9450a2bb46aa55ed3b2f9d9ae97e50d/planning/acceptance-checklist.md) separately records SPN-01 and SPN-02 as verified, owner-accepted on 2026-10-11. Those records do not come from the local commands above. See [AH-10 internal telemetry evidence](../evidence-and-provenance.md), [JEV provider wire conformance](../decisions/provider-conformance.md) and [Neatlogs local SDK mapping conformance](../decisions/neatlogs-sdk-conformance.md) for what each manifest records.
 
 ## Provider readiness profile
 

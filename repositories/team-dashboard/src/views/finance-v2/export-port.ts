@@ -56,8 +56,13 @@ export type FinanceV2ExportPortResolution =
 export function resolveFinanceV2ExportPort(mode: FinanceV2DataMode, port: unknown): FinanceV2ExportPortResolution {
   if (mode !== 'SYNTHETIC_PROPOSAL') return { status: 'unavailable', reason: 'integrated-port-not-accepted' };
   if (port === undefined || port === null) return { status: 'unavailable', reason: 'no-port' };
-  if (typeof port !== 'object' || (port as { kind?: unknown }).kind !== FINANCE_V2_EXPORT_KIND || typeof (port as { prepare?: unknown }).prepare !== 'function') return { status: 'unavailable', reason: 'port-kind-mismatch' };
-  return { status: 'available', port: port as FinanceV2SyntheticExportPort };
+  try {
+    if (typeof port !== 'object' || (port as { kind?: unknown }).kind !== FINANCE_V2_EXPORT_KIND || typeof (port as { prepare?: unknown }).prepare !== 'function') return { status: 'unavailable', reason: 'port-kind-mismatch' };
+    return { status: 'available', port: port as FinanceV2SyntheticExportPort };
+  } catch {
+    // The injected port is unknown; unreadable metadata is unavailable, not a render-time exception.
+    return { status: 'unavailable', reason: 'port-kind-mismatch' };
+  }
 }
 
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
@@ -211,8 +216,6 @@ function deepFreeze<T>(value: T): T {
   if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) { Object.freeze(value); for (const member of Object.values(value)) deepFreeze(member); }
   return value;
 }
-class Stale extends Error {}
-class Vetoed extends Error { constructor(readonly reason: FinanceV2ExportUnavailableReason) { super(reason); } }
 type Held = Readonly<{ key: string; fingerprint: string; format: FinanceV2ExportFormat; files: readonly FinanceV2PreparedFile[] }>;
 type Settled = Readonly<{ key: string; state: FinanceV2ExportState }>;
 
@@ -270,13 +273,17 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
     const handle = { cancel: () => { live = false; clearTimeout(timer); controller.abort(); } };
     active.current = handle;
     setSettled({ key, state: { phase: 'preparing' } });
+    // Private per-run identities cannot be forged by a port or trigger external prototype traps.
+    const stale = Symbol('stale');
+    const vetoed = Symbol('vetoed');
+    let vetoReason: FinanceV2ExportUnavailableReason | null = null;
     /** Renewed before and after every await and before anything is kept: the identity this run started for, then the host's CURRENT access. */
     const renew = () => {
-      if (!live) throw new Stale();
+      if (!live) throw stale;
       const now = latest.current;
-      if (now.runKey !== key) throw new Stale();
+      if (now.runKey !== key) throw stale;
       const reason = unavailableNow(now.options, bound);
-      if (reason !== null) throw new Vetoed(reason);
+      if (reason !== null) { vetoReason = reason; throw vetoed; }
     };
     void (async () => {
       try {
@@ -303,12 +310,16 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
       } catch (error) {
         // A run that was cancelled or already finished owns nothing: it must not touch the held bytes or the state of a newer run.
         if (!live) return;
-        if (error instanceof Stale) return;
+        if (error === stale) return;
         held.current = null;
-        if (error instanceof Vetoed) { if (active.current === handle) active.current = null; live = false; clearTimeout(timer); controller.abort(); discard(key, error.reason); return; }
+        if (error === vetoed && vetoReason !== null) { if (active.current === handle) active.current = null; live = false; clearTimeout(timer); controller.abort(); discard(key, vetoReason); return; }
         // A rejection is classified from its numeric status or code only; its message and body are never read.
-        const fault = classifyFinanceV2Fault(error);
-        finish({ phase: 'failed', code: fault.outcome === 'unauthorized' ? 'unauthorized' : fault.outcome === 'restricted' ? 'FORBIDDEN_SCOPE' : 'failed' });
+        let code: 'unauthorized' | 'FORBIDDEN_SCOPE' | 'failed' = 'failed';
+        try {
+          const fault = classifyFinanceV2Fault(error);
+          code = fault.outcome === 'unauthorized' ? 'unauthorized' : fault.outcome === 'restricted' ? 'FORBIDDEN_SCOPE' : 'failed';
+        } catch { /* Unreadable rejection metadata must still release this run into fixed failure copy. */ }
+        finish({ phase: 'failed', code });
       }
     })();
   };

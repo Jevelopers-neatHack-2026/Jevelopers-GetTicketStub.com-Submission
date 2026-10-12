@@ -25,7 +25,9 @@ function run(command, argv, cwd, label, env = {}) {
   results.push({ command: label, exit_code: result.status, passed: result.status === 0, ...(Object.keys(counts).length ? { counts } : {}) });
   for (const line of (result.stdout ?? '').split('\n')) if (line.startsWith('# {"controls_probe":')) reviewProbes.push(JSON.parse(line.slice(2)));
 }
-run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs', 'tests/controls/public-result.test.mjs', 'tests/controls/actual-inspection.test.mjs', 'tests/controls/inspection-result.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs tests/controls/public-result.test.mjs tests/controls/actual-inspection.test.mjs tests/controls/inspection-result.test.mjs');
+run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs', 'tests/controls/public-result.test.mjs', 'tests/controls/actual-inspection.test.mjs', 'tests/controls/inspection-result.test.mjs', 'tests/controls/composition-integration.test.mjs', 'tests/controls/composition-view.test.mjs', 'tests/controls/inflight-isolation.test.mjs', 'tests/controls/composition-scope-backend.test.mjs', 'tests/controls/reviewer-midflight-corrupt.test.mjs', 'tests/controls/composition-recovery.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs tests/controls/public-result.test.mjs tests/controls/actual-inspection.test.mjs tests/controls/inspection-result.test.mjs tests/controls/composition-integration.test.mjs tests/controls/composition-view.test.mjs tests/controls/inflight-isolation.test.mjs tests/controls/composition-scope-backend.test.mjs tests/controls/reviewer-midflight-corrupt.test.mjs tests/controls/composition-recovery.test.mjs');
+run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/artwork-recovery.test.mjs'], root,
+  'node --test --test-reporter=tap tests/controls/artwork-recovery.test.mjs');
 if (runBrowser || args.includes('--types')) run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', '../../tests/controls/types/tsconfig.json'],
   fixtureDir, 'tsc --strict --module NodeNext (source and public actual inspection consumers)');
 if (runBrowser) run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--reporter=list,json'], fixtureDir,
@@ -59,6 +61,8 @@ if (runBrowser) { const report = JSON.parse(readFileSync(join(fixtureDir, 'test-
 const evidence = { evidence_version: 'controls-offline-evidence/2.0', dependency_mode: 'mock', billing_mode: 'simulated',
   runtime: process.version, platform: process.platform, architecture: process.arch, host_validation: 'local_only',
   schema_version: 'creative-controls/1.1', action_version: 'creative-apply/1.1',
+  composition_schema_version: 'creative-composition-controls/1.0', composition_action_version: 'creative-composition-apply/1.0', composition_renewal_action_version: 'creative-composition-renew/1.0',
+  composition_backend_api_versions: ['1.2','1.3'],
   contract_status: 'local-consumer-proposal', source_fingerprint_sha256: digest.digest('hex'), source_files: sourceFiles,
   fixture_schema_sha256: hash(createControlSchema(state)), fixture_action_sha256: hash(action(state)),
   checks: results, review_probes: reviewProbes, browser_summary, browser_exercised: runBrowser && results.find(r => r.command === 'npm test (Playwright Chromium + axe)')?.passed === true,
@@ -69,7 +73,7 @@ const evidence = { evidence_version: 'controls-offline-evidence/2.0', dependency
   authoritative_checklist_revision: 'ff1f6d2df816ebbff34742f51be728fcb5c28cb5',
   actual_api_transcript: transcript,
   calls: { application_provider_live: 0, fixture_apply_image: transcript.final_counters.image_calls, fixture_apply_jev: transcript.final_counters.jev_calls, fixture_apply_reservations: transcript.final_counters.reservations }, approval_created: false, purchase_created: false,
-  pending: ['canonical external schema publication and consumer acknowledgement', 'actual CE06 composition, compound and correction consumers', 'live observer/JEV execution and external inspection policy acceptance', 'application authentication/authorization',
+  pending: ['canonical external schema publication and consumer acknowledgement', 'full CE06 eight-bucket routing, compound and correction consumers plus exact full-state handoff', 'live observer/JEV execution and external inspection policy acceptance', 'application authentication/authorization',
     'harness outbox consumer and paid artwork dispatch', 'live providers and external release acceptance',
     'CloudLinux/CageFS x86_64 host validation (exact Node 22 patch unknown)'],
   passed: results.every(r => r.passed) };

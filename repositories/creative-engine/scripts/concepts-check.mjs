@@ -63,6 +63,7 @@ const inputFiles = [
   "src/generation/concepts.d.mts", "src/models/openai-images.mjs", "src/runtime/creative-runtime.mjs",
   "src/telemetry/evidence.mjs", "src/versions/api-ports.mjs", "src/versions/store.mjs",
   "tests/generation/concepts.test.mjs", "tests/models/creative-api-integration.test.mjs",
+  "fixtures/models/creative-api-fixture.mjs",
   "tests/models/openai-images.test.mjs", "tests/versions/store.test.mjs",
   "tests/composition/contracts.test.mjs", "tests/versions/composition-authority.test.mjs",
   "tests/api/concepts-public-consumer.mts", "tests/api/composition-public-consumer.mts",

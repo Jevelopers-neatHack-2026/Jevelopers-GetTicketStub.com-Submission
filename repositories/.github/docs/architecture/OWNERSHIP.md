@@ -1,42 +1,34 @@
-# `.github`
+# `.github` ownership and handoffs
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
-**Proposed owner:** Finance and reliability.
-**Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
+This document identifies the shared governance boundary and the repository or role that owns each decision. A role is not a named assignee, GitHub team, CODEOWNERS entry, or configured review rule.
 
-## Responsibility
+## Responsibility boundaries
 
-Own the organization's documented contribution practices, review expectations, issue conventions, and reusable engineering guidance. Keep shared policy concise enough for contributors and coding agents to apply consistently across independently maintained repositories.
+| Decision or work | Authority | State and handoff |
+|---|---|---|
+| Shared contribution guidance, standards, templates, and reusable workflow source | Maintainers of this `.github` repository | This repository maintains the shared source. The original architecture plan proposed `Finance and reliability` as its owner role; that proposal does not confirm a named maintainer or GitHub team. |
+| Product behavior, tests, local contributor/agent instructions, and repository settings | Maintainers of the repository that owns the behavior or setting | The destination repository decides and verifies its own implementation, local files, and controls. A shared document or inherited file does not transfer ownership. |
+| Product architecture and cross-repository sequencing | The product architecture and product planning owners in the owning repositories | `getticketstub.com` maintains the architecture kit and central implementation plan. Recheck their current revisions before making a decision; this document does not assign a person or team. |
+| Canonical interface schemas and compatibility | `shared-contracts` maintainers, with affected producer and consumer roles reviewing | The catalog is authoritative for schema definitions and versions. The relevant owners record compatibility and migration decisions there. |
+| Master acceptance, evidence, and integrated release status | `integration-evals` owner and the listed criterion owner roles | `integration-evals` changes master status after evidence review. Local issues, this view, merged guidance, and green mock checks do not change that status. |
+| Security disclosure destination, access, and response responsibility | The maintainers who approve a private route and its responsible role | The route and owner remain unconfirmed. Keep `SECURITY.pending.md` and the parked form inactive; do not invent a contact or invite sensitive reports to public issues. |
+| Destination-local `CODEOWNERS`, workflows, templates, and contributor instructions | Maintainers of the destination repository with appropriate write access | Entries and callers are destination-specific; verify referenced code owners have repository access. No shared file assigns a local code owner. |
+| Branch/ruleset protections, visibility, membership, workflow access, secrets, and other platform settings | Authorized organization or destination repository administrators | Proposals require the appropriate owner's decision and observed configuration evidence. Required code-owner review is a separate setting from the `CODEOWNERS` file. |
 
-A public `.github` repository is needed for GitHub's supported inherited community-health defaults. Any visibility decision remains separate from this plan. Repository-specific `CODEOWNERS`, `AGENTS.md`, license decisions, and workflow callers must be installed or maintained in the repositories where they apply; this repository does not make them universal automatically.
+The local acceptance view records criterion owner roles for selected master IDs. For example, it lists Product and frontend for ARC-02 and LIVE-02, Agent and research for CON-01, and Finance and reliability for EVAL-04. These are criterion-level role assignments from the acceptance source, not assignments of every governance decision to those roles and not named-user or GitHub-team confirmation. Review the current master tracker before relying on a role assignment.
 
-## Planned internal modules
+## Current governance-program state
 
-- `community/`: Source drafts for supported contribution and security documents.
-- `templates/`: Issue, pull-request, and handoff conventions.
-- `standards/`: Branching, review, dependency, and release expectations.
-- `automation-design/`: Proposed reusable checks and caller requirements.
-- `ownership/`: Responsibility matrix and escalation guidance.
-- `adoption/`: Per-repository rollout and verification checklist.
+The issue snapshot recorded on 2026-10-12 shows the ten retained leaves—[GH-01 #4](https://github.com/Jevelopers-neatHack-2026/.github/issues/4), [GH-02 #7](https://github.com/Jevelopers-neatHack-2026/.github/issues/7), [GH-02-R #8](https://github.com/Jevelopers-neatHack-2026/.github/issues/8), [GH-03-P #14](https://github.com/Jevelopers-neatHack-2026/.github/issues/14), [GH-04 #9](https://github.com/Jevelopers-neatHack-2026/.github/issues/9), [GH-05 #10](https://github.com/Jevelopers-neatHack-2026/.github/issues/10), [GH-06 #12](https://github.com/Jevelopers-neatHack-2026/.github/issues/12), [GH-08 #5](https://github.com/Jevelopers-neatHack-2026/.github/issues/5), [GH-09 #6](https://github.com/Jevelopers-neatHack-2026/.github/issues/6), and [GH-10 #15](https://github.com/Jevelopers-neatHack-2026/.github/issues/15)—closed as completed. The [GH-11 release gate #16](https://github.com/Jevelopers-neatHack-2026/.github/issues/16) was completed and the [epic #3](https://github.com/Jevelopers-neatHack-2026/.github/issues/3) closed after that gate. The security-reporting leaf [GH-07 #11](https://github.com/Jevelopers-neatHack-2026/.github/issues/11) and six-form/security-routing leaf [GH-03-I #13](https://github.com/Jevelopers-neatHack-2026/.github/issues/13) were closed as `not_planned`, not completed or verified. These are local backlog decisions only. They do not confirm a private reporting route, consumer adoption, repository settings, product acceptance, or a release. The snapshot is dated and can become stale; check current issue and owner evidence before a new status decision. See the dated [security-policy status](../../community/SECURITY.pending.md).
 
-## Dependencies and handoff
+## Shared guidance and local enforcement
 
-Coordinate interface gates with `shared-contracts`, integrated release checks with `integration-evals`, and workspace assembly with `getticketstub.com`. Match any future reusable workflow visibility to the visibility of its callers. Document required permissions and configure checks only after their implementation is available.
+The `.github` repository can supply only GitHub-supported community-health defaults when it is public and the destination has no applicable local equivalent. Destination-local files take precedence; a local `ISSUE_TEMPLATE` directory can replace the inherited chooser. GitHub displays inherited defaults but does not copy them into a clone. `AGENTS.md`, `CODEOWNERS`, workflow callers, branch protections, repository settings, and Actions permissions require destination-specific installation or configuration and verification. See [contribution guidance](../../CONTRIBUTING.md) and [GitHub's inheritance rules](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file).
 
-## P0 demo slice
+The issue and PR templates are shared inputs, not enforcement. A reusable workflow definition is not adopted merely because it exists here; a destination must call it and verify its access and permissions. A proposed review convention is not a required review unless the destination's actual rule configuration establishes that requirement. Record `proposed`, `configured`, and `verified` separately in the destination adoption record.
 
-Agree on pull-request evidence, repository ownership, secret handling, and a minimal integrated release gate. Prepare governance drafts without claiming that branch rules, licenses, workflows, or visibility settings are already configured.
+## Dependencies and contributor handoff
 
-## Acceptance boundary
+Coordinate interface gates with `shared-contracts`, integrated release checks with `integration-evals`, and workspace assembly with `getticketstub.com`. Preserve each repository's local ownership and instructions. Before declaring a cross-repository dependency ready, identify its producer and consumer roles, exact expected artifact/version, source revisions, unblock condition, and evidence needed for the receiving owner to acknowledge it.
 
-- [ ] Each repository has a confirmed owner and applicable local instructions.
-- [ ] Shared defaults are distinguished from per-repository configuration.
-- [ ] Planned checks have named implementers and meaningful pass conditions.
-- [ ] License choices remain explicit team decisions.
-- [ ] Adoption status is recorded without inventing completed configuration.
-
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
-
-## Acceptance and contributor handoff
-
-Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
+Use the [repository acceptance view](ACCEPTANCE.md) only to navigate relevant criteria; the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) and its tracker remain authoritative. Follow [organization contribution guidance](../../CONTRIBUTING.md), the [governance lifecycle](../../standards/governance-lifecycle.md), and the [architecture and evidence-linking standard](../../standards/architecture-linking.md). Named maintainers, reviewer assignments, license decisions, `CODEOWNERS` entries, and local settings remain decisions for their owning administrators.

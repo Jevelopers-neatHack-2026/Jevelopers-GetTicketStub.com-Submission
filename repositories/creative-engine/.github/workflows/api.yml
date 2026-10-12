@@ -46,6 +46,8 @@ jobs:
         run: make check TARGET=brief MODE=mock
       - name: CE-03 native Images adapter and actual API/C03/CE08 fixtures
         run: make check TARGET=image-adapter MODE=mock
+      - name: IE-07 retained synthetic generation/edit API packets and fault cases
+        run: node scripts/creative-api-fixture.mjs --scenario all --out build/ie07-offline-fixture
       - name: Composition authority contracts, SQLite lifecycle, recovery and strict public types
         env:
           COMPOSITION_AUTHORITY_EVIDENCE_DIR: build/composition-authority-evidence
@@ -283,6 +285,7 @@ jobs:
             build/access-preflight-live-gate.stdout.json
             build/access-preflight-acceptance-gate.stdout.json
             build/image-adapter-evidence.json
+            build/ie07-offline-fixture/
             build/image-adapter-live-gate.json
             build/image-adapter-live-gate.stdout.json
             build/image-adapter-acceptance-gate.stdout.json

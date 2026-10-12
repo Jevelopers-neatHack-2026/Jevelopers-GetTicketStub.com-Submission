@@ -74,3 +74,4 @@ Describe the risk, what could break and how to revert.
      design review is separate from later consumer integration. Only the supervisor closes issues after
      required merged-revision evidence exists. Name the reviewer role needed. -->
 - **Reviewer role(s) requested:** e.g. owning-repo maintainer; contract consumer owner
+- **Required approvals:** cite the destination's verified review rule and eligible roles, or write `Unknown / not configured`; inspect actual review state on this candidate before claiming approval.

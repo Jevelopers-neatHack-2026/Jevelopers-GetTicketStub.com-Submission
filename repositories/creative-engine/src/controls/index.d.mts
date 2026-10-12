@@ -31,9 +31,9 @@ export interface ControlOperation { operation_version: 'creative-control-operati
     follow_up_answers?: Record<string, string>; follow_up_state?: Record<string, string>; image_calls?: 0; jev_calls?: 0 }[]; approval: false; purchase: false }
 export type RejectionCode = 'validation' | 'unsupported_version' | 'unknown_field' | 'invalid_intent' | 'permission' | 'draft_mismatch'
   | 'stale_version' | 'stale_schema' | 'already_completed' | 'action_conflict' | 'unknown_control' | 'invalid_value' | 'locked' | 'asset_permission'
-  | 'unknown_question' | 'follow_up_required' | 'no_changes' | 'conflict' | 'cancelled' | 'unavailable';
+  | 'unknown_question' | 'follow_up_required' | 'no_changes' | 'conflict' | 'cancelled' | 'failed' | 'unavailable';
 export type ApplyResult = { ok: boolean; code: RejectionCode | 'accepted' | 'replayed' | 'ready' | 'completed'; retryable?: boolean;
-  operation_id?: string; status?: 'queued' | 'ready' | 'cancelled' | 'completed'; replayed?: boolean; operation?: ControlOperation;
+  operation_id?: string; status?: 'queued' | 'ready' | 'cancelled' | 'failed' | 'completed'; replayed?: boolean; operation?: ControlOperation;
   current_versions?: Versions; audit_ref?: string; audit_status?: 'unavailable' };
 export function canonical(value: unknown): string | undefined;
 export function hash(value: unknown): string;
@@ -49,6 +49,7 @@ export function assertControlContractBinding(envelope: unknown, schema: ControlS
 export class ApplyStore {
   constructor(path: string, getState: (principal: TrustedPrincipal) => CurrentProjection);
   apply(principal: TrustedPrincipal, untrustedBody: unknown): ApplyResult;
+  applyReviewedArtwork(principal: TrustedPrincipal, untrustedBody: unknown): ApplyResult;
   dispatch(principal: TrustedPrincipal, operationId: string): ApplyResult;
   cancel(principal: TrustedPrincipal, operationId: string): ApplyResult;
   acknowledge(trustedConsumer: TrustedPrincipal, operationId: string, receipt: { completion_id: string; result_ref: string; applied_versions: Versions }): ApplyResult;
@@ -79,10 +80,20 @@ export class CreativeControlsAdapter {
   readonly store: ApplyStore;
   projection(principal: TrustedPrincipal): CurrentProjection;
   apply(principal: TrustedPrincipal, body: unknown): Promise<IntegratedApplyResult>;
+  applyReviewedArtwork(principal: TrustedPrincipal, body: unknown): Promise<import('./artwork-recovery.mjs').ArtworkRecovery | null>;
+  readArtworkAction(principal: TrustedPrincipal, actionId: string): Promise<import('./artwork-recovery.mjs').ArtworkRecovery | null>;
+  retryArtworkAction(principal: TrustedPrincipal, actionId: string): Promise<import('./artwork-recovery.mjs').ArtworkRecovery | null>;
+  retryExisting(principal: TrustedPrincipal, actionId: string): Promise<IntegratedApplyResult>;
+  readExisting(principal: TrustedPrincipal, actionId: string): Promise<IntegratedApplyResult>;
   cancel(principal: TrustedPrincipal, operationId: string): Promise<IntegratedApplyResult>;
   lookup(principal: TrustedPrincipal, actionId: string): { operation_id: string; status: string } | null;
   close(): void;
 }
+export { ARTWORK_RECOVERY_VERSION, ARTWORK_NON_ADMISSION_CODES, assertArtworkRecovery, type ArtworkRecovery, type ArtworkRecoveryIdentity, type ArtworkNonAdmissionCode } from './artwork-recovery.mjs';
+export { projectApplyResult, type ApplyPresentation, type ArtworkReference } from './public-result.mjs';
 export * from './inspection-consumer.mjs';
 export * from './inspection-integration.mjs';
 export * from './inspection-view.mjs';
+export * from './composition-projection.mjs';
+export * from './composition-integration.mjs';
+export * from './composition-view.mjs';

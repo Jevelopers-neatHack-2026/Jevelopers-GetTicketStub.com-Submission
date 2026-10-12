@@ -4,7 +4,6 @@ description: A buildable unit of product or platform work with a measurable outc
 title: '[<PREFIX>-NN][P#] <Imperative summary>'
 labels:
 - type:implementation
-- enhancement
 body:
 - type: markdown
   attributes:

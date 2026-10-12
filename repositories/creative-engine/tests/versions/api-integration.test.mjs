@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { spawnSync } from "node:child_process";
-import { cp, readFile, unlink } from "node:fs/promises";
+import { cp, link, mkdir, open, readFile, readdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,6 +42,64 @@ function request(actionId, plan) {
     occurred_at: "2026-10-10T12:20:00.000Z", ingested_at: "2026-10-10T12:20:00.000Z",
     environment: "test", billing_mode: "simulated", source_refs: ["source-api-1"],
     operation: "generate", action_id: actionId, payload: { brief_id: SCOPE.brief_id, plan } };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => { resolve = resolvePromise; reject = rejectPromise; });
+  return { promise, resolve, reject };
+}
+
+function concurrentProvider(label, counters, waitForProvider = async () => {}) {
+  // Text bytes stand in for durable object identity only; this fixture declares
+  // image/png to satisfy the edit contract but performs no image codec check.
+  const artifactBytes = Buffer.from(`exact concurrent artifact bytes:${label}`);
+  const content_hash = `sha256:${createHash("sha256").update(artifactBytes).digest("hex")}`;
+  return {
+    resolveRoute: () => ({ retry_mapping_ref: "retry:concurrent-fixture/1", provider: {
+      name: "fixture-provider", model: "fixture-model", endpoint: "test:/image",
+      sdk: { name: "fixture-sdk", version: "1.0" },
+    } }),
+    async generate(input) {
+      counters.provider += 1;
+      (counters.providerTransportIds ??= []).push(input.transport_attempt_id);
+      await input.recordTransportAttempt(input.transport_attempt_id);
+      await waitForProvider(input);
+      return { design_version_id: `design:${label}`, artifact: {
+        artifact_id: `artifact:${label}`, content_hash, media_type: "image/png",
+      }, artifact_bytes: Uint8Array.from(artifactBytes), provider: "fixture-provider", model: "fixture-model",
+      usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 } };
+    },
+    async edit(input) {
+      counters.provider += 1;
+      (counters.providerTransportIds ??= []).push(input.transport_attempt_id);
+      await input.recordTransportAttempt(input.transport_attempt_id);
+      await waitForProvider(input);
+      return { design_version_id: `design:${label}`, artifact: {
+        artifact_id: `artifact:${label}`, content_hash, media_type: "image/png",
+      }, artifact_bytes: Uint8Array.from(artifactBytes), provider: "fixture-provider", model: "fixture-model",
+      usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 } };
+    },
+  };
+}
+
+function barrierFor(participants) {
+  let arrived = 0;
+  const gate = deferred();
+  return async () => {
+    arrived += 1;
+    if (arrived === participants) gate.resolve();
+    await gate.promise;
+  };
+}
+
+function concurrentApi(store, label, counters, waitForProvider) {
+  let portId = 0;
+  let apiId = 0;
+  const ports = portsFor(store, counters, () => `${label}-port-${++portId}`);
+  ports.provider = concurrentProvider(label, counters, waitForProvider);
+  return createCreativeApi({ ports, now: () => NOW, idFactory: () => `${label}-api-${++apiId}` });
 }
 
 function inspectionRequest(actionId, designVersionId) {
@@ -508,7 +566,7 @@ test("CE09 acceptance case 4 persists cumulative root limits across restart and 
   assert.equal(repaired1.result.inspection_repair.source_report_hash, canonicalHash(inspected.result.report));
   assert.equal(counters.provider, 2, "repair uses the existing normal edit provider path once");
   assert.equal(counters.reserved, 5);
-  const state = activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const state = await activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: original.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(state.repairs_used, 1);
   assert.equal(state.simulated_units_used, 1);
@@ -539,7 +597,7 @@ test("CE09 acceptance case 4 persists cumulative root limits across restart and 
   assert.equal(repaired2.result.design_version.parent_version_id, design1.design_version_id);
   assert.equal(counters.provider, 3);
   assert.equal(counters.reserved, 9, "second inspect adds three attempts and second repair adds one");
-  const finalState = activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const finalState = await activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: original.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(finalState.repairs_used, 2);
   assert.equal(finalState.remaining_repairs, 0);
@@ -1016,7 +1074,7 @@ test("a repair claim's root deadline prevents a reservation after an awaited rou
   assert.deepEqual({ reserved: counters.reserved, provider: counters.provider }, before,
     "a route lookup that reaches the cumulative root deadline cannot reserve or dispatch the edit");
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1);
-  const state = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const state = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(state.repairs_used, 1, "the serialized root claim remains counted after the stopped attempt");
 });
@@ -1099,11 +1157,83 @@ test("a repair claim's root deadline blocks the final send permit after the awai
   const job = store.db.prepare("SELECT status,result_json FROM creative_jobs WHERE action_id=?").get(body.action_id);
   assert.notEqual(job.status, "completed");
   assert.equal(job.result_json, null);
-  const claim = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const claim = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(claim.repairs_used, 1, "the failed attempt remains included in cumulative root accounting");
   assert.equal(store.db.prepare(`SELECT status,result_hash FROM creative_inspection_action_v2 WHERE action_id=?`)
     .get(body.action_id).status, "claimed");
+});
+
+test("principal expiry during the queued repair read blocks the final send permit", async (t) => {
+  let currentNow = NOW;
+  const system = await setupInspectionSystem(t, { now: () => currentNow, recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("repair-queued-read-expiry-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("repair-queued-read-expiry-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+
+  const claimReadEntered = deferred();
+  const releaseClaimRead = deferred();
+  t.after(() => releaseClaimRead.resolve());
+  const durableRepairPort = ports.storage.inspectionRepair;
+  let acknowledged = false;
+  let heldClaimRead = false;
+  ports.storage.inspectionRepair = Object.freeze({
+    ...durableRepairPort,
+    async isClaimCurrent(input) {
+      const result = await durableRepairPort.isClaimCurrent(input);
+      if (acknowledged && !heldClaimRead) {
+        heldClaimRead = true;
+        claimReadEntered.resolve();
+        await releaseClaimRead.promise;
+      }
+      return result;
+    },
+  });
+  const recordTransportAttempt = ports.metering.recordTransportAttempt.bind(ports.metering);
+  ports.metering.recordTransportAttempt = async (input) => {
+    const result = await recordTransportAttempt(input);
+    acknowledged = true;
+    return result;
+  };
+  let providerSendPermits = 0;
+  const edit = ports.provider.edit;
+  ports.provider.edit = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    providerSendPermits += 1;
+    return edit({ ...input, recordTransportAttempt: async () => {} });
+  };
+
+  currentNow = NOW + 29_000;
+  const expiresAt = new Date(NOW + 30_000).toISOString();
+  const body = await repairEditRequest("repair-queued-read-expiry-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const before = { provider: counters.provider, reserved: counters.reserved,
+    acknowledgments: counters.financeTransportIds.length };
+  let pending;
+  try {
+    pending = api.invoke({ ...actor(), expires_at: expiresAt }, body);
+    await claimReadEntered.promise;
+    currentNow = NOW + 31_000;
+    releaseClaimRead.resolve();
+    const result = await pending;
+    assert.equal(heldClaimRead, true, "the test holds the actual same-database repair proof read after C03 ACK");
+    assert.equal(acknowledged, true, "the transport acknowledgment remains attributable before expiry is checked");
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.equal(result.error.code, "cancelled");
+    assert.equal(providerSendPermits, 0, "expired principal authority never reaches the provider send permit");
+    assert.equal(counters.provider, before.provider);
+    assert.equal(counters.reserved, before.reserved + 1);
+    assert.equal(counters.financeTransportIds.length, before.acknowledgments + 1);
+    assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1);
+    assert.equal(store.getCurrentDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id }).design_version_id,
+      design.design_version_id);
+  } finally {
+    releaseClaimRead.resolve();
+  }
 });
 
 test("repair outcome, immutable child, selection, and job result roll back when publication crosses the root deadline", async (t) => {
@@ -1554,7 +1684,7 @@ test("cancelled repair dispatch keeps its root claim and usage evidence but cann
     .get(repairBody.action_id);
   assert.deepEqual({ ...repairAction }, { status: "claimed", result_hash: null },
     "cancellation leaves the cumulative root claim consumed without recording a publishable outcome");
-  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const rootState = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(rootState.repairs_used, 1);
   assert.equal(counters.reserved, 5, "cancellation does not retry or add a repair reservation");
@@ -1590,7 +1720,7 @@ test("repair output is held when its job lease expires after transport ACK but b
   assert.equal(job.result_json, null);
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions WHERE creation_job_id=(SELECT job_id FROM creative_jobs WHERE action_id=?)")
     .get(body.action_id).count, 0, "expired lease blocks immutable child publication");
-  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const rootState = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(rootState.repairs_used, 1, "the claim stays counted while the lease-lost result is not published");
   const usage = store.db.prepare(`SELECT status,payload_json FROM creative_telemetry_observations_v1
@@ -1616,7 +1746,7 @@ test("concurrent actual API repair requests serialize against the shared two-rep
   const responses = await Promise.all(requests.map((body) => api.invoke(actor(), body)));
   assert.ok(responses.every((response) => response.ok || ["stale_version", "review_required", "unavailable"]
     .includes(response.error?.code)), JSON.stringify(responses));
-  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const rootState = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.ok(rootState.repairs_used <= 2);
   assert.ok(rootState.simulated_units_used <= 3);
@@ -2711,6 +2841,40 @@ test("dispatch authorization replay does not reuse an intent after the lease exp
   assert.deepEqual(replay, { status: "lease_lost" });
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_dispatch_intents WHERE job_id=?")
     .get(started.job_id).count, 1, "the replay cannot create another dispatch intent");
+
+  store.db.exec("DROP TRIGGER creative_brief_versions_no_delete");
+  store.db.prepare(`DELETE FROM creative_brief_versions
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).run(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 0);
+  assert.equal(store.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id },
+    { allowLegacyHistoryBackfill: false }), null, "read-only brief lookup does not migrate a missing history head");
+  assert.equal(store.isBriefUsable({ scope: SCOPE, brief_id: SCOPE.brief_id },
+    { allowLegacyHistoryBackfill: false }), false, "read-only usability check does not migrate a missing history head");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 0, "both read-only store methods leave missing history untouched");
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent(currentPermit), { status: "stale_context" },
+    "the final synchronous fence fails closed when the immutable brief history head is missing");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 0, "the final send fence never backfills legacy brief history");
+
+  assert.ok(store.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "the ordinary legacy read retains its supported history backfill behavior");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 1);
+
+  store.db.exec("DROP TRIGGER creative_brief_versions_no_update");
+  const corruptedHash = `sha256:${"0".repeat(64)}`;
+  store.db.prepare(`UPDATE creative_brief_versions SET brief_hash=?
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).run(corruptedHash,
+      SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id);
+  const corruptedHistory = store.db.prepare(`SELECT version_no,brief_hash,record_json FROM creative_brief_versions
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id);
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent(currentPermit), { status: "stale_context" },
+    "the final synchronous fence fails closed when immutable brief history is corrupt");
+  assert.deepEqual(store.db.prepare(`SELECT version_no,brief_hash,record_json FROM creative_brief_versions
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id),
+    corruptedHistory, "the final send fence leaves corrupt history untouched");
 });
 
 test("normal paired publication rolls back when the lease expires during final result timestamping", async (t) => {
@@ -2856,6 +3020,1091 @@ test("paired API persists explicit A/B/C branches and restore-by-selection witho
   assert.equal(comparison.right.parent_version_id, a.design_version_id);
 });
 
+test("SQLite publication is safe across adapter factories, file connections, stale CAS, replay, cancel, and restart", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-publication-concurrency-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  const aliasPath = join(root, "versions-symlink.sqlite");
+  const hardLinkPath = join(root, "versions-hardlink.sqlite");
+  const brief = await fixture("brief");
+  const store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
+
+  const makeBody = async (actionId, selection_mode) => {
+    const body = request(actionId, await fixture("generate-plan"));
+    if (selection_mode) body.payload.selection_mode = selection_mode;
+    return body;
+  };
+  const seedCounters = { provider: 0, reserved: 0 };
+  const seedApi = concurrentApi(store, "concurrency-root", seedCounters);
+  const seedBody = await makeBody("concurrency-root-action");
+  const seeded = await seedApi.invoke(actor(), seedBody);
+  assert.equal(seeded.ok, true, JSON.stringify(seeded));
+  assert.equal(seedCounters.provider, 1);
+  const rootVersion = seeded.result.design_version;
+
+  const makeEditBody = async (actionId, parent, selection_mode) => {
+    const plan = await fixture("edit-plan");
+    plan.base = { brief_hash: parent.brief_hash, design_hash: parent.design_hash,
+      design_version_id: parent.design_version_id };
+    for (const step of plan.steps) {
+      if (step.parameters.design_version_id !== undefined) step.parameters.design_version_id = parent.design_version_id;
+      if (step.parameters.artifact_id !== undefined) step.parameters.artifact_id = parent.artifact.artifact_id;
+    }
+    plan.expected_result.parent_version_id = parent.design_version_id;
+    return { ...request(actionId, plan), operation: "edit",
+      payload: { brief_id: SCOPE.brief_id, design_version_id: parent.design_version_id, selection_mode, plan } };
+  };
+
+  const runConcurrentPair = async ({ firstStore, secondStore, parent, firstLabel, secondLabel,
+    firstAction, secondAction, selection_mode }) => {
+    const waitForProvider = barrierFor(2);
+    const firstCounters = { provider: 0, reserved: 0 };
+    const secondCounters = { provider: 0, reserved: 0 };
+    const firstApi = concurrentApi(firstStore, firstLabel, firstCounters, waitForProvider);
+    const secondApi = concurrentApi(secondStore, secondLabel, secondCounters, waitForProvider);
+    const firstBody = await makeEditBody(firstAction, parent, selection_mode);
+    const secondBody = await makeEditBody(secondAction, parent, selection_mode);
+    const [first, second] = await Promise.all([
+      firstApi.invoke(actor(), firstBody), secondApi.invoke(actor(), secondBody),
+    ]);
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(second.ok, true, JSON.stringify(second));
+    assert.deepEqual([firstCounters.provider, secondCounters.provider], [1, 1]);
+    return { firstApi, secondApi, firstBody, secondBody, first, second, firstCounters, secondCounters };
+  };
+
+  // Two factories for one connection keep their per-database transaction
+  // ownership shared even when the queue has become idle between operations.
+  const sameConnection = await runConcurrentPair({ firstStore: store, secondStore: store, parent: rootVersion,
+    firstLabel: "same-connection-a", secondLabel: "same-connection-b",
+    firstAction: "same-connection-branch-a", secondAction: "same-connection-branch-b",
+    selection_mode: "branch" });
+  for (const result of [sameConnection.first, sameConnection.second]) {
+    const bytes = await store.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: result.result.design_version.design_version_id });
+    assert.deepEqual(Buffer.from(bytes), Buffer.from(`exact concurrent artifact bytes:${result.result.design_version.design_version_id.replace("design:", "")}`));
+  }
+  const sameReplay = await sameConnection.secondApi.invoke(actor(), sameConnection.firstBody);
+  assert.equal(sameReplay.ok, true, JSON.stringify(sameReplay));
+  assert.equal(sameReplay.replayed, true);
+  assert.equal(sameConnection.firstCounters.provider, 1, "completed cross-adapter replay does not redispatch");
+  const changedReplayBody = structuredClone(sameConnection.firstBody);
+  changedReplayBody.payload.plan.steps[0].parameters.variant_count = 2;
+  const sameConflict = await sameConnection.secondApi.invoke(actor(), changedReplayBody);
+  assert.equal(sameConflict.ok, false);
+  assert.equal(sameConflict.error.code, "conflict");
+  assert.equal(sameConnection.firstCounters.provider, 1, "duplicate action conflict does not redispatch");
+
+  // A symbolic path alias resolves to the same registered SQLite identity.
+  // This pair uses two separate DatabaseSync connections and must both publish.
+  await symlink(databasePath, aliasPath);
+  assert.throws(() => new CreativeVersionStore({ databasePath: aliasPath,
+    objectRoot: join(root, "mismatched-objects"), now: () => NOW }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "database.object_root_mismatch");
+  const aliasStore = new CreativeVersionStore({ databasePath: aliasPath, objectRoot, now: () => NOW });
+  t.after(() => aliasStore.close());
+  const separateConnections = await runConcurrentPair({ firstStore: store, secondStore: aliasStore, parent: rootVersion,
+    firstLabel: "separate-connection-a", secondLabel: "separate-connection-b",
+    firstAction: "separate-connection-branch-a", secondAction: "separate-connection-branch-b",
+    selection_mode: "branch" });
+
+  // A top-level stale selection CAS remains fenced after both providers have
+  // completed. Exactly one immutable version can advance the empty selection.
+  const staleGate = barrierFor(2);
+  const staleCountersA = { provider: 0, reserved: 0 };
+  const staleCountersB = { provider: 0, reserved: 0 };
+  const staleApiA = concurrentApi(store, "stale-cas-a", staleCountersA, staleGate);
+  const staleApiB = concurrentApi(aliasStore, "stale-cas-b", staleCountersB, staleGate);
+  const staleBodyA = await makeEditBody("stale-cas-action-a", rootVersion, "advance");
+  const staleBodyB = await makeEditBody("stale-cas-action-b", rootVersion, "advance");
+  const staleResults = await Promise.all([staleApiA.invoke(actor(), staleBodyA), staleApiB.invoke(actor(), staleBodyB)]);
+  assert.equal(staleResults.filter((entry) => entry.ok).length, 1, JSON.stringify(staleResults));
+  assert.equal(staleResults.filter((entry) => !entry.ok && entry.error.code === "stale_version").length, 1,
+    JSON.stringify(staleResults));
+  assert.deepEqual([staleCountersA.provider, staleCountersB.provider], [1, 1]);
+  const staleWinner = staleResults.find((entry) => entry.ok);
+  const staleLoserBody = staleResults[0].ok ? staleBodyB : staleBodyA;
+  const staleLoserActionId = staleLoserBody.action_id;
+  const selected = store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  assert.equal(selected.design_version_id, staleWinner.result.design_version.design_version_id);
+  const staleWinnerBody = staleWinner === staleResults[0] ? staleBodyA : staleBodyB;
+  const staleWinnerApi = staleWinner === staleResults[0] ? staleApiB : staleApiA;
+  const staleReplay = await staleWinnerApi.invoke(actor(), staleWinnerBody);
+  assert.equal(staleReplay.ok, true, JSON.stringify(staleReplay));
+  assert.equal(staleReplay.replayed, true);
+
+  // Provider I/O is outside the SQLite queue: a second connection can cancel
+  // an in-flight request, and the late response leaves no visible version.
+  const providerEntered = deferred();
+  const providerRelease = deferred();
+  const cancelCounters = { provider: 0, reserved: 0 };
+  const cancelApi = concurrentApi(store, "cancel-race", cancelCounters, async () => {
+    providerEntered.resolve();
+    await providerRelease.promise;
+  });
+  const cancelController = concurrentApi(aliasStore, "cancel-controller", { provider: 0, reserved: 0 });
+  const cancelBody = await makeEditBody("cancel-race-action", rootVersion, "branch");
+  const pending = cancelApi.invoke(actor(), cancelBody);
+  await providerEntered.promise;
+  const job = store.db.prepare("SELECT job_id FROM creative_jobs WHERE action_id=?").get(cancelBody.action_id);
+  assert.ok(job?.job_id);
+  const cancelRequest = { ...request("cancel-race-command", await fixture("generate-plan")),
+    operation: "cancel", payload: { job_id: job.job_id } };
+  const cancellation = await cancelController.invoke(actor(), cancelRequest);
+  assert.equal(cancellation.ok, true, JSON.stringify(cancellation));
+  assert.equal(cancellation.job.status, "cancelled");
+  providerRelease.resolve();
+  const lateResponse = await pending;
+  assert.equal(lateResponse.ok, false);
+  assert.equal(lateResponse.error.code, "cancelled");
+  assert.equal(cancelCounters.provider, 1);
+  assert.equal(store.db.prepare("SELECT status FROM creative_jobs WHERE job_id=?").get(job.job_id).status, "cancelled");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions WHERE creation_job_id=?")
+    .get(job.job_id).count, 0);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creation_actions WHERE job_id=?")
+    .get(job.job_id).count, 0);
+
+  const committedVersionIds = [
+    rootVersion.design_version_id,
+    sameConnection.first.result.design_version.design_version_id,
+    sameConnection.second.result.design_version.design_version_id,
+    separateConnections.first.result.design_version.design_version_id,
+    separateConnections.second.result.design_version.design_version_id,
+    staleWinner.result.design_version.design_version_id,
+  ];
+  assert.equal(store.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 20 }).items.length, 6);
+
+  store.close();
+  aliasStore.close();
+  const reopened = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => reopened.close());
+  const recovery = await reopened.recover();
+  assert.deepEqual(recovery, { examined: 1, committed: 0, conflicts: 0, unknown: 1 },
+    "recovery records the stale CAS loser as unknown and cannot publish it");
+  assert.equal(reopened.db.prepare("SELECT state FROM creation_actions WHERE action_id=?")
+    .get(staleLoserActionId).state, "unknown");
+  const staleLoserJob = reopened.db.prepare("SELECT status,error_json FROM creative_jobs WHERE action_id=?")
+    .get(staleLoserActionId);
+  assert.equal(staleLoserJob.status, "failed");
+  assert.equal(JSON.parse(staleLoserJob.error_json).code, "stale_version");
+  assert.equal(reopened.db.prepare("SELECT count(*) AS count FROM design_versions WHERE action_id=?")
+    .get(staleLoserActionId).count, 0);
+  assert.equal(reopened.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 20 }).items.length, 6);
+  assert.equal(reopened.db.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+  assert.deepEqual(reopened.db.prepare("PRAGMA foreign_key_check").all(), []);
+  for (const design_version_id of committedVersionIds) {
+    const bytes = await reopened.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id, design_version_id });
+    const label = design_version_id.replace("design:", "");
+    assert.deepEqual(Buffer.from(bytes), Buffer.from(`exact concurrent artifact bytes:${label}`));
+  }
+  const restartCounters = { provider: 0, reserved: 0 };
+  const restartApi = concurrentApi(reopened, "restart-replay", restartCounters);
+  const restartReplay = await restartApi.invoke(actor(), sameConnection.firstBody);
+  assert.equal(restartReplay.ok, true, JSON.stringify(restartReplay));
+  assert.equal(restartReplay.replayed, true);
+  assert.equal(restartCounters.provider, 0, "restart replay uses the committed exact artifact without redispatch");
+  const staleLoserReplay = await restartApi.invoke(actor(), staleLoserBody);
+  assert.equal(staleLoserReplay.ok, true, JSON.stringify(staleLoserReplay));
+  assert.equal(staleLoserReplay.replayed, true);
+  assert.equal(staleLoserReplay.job.status, "failed");
+  assert.equal(staleLoserReplay.job.error.code, "stale_version");
+  assert.equal(restartCounters.provider, 0, "a recovered stale CAS outcome never redispatches");
+
+  reopened.close();
+  // Opt-in evidence capture is used only by the isolated runner; normal tests
+  // leave their temporary database and object tree under the cleanup hook.
+  const evidenceDbPath = process.env.CE_SQLITE_COMPLETION_EVIDENCE_DB;
+  if (typeof evidenceDbPath === "string" && evidenceDbPath.length > 0) {
+    const evidenceObjectPath = `${evidenceDbPath}.objects`;
+    await cp(databasePath, evidenceDbPath, { force: false, errorOnExist: true });
+    await cp(objectRoot, evidenceObjectPath, { recursive: true, force: false, errorOnExist: true });
+    const evidenceDbBytes = await readFile(evidenceDbPath);
+    t.diagnostic(JSON.stringify({ evidence_db_path: evidenceDbPath, evidence_db_bytes: evidenceDbBytes.byteLength,
+      evidence_db_sha256: createHash("sha256").update(evidenceDbBytes).digest("hex"),
+      evidence_object_path: evidenceObjectPath }));
+  }
+  await link(databasePath, hardLinkPath);
+  assert.throws(() => new CreativeVersionStore({ databasePath: hardLinkPath,
+    objectRoot: join(root, "hardlink-objects"), now: () => NOW }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "database.hard_link_alias");
+  const hardLinkedDatabase = new DatabaseSync(hardLinkPath);
+  assert.throws(() => createSqliteTelemetryOutbox({ database: hardLinkedDatabase }),
+    (error) => error?.code === "telemetry_storage_unavailable");
+  hardLinkedDatabase.close();
+});
+
+test("SQLite outbox writes wait behind held branch publication and preserve provider usage", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-outbox-admission-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+
+  const exercisePair = async ({ separateConnection, overlap, label }) => {
+    const pairRoot = join(root, label);
+    const databasePath = join(pairRoot, "versions.sqlite");
+    const aliasPath = join(pairRoot, "versions-alias.sqlite");
+    const objectRoot = join(pairRoot, "objects");
+    const storeA = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+    t.after(() => storeA.close());
+    let storeB = storeA;
+    if (separateConnection) {
+      await symlink(databasePath, aliasPath);
+      storeB = new CreativeVersionStore({ databasePath: aliasPath, objectRoot, now: () => NOW });
+      t.after(() => storeB.close());
+    }
+    storeA.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+
+    const seedAction = `${label}-seed`;
+    const countersA = { provider: 0, reserved: 0 };
+    const countersB = { provider: 0, reserved: 0 };
+    let portIdA = 0;
+    let apiIdA = 0;
+    let portIdB = 0;
+    let apiIdB = 0;
+    const portsA = portsFor(storeA, countersA, () => `${label}-a-port-${++portIdA}`);
+    portsA.provider = concurrentProvider(`${label}-seed-artifact`, countersA);
+    const apiA = createCreativeApi({ ports: portsA, now: () => NOW, idFactory: () => `${label}-a-api-${++apiIdA}` });
+    const seeded = await apiA.invoke(actor(), request(seedAction, await fixture("generate-plan")));
+    assert.equal(seeded.ok, true, JSON.stringify(seeded));
+    const parent = seeded.result.design_version;
+    portsA.provider = concurrentProvider(`${label}-branch-a-artifact`, countersA);
+
+    const providerEntered = deferred();
+    const providerRelease = deferred();
+    const providerReturned = deferred();
+    const usageWriteEntered = deferred();
+    const publicationEntered = deferred();
+    const publicationRelease = deferred();
+    t.after(() => {
+      providerRelease.resolve();
+      publicationRelease.resolve();
+    });
+    const actionA = `${label}-branch-a`;
+    const actionB = `${label}-branch-b`;
+    const portsB = portsFor(storeB, countersB, () => `${label}-b-port-${++portIdB}`);
+    portsB.provider = concurrentProvider(`${label}-branch-b-artifact`, countersB, async () => {
+      providerEntered.resolve();
+      await providerRelease.promise;
+      providerReturned.resolve();
+    });
+    const durableOutboxB = portsB.telemetry.outbox;
+    const seedEventRows = storeA.db.prepare(`SELECT payload_json FROM creative_telemetry_evidence_outbox_v1
+      WHERE json_extract(payload_json,'$.logical_operation_id')=? ORDER BY rowid`).all(seedAction);
+    const seedEvents = seedEventRows.map((row) => JSON.parse(row.payload_json));
+    const intentEvent = structuredClone(seedEvents.find((event) => event.event_type === "attempt_intent"));
+    const outcomeEvent = structuredClone(seedEvents.find((event) => event.event_type === "attempt_outcome"));
+    intentEvent.event_id = `${label}:mutation-append`;
+    outcomeEvent.event_id = `${label}:mutation-stage`;
+    const expectedAppendedEvent = structuredClone(intentEvent);
+    const expectedStagedEvent = structuredClone(outcomeEvent);
+    const seedObservationRow = storeA.db.prepare(`SELECT payload_json FROM creative_telemetry_observations_v1
+      WHERE logical_operation_id=?`).get(seedAction);
+    const seedObservation = JSON.parse(seedObservationRow.payload_json);
+    const mutationAttempt = structuredClone(seedObservation.attempt);
+    const mutationObservation = structuredClone(seedObservation.observation);
+    mutationObservation.source_observation_id = `${label}:mutation-usage`;
+    const expectedMutationObservationId = mutationObservation.source_observation_id;
+    const claimableObservationSeeds = [];
+    for (const index of [1, 2]) {
+      const observation = structuredClone(seedObservation.observation);
+      observation.source_observation_id = `${label}:claim-seed-${index}`;
+      await durableOutboxB.enqueueUsageObservation({ attempt: seedObservation.attempt,
+        trustedScope: { tenant_id: seedObservation.attempt.tenant_id, project_id: seedObservation.attempt.project_id,
+          budget_scope_id: seedObservation.attempt.budget_scope_id }, observation });
+      claimableObservationSeeds.push(observation);
+    }
+    const preclaimedObservations = await durableOutboxB.claimPending({ limit: 2 });
+    assert.equal(preclaimedObservations.records.length, 2);
+    const observationClaims = claimableObservationSeeds.map((observation) => {
+      const row = preclaimedObservations.records.find((record) =>
+        record.observation.source_observation_id === observation.source_observation_id);
+      assert.ok(row);
+      return row;
+    });
+    const preclaimedEvidence = await durableOutboxB.claimPendingEvidence({ limit: 2 });
+    assert.equal(preclaimedEvidence.records.length, 2);
+    const deliveredRootObservation = storeA.db.prepare(`SELECT record_ref,source_observation_id,billable_attempt_id
+      FROM creative_telemetry_observations_v1 WHERE logical_operation_id=?`).get(seedAction);
+    const outboxFailures = [];
+    let bUsageWriteSettled = false;
+    portsB.telemetry.outbox = Object.freeze({
+      ...durableOutboxB,
+      async append(event) {
+        try { return await durableOutboxB.append(event); }
+        catch (error) { outboxFailures.push({ method: "append", code: error?.code }); throw error; }
+      },
+      async stagePendingEvidence(event) {
+        try { return await durableOutboxB.stagePendingEvidence(event); }
+        catch (error) { outboxFailures.push({ method: "stagePendingEvidence", code: error?.code }); throw error; }
+      },
+      async enqueueUsageObservation(input) {
+        if (input?.attempt?.logical_operation_id === actionB) usageWriteEntered.resolve();
+        try {
+          const result = await durableOutboxB.enqueueUsageObservation(input);
+          if (input?.attempt?.logical_operation_id === actionB) bUsageWriteSettled = true;
+          return result;
+        }
+        catch (error) { outboxFailures.push({ method: "enqueueUsageObservation", code: error?.code }); throw error; }
+      },
+    });
+    let usageAuthorityDurableRow;
+    let unknownHolds = 0;
+    let settlements = 0;
+    const meteringB = portsB.metering;
+    portsB.metering = {
+      ...meteringB,
+      async recordUsageObservation(input) {
+        usageAuthorityDurableRow = storeA.db.prepare(`SELECT status,payload_json FROM creative_telemetry_observations_v1
+          WHERE source_observation_id=?`).get(input.observation.source_observation_id);
+        return meteringB.recordUsageObservation(input);
+      },
+      async settleReservation(...args) {
+        settlements += 1;
+        return meteringB.settleReservation(...args);
+      },
+      async markOutcomeUnknown(...args) {
+        unknownHolds += 1;
+        return meteringB.markOutcomeUnknown(...args);
+      },
+    };
+    const portsAStorageCommit = portsA.storage.commitPreparedDesignVersion.bind(portsA.storage);
+    portsA.storage.commitPreparedDesignVersion = async (...args) => {
+      publicationEntered.resolve();
+      await publicationRelease.promise;
+      return portsAStorageCommit(...args);
+    };
+
+    const apiB = createCreativeApi({ ports: portsB, now: () => NOW, idFactory: () => `${label}-b-api-${++apiIdB}` });
+    const makeEditBody = async (actionId) => {
+      const plan = await fixture("edit-plan");
+      plan.base = { brief_hash: parent.brief_hash, design_hash: parent.design_hash,
+        design_version_id: parent.design_version_id };
+      for (const step of plan.steps) {
+        if (step.parameters.design_version_id !== undefined) step.parameters.design_version_id = parent.design_version_id;
+        if (step.parameters.artifact_id !== undefined) step.parameters.artifact_id = parent.artifact.artifact_id;
+      }
+      plan.expected_result.parent_version_id = parent.design_version_id;
+      return { ...request(actionId, plan), operation: "edit",
+        payload: { brief_id: SCOPE.brief_id, design_version_id: parent.design_version_id,
+          selection_mode: "branch", plan } };
+    };
+    const bodyA = await makeEditBody(actionA);
+    const bodyB = await makeEditBody(actionB);
+    const apiAForBranch = createCreativeApi({ ports: portsA, now: () => NOW, idFactory: () => `${label}-a-api-${++apiIdA}` });
+    const pendingB = apiB.invoke(actor(), bodyB);
+    let bSettled = false;
+    pendingB.then(() => { bSettled = true; }, () => { bSettled = true; });
+    await providerEntered.promise;
+    const pendingA = apiAForBranch.invoke(actor(), bodyA);
+    let aSettled = false;
+    pendingA.then(() => { aSettled = true; }, () => { aSettled = true; });
+    await publicationEntered.promise;
+    assert.equal(storeA.db.isTransaction, true, "A is held inside its real publication transaction");
+    assert.throws(() => createSqliteTelemetryOutbox({ database: storeA.db, clock: () => NOW }),
+      (error) => error?.code === "telemetry_outer_transaction_active");
+    assert.throws(() => new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW }),
+      (error) => error instanceof VersionStoreError && error.code === "unavailable");
+
+    const queuedWriterPromises = [];
+    let mutationEvents;
+    let queuedClaims;
+    let queuedAcknowledgements;
+    if (overlap) {
+      providerRelease.resolve();
+      await providerReturned.promise;
+      await usageWriteEntered.promise;
+      assert.equal(aSettled, false, "A remains in publication while B receives its provider result");
+      assert.equal(bSettled, false, "B waits for durable local usage before publication can proceed");
+      assert.equal(bUsageWriteSettled, false, "B usage admission remains queued until A commits");
+
+      const outbox = portsB.telemetry.outbox;
+      const appendPromise = outbox.append(intentEvent);
+      intentEvent.logical_operation_id = `${label}:mutated-after-append-call`;
+      intentEvent.provider.name = "mutated-after-append-call";
+      const stagePromise = outbox.stagePendingEvidence(outcomeEvent);
+      outcomeEvent.logical_operation_id = `${label}:mutated-after-stage-call`;
+      outcomeEvent.provider.name = "mutated-after-stage-call";
+
+      const usagePromise = outbox.enqueueUsageObservation({ attempt: mutationAttempt,
+        trustedScope: { tenant_id: mutationAttempt.tenant_id, project_id: mutationAttempt.project_id,
+          budget_scope_id: mutationAttempt.budget_scope_id }, observation: mutationObservation });
+      mutationAttempt.logical_operation_id = `${label}:mutated-after-usage-call`;
+      mutationObservation.source_observation_id = `${label}:mutated-after-usage-call`;
+
+      const queuedClaim = outbox.claimPending({ limit: 2 });
+      const queuedEvidenceClaim = outbox.claimPendingEvidence({ limit: 2 });
+      const ackEnqueued = outbox.acknowledgeEnqueuedObservation({ record_ref: deliveredRootObservation.record_ref,
+        source_observation_id: deliveredRootObservation.source_observation_id,
+        effective_billable_attempt_id: deliveredRootObservation.billable_attempt_id, authority_status: "duplicate" });
+      const ackObservation = outbox.acknowledge({ record_ref: observationClaims[0].record_ref,
+        claim_token: observationClaims[0].claim_token,
+        source_observation_id: observationClaims[0].observation.source_observation_id,
+        effective_billable_attempt_id: observationClaims[0].attempt.billable_attempt_id, authority_status: "accepted" });
+      const deferObservation = outbox.defer({ record_ref: observationClaims[1].record_ref,
+        claim_token: observationClaims[1].claim_token, reason: "metering_observation_unconfirmed" });
+      const ackEvidence = outbox.acknowledgeEvidence({ event_id: preclaimedEvidence.records[0].event.event_id,
+        claim_token: preclaimedEvidence.records[0].claim_token });
+      const deferEvidence = outbox.deferEvidence({ event_id: preclaimedEvidence.records[1].event.event_id,
+        claim_token: preclaimedEvidence.records[1].claim_token, reason: "sink_unavailable" });
+      queuedWriterPromises.push(appendPromise, stagePromise, usagePromise, queuedClaim, queuedEvidenceClaim,
+        ackEnqueued, ackObservation, deferObservation, ackEvidence, deferEvidence);
+      mutationEvents = { expectedAppendedEvent, expectedStagedEvent, expectedMutationObservationId };
+      queuedClaims = { queuedClaim, queuedEvidenceClaim };
+      queuedAcknowledgements = { ackEnqueued, ackObservation, deferObservation, ackEvidence, deferEvidence };
+      let queuedWriteSettlements = 0;
+      for (const promise of queuedWriterPromises) promise.then(() => { queuedWriteSettlements += 1; },
+        () => { queuedWriteSettlements += 1; });
+      assert.equal(queuedWriteSettlements, 0, "all queued outbox mutations wait behind A's live write owner");
+    }
+
+    publicationRelease.resolve();
+    const responseA = await pendingA;
+    if (!responseA.ok) t.diagnostic(`${label}: A failed ${JSON.stringify({ error: responseA.error,
+      job: storeA.db.prepare("SELECT status,error_json FROM creative_jobs WHERE action_id=?").get(actionA),
+      selection: storeA.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id }), outboxFailures })}`);
+    assert.equal(responseA.ok, true, JSON.stringify(responseA));
+    if (!overlap) providerRelease.resolve();
+    const responseB = await pendingB;
+    assert.equal(responseB.ok, true, JSON.stringify(responseB));
+    await Promise.all(queuedWriterPromises);
+    assert.equal(countersA.provider, 2, "the seed and A each dispatch once");
+    assert.equal(countersB.provider, 1, "B dispatches once");
+    assert.equal(responseA.result.design_version.parent_version_id, parent.design_version_id);
+    assert.equal(responseB.result.design_version.parent_version_id, parent.design_version_id);
+    assert.equal(storeA.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id }).design_version_id,
+      parent.design_version_id, "both explicit branches leave the selected root unchanged");
+    assert.deepEqual(outboxFailures, []);
+    assert.ok(usageAuthorityDurableRow, "metering authority was called only after B usage had a durable outbox row");
+    const bUsagePayload = JSON.parse(usageAuthorityDurableRow.payload_json);
+    assert.equal(bUsagePayload.attempt.logical_operation_id, actionB);
+    assert.equal(bUsagePayload.attempt.billable_attempt_id, responseB.result.design_version.billable_attempt_id);
+    assert.equal(bUsagePayload.observation.completeness, "complete");
+    assert.deepEqual(bUsagePayload.observation.usage_units, [
+      { name: "input_tokens", quantity: "2", relation: "standalone" },
+      { name: "output_tokens", quantity: "4", relation: "standalone" },
+    ]);
+    assert.equal(usageAuthorityDurableRow.status, "pending", "the outbox row exists before Finance acknowledgment");
+    assert.equal(settlements, 1);
+    assert.equal(unknownHolds, 0, "a durable provider result is settled rather than held unknown");
+    const bOutcomeRow = storeA.db.prepare(`SELECT payload_json FROM creative_telemetry_evidence_outbox_v1
+      WHERE event_type='attempt_outcome' AND json_extract(payload_json,'$.logical_operation_id')=?`).get(actionB);
+    assert.ok(bOutcomeRow, "provider outcome evidence is persisted");
+    assert.equal(JSON.parse(bOutcomeRow.payload_json).provider_outcome, "succeeded");
+    assert.equal(storeA.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?").get(actionB).status, "completed");
+    assert.deepEqual(Buffer.from(await storeA.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: responseB.result.design_version.design_version_id })),
+    Buffer.from(`exact concurrent artifact bytes:${label}-branch-b-artifact`));
+
+    if (overlap) {
+      const appended = JSON.parse(storeA.db.prepare(`SELECT payload_json FROM creative_telemetry_evidence_outbox_v1
+        WHERE event_id=?`).get(mutationEvents.expectedAppendedEvent.event_id).payload_json);
+      const staged = JSON.parse(storeA.db.prepare(`SELECT payload_json FROM creative_telemetry_evidence_outbox_v1
+        WHERE event_id=?`).get(mutationEvents.expectedStagedEvent.event_id).payload_json);
+      assert.equal(canonicalSerialize(appended), canonicalSerialize(mutationEvents.expectedAppendedEvent));
+      assert.equal(canonicalSerialize(staged), canonicalSerialize(mutationEvents.expectedStagedEvent));
+      const stableUsage = storeA.db.prepare(`SELECT payload_json FROM creative_telemetry_observations_v1
+        WHERE source_observation_id=?`).get(mutationEvents.expectedMutationObservationId);
+      assert.ok(stableUsage);
+      assert.equal(JSON.parse(stableUsage.payload_json).attempt.logical_operation_id, seedAction);
+      assert.equal(JSON.parse(stableUsage.payload_json).observation.source_observation_id,
+        mutationEvents.expectedMutationObservationId);
+      const [claimedUsage, claimedEvidence] = await Promise.all([queuedClaims.queuedClaim, queuedClaims.queuedEvidenceClaim]);
+      assert.equal(claimedUsage.status, "claimed");
+      assert.equal(claimedEvidence.status, "claimed");
+      const results = await Promise.all(Object.values(queuedAcknowledgements));
+      assert.equal(results[0].status, "acknowledged");
+      assert.equal(results[1].status, "acknowledged");
+      assert.equal(results[2].status, "retained");
+      assert.equal(results[3].status, "acknowledged");
+      assert.equal(results[4].status, "retained");
+    }
+
+    storeA.close();
+    if (storeB !== storeA) storeB.close();
+    const reopened = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+    const recovery = await reopened.recover();
+    assert.equal(recovery.unknown, 0);
+    assert.equal(reopened.db.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+    assert.deepEqual(reopened.db.prepare("PRAGMA foreign_key_check").all(), []);
+    const recoveredUsage = reopened.db.prepare(`SELECT payload_json FROM creative_telemetry_observations_v1
+      WHERE logical_operation_id=?`).get(actionB);
+    assert.ok(recoveredUsage, "B usage survives Store close and reopen");
+    assert.equal(JSON.parse(recoveredUsage.payload_json).attempt.billable_attempt_id,
+      responseB.result.design_version.billable_attempt_id);
+    assert.deepEqual(Buffer.from(await reopened.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: responseB.result.design_version.design_version_id })),
+    Buffer.from(`exact concurrent artifact bytes:${label}-branch-b-artifact`));
+    reopened.close();
+    const evidenceRoot = process.env.CE_SQLITE_PR50_F1_EVIDENCE_ROOT;
+    if (overlap && typeof evidenceRoot === "string" && evidenceRoot.length > 0) {
+      const evidenceDbPath = join(evidenceRoot, `${label}.sqlite`);
+      const evidenceObjectPath = `${evidenceDbPath}.objects`;
+      await cp(databasePath, evidenceDbPath, { force: false, errorOnExist: true });
+      await cp(objectRoot, evidenceObjectPath, { recursive: true, force: false, errorOnExist: true });
+      const databaseBytes = await readFile(evidenceDbPath);
+      const objectFiles = [];
+      const collectObjects = async (directory, relative = "") => {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          const childRelative = relative ? `${relative}/${entry.name}` : entry.name;
+          const childPath = join(directory, entry.name);
+          if (entry.isDirectory()) await collectObjects(childPath, childRelative);
+          else if (entry.isFile()) {
+            const bytes = await readFile(childPath);
+            objectFiles.push({ path: childRelative, bytes: bytes.byteLength,
+              sha256: createHash("sha256").update(bytes).digest("hex") });
+          }
+        }
+      };
+      await collectObjects(evidenceObjectPath);
+      objectFiles.sort((left, right) => left.path.localeCompare(right.path));
+      t.diagnostic(JSON.stringify({ f1_evidence_db_path: evidenceDbPath,
+        database_bytes: databaseBytes.byteLength,
+        database_sha256: createHash("sha256").update(databaseBytes).digest("hex"),
+        evidence_object_path: evidenceObjectPath, object_files: objectFiles }));
+    }
+  };
+
+  for (const separateConnection of [false, true]) {
+    const identity = separateConnection ? "two-connections" : "one-connection";
+    await exercisePair({ separateConnection, overlap: true, label: `f1-overlap-${identity}` });
+    await exercisePair({ separateConnection, overlap: false, label: `f1-control-${identity}` });
+  }
+});
+
+for (const separateConnection of [false, true]) for (const overlap of [false, true]) {
+  test(`public inspection waits through explicit-parent publication (separateConnection=${separateConnection}, overlap=${overlap})`, async (t) => {
+    // This is a fixture-only API composition using generated valid PNG bytes and injected offline adapters.
+    const root = await mkdtemp(join(tmpdir(), "creative-inspection-publication-admission-"));
+    t.after(async () => rm(root, { recursive: true, force: true }));
+    const databasePath = join(root, "versions.sqlite");
+    const objectRoot = join(root, "objects");
+    const storeA = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+    t.after(() => storeA.close());
+    const storeB = separateConnection
+      ? new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW }) : storeA;
+    if (storeB !== storeA) t.after(() => storeB.close());
+    storeA.putBrief({ scope: SCOPE, brief: await fixture("brief") });
+
+    let id = 0;
+    const countersA = { provider: 0, reserved: 0 };
+    const countersB = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+    const portsA = portsFor(storeA, countersA, () => `inspection-admission-a-port-${++id}`,
+      { artifactBytes: Buffer.from(makePng(16, 16)) });
+    const apiA = createCreativeApi({ ports: portsA, now: () => NOW,
+      idFactory: () => `inspection-admission-a-api-${++id}` });
+    const seeded = await apiA.invoke(actor(), request("inspection-admission-seed", await fixture("generate-plan")));
+    assert.equal(seeded.ok, true, JSON.stringify(seeded));
+    const parent = seeded.result.design_version;
+
+    const portsB = attachInspectionPorts(portsFor(storeB, countersB,
+      () => `inspection-admission-b-port-${++id}`), countersB);
+    const artifactEntered = deferred();
+    const artifactRelease = deferred();
+    const publicationEntered = deferred();
+    const publicationRelease = deferred();
+    const repairReadEntered = deferred();
+    t.after(() => {
+      artifactRelease.resolve();
+      publicationRelease.resolve();
+    });
+
+    // Hold inspection after its SQLite artifact read has released the queue.
+    // This lets the unrelated branch publication become the active writer.
+    const readArtifactBytes = portsB.storage.getArtifactBytes;
+    portsB.storage.getArtifactBytes = async (...args) => {
+      const result = await readArtifactBytes(...args);
+      artifactEntered.resolve();
+      await artifactRelease.promise;
+      return result;
+    };
+    const durableRepairPort = portsB.storage.inspectionRepair;
+    portsB.storage.inspectionRepair = Object.freeze({
+      ...durableRepairPort,
+      async startInspection(input) {
+        repairReadEntered.resolve();
+        return durableRepairPort.startInspection(input);
+      },
+    });
+
+    const commitPrepared = portsA.storage.commitPreparedDesignVersion;
+    portsA.storage.commitPreparedDesignVersion = async (...args) => {
+      publicationEntered.resolve();
+      await publicationRelease.promise;
+      return commitPrepared(...args);
+    };
+    const apiB = createCreativeApi({ ports: portsB, now: () => NOW,
+      idFactory: () => `inspection-admission-b-api-${++id}` });
+    const inspectBody = inspectionRequest("inspection-admission-public-inspect", parent.design_version_id);
+    let pendingB;
+    let inspectionSettled = false;
+    let pendingA;
+    try {
+      pendingB = apiB.invoke({ ...actor(), permissions: [...actor().permissions, "creative.inspect"] }, inspectBody);
+      pendingB.then(() => { inspectionSettled = true; }, () => { inspectionSettled = true; });
+      await artifactEntered.promise;
+
+      const plan = await fixture("edit-plan");
+      plan.base = { brief_hash: parent.brief_hash, design_hash: parent.design_hash,
+        design_version_id: parent.design_version_id };
+      for (const step of plan.steps) {
+        if (step.parameters.design_version_id !== undefined) step.parameters.design_version_id = parent.design_version_id;
+        if (step.parameters.artifact_id !== undefined) step.parameters.artifact_id = parent.artifact.artifact_id;
+      }
+      plan.expected_result.parent_version_id = parent.design_version_id;
+      const editBody = { ...request("inspection-admission-explicit-parent-edit", plan), operation: "edit",
+        payload: { brief_id: SCOPE.brief_id, design_version_id: parent.design_version_id,
+          selection_mode: "branch", plan } };
+      pendingA = apiA.invoke(actor(), editBody);
+      await publicationEntered.promise;
+      assert.equal(storeA.db.isTransaction, true, "A holds its real publication transaction at the barrier");
+
+      if (overlap) {
+        artifactRelease.resolve();
+        await repairReadEntered.promise;
+        await Promise.resolve();
+        assert.equal(inspectionSettled, false,
+          "B waits behind the held publication instead of failing on a borrowed transaction or SQLite busy timeout");
+        publicationRelease.resolve();
+      } else {
+        // Positive control: finish A before B reaches inspection admission.
+        publicationRelease.resolve();
+        const completedA = await pendingA;
+        assert.equal(completedA.ok, true, JSON.stringify(completedA));
+        artifactRelease.resolve();
+      }
+
+      const [resultA, resultB] = await Promise.all([pendingA, pendingB]);
+      assert.equal(resultA.ok, true, JSON.stringify(resultA));
+      assert.equal(resultB.ok, true, JSON.stringify(resultB));
+      assert.equal(countersA.provider, 2, "seed and explicit-parent edit each dispatch exactly once");
+      assert.equal(countersB.inspection, 1, "inspection runs exactly once after admission");
+      assert.equal(countersB.reserved, 3, "the fixture observer and two decision stages each reserve once");
+      assert.equal(countersB.decision, 2, "the fixture inspection performs both decision stages");
+      assert.equal(resultA.result.design_version.parent_version_id, parent.design_version_id);
+      const selection = storeA.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+      assert.equal(selection.design_version_id, parent.design_version_id,
+        "an explicit-parent branch publication leaves the current selection on the root");
+      assert.equal(resultB.result.report.contract, "CreativeInspectionReport");
+      assert.equal(resultB.result.report.design_version_id, parent.design_version_id);
+      assert.equal(resultB.result.report.artifact_id, parent.artifact.artifact_id);
+      assert.equal(resultB.result.report.artifact_hash, parent.artifact.content_hash);
+      assert.equal(resultB.result.report.limits.usage_completeness, "complete");
+      assert.equal(resultB.result.attempt_ids.length, 3);
+      assert.equal(resultB.result.telemetry_evidence.length, 3);
+      const storedSession = storeA.db.prepare(`SELECT status,result_json,result_hash
+        FROM creative_inspection_sessions_v1 WHERE action_id=?`).get(inspectBody.action_id);
+      assert.equal(storedSession.status, "completed");
+      assert.equal(storedSession.result_hash, canonicalHash(JSON.parse(storedSession.result_json)));
+      const usageRows = storeA.db.prepare(`SELECT status,logical_operation_id,billable_attempt_id,payload_json
+        FROM creative_telemetry_observations_v1 WHERE logical_operation_id=?`).all(inspectBody.action_id);
+      assert.equal(usageRows.length, 3);
+      assert.ok(usageRows.every((row) => row.status === "delivered" && row.logical_operation_id === inspectBody.action_id &&
+        resultB.result.attempt_ids.includes(row.billable_attempt_id) &&
+        JSON.parse(row.payload_json).attempt.billable_attempt_id === row.billable_attempt_id &&
+        JSON.parse(row.payload_json).observation.completeness === "complete"),
+      "the inspection report is supported by three complete, durably acknowledged fixture usage records");
+      assert.equal(new Set(usageRows.map((row) => row.billable_attempt_id)).size, 3,
+        "each fixture inspection stage has distinct durable attempt evidence");
+      assert.deepEqual(Buffer.from(await storeA.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+        design_version_id: resultA.result.design_version.design_version_id })), Buffer.from(makePng(16, 16)));
+      assert.equal(storeA.db.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+      assert.deepEqual(storeA.db.prepare("PRAGMA foreign_key_check").all(), []);
+    } finally {
+      artifactRelease.resolve();
+      publicationRelease.resolve();
+    }
+  });
+}
+
+test("public inspection repair admission rejects caller BEGIN and SAVEPOINT without changing either transaction", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-inspection-caller-transaction-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  const adapter = createCreativeVersionApiPorts({ store }).ports;
+  store.db.exec("CREATE TABLE caller_transaction_sentinel (value TEXT PRIMARY KEY) STRICT;");
+  store.db.prepare("INSERT INTO caller_transaction_sentinel(value) VALUES (?)").run("committed-before-test");
+  const beforeRows = store.db.prepare("SELECT count(*) AS count FROM creative_inspection_state_v1").get().count;
+  const beforeActions = store.db.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count;
+
+  for (const scenario of [
+    { name: "BEGIN", open: () => store.db.exec("BEGIN IMMEDIATE;"), close: () => store.db.exec("ROLLBACK;") },
+    { name: "SAVEPOINT", open: () => store.db.exec("SAVEPOINT caller_inspection_admission;"),
+      close: () => { store.db.exec("ROLLBACK TO caller_inspection_admission;"); store.db.exec("RELEASE caller_inspection_admission;"); } },
+  ]) {
+    scenario.open();
+    store.db.prepare("INSERT INTO caller_transaction_sentinel(value) VALUES (?)").run(`uncommitted-${scenario.name}`);
+    try {
+      assert.equal(store.db.isTransaction, true, `${scenario.name} is open before the public adapter call`);
+      await assert.rejects(adapter.storage.inspectionRepair.startInspection({ scope: { ...SCOPE,
+        design_version_id: `design-caller-${scenario.name.toLowerCase()}` }, inspection_id: `inspection-${scenario.name.toLowerCase()}`,
+        brief_hash: canonicalHash("caller transaction brief"), design_hash: canonicalHash("caller transaction design") }),
+      (error) => error instanceof VersionStoreError && error.code === "unavailable" &&
+        error.field === "inspection.transaction");
+      assert.equal(store.db.isTransaction, true, `${scenario.name} remains open after rejection`);
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM caller_transaction_sentinel").get().count, 2,
+        `${scenario.name} retains its uncommitted caller sentinel`);
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_inspection_state_v1").get().count, beforeRows);
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count, beforeActions);
+    } finally {
+      scenario.close();
+    }
+    assert.equal(store.db.isTransaction, false, `${scenario.name} cleanup closes only its caller transaction`);
+    assert.equal(store.db.prepare("SELECT count(*) AS count FROM caller_transaction_sentinel").get().count, 1,
+      `${scenario.name} rollback leaves only the previously committed sentinel`);
+  }
+});
+
+test("SQLite reentrancy expires with its operation and cannot leak through detached async context", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-context-lifetime-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const first = createCreativeVersionApiPorts({ store }).ports;
+  const second = createCreativeVersionApiPorts({ store }).ports;
+  const originalGetBrief = store.getBrief.bind(store);
+  let reentrantChildEntered = false;
+  store.getBrief = (input) => {
+    if (input.test_mode === "outer-reentrant") {
+      return second.storage.getBrief({ ...input, test_mode: "inner-reentrant" });
+    }
+    if (input.test_mode === "inner-reentrant") reentrantChildEntered = true;
+    return originalGetBrief(input);
+  };
+  assert.ok(await first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "outer-reentrant" }));
+  assert.equal(reentrantChildEntered, true, "an active callback may reenter through another factory on the same connection");
+
+  const aliasPath = join(root, "versions-symlink.sqlite");
+  await symlink(join(root, "versions.sqlite"), aliasPath);
+  const aliasStore = new CreativeVersionStore({ databasePath: aliasPath,
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => aliasStore.close());
+  const aliasPorts = createCreativeVersionApiPorts({ store: aliasStore }).ports;
+  store.getBrief = (input) => {
+    if (input.test_mode === "cross-connection-nested") {
+      return aliasPorts.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id });
+    }
+    return originalGetBrief(input);
+  };
+  await assert.rejects(first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "cross-connection-nested" }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "database.cross_connection");
+  store.getBrief = originalGetBrief;
+  assert.ok(await second.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a rejected nested cross-connection call releases the queue");
+
+  store.getBrief = (input) => {
+    if (input.test_mode === "sync-throw") throw new Error("focused synchronous callback failure");
+    return originalGetBrief(input);
+  };
+  await assert.rejects(first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "sync-throw" }), /focused synchronous callback failure/);
+  store.getBrief = originalGetBrief;
+  assert.ok(await second.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a synchronous queued callback failure releases the shared scheduler");
+
+  const childGate = deferred();
+  const childScheduled = deferred();
+  const childAttempted = deferred();
+  const childFinished = deferred();
+  const holdEntered = deferred();
+  let releaseHold;
+  let childEntered = false;
+  store.getBrief = (input) => {
+    if (input.test_mode === "seed") {
+      setImmediate(async () => {
+        childScheduled.resolve();
+        await childGate.promise;
+        childAttempted.resolve();
+        try { childFinished.resolve(await second.storage.getBrief({ ...input, test_mode: "child" })); }
+        catch (error) { childFinished.reject(error); }
+      });
+      return originalGetBrief(input);
+    }
+    if (input.test_mode === "hold") {
+      holdEntered.resolve();
+      return new Promise((resolve) => { releaseHold = () => resolve(originalGetBrief(input)); });
+    }
+    if (input.test_mode === "child") childEntered = true;
+    return originalGetBrief(input);
+  };
+
+  await first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "seed" });
+  await childScheduled.promise;
+  const holding = first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "hold" });
+  await holdEntered.promise;
+  childGate.resolve();
+  await childAttempted.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(childEntered, false, "a settled operation's inherited ALS context cannot bypass the active database queue");
+  releaseHold();
+  await holding;
+  assert.ok(await childFinished.promise);
+  assert.equal(childEntered, true, "the detached child runs after the current serialized owner releases");
+
+  // A detached child keeps the old AsyncLocalStorage context after the old
+  // Store closes, but a reopened same-path Store has a fresh scheduler owner.
+  const staleContextGate = deferred();
+  const staleChildScheduled = deferred();
+  const staleChildAttempted = deferred();
+  const staleChildFinished = deferred();
+  store.getBrief = (input) => {
+    if (input.test_mode === "stale-context-seed") {
+      setImmediate(async () => {
+        staleChildScheduled.resolve();
+        await staleContextGate.promise;
+        staleChildAttempted.resolve();
+        try { staleChildFinished.resolve(await reopenedPorts.storage.getBrief({
+          scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "stale-context-child",
+        })); } catch (error) { staleChildFinished.reject(error); }
+      });
+    }
+    return originalGetBrief(input);
+  };
+  await first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "stale-context-seed" });
+  await staleChildScheduled.promise;
+  store.close();
+  aliasStore.close();
+  const reopenedStore = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => reopenedStore.close());
+  const reopenedPorts = createCreativeVersionApiPorts({ store: reopenedStore }).ports;
+  const originalReopenedGetBrief = reopenedStore.getBrief.bind(reopenedStore);
+  const reopenedHoldEntered = deferred();
+  const releaseReopened = deferred();
+  let staleChildEntered = false;
+  reopenedStore.getBrief = (input) => {
+    if (input.test_mode === "reopened-hold") {
+      reopenedHoldEntered.resolve();
+      return releaseReopened.promise.then(() => originalReopenedGetBrief(input));
+    }
+    if (input.test_mode === "stale-context-child") staleChildEntered = true;
+    return originalReopenedGetBrief(input);
+  };
+  const reopenedHolding = reopenedPorts.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "reopened-hold" });
+  await reopenedHoldEntered.promise;
+  staleContextGate.resolve();
+  await staleChildAttempted.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(staleChildEntered, false, "an old context cannot reenter the reopened same-inode scheduler");
+  releaseReopened.resolve();
+  await reopenedHolding;
+  assert.ok(await staleChildFinished.promise);
+  assert.equal(staleChildEntered, true);
+  await assert.rejects(first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    (error) => error instanceof VersionStoreError && error.code === "unavailable");
+});
+
+test("SQLite in-memory schedulers are shared only by the same DatabaseSync instance", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-memory-scheduler-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const firstStore = new CreativeVersionStore({ databasePath: ":memory:", objectRoot: join(root, "first-objects"), now: () => NOW });
+  const secondStore = new CreativeVersionStore({ databasePath: ":memory:", objectRoot: join(root, "second-objects"), now: () => NOW });
+  t.after(() => firstStore.close());
+  t.after(() => secondStore.close());
+  for (const store of [firstStore, secondStore]) {
+    store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  }
+  const firstFactory = createCreativeVersionApiPorts({ store: firstStore }).ports;
+  const secondFactory = createCreativeVersionApiPorts({ store: firstStore }).ports;
+  const independentFactory = createCreativeVersionApiPorts({ store: secondStore }).ports;
+  const originalGetBrief = firstStore.getBrief.bind(firstStore);
+  const holdEntered = deferred();
+  const releaseHold = deferred();
+  let secondFactoryEntered = false;
+  firstStore.getBrief = (input) => {
+    if (input.test_mode === "held-memory-read") {
+      holdEntered.resolve();
+      return releaseHold.promise.then(() => originalGetBrief(input));
+    }
+    if (input.test_mode === "same-memory-instance-queued") secondFactoryEntered = true;
+    return originalGetBrief(input);
+  };
+  const held = firstFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "held-memory-read" });
+  await holdEntered.promise;
+  assert.ok(await independentFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "an independent :memory: connection has an independent scheduler");
+  const queued = secondFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "same-memory-instance-queued" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(secondFactoryEntered, false, "two factories over one :memory: connection share queue ownership");
+  releaseHold.resolve();
+  await held;
+  assert.ok(await queued);
+  assert.equal(secondFactoryEntered, true);
+});
+
+test("SQLite admission queues remain independent for distinct database files", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-independent-files-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const firstStore = new CreativeVersionStore({ databasePath: join(root, "first.sqlite"),
+    objectRoot: join(root, "first-objects"), now: () => NOW });
+  const secondStore = new CreativeVersionStore({ databasePath: join(root, "second.sqlite"),
+    objectRoot: join(root, "second-objects"), now: () => NOW });
+  t.after(() => firstStore.close());
+  t.after(() => secondStore.close());
+  for (const store of [firstStore, secondStore]) {
+    store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  }
+  const first = createCreativeVersionApiPorts({ store: firstStore }).ports;
+  const second = createCreativeVersionApiPorts({ store: secondStore }).ports;
+  const originalGetBrief = firstStore.getBrief.bind(firstStore);
+  const holdEntered = deferred();
+  const releaseHold = deferred();
+  firstStore.getBrief = (input) => {
+    if (input.test_mode === "held-distinct-file") {
+      holdEntered.resolve();
+      return releaseHold.promise.then(() => originalGetBrief(input));
+    }
+    return originalGetBrief(input);
+  };
+  const held = first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "held-distinct-file" });
+  await holdEntered.promise;
+  assert.ok(await second.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "unrelated database work completes while the first file has a held owner");
+  releaseHold.resolve();
+  assert.ok(await held);
+});
+
+test("failed SQLite construction closes the handle and permits a clean retry at the same path", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-constructor-cleanup-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  await writeFile(databasePath, "not a SQLite database");
+  assert.throws(() => new CreativeVersionStore({ databasePath, objectRoot: join(root, "objects"), now: () => NOW }),
+    (error) => error instanceof VersionStoreError && error.code === "unavailable");
+  await unlink(databasePath);
+  const store = new CreativeVersionStore({ databasePath, objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  assert.equal(store.db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
+  const adapter = createCreativeVersionApiPorts({ store }).ports;
+  assert.equal(typeof adapter.storage.getBrief, "function");
+});
+
+test("SQLite caller transactions remain untouched and external handoff reads stay outside the DB queue", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-boundaries-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const unrelatedStore = new CreativeVersionStore({ databasePath: join(root, "unrelated.sqlite"),
+    objectRoot: join(root, "unrelated-objects"), now: () => NOW });
+  t.after(() => unrelatedStore.close());
+  unrelatedStore.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const adapter = createCreativeVersionApiPorts({ store, otherPorts: { storage: {
+    async getHandoffContext() {
+      assert.equal(store.db.isTransaction, false, "external context must not run under a SQLite write transaction");
+      await externalGate.promise;
+      return null;
+    },
+  } } });
+  const externalGate = deferred();
+  const externalRead = adapter.storage.getHandoffContext({});
+  assert.equal(typeof externalRead?.then, "function", "the injected read keeps its asynchronous API contract");
+  const localRead = await adapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  assert.ok(localRead, "an unresolved external read cannot hold the local SQLite scheduler");
+  externalGate.resolve();
+  assert.equal(await externalRead, null);
+
+  const unrelatedAdapter = createCreativeVersionApiPorts({ store: unrelatedStore }).ports;
+  const originalGetBrief = store.getBrief.bind(store);
+  const localQueueEntered = deferred();
+  const releaseLocalQueue = deferred();
+  let lateFactoryEntered = false;
+  store.getBrief = (input) => {
+    if (input.hold_sqlite_queue) {
+      localQueueEntered.resolve();
+      return releaseLocalQueue.promise.then(() => originalGetBrief(input));
+    }
+    if (input.late_factory) lateFactoryEntered = true;
+    return originalGetBrief(input);
+  };
+  const heldLocalRead = adapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, hold_sqlite_queue: true });
+  await localQueueEntered.promise;
+  const lateFactory = createCreativeVersionApiPorts({ store }).ports;
+  const lateFactoryRead = lateFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, late_factory: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(lateFactoryEntered, false, "a factory created during a queued DB operation joins its current owner queue");
+  assert.ok(await unrelatedAdapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a waiting operation on one database cannot block an unrelated database");
+  releaseLocalQueue.resolve();
+  await heldLocalRead;
+  assert.ok(await lateFactoryRead);
+  assert.equal(lateFactoryEntered, true);
+  store.getBrief = originalGetBrief;
+
+  const throwingRead = createCreativeVersionApiPorts({ store, otherPorts: { storage: {
+    getHandoffContext() { throw new Error("fixture handoff read failure"); },
+  } } }).storage.getHandoffContext({});
+  assert.equal(typeof throwingRead?.then, "function", "synchronous injected errors keep Promise rejection semantics");
+  await assert.rejects(throwingRead, /fixture handoff read failure/);
+
+  store.db.exec("BEGIN IMMEDIATE; SAVEPOINT caller_owned");
+  await assert.rejects(adapter.jobs.completeIfActive({ operation: "generate" }, async () => {}),
+    (error) => error instanceof VersionStoreError && error.code === "unavailable");
+  assert.equal(store.db.isTransaction, true, "adapter rejection does not roll back a caller-owned transaction or savepoint");
+  store.db.exec("ROLLBACK TO caller_owned; RELEASE caller_owned; ROLLBACK");
+  assert.equal(store.db.isTransaction, false);
+  assert.ok(await adapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a rejected transaction boundary releases its scheduler slot");
+});
+
+test("independent Node processes serialize SQLite BEGIN IMMEDIATE without assuming a process-local queue", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-cross-process-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  const store = new CreativeVersionStore({ databasePath, objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.db.exec("BEGIN IMMEDIATE");
+
+  const code = `import { DatabaseSync } from "node:sqlite";
+const db = new DatabaseSync(process.argv.at(-1));
+db.exec("PRAGMA busy_timeout=5000;");
+process.stdout.write("attempting\\n");
+db.exec("BEGIN IMMEDIATE;");
+process.stdout.write("acquired\\n");
+db.exec("COMMIT;");
+db.close();`;
+  const childArgs = ["--input-type=module", "-e", code, databasePath];
+  const child = spawn(process.execPath, childArgs, {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => { if (child.exitCode === null) child.kill("SIGTERM"); });
+  let stdout = "";
+  let stderr = "";
+  let signalAttempting;
+  const attempting = new Promise((resolve) => { signalAttempting = resolve; });
+  const exited = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+    if (stdout.includes("attempting\n")) signalAttempting();
+  });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  await attempting;
+  assert.equal(child.exitCode, null, "the second process waits while the first owns BEGIN IMMEDIATE");
+  store.db.exec("COMMIT");
+  const exit = await exited;
+  assert.deepEqual(exit, { code: 0, signal: null }, stderr);
+  assert.match(stdout, /attempting\nacquired\n/);
+  t.diagnostic(JSON.stringify({ executable: process.execPath, child_pid: child.pid,
+    argv: [process.execPath, ...childArgs], exit_code: exit.code, signal: exit.signal,
+    stdout_bytes: Buffer.byteLength(stdout), stdout_sha256: createHash("sha256").update(stdout).digest("hex"),
+    stdout, stderr_bytes: Buffer.byteLength(stderr), stderr_sha256: createHash("sha256").update(stderr).digest("hex"), stderr }));
+});
+
 test("paired adapter refuses external handoff while a SQLite publication transaction would be open", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-version-handoff-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
@@ -2914,6 +4163,530 @@ test("paired API reports handoff unavailable before verifier, context, destinati
   assert.deepEqual(calls, { context: 0, destination: 0, verify: 0, submit: 0 });
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_jobs WHERE action_id=?")
     .get("handoff-preflight-action").count, 0, "unsupported paired handoff must not create a misleading job");
+});
+
+test("a busy SQLite job-start transaction is retryable without losing the public request identity", async (t) => {
+  const evidenceRoot = process.env.CREATIVE_SQLITE_BUSY_EVIDENCE_ROOT;
+  const root = evidenceRoot ?? await mkdtemp(join(tmpdir(), "creative-sqlite-busy-api-"));
+  await mkdir(root, { recursive: true });
+  if (evidenceRoot) assert.deepEqual(await readdir(root), [], "the evidence directory is fresh for this runtime");
+  else t.after(async () => rm(root, { recursive: true, force: true }));
+
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  const store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  // Keep the test bounded while still exercising a real independent SQLite
+  // writer lock and SQLITE_BUSY at BEGIN IMMEDIATE.
+  store.db.exec("PRAGMA busy_timeout=200");
+
+  const counters = { provider: 0, reserved: 0, route: 0 };
+  let portId = 0;
+  let apiId = 0;
+  const ports = portsFor(store, counters, () => `sqlite-busy-port-${++portId}`);
+  const originalResolveRoute = ports.provider.resolveRoute;
+  ports.provider.resolveRoute = (...args) => {
+    counters.route += 1;
+    return originalResolveRoute(...args);
+  };
+  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `sqlite-busy-api-${++apiId}` });
+
+  const lockSource = `import { DatabaseSync } from "node:sqlite";
+const db = new DatabaseSync(process.argv.at(-1));
+db.exec("PRAGMA busy_timeout=15000");
+db.exec("BEGIN IMMEDIATE");
+process.stdout.write(JSON.stringify({ event: "LOCK_ACQUIRED", pid: process.pid }) + "\\n");
+process.stdin.once("data", () => {
+  db.exec("ROLLBACK");
+  db.close();
+  process.stdout.write("LOCK_RELEASED\\n");
+});`;
+  const lockArgs = ["--input-type=module", "-e", lockSource, databasePath];
+  const child = spawn(process.execPath, lockArgs, { stdio: ["pipe", "pipe", "pipe"] });
+  let childStdout = "";
+  let childStderr = "";
+  let lockAcquiredResolve;
+  let lockAcquiredReject;
+  const lockAcquired = new Promise((resolve, reject) => {
+    lockAcquiredResolve = resolve;
+    lockAcquiredReject = reject;
+  });
+  let childClosedResolve;
+  let childClosedReject;
+  const childClosed = new Promise((resolve, reject) => {
+    childClosedResolve = resolve;
+    childClosedReject = reject;
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    childStdout += chunk;
+    if (childStdout.includes("LOCK_ACQUIRED")) lockAcquiredResolve();
+  });
+  child.stderr.on("data", (chunk) => { childStderr += chunk; });
+  child.once("error", (error) => {
+    lockAcquiredReject(error);
+    childClosedReject(error);
+  });
+  child.once("close", (code, signal) => {
+    const result = { code, signal };
+    childClosedResolve(result);
+    if (!childStdout.includes("LOCK_ACQUIRED")) lockAcquiredReject(new Error(`lock child closed before acquisition: ${JSON.stringify(result)}`));
+  });
+  let childReleaseSent = false;
+  const releaseChild = async () => {
+    if (child.exitCode === null && !childReleaseSent) {
+      childReleaseSent = true;
+      child.stdin.end("release\\n");
+    }
+    return childClosed;
+  };
+  t.after(async () => {
+    try { await releaseChild(); } catch { /* the captured test failure remains primary */ }
+  });
+
+  let acquireTimer;
+  await Promise.race([lockAcquired, new Promise((_, reject) => {
+    acquireTimer = setTimeout(() => reject(new Error("independent SQLite lock child did not acquire BEGIN IMMEDIATE")), 10_000);
+  })]).finally(() => clearTimeout(acquireTimer));
+  const lockMarker = childStdout.split("\\n").find((line) => line.includes("LOCK_ACQUIRED"));
+  const lockDetails = lockMarker ? JSON.parse(lockMarker) : null;
+  assert.equal(lockDetails?.pid, child.pid);
+
+  const nativeBeginErrors = [];
+  const nativeExec = store.db.exec.bind(store.db);
+  store.db.exec = (sql) => {
+    try { return nativeExec(sql); }
+    catch (error) {
+      if (sql === "BEGIN IMMEDIATE") nativeBeginErrors.push({ name: error.name, code: error.code,
+        errcode: error.errcode, errstr: error.errstr, message: error.message });
+      throw error;
+    }
+  };
+
+  const encodeValue = (value) => value instanceof Uint8Array
+    ? { blob_base64: Buffer.from(value).toString("base64") }
+    : typeof value === "bigint" ? { integer_string: value.toString() } : value;
+  const tableSnapshot = () => {
+    const schema = store.db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name").all();
+    const tables = store.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
+      .map(({ name }) => {
+        const quoted = `"${name.replaceAll('"', '""')}"`;
+        const rows = store.db.prepare(`SELECT * FROM ${quoted}`).all().map((row) => Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [key, encodeValue(value)])));
+        rows.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+        return { name, rows };
+      });
+    return { schema: schema.map((row) => Object.fromEntries(Object.entries(row)
+      .map(([key, value]) => [key, encodeValue(value)]))), tables };
+  };
+  // Never open the live main/WAL/SHM paths in the process that owns store.db.
+  // On POSIX, closing another descriptor for SQLite's SHM file can release
+  // process-scoped locks; the capture child has only its own file descriptors.
+  const helperProcesses = [];
+  const runNodeHelper = async (kind, label, source, args) => {
+    const nodeArgs = ["--input-type=module", "-e", source, ...args];
+    const startedAt = new Date().toISOString();
+    const childProcess = spawn(process.execPath, nodeArgs, { stdio: ["ignore", "pipe", "pipe"] });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let stdoutEof = false;
+    let stderrEof = false;
+    let spawnError;
+    childProcess.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
+    childProcess.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+    childProcess.stdout.once("end", () => { stdoutEof = true; });
+    childProcess.stderr.once("end", () => { stderrEof = true; });
+    childProcess.once("error", (error) => { spawnError = error; });
+    const exit = await new Promise((resolve) => childProcess.once("close", (code, signal) => resolve({ code, signal })));
+    const stdout = Buffer.concat(stdoutChunks);
+    const stderr = Buffer.concat(stderrChunks);
+    const outputDirectory = join("helper-processes", `${kind}-${label}`);
+    const record = {
+      kind, label, pid: childProcess.pid, argv: [process.execPath, ...nodeArgs],
+      started_utc: startedAt, finished_utc: new Date().toISOString(),
+      exit, spawn_error: spawnError ? { name: spawnError.name, code: spawnError.code, message: spawnError.message } : null,
+      stdout_bytes: stdout.length, stdout_sha256: createHash("sha256").update(stdout).digest("hex"), stdout_eof: stdoutEof,
+      stderr_bytes: stderr.length, stderr_sha256: createHash("sha256").update(stderr).digest("hex"), stderr_eof: stderrEof,
+    };
+    if (evidenceRoot) {
+      const absoluteOutputDirectory = join(root, outputDirectory);
+      await mkdir(absoluteOutputDirectory, { recursive: true, mode: 0o700 });
+      for (const [name, bytes] of [["stdout.raw", stdout], ["stderr.raw", stderr]]) {
+        const rawPath = join(absoluteOutputDirectory, name);
+        await writeFile(rawPath, bytes, { flag: "wx", mode: 0o600 });
+        const handle = await open(rawPath, "r+");
+        try { await handle.sync(); } finally { await handle.close(); }
+        record[`${name === "stdout.raw" ? "stdout" : "stderr"}_path`] = `${outputDirectory}/${name}`;
+      }
+      const resultPath = join(absoluteOutputDirectory, "process-result.json");
+      await writeFile(resultPath, `${JSON.stringify(record, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+      const resultHandle = await open(resultPath, "r+");
+      try { await resultHandle.sync(); } finally { await resultHandle.close(); }
+      record.process_result_path = `${outputDirectory}/process-result.json`;
+    }
+    helperProcesses.push(record);
+    assert.equal(spawnError, undefined, `${kind} helper spawned successfully: ${spawnError?.message}`);
+    assert.deepEqual(exit, { code: 0, signal: null }, `${kind} helper exited normally: ${stderr.toString("utf8")}`);
+    assert.equal(stdoutEof, true, `${kind} helper stdout reached EOF`);
+    assert.equal(stderrEof, true, `${kind} helper stderr reached EOF`);
+    return { record, stdout: stdout.toString("utf8"), stderr: stderr.toString("utf8") };
+  };
+  const databaseFileCaptureSource = `import { createHash } from "node:crypto";
+import { mkdir, open, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+const [root, label, databasePath, captureFlag] = process.argv.slice(-4);
+const captureBytes = captureFlag === "1";
+const files = [];
+for (const [suffix, name] of [["", "main.sqlite"], ["-wal", "wal.sqlite"], ["-shm", "shm.sqlite"]]) {
+  const sourcePath = databasePath + suffix;
+  let bytes;
+  try { bytes = await readFile(sourcePath); }
+  catch (error) {
+    if (error?.code === "ENOENT") { files.push({ suffix, name, source_path: sourcePath, missing: true }); continue; }
+    throw error;
+  }
+  const file = { suffix, name, source_path: sourcePath, bytes: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"), missing: false };
+  if (captureBytes) {
+    const rawDirectory = join(root, "db-raw", label);
+    await mkdir(rawDirectory, { recursive: true, mode: 0o700 });
+    const rawPath = join(rawDirectory, name);
+    await writeFile(rawPath, bytes, { flag: "wx", mode: 0o600 });
+    const handle = await open(rawPath, "r+");
+    try { await handle.sync(); } finally { await handle.close(); }
+    file.raw_capture_path = "db-raw/" + label + "/" + name;
+  }
+  files.push(file);
+}
+process.stdout.write(JSON.stringify({ pid: process.pid, label, database_path: databasePath, files }) + "\\n");`;
+  const captureDatabaseFiles = async (label, captureBytes) => {
+    const { record, stdout } = await runNodeHelper("file-capture", label, databaseFileCaptureSource,
+      [root, label, databasePath, captureBytes ? "1" : "0"]);
+    const captured = JSON.parse(stdout);
+    assert.equal(captured.pid, record.pid);
+    assert.equal(captured.label, label);
+    assert.equal(captured.database_path, databasePath);
+    return captured.files;
+  };
+  const independentDatabaseReaderSource = `import { DatabaseSync } from "node:sqlite";
+const databasePath = process.argv.at(-1);
+const db = new DatabaseSync(databasePath, { readOnly: true });
+const encodeValue = (value) => value instanceof Uint8Array
+  ? { blob_base64: Buffer.from(value).toString("base64") }
+  : typeof value === "bigint" ? { integer_string: value.toString() } : value;
+const schema = db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name").all();
+const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
+  .map(({ name }) => {
+    const quoted = '"' + name.replaceAll('"', '""') + '"';
+    const rows = db.prepare('SELECT * FROM ' + quoted).all().map((row) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, encodeValue(value)])));
+    rows.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    return { name, rows };
+  });
+const schemaAndRows = {
+  schema: schema.map((row) => Object.fromEntries(Object.entries(row)
+    .map(([key, value]) => [key, encodeValue(value)]))), tables,
+};
+db.close();
+process.stdout.write(JSON.stringify({ pid: process.pid, database_path: databasePath,
+  table_count: tables.length, schema_and_rows: schemaAndRows }) + "\\n");`;
+  const readDatabaseIndependently = async (label, path) => {
+    const { record, stdout } = await runNodeHelper("sqlite-reader", label, independentDatabaseReaderSource, [path]);
+    const result = JSON.parse(stdout);
+    assert.equal(result.pid, record.pid);
+    assert.equal(result.database_path, path);
+    assert.equal(result.table_count, result.schema_and_rows.tables.length);
+    return result;
+  };
+  const reconstructAndReadSnapshot = async (label, files, expected) => {
+    const reconstructedDirectory = join(root, "db-reconstructed", label);
+    await mkdir(reconstructedDirectory, { recursive: true, mode: 0o700 });
+    const reconstructedPath = join(reconstructedDirectory, "versions.sqlite");
+    let copiedMain = false;
+    const copiedFiles = [];
+    for (const file of files) {
+      if (file.missing || !file.raw_capture_path) continue;
+      const capturedPath = join(root, file.raw_capture_path);
+      const targetPath = reconstructedPath + file.suffix;
+      const capturedBytes = await readFile(capturedPath);
+      assert.equal(capturedBytes.length, file.bytes, `retained ${file.name} byte count`);
+      assert.equal(createHash("sha256").update(capturedBytes).digest("hex"), file.sha256,
+        `retained ${file.name} hash`);
+      await writeFile(targetPath, capturedBytes, { flag: "wx", mode: 0o600 });
+      const targetHandle = await open(targetPath, "r+");
+      try { await targetHandle.sync(); } finally { await targetHandle.close(); }
+      if (file.suffix === "") copiedMain = true;
+      copiedFiles.push({ suffix: file.suffix, bytes: capturedBytes.length, sha256: file.sha256 });
+    }
+    assert.equal(copiedMain, true, `${label} retains a main SQLite database`);
+    const result = await readDatabaseIndependently(`reconstructed-${label}`, reconstructedPath);
+    assert.equal(result.table_count, 34, `${label} reconstructed all 34 tables`);
+    assert.deepEqual(result.schema_and_rows, expected.schema_and_rows,
+      `${label} reconstructed files match full owner schema, rows, and BLOB values`);
+    return { database_path: reconstructedPath, copied_files: copiedFiles, table_count: result.table_count,
+      schema_and_rows: result.schema_and_rows, process: result.pid };
+  };
+  const objectSnapshot = async (directory, prefix = "") => {
+    const entries = [];
+    for (const entry of await readdir(directory, { withFileTypes: true }).catch((error) => {
+      if (error?.code === "ENOENT") return [];
+      throw error;
+    })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) entries.push(...await objectSnapshot(path, relative));
+      else if (entry.isFile()) {
+        const bytes = await readFile(path);
+        entries.push({ path: relative, bytes: bytes.length,
+          sha256: createHash("sha256").update(bytes).digest("hex") });
+      } else entries.push({ path: relative, type: entry.isSymbolicLink() ? "symlink" : "other" });
+    }
+    return entries.sort((left, right) => left.path.localeCompare(right.path));
+  };
+  const snapshot = async (label, captureDbBytes = false) => {
+    const schemaAndRows = tableSnapshot();
+    const files = await captureDatabaseFiles(label, captureDbBytes);
+    return {
+      schema_and_rows: schemaAndRows,
+      pragmas: {
+        busy_timeout: store.db.prepare("PRAGMA busy_timeout").get(),
+        journal_mode: store.db.prepare("PRAGMA journal_mode").get(),
+        schema_version: store.db.prepare("PRAGMA schema_version").get(),
+        user_version: store.db.prepare("PRAGMA user_version").get(),
+      },
+      is_transaction: store.db.isTransaction,
+      files,
+      objects: await objectSnapshot(objectRoot),
+    };
+  };
+
+  const body = request("sqlite-busy-public-retry", await fixture("generate-plan"));
+  const before = await snapshot("before", true);
+  let blockedResponse;
+  let blockedThrow;
+  try { blockedResponse = await api.invoke(actor(), body); }
+  catch (error) { blockedThrow = { name: error.name, code: error.code, errcode: error.errcode,
+    errstr: error.errstr, message: error.message }; }
+  const whileLocked = await snapshot("while-locked", true);
+  const blockedCounters = { ...counters, api_id_factory_calls: apiId, port_id_factory_calls: portId };
+  const childExit = await releaseChild();
+  const afterRelease = await snapshot("after-release", true);
+  const retriedResponse = await api.invoke(actor(), body);
+  const afterRetry = await snapshot("after-retry", true);
+  const retryLiveObservation = await readDatabaseIndependently("live-after-retry", databasePath);
+  assert.equal(store.db.isTransaction, false, "the public retry has released its SQLite transaction before independent verification");
+  assert.equal(afterRetry.schema_and_rows.tables.length, 34, "the owner snapshot covers all 34 SQLite tables after retry");
+  assert.equal(retryLiveObservation.table_count, 34, "an independent reader sees all 34 live tables before owner close");
+  assert.deepEqual(retryLiveObservation.schema_and_rows, afterRetry.schema_and_rows,
+    "an independent SQLite connection sees the complete retry schema, rows, and BLOBs before owner close");
+  const retryReconstruction = await reconstructAndReadSnapshot("after-retry", afterRetry.files, afterRetry);
+  const effectsAfterRetry = { ...counters, api_id_factory_calls: apiId, port_id_factory_calls: portId };
+  const duplicateResponse = await api.invoke(actor(), body);
+  const afterDuplicate = await snapshot("after-duplicate", true);
+  const duplicateLiveObservation = await readDatabaseIndependently("live-after-duplicate", databasePath);
+  assert.equal(store.db.isTransaction, false, "the duplicate replay has released its SQLite transaction before independent verification");
+  assert.equal(afterDuplicate.schema_and_rows.tables.length, 34, "the owner snapshot covers all 34 SQLite tables after replay");
+  assert.equal(duplicateLiveObservation.table_count, 34, "an independent reader sees all 34 live tables before owner close");
+  assert.deepEqual(duplicateLiveObservation.schema_and_rows, afterDuplicate.schema_and_rows,
+    "an independent SQLite connection sees the complete replay schema, rows, and BLOBs before owner close");
+  const duplicateReconstruction = await reconstructAndReadSnapshot("after-duplicate", afterDuplicate.files, afterDuplicate);
+  const effectsAfterDuplicate = { ...counters, api_id_factory_calls: apiId, port_id_factory_calls: portId };
+
+  const injectedLockedError = Object.assign(new Error("database table is locked"), {
+    code: "ERR_SQLITE_ERROR", errcode: 262, errstr: "database table is locked",
+  });
+  const execBeforeLockedProbe = store.db.exec;
+  store.db.exec = (sql) => {
+    if (sql === "BEGIN IMMEDIATE") throw injectedLockedError;
+    return execBeforeLockedProbe(sql);
+  };
+  let lockedClassificationError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-locked-extended-code",
+      request_hash: canonicalHash({ action_id: "sqlite-locked-extended-code", operation: "generate" }), operation: "generate" });
+  } catch (error) {
+    lockedClassificationError = { name: error.name, module: error.module, code: error.code,
+      field: error.field, retryable: error.retryable, same_error_object: error === injectedLockedError };
+  } finally { store.db.exec = execBeforeLockedProbe; }
+  const afterLockedCodeProbe = await snapshot("after-locked-error");
+
+  const unrelatedSqliteError = Object.assign(new Error("constraint failed"), {
+    code: "ERR_SQLITE_ERROR", errcode: 19, errstr: "constraint failed",
+  });
+  const observedExec = store.db.exec;
+  store.db.exec = (sql) => {
+    if (sql === "BEGIN IMMEDIATE") throw unrelatedSqliteError;
+    return observedExec(sql);
+  };
+  let unrelatedBeginError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-busy-unrelated-error",
+      request_hash: canonicalHash({ action_id: "sqlite-busy-unrelated-error", operation: "generate" }), operation: "generate" });
+  } catch (error) { unrelatedBeginError = error; }
+  finally { store.db.exec = observedExec; }
+  const afterUnrelatedError = await snapshot("after-unrelated-error");
+
+  const borrowerBefore = await snapshot("borrower-before");
+  store.db.exec("BEGIN IMMEDIATE; SAVEPOINT caller_owned_busy_test");
+  store.db.exec("CREATE TEMP TABLE caller_busy_sentinel(value TEXT); INSERT INTO caller_busy_sentinel VALUES('preserved')");
+  let borrowedError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-busy-caller-owned",
+      request_hash: canonicalHash({ action_id: "sqlite-busy-caller-owned", operation: "generate" }), operation: "generate" });
+  } catch (error) {
+    borrowedError = { name: error.name, module: error.module, code: error.code, field: error.field,
+      retryable: error.retryable, message: error.message };
+  }
+  const borrowedTransactionOpen = store.db.isTransaction;
+  const borrowedSentinel = store.db.prepare("SELECT value FROM caller_busy_sentinel").all();
+  store.db.exec("ROLLBACK TO caller_owned_busy_test; RELEASE caller_owned_busy_test; ROLLBACK");
+  const borrowerAfter = await snapshot("borrower-after-rollback");
+  store.close();
+  let closedStoreError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-busy-closed-store",
+      request_hash: canonicalHash({ action_id: "sqlite-busy-closed-store", operation: "generate" }), operation: "generate" });
+  } catch (error) {
+    closedStoreError = { name: error.name, module: error.module, code: error.code, field: error.field,
+      retryable: error.retryable, message: error.message };
+  }
+
+  const evidence = {
+    schema: "sqlite-busy-public-retry-regression/1",
+    runtime: process.version,
+    pid: process.pid,
+    argv: process.argv,
+    cwd: process.cwd(),
+    database_path: databasePath,
+    lock_child: { pid: child.pid, argv: [process.execPath, ...lockArgs], exit: childExit,
+      stdout: childStdout, stderr: childStderr, stdout_bytes: Buffer.byteLength(childStdout),
+      stderr_bytes: Buffer.byteLength(childStderr), stdout_sha256: createHash("sha256").update(childStdout).digest("hex"),
+      stderr_sha256: createHash("sha256").update(childStderr).digest("hex") },
+    native_begin_errors: nativeBeginErrors,
+    blocked_throw: blockedThrow ?? null,
+    blocked_response: blockedResponse ?? null,
+    blocked_counters: blockedCounters,
+    before, while_locked: whileLocked, after_release: afterRelease,
+    retry_response: retriedResponse, after_retry: afterRetry,
+    duplicate_response: duplicateResponse, after_duplicate: afterDuplicate,
+    independent_database_observations: {
+      after_retry_live: retryLiveObservation,
+      after_retry_reconstruction: retryReconstruction,
+      after_duplicate_live: duplicateLiveObservation,
+      after_duplicate_reconstruction: duplicateReconstruction,
+    },
+    helper_processes: helperProcesses,
+    effects_after_retry: effectsAfterRetry, effects_after_duplicate: effectsAfterDuplicate,
+    injected_locked_extended_code: lockedClassificationError ?? null,
+    after_locked_extended_code: afterLockedCodeProbe,
+    unrelated_sqlite_error: { name: unrelatedBeginError?.name, code: unrelatedBeginError?.code,
+      errcode: unrelatedBeginError?.errcode, errstr: unrelatedBeginError?.errstr,
+      same_error_object: unrelatedBeginError === unrelatedSqliteError },
+    after_unrelated_error: afterUnrelatedError,
+    borrower: { before: borrowerBefore, error: borrowedError ?? null,
+      transaction_still_open: borrowedTransactionOpen, sentinel_rows: borrowedSentinel, after_rollback: borrowerAfter },
+    closed_store_error: closedStoreError ?? null,
+  };
+  const evidenceBytes = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`);
+  const evidencePath = evidenceRoot ? join(root, "attempt-evidence.json") : null;
+  // Keep TAP output below the inspection runner's default spawnSync buffer;
+  // the complete nested database evidence remains in the referenced file.
+  if (evidencePath) await writeFile(evidencePath, evidenceBytes);
+  const summarizeResponse = (response) => response ? {
+    ok: response.ok,
+    operation_id: response.operation_id,
+    replayed: response.replayed,
+    error: response.error ? { code: response.error.code, field: response.error.field,
+      retryable: response.error.retryable } : null,
+  } : null;
+  const summarizeSnapshot = (snapshot) => ({
+    table_count: snapshot.schema_and_rows.tables.length,
+    key_table_rows: Object.fromEntries(snapshot.schema_and_rows.tables
+      .filter((table) => ["creative_jobs", "design_versions", "creation_actions"].includes(table.name))
+      .map((table) => [table.name, table.rows.length])),
+    object_count: snapshot.objects.length,
+    is_transaction: snapshot.is_transaction,
+  });
+  const diagnostic = {
+    schema: "sqlite-busy-public-retry-diagnostic/1",
+    runtime: evidence.runtime,
+    pid: evidence.pid,
+    native_begin_errors: nativeBeginErrors,
+    lock_child: { pid: child.pid, exit: childExit },
+    blocked: { thrown: blockedThrow ?? null, response: summarizeResponse(blockedResponse), counters: blockedCounters },
+    retry: { response: summarizeResponse(retriedResponse), snapshot: summarizeSnapshot(afterRetry),
+      live_reader: { pid: retryLiveObservation.pid, table_count: retryLiveObservation.table_count },
+      reconstructed: { table_count: retryReconstruction.table_count, copied_files: retryReconstruction.copied_files.length },
+      effects: effectsAfterRetry },
+    replay: { response: summarizeResponse(duplicateResponse), snapshot: summarizeSnapshot(afterDuplicate),
+      live_reader: { pid: duplicateLiveObservation.pid, table_count: duplicateLiveObservation.table_count },
+      reconstructed: { table_count: duplicateReconstruction.table_count, copied_files: duplicateReconstruction.copied_files.length },
+      effects: effectsAfterDuplicate },
+    helper_processes: { count: helperProcesses.length, pids: helperProcesses.map((process) => process.pid),
+      all_exited: helperProcesses.every((process) => process.exit.code === 0 && process.exit.signal === null),
+      all_streams_reached_eof: helperProcesses.every((process) => process.stdout_eof && process.stderr_eof) },
+    extended_locked_error: lockedClassificationError ?? null,
+    unrelated_sqlite_error: evidence.unrelated_sqlite_error,
+    borrower: { error: borrowedError ?? null, transaction_still_open: borrowedTransactionOpen,
+      sentinel_rows: borrowedSentinel },
+    closed_store_error: closedStoreError ?? null,
+    evidence_reference: evidencePath ? { path: evidencePath, bytes: evidenceBytes.length,
+      sha256: createHash("sha256").update(evidenceBytes).digest("hex") } : null,
+  };
+  t.diagnostic(JSON.stringify(diagnostic));
+
+  assert.equal(nativeBeginErrors.length, 1, "the public request reaches a real SQLite BEGIN IMMEDIATE failure");
+  assert.ok([5, 6].includes(nativeBeginErrors[0].errcode & 0xff), JSON.stringify(nativeBeginErrors[0]));
+  assert.equal(blockedThrow, undefined, "the API returns its typed unavailable response");
+  assert.equal(blockedResponse?.ok, false);
+  assert.equal(blockedResponse?.error?.code, "unavailable");
+  assert.equal(blockedResponse?.error?.retryable, true);
+  assert.deepEqual(whileLocked.schema_and_rows, before.schema_and_rows,
+    "the failed attempt changes no schema or durable rows while the independent owner holds the lock");
+  assert.deepEqual(whileLocked.objects, before.objects, "the failed attempt changes no artifact files");
+  assert.equal(whileLocked.is_transaction, false, "the failed BEGIN leaves no borrowed transaction active");
+  assert.deepEqual(blockedCounters, { provider: 0, reserved: 0, route: 0,
+    api_id_factory_calls: 1, port_id_factory_calls: 0 },
+  "only the API's local error diagnostic id is allocated; provider, metering, route and job owners are untouched");
+  assert.deepEqual(childExit, { code: 0, signal: null });
+  assert.equal(retriedResponse?.ok, true, JSON.stringify(retriedResponse));
+  assert.equal(retriedResponse?.replayed, undefined);
+  assert.equal(duplicateResponse?.ok, true, JSON.stringify(duplicateResponse));
+  assert.equal(duplicateResponse?.replayed, true);
+  assert.equal(duplicateResponse?.operation_id, retriedResponse?.operation_id);
+  assert.equal(counters.provider, 1, "the exact retry dispatches once");
+  assert.equal(counters.reserved, 1, "the exact retry reserves once");
+  assert.equal(counters.route, 1, "the exact retry resolves one provider route");
+  assert.ok(effectsAfterRetry.port_id_factory_calls >= 2, "the successful request allocates a job and lease");
+  assert.deepEqual(effectsAfterDuplicate, effectsAfterRetry, "replay does not call provider, metering, or adapter ID factories again");
+  assert.deepEqual(afterDuplicate.schema_and_rows, afterRetry.schema_and_rows,
+    "same-identity replay adds no second job, usage, version or selection row");
+  assert.deepEqual(afterDuplicate.objects, afterRetry.objects,
+    "same-identity replay adds no second artifact object");
+  assert.deepEqual(lockedClassificationError, { name: "VersionStoreError", module: "creative-engine.versions",
+    code: "unavailable", field: "job", retryable: true, same_error_object: false },
+  "an injected extended SQLITE_LOCKED code maps through the same neutral acquisition classifier");
+  assert.deepEqual(afterLockedCodeProbe.schema_and_rows, afterDuplicate.schema_and_rows,
+    "locked acquisition classification itself creates no job rows");
+  assert.strictEqual(unrelatedBeginError, unrelatedSqliteError,
+    "non-busy SQLite errors are propagated unchanged by acquisition classification");
+  assert.deepEqual(afterUnrelatedError.schema_and_rows, afterDuplicate.schema_and_rows,
+    "a propagated acquisition error leaves durable schema and rows unchanged");
+  assert.ok(borrowedError && borrowedError.module === "creative-engine.versions" && borrowedError.code === "unavailable",
+    JSON.stringify(borrowedError));
+  assert.equal(borrowedError?.field, "job.begin.transaction");
+  assert.equal(borrowedError?.retryable, true);
+  assert.equal(borrowedTransactionOpen, true, "a rejected borrower does not roll back caller BEGIN/SAVEPOINT");
+  assert.deepEqual(JSON.parse(JSON.stringify(borrowedSentinel)), [{ value: "preserved" }]);
+  assert.deepEqual(borrowerAfter.schema_and_rows, afterDuplicate.schema_and_rows,
+    "caller rollback leaves the durable job tables unchanged");
+  assert.equal(closedStoreError?.name, "VersionStoreError");
+  assert.equal(closedStoreError?.module, "creative-engine.versions");
+  assert.equal(closedStoreError?.code, "unavailable");
+  assert.equal(closedStoreError?.field, "database.identity",
+    "closed-store identity failure remains distinct from a retryable busy acquisition");
 });
 
 test("cancelled dispatch cannot publish but its late worker can persist attempt evidence for reconciliation", async (t) => {

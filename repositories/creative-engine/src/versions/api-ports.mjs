@@ -1,9 +1,11 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalHash, canonicalSerialize } from "../contracts/index.mjs";
-import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent, creativeCompositionFenceCurrent } from "./store.mjs";
+import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent, creativeCompositionFenceCurrent,
+  inspectionRepairControllerForStore } from "./store.mjs";
 import { applyResearchInvalidation } from "../planning/index.mjs";
-import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
+import { inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
+import { runSqliteDatabaseOperation, runSqliteDatabaseOperationSync,
+  sqliteDatabaseOperationIsActive, sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
 
 const OPERATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.revalidate", "composition.get", "composition.history",
   "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
@@ -78,6 +80,24 @@ function inspectionSessionFromRows(session, stages) {
 
 function tokenHash(value) { return createHash("sha256").update(value).digest("hex"); }
 
+function isSqliteBusyOrLocked(error) {
+  if (error?.code !== "ERR_SQLITE_ERROR") return false;
+  if (Number.isSafeInteger(error.errcode)) {
+    const primaryCode = error.errcode & 0xff;
+    return primaryCode === 5 || primaryCode === 6;
+  }
+  return typeof error.errstr === "string" &&
+    /^(?:database is (?:busy|locked)|database (?:table|schema) is locked)$/i.test(error.errstr);
+}
+
+function beginImmediate(store, field) {
+  try { store.db.exec("BEGIN IMMEDIATE"); }
+  catch (error) {
+    if (isSqliteBusyOrLocked(error)) throw new VersionStoreError("unavailable", field, true);
+    throw error;
+  }
+}
+
 function jobFromRow(row) {
   if (!row) return null;
   let result;
@@ -109,16 +129,22 @@ function briefScope(scope, briefId) {
   return Object.freeze({ tenant_id, project_id, brief_id: checkedBriefId });
 }
 
-function contextFenceMatches(store, scope, fence, { requireRecordedRepair = false, afterPublication = false } = {}) {
+function contextFenceMatches(store, scope, fence, { requireRecordedRepair = false, afterPublication = false,
+  readOnlyBriefHistory = false } = {}) {
   if (!record(fence) || Object.keys(fence).some((key) => ![
     "brief_id", "brief_hash", "design_version_id", "design_hash",
     "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights", "composition",
   ].includes(key))) return false;
   try {
     const checkedScope = briefScope(scope, fence.brief_id);
-    const brief = store.getBrief({ scope: checkedScope, brief_id: checkedScope.brief_id });
+    // The final send fence uses the store's true read-only history mode. A
+    // separate precheck would still race a cross-process history deletion
+    // before getBrief's legacy backfill path.
+    const historyOptions = readOnlyBriefHistory ? { allowLegacyHistoryBackfill: false } : undefined;
+    const brief = store.getBrief({ scope: checkedScope, brief_id: checkedScope.brief_id }, historyOptions);
     if (!brief || canonicalHash(brief) !== fence.brief_hash) return false;
-    if (!store.isBriefUsable({ scope: checkedScope, brief_id: checkedScope.brief_id, brief_hash: fence.brief_hash })) return false;
+    if (!store.isBriefUsable({ scope: checkedScope, brief_id: checkedScope.brief_id,
+      brief_hash: fence.brief_hash }, historyOptions)) return false;
     if (fence.design_version_id !== undefined) {
       safeReference(fence.design_version_id, "context_fence.design_version_id");
       safeHash(fence.design_hash, "context_fence.design_hash");
@@ -196,17 +222,67 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     faultInjector !== undefined && typeof faultInjector !== "function") {
     throw new VersionStoreError("invalid_request", "adapter_options");
   }
-  const transactionContext = new AsyncLocalStorage();
-  const inspectionRepair = createSqliteInspectionRepairController({ database: store.db, now: store.now });
-  let serialQueue = Promise.resolve();
   const serial = (work) => {
-    if (transactionContext.getStore() === store) return Promise.resolve().then(work);
-    const prior = serialQueue;
-    let release;
-    const barrier = new Promise((resolve) => { release = resolve; });
-    serialQueue = prior.then(() => barrier);
-    return prior.then(() => transactionContext.run(store, work)).finally(() => release());
+    return runSqliteDatabaseOperation({ database: store.db, owner: store, work,
+      identityError: () => new VersionStoreError("unavailable", "database.identity", true),
+      conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true) });
   };
+  const inspectionRepairController = inspectionRepairControllerForStore(store);
+  if (!inspectionRepairController) throw new VersionStoreError("unavailable", "database", true);
+  const snapshotRepairScope = (scope) => {
+    if (!record(scope) || Array.isArray(scope)) return scope;
+    return Object.freeze({ tenant_id: scope.tenant_id, project_id: scope.project_id,
+      brief_id: scope.brief_id, design_version_id: scope.design_version_id });
+  };
+  const snapshotRepairProof = (proof) => {
+    if (!record(proof) || Array.isArray(proof)) return proof;
+    return Object.freeze({ inspection_id: proof.inspection_id, action_id: proof.action_id,
+      request_hash: proof.request_hash, claim_ref: proof.claim_ref, root_brief_hash: proof.root_brief_hash,
+      root_design_hash: proof.root_design_hash, root_design_version_id: proof.root_design_version_id,
+      started_at_ms: proof.started_at_ms, deadline_at_ms: proof.deadline_at_ms,
+      simulated_units_milli: proof.simulated_units_milli, ...(proof.result_hash !== undefined ? { result_hash: proof.result_hash } : {}) });
+  };
+  const snapshotRepairInput = (input, fields) => {
+    if (!record(input) || Array.isArray(input)) return input;
+    const snapshot = {};
+    for (const field of fields) {
+      if (field === "scope") snapshot.scope = snapshotRepairScope(input.scope);
+      else if (field === "proof") snapshot.proof = snapshotRepairProof(input.proof);
+      else snapshot[field] = input[field];
+    }
+    return Object.freeze(snapshot);
+  };
+  const queueInspectionRepair = (method, fields) => (input) => {
+    let snapshot;
+    try { snapshot = snapshotRepairInput(input, fields); }
+    catch (error) { return Promise.reject(error); }
+    const identityError = () => new VersionStoreError("unavailable", "database.identity", true);
+    const transactionError = () => new VersionStoreError("unavailable", "inspection.transaction", true);
+    try {
+      // A caller-owned BEGIN/SAVEPOINT has no queue owner and must remain
+      // untouched. A publication already holding this scheduler is allowed
+      // to finish before this request enters the queue.
+      if (store.db.isTransaction === true && !sqliteDatabaseOperationIsActive(store.db, identityError)) {
+        return Promise.reject(transactionError());
+      }
+    } catch (error) { return Promise.reject(error); }
+    return serial(() => {
+      // Reentrant awaits under our own active publication would otherwise
+      // hold the SQLite writer while waiting on work queued behind itself.
+      if (store.db.isTransaction === true) throw transactionError();
+      return inspectionRepairController[method](snapshot);
+    });
+  };
+  const inspectionRepair = Object.freeze({
+    limits: inspectionRepairController.limits,
+    startInspection: queueInspectionRepair("startInspection", ["scope", "inspection_id", "brief_hash", "design_hash"]),
+    recordRepairClaim: queueInspectionRepair("recordRepairClaim", ["scope", "inspection_id", "action_id", "request_hash", "repair_action", "simulated_units"]),
+    recordRepairOutcome: queueInspectionRepair("recordRepairOutcome", ["scope", "inspection_id", "action_id", "result_hash"]),
+    recordRepairOutcomeInPublication: inspectionRepairController.recordRepairOutcomeInPublication,
+    isClaimCurrent: queueInspectionRepair("isClaimCurrent", ["scope", "proof"]),
+    cancelInspection: queueInspectionRepair("cancelInspection", ["scope", "inspection_id"]),
+    getState: queueInspectionRepair("getState", ["scope", "inspection_id"]),
+  });
 
   const storage = {
     getBrief(input) { return serial(() => store.getBrief(input)); },
@@ -242,7 +318,10 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       // Publication calls this from completeIfActive while that adapter owns
       // the same connection's BEGIN IMMEDIATE transaction. Preserve a truly
       // synchronous final-owner-fence→CAS ordering inside that transaction.
-      if (transactionContext.getStore() === store) return store.commitCompositionRevision(input, transaction);
+      if (sqliteDatabaseOperationOwnedBy(store.db, store,
+        () => new VersionStoreError("unavailable", "database.identity", true))) {
+        return store.commitCompositionRevision(input, transaction);
+      }
       return serial(() => store.commitCompositionRevision(input, transaction));
     },
     inspectionRepair,
@@ -265,7 +344,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           brief_hash: input.brief_hash, design_version_id, design_hash: input.design_hash, artifact_id,
           artifact_hash: input.artifact_hash, parent_version_id, parent_design_hash, root_design_version_id,
           root_design_hash: input.root_design_hash };
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "inspection.session");
         try {
           const timestamp = store.timestamp();
           const job = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -349,7 +428,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const intent = safeJson(input?.intent, "inspection.stage.intent");
         const intent_json = canonicalSerialize(intent);
         const intent_hash = canonicalHash(intent);
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "inspection.stage");
         try {
           const timestamp = store.timestamp();
           const job = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -407,7 +486,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const result = safeJson(input?.result, "inspection.stage.result");
         const result_json = canonicalSerialize(result);
         const result_hash = canonicalHash(result);
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "inspection.stage");
         try {
           const timestamp = store.timestamp();
           const job = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -465,7 +544,9 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     },
     getHandoffContext(input) {
       const get = otherPorts.storage?.getHandoffContext;
-      return typeof get === "function" ? serial(() => get(input)) : Promise.resolve(null);
+      // This injected external read does not use SQLite. Keep it outside the
+      // database queue so unrelated I/O cannot delay local transactions.
+      return typeof get === "function" ? Promise.resolve().then(() => get(input)) : Promise.resolve(null);
     },
     async prepareDesignVersion(input) {
       return serial(async () => {
@@ -624,7 +705,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         if (!OPERATIONS.has(input.operation)) throw new VersionStoreError("invalid_request", "operation");
         const brief_id = input.scope.brief_id === undefined ? null : safeReference(input.scope.brief_id, "brief_id");
         const now = store.timestamp();
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job");
         try {
           const existing = store.db.prepare(`SELECT * FROM creative_jobs
             WHERE tenant_id=? AND project_id=? AND action_id=?`)
@@ -662,7 +743,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const job_id = safeReference(input.job_id, "job_id");
         const action_id = safeReference(input.action_id, "action_id");
         const request_hash = safeHash(input.request_hash, "request_hash");
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.resume");
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, job_id);
@@ -705,7 +786,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     },
     async authorizeDispatch(input) {
       return serial(() => {
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.dispatch");
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(input.scope.tenant_id, input.scope.project_id, input.job_id);
@@ -776,8 +857,14 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       // The send permit crosses a Finance await after authorizeDispatch has
       // committed. Re-read the durable owner state synchronously at the last
       // callback boundary; awaiting the serialized authorizer here would
-      // recreate the cancellation/lease race this check closes.
+      // recreate the cancellation/lease race this check closes. A scheduler
+      // can remain marked active for a microtask after its synchronous work
+      // has returned, so this final read validates identity but does not try
+      // to acquire the scheduler. It is read-only and rejects any live SQLite
+      // transaction before observing owner state.
       try {
+        sqliteDatabaseOperationIsActive(store.db,
+          () => new VersionStoreError("unavailable", "database.identity", true));
         // This check must not borrow a transaction opened by another caller
         // on the shared connection. In that case the reads could observe
         // uncommitted owner state, so fail closed without touching the caller's
@@ -832,7 +919,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           return Object.freeze({ status: "lease_lost" });
         }
         if (!sameDispatchFence(intent.context_fence_json, input.context_fence) ||
-            !contextFenceMatches(store, scope, input.context_fence)) {
+            !contextFenceMatches(store, scope, input.context_fence, { readOnlyBriefHistory: true })) {
           return Object.freeze({ status: "stale_context" });
         }
         // Context and permission checks above may read several owner rows. Do
@@ -882,7 +969,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           throw new VersionStoreError("unavailable", "handoff.durable_result_staging", true);
         }
         const scope = briefScope(input.scope, input.publication_fence?.brief_id);
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.publication");
         let transaction;
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -997,7 +1084,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       return serial(() => {
         store.assertNoBorrowedTransaction("job.failure.transaction");
         const scope = briefScope(input.scope, input.scope.brief_id ?? "job-scope");
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.failure");
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, input.job_id);
@@ -1039,7 +1126,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const action_id = safeReference(input.action_id, "action_id");
         const target_action_id = safeReference(input.target_action_id, "target_action_id");
         const request_hash = safeHash(input.request_hash, "request_hash");
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.cancel");
         try {
           const prior = store.db.prepare(`SELECT * FROM creative_cancel_requests WHERE tenant_id=? AND project_id=? AND action_id=?`)
             .get(tenant_id, project_id, action_id);

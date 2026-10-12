@@ -2,9 +2,6 @@
 name: Bug report
 description: A defect with a sanitized reproduction.
 title: '[<PREFIX>-NN][P#] Fix <symptom>'
-labels:
-- type:bug
-- bug
 body:
 - type: markdown
   attributes:

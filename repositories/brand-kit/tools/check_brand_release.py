@@ -48,6 +48,8 @@ def collect_check(root: Path, target: str, output: Path, number: int, timeout: i
     command = ["make", target]
     if target == "package-brand":
         command.append("BRAND_OUTPUT=" + str(output / "approved-brand.zip"))
+    elif target == "build-assets":
+        command.append("ASSET_OUTPUT=" + str(output / "asset-review"))
     started = datetime.now(timezone.utc).isoformat()
     begin = time.monotonic()
     environment = dict(os.environ)
@@ -135,16 +137,38 @@ def gate(root: Path, output: Path, timeout: int = 180) -> dict:
     # Record every command, including later checks after an earlier failure.
     outcomes = [collect_check(root, target, output, n, timeout) for n, target in enumerate(CHECKS, 1)]
     blockers, archive_info = [], None
+    archive_problem = "exact candidate archive or required approval inputs are unavailable"
     try:
-        data, manifest = dist.build_bytes(root, "review")
+        try:
+            data, manifest = dist.build_bytes(root, "approved")
+        except dist.DistributionError:
+            # Missing decisions must still leave a reviewable diagnostic, but the
+            # full proposal is not the file set of a future approved subset.
+            data, manifest = dist.build_bytes(root, "review")
+            archive_name, from_package = "review-brand.zip", False
+            dist.write_new(output / archive_name, data)
+            blockers.append("approved artifact unavailable; review archive is diagnostic only")
+        else:
+            # Bind acceptance to the actual package-brand result, including its
+            # manifest. A successful exit without the exact archive is insufficient.
+            archive_name, from_package = "approved-brand.zip", True
+            packaged = output / archive_name
+            if packaged.is_symlink() or not packaged.is_file():
+                archive_problem = "package-brand did not create a regular approved archive"
+                raise dist.DistributionError(archive_problem)
+            if dist.read_archive(packaged) != data:
+                archive_problem = "package-brand archive differs from the reproducible approved candidate"
+                raise dist.DistributionError(archive_problem)
         archive_info = {"source_sha": manifest["source_sha"], "archive_sha256": dist.digest(data),
                         "files_digest": manifest["files_digest"], "kind": manifest["kind"],
-                        "brand_version": manifest["brand_version"], "token_profile": manifest["token_profile"]}
-        dist.write_new(output / "review-brand.zip", data)
+                        "brand_version": manifest["brand_version"], "token_profile": manifest["token_profile"],
+                        "path": archive_name, "from_package_brand": from_package}
         record, missing = dist.accepted_record(root, source)
         blockers += missing + manual_problems(record, manifest["files_digest"])
     except (dist.DistributionError, OSError, TypeError, KeyError, ValueError, AttributeError):
-        blockers.append("exact candidate archive or required approval inputs are unavailable")
+        # Only locally selected fixed messages enter reports; nested exceptions
+        # may include input-derived or sensitive details.
+        blockers.append(archive_problem)
     for result in outcomes:
         if result["result"] != "pass":
             blockers.append(result["target"] + ": required command did not pass")

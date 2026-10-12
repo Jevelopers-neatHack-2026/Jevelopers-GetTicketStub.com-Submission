@@ -1411,21 +1411,21 @@ export interface InspectionSessionRecord extends Readonly<Omit<InspectionSession
 }
 export interface InspectionRepairPort {
   startInspection(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
-    inspection_id: string; brief_hash: string; design_hash: string }): Readonly<Record<string, unknown>>;
+    inspection_id: string; brief_hash: string; design_hash: string }): Promise<Readonly<Record<string, unknown>>> | Readonly<Record<string, unknown>>;
   recordRepairClaim(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
     inspection_id: string; action_id: string; request_hash: string; repair_action: string; simulated_units?: number | null }):
-    Readonly<Record<string, unknown>>;
+    Promise<Readonly<Record<string, unknown>>> | Readonly<Record<string, unknown>>;
   recordRepairOutcome(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
-    inspection_id: string; action_id: string; result_hash: string }): Readonly<Record<string, unknown>>;
+    inspection_id: string; action_id: string; result_hash: string }): Promise<Readonly<Record<string, unknown>>> | Readonly<Record<string, unknown>>;
   recordRepairOutcomeInPublication(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
     inspection_id: string; action_id: string; result_hash: string; proof: CreativeInspectionRepairFence }):
     Readonly<{ status: "recorded" | "cancelled"; result_hash?: string }>;
   isClaimCurrent(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
-    proof: CreativeInspectionRepairFence }): boolean;
+    proof: CreativeInspectionRepairFence }): Promise<boolean> | boolean;
   cancelInspection(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
-    inspection_id: string }): Readonly<Record<string, unknown>>;
+    inspection_id: string }): Promise<Readonly<Record<string, unknown>>> | Readonly<Record<string, unknown>>;
   getState(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string }):
-    Readonly<Record<string, unknown>> | null;
+    Promise<Readonly<Record<string, unknown>> | null> | Readonly<Record<string, unknown>> | null;
 }
 
 export interface InspectionInput {

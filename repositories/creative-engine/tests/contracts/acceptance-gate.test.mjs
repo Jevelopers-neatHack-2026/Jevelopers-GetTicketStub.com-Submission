@@ -43,6 +43,24 @@ test("canonical owner acceptance gate reports missing C01 and C02 agreements as 
   assert.match(api.stderr, /event_intelligence_producer/);
   assert.match(api.stderr, /trusted_project_membership/);
 
+  const controls = spawnSync(process.execPath, ["scripts/acceptance-gate.mjs", "controls"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(controls.status, 2, "the controls foundation must not imply CE-05/06/12 acceptance");
+  const controlsGate = JSON.parse(controls.stdout);
+  assert.equal(controlsGate.schema_version, "creative-controls-acceptance-result/v1");
+  assert.deepEqual(controlsGate.target, ["CE-05", "CE-06", "CE-12"]);
+  assert.equal(controlsGate.local_status, "offline-foundation-only");
+  assert.equal(controlsGate.acceptance_allowed, false);
+  assert.equal(controlsGate.provider_dispatches, 0);
+  assert.equal(controlsGate.paid_provider_calls, 0);
+  assert.ok(controlsGate.missing_owner_evidence.includes("creative_controls_consumer"));
+  assert.ok(controlsGate.pending_local_gates.some((gate) => gate.startsWith("R1:")));
+  assert.ok(controlsGate.pending_local_gates.some((gate) => gate.startsWith("E1:")));
+  assert.ok(controlsGate.pending_local_gates.some((gate) => gate.startsWith("R2:")));
+  assert.ok(controlsGate.pending_local_gates.some((gate) => gate.startsWith("Q:")));
+
   const brief = spawnSync("make", ["--no-print-directory", "--silent", "acceptance", "TARGET=brief"], {
     cwd: root,
     encoding: "utf8",
@@ -216,6 +234,7 @@ test("acceptance requires an accepted proposal, pinned input bytes, canonical sc
 
     const valid = await evaluateAcceptanceRecord(accepted, "contracts", tempRoot);
     assert.deepEqual(valid.unmet, []);
+    assert.deepEqual((await evaluateAcceptanceRecord(accepted, "controls", tempRoot)).unmet, []);
     assert.deepEqual((await evaluateAcceptanceRecord(accepted, "brief", tempRoot)).unmet, []);
     assert.deepEqual((await evaluateAcceptanceRecord(accepted, "metering-contract", tempRoot)).unmet, []);
     const telemetryAcceptedInputs = await evaluateAcceptanceRecord(accepted, "creative-metering", tempRoot);
@@ -230,6 +249,7 @@ test("acceptance requires an accepted proposal, pinned input bytes, canonical sc
     assert.equal(allAcceptedInputs.unresolved.length, 1);
     const pendingProposal = { ...accepted, proposal_state: "pending_external_owner_agreement" };
     assert.equal((await evaluateAcceptanceRecord(pendingProposal, "contracts", tempRoot)).unmet.length, 4);
+    assert.equal((await evaluateAcceptanceRecord(pendingProposal, "controls", tempRoot)).unmet.length, 7);
     assert.equal((await evaluateAcceptanceRecord(pendingProposal, "metering-contract", tempRoot)).unmet.length, 2);
     assert.equal((await evaluateAcceptanceRecord(pendingProposal, "creative-metering", tempRoot)).unmet.length, 2);
     assert.equal((await evaluateAcceptanceRecord(pendingProposal, "creative-metering", tempRoot)).unresolved.length, 1);

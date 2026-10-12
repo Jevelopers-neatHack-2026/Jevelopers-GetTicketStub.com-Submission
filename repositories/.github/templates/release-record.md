@@ -7,6 +7,7 @@ This template records an actual repository or assembled release. Replace every p
 - Release/repository:
 - Owner role and publication authority:
 - Release name/tag, if actually created:
+- Release notes/changelog reference, if used:
 - Source full commit SHA:
 - Governance package revision, if relevant:
 - Contract versions and catalog source revision:
@@ -24,6 +25,7 @@ This template records an actual repository or assembled release. Replace every p
 - Input/fixture identities and hashes:
 - Evidence URLs and hashes:
 - Compatibility and consumer acknowledgments:
+- Deprecation/withdrawal notice, replacement, migration, and effective date, or N/A with a reason:
 - Unknown cost/billing or other limitations:
 
 ## Decision and recovery
