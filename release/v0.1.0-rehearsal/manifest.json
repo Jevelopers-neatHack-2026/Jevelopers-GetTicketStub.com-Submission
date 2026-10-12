@@ -3,7 +3,7 @@
   "packageVersion": "v0.1.0-rehearsal",
   "releaseClass": "draft_rehearsal_only",
   "lifecycleState": "draft_rehearsal_only",
-  "candidateSourceCommitAtGeneration": "9ce9506499de7d4d72c6c838bd854d88b996f4d4",
+  "candidateSourceCommitAtGeneration": "8da0412419edb97321f9e50e4d4df61810da34df",
   "manifestGenerationTime": "Not self-certified; if needed, record the execution time in the separate release review record after this manifest is committed.",
   "contentAddresses": {
     "algorithm": "SHA-256",
@@ -4478,7 +4478,7 @@
       },
       "limitations": [
         "Draft templates only; no automatic posting or authorization to publish.",
-        "Team name, submitter, official post, cutoff, public repository URL, and demo URL remain pending."
+        "Team, project, and repository are known draft fields (review pending, not approved); submitter, public demo URL, official post, cutoff, and approvals remain pending."
       ],
       "evidenceClassification": "source documentation or rehearsal draft",
       "providerMode": "none or source-specific; no package paid calls",
@@ -7610,7 +7610,7 @@
     {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "a4f66b136211938f9b868015ca61864497c722ba90c1993053f0a7250e3a82b1",
+      "sha256": "dfab37d31e5085bd1510ef299749b33bc43fccc5c805d51ad3875abefa4bfc0f",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7644,7 +7644,7 @@
     {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "6b99d562a2acebe25babd27f45303c3b020f57e9ad90df911e4d0e7268ae99d9",
+      "sha256": "bca0a84aa1001c76df1fa8472c0c954b9e7bd5ad586b80744dd4fe67d9cb5dee",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7826,7 +7826,7 @@
     "docs/collateral-inventory.json": {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "a4f66b136211938f9b868015ca61864497c722ba90c1993053f0a7250e3a82b1",
+      "sha256": "dfab37d31e5085bd1510ef299749b33bc43fccc5c805d51ad3875abefa4bfc0f",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7860,7 +7860,7 @@
     "review/provenance.json": {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "6b99d562a2acebe25babd27f45303c3b020f57e9ad90df911e4d0e7268ae99d9",
+      "sha256": "bca0a84aa1001c76df1fa8472c0c954b9e7bd5ad586b80744dd4fe67d9cb5dee",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7962,8 +7962,8 @@
     "release/v0.1.0-rehearsal/package-spec.json": {
       "path": "release/v0.1.0-rehearsal/package-spec.json",
       "exists": true,
-      "sha256": "040761993433b65b90386b83b9354f0da4eb5e5e00cd01c6b604b113b8588281",
-      "sourceCommitId": "b3997f51375d0520126846eb73634ab3cf44cb6a",
+      "sha256": "8d482dbc2fb6ad0f4896b4a5150b63404fafe6238eee914a12f4516cdf2a852e",
+      "sourceCommitId": "4f5dc5d60c0cd25c86ea38e2ef80bf3bc4876415",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "json",
