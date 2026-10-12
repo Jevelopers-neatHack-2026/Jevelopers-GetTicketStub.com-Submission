@@ -1,0 +1,19 @@
+✔ actual source config, no-JS markup and local editor boundary are explicit (6.159917ms)
+✔ missing/invalid config cannot expose any external navigation (8.054666ms)
+✔ approved-shaped link fixtures carry only exact owner-allowlisted URL in each environment (5.262833ms)
+✔ unavailable service, pending owner or absent/nonimmutable/mismatched approval receipts disable the link (14.245917ms)
+✔ invalid scheme/origin/path, queries, fragments, credentials and private destinations fail closed (22.10625ms)
+✔ real pointer/Enter/preview/example/navigation handlers keep synthetic input local with reduced motion and blocked surfaces (2.763833ms)
+✔ tampered source config, named input and sending confirmation are rejected (2.288292ms)
+✔ limited thread receipt rejects malformed observation/approval scope and cannot migrate to another environment (12.862459ms)
+✔ actual live navigation target stays byte-identical after editing, chips, button clicks and Enter (0.795917ms)
+✔ invalid config must remove the real pre-existing native href; deletion mutant fails the safety assertion (2.675542ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 158.791542
+FAIL cta: Release CTA deployed revision/artifact identity, broader owner acceptance and browser evidence pending; navigation-only approval cannot pass release

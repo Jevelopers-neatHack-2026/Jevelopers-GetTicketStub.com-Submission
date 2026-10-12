@@ -1,0 +1,20 @@
+✔ actual static HTML has one valid head and consistent inventoried preview/social copy (1.680083ms)
+✔ preview, demo and staging never inherit production canonical, indexing or sitemap (0.195459ms)
+✔ synthetic approved production index/noindex fixtures enforce exact origin and real homepage inventory (0.480041ms)
+✔ production rejects missing origin, undecided indexing and every pending/missing owner receipt (0.424875ms)
+✔ production origin rejects preview hosts, private addresses and malformed/credential/query/path URLs (0.156042ms)
+✔ private app routes, aliases and section anchors cannot become indexable pages (0.118125ms)
+✔ head placement, duplicate and missing metadata regression fixtures fail (1.046958ms)
+✔ canonical/image/structured data leakage and missing ledger entries fail (1.419333ms)
+✔ invalid environments and unsupported image/structured decisions fail (0.11025ms)
+✔ loopback served artifact contains static metadata without JS and exposes no sitemap/robots/private route (36.440333ms)
+✔ approval receipts cannot silently authorize a changed origin or indexing decision (0.204208ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 161.389542
+FAIL metadata: Production origin pending: app/hosting owner must supply it
