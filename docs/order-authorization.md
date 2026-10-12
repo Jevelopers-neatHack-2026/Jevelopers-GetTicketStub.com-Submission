@@ -51,7 +51,7 @@ A 503 from the producer is its pre-commit `consumer_unavailable` answer, so it i
 
 ## Dispatch-time revalidation in the runtime
 
-`submit` passes `beforeTransport` to `execute` when the verifier implements `revalidateBeforeDispatch`. It runs before every transport request, including adapter retries, after the claim, attempt persistence and budget reservation, and before the request is sent. `rejected` is `stale_authorization`, a throw or malformed answer is `authorization_unavailable`; the side effect is `not_dispatched` until a request has been sent and `possible` after. The runtime's own `dispatching` metering record is written after this check and before the request; a lapse inside that local window is not rechecked (a limitation of using the existing `beforeTransport` point).
+`submit` passes a `beforeDispatch` hook to `execute` when the verifier implements `revalidateBeforeDispatch`. It runs before every transport request, including adapter retries, after the claim, attempt persistence, budget reservation and metering write, and before the request is sent. `rejected` is `stale_authorization`, a throw or malformed answer is `authorization_unavailable`; the side effect is `not_dispatched` until a request has been sent and `possible` after. The check is the last awaited step: it runs after the runtime's own `dispatching` metering write, and only synchronous mode and quote checks sit between its answer and the transport call. A lapse while that metering write is awaited therefore sends nothing and leaves `not_dispatched` evidence (metering outcome `not_dispatched`, attempt `not_dispatched`, reservation kept). The check's own request to the issuer is the remaining, unavoidable window.
 
 ## Redaction
 

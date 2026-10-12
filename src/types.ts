@@ -273,7 +273,9 @@ export interface AuthorizationVerifier {
   /**
    * Optional. A claim is not a promise that the authority still holds at
    * dispatch. When present, submit calls this immediately before EVERY
-   * transport request, including adapter retries, and sends nothing unless the
+   * transport request, including adapter retries, after every other awaited
+   * pre-dispatch step (including the dispatching metering write) with only
+   * synchronous checks between the answer and the request, and sends nothing unless the
    * answer is exactly `dispatchable`. `rejected` is a stale authorization and a
    * throw or malformed answer is an unavailable verifier. Verifiers without the
    * method behave exactly as before.

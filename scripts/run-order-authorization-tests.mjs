@@ -24,6 +24,7 @@ export const ORDER_AUTHORIZATION_SUITE_CASE_IDS = Object.freeze([
   "key.signing-key-rotation-after-lost-committed-response-replays-instead-of-stranding",
   "runtime.healthy-submit-revalidates-after-claim-and-before-the-single-dispatch",
   "runtime.lapse-during-budget-sends-nothing-and-is-stale-authorization",
+  "runtime.lapse-while-dispatching-metering-is-awaited-sends-nothing-and-keeps-evidence",
   "runtime.revalidate-failure-or-malformed-answer-is-authorization-unavailable",
   "runtime.adapter-retry-revalidates-before-every-transport-request",
   "runtime.verifiers-without-the-method-behave-as-before",

@@ -435,7 +435,7 @@ add("runtime.healthy-submit-revalidates-after-claim-and-before-the-single-dispat
   const token = h.issuer.issue();
   const response = await h.runtime.submit(envelope(submitCommand(token)), scope);
   assert.equal(response.value.providerRequestId, "request-fixture-1");
-  assert.deepEqual(h.events, ["budget", "transport"]);
+  assert.deepEqual(h.events.filter((event) => event !== "metering:attempt_prepared" && event !== "metering:provider_accepted"), ["budget", "metering:dispatching", "transport"]);
   assert.deepEqual(kinds(h.http), ["claim", "revalidate", "revalidate"]);
   assert.equal(h.state.transportCalls.length, 1);
 });
@@ -458,6 +458,25 @@ add("runtime.lapse-during-budget-sends-nothing-and-is-stale-authorization", asyn
     assert.equal(attempt.budgetReservationState, "reserved", name);
     assert.equal(attempt.sideEffectState, "not_dispatched", name);
     assert.deepEqual(kinds(h.http), ["claim", "revalidate", "revalidate"], name);
+  }
+});
+
+add("runtime.lapse-while-dispatching-metering-is-awaited-sends-nothing-and-keeps-evidence", async () => {
+  const lapses = {
+    revoked: async ({ issuer }) => { await Promise.resolve(); issuer.revoke("oau_SIM_1"); },
+    expired: async ({ clock }) => { await Promise.resolve(); clock.current += 20 * 60_000; },
+    "approval-revoked": async ({ issuer }) => { await Promise.resolve(); issuer.approval = "revoked"; }
+  };
+  for (const [name, lapse] of Object.entries(lapses)) {
+    const h = createRuntimeHarness({ onDispatchingMetering: lapse });
+    await expectConnectorError(h.runtime.submit(envelope(submitCommand(h.issuer.issue())), scope), "stale_authorization", "not_dispatched");
+    assert.equal(h.state.transportCalls.length, 0, name);
+    assert.deepEqual(h.state.observations, ["attempt_prepared", "dispatching", "not_dispatched"], name);
+    assert.deepEqual(h.events.filter((event) => event !== "metering:attempt_prepared"), ["budget", "metering:dispatching", "metering:not_dispatched"], name);
+    assert.deepEqual(kinds(h.http), ["claim", "revalidate", "revalidate"], name);
+    const [attempt] = [...h.state.attempts.values()];
+    assert.equal(attempt.sideEffectState, "not_dispatched", name);
+    assert.equal(attempt.budgetReservationState, "reserved", name);
   }
 });
 

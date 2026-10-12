@@ -434,7 +434,7 @@ export function createRuntimeHarness(options = {}) {
   const verifierParts = options.verifierParts ?? createVerifierHarness(options);
   const { clock } = verifierParts;
   const events = [];
-  const state = { transportCalls: [], budgetCalls: 0, adapterCalls: 0, attempts: new Map(), events };
+  const state = { transportCalls: [], budgetCalls: 0, adapterCalls: 0, attempts: new Map(), events, observations: [] };
   const bindings = createBindings(options.bindingOverrides);
   const contracts = {
     binding: (shape) => bindings.get(shape),
@@ -512,6 +512,9 @@ export function createRuntimeHarness(options = {}) {
         providerId === PROVIDER_ID && runtimeMode === mode && suppliedScope.tenantId === requestedScope.tenantId && suppliedScope.projectId === requestedScope.projectId,
       async replayPending() { return { pending: 0, failures: [] }; },
       async recordObservation(observation) {
+        state.observations.push(observation.outcome);
+        events.push(`metering:${observation.outcome}`);
+        if (observation.outcome === "dispatching" && options.onDispatchingMetering) await options.onDispatchingMetering(verifierParts);
         const validation = await contracts.validateOutbound({
           operation: observation.operation, requiredShapes: ["fulfillment_usage"],
           value: { ...structuredClone(observation), providerId: PROVIDER_ID, mode }, trustedScope: requestedScope

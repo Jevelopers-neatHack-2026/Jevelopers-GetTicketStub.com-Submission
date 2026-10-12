@@ -51,6 +51,12 @@ const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/;
 
 interface ExecuteHooks<T> {
   readonly beforeTransport?: (transportCalled: boolean) => void | Promise<void>;
+  /**
+   * Awaited as the LAST asynchronous step before a transport request: after the
+   * dispatching metering write, followed only by synchronous mode and quote
+   * checks and then the transport call itself.
+   */
+  readonly beforeDispatch?: (transportCalled: boolean) => Promise<void>;
   readonly assertPreDispatch?: (transportCalled: boolean) => void;
   readonly onSuccess?: (value: T, sideEffectState: AttemptEffectState) => Promise<void>;
   readonly onFailure?: (sideEffectState: AttemptEffectState) => Promise<void>;
@@ -394,7 +400,7 @@ export class FulfillmentConnectorRuntime {
           quoteAmount: quoteAmountEvidence(command.quote.totalMinor, command.quote.currency)
         },
         ...(typeof this.dependencies.authorizationVerifier.revalidateBeforeDispatch === "function" ? {
-          beforeTransport: (transportCalled: boolean) => this.revalidateAuthorizationBeforeDispatch(
+          beforeDispatch: (transportCalled: boolean) => this.revalidateAuthorizationBeforeDispatch(
             authorization,
             authorizationClaim,
             transportCalled
@@ -641,8 +647,11 @@ export class FulfillmentConnectorRuntime {
               effect: operationEffect
             }, true, transportCalled ? "possible" : "not_dispatched");
           }
-          // Metering validation and delivery are asynchronous boundaries. Recheck
-          // mutable mode and immutable quote facts immediately before transport.
+          // Metering validation and delivery are asynchronous boundaries, so the
+          // dispatch-time authorization check runs after them. Nothing awaited
+          // may sit between this hook and the transport call below.
+          if (hooks.beforeDispatch !== undefined) await hooks.beforeDispatch(transportCalled);
+          // Recheck mutable mode and immutable quote facts immediately before transport.
           this.assertRuntimeMode(operation);
           hooks.assertPreDispatch?.(transportCalled);
           transportCalled = true;
@@ -930,7 +939,8 @@ export class FulfillmentConnectorRuntime {
   /**
    * A claim is not a promise that the authority holds at dispatch. Budget,
    * persistence and metering all run between the claim and the transport, so an
-   * optional verifier revalidates immediately before every transport request.
+   * optional verifier revalidates immediately before every transport request:
+   * after the dispatching metering write, with only synchronous checks left.
    */
   private async revalidateAuthorizationBeforeDispatch(
     authorization: AuthorizationCheck,
