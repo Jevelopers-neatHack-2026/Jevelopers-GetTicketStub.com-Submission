@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 // Keep the configured-export regression cases in the existing required exports suite.
 import './prepared-exports.test.mjs';
+import './query-export-composition.test.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const integrationApi = await import('../../dist/integrations/index.js');

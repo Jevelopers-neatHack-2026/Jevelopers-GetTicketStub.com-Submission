@@ -24,6 +24,7 @@ const combinedValidators = Object.freeze({
   LedgerAppendRequestSchema: 'validateLedgerAppendRequestBoundary',
   LedgerProjectionRequestSchema: 'validateLedgerProjectionRequestBoundary',
   ExportRequestSchema: 'validateExportRequestBoundary',
+  ReportingExportRequestSchema: 'validateReportingExportRequestBoundary',
 });
 const entries = [
   ['shared', 'ErrorEnvelopeSchema'], ['shared', 'TrustedScopeSchema'],
@@ -53,6 +54,9 @@ const pricingV2Names = [
   ['SourceReferenceSchema', 'SourceReferenceSchema'], ['PricingPartitionGroupSchema', 'PricingPartitionGroupSchema'],
 ].map(([name, exportName]) => ({ module: 'pricing', name, exportName, schema: api[exportName], version: pricingV2Version }));
 entries.push(...pricingV2Names);
+for (const name of ['ReportingExportRequestSchema', 'ReportingExportManifestSchema', 'ReportingExportReceiptSchema']) {
+  entries.push({ module: 'integrations', name, exportName: name, schema: api[name], version: '2.0.0' });
+}
 for (const exportName of ['FinancialSummaryFiltersV2Schema', 'FinancialSummaryQueryV2Schema', 'ReportingDimensionSchema', 'ReportingAmountSchema', 'ReportingDetailSchema', 'ReportingCurrencySummarySchema', 'ReportingProductEvidenceSchema', 'ReportingProjectionSchema', 'FinancialSummaryPageV2Schema']) {
   entries.push({ module: 'reporting', name: exportName.replace('V2Schema', 'Schema'), exportName, schema: api[exportName], version: '2.0.0' });
 }
@@ -80,7 +84,7 @@ for (const entry of entries) {
 const contractLock = JSON.parse(await readFile(join(root, 'contracts.lock.json'), 'utf8'));
 const manifest = {
   schema_version: version,
-  schema_versions: { pricing: [version, pricingV2Version], reporting: [version, '2.0.0'] },
+  schema_versions: { pricing: [version, pricingV2Version], reporting: [version, '2.0.0'], integrations: [version, '2.0.0'] },
   package: '@jevelopers/cost-intelligence',
   shared_contracts: {
     package: contractLock.producer.package,

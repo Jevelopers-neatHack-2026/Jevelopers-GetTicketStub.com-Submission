@@ -8,6 +8,10 @@
     "reporting": [
       "1.0.0",
       "2.0.0"
+    ],
+    "integrations": [
+      "1.0.0",
+      "2.0.0"
     ]
   },
   "package": "@jevelopers/cost-intelligence",
@@ -561,6 +565,34 @@
       "path": "schemas/cost-intelligence/2.0.0/pricing/PricingPartitionGroupSchema.json",
       "completeness": "complete",
       "sha256": "06e14940451ddc69a66b8e61d5293a21d6cd3117f5942a8d991baf8c0564fa69"
+    },
+    {
+      "module": "integrations",
+      "name": "ReportingExportRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "ReportingExportRequestSchema",
+      "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateReportingExportRequestBoundary",
+      "sha256": "1c97ba0d69cd0e5d18baa4b2490e87be2ea57e16a4784e54ec34497dd4989a23"
+    },
+    {
+      "module": "integrations",
+      "name": "ReportingExportManifestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "ReportingExportManifestSchema",
+      "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportManifestSchema.json",
+      "completeness": "complete",
+      "sha256": "7b101a9f29a6945f7ee86406ed9da4045e50de938420d6f22f1cb1b657cc3fb8"
+    },
+    {
+      "module": "integrations",
+      "name": "ReportingExportReceiptSchema",
+      "schema_version": "2.0.0",
+      "export_name": "ReportingExportReceiptSchema",
+      "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "703d3b7501084c88bd5db16a99ed4a044f10f0325d29054b77504d717ce0f92f"
     },
     {
       "module": "reporting",

@@ -1,153 +1,187 @@
 # Prepared financial exports — Finance proposal 2.0.0
 
-Configured `exportSummary` prepares immutable files and returns the unchanged
-`ExportManifest@1.0.0`. The integrations subpath also provides
-`exportSummaryV2` and `getPreparedExportArtifacts`, which return the legacy
-manifest, `ExportArtifactManifestV2@2.0.0`, and sanitized artifact bytes. These
-are Finance-owned proposals. They do not adopt or replace shared
-`FinancialSummary@1.0.0` in shared-contracts 0.3.0. The dashboard SDK 0.9.7 at
-`d432ad5c` has a separate compatibility/consumer-acknowledgement gate.
+The configured public exporter prepares immutable JSON/CSV files from the same
+verified stored query snapshot. An unconfigured call returns typed
+`SOURCE_UNAVAILABLE`. Caller summaries, hashes, `requestedBy` and evidence-mode
+labels establish no source or accounting authority.
 
-This checkpoint verifies synthetic configured adapters only. The actual CI-08
-PostgreSQL snapshot reader, producer hash agreement, mixed-mode query-to-export
-oracle and consumer ACK remain pending. An unconfigured call returns typed
-`SOURCE_UNAVAILABLE`; supplying a caller summary does not configure a source.
+| Input | Public result | Compatibility |
+| --- | --- | --- |
+| `ExportRequest@1.0.0` through `exportSummary` | Unchanged `ExportManifest@1.0.0` | Existing legacy shape retained |
+| `ExportRequest@1.0.0` through `exportSummaryV2` or `getPreparedExportArtifacts` | Legacy manifest plus `ExportArtifactManifestV2@2.0.0` and bytes | Registered UUID, single-currency canonical mapping |
+| `ReportingExportRequest@2.0.0` through `exportSummaryV2` or `getPreparedExportArtifacts` | `ReportingExportReceipt@2.0.0`: `ReportingExportManifest@2.0.0` and bytes | Finance-owned rich projection proposal; opaque scopes and separate currency blocks supported |
 
-The configured-export tests produce executed synthetic examples in the local
-`artifacts/export-samples/` directory:
-versioned JSON, the metric CSV, both manifests and an external hash/byte-count
-index. They contain fictional fixture amounts and pending-owner definitions.
-They are import-format examples, not actual Finance/producer/consumer receipts.
+These wrappers do not replace shared `FinancialSummary@1.0.0` in package
+shared-contracts 0.3.0. Dashboard SDK 0.9.7 at `d432ad5c` remains a distinct
+version. Dashboard's synthetic consumer revision
+`840231c1753157bac309cb8f8d2c4b3d26690747` has not acknowledged this producer
+or the four structured simulated `ReportingAmount` fields. Canonical adoption,
+mounted host acceptance, consumer ACK and CFO import remain pending.
 
-## Host composition and authority
+## Concrete host composition
 
-`ExportRuntimePorts` extends the existing runtime locally with optional
-`exports.snapshotReader` and `exports.artifactStore`. Shared `RuntimePorts` is
-unchanged. The provisional trusted reader contract is:
+`createReportingExportRuntimePorts(reportingPorts, legacyStore, reportingStore)`
+composes the existing public Finance PostgreSQL snapshot readers. The stores
+are reviewed host artifact storage, never financial balances. Shared
+`RuntimePorts` is unchanged; integrations defines its optional local extension.
 
 ```ts
-readVerifiedSnapshot({ scope, snapshotId, summaryContentHash, queryContentHash })
-  // Promise<FinancialSummaryPage | null>
+const ports = createReportingExportRuntimePorts(
+  reportingPorts,
+  createFileExportArtifactStore({ directory, receiptKey }),
+  createFileReportingExportArtifactStore({ directory, receiptKey }),
+);
+const result = await exportSummaryV2(request, ports);
 ```
 
-The reader must retrieve the immutable stored query page in the authenticated
-tenant/project/environment/billing scope and verify its producer provenance.
-It must never echo the caller's `summarySnapshot`. The exporter validates the
-complete pinned canonical payload, exact scope, summary SHA-256, full expected
-snapshot envelope, and absence of continuation pages. The pending producer
-handoff must additionally establish the normalized query hash, policy and
-watermark semantics against actual stored source rows.
+The reader retrieves the scoped immutable stored original first page and
+checks current authority, reporting health, privacy quarantine, normalized
+query/source/projection hashes and producer provenance. Export checks the
+complete expected envelope excluding only `requestId`, the exact scope and
+all registered canonical economics. `hasMore: true` is supported because the
+first page contains the full aggregate. A submitted continuation page differs
+from the original first page and returns `IDEMPOTENCY_CONFLICT`.
 
-Every operation requires current `integrations.exportSummary` /
-`finance.summary.export` authorization before any source or artifact lookup,
-serialization or storage. Current authority is checked again after each async
-storage/source wait, before publication and after the persistence await.
-The principal must have an active current membership/service grant and the
-exact bound scope. `requestedBy`, application roles and display access are not
-authority. Retrieval performs the same checks and freshly verifies the source.
-The low-level artifact-store adapter is for a trusted host and is not an
-independently authorized public endpoint.
+The exact selected query source is `22a3237dd44f376017969ac881586ff396f19cf8`
+with the reporting migration compatibility prerequisite
+`3920a4689b076fd9bdf5ed3aa71764016c1da33d`. Its immutable definition-registry
+fixture SHA-256 is
+`577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1`;
+canonical registry hash is
+`sha256:827ac8d4e37adc354dc8721d4f34c4c3bfb0039b318ae769ed8fec3e249055c2`.
+Exporter privately deep-copies/freezes the pinned registry before any await,
+checks definition bodies, UUID references and policy hashes, and applies shared
+`checkFinancialSummary` with independently resolved references. Definitions
+remain Finance-owned proposals pending supervisor adjudication, not caller
+same-name aliases. `ReportingExportRequestSchema` is explicitly marked partial:
+use `validateReportingExportRequestBoundary` for nested canonical semantics.
 
-Dashboard issuer actions `finance.read` / `finance.export` are not the Finance
-permissions `finance.summary.read` / `finance.summary.export`. This module
-does not translate or elevate them; an explicitly reviewed Product host
-adapter and mounted issuer acceptance remain external prerequisites.
+Every public operation requires current `integrations.exportSummary` /
+`finance.summary.export` before snapshot/artifact lookup, serialization or
+storage. The composed source also requires current `finance.summary.read`.
+Scope includes tenant, project, actor, environment and billing mode. Grants,
+revocation and expiry are freshly checked after async source/storage waits and
+before response. Request/scope are privately copied and frozen before the first
+await. Dashboard `finance.read` / `finance.export` actions are not these Finance
+permissions; reviewed Product adapter and mounted issuer acceptance remain
+external prerequisites. A low-level store is a trusted host port, not a public
+authorized endpoint.
 
-## Bytes, tables and redaction
+## Amounts, tables and privacy
 
-Every preparation creates both `summary.json` and `metrics.csv`, regardless of
-the selected manual-consumer representation. JSON is recursively key-sorted,
-UTF-8, without BOM, with a final LF. Arrays retain their defined ordering.
-CSV uses the existing protected encoder, UTF-8 without BOM and CRLF records.
-Money is a typed canonical signed decimal at its declared scale; excess
-nonzero precision is rejected, never rounded. Negative money stays numeric.
-Unknown amounts are JSON `null` and empty CSV cells with explicit `unknown`
-status. Missing metrics stay absent and unavailable.
+Every preparation produces both `summary.json` and `metrics.csv`, regardless
+of selected manual representation. JSON is recursively key-sorted UTF-8,
+without BOM, final LF. CSV uses the existing protected encoder, UTF-8, no BOM,
+CRLF records. Money retains exact signed decimals at declared scale; nonzero
+excess precision fails instead of rounding. Text uses the existing normalized
+formula/control/malformed-text policy. Unknown totals are JSON null and empty
+CSV cells, with status and unknown count. No missing bill becomes zero.
 
-CSV columns are `metric`, `definition`, `definition_status`, `status`,
-`currency`, `scale`, `amount`, `valuation_basis`, `completeness`,
-`reconciliation`, `period_start`, `period_end`, `timezone`, `environment`,
-`billing_mode`, `summary_content_hash`, `query_content_hash`.
+Legacy CSV columns remain documented by its existing artifact schema. Rich
+2.0.0 CSV columns are `currency`, `scale`, `metric`, `recognition`, `definition`,
+`status`, `known_subtotal`, `total`, `unknown_count`, `period_start`, `period_end`,
+`timezone`, `environment`, `billing_mode`, `projection_content_hash`,
+`query_content_hash`. Each currency has seven actual rows and four simulated
+rows. JSON retains groups, coverage, reconciliation counts, expense valuation,
+advisory lifetime budgets, allocations and approved-denominator unit costs.
 
-The finite proposed dictionary covers `expense`, `gross_sales`, `net_sales`,
-`direct_costs`, `contribution`, `cash_receipts`, `cash_payouts` and `cash_net`.
-Each included row carries its static definition, local definition hash and
-the producer definition's version/revision/hash. All definitions remain
-`pending_owner_review` under the documented CI-06 default mapping. Those
-mapping versions are not proof that an arbitrary canonical source applied
-CI-06: actual applied policy/allocation provenance needs the trusted query
-handoff. Unsupported keys, currencies or definition contracts return typed
-`UNSUPPORTED_VERSION`; this configured path does not silently export only
-expense. Summary-wide valuation basis is retained as supplied and is not a
-per-metric confirmed/estimated breakdown.
+Actual metrics are `expense`, `gross_sales`, `net_sales`, `direct_costs`,
+`contribution`, `cash_receipts`, `cash_payouts`. The query applies their pinned
+policy; exporter copies amounts without a second accounting calculation.
+Expense and direct costs are different definitions. `cash_net` is explicitly
+`not_supplied_by_query` in `unavailableMetrics`, with null amounts, and has no
+invented CSV row. Simulated expense/gross/net/direct amounts retain
+`{ status, knownSubtotal, total, unknownCount }` independently and never enter
+actual recognition. Known subtotals stay separate from partial/unknown totals.
+Expense estimated/confirmed axes are currency aggregates; per-metric valuation
+is `not_supplied_by_query`. Currency blocks are never combined without sourced
+conversion. Forecast and business-plan assumptions are empty and `not_supplied`.
 
-Phase 1 accepts only `evidenceMode: "mocked"` with an explicit host
-`syntheticFixtureRegistry` binding the exact summary hash, policy reference and
-every metric definition reference. Its mode must be `synthetic_only`.
-Sandbox/live export preparation is rejected until an immutable Finance-owned
-registered UUID definition/policy domain mapping and actual query reader are
-reviewed. A synthetic registry cannot grant actual accounting authority.
+Public artifacts contain static approved labels, dates, enum states, amounts,
+registered definition references and necessary opaque SHA-256 associations.
+Tenant/project/actor, raw financial-event/provider/customer identifiers,
+prompts, addresses, credentials and caller labels are omitted. Group values,
+source revisions, allocation targets and private evidence-reference IDs are
+hashed; unapproved source names become `unclassified_source`. The restricted
+original snapshot/envelope association remains bound through request hash and
+trusted reader. Artifacts never copy raw internal detail rows. Evidence mode is
+a requested label: `sourceEvidenceStatus: not_exposed_by_query` explicitly
+states that query data supplies no provider activity or rate-evidence attestation.
 
-Only approved static labels, dates, numeric amounts, currency/status enums and
-necessary snapshot/summary references flow into artifacts. Tenant/project,
-actor, customer, provider-request, financial-event and raw source-reference
-IDs are omitted. Source hashes are retained; source revision text is hashed.
-Unrecognized coverage/source names become `unclassified_source`, retaining
-the gap count. Prompts, addresses, credentials, raw exception messages and
-caller labels are never copied. Forecast and business-plan assumptions are
-explicitly `not_supplied`, with empty arrays; none are inferred from events.
+The legacy standalone fixture configuration still requires an explicit
+`synthetic_only` registry and mocked evidence. It does not establish actual
+accounting authority. The concrete producer bridge uses the pinned Finance
+registry for both supported query versions.
 
-## Immutable preparation and retries
+## Immutable persistence
 
-An idempotency key is scoped by tenant/project/environment/billing mode and
-current actor. Its fingerprint includes the complete expected economic
-snapshot, scope, format, destination and evidence mode. Snapshot `requestId`
-and export `requestId`, `requestedAt`, `requestedBy` are transport metadata
-and are excluded. Changed content under the same key returns
-`IDEMPOTENCY_CONFLICT`. Public manifest `requestId` is the opaque export
-reference, so caller text cannot leak into the handoff.
+Keys include wrapper version and full bound scope. Fingerprints include full
+first-page economics/provenance, destination, format and evidence mode. Only
+export `requestId`, `requestedAt`, `requestedBy` and snapshot `requestId` are
+transport metadata excluded from the economic fingerprint. Changed snapshot,
+format or evidence under the same key returns `IDEMPOTENCY_CONFLICT`.
 
-`createFileExportArtifactStore({ directory, receiptKey })` is a concrete host-managed
-local adapter: it fsyncs one complete bytes-and-receipts file and publishes
-that file using an exclusive atomic hard link. Existing files are never
-overwritten. Concurrent preparations return the immutable original, including
-its first actual `createdAt`. A lost persistence acknowledgement leaves the
-original bundle available for a retry. The host retains a separate HMAC-SHA256
-receipt key (at least 32 bytes) across restarts; it authenticates the full
-immutable record, first actual preparation time and restricted source binding.
-`verifyOriginal` checks the independently authenticated original before replay.
-The exporter privately copies and freezes lookup/commit results immediately
-when the adapter returns them. Validation, original-receipt verification and
-the response use that same immutable copy across later authorization waits;
-a shared adapter cache alias cannot change authenticated response bytes.
-Coherently changing both public receipt timestamps therefore fails verification.
-Tests use a fixture-only local key; no provider credential is loaded. Changing
-the receipt key makes earlier records unreadable until the host restores the
-original key; rotation/migration is a separate host lifecycle obligation.
-Symlink files are not followed and
-malformed, oversized or mismatched receipts fail closed. The host owns directory
-permissions and lifecycle; this is artifact persistence, not a ledger.
+Filesystem adapters fsync bytes/receipts and publish using an exclusive atomic
+hard link; prior records are never overwritten. HMAC-SHA256 authenticates the
+full original record, first trusted-clock preparation time and source binding.
+The host retains its receipt key (minimum 32 bytes) across restarts. Rotation
+requires a host lifecycle policy. Custom stores must provide immutable commit
+and independently authenticated `verifyOriginal` semantics. Export immediately
+private-copies/freezes lookup and commit returns, validates/authenticates and
+returns the same frozen copy across final authority waits. A mutable shared
+adapter alias cannot alter authenticated success bytes. Receipt/source/format
+metadata and exact bytes are validated before replay. Lost commit acknowledgement
+retries return the original result, including original `createdAt`.
 
-Public snapshot/watermark references are opaque SHA-256 aliases. The raw
-producer references stay in the restricted authenticated storage binding,
-associated with the exact summary/query hashes, and never enter public files.
-Shared `checkFinancialSummary` validates coverage, period, scale/currency,
-policy and every independently registered UUID reference in addition to
-structural validation. Request/scope and the trusted synthetic registry are
-deep-copied and frozen before the first asynchronous authorization call.
+Content hashes cover exact file bytes; artifact-set hash covers ordered
+name/media/hash/byte-length receipts. Actual preparation time is outside the
+content-hash boundary and is never relabelled query `asOf`. Same frozen snapshot
+produces deterministic files under different keys. Requests, source envelopes,
+individual artifacts and stored bundles are bounded to 1 MiB; rich format
+supports at most 100 currency blocks/1100 CSV metric rows, bounded object count
+and depth. Malformed/oversized/symlink/authentication-mismatched receipts fail
+closed. Errors are opaque and contain no raw adapter exception or source data.
 
-Artifact hashes cover exact file bytes. `artifactSetHash` covers ordered
-name/media-type/hash/byte-count receipts. Creation time belongs to preparation
-metadata, outside those deterministic content hashes; it is actual trusted
-clock time, never the query `asOf`. A frozen snapshot produces identical
-content hashes even when a different export key is prepared later. Stored
-receipt economics and bytes are checked against the freshly verified source
-before replay. Requests, source envelopes and persisted bundles are bounded
-to 1 MiB; at most 100 metric rows are supported. Errors carry opaque diagnostic
-references and no source content.
+## Executed and pending verification
 
-`prepared` / `manual_prepared` records executed local preparation only.
-`deliveryReference` stays null. No connector, delivery, sponsor plan,
-owner-approved accounting dictionary, live billing completeness or consumer
-acceptance is implied. CI-08X.1–.4 and DASH-04 stay pending until their actual
-source, compatibility and external acceptance evidence is complete.
+The default exports suite covers legacy preparation, CSV hardening, package
+exports, schema compatibility and pure public-port composition. The latter
+uses a labeled synthetic SQL port, not PostgreSQL evidence. Disposable real
+PostgreSQL composition is selected explicitly:
+
+```sh
+npm run build --silent && node scripts/with-postgres.mjs exports --suite=postgres
+```
+
+It appends final-boundary-validated synthetic events through public ledger APIs,
+then queries, reads the same stored snapshot and exports actual JSON/CSV bytes.
+Direct oracles cover expense/cash separation, corrected cash, reversal lineage,
+unknown simulation, actual test-mode cost separation, first-page pagination,
+legacy/rich versions, opaque scopes, mixed currencies, exact decimals,
+idempotency, restart, grants and revocation. It fails closed without the approved
+disposable database configuration; no mocked fallback or skipped PG tests exist.
+
+Local Docker is blocked by read-only daemon metadata. This candidate has no
+passing composed PG receipt yet; genuine hosted CI and fresh whole-candidate
+review remain required. `artifacts/exports/synthetic-sql-composition.json` is a
+pure example; `artifacts/exports/postgres-composition.json` is written only by
+the actual PG test and records failures/results without private store keys.
+Earlier failures are retained. `prepared` / `manual_prepared` means executed
+artifact preparation only; delivery reference remains null. CI-08X.1–.4,
+DASH-04, live-billing completeness and external consumer acceptance are not
+closed from this checkpoint. SPN-03 is established only by the external plan
+owner's actual evidence, never by export creation.
+
+The selected migration file set is 0001–0010 plus separate reporting capability
+0012 (11 files); no 0011 budget migration is part of this export candidate.
+Core health remains the original ten-migration check. Only a genuine database
+receipt establishes which files were actually applied. The CI uploader's
+`migrations-*.log` allowlist is source-verified to receive sanitized container
+logs, not JavaScript TAP/assertion output. Future uploaded bytes still require
+inspection; a missing per-case assertion message is not diagnostic evidence.
+
+[The eleven-scenario coverage catalog](../../fixtures/exports/global-scenario-coverage.json)
+records the authoritative domain source path and pending receipt for every
+required global scenario. It distinguishes export's composed oracles from
+budget/intake/recovery/accounting responsibilities and establishes no unrelated
+issue or global acceptance completion.

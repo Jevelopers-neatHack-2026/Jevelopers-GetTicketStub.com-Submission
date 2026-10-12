@@ -111,4 +111,7 @@ export async function exportSummary(request: ExportRequest, ports: ExportRuntime
 
 export { exportSummaryV2, getPreparedExportArtifacts, hashExportCanonical, ExportArtifactManifestV2Schema } from './runtime.js';
 export type { ExportRuntimePorts, ExportSnapshotReaderPort, ExportArtifactStorePort, ExportArtifact, ExportArtifactManifestV2, PreparedExportArtifacts, StoredExportArtifacts } from './runtime.js';
-export { createFileExportArtifactStore } from './artifact-store.js';
+export { createFileExportArtifactStore, createFileReportingExportArtifactStore } from './artifact-store.js';
+export { createReportingExportRuntimePorts, REPORTING_EXPORT_REGISTRY_PIN } from './reporting-bridge.js';
+export { validateReportingExportRequestBoundary, ReportingExportRequestSchema, ReportingExportManifestSchema, ReportingExportReceiptSchema } from './reporting-export.js';
+export type { ReportingExportRequest, ReportingExportManifest, ReportingPreparedExportArtifacts, ReportingStoredExportArtifacts, ReportingExportArtifactStorePort } from './reporting-export.js';

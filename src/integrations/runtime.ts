@@ -6,6 +6,8 @@ import { authorizeFinanceOperation, errorEnvelope, failure, validateRequest, Tru
 import { validateFinancialSummaryPageBoundary, type FinancialSummaryPage } from '../reporting/index.js';
 import { ExportManifestSchema, validateExportRequestBoundary, type ExportManifest, type ExportRequest } from './index.js';
 import { encodeCsv, encodeMoneyCell, encodeTextCell, type CsvCell } from './csv.js';
+import { reportingExportBridge, checkRegisteredCanonicalSummary, type ReportingExportBridge } from './reporting-bridge.js';
+import { prepareReportingExport, type ReportingExportRequest, type ReportingPreparedExportArtifacts } from './reporting-export.js';
 
 const MAX_BYTES = 1_048_576;
 const MAX_METRICS = 100;
@@ -131,6 +133,8 @@ function boundedInput(value: unknown): boolean {
         bytes += new TextEncoder().encode(key).length;
         if (bytes > MAX_BYTES || !visit(child, depth + 1)) return false;
       }
+      // Repeated immutable subobjects are valid JSON; only an ancestor cycle is rejected.
+      seen.delete(item);
     }
     return bytes <= MAX_BYTES;
   };
@@ -193,15 +197,15 @@ function storedMatchesSource(stored: StoredExportArtifacts, page: FinancialSumma
     && detail.snapshotEnvelopeHash === hashExportCanonical(snapshotEnvelope(page));
 }
 
-function projectDocument(page: FinancialSummaryPage, evidenceMode: ExportRequest['evidenceMode']) {
+function projectDocument(page: FinancialSummaryPage, evidenceMode: ExportRequest['evidenceMode'], bridge?: ReportingExportBridge) {
   const summary = page.summary;
   const entries = Object.entries(summary.metrics).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   if (entries.length === 0 || entries.length > MAX_METRICS
       || entries.some(([name]) => !Object.hasOwn(DEFINITIONS, name))) throw new UnsupportedExport();
   const metrics = entries.map(([metric, value]) => {
-    if (value.definition_ref.contract !== 'MetricDefinition') throw new UnsupportedExport();
+    if (value.definition_ref.contract !== (bridge ? bridge.registry.metrics[metric]?.reference.contract : 'MetricDefinition')) throw new UnsupportedExport();
     if (value.status === 'known' && value.value.currency !== summary.currency) throw new UnsupportedExport();
-    const definition = DEFINITIONS[metric as keyof typeof DEFINITIONS];
+    const definition = bridge ? bridge.registry.metrics[metric]!.definition.formula : DEFINITIONS[metric as keyof typeof DEFINITIONS];
     return {
       metric, definition, definitionStatus: 'pending_owner_review' as const,
       definitionHash: hashExportCanonical({ metric, definition, policy: 'ci06-accounting-policy-1.0.0' }),
@@ -226,6 +230,7 @@ function projectDocument(page: FinancialSummaryPage, evidenceMode: ExportRequest
     metrics,
     assumptions: { forecast: [], businessPlanInputs: [], status: 'not_supplied', note: 'No forecasts or business-plan assumptions are inferred from observed financial events.' },
     provenance: {
+      ...(bridge ? { sourceEvidenceStatus: 'not_exposed_by_query' } : {}),
       snapshotId: opaqueReference('snapshot', page.snapshotId), summaryContentHash: page.summaryContentHash, queryContentHash: page.queryContentHash,
       snapshotEnvelopeHash: hashExportCanonical(snapshotEnvelope(page)),
       sourceWatermarks: page.watermark.sources.map(source => ({ source: safeSourceName(source.source), revisionHash: hashExportCanonical(source.revision), observedThrough: source.observedThrough, contentHash: source.contentHash, completeness: source.completeness })).sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b))),
@@ -236,8 +241,8 @@ function projectDocument(page: FinancialSummaryPage, evidenceMode: ExportRequest
 }
 class UnsupportedExport extends Error {}
 
-function buildArtifacts(page: FinancialSummaryPage, request: ExportRequest): readonly ExportArtifact[] {
-  const document = projectDocument(page, request.evidenceMode);
+function buildArtifacts(page: FinancialSummaryPage, request: ExportRequest, bridge?: ReportingExportBridge): readonly ExportArtifact[] {
+  const document = projectDocument(page, request.evidenceMode, bridge);
   const text = (value: string): CsvCell => ({ kind: 'text', value });
   // Money uses the existing typed money encoder; negative numeric cells are not converted to formula-like text.
   const rows = document.metrics.map(metric => [
@@ -298,6 +303,7 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
   const envelope = validateRequest(AuthEnvelopeSchema, frozenRequest, 'integrations', 'exportSummary');
   if (!envelope.ok) return failure(envelope.error);
   const configuredExports = ports.exports;
+  const capturedBridge = reportingExportBridge(ports);
   const frozenRegistry = configuredExports?.syntheticFixtureRegistry === undefined ? undefined : freezeCopy(configuredExports.syntheticFixtureRegistry);
   const authorize = () => authorizeFinanceOperation({ module: 'integrations', requestOperation: 'exportSummary', operation: 'integrations.exportSummary', scope: envelope.value.scope, requestId: envelope.value.requestId, clock: ports.clock, financeAuthority: ports.financeAuthority });
   const reject = (code: ErrorCode, message: string, retryable = false) => failure(errorEnvelope('integrations', 'exportSummary', code, envelope.value.requestId, message, retryable));
@@ -329,10 +335,13 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     if (!pageValidation.ok) return reject('SOURCE_UNAVAILABLE', 'The verified query snapshot could not be validated.', true);
     const page = freezeCopy(pageValidation.value);
     if (!scopedPage(page, parsed.scope)) return reject('FORBIDDEN_SCOPE', 'The summary does not match the authenticated export scope.');
-    if (page.hasMore || page.nextCursor !== null) return reject('UNSUPPORTED_VERSION', 'Export requires a complete stored summary snapshot.');
     if (hashExportCanonical(page.summary) !== page.summaryContentHash
         || hashExportCanonical(snapshotEnvelope(page)) !== hashExportCanonical(snapshotEnvelope(parsed.summarySnapshot))) return reject('IDEMPOTENCY_CONFLICT', 'The expected summary differs from the verified query snapshot.');
+    const bridge = capturedBridge;
     const registry = frozenRegistry;
+    if (bridge) {
+      if (!checkRegisteredCanonicalSummary(page, parsed.scope, ports.clock.now().toISOString())) return reject('SOURCE_UNAVAILABLE', 'The registered query summary failed financial semantic validation.', true);
+    } else {
     if (parsed.evidenceMode !== 'mocked' || registry?.mode !== 'synthetic_only'
         || registry.summaryContentHash !== page.summaryContentHash
         || hashExportCanonical(registry.policyRef) !== hashExportCanonical(page.summary.policy_ref)
@@ -348,9 +357,10 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
       included_environments: [parsed.scope.environment], included_billing_modes: [parsed.scope.billingMode],
     });
     if (!semantic.ok) return reject('SOURCE_UNAVAILABLE', 'The verified query snapshot failed financial semantic validation.', true);
+    }
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
-    const artifacts = buildArtifacts(page, parsed);
+    const artifacts = freezeCopy(buildArtifacts(page, parsed, bridge));
     if (existing !== null) {
       if (!storedMatchesSource(existing, page, parsed, key)
           || hashExportCanonical(artifacts) !== hashExportCanonical(existing.prepared.artifacts)) return reject('SOURCE_UNAVAILABLE', 'The prepared export does not match the verified query snapshot.', true);
@@ -378,7 +388,7 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
       compatibility: { financialSummarySchema: '1.0.0', financeExportSchema: '2.0.0', sharedContractsPackage: '0.3.0', adoption: 'proposal_only', financeDefinitions: 'pending_owner_review', dashboardSdkMapping: 'pending_consumer_ack' },
       delivery: 'manual_prepared',
     };
-    const candidate: StoredExportArtifacts = { requestHash: fingerprint, sourceBinding: { snapshotId: page.snapshotId, watermarkId: page.watermark.watermarkId, summaryContentHash: page.summaryContentHash, queryContentHash: page.queryContentHash }, prepared: { manifest, artifactManifest, artifacts } };
+    const candidate: StoredExportArtifacts = freezeCopy({ requestHash: fingerprint, sourceBinding: { snapshotId: page.snapshotId, watermarkId: page.watermark.watermarkId, summaryContentHash: page.summaryContentHash, queryContentHash: page.queryContentHash }, prepared: { manifest, artifactManifest, artifacts } });
     if (!validStoredExport(candidate)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
@@ -400,9 +410,15 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
   }
 }
 
-export async function exportSummaryV2(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts>> {
-  return prepareExport(request, ports, true);
+export function exportSummaryV2(request: ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<ReportingPreparedExportArtifacts>>;
+export function exportSummaryV2(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts>>;
+export async function exportSummaryV2(request: ExportRequest | ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts | ReportingPreparedExportArtifacts>> {
+  return request?.schemaVersion === '2.0.0' ? prepareReportingExport(request, ports, true) : prepareExport(request as ExportRequest, ports, true);
 }
-export async function getPreparedExportArtifacts(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts>> {
-  return prepareExport(request, ports, false);
+export function getPreparedExportArtifacts(request: ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<ReportingPreparedExportArtifacts>>;
+export function getPreparedExportArtifacts(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts>>;
+export async function getPreparedExportArtifacts(request: ExportRequest | ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts | ReportingPreparedExportArtifacts>> {
+  return request?.schemaVersion === '2.0.0' ? prepareReportingExport(request, ports, false) : prepareExport(request as ExportRequest, ports, false);
 }
+
+export { canonicalJson as canonicalExportJson, freezeCopy as freezeExportValue };
