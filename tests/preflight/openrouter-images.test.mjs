@@ -439,11 +439,9 @@ test('billable dispatch requires a native runner signal and combines it with the
   const proxiedCaller = new AbortController();
   const proxiedSignal = new Proxy(proxiedCaller.signal, {});
   const proxiedPrepared = await adapter.prepare(input);
-  assert.deepEqual(await adapter.dispatch(dispatchInput(input, proxiedPrepared, proxiedSignal)), { host: 'result' },
-    'Node accepts a proxy over a genuine native signal through its native composition API');
-  assert.ok(hostSignals[1] instanceof AbortSignal, 'the host receives the native composite, not the caller proxy');
-  proxiedCaller.abort();
-  assert.equal(hostSignals[1].aborted, true, 'cancellation through the native caller target reaches the host');
+  await assert.rejects(adapter.dispatch(dispatchInput(input, proxiedPrepared, proxiedSignal)),
+    (error) => error.code === 'invalid_abort_signal', 'Proxy signals are explicitly unsupported at the JS trust boundary');
+  assert.equal(hostSignals.length, 1, 'even a forwarding proxy is refused before host dispatch');
 });
 
 test('native cancellation state wins over a shadowed aborted property before host dispatch', async () => {
@@ -661,7 +659,7 @@ test('public runner rejects spoofed and throwing caller signals with sanitized f
   assert.ok(!JSON.stringify(throwingResult).includes(TOKEN_CANARY));
 });
 
-test('public runner accepts active shadowed and proxied native signals and propagates later cancellation', async () => {
+test('public runner accepts active shadowed native signals and propagates later cancellation', async () => {
   const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
   const variants = [
     (signal) => signal,
@@ -673,7 +671,6 @@ test('public runner accepts active shadowed and proxied native signals and propa
       Object.defineProperty(signal, 'aborted', { get() { return false; } });
       return signal;
     },
-    (signal) => new Proxy(signal, {}),
   ];
   for (const wrap of variants) {
     const controller = new AbortController();
@@ -1586,4 +1583,119 @@ test('a target.model getter that answers evil on exactly the k-th read never bin
     for (const call of calls) assert.equal(call.target_binding.model, real, `k=${k}: credential binding`);
     for (const model of hostModels) assert.equal(model, real, `k=${k}: host args`);
   }
+});
+
+
+test('direct prepare and dispatch reject hostile signal proxies before credential or host effects', async () => {
+  const calls = [];
+  const host = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }),
+    fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async prepare(args) { assert.equal(Object.hasOwn(args, 'signal'), false); host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+  const input = billable();
+  const controller = new AbortController(); controller.abort();
+  let traps = 0;
+  const signal = new Proxy(controller.signal, { get(target, key, receiver) {
+    traps += 1;
+    if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+    return Reflect.get(target, key, receiver);
+  } });
+  await assert.rejects(adapter.prepare({ ...input, signal }), (e) => e.code === 'invalid_abort_signal');
+  assert.equal(calls.length, 0); assert.deepEqual(host, []); assert.equal(traps, 0);
+  const prepared = await adapter.prepare(input); // Direct callers may still omit a preparation signal.
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, signal)), (e) => e.code === 'invalid_abort_signal');
+  assert.deepEqual(host, ['prepare']); assert.equal(traps, 0);
+  assert.ok(calls.every((request) => !Object.hasOwn(request, 'signal')), 'credentials never receive cancellation input');
+});
+
+test('credential callback cannot rewrite its own expected target binding', async () => {
+  const host = [];
+  const port = grantCredentialPort();
+  const resolve = port.resolveCredential.bind(port);
+  port.resolveCredential = async (request) => {
+    request.target_binding.model = EVIL_MODEL;
+    return resolve(request);
+  };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async prepare() { host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+  await assert.rejects(adapter.prepare(billable()), (e) => e.code === 'credential_unavailable');
+  assert.deepEqual(host, []);
+});
+
+test('nested authorization evidence cannot change across the credential await', async () => {
+  const input = billable(); input.authorization_evidence = pinned('authorization');
+  const port = grantCredentialPort(); const resolve = port.resolveCredential.bind(port); const host = [];
+  port.resolveCredential = async (request) => {
+    const result = await resolve(request);
+    input.authorization_evidence.ref = 'test:changed';
+    input.authorization_evidence.independent_review.ref = 'test:changed-review';
+    return result;
+  };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async prepare(args) { host.push(args); }, async dispatch() {} } });
+  await assert.rejects(adapter.prepare(input), (e) => e.code === 'credential_unavailable');
+  assert.deepEqual(host, []);
+});
+
+test('host receives frozen authorization evidence bound at preparation', async () => {
+  const input = billable(); input.authorization_evidence = pinned('authorization');
+  const expected = structuredClone(input.authorization_evidence); const host = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async prepare(args) { host.push(args.authorization_evidence); },
+      async dispatch(args) { host.push(args.authorization_evidence); } } });
+  const prepared = await adapter.prepare(input);
+  await adapter.dispatch(dispatchInput(input, prepared));
+  assert.equal(host.length, 2);
+  for (const evidence of host) {
+    assert.deepEqual(evidence, expected); assert.notEqual(evidence, input.authorization_evidence);
+    assert.ok(Object.isFrozen(evidence)); assert.ok(Object.isFrozen(evidence.independent_review));
+  }
+});
+
+test('a clock callback changing the target stops before host preparation', async () => {
+  const input = billable(); const host = []; let reads = 0;
+  const adapter = createOpenRouterImagesAdapter({ now() {
+    reads += 1; if (reads === 4) input.target.model = EVIL_MODEL; return clock();
+  }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+  dispatchPort: { async prepare() { host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+  await assert.rejects(adapter.prepare(input), (e) => e.code === 'unsupported_image_configuration');
+  assert.deepEqual(host, []);
+});
+
+test('preparation cancellation at every async and clock boundary stops later host effects', async () => {
+  for (const boundary of ['already', 'credential', 'clock-before-host', 'host-prepare']) {
+    const controller = new AbortController(); const calls = []; const host = []; let reads = 0; let lateHostReads = 0;
+    const port = grantCredentialPort({ calls }); const resolve = port.resolveCredential.bind(port);
+    port.resolveCredential = async (request) => { const result = await resolve(request);
+      if (boundary === 'credential') controller.abort(); return result; };
+    const adapter = createOpenRouterImagesAdapter({ now() {
+      reads += 1; if (reads === 4 && boundary === 'clock-before-host') controller.abort(); return clock();
+    }, credentialPort: port, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      get prepare() {
+        if (controller.signal.aborted) lateHostReads += 1;
+        return async (args) => {
+          assert.equal(Object.hasOwn(args, 'signal'), false);
+          host.push('prepare'); if (boundary === 'host-prepare') controller.abort();
+        };
+      },
+      async dispatch() { host.push('dispatch'); } } });
+    if (boundary === 'already') controller.abort();
+    await assert.rejects(adapter.prepare({ ...billable(), signal: controller.signal }), (e) => e.code === 'preflight_deadline_passed', boundary);
+    assert.equal(calls.length, boundary === 'already' ? 0 : 1, boundary);
+    assert.deepEqual(host, boundary === 'host-prepare' ? ['prepare'] : [], boundary);
+    assert.equal(lateHostReads, 0, 'cancellation stops even callback-capable host property access');
+  }
+});
+
+test('public cancellation during credential resolution stops host preparation and reservation', async () => {
+  const controller = new AbortController(); let hostPrepares = 0;
+  const run = createLiveOpenRouterRunner({ signal: controller.signal, prepareHost() { hostPrepares += 1; return {}; } });
+  const adapter = run.args.adapter;
+  // The runner signal reaches prepare without being exposed to credential or host payloads.
+  run.args.adapter = { ...adapter, async prepare(input) {
+    const pending = adapter.prepare(input); controller.abort(); return pending;
+  } };
+  const result = await executeAuthorizedAccessCell(run.args);
+  assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(hostPrepares, 0); assert.equal(run.fixture.calls.reserve, 0); assert.equal(run.hostDispatches.length, 0);
 });

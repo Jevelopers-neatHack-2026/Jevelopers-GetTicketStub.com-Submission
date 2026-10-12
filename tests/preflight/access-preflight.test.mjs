@@ -967,3 +967,42 @@ test('invalid access plan keeps fixed cell denominator and records safe invalid 
   assert.equal(fixture.calls.dispatch, 0);
   assert.doesNotMatch(JSON.stringify(report), /person@example\.invalid/);
 });
+
+
+test('public runner rejects all Proxy signals without invoking any proxy trap', async () => {
+  for (const kind of ['hostile-aborted', 'benign-active', 'revoked', 'spoof']) {
+    const fixture = createMockAccessFixture();
+    const controller = new AbortController();
+    if (kind === 'hostile-aborted') controller.abort();
+    let traps = 0;
+    const handler = { get(target, key, receiver) {
+      traps += 1;
+      if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+      return Reflect.get(target, key, receiver);
+    }, getPrototypeOf() { traps += 1; return AbortSignal.prototype; } };
+    const revocable = Proxy.revocable(kind === 'spoof' ? {} : controller.signal, handler);
+    if (kind === 'revoked') revocable.revoke();
+    const result = await executeAuthorizedAccessCell({ ...fixture.args, signal: revocable.proxy });
+    assert.equal(result.reason_code, 'invalid_abort_signal', kind);
+    assert.equal(traps, 0, kind);
+    assert.equal(fixture.calls.inspect, 0, kind);
+    assert.equal(fixture.calls.reserve, 0, kind);
+    assert.equal(fixture.calls.dispatch, 0, kind);
+    assert.equal(result.financial_hold, 'none', kind);
+  }
+});
+
+test('a genuine signal with a subclass prototype retains cancellation and positive behavior', async () => {
+  class SignalSubclass extends AbortSignal {}
+  for (const aborted of [false, true]) {
+    const fixture = createMockAccessFixture();
+    const controller = new AbortController();
+    Object.setPrototypeOf(controller.signal, SignalSubclass.prototype);
+    Object.defineProperty(controller.signal, 'aborted', { value: false });
+    if (aborted) controller.abort();
+    const result = await executeAuthorizedAccessCell({ ...fixture.args, signal: controller.signal });
+    assert.equal(result.status, aborted ? 'failed' : 'simulated');
+    assert.equal(fixture.calls.reserve, aborted ? 0 : 1);
+    assert.equal(fixture.calls.dispatch, aborted ? 0 : 1);
+  }
+});

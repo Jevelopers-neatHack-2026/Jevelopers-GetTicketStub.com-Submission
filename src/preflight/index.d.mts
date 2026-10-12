@@ -159,6 +159,8 @@ export interface AccessProviderAdapter {
     grant_ref: string;
     deadline_at: string;
     authorization_evidence: PinnedAccessEvidence;
+    /** Optional preparation cancellation. Genuine non-Proxy AbortSignals only; omitted by legacy direct callers. */
+    signal?: AbortSignal;
   }>): Promise<unknown>;
   dispatch(input: Readonly<{
     run_id: string;
@@ -175,7 +177,7 @@ export interface AccessProviderAdapter {
 }
 
 export interface AccessProviderMeteringContext extends MeteredDispatchContext {
-  /** Native runner cancellation/deadline signal; required for every billable provider dispatch. */
+  /** Genuine non-Proxy runner cancellation/deadline signal; required for every billable provider dispatch. */
   readonly signal: AbortSignal;
   /** Revalidate the current grant, provider capability, and Finance lease after transport acknowledgement. */
   authorizeTransport(): Promise<void>;
@@ -258,6 +260,7 @@ export interface AccessExecutionPorts {
   readonly trustedScope: TrustedAccessScope;
   readonly mode: AccessMode;
   readonly now?: string | (() => string);
+  /** Genuine non-Proxy AbortSignal; Proxy wrappers fail explicitly with invalid_abort_signal. */
   readonly signal?: AbortSignal;
 }
 
@@ -360,7 +363,7 @@ export interface OpenRouterCredentialPort {
 /** Trusted host-composed billable dispatch. The built-in adapter never sends a paid request itself. */
 export interface OpenRouterImagesDispatchPort {
   /** Called only after the adapter resolved a credential bound to the grant and valid through the deadline. */
-  prepare?(input: Parameters<NonNullable<AccessProviderAdapter['prepare']>>[0] & Readonly<{
+  prepare?(input: Omit<Parameters<NonNullable<AccessProviderAdapter['prepare']>>[0], 'signal'> & Readonly<{
     credential: Readonly<{ token: string }>;
   }>): Promise<unknown>;
   /** `prepared` is the value returned by the port's own `prepare` (or undefined). `signal` is capped by the deadline. */

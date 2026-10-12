@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import {
   executeMeteredAttempt,
@@ -27,8 +28,9 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}$/;
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const MAX_CAPABILITY_AGE_MS = 5 * 60_000;
-// Read the native slot so an own `aborted` value/getter cannot hide a cancellation.
-// Node's native getter also recognizes a Proxy around a real AbortSignal.
+// Accept genuine, non-Proxy AbortSignals, including subclasses. Proxy wrappers are explicitly invalid:
+// their traps can falsify both the public property and Node's internal aborted symbol.
+// After excluding proxies, the prototype getter bypasses an own public `aborted` value/getter.
 const nativeAbortSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
 const SENSITIVE_KEY = /(?:(?:^|[_-])(?:credential|secret|password|authorization|bearer|cookie|api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|token)(?:$|[_-])|(?<!s)token$|(?:credentials?|secrets?|password|authorization|bearer|cookie|apiKey|privateKey))$/i;
 const RAW_CONTENT_KEY = /^(?:prompt|prompt_text|raw_text|image_bytes|authorization_header|headers?)$/i;
@@ -136,6 +138,9 @@ function fail(code, message, field) {
 }
 
 function nativeAbortSignalState(value) {
+  // V8's isProxy does not invoke traps (including for revoked proxies). Node's aborted getter reads
+  // a JS symbol on its receiver, so calling it on a Proxy is not a trustworthy native-state read.
+  if (utilTypes.isProxy(value)) return undefined;
   try {
     const aborted = nativeAbortSignalAborted?.call(value);
     return typeof aborted === 'boolean' ? aborted : undefined;
@@ -1049,6 +1054,7 @@ export async function executeAuthorizedAccessCell(args) {
         grant_ref: args.grantRef,
         deadline_at: cell.spend.deadline_at,
         authorization_evidence: grantEvidence.evidence,
+        ...(runnerSignal === undefined ? {} : { signal: runnerSignal }),
       });
     } catch (error) {
       return resultRow(cell, mode, 'failed', safeFailureCode(error, 'adapter_unavailable'), 'Resolve the local prompt, asset, and exact scoped credential before requesting a reservation.', { pin_evidence: pinEvidence.evidence, capability_observation: accessObservation, authorization_evidence: grantEvidence.evidence });

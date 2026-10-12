@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 import { createHash } from 'node:crypto';
 import { AccessPreflightError } from './access.mjs';
 import { canonicalHash } from '../contracts/validation.mjs';
@@ -37,7 +38,8 @@ const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$/;
 const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const METADATA_TIMEOUT_MS = 15_000;
 const BILLABLE_TIMEOUT_MAX_MS = 120_000;
-// Read the native slot through its getter; `instanceof` alone accepts prototype-spoofed objects.
+// Only genuine non-Proxy signals are supported. `instanceof` accepts prototype spoofs and Node's
+// prototype getter is proxy-trappable; reject wrappers first, then bypass own public aborted shadows.
 const nativeAbortSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
 
 function error(code, message) {
@@ -62,6 +64,9 @@ function remainingUntil(deadlineAt, now) {
 }
 
 function nativeAbortSignalState(value) {
+  // V8's isProxy does not invoke traps (including for revoked proxies). Node's aborted getter reads
+  // a JS symbol on its receiver, so calling it on a Proxy is not a trustworthy native-state read.
+  if (utilTypes.isProxy(value)) return undefined;
   try {
     const aborted = nativeAbortSignalAborted?.call(value);
     return typeof aborted === 'boolean' ? aborted : undefined;
@@ -156,7 +161,7 @@ function capturePrepareBinding(input) {
     if (Object.values(scopeValues).some((value) => typeof value !== 'string' || !SAFE_REF.test(value))) {
       throw new TypeError('scope references');
     }
-    scope = Object.freeze(scopeValues);
+    scope = deepFreeze(structuredClone({ ...sourceScope, ...scopeValues }));
     grantRef = input.grant_ref;
     deadlineAt = input.deadline_at;
     hasConfiguration = Object.hasOwn(input, 'configuration');
@@ -176,6 +181,17 @@ function capturePrepareBinding(input) {
   }
   if (hasConfiguration && configurationHash !== pinnedConfigurationHash) {
     throw error('credential_unavailable', 'Billable configuration does not match the pinned target configuration.');
+  }
+  let hostExtras;
+  let authorizationHash;
+  const hasAuthorization = Object.hasOwn(input, 'authorization_evidence');
+  try {
+    const { target: liveTarget, scope: liveScope, configuration: liveConfiguration, signal: callerSignal, ...extras } = input;
+    hostExtras = deepFreeze(structuredClone(extras));
+    authorizationHash = canonicalHash(hostExtras.authorization_evidence ?? null);
+    if (canonicalHash(input.authorization_evidence ?? null) !== authorizationHash) throw new TypeError('evidence copy');
+  } catch {
+    throw error('credential_unavailable', 'Billable preparation evidence could not be copied safely.');
   }
   const matchesTarget = (candidate) => {
     try {
@@ -212,15 +228,17 @@ function capturePrepareBinding(input) {
         && currentScopeValues.budget_scope_id === scope.budget_scope_id
         && currentScopeValues.account_ref === scope.account_ref
         && currentScopeValues.project_ref === scope.project_ref
+        && Object.hasOwn(candidate, 'authorization_evidence') === hasAuthorization
+        && canonicalHash(candidate.authorization_evidence ?? null) === authorizationHash
         && currentHasConfiguration === hasConfiguration
         && (!hasConfiguration || canonicalHash(currentConfiguration) === pinnedConfigurationHash)
         && targetContentDigest(currentCell, currentTarget) === targetHash;
     } catch { return false; }
   };
-  const hostInput = Object.freeze({ ...input, cell_id: cellId, target, scope, grant_ref: grantRef, deadline_at: deadlineAt,
+  const hostInput = Object.freeze({ ...hostExtras, cell_id: cellId, target, scope, grant_ref: grantRef, deadline_at: deadlineAt,
     ...(Object.hasOwn(input, 'configuration') ? { configuration: target.configuration } : {}) });
   return { cellId, sourceTarget, target, targetHash, scope, grantRef, deadlineAt, hasConfiguration,
-    pinnedConfigurationHash, matches, matchesTarget, hostInput };
+    pinnedConfigurationHash, matches, matchesTarget, hostInput, authorizationHash, hasAuthorization };
 }
 
 /** The catalog URL for an explicit author/slug model id. Segments are encoded; nothing else is interpolated. */
@@ -326,8 +344,9 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
       throw error('credential_unavailable', 'Provider account and project references must be safe opaque IDs.');
     }
-    const binding = targetBinding(target, scope);
-    const resolved = await credentialPort.resolveCredential({
+    const binding = Object.freeze(targetBinding(target, scope));
+    const expectedBindingHash = digest(Buffer.from(JSON.stringify(binding), 'utf8'));
+    const request = Object.freeze({
       service: OPENROUTER_PREFLIGHT_SERVICE,
       purpose,
       account_ref: scope.account_ref,
@@ -335,7 +354,7 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       target_binding: binding,
       ...(grantRef ? { grant_ref: grantRef } : {}),
     });
-    const expectedBindingHash = digest(Buffer.from(JSON.stringify(binding), 'utf8'));
+    const resolved = await credentialPort.resolveCredential(request);
     if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
@@ -539,7 +558,16 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       } catch {
         throw error('credential_unavailable', 'Billable preparation bindings could not be captured safely.');
       }
+      const callerSignal = args.signal;
+      const assertNotCancelled = () => {
+        if (callerSignal === undefined) return;
+        const state = nativeAbortSignalState(callerSignal);
+        if (state === undefined) throw error('invalid_abort_signal', 'Preparation requires a genuine non-Proxy AbortSignal.');
+        if (state) throw error('preflight_deadline_passed', 'Cancellation stopped billable preparation.');
+      };
+      assertNotCancelled();
       const binding = capturePrepareBinding(args);
+      assertNotCancelled();
       if (typeof binding.grantRef !== 'string' || !SAFE_REF.test(binding.grantRef)
         || typeof binding.deadlineAt !== 'string' || !Number.isFinite(Date.parse(binding.deadlineAt))
         || Date.parse(binding.deadlineAt) <= readClock(now)) {
@@ -558,22 +586,39 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
           throw error('credential_unavailable', 'Billable preparation bindings changed while an asynchronous operation was pending.');
         }
       };
+      assertNotCancelled();
+      assertBindingsUnchanged();
+      assertNotCancelled();
       const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: binding.scope,
         target: hostTarget, grantRef: binding.grantRef, deadlineAt: binding.deadlineAt, now });
+      assertNotCancelled();
       assertBindingsUnchanged();
+      assertNotCancelled();
       // Credential lookup is asynchronous. Recheck the clock/deadline before handing its token to host preparation.
       remainingUntil(binding.deadlineAt, now);
-      const credential = Object.freeze({ token });
-      const hostPrepared = dispatchPort.prepare
-        ? await dispatchPort.prepare(Object.freeze({ ...hostInput, credential })) : undefined;
+      assertNotCancelled();
+      const prepareHost = dispatchPort.prepare;
+      assertNotCancelled();
       assertBindingsUnchanged();
+      assertNotCancelled();
+      const credential = Object.freeze({ token });
+      const hostPrepared = prepareHost
+        ? await prepareHost.call(dispatchPort, Object.freeze({ ...hostInput, credential })) : undefined;
+      assertNotCancelled();
+      assertBindingsUnchanged();
+      assertNotCancelled();
       // Host preparation is also asynchronous. Never mint a dispatchable value after the grant's deadline.
       remainingUntil(binding.deadlineAt, now);
+      assertNotCancelled();
+      assertBindingsUnchanged();
+      assertNotCancelled();
       const prepared = Object.freeze({ prepared: true });
       preparedState.set(prepared, { cell_id: binding.cellId, source_target: binding.sourceTarget, target: hostTarget,
         target_hash: binding.targetHash, target_digest: binding.targetHash,
         has_configuration: binding.hasConfiguration, configuration_hash: binding.pinnedConfigurationHash,
-        scope: binding.scope, grant_ref: binding.grantRef, deadline_at: binding.deadlineAt, credential, hostPrepared });
+        scope: binding.scope, grant_ref: binding.grantRef, deadline_at: binding.deadlineAt, credential, hostPrepared,
+        authorization_evidence: binding.hostInput.authorization_evidence, authorization_hash: binding.authorizationHash,
+        has_authorization: binding.hasAuthorization });
       return prepared;
     };
     adapter.dispatch = async (input) => {
@@ -610,6 +655,12 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         }
         throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
       }
+      let authorizationMatches = false;
+      try {
+        authorizationMatches = Object.hasOwn(args, 'authorization_evidence') === state.has_authorization
+          && canonicalHash(args.authorization_evidence ?? null) === state.authorization_hash;
+      } catch { /* unreadable authorization evidence fails closed */ }
+      if (!authorizationMatches) throw error('credential_unavailable', 'Prepared authorization evidence changed.');
       let configurationMatches = false;
       try {
         configurationMatches = Object.hasOwn(args, 'configuration') === state.has_configuration
@@ -645,6 +696,8 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       const hostInput = { ...args, cell_id: state.cell_id, target: state.target, scope: state.scope,
         grant_ref: state.grant_ref, deadline_at: state.deadline_at, prepared: state.hostPrepared,
         credential: state.credential, signal };
+      if (state.has_authorization) hostInput.authorization_evidence = state.authorization_evidence;
+      else delete hostInput.authorization_evidence;
       if (state.has_configuration) hostInput.configuration = state.target.configuration;
       else delete hostInput.configuration;
       return dispatchPort.dispatch(hostInput);
