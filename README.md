@@ -85,7 +85,7 @@ Open the local address printed in the terminal. Choose **The Pale Hours**, confi
 
 [Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary D. Wright](https://github.com/zwright8) · [Crystal Aguilar](https://github.com/lajefahemp-collab). Brand and studio design: Lars. [Team and socials →](docs/judges/TEAM.md)
 
-[Build posts, submission videos, and organizer updates →](docs/judges/PUBLIC-POSTS.md)
+[Build posts, submission videos, and organizer updates →](docs/judges/PUBLIC-POSTS.md) · [Watched live on Twitch](https://www.twitch.tv/completedottech): about 65 hours of [neatHack VODs](docs/judges/PUBLIC-POSTS.md#live-streams)
 
 [Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Repo, line, and commit counts](REPOSITORIES.md#collection-at-a-glance) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 
