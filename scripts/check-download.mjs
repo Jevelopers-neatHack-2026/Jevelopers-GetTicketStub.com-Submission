@@ -22,7 +22,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { launchBrowser, chromePath } from "./lib/cdp.mjs";
 import { BEGIN_CAPTURE_PROVENANCE, browserProvenance, captureFailureFrames, readCaptureProvenance } from "./lib/download-capture-diagnostics.mjs";
 import { DownloadLayerDiagnostics } from "./lib/download-layer-diagnostics.mjs";
-import { CaptureQualification, captureQualificationPlan } from "./lib/download-capture-qualification.mjs";
+import { CaptureQualification, captureQualificationPlan, retainFirstCapture } from "./lib/download-capture-qualification.mjs";
 import { DownloadReceipts } from "./lib/download-receipts.mjs";
 import { checkDownloadReceiptControls } from "./lib/download-receipt-controls.mjs";
 import { MESSAGES } from "../src/customer/feedback-messages/messages.ts";
@@ -365,8 +365,7 @@ try {
         if (!shot) return;
         const file = `${tag}${phase === "edited" ? "-edited" : ""}-screen.png`;
         rec[phase === "edited" ? "editedScreen" : "screen"] = shot.info;
-        writeFileSync(join(outDir, file), shot.png);
-        if (pairId) qualification.captured(pairId, phase, { captureId: shot.captureId, sha256: shot.sha256, file });
+        retainFirstCapture({ directory: outDir, file, png: shot.png, captureId: shot.captureId, sha256: shot.sha256, qualification, pairId, phase });
       };
       try {
         // Only the baseline's first studio load/download is throttled. Fresh pages share this browser's

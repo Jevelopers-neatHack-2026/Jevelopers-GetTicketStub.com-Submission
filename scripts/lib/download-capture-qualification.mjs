@@ -1,5 +1,15 @@
 // Fixed fresh-page qualification, never a retry-until-match loop. The baseline matrix is preserved;
 // two additional original/edited pairs cover the image edition at each selected viewport.
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+export function retainFirstCapture({ directory, file, png, captureId, sha256, qualification, pairId, phase }) {
+  // Preserve an existing authoritative file even if the caller reuses an evidence directory or
+  // supplies a duplicate name. A rejected write must never be counted as a newly retained capture.
+  writeFileSync(join(directory, file), png, { flag: "wx" });
+  if (pairId) qualification.captured(pairId, phase, { captureId, sha256, file });
+}
+
 export function captureQualificationPlan(viewports) {
   return [
     ...viewports.map((viewport) => ({ viewport, trial: 0, kind: "baseline" })),

@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CaptureQualification, captureQualificationPlan } from "../scripts/lib/download-capture-qualification.mjs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { CaptureQualification, captureQualificationPlan, retainFirstCapture } from "../scripts/lib/download-capture-qualification.mjs";
 
 const plan = captureQualificationPlan([{ name: "390" }, { name: "1440" }]);
 const pairId = ({ viewport, trial }) => `${viewport.name}:${trial}`;
@@ -97,4 +100,25 @@ test("distinct capture IDs cannot share a file that would overwrite earlier auth
   ledger.captured("390:0", "edited", { captureId: "00000000-0000-0000-0000-000000000002", sha256: "b".repeat(64), file: "same.png" });
   assert.ok(ledger.snapshot().violations.includes("invalid_or_duplicate_first_capture"));
   assert.equal(ledger.snapshot().pairs[0].phases.original.sha256, "a".repeat(64));
+});
+
+test("the actual first-capture writer preserves an existing frame and never counts its rejected replacement", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ticketstub-first-capture-"));
+  try {
+    const qualification = new CaptureQualification(plan);
+    qualification.begin("390:0");
+    const first = { directory, file: "first.png", png: Buffer.from("original-failed-frame"), captureId: "00000000-0000-0000-0000-000000000001",
+      sha256: "a".repeat(64), qualification, pairId: "390:0", phase: "original" };
+    retainFirstCapture(first);
+    qualification.compared("390:0", "original", false, { mean: 103, bad: 0.57 });
+    const retained = qualification.snapshot().pairs[0].phases.original;
+    assert.throws(() => retainFirstCapture({ ...first, png: Buffer.from("later-passing-frame"), phase: "edited",
+      captureId: "00000000-0000-0000-0000-000000000002", sha256: "b".repeat(64) }), { code: "EEXIST" });
+    qualification.finish("390:0", 1, true);
+    assert.equal(readFileSync(join(directory, "first.png"), "utf8"), "original-failed-frame");
+    assert.deepEqual(qualification.snapshot().pairs[0].phases.original, retained);
+    assert.equal(qualification.snapshot().recordedFirstCaptures, 1);
+    assert.equal(qualification.snapshot().pairs[0].phases.edited, undefined);
+    assert.equal(qualification.snapshot().passed, false);
+  } finally { rmSync(directory, { recursive: true }); }
 });
