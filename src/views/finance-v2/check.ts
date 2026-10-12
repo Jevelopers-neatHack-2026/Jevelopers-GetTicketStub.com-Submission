@@ -199,6 +199,61 @@ export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductSco
 export type FinanceV2TrailEntry = Readonly<{ cursor: string; fromDetailIds: readonly string[]; linked: boolean }>;
 export type FinanceV2PageTrail = readonly FinanceV2TrailEntry[];
 
+/** Members that legitimately vary per read: everything else on a page is the immutable public snapshot envelope. */
+const PER_READ_KEYS: ReadonlySet<string> = new Set(['requestId', 'details', 'hasMore', 'nextCursor']);
+/** Key of the cursorless first page in the evidence; a real cursor is never empty (`minLength: 1`). */
+const FIRST_PAGE = '';
+
+/** Structural equality of delivered JSON values, insensitive to object key order. Compares values only; nothing is hashed, parsed or computed. */
+export function sameDeliveredValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, index) => sameDeliveredValue(item, b[index]));
+  if (!record(a) || !record(b)) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && sameDeliveredValue(a[key], b[key]));
+}
+
+/**
+ * What this identity generation has independently observed: the immutable public envelope of the first accepted page, and for every request cursor the
+ * page it was answered with (detail ids in order, `hasMore`, `nextCursor`). Held only for one scope/snapshot/authorization/filter generation and
+ * never persisted. It survives Previous, retry and revisits, so it is not erased by trail truncation. Deep-linked pages can be compared only against
+ * pages observed from the first one onward; an unseen preceding page cannot be checked.
+ */
+export type FinanceV2Evidence = Readonly<{
+  envelope: Readonly<Record<string, unknown>> | null;
+  pages: ReadonlyMap<string, Readonly<{ detailIds: readonly string[]; hasMore: boolean; nextCursor: string | null }>>;
+}>;
+export const NO_EVIDENCE: FinanceV2Evidence = { envelope: null, pages: new Map() };
+
+/** Compares a structurally accepted page, answered for `requestCursor` (undefined = first page), with the evidence. Only delivered strings and values are compared. */
+export function checkFinanceV2Evidence(page: FinanceV2Page, requestCursor: string | undefined, evidence: FinanceV2Evidence): FinanceV2Check {
+  const at = requestCursor ?? FIRST_PAGE;
+  if (evidence.envelope !== null) {
+    const raw = page as unknown as Record<string, unknown>;
+    for (const key of Object.keys(evidence.envelope)) if (!sameDeliveredValue(evidence.envelope[key], raw[key])) return refuse('SNAPSHOT_MISMATCH', `/${key}`);
+  }
+  const ids = page.details.map((detail) => detail.detailId);
+  for (const [other, seen] of evidence.pages) {
+    if (other === at) continue;
+    const clash = ids.findIndex((id) => seen.detailIds.includes(id));
+    if (clash >= 0) return refuse('PAGE_REPLAY', `/details/${clash}/detailId`);
+  }
+  const known = evidence.pages.get(at);
+  if (known !== undefined) {
+    if (known.detailIds.length !== ids.length || known.detailIds.some((id, index) => id !== ids[index])) return refuse('PAGE_REPLAY', '/details');
+    if (known.hasMore !== page.hasMore || known.nextCursor !== page.nextCursor) return refuse('PAGE_REPLAY', '/nextCursor');
+  }
+  return { ok: true, page };
+}
+
+/** Records an accepted page. The envelope is taken from the first accepted page of the generation and never replaced. */
+export function recordFinanceV2Evidence(page: FinanceV2Page, requestCursor: string | undefined, evidence: FinanceV2Evidence): FinanceV2Evidence {
+  const pages = new Map(evidence.pages);
+  pages.set(requestCursor ?? FIRST_PAGE, { detailIds: page.details.map((detail) => detail.detailId), hasMore: page.hasMore, nextCursor: page.nextCursor });
+  const envelope = evidence.envelope ?? structuredClone(Object.fromEntries(Object.entries(page).filter(([key]) => !PER_READ_KEYS.has(key))));
+  return { envelope, pages };
+}
+
 /**
  * Replay guard for a page shown after other pages of the same snapshot: a detail id already delivered (on this page or on an earlier page of
  * the trail), or a `nextCursor` that points back into the trail, is refused. Only strings are compared; nothing is recomputed or summed.

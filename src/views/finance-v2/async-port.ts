@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { checkFinanceV2Continuation, checkFinanceV2Page, validCursor, type FinanceV2PageTrail, type FinanceV2TrustedReferences } from './check';
+import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
+import { NO_EVIDENCE, checkFinanceV2Continuation, checkFinanceV2Evidence, checkFinanceV2Page, recordFinanceV2Evidence, validCursor, type FinanceV2Evidence, type FinanceV2PageTrail, type FinanceV2TrustedReferences } from './check';
 import type { FinanceV2Input, FinanceV2Page, FinanceV2RefusalCode, OpaqueProductScope } from './types';
 
 /**
@@ -120,7 +120,7 @@ export type FinanceV2ReadState =
   | Readonly<{ phase: 'refused'; code: FinanceV2RefusalCode; path: string }>
   | Readonly<{ phase: 'missing' | 'restricted' | 'unauthorized' | 'unknown' }>
   | Readonly<{ phase: 'error'; kind: FinanceV2FaultKind; retryable: boolean }>;
-/** Page controls. `previous` re-reads the earlier page (nothing is cached), and from a deep-linked page it returns to the first page. */
+/** Page controls. `previous` re-reads the earlier page with fresh authorization (no amounts are cached; only observed page identities are compared), and from a deep-linked page it returns to the first page. */
 export type FinanceV2Paging = Readonly<{
   /** 1-based position from the first page, or `null` for a deep-linked page whose position is not known. */
   pageNumber: number | null;
@@ -161,14 +161,19 @@ function invalidRequest(o: FinanceV2ReadOptions, cursor: string | undefined): { 
   return undefined;
 }
 
-function interpret(result: FinanceV2Input | null | undefined, o: FinanceV2ReadOptions, trail: FinanceV2PageTrail): FinanceV2ReadState {
+function interpret(result: FinanceV2Input | null | undefined, o: FinanceV2ReadOptions, trail: FinanceV2PageTrail, cursor: string | undefined, evidence: MutableRefObject<FinanceV2Evidence>): FinanceV2ReadState {
   if (typeof result !== 'object' || result === null) return { phase: 'unknown' };
   if (result.status === 'missing' || result.status === 'restricted' || result.status === 'unauthorized' || result.status === 'unknown') return { phase: result.status };
   if (result.status !== 'ready') return { phase: 'unknown' };
   const checked = checkFinanceV2Page(result.page, o.scope, o.expectedSnapshotId, { queryContentHash: o.expectedQueryContentHash, summaryContentHash: o.expectedSummaryContentHash, ...(o.expectedReferences ? { references: o.expectedReferences } : {}) });
   if (!checked.ok) return { phase: 'refused', code: checked.code, path: checked.path };
   const continued = checkFinanceV2Continuation(checked.page, trail);
-  return continued.ok ? { phase: 'ready', page: continued.page } : { phase: 'refused', code: continued.code, path: continued.path };
+  if (!continued.ok) return { phase: 'refused', code: continued.code, path: continued.path };
+  // Compared with what this identity generation already observed (public envelope of the first accepted page, the page behind every request cursor). Only an accepted page is recorded.
+  const observed = checkFinanceV2Evidence(continued.page, cursor, evidence.current);
+  if (!observed.ok) return { phase: 'refused', code: observed.code, path: observed.path };
+  evidence.current = recordFinanceV2Evidence(observed.page, cursor, evidence.current);
+  return { phase: 'ready', page: observed.page };
 }
 function fromFault(fault: FinanceV2Fault): FinanceV2ReadState {
   return fault.outcome === 'error' ? { phase: 'error', kind: fault.kind, retryable: fault.retryable } : { phase: fault.outcome };
@@ -195,7 +200,11 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
   const cursor = trail.length === 0 ? undefined : trail[trail.length - 1]!.cursor;
   const invalid = invalidRequest(options, cursor);
   const active = gated === undefined && resolution.status === 'available' && invalid === undefined;
-  const readKey = `${key}\u0000${cursor ?? ''}`;
+  // The filter/reset generation is part of the read identity: a change cancels an in-flight first-page read and drops a settled one, exactly as a cursor change does.
+  const readKey = `${pagingKey}\u0000${cursor ?? ''}`;
+  // Observed page evidence belongs to one pagingKey generation: it survives Previous, retry and revisits, but never an identity or filter change (also A -> B -> A).
+  const evidence = useRef<FinanceV2Evidence>(NO_EVIDENCE);
+  useLayoutEffect(() => { evidence.current = NO_EVIDENCE; }, [pagingKey]);
   const latest = useRef({ options, trail, cursor, pagingKey });
   useLayoutEffect(() => { latest.current = { options, trail, cursor, pagingKey }; });
   const [retries, setRetries] = useState<Readonly<{ key: string; count: number }>>({ key, count: 0 });
@@ -230,7 +239,7 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
           authorization: { token, revision: o.authorization.revision }, signal: controller.signal,
         });
         if (!live) return;
-        finish(interpret(answer, o, trailNow));
+        finish(interpret(answer, o, trailNow, cursorNow, evidence));
       } catch (error) {
         finish(fromFault(classifyFinanceV2Fault(error)));
       }

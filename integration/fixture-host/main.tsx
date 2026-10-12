@@ -6,6 +6,7 @@ import '@jevelopers/team-dashboard/style.css';
 import { ComponentExamples } from './component-examples';
 import { fixtureFinanceV2Port, portBehaviors, type FixturePortLog, type PortBehavior } from './finance-v2-port';
 import { syntheticPagedMisbehaviors, syntheticPagedPort, type SyntheticPagedLog, type SyntheticPagedScript } from './finance-v2-paged';
+import { capturedForeignProjectId, capturedGrants, capturedPaginationPort, capturedTampers, type CapturedGrant, type CapturedPortLog, type CapturedTamper } from './finance-v2-captured';
 import { authorizedFixture, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FixtureState, type SummaryFixtureName } from './host';
 import { hostFixture, hostFixtureNames, type HostFixtureName } from './conformance';
 const params = new URLSearchParams(window.location.search);
@@ -26,9 +27,19 @@ const v2Log: FixturePortLog = { calls: [] };
  * `v2port=paged` serves the HAND-AUTHORED synthetic three-page transaction chain (not Finance output, not producer pages). `v2p1`..`v2p3` script one deviation for page 1..3:
  * a misbehavior name, `slow` (a late answer that ignores the abort signal) or `fault<status>`.
  */
-const v2Cursor = params.get('cursor') ?? undefined;
 const pagedLog: SyntheticPagedLog = { requests: [] };
 (window as unknown as { __financeV2PagedLog: SyntheticPagedLog }).__financeV2PagedLog = pagedLog;
+/**
+ * `v2port=captured` (with `v2=conformance-pagination`) serves the ACTUAL captured producer chain (SYNTHETIC_CONFORMANCE_ONLY) by looking up the recorded answer to the exact query: `v2grant=denied|stale|revoked`
+ * replays the recorded current-grant refusals, `v2tamper=period|filters|version` the recorded snapshot-binding refusals, `v2scope=foreign` the recorded foreign scope, `v2size` a page size and
+ * `v2delay=<ms>` a late continuation that ignores the abort signal. The first page size is the host's own trusted 2.
+ */
+const capturedLog: CapturedPortLog = { reads: [] };
+(window as unknown as { __financeV2CapturedLog: CapturedPortLog }).__financeV2CapturedLog = capturedLog;
+const capturedGrant = capturedGrants.find((name) => name === params.get('v2grant')) as CapturedGrant | undefined;
+const capturedTamper = capturedTampers.find((name) => name === params.get('v2tamper')) as CapturedTamper | undefined;
+const capturedDelay = Number(params.get('v2delay')) > 0 ? Number(params.get('v2delay')) : undefined;
+const pagedMode = requestedBehavior === 'paged' || requestedBehavior === 'captured';
 function pagedScript(): SyntheticPagedScript {
   const script: SyntheticPagedScript = {};
   ([0, 1, 2] as const).forEach((index) => {
@@ -72,7 +83,9 @@ function FixtureHost() {
   const [v2Available, setV2Available] = useState(true);
   // The token seam is stable until the token or its revision changes, and the host bumps the revision whenever the token changes.
   const v2Authorization = useMemo(() => ({ revision: String(v2Revision), token: async () => (v2Token ? `fixture-token-${v2Revision}` : null) }), [v2Revision, v2Token]);
-  const v2Port = useMemo(() => v2Name && !noV2Port ? (requestedBehavior === 'paged' ? syntheticPagedPort(pagedScript(), pagedLog) : fixtureFinanceV2Port(v2Name, v2Behavior, v2Log)) : undefined, []);
+  const v2Port = useMemo(() => v2Name && !noV2Port ? (requestedBehavior === 'captured'
+    ? capturedPaginationPort({ ...(capturedGrant ? { grant: capturedGrant } : {}), ...(capturedTamper ? { tamper: capturedTamper } : {}), ...(capturedDelay ? { delayContinuationMs: capturedDelay } : {}), log: capturedLog })
+    : requestedBehavior === 'paged' ? syntheticPagedPort(pagedScript(), pagedLog) : fixtureFinanceV2Port(v2Name, v2Behavior, v2Log)) : undefined, []);
   // The cursor lives in the host's own URL as request metadata only. It is read once on load; the dashboard still binds every answer to the host's scope, snapshot and hashes, and a
   // URL cursor alone is never authority. replaceState keeps Back from walking through pages: leaving the page is the host's Back, Previous page is the dashboard's.
   const keepCursor = (cursor: string | null) => {
@@ -109,12 +122,15 @@ function FixtureHost() {
           for (const [key, value] of Object.entries(next)) { if (value === 'all') params.delete(key); else params.set(key, value); }
           navigate(window.location.pathname + (params.toString() ? `?${params.toString()}` : ''));
         };
-        const scope = v2Actor === 'a' ? fixture.expectedScope : { ...fixture.expectedScope, actorId: 'account:synthetic-actor-b' };
+        const actorScope = v2Actor === 'a' ? fixture.expectedScope : { ...fixture.expectedScope, actorId: 'account:synthetic-actor-b' };
+        const scope = params.get('v2scope') === 'foreign' ? { ...actorScope, projectId: capturedForeignProjectId } : actorScope;
         const shared = { view: v2Views[route.id]!, availability: v2Available ? { status: 'available' } as const : { status: 'refused', reason: 'restricted' } as const, scope, authorization: v2Authorization,
           expectedSnapshotId: fixture.expectedSnapshotId, expectedQueryContentHash: fixture.expectedQueryContentHash, expectedSummaryContentHash: fixture.expectedSummaryContentHash,
           ...(fixture.expectedReferences ? { expectedReferences: fixture.expectedReferences } : {}),
           ...(v2Timeout ? { timeoutMs: v2Timeout } : {}),
-          ...(requestedBehavior === 'paged' ? { onCursorChange: keepCursor, ...(v2Cursor ? { initialCursor: v2Cursor } : {}), ...(params.get('v2size') ? { pageSize: Number(params.get('v2size')) } : {}) } : {}),
+          // An empty `?cursor=` is still a cursor (a malformed one): it is passed on and refused before any read, never silently turned into a first-page read.
+          // The cursor is read from the LIVE URL each time this route mounts (so Back to a page keeps its cursor); the view still reads it once per mount and treats it as a request parameter only.
+          ...(pagedMode ? { onCursorChange: keepCursor, ...(search.get('cursor') !== null ? { initialCursor: search.get('cursor')! } : {}), ...(params.get('v2size') ? { pageSize: Number(params.get('v2size')) } : requestedBehavior === 'captured' ? { pageSize: 2 } : {}) } : {}),
           ...(route.params.id ? { detailId: route.params.id } : {}), detailHref: (id: string) => routeHref(configuredBase, 'transaction-detail', { id }) + context, listHref: routeHref(configuredBase, 'transactions') + context,
           onNavigate: navigate, filters, onFiltersChange: changeFilters };
         return v2Integrated ? <FinanceV2ConnectedView mode="INTEGRATED" {...shared} /> : <FinanceV2ConnectedView mode="SYNTHETIC_PROPOSAL" {...shared} {...(v2Port ? { port: v2Port } : {})} />;
