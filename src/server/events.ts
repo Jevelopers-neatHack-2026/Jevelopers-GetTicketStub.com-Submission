@@ -42,7 +42,7 @@ export const EVENT_SPEC = {
   order_blocked: { code: "code" },
   checkout_started: { order: "ref", lines: "count", totalMinor: "count", provider: "code" },
   order_paid: { order: "ref", totalMinor: "count", provider: "code" },
-  payment_needs_review: { order: "ref", provider: "code", reason: ["amount", "currency"] },
+  payment_needs_review: { order: "ref", provider: "code", reason: ["amount", "currency", "late"] },
   signin_link_sent: { reason: ["save", "checkout", "claim"], delivery: ["mail", "sandbox"] },
   signed_in: { fresh: "flag" },
   claim_redeemed: { status: ["claimed", "already"] },

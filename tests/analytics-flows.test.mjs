@@ -318,9 +318,13 @@ describe("sandbox orders", () => {
     assert.equal(failed.code, "payment_unavailable");
     assert.deepEqual(commerce.loadOrders(), []);
     assert.equal(events("sandbox_order")[0].result, "not_persisted");
-    reply = () => ({ status: 200, body: { order: { ...payable(), id: "ord_pay2", mode: "sandbox", createdAt: "x" }, checkoutUrl } });
+    const sent = [];
+    reply = (path, init) => (sent.push(JSON.parse(init.body).attemptId), { status: 200, body: { order: { ...payable(), id: "ord_pay2", mode: "sandbox", createdAt: "x" }, checkoutUrl } });
     const retried = await orders.resendOrder(failed);
     assert.deepEqual([retried.checkoutUrl, retried.receipt], [checkoutUrl, false]);
+    // the retry carries the attempt id the first request did, so the server can tell it is the same attempt
+    assert.match(failed.attemptId, /^[A-Za-z0-9_-]{16,64}$/);
+    assert.deepEqual(sent, [failed.attemptId]);
   });
 
   test("a full quota and a refused server is not_persisted, with no value: nothing kept the order", async () => {
