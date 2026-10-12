@@ -1,5 +1,11 @@
 # Private local production output
 
+The current named `exporters` command can report scoped local conformance after
+real output and supplied canonical-manifest byte checks. See the
+[exporter conformance runbook](EXPORTER-CONFORMANCE.md) for execution, custody,
+the retained 0.9.7 byte-metadata defect and release/approval holds. The historical
+private-stage description below does not grant supplier or consumer acceptance.
+
 Issues 13/14/15/16/19 now have executable local functions. They consume the real
 private composition, assets, typography, preflight, repair, SQLite storage,
 durable jobs and observation modules. These modules are not public canonical

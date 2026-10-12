@@ -71,9 +71,9 @@ export const suiteRegistry = {
 			"PP-06B private streaming adapter tested conditionally; approved CSV launch roster absent",
 	},
 	exporters: {
-		state: "external-blocked",
+		state: "local-conformance",
 		dependency:
-			"PP-09A real local files inspected; supplier roster/spec and required PDF Unicode/wrap cases remain blocked",
+			"PP-09A local exporter and supplied canonical-manifest byte conformance; injected test authority only, accepted supplier/spec/font roster and app/Finance handoff unproven; retained SDK byte-metadata limitation",
 	},
 	manifests: {
 		state: "external-blocked",

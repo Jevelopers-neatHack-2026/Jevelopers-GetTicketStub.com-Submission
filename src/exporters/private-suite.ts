@@ -11,6 +11,11 @@ import {
 import { IndependentTestFailure } from "../internal/independent-diagnostics.js";
 import { VerificationFailure, failureReceipt } from "../runtime/errors.js";
 import { verifyStorageConformance } from "./storage-suite.js";
+import { verifyExporterConformance } from "./exporter-suite.js";
+import {
+	outputEvidenceRequirements,
+	outputIntegrationTestPaths,
+} from "./output-evidence.js";
 export { suiteNames, suiteRegistry } from "./private-suite-registry.js";
 import type { SuiteName } from "./private-suite-registry.js";
 export type { SuiteName } from "./private-suite-registry.js";
@@ -20,7 +25,6 @@ import {
 	outputTestFiles,
 	compositionExpectedTests,
 	outputExpectedTests,
-	semanticRequirements,
 } from "./private-suite-manifest.js";
 export {
 	compositionExpectedTests,
@@ -32,6 +36,8 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 	await mkdir(root, { recursive: true });
 	await rm(receipt, { force: true });
 	try {
+		const exporter =
+			suite === "exporters" ? await verifyExporterConformance(root) : undefined;
 		const storage =
 			suite === "artifact-storage"
 				? await verifyStorageConformance(root)
@@ -104,85 +110,15 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 				.parse(suite);
 			paths = [
 				...outputTestFiles[key].map((f) => `unit/${f}.test.js`),
-				"integration/production-output-flow.test.js",
-				"integration/production-output-formats.test.js",
-				"integration/production-output-negative.test.js",
-				"integration/production-output-csv-flow.test.js",
-				"integration/production-output-process.test.js",
-				"integration/production-output-receipt.test.js",
-				"integration/production-output-pdf-mapping.test.js",
-				"integration/production-output-pdf-semantic.test.js",
-				"integration/production-output-pdf-font-adversarial.test.js",
-				"fixtures/production-output/canary.js",
+				...outputIntegrationTestPaths,
 			];
 			directoryVariable = "PP_OUTPUT_EVIDENCE_DIR";
-			requiredEvidence = [
-				{
-					path: "production-output-canary.json",
-					schema: z.object({ executed: z.literal(true) }),
-				},
-				{
-					path: "corpus-index.json",
-					schema: z.object({
-						mode: z.literal("synthetic-private-local"),
-						handoffEligible: z.literal(false),
-						artifacts: z
-							.array(z.object({ name: z.string(), digest: z.string() }))
-							.min(6),
-					}),
-				},
-				{
-					path: "output-process-restart.json",
-					schema: z.object({
-						mode: z.literal("real-process-private-synthetic"),
-						executionAttempts: z.literal(2),
-						interruptedAttempt: z.string().uuid(),
-					}),
-				},
-				{
-					path: "pdf-mapping/arabic.json",
-					schema: z.object({
-						mode: z.literal("diagnostic-synthetic-not-production"),
-						productionExactness: z.literal("verified-private-not-approved"),
-						networkRequests: z.literal(0),
-						fileDigest: z.string().regex(/^[a-f0-9]{64}$/),
-						expected: z.array(z.string()).min(1),
-					}),
-				},
-				{
-					path: "pdf-mapping/wrap.json",
-					schema: z.object({
-						mode: z.literal("diagnostic-synthetic-not-production"),
-						productionExactness: z.literal("verified-private-not-approved"),
-						networkRequests: z.literal(0),
-						fileDigest: z.string().regex(/^[a-f0-9]{64}$/),
-						expected: z.array(z.string()).min(1),
-					}),
-				},
-				{
-					path: "pdf-mapping/actualtext-control.json",
-					schema: z.object({
-						mode: z.literal("diagnostic-synthetic-not-production"),
-						readerUsesActualText: z.literal(false),
-						productionExactness: z.literal("not-accepted"),
-					}),
-				},
-			];
-			requiredEvidence.push(...semanticRequirements);
-			requiredEvidence.push({
-				path: "csv-flow-state.json",
-				schema: z.object({
-					mode: z.literal("finite-csv-test-stage"),
-					phase: z.literal("completed"),
-					generationCalls: z.literal(0),
-					privacyVerified: z.literal(true),
-					privacyRevision: z.literal("private-observation-test-privacy-1"),
-				}),
-			});
+			requiredEvidence = [...outputEvidenceRequirements];
 			expectedTests = outputExpectedTests[key];
 		}
 		const result =
 			storage?.durability ??
+			exporter?.output ??
 			(await runIndependentTests({
 				paths: paths.map((p) =>
 					fileURLToPath(new URL(`../../tests/${p}`, import.meta.url)),
@@ -192,7 +128,7 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 				evidenceEnvironment: { directoryVariable },
 				expectedTests,
 			}));
-		const conformance = storage?.conformance;
+		const conformance = storage?.conformance ?? exporter?.conformance;
 		await writeFile(
 			receipt,
 			JSON.stringify(
@@ -216,7 +152,7 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 						state: "failed-private-mechanisms",
 						externalState: "external-blocked",
 						code: "RUNTIME_FAILURE",
-						...(suite === "artifact-storage"
+						...(suite === "artifact-storage" || suite === "exporters"
 							? { failure: failureReceipt(error) }
 							: {}),
 						...(error instanceof IndependentTestFailure
