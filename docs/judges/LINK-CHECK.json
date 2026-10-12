@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-12T17:30:28.970969+00:00",
+  "checked_at": "2026-10-12T22:03:11.386152+00:00",
   "method": "Unauthenticated HTTP GET; does not prove form completion or page claims.",
   "links": [
     {
@@ -13,6 +13,16 @@
       "final_url": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst"
     },
     {
+      "url": "https://developers.openai.com/api/docs/pricing",
+      "status": 200,
+      "final_url": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "url": "https://docs.github.com/en/repositories/viewing-activity-and-data-for-your-repository/viewing-a-projects-contributors",
+      "status": 200,
+      "final_url": "https://docs.github.com/en/repositories/viewing-activity-and-data-for-your-repository/viewing-a-projects-contributors"
+    },
+    {
       "url": "https://getticketstub.com/",
       "status": 200,
       "final_url": "https://getticketstub.com/"
@@ -23,9 +33,94 @@
       "final_url": "https://github.com/CompleteDotTech"
     },
     {
+      "url": "https://github.com/CompleteTech-LLC/ai-usage-ledger-skill",
+      "status": 200,
+      "final_url": "https://github.com/CompleteTech-LLC/ai-usage-ledger-skill"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/.github/commit/c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/.github/commit/c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/.github/commits/c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/.github/commits/c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/442f4bcbc1c37f8d46470feee7e669b4f52620a4",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/442f4bcbc1c37f8d46470feee7e669b4f52620a4"
+    },
+    {
       "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9580b9b3eebd90470c8c322d95ee169f153995d3",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9580b9b3eebd90470c8c322d95ee169f153995d3"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/graphs/contributors",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/graphs/contributors"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/commit/884b0ded7d7d8c310417ac8c114f21ded27474cb",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/commit/884b0ded7d7d8c310417ac8c114f21ded27474cb"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/commits/884b0ded7d7d8c310417ac8c114f21ded27474cb",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/commits/884b0ded7d7d8c310417ac8c114f21ded27474cb"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/commit/f34c71a0961dc0c67f1ecb293a5bbb633addb663",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/commit/f34c71a0961dc0c67f1ecb293a5bbb633addb663"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/commits/f34c71a0961dc0c67f1ecb293a5bbb633addb663",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/commits/f34c71a0961dc0c67f1ecb293a5bbb633addb663"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commit/45248c766128216c0d7542737d30c0167f5b4f9b",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commit/45248c766128216c0d7542737d30c0167f5b4f9b"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commits/45248c766128216c0d7542737d30c0167f5b4f9b",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commits/45248c766128216c0d7542737d30c0167f5b4f9b"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/creative-engine/commit/81e1fe6dd4203ac238660f91b98d2622877df474",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/creative-engine/commit/81e1fe6dd4203ac238660f91b98d2622877df474"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/creative-engine/commits/81e1fe6dd4203ac238660f91b98d2622877df474",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/creative-engine/commits/81e1fe6dd4203ac238660f91b98d2622877df474"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence/commit/dc97a96d07abd5d7b66c0c18f46021e85fd60cea",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence/commit/dc97a96d07abd5d7b66c0c18f46021e85fd60cea"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence/commits/dc97a96d07abd5d7b66c0c18f46021e85fd60cea",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence/commits/dc97a96d07abd5d7b66c0c18f46021e85fd60cea"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commit/5f7e952f1632d0c07005bc64603ad1c28558814e",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commit/5f7e952f1632d0c07005bc64603ad1c28558814e"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commits/5f7e952f1632d0c07005bc64603ad1c28558814e",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commits/5f7e952f1632d0c07005bc64603ad1c28558814e"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087",
@@ -34,31 +129,26 @@
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/package.json",
-      "previous_error": "HTTP Error 503: Service Unavailable",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/package.json"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/app/api/research/route.ts",
-      "previous_error": "HTTP Error 503: Service Unavailable",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/app/api/research/route.ts"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/agent/planner.ts",
-      "previous_error": "HTTP Error 503: Service Unavailable",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/agent/planner.ts"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/fixtures.ts",
-      "previous_error": "HTTP Error 503: Service Unavailable",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/fixtures.ts"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/server/ai/providers.ts",
-      "previous_error": "HTTP Error 503: Service Unavailable",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/server/ai/providers.ts"
     },
@@ -68,54 +158,84 @@
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/6daafba1a3384b20ad181b957fd5d5715da29153"
     },
     {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/aec83af65ee75be80246d88782c8f8ce00a10c31",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/aec83af65ee75be80246d88782c8f8ce00a10c31"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commits/aec83af65ee75be80246d88782c8f8ce00a10c31",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commits/aec83af65ee75be80246d88782c8f8ce00a10c31"
+    },
+    {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46"
     },
     {
-      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md",
-      "fallback_from": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md",
-      "previous_error": "HTTP Error 503: Service Unavailable",
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/13bde39399a09d4a14cc97d72cd769b51da83e00",
       "status": 200,
-      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md",
-      "sha256": "c02e183eed44b886aa78413e56eb5bbe98edd4e1e566ad3b4d1627cdb734ce13"
-    },
-    {
-      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md",
-      "fallback_from": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md",
-      "previous_error": "HTTP Error 503: Service Unavailable",
-      "status": 200,
-      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md",
-      "sha256": "e138a75f5d0e74a2b26c1c660787570f4b77632a52295826f5624f6219a045ff"
-    },
-    {
-      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx",
-      "fallback_from": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx",
-      "previous_error": "HTTP Error 503: Service Unavailable",
-      "status": 200,
-      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx",
-      "sha256": "43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14"
-    },
-    {
-      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md",
-      "fallback_from": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md",
-      "previous_error": "HTTP Error 503: Service Unavailable",
-      "status": 200,
-      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md",
-      "sha256": "24172778d1bf116d3cfd6ae4152b6bb85100f721fcbbaa034fba19582ef4844b"
-    },
-    {
-      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md",
-      "fallback_from": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md",
-      "previous_error": "HTTP Error 503: Service Unavailable",
-      "status": 200,
-      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md",
-      "sha256": "9635928443fe3802f86dd9f9bf5d8daa3eb684ece5de832cef1596ade8462678"
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/13bde39399a09d4a14cc97d72cd769b51da83e00"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commits/13bde39399a09d4a14cc97d72cd769b51da83e00",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commits/13bde39399a09d4a14cc97d72cd769b51da83e00"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/dda1b5d48e71ed9c111b82111676b7ef033fe5ef",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/dda1b5d48e71ed9c111b82111676b7ef033fe5ef"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commits/dda1b5d48e71ed9c111b82111676b7ef033fe5ef",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commits/dda1b5d48e71ed9c111b82111676b7ef033fe5ef"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/commit/9b38209b9f1ae6ac367d9f85418e73e6146d124d",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/commit/9b38209b9f1ae6ac367d9f85418e73e6146d124d"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/commits/9b38209b9f1ae6ac367d9f85418e73e6146d124d",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/commits/9b38209b9f1ae6ac367d9f85418e73e6146d124d"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/print-production/commit/8829db6f0f14bc29c8e19a4a35b1164f84da3343",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/print-production/commit/8829db6f0f14bc29c8e19a4a35b1164f84da3343"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/print-production/commits/8829db6f0f14bc29c8e19a4a35b1164f84da3343",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/print-production/commits/8829db6f0f14bc29c8e19a4a35b1164f84da3343"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/cd961246234f8666303f306ac349c69b8b3236cd",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/cd961246234f8666303f306ac349c69b8b3236cd"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/commits/cd961246234f8666303f306ac349c69b8b3236cd",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/commits/cd961246234f8666303f306ac349c69b8b3236cd"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard/commit/eeefeb3497f3ce43fb9cc456ca67e5bbbe3b1a0f",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard/commit/eeefeb3497f3ce43fb9cc456ca67e5bbbe3b1a0f"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard/commits/eeefeb3497f3ce43fb9cc456ca67e5bbbe3b1a0f",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard/commits/eeefeb3497f3ce43fb9cc456ca67e5bbbe3b1a0f"
     },
     {
       "url": "https://github.com/gitleaks/gitleaks",
@@ -158,6 +278,46 @@
       "final_url": "https://neatlogs.com/submission"
     },
     {
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "status": 200,
+      "final_url": "https://platform.claude.com/docs/en/about-claude/pricing"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11/cfo-native-export.xlsx",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11/cfo-native-export.xlsx"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md"
+    },
+    {
+      "url": "https://x.com/CompleteTechLLC",
+      "status": 200,
+      "final_url": "https://x.com/CompleteTechLLC"
+    },
+    {
       "url": "https://x.com/CompleteTechLLC/status/2109089580159004778",
       "status": 200,
       "final_url": "https://x.com/CompleteTechLLC/status/2109089580159004778"
@@ -168,11 +328,69 @@
       "final_url": "https://x.com/CompleteTechLLC/status/2109407386289189284"
     },
     {
+      "url": "https://x.com/CompleteTechLLC/status/2109407964784382285",
+      "status": 200,
+      "final_url": "https://x.com/CompleteTechLLC/status/2109407964784382285"
+    },
+    {
+      "url": "https://x.com/CompleteTechLLC/status/2109753079604166718",
+      "status": 200,
+      "final_url": "https://x.com/CompleteTechLLC/status/2109753079604166718"
+    },
+    {
+      "url": "https://x.com/CompleteTechLLC/status/2109758479720231135",
+      "status": 200,
+      "final_url": "https://x.com/CompleteTechLLC/status/2109758479720231135"
+    },
+    {
+      "url": "https://x.com/Lmvdzande",
+      "status": 200,
+      "final_url": "https://x.com/Lmvdzande"
+    },
+    {
+      "url": "https://x.com/Lmvdzande/status/2109763739222417841",
+      "status": 200,
+      "final_url": "https://x.com/Lmvdzande/status/2109763739222417841"
+    },
+    {
+      "url": "https://x.com/ZacharyDWright",
+      "status": 200,
+      "final_url": "https://x.com/ZacharyDWright"
+    },
+    {
+      "url": "https://x.com/arithecfo/status/2108214990553395584",
+      "status": 200,
+      "final_url": "https://x.com/arithecfo/status/2108214990553395584"
+    },
+    {
       "url": "https://x.com/bettersayAJ/status/2109639214723932495",
       "status": 200,
       "final_url": "https://x.com/bettersayAJ/status/2109639214723932495"
+    },
+    {
+      "url": "https://x.com/lajefahemp",
+      "status": 200,
+      "final_url": "https://x.com/lajefahemp"
+    },
+    {
+      "url": "https://x.com/lajefahemp/status/2109734550331121877",
+      "status": 200,
+      "final_url": "https://x.com/lajefahemp/status/2109734550331121877"
+    },
+    {
+      "url": "https://x.com/neatlogs/status/2108570596456181843",
+      "status": 200,
+      "final_url": "https://x.com/neatlogs/status/2108570596456181843"
+    },
+    {
+      "url": "https://x.com/neatlogs/status/2109620501274620160",
+      "status": 200,
+      "final_url": "https://x.com/neatlogs/status/2109620501274620160"
+    },
+    {
+      "url": "https://x.com/neatlogs/status/2109642878574068152",
+      "status": 200,
+      "final_url": "https://x.com/neatlogs/status/2109642878574068152"
     }
-  ],
-  "rechecked_at": "2026-10-12T17:33:58.300925+00:00",
-  "recheck_note": "Ten transient GitHub HTTP 503 responses were retried sequentially. Five source pages recovered. Five integration-evals blob views still failed, so maintained links now use verified raw files at the same exact commit. Each raw file matched the collected copy byte for byte."
+  ]
 }

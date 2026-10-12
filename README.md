@@ -5,9 +5,9 @@
 ![Illustration of a cream ticket stub with rainy-night art, resting on paper and dark velvet.](docs/assets/submission/banner.jpg)
 *AI illustration of the idea, not a product photo or proof of printing.*
 
-**[Demo placeholder & status](docs/judges/DEMO.md) · [Open the product](https://getticketstub.com/) · [See the evidence](docs/judges/EVIDENCE.md) · [Browse the code](REPOSITORIES.md)**
+**[Watch the video · 2:56](https://x.com/CompleteTechLLC/status/2109758479720231135) · [Open the product](https://getticketstub.com/) · [See the evidence](docs/judges/EVIDENCE.md) · [Browse the code](REPOSITORIES.md)**
 
-> **Before judging:** A final demo video, required quote-post, and form confirmation are not yet in this evidence pack. A full live journey still needs proof. [Submission checklist →](docs/judges/RULES-CHECKLIST.md)
+> **Before judging:** The video and launch quote-post are linked. Video coverage, deadline eligibility, form confirmation, and a full live journey still need verification. [Submission checklist →](docs/judges/RULES-CHECKLIST.md)
 
 ## A ticket should hold more than a barcode
 
@@ -83,9 +83,9 @@ Open the local address printed in the terminal. Choose **The Pale Hours**, confi
 
 ## Built by Jevelopers
 
-[Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary Wright](https://github.com/zwright8) · [@lajefahemp-collab](https://github.com/lajefahemp-collab). Brand and studio design: Lars.
+[Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary D. Wright](https://github.com/zwright8) · [Crystal Aguilar](https://github.com/lajefahemp-collab). Brand and studio design: Lars. [Team and socials →](docs/judges/TEAM.md)
 
-[Day 1 build post](https://x.com/CompleteTechLLC/status/2109089580159004778) · [Day 2 build post](https://x.com/CompleteTechLLC/status/2109407386289189284)
+[Build posts, submission videos, and organizer updates →](docs/judges/PUBLIC-POSTS.md)
 
 [Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Repo, line, and commit counts](REPOSITORIES.md#collection-at-a-glance) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 

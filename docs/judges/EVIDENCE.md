@@ -91,7 +91,7 @@ Timothy's [searchable report and complete CSV bundle](USAGE.md#explore-the-repor
 
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
 
-**Still missing:** a verified final demo quote-post of the official launch post. The two build posts predate that launch and do not satisfy this step. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
+**Now linked:** [Timothy’s launch quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) includes a video shown as 2:56 and all three required tags. Clicking its quoted card reached the exact official launch. Lars also posted a matching launch quote; Crystal posted a standalone video. [Exact links, review scope, and timing caveat](PUBLIC-POSTS.md). Full video coverage, deadline eligibility, and form confirmation remain unverified. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
 
 ## Code history
 
@@ -105,7 +105,7 @@ Examples: [studio commit](https://github.com/Jevelopers-neatHack-2026/gettickets
 
 ## Limits that matter
 
-- Complete live agent task, measured improvement, final video, required public post, and form confirmation remain open.
+- Complete live agent task, measured improvement, video content review, deadline eligibility, and form confirmation remain open. The required quote-post elements are now verified.
 - The sample is simulated. It is not a paid customer result or proof that physical products can be ordered.
 - Wall navigation failed in an initial Webpack preview on a CSS selector. The normal Turbopack development server then showed the saved stub on its wall. Download succeeded. See [replay notes](DEMO.md#replay-the-sample) for the exact runtime and any later verification.
 - Evidence files describe the revisions they tested. A source refresh does not refresh the evidence or close internal acceptance gates.

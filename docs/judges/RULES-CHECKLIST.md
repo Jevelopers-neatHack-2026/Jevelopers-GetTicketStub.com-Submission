@@ -2,7 +2,7 @@
 
 [Back to TicketStub](../../README.md) · [Evidence](EVIDENCE.md) · [Demo](DEMO.md)
 
-**Checked October 12, 2026.** Sources: [official rules](https://neatlogs.com/hackathon), [official submission form](https://neatlogs.com/submission), and the Discord link they provide.
+**Checked October 12, 2026.** Sources: [official rules](https://neatlogs.com/hackathon), [official submission form](https://neatlogs.com/submission), the [organizer’s October 12 instructions](https://x.com/neatlogs/status/2109642878574068152), and the Discord link they provide.
 
 **Deadline needs verification.** The website lists October 12, 7:00–11:55 PM IST (13:30–18:25 UTC; 9:30 AM–2:25 PM New York). Later organizer posts on Discord control the cutoff. The invite resolved, but channel updates were not accessible in this check. Confirm them before relying on the website time.
 
@@ -16,19 +16,18 @@
 | Use cfo.ai; include its business plan | **Verified** | [Saved narrative and reviewer workbook](EVIDENCE.md#cfoai). Hypothetical forecasts; export caveats remain. |
 | Public code with event-period commits | **Verified** | [14 source commit records](SOURCE-PROVENANCE.json). Each inspected tip is dated October 12. Full code eligibility is a separate open check below. |
 | All code written in the allowed window | **Needs verification** | Website start: October 10, 12:30 PM IST. Tip dates alone cannot prove when every file was written. Review original history and any earlier planning/brand assets; ask organizers about uncertain material. |
-| Video at most three minutes; covers all three tools | **Missing** | [2:50 silent placeholder and recording plan](DEMO.md). The supplied concept animatic is not a verified final demo. |
-| Public quote-post of the official launch post, with demo and all three tags | **Missing** | Use the [official launch post](https://x.com/bettersayAJ/status/2109639214723932495) linked by the form. Include @neatlogs, @EntireHQ, @arithecfo. Save the resulting public URL. |
+| Video at most three minutes; covers all three tools | **Needs verification** | [Posted video](DEMO.md): X displays 2:56. Full content, audio, and all-three-tool coverage have not been reviewed. |
+| Public quote-post of the official launch post, with demo and all three tags | **Verified** | [Timothy’s post](https://x.com/CompleteTechLLC/status/2109758479720231135) quotes the exact launch, has an attached video, and links @neatlogs, @EntireHQ, @arithecfo. [Scope and timing caveat](PUBLIC-POSTS.md): this verifies post elements, not deadline acceptance or signed-out playback. |
 | Complete and confirm the official form | **Missing** | The public form was inspected. No team submission was made here and no confirmation is retained. A draft is not a submitted entry. |
 
 Every requirement above comes from the [rules](https://neatlogs.com/hackathon); the quote-post and confirmation sequence is also shown by the [form](https://neatlogs.com/submission).
 
 ## Finish the external steps
 
-1. Confirm the final deadline in Discord.
-2. Record and check the demo, including neatlogs, Entire, and cfo.ai.
-3. Use **View launch post** in the official form. It links to Ajay Yadav’s October 12 neatlogs launch, verified in Chrome.
-4. Quote that post publicly with the demo and all required tags. Keep a public URL and check it while signed out.
-5. The team leader completes all form steps, reviews the entry, selects **Submit project**, and saves the confirmation.
+1. Confirm the final deadline in Discord. Timothy’s and Lars’s posts display times after the website cutoff; organizer acceptance is not established.
+2. Review the [posted video](DEMO.md) for all three tools and accurate claims. Test signed-out playback.
+3. Use the verified [launch quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) in the official form.
+4. The team leader completes all form steps, reviews the entry, selects **Submit project**, and saves the confirmation.
 
 ## Separate from our engineering checklist
 
@@ -37,3 +36,5 @@ The project’s [master checklist](../../repositories/integration-evals/planning
 ## Public access notes
 
 The form loaded without authentication and showed three steps: Quote post, Project & team, Review & submit. We did not enter data or request an email code. Discord invite access did not expose organizer messages. The product loaded in Chrome. An early automated request received 403; the later unauthenticated link check returned 200. Access was verified at check time, not guaranteed for every client. The launch post and two team build posts were read in signed-in Chrome; their URLs returned HTTP 200 without authentication. Full signed-out X rendering was not separately checked.
+
+The October 12 social review found [three team video posts and organizer guidance](PUBLIC-POSTS.md). Their content was read in signed-in Chrome. This review did not establish signed-out video playback or a Discord deadline extension.
