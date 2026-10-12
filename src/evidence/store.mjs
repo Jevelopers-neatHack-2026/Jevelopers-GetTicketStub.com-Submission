@@ -3130,6 +3130,220 @@ export function createEvidenceStore(options) {
     return materializeSelectedInternal(scope, selection, request, signal, 'materialize_selected');
   }
 
+  /**
+   * Rechecks the selected private snapshot and any controlled asset roles at
+   * the release boundary. This is an opt-in-only capability: it does not
+   * materialize additional evidence or change the ordinary eight-evidence
+   * selection limit. All host callbacks which may await finish before the
+   * synchronous authorization / durable-state tail below.
+   */
+  async function revalidateControlledAssetRelease(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    checkCancellation(signal);
+    const input = ownDataRecord(inputValue, new Set([
+      'evidence', 'facts', 'assetGroups', 'beforeFinalization', 'finalizeHostAuthority',
+    ]));
+    if (!input || typeof input.beforeFinalization !== 'function'
+      || typeof input.finalizeHostAuthority !== 'function') fail('EVIDENCE_INVALID');
+    const evidenceValues = safeArray(input.evidence, SELECTED_BATCH_LIMITS.evidenceCount);
+    const factValues = safeArray(input.facts, SELECTED_BATCH_LIMITS.factCount);
+    const assetGroupValues = safeArray(input.assetGroups, 8);
+    if (!evidenceValues || !factValues || !assetGroupValues
+      || evidenceValues.length + factValues.length === 0) fail('EVIDENCE_INVALID');
+
+    const copyReference = (value) => {
+      const reference = ownDataRecord(value, new Set(['handle', 'metadata']));
+      const metadata = reference && ownDataRecord(reference.metadata, new Set([
+        'evidenceId', 'version', 'previousEvidenceId', 'contentHash', 'duplicateGroupId',
+        'retrievedAt', 'createdAt', 'expiresAt', 'policyId', 'policyVersion', 'accessPolicy',
+        'state', 'positionCount', 'representation', 'derivationDigest',
+      ]));
+      if (!reference || !metadata || !validUuid(metadata.evidenceId)
+        || !Number.isSafeInteger(metadata.version) || metadata.version < 1
+        || (metadata.previousEvidenceId !== null && !validUuid(metadata.previousEvidenceId))
+        || !isDigest(metadata.contentHash) || !isDigest(metadata.duplicateGroupId)
+        || !validTimestamp(metadata.retrievedAt) || !validTimestamp(metadata.createdAt) || !validTimestamp(metadata.expiresAt)
+        || typeof metadata.policyId !== 'string' || metadata.policyId.length < 1 || metadata.policyId.length > 128
+        || typeof metadata.policyVersion !== 'string' || metadata.policyVersion.length < 1 || metadata.policyVersion.length > 128
+        || metadata.accessPolicy !== 'tenant_private' || metadata.state !== 'available'
+        || !Number.isSafeInteger(metadata.positionCount) || metadata.positionCount < 1
+        || (metadata.representation !== undefined
+          && ![PDF_DERIVED_REPRESENTATION, ASSET_SOURCE_EXCERPT_REPRESENTATION].includes(metadata.representation))
+        || (metadata.representation === undefined && Object.hasOwn(metadata, 'derivationDigest'))
+        || (metadata.representation !== undefined && !isDigest(metadata.derivationDigest))) fail('EVIDENCE_INVALID');
+      const evidence = evidenceInfo(scope, reference.handle);
+      if (metadata.evidenceId !== evidence.evidenceId) fail('EVIDENCE_DENIED');
+      return Object.freeze({
+        evidenceId: evidence.evidenceId,
+        handle: reference.handle,
+        metadata: Object.freeze({ ...metadata }),
+      });
+    };
+    const evidenceReferences = evidenceValues.map(copyReference);
+    const factIds = factValues.map((handle) => {
+      const fact = FACT_HANDLES.get(handle);
+      if (!fact || fact.tenantHash !== info.tenantHash || fact.tenantId !== info.tenantId) fail('EVIDENCE_DENIED');
+      return fact.factId;
+    });
+    if (evidenceReferences.length === 0 || new Set(evidenceReferences.map((item) => item.evidenceId)).size !== evidenceReferences.length
+      || new Set(factIds).size !== factIds.length) fail('EVIDENCE_INVALID');
+
+    const assetGroups = assetGroupValues.map((value) => {
+      const group = ownDataRecord(value, new Set(['candidateId', 'evidence']));
+      if (!group || typeof group.candidateId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(group.candidateId)) {
+        fail('EVIDENCE_INVALID');
+      }
+      const roles = safeArray(group.evidence, 2);
+      if (!roles || roles.length !== 2) fail('EVIDENCE_INVALID');
+      const copiedRoles = roles.map(copyReference);
+      if (new Set(copiedRoles.map((item) => item.evidenceId)).size !== copiedRoles.length) fail('EVIDENCE_INVALID');
+      return Object.freeze({ candidateId: group.candidateId, evidence: Object.freeze(copiedRoles) });
+    });
+    if (new Set(assetGroups.map((item) => item.candidateId)).size !== assetGroups.length) fail('EVIDENCE_INVALID');
+    const allReferenceMap = new Map();
+    for (const reference of [...evidenceReferences, ...assetGroups.flatMap((group) => group.evidence)]) {
+      const previous = allReferenceMap.get(reference.evidenceId);
+      if (previous && JSON.stringify(previous.metadata) !== JSON.stringify(reference.metadata)) fail('EVIDENCE_INTEGRITY');
+      allReferenceMap.set(reference.evidenceId, reference);
+    }
+    if (allReferenceMap.size > SELECTED_BATCH_LIMITS.evidenceCount + 16) fail('EVIDENCE_INVALID');
+
+    const directory = await tenantDirectory(info);
+    let snapshot;
+    let finalVerifier;
+    try {
+      snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
+        const manifest = await readManifest(database, info.tenantHash);
+        await expireRecords(database, manifest, currentTime());
+        const budget = newMaterializationBudget();
+        const evidenceRecords = [];
+        let selectedPositionCount = 0;
+        const selectedPositionLimit = Math.min(limits.maxPositionCount, SELECTED_BATCH_LIMITS.positionCount);
+        for (const reference of evidenceReferences) {
+          const record = manifest.records[reference.evidenceId];
+          if (!record) fail('EVIDENCE_NOT_FOUND');
+          if (record.state !== 'available') fail('EVIDENCE_EXPIRED');
+          const copied = copyEvidenceRecord(record, selectedPositionLimit - selectedPositionCount, budget);
+          selectedPositionCount += copied.positionIds.length;
+          if (selectedPositionCount > selectedPositionLimit) fail('EVIDENCE_INVALID');
+          if (JSON.stringify(frozenMetadata(copied)) !== JSON.stringify(reference.metadata)) fail('EVIDENCE_INTEGRITY');
+          evidenceRecords.push(copied);
+        }
+        // Controlled source and transformed records are role-separated. Each
+        // retains the host position-count ceiling, including bounded chunking;
+        // these role positions do not become public selected positions.
+        for (const group of assetGroups) {
+          for (const reference of group.evidence) {
+            const record = manifest.records[reference.evidenceId];
+            if (!record) fail('EVIDENCE_NOT_FOUND');
+            if (record.state !== 'available') fail('EVIDENCE_EXPIRED');
+            const copied = copyEvidenceRecord(record, Math.min(limits.maxPositionCount, SELECTED_BATCH_LIMITS.positionCount), budget);
+            if (JSON.stringify(frozenMetadata(copied)) !== JSON.stringify(reference.metadata)) fail('EVIDENCE_INTEGRITY');
+            if (!evidenceRecords.some((existing) => existing.id === copied.id)) evidenceRecords.push(copied);
+          }
+        }
+        const factRecords = [];
+        const supportEvidenceIds = new Set();
+        for (const factId of factIds) {
+          const record = manifest.facts[factId];
+          if (!record) fail('EVIDENCE_NOT_FOUND');
+          if (record.state !== 'available') fail('EVIDENCE_EXPIRED');
+          const copied = copyFactRecord(record, budget);
+          factRecords.push(copied);
+          for (const evidenceId of copied.supportEvidenceIds) supportEvidenceIds.add(evidenceId);
+        }
+        const selectedEvidenceIds = new Set(evidenceReferences.map((item) => item.evidenceId));
+        if ([...supportEvidenceIds].some((evidenceId) => !selectedEvidenceIds.has(evidenceId))) fail('EVIDENCE_INTEGRITY');
+        const publicationTime = currentTime();
+        if (evidenceRecords.some((record) => record.expiresAtMs <= publicationTime)
+          || factRecords.some((record) => record.expiresAtMs <= publicationTime)) fail('EVIDENCE_EXPIRED');
+        return { evidence: evidenceRecords, facts: factRecords, manifestPresentAtSnapshot: true };
+      }, signal);
+
+      checkCancellation(signal);
+      const originalEvidenceIds = evidenceReferences.map((item) => item.evidenceId);
+      const allFactAndCoreEvidenceIds = [...originalEvidenceIds];
+      for (const factId of factIds) {
+        const record = snapshot.facts.find((item) => item.id === factId);
+        if (!record) fail('EVIDENCE_INTEGRITY');
+        for (const supportId of record.supportEvidenceIds) {
+          if (!allFactAndCoreEvidenceIds.includes(supportId)) allFactAndCoreEvidenceIds.push(supportId);
+        }
+      }
+      const allRoleIds = assetGroups.flatMap((group) => group.evidence.map((item) => item.evidenceId));
+      await authorize(info, request, 'read_private_evidence', [...allFactAndCoreEvidenceIds, ...allRoleIds], factIds, signal);
+      checkCancellation(signal);
+
+      let activeCandidateIds = await awaitAbortableHostOperation(
+        () => input.beforeFinalization(Object.freeze({
+          candidateIds: Object.freeze(assetGroups.map((group) => group.candidateId)),
+        })),
+        signal,
+      );
+      const copiedActiveCandidateIds = safeArray(activeCandidateIds, assetGroups.length);
+      if (!copiedActiveCandidateIds
+        || copiedActiveCandidateIds.some((id) => typeof id !== 'string' || !assetGroups.some((group) => group.candidateId === id))
+        || new Set(copiedActiveCandidateIds).size !== copiedActiveCandidateIds.length) fail('EVIDENCE_INVALID');
+      activeCandidateIds = [...copiedActiveCandidateIds];
+
+      const finalEvidenceIds = () => [
+        ...allFactAndCoreEvidenceIds,
+        ...assetGroups.filter((group) => activeCandidateIds.includes(group.candidateId))
+          .flatMap((group) => group.evidence.map((item) => item.evidenceId)),
+      ];
+      const syncCurrentAuthorization = (evidenceIds) => {
+        authorizeCurrent(info, request, 'read_private_evidence', evidenceIds, factIds);
+      };
+      const runHostFinalizer = () => {
+        let decision;
+        try { decision = input.finalizeHostAuthority(Object.freeze({ candidateIds: Object.freeze([...activeCandidateIds]) })); }
+        catch { fail('EVIDENCE_DENIED'); }
+        if (decision !== null && (typeof decision === 'object' || typeof decision === 'function')) {
+          observeNativeRejectedPromise(decision);
+          const copied = ownDataRecord(decision, new Set(['releaseAuthorized', 'candidateIds']));
+          const returnedCandidateIds = copied && safeArray(copied.candidateIds, assetGroups.length);
+          if (!copied || typeof copied.releaseAuthorized !== 'boolean' || !returnedCandidateIds
+            || returnedCandidateIds.some((id) => typeof id !== 'string'
+              || !activeCandidateIds.includes(id) || !assetGroups.some((group) => group.candidateId === id))
+            || new Set(returnedCandidateIds).size !== returnedCandidateIds.length) fail('EVIDENCE_INVALID');
+          if (copied.releaseAuthorized !== true) fail('EVIDENCE_DENIED');
+          activeCandidateIds = [...returnedCandidateIds];
+          return;
+        }
+        fail('EVIDENCE_INVALID');
+      };
+
+      // No async work follows this joint tail. The two synchronous authority
+      // checks bracket host authorization so one-time revocations made by a
+      // trusted callback are observed by the next check; the durable verifier
+      // then checks all selected and active role records at the final state.
+      syncCurrentAuthorization(finalEvidenceIds());
+      runHostFinalizer();
+      syncCurrentAuthorization(finalEvidenceIds());
+      runHostFinalizer();
+      finalVerifier = makeFinalStateVerifier(info, directory, finalEvidenceIds(), factIds);
+      finalVerifier.check({
+        evidence: snapshot.evidence.filter((record) => finalEvidenceIds().includes(record.id)),
+        facts: snapshot.facts,
+        manifestPresentAtSnapshot: snapshot.manifestPresentAtSnapshot,
+      });
+      checkCancellation(signal);
+      const currentEvidenceMetadata = evidenceReferences.map((reference) => {
+        const record = snapshot.evidence.find((item) => item.id === reference.evidenceId);
+        if (!record) fail('EVIDENCE_INTEGRITY');
+        return frozenMetadata(record);
+      });
+      return Object.freeze({ currentEvidenceMetadata: Object.freeze(currentEvidenceMetadata) });
+    } catch (error) {
+      if (!(error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED')) {
+        try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
+      }
+      throw safePublicError(error);
+    } finally {
+      finalVerifier?.close();
+    }
+  }
+
   async function createScope(request) {
     let tenantId;
     try { tenantId = await config.resolveTenant(request); } catch { fail('EVIDENCE_DENIED'); }
@@ -5364,6 +5578,7 @@ export function createEvidenceStore(options) {
     withPrivatePayload,
     readAssetSourceCandidateBinding,
     readControlledAssetBytes,
+    revalidateControlledAssetRelease,
     appendFact,
     lookupFact,
     readFact,

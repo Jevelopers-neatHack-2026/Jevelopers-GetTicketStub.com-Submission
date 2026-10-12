@@ -650,6 +650,7 @@ test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindin
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
     'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'readPrivateRunReceipt',
     'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'readAssetSourceCandidateBinding',
+    'revalidateControlledAssetRelease',
   ]) observedStore[name] = h.evidenceStore[name].bind(h.evidenceStore);
   observedStore.finalizePrivateRunReceipt = async (...args) => {
     try { return await h.evidenceStore.finalizePrivateRunReceipt(...args); }
@@ -790,6 +791,7 @@ test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindin
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
     'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'readPrivateRunReceipt',
     'readControlledAssetBytes', 'readAssetSourceCandidateBinding', 'finalizePrivateRunReceipt',
+    'revalidateControlledAssetRelease',
   ]) roleSwapStore[name] = h.evidenceStore[name].bind(h.evidenceStore);
   const ingestControlledAssetEvidence = h.evidenceStore.ingestControlledAssetEvidence.bind(h.evidenceStore);
   let fetchedRoleWitness;
@@ -818,6 +820,147 @@ test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindin
   }));
   assert.equal(expiredSourceReplay.status, 'incomplete', JSON.stringify(expiredSourceReplay));
   assert.equal(paths.length, 6, 'expired source evidence cannot trigger a fresh asset fetch');
+});
+
+test('controlled release joint tail catches cross-domain revocation after the final async store authorization', async (t) => {
+  const svg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect fill="red" height="3" width="2"/></svg>';
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-controlled-svg-joint-tail-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+
+  for (const mode of [
+    'async-store-asset-revocation',
+    'async-store-release-revocation',
+    'async-store-deadline',
+    'host-finalizer-store-acl-revocation',
+    'host-finalizer-store-expiry',
+    'store-current-auth-host-revocation',
+  ]) {
+    const paths = [];
+    const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+      + '<script type="application/ld+json">{"@type":"Event","name":"Joint Tail Event","startDate":"2027-06-20"}</script></body></html>');
+    const server = await startFixture((requestValue, response) => {
+      const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+      paths.push(pathname);
+      if (pathname === '/logo.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, svg);
+      else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+    });
+    t.after(() => server.close());
+
+    let storeAcl = true;
+    let hostReleaseAuthorized = true;
+    let hostAssetAuthorized = true;
+    const evidenceNowStart = Date.now();
+    let evidenceNow = evidenceNowStart;
+    const sourceRetentionExpiresAt = evidenceNowStart + 120_000;
+    let finalRevalidationEntered = false;
+    let firstStoreAuthorizationTriggered = false;
+    let firstCurrentAuthorizationTriggered = false;
+    let firstHostFinalizationTriggered = false;
+    const performanceObject = globalThis.performance;
+    const priorOwnPerformanceNow = Object.getOwnPropertyDescriptor(performanceObject, 'now');
+    const realPerformanceNow = performanceObject.now.bind(performanceObject);
+    const performanceStart = realPerformanceNow();
+
+    const h = await harness(t, {
+      evidenceOptions: {
+        now: () => evidenceNow,
+        async authorizePrivateAccess({ tenantId, request: authenticated }) {
+          if (finalRevalidationEntered && !firstStoreAuthorizationTriggered && mode.startsWith('async-store-')) {
+            firstStoreAuthorizationTriggered = true;
+            if (mode === 'async-store-asset-revocation') hostAssetAuthorized = false;
+            if (mode === 'async-store-release-revocation') hostReleaseAuthorized = false;
+            if (mode === 'async-store-deadline') {
+              // Advance the actual monotonic clock source used by the runner
+              // after final store authorization, without sleeping 30 seconds.
+              Object.defineProperty(performanceObject, 'now', {
+                configurable: true,
+                value: () => performanceStart + 60_000,
+              });
+            }
+          }
+          return storeAcl && authenticated?.principal?.tenantId === tenantId && authenticated.allowPrivate === true;
+        },
+        authorizePrivateAccessCurrent({ tenantId, request: authenticated }) {
+          const authorized = storeAcl && authenticated?.principal?.tenantId === tenantId && authenticated.allowPrivate === true;
+          if (finalRevalidationEntered && !firstCurrentAuthorizationTriggered
+            && mode === 'store-current-auth-host-revocation') {
+            firstCurrentAuthorizationTriggered = true;
+            hostReleaseAuthorized = false;
+          }
+          return authorized;
+        },
+      },
+    });
+
+    const store = Object.create(null);
+    for (const name of [
+      'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
+      'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'readPrivateRunReceipt',
+      'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'readAssetSourceCandidateBinding',
+      'revalidateControlledAssetRelease', 'finalizePrivateRunReceipt',
+    ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+    const revalidate = h.evidenceStore.revalidateControlledAssetRelease.bind(h.evidenceStore);
+    store.revalidateControlledAssetRelease = (scope, input, authenticated, signal) => {
+      finalRevalidationEntered = true;
+      return revalidate(scope, {
+        ...input,
+        finalizeHostAuthority(context) {
+          const decision = input.finalizeHostAuthority(context);
+          if (!firstHostFinalizationTriggered && mode === 'host-finalizer-store-acl-revocation') {
+            firstHostFinalizationTriggered = true;
+            storeAcl = false;
+          }
+          if (!firstHostFinalizationTriggered && mode === 'host-finalizer-store-expiry') {
+            firstHostFinalizationTriggered = true;
+            evidenceNow = sourceRetentionExpiresAt + 1;
+          }
+          return decision;
+        },
+      }, authenticated, signal);
+    };
+
+    const runId = `private-controlled-svg-joint-tail-${mode}`;
+    let result;
+    try {
+      result = await runPrivateRetrieval(h.makeInput({
+        runId,
+        server,
+        seeds: [{ url: sourceUrl('/event') }],
+        store,
+        retentionHandleFor: () => h.createRetention(sourceRetentionExpiresAt),
+        assetAcquisitionPolicyFor: () => policy,
+        authorizeCurrent: (_request, context) => {
+          if (context.stage === 'release') return hostReleaseAuthorized;
+          if (context.stage === 'asset-acquisition') return hostAssetAuthorized;
+          return true;
+        },
+      }));
+    } finally {
+      if (priorOwnPerformanceNow) Object.defineProperty(performanceObject, 'now', priorOwnPerformanceNow);
+      else delete performanceObject.now;
+    }
+
+    assert.deepEqual(paths, ['/event', '/logo.svg'], `${mode} never dispatches a second or replay request`);
+    if (mode === 'async-store-asset-revocation') {
+      assert.equal(firstStoreAuthorizationTriggered, true);
+      assert.equal(result.status, 'draft', JSON.stringify(result));
+      assert.deepEqual(result.assetAcquisitions, [], 'asset-stage revocation removes the stale local plan');
+    } else {
+      assert.equal(result.status, 'incomplete', `${mode} suppresses stale release output: ${JSON.stringify(result)}`);
+      assert.equal(result.draft, null);
+      assert.deepEqual(result.assetAcquisitions ?? [], []);
+    }
+    if (mode === 'async-store-release-revocation') assert.equal(firstStoreAuthorizationTriggered, true);
+    if (mode === 'async-store-deadline') assert.equal(firstStoreAuthorizationTriggered, true);
+    if (mode === 'host-finalizer-store-acl-revocation' || mode === 'host-finalizer-store-expiry') {
+      assert.equal(firstHostFinalizationTriggered, true);
+    }
+    if (mode === 'store-current-auth-host-revocation') assert.equal(firstCurrentAuthorizationTriggered, true);
+  }
 });
 
 test('default-off and zero-depth runs never issue separate asset requests; an ordinary SVG seed stays failed', async (t) => {
@@ -4910,6 +5053,46 @@ test('revocation while final selected materialization is returning withholds the
   h.setAcl(false);
   releaseFinal();
   const result = await running;
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('authorization_revoked'));
+});
+
+test('default-off legacy evidence adapters still recheck host release authorization after materialization', async (t) => {
+  const server = await startFixture((_request, response) => {
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  let materializationCalls = 0;
+  let finalMaterializationCompleted = false;
+  let releaseAuthorized = true;
+  let releaseCheckedAfterMaterialization = false;
+  const store = legacyEvidenceAdapter(h.evidenceStore);
+  const materialize = store.materializeSelected;
+  store.materializeSelected = async (...args) => {
+    const result = await materialize(...args);
+    materializationCalls += 1;
+    if (materializationCalls === 3) {
+      finalMaterializationCompleted = true;
+      releaseAuthorized = false;
+    }
+    return result;
+  };
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-default-off-final-release-revoked',
+    server,
+    seeds: [{ url: sourceUrl('/event') }],
+    store,
+    authorizeCurrent: (_request, context) => {
+      if (context.stage === 'release' && finalMaterializationCompleted) {
+        releaseCheckedAfterMaterialization = true;
+      }
+      return context.stage !== 'release' || releaseAuthorized;
+    },
+  }));
+  assert.equal(finalMaterializationCompleted, true, 'the fixture revoked release only after final selection materialized');
+  assert.equal(releaseCheckedAfterMaterialization, true);
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('authorization_revoked'));

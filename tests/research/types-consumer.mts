@@ -2,6 +2,7 @@ import type { DiscoveryFrontierStore } from '../../src/discovery/planner/frontie
 import type {
   ControlledAssetEvidenceIngestInput,
   ControlledAssetEvidenceStore,
+  AvailableEvidenceMetadata,
   EvidenceHandle,
   EvidenceTenantScope,
 } from '../../src/evidence/store.mjs';
@@ -22,6 +23,11 @@ declare const frontier: DiscoveryFrontierStore<AuthenticatedRequest>;
 declare const evidenceStore: ControlledAssetEvidenceStore<AuthenticatedRequest>;
 declare const safeFetcher: SafeFetcher;
 declare const request: AuthenticatedRequest;
+declare const evidenceScope: EvidenceTenantScope;
+declare const selectedEvidenceHandle: EvidenceHandle;
+declare const fetchedAssetEvidenceHandle: EvidenceHandle;
+declare const transformedAssetEvidenceHandle: EvidenceHandle;
+declare const evidenceMetadata: AvailableEvidenceMetadata;
 const acquisitionPolicy: PrivateRetrievalAssetAcquisitionPolicy = {
   schemaVersion: 1,
   policyVersion: 'ei-private-svg-acquisition/1',
@@ -92,3 +98,20 @@ async function inspect(result: PrivateRetrievalResult): Promise<void> {
 void runPrivateRetrieval(input).then(inspect);
 void storeControlledAsset;
 void reopenAssetSource;
+
+async function revalidateControlledRelease(candidateId: string): Promise<void> {
+  const assetRoles = [
+    { handle: fetchedAssetEvidenceHandle, metadata: evidenceMetadata },
+    { handle: transformedAssetEvidenceHandle, metadata: evidenceMetadata },
+  ] as const;
+  const current = await evidenceStore.revalidateControlledAssetRelease(evidenceScope, {
+    evidence: [{ handle: selectedEvidenceHandle, metadata: evidenceMetadata }],
+    facts: [],
+    assetGroups: [{ candidateId, evidence: assetRoles }],
+    beforeFinalization: async ({ candidateIds }) => candidateIds,
+    finalizeHostAuthority: ({ candidateIds }) => ({ releaseAuthorized: true, candidateIds }),
+  }, request);
+  current.currentEvidenceMetadata[0]?.expiresAt satisfies string | undefined;
+}
+
+void revalidateControlledRelease;

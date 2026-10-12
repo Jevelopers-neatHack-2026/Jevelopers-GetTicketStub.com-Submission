@@ -206,7 +206,7 @@ function snapshotRunInput(value) {
     'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]);
   const controlledAssetEvidenceStore = exactMethods(input.evidenceStore, [
-    'ingestControlledAssetEvidence', 'readControlledAssetBytes',
+    'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'revalidateControlledAssetRelease',
   ]);
   const assetSourceBindingStore = exactMethods(input.evidenceStore, ['readAssetSourceCandidateBinding']);
   if (!frontier || !evidenceStore || !(input.safeFetcher instanceof SafeFetcher)) fail();
@@ -933,6 +933,7 @@ export async function runPrivateRetrieval(value) {
   const omittedLinkCandidates = [];
   const assetAcquisitionResults = [];
   const assetAcquisitionReceipts = new Map();
+  const assetReleaseRoleReferences = new Map();
   const assetCandidateIds = new Set();
   let truncatedSuggestionCount = 0;
   let sourceLinkCandidateOmittedCountLowerBound = 0;
@@ -1007,6 +1008,7 @@ export async function runPrivateRetrieval(value) {
   };
   const forgetAcquiredAssetPlan = (candidateId) => {
     assetAcquisitionReceipts.delete(candidateId);
+    assetReleaseRoleReferences.delete(candidateId);
     const index = assetAcquisitionResults.findIndex((entry) => entry.candidate.frontierCandidateId === candidateId);
     if (index >= 0) assetAcquisitionResults.splice(index, 1);
   };
@@ -1156,6 +1158,13 @@ export async function runPrivateRetrieval(value) {
         === receipt.candidate.candidateId);
       if (existing < 0) assetAcquisitionResults.push(result);
       else assetAcquisitionResults[existing] = result;
+      assetReleaseRoleReferences.set(receipt.candidate.candidateId, Object.freeze({
+        candidateId: receipt.candidate.candidateId,
+        evidence: Object.freeze([
+          Object.freeze({ handle: originalHandle, metadata: original.metadata }),
+          Object.freeze({ handle: transformedHandle, metadata: transformed.metadata }),
+        ]),
+      }));
       assetAcquisitionReceipts.set(receipt.candidate.candidateId, receipt);
       return true;
     } catch {
@@ -2434,31 +2443,69 @@ export async function runPrivateRetrieval(value) {
         limitations.add('asset_acquisition_final_revalidation_failed');
       }
     }
-    if (assetAcquisitionResults.length > 0) {
-      // This callback may await. The last asset and release authorization
-      // checks below are intentionally synchronous and immediately precede
-      // projection, leaving no later await boundary for a stale plan.
-      if (!await currentAssetPolicyMatches()) {
-        for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
-        limitations.add('asset_acquisition_policy_changed');
-      }
-      if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
-        for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
-        limitations.add('authorization_revoked');
-      }
-    }
     const sourceLinkCandidateOmittedCount = sourceLinkCandidateOmittedCountComplete
       ? sourceLinkCandidateOmittedCountLowerBound : null;
+    let finalEvidence = materialized.evidence;
+    let controlledReleaseRevalidationCompleted = false;
+    if (assetAcquisitionResults.length > 0) {
+      const assetGroups = assetAcquisitionResults.map((result) =>
+        assetReleaseRoleReferences.get(result.candidate.frontierCandidateId)).filter(Boolean);
+      if (assetGroups.length !== assetAcquisitionResults.length) {
+        for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+        limitations.add('asset_acquisition_reopen_unavailable');
+      }
+      if (assetAcquisitionResults.length > 0) {
+        const revalidated = await awaitOperation(() => input.controlledAssetEvidenceStore.revalidateControlledAssetRelease(
+          evidenceScope,
+          {
+            evidence: materialized.evidence.map((item) => ({ handle: item.handle, metadata: item.metadata })),
+            facts: factHandles,
+            assetGroups,
+            beforeFinalization: async () => {
+              if (assetAcquisitionResults.length === 0 || !await currentAssetPolicyMatches()) {
+                for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+                limitations.add('asset_acquisition_policy_changed');
+                return [];
+              }
+              return assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId);
+            },
+            finalizeHostAuthority: () => {
+              checkDeadline();
+              if (controller.signal.aborted) return { releaseAuthorized: false, candidateIds: [] };
+              if (!authorized(input, 'release')) return { releaseAuthorized: false, candidateIds: [] };
+              if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
+                for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+                limitations.add('authorization_revoked');
+              }
+              checkDeadline();
+              return {
+                releaseAuthorized: true,
+                candidateIds: assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId),
+              };
+            },
+          },
+          input.request,
+          controller.signal,
+        ));
+        controlledReleaseRevalidationCompleted = true;
+        const currentMetadata = new Map(revalidated.currentEvidenceMetadata.map((metadata) => [metadata.evidenceId, metadata]));
+        finalEvidence = materialized.evidence.map((item) => {
+          const metadata = currentMetadata.get(item.metadata.evidenceId);
+          if (!metadata) throw new RetrievalError('final_selected_snapshot_mismatch');
+          return Object.freeze({ ...item, metadata });
+        });
+      }
+    }
     checkDeadline();
-    if (controller.signal.aborted || !authorized(input, 'release')) {
-      limitations.add(controller.signal.aborted ? 'cancelled' : 'authorization_revoked');
+    if (controller.signal.aborted) {
+      limitations.add('cancelled');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
-    if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
-      for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+    if (!controlledReleaseRevalidationCompleted && !authorized(input, 'release')) {
       limitations.add('authorization_revoked');
+      return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
-    const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations,
+    const draft = projection(identity, finalEvidence, materialized.facts, finalSnapshot, limitations,
       omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
       sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete,
       assetCandidateIds, assetAcquisitionResults);

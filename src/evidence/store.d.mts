@@ -733,6 +733,40 @@ export interface EvidenceStore<Request = unknown> {
   ): Promise<PrivateRetrievalReceiptRead>;
 }
 
+export interface ControlledAssetReleaseEvidenceReference {
+  readonly handle: EvidenceHandle;
+  readonly metadata: AvailableEvidenceMetadata;
+}
+
+export interface ControlledAssetReleaseRoleGroup {
+  readonly candidateId: string;
+  readonly evidence: readonly [ControlledAssetReleaseEvidenceReference, ControlledAssetReleaseEvidenceReference];
+}
+
+export interface ControlledAssetReleaseRevalidationInput {
+  /** The same at-most-eight evidence records selected for the private draft, including fact support. */
+  readonly evidence: readonly ControlledAssetReleaseEvidenceReference[];
+  /** The same fact handles selected for the private draft. */
+  readonly facts: readonly EvidenceFactHandle[];
+  /** At most eight candidate-bound fetched/transformed role pairs. */
+  readonly assetGroups: readonly ControlledAssetReleaseRoleGroup[];
+  /** Last awaited policy re-read; returns only candidate IDs whose plans remain eligible. */
+  readonly beforeFinalization: (context: Readonly<{ candidateIds: readonly string[] }>) => readonly string[] | Promise<readonly string[]>;
+  /**
+   * Synchronous trusted-composition host authorization, called twice around
+   * current store authorization. Re-derive release, asset, and deadline state
+   * on each call; thenables are rejected.
+   */
+  readonly finalizeHostAuthority: (context: Readonly<{ candidateIds: readonly string[] }>) => Readonly<{
+    releaseAuthorized: boolean;
+    candidateIds: readonly string[];
+  }>;
+}
+
+export interface ControlledAssetReleaseRevalidationResult {
+  readonly currentEvidenceMetadata: readonly AvailableEvidenceMetadata[];
+}
+
 /** Optional capability required only when private retrieval is explicitly opted into controlled SVG acquisition. */
 export interface ControlledAssetEvidenceStore<Request = unknown> extends EvidenceStore<Request> {
   /** Internal same-run SVG path; supported callers must provide the trusted composition's original document and witness. */
@@ -762,6 +796,13 @@ export interface ControlledAssetEvidenceStore<Request = unknown> extends Evidenc
     source: EvidenceSelectedEvidence['source'];
     bytes: Uint8Array;
   }>>;
+  /** Final same-run release barrier for the selected page/facts and active controlled asset role pairs. */
+  revalidateControlledAssetRelease(
+    scope: EvidenceTenantScope,
+    input: ControlledAssetReleaseRevalidationInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<ControlledAssetReleaseRevalidationResult>;
 }
 
 export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): ControlledAssetEvidenceStore<Request>;
