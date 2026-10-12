@@ -7,6 +7,7 @@ import {
 } from "../../src/internal/durability.js";
 import {
 	canonicalJson,
+	evidencePayloadDigest,
 	evidencePageSchemaId,
 	readEvidencePage,
 	verifyEvidencePage,
@@ -235,4 +236,103 @@ test("exports no raw input, names, scope strings, URLs or secrets", () => {
 			"stagingVersion",
 		],
 	);
+});
+
+test("projects metrics explicitly so unexpected runtime fields never leak", () => {
+	using f = fixture();
+	seedJob(f);
+	const real = f.outbox.list(scope);
+	const leak = "https://private.invalid/?signature=secret";
+	const injected = real.map((event) => ({
+		...event,
+		metrics: {
+			outputBytes: { ...event.metrics.outputBytes, privateUrl: leak },
+			duration: { ...event.metrics.duration, privateUrl: leak },
+			rows: { ...event.metrics.rows, privateUrl: leak },
+		},
+	}));
+	f.outbox.list = () => injected;
+	const page = readEvidencePage(f.outbox, scope);
+	const text = JSON.stringify(page);
+	assert.equal(text.includes(leak), false);
+	assert.equal(text.includes("privateUrl"), false);
+	assert.equal(verifyEvidencePage(page), true);
+	page.observations.forEach((o, i) => {
+		const m = real[i]?.metrics;
+		assert.ok(m);
+		assert.deepEqual(o.metrics, m);
+		for (const metric of Object.values(o.metrics))
+			assert.deepEqual(Object.keys(metric), ["unit", "value", "completeness"]);
+	});
+});
+
+test("canonicalization fails closed on non-JSON and malformed values", () => {
+	const reject = (value: unknown) =>
+		assert.throws(() => canonicalJson(value), invalid);
+	reject(undefined);
+	reject({ a: undefined });
+	reject([undefined]);
+	reject(Number.NaN);
+	reject({ a: Number.POSITIVE_INFINITY });
+	reject(() => 1);
+	reject(Symbol("x"));
+	reject(1n);
+	reject(new Array(2));
+	reject([1, , 3]);
+	const extra = [1, 2];
+	(extra as unknown as Record<string, unknown>)["x"] = 1;
+	reject(extra);
+	const cycle: Record<string, unknown> = {};
+	cycle["self"] = cycle;
+	reject(cycle);
+	const arrayCycle: unknown[] = [];
+	arrayCycle.push(arrayCycle);
+	reject(arrayCycle);
+	reject({
+		get a() {
+			return 1;
+		},
+	});
+	reject({ [Symbol("k")]: 1 });
+	reject(new Date(0));
+	reject(new Map());
+	reject(Object.defineProperty({}, "hidden", { value: 1, enumerable: false }));
+	// shared (non-cyclic) references are fine and deterministic
+	const shared = { v: 1 };
+	assert.equal(
+		canonicalJson({ b: shared, a: [shared] }),
+		'{"a":[{"v":1}],"b":{"v":1}}',
+	);
+	assert.equal(canonicalJson(Object.create(null)), "{}");
+});
+
+test("verification returns false without throwing for malformed or mutated pages", () => {
+	using f = fixture();
+	seedJob(f);
+	const page = readEvidencePage(f.outbox, scope);
+	assert.ok(page.observations.length > 1);
+	const sparse = new Array(page.observations.length);
+	sparse[0] = page.observations[0];
+	assert.equal(verifyEvidencePage({ ...page, observations: sparse }), false);
+	const hole = [...page.observations];
+	delete hole[1];
+	assert.equal(verifyEvidencePage({ ...page, observations: hole }), false);
+	assert.equal(
+		verifyEvidencePage({ ...page, nextCursor: undefined as never }),
+		false,
+	);
+	assert.equal(verifyEvidencePage({ ...page, after: Number.NaN }), false);
+	const cyclic = { ...page, observations: [] as unknown[] };
+	cyclic.observations.push(cyclic);
+	assert.equal(verifyEvidencePage(cyclic as never), false);
+	assert.equal(
+		verifyEvidencePage({ ...page, integrity: null as never }),
+		false,
+	);
+	assert.equal(verifyEvidencePage(null as never), false);
+	assert.throws(
+		() => evidencePayloadDigest({ ...page, observations: sparse } as never),
+		invalid,
+	);
+	assert.equal(verifyEvidencePage(page), true);
 });

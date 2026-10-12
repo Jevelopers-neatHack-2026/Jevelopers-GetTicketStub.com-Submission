@@ -68,33 +68,78 @@ const note =
 	"Local staged, unmapped, non-authoritative observations. Delivery status is not included and no delivery claim is made. Not a UsageEvent, ledger, approved receipt or consumer acknowledgement.";
 const cursorPattern = /^v1:([a-f0-9]{64}):(0|[1-9][0-9]{0,15})$/;
 
-/** Deterministic JSON: object keys sorted, arrays ordered, no undefined. */
+/**
+ * Deterministic JSON: object keys sorted, arrays ordered. Fails closed
+ * (INVALID_INPUT) on anything that is not plain JSON data: undefined,
+ * functions, symbols, bigints, non-finite numbers, sparse arrays, extra array
+ * properties, accessors, symbol keys, non-plain prototypes and cycles.
+ */
 export function canonicalJson(value: unknown): string {
-	if (value === null || typeof value !== "object") {
-		check(value !== undefined && typeof value !== "function", "INVALID_INPUT");
-		check(typeof value !== "number" || Number.isFinite(value), "INVALID_INPUT");
+	return encode(value, new Set());
+}
+function encode(value: unknown, ancestors: Set<object>): string {
+	if (value === null) return "null";
+	if (typeof value === "string" || typeof value === "boolean")
+		return JSON.stringify(value);
+	if (typeof value === "number") {
+		check(Number.isFinite(value), "INVALID_INPUT");
 		return JSON.stringify(value);
 	}
-	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-	const record = value as Record<string, unknown>;
-	return `{${Object.keys(record)
-		.sort()
-		.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-		.join(",")}}`;
+	check(typeof value === "object", "INVALID_INPUT");
+	check(!ancestors.has(value), "INVALID_INPUT");
+	ancestors.add(value);
+	try {
+		const keys = Reflect.ownKeys(value);
+		for (const key of keys) {
+			check(typeof key === "string", "INVALID_INPUT");
+			const descriptor = Object.getOwnPropertyDescriptor(value, key);
+			check(descriptor !== undefined && "value" in descriptor, "INVALID_INPUT");
+			check(
+				descriptor.enumerable || (Array.isArray(value) && key === "length"),
+				"INVALID_INPUT",
+			);
+		}
+		if (Array.isArray(value)) {
+			check(Object.getPrototypeOf(value) === Array.prototype, "INVALID_INPUT");
+			check(keys.length === value.length + 1, "INVALID_INPUT");
+			const items: string[] = [];
+			for (let i = 0; i < value.length; i++) {
+				check(Object.hasOwn(value, String(i)), "INVALID_INPUT");
+				items.push(encode(value[i], ancestors));
+			}
+			return `[${items.join(",")}]`;
+		}
+		const proto = Object.getPrototypeOf(value);
+		check(proto === Object.prototype || proto === null, "INVALID_INPUT");
+		const record = value as Record<string, unknown>;
+		return `{${(keys as string[])
+			.sort()
+			.map((key) => `${JSON.stringify(key)}:${encode(record[key], ancestors)}`)
+			.join(",")}}`;
+	} finally {
+		ancestors.delete(value);
+	}
 }
 export function evidencePayloadDigest(payload: EvidencePagePayload): Digest {
 	return hash(canonicalJson(payload));
 }
 /** True when the commitment matches the exact payload fields of the page. */
 export function verifyEvidencePage(page: EvidencePage): boolean {
-	const { integrity, ...payload } = page;
-	return (
-		integrity.algorithm === "sha256" &&
-		integrity.canonicalization === "json-sorted-keys-v1" &&
-		integrity.payloadDigest === evidencePayloadDigest(payload)
-	);
+	try {
+		const { integrity, ...payload } = page;
+		return (
+			integrity.algorithm === "sha256" &&
+			integrity.canonicalization === "json-sorted-keys-v1" &&
+			integrity.payloadDigest === evidencePayloadDigest(payload)
+		);
+	} catch {
+		return false;
+	}
 }
 
+function measurement<U extends string>(m: Measurement<U>): Measurement<U> {
+	return { unit: m.unit, value: m.value, completeness: m.completeness };
+}
 function project(event: Observation): EvidenceObservation {
 	return {
 		sequence: event.sequence,
@@ -113,9 +158,9 @@ function project(event: Observation): EvidenceObservation {
 		billingMode: event.billingMode,
 		producerBuildDigest: event.producerBuildDigest,
 		metrics: {
-			outputBytes: { ...event.metrics.outputBytes },
-			duration: { ...event.metrics.duration },
-			rows: { ...event.metrics.rows },
+			outputBytes: measurement(event.metrics.outputBytes),
+			duration: measurement(event.metrics.duration),
+			rows: measurement(event.metrics.rows),
 		},
 	};
 }

@@ -182,7 +182,8 @@ mapping, real finance intake, Neatlogs and EvaluationEvidence remain blocked.
 staged observations as digest-committed pages (see the telemetry README). It
 adds no provider/billable IDs or valuation, states delivery status as
 `not_included` (no delivery claim), and does not mutate
-outbox state. Its SHA-256 commitment is local tamper evidence only.
+outbox state. Its projection is field-by-field and its canonicalization rejects non-JSON or
+malformed data. Its SHA-256 commitment is local tamper evidence only.
 
 ## Acceptance and handoffs
 

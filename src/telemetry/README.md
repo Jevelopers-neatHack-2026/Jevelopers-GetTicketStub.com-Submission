@@ -12,7 +12,10 @@ an allowlisted observation projection (observation/operation/execution-attempt/
 job/row/publication references; measured or unknown metrics as recorded;
 environment=local, billingMode=unclassified, producerBuildDigest=null). The
 SHA-256 `integrity.payloadDigest` commits to the canonical (sorted-key) JSON of
-everything except `integrity`; `verifyEvidencePage` rechecks it. Pagination uses
+everything except `integrity`; `verifyEvidencePage` rechecks it and returns false for malformed pages. Canonicalization
+fails closed (`INVALID_INPUT`) on non-JSON data such as undefined, non-finite
+numbers, sparse arrays, accessors or cycles, and metrics are projected field by
+field so unexpected runtime properties never reach evidence. Pagination uses
 a scope-bound `nextCursor`. Delivery status is not included
 (`deliveryStatus: "not_included"`); the adapter reads observations only and
 makes no delivery claim. The digest is a local integrity check, not a signature
