@@ -623,7 +623,16 @@ function EditorLoaded({ id }: { id: string }) {
       <RemixSheet open={sheet === "remix"} onClose={() => setSheet(null)} stub={stub} onChange={update} onDescribe={() => ask()} />
       <PaperSheet title="Ask the agent" open={sheet === "agent"} onClose={() => setSheet(null)}>
         <div className={styles.agentSheet}>
-          <AgentChat key={agentSeed?.n ?? 0} stub={stub} onChange={update} initial={agentSeed?.text} />
+          <AgentChat
+            key={agentSeed?.n ?? 0}
+            stub={stub}
+            onChange={update}
+            onShowBack={() => {
+              showBack();
+              setSheet(null);
+            }}
+            initial={agentSeed?.text}
+          />
         </div>
       </PaperSheet>
       <PaperSheet title="Facts" open={sheet === "facts"} onClose={() => setSheet(null)}>
@@ -845,7 +854,7 @@ function EditorLoaded({ id }: { id: string }) {
           className={styles.stage}
           data-pressing={pressing || undefined}
           style={stageVars}
-          aria-label={`Your stub, ${editionLabel(edition)} style. Swipe or press the left and right arrow keys for another style, hold for all styles, press F to flip it.`}
+          aria-label={`Your stub, ${editionLabel(edition)} style. Swipe or press the left and right arrow keys for another style, hold or use the All styles button for all of them, press F to flip it.`}
           {...stageHandlers}
         >
           {deck("lg")}
@@ -862,6 +871,9 @@ function EditorLoaded({ id }: { id: string }) {
             {editionLabel(edition)}
             <span> · swipe for more</span>
           </p>
+          <button type="button" className={styles.allStyles} aria-haspopup="dialog" onClick={() => openSheet("styles")}>
+            All styles
+          </button>
         </div>
         {hiddenRow}
 

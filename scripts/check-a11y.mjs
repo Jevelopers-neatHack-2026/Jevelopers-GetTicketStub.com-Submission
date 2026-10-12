@@ -20,6 +20,7 @@ const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const axeVersion = JSON.parse(readFileSync(join(dirname(require.resolve("axe-core/package.json")), "package.json"), "utf8")).version;
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
 let passed = 0;
 function check(name, ok, detail = "") {
@@ -203,10 +204,23 @@ try {
 
   // the tear has a keyboard path: Tab to the strip, Enter, the handle takes focus, arrows tear, Enter finishes
   await page.eval(`document.body.focus(); 0`);
+  const tearInView = (w, h) => page.eval(`(() => { const r = document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')?.getBoundingClientRect(); return !!r && r.width > 0 && r.top >= 0 && r.left >= 0 && r.right <= ${w} + 1 && r.bottom <= ${h} + 1 && getComputedStyle(document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')).position === "fixed"; })()`);
   const isStrip = `/Tear off and pin/.test(e.textContent || "")`;
+  await open(`/studio/${DEMO}`, 1440, 900, { desktop: true });
+  await page.eval(`document.body.focus(); 0`);
+  if (await tabTo(isStrip)) {
+    await page.key("Enter");
+    await page.waitFor(`!!document.querySelector('[role="dialog"][aria-label="Tear off your stub"]')`, 3000);
+  }
+  check("tear @1440: the stage fills the viewport", await tearInView(1440, 900));
+  await page.key("Escape");
+
+  await open(`/studio/${DEMO}`, 390, 844);
+  await page.eval(`document.body.focus(); 0`);
   check("studio @390: the tear strip can be reached by Tab", await tabTo(isStrip));
   await page.key("Enter");
   check("tear: focus lands on the tear handle (a slider)", await page.waitFor(`document.activeElement && document.activeElement.getAttribute("role") === "slider"`, 3000));
+  check("tear @390: the stage fills the viewport (fixed, not pushed below the fold by .desk-surface)", await tearInView(390, 844));
   await page.key("ArrowRight");
   check("tear: the arrow keys tear a little at a time", Number(await page.eval(`document.activeElement.getAttribute("aria-valuenow")`)) > 0);
   await page.key("Escape");
@@ -216,6 +230,17 @@ try {
   await page.waitFor(`document.activeElement && document.activeElement.getAttribute("role") === "slider"`, 3000);
   await page.key("Enter");
   check("tear: Enter on the handle tears it off and pins it to the wall", await page.waitFor(`location.pathname === "/wall"`, 6000), await page.eval("location.href"));
+
+  check("tear: the stub just pinned on the wall lifts the lamp when tapped", await (async () => {
+    await page.waitFor(`!!document.querySelector('[class*="landingBtn"]')`, 4000);
+    await sleep(1200); // the landing animation
+    const at = await page.eval(`(() => { const el = document.querySelector('[class*="landingBtn"]'); el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.click(at[0], at[1]);
+    const opened = await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')].every((x) => x.closest("[inert]") || x.getAttribute("aria-hidden") === "true")`, 3000);
+    await page.key("Escape");
+    await page.waitFor(noDialog, 3000);
+    return opened;
+  })());
 
   // the wall: move a stub with the arrow keys, lift it, pin it back
   await open("/wall", 1280, 800);
@@ -241,6 +266,42 @@ try {
     await dialogCycle("sign-in sheet", isSave);
   } else {
     check("wall @1280: the sign-in button can be reached by Tab", false, "no 'Save your wall' control (is saving off?)");
+  }
+
+  // the review-before-approving sheet (GT-06B.1): signed in with the sandbox link, opened from the Versions sheet, so it is a dialog on a dialog
+  await open(`/studio/${DEMO}`, 390, 844);
+  const signedIn = await page.eval(`(async () => { const j = await (await fetch("/api/auth/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "a11y-approve@example.com", returnTo: "/wall", reason: "save" }) })).json(); if (!j.devLink) return 0; return (await fetch("/api/auth/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: new URL(j.devLink).searchParams.get("token") }) })).status; })()`);
+  if (check("approve sheet: the sandbox sign-in link works", signedIn === 200, String(signedIn))) {
+    await open(`/studio/${DEMO}`, 390, 844);
+    await page.eval(`document.body.focus(); 0`);
+    const isVersions = `/^Versions/.test((e.textContent || "").trim())`;
+    const isApprove = `/^Approve for print/.test((e.textContent || "").trim())`;
+    check("approve sheet: the Versions button can be reached by Tab", await tabTo(isVersions));
+    await page.key("Enter");
+    await page.waitFor(`!!document.querySelector('${OPEN_DIALOG}')`, 3000);
+    if (check("approve sheet: 'Approve for print' can be reached by Tab inside Versions", await tabTo(isApprove))) {
+      await page.key("Enter");
+      const top = `(() => { const d = [...document.querySelectorAll('${OPEN_DIALOG}')].pop(); return !!d && d.contains(document.activeElement); })()`;
+      check("approve sheet: focus moves into the new sheet", await page.waitFor(top, 3000));
+      const named = await page.eval(`(() => { const d = [...document.querySelectorAll('${OPEN_DIALOG}')].pop(); const t = d && document.getElementById(d.getAttribute("aria-labelledby") || ""); return { title: t ? t.textContent : "", buttons: [...d.querySelectorAll("button")].map((b) => b.getAttribute("aria-label") || (b.textContent || "").trim()), headings: [...d.querySelectorAll("h3")].map((h) => h.textContent) }; })()`);
+      check("approve sheet: it is named 'Approve for print' and its controls have names", named.title === "Approve for print" && ["Approve this version", "Cancel", "Close Approve for print"].every((n) => named.buttons.includes(n)), JSON.stringify(named));
+      check("approve sheet: it says what changed, the printed facts and how it is made", ["What changed since your last approval", "Printed facts", "How it is made"].every((h) => named.headings.includes(h)), named.headings.join());
+      let held = true;
+      for (let i = 0; i < 24 && held; i++) {
+        await page.key("Tab");
+        held = await page.eval(top);
+      }
+      for (let i = 0; i < 6 && held; i++) {
+        await page.key("Tab", { shift: true });
+        held = await page.eval(top);
+      }
+      check("approve sheet: Tab and Shift+Tab never leave it (nor reach the Versions sheet under it)", held);
+      await page.key("Escape");
+      await page.waitFor(`document.querySelectorAll('${OPEN_DIALOG}').length === 1`, 3000);
+      const one = await page.eval(`document.querySelectorAll('${OPEN_DIALOG}').length === 1`);
+      const back = await page.eval(`(() => { const e = document.activeElement; return !!(e && e !== document.body && (${isApprove})); })()`);
+      check("approve sheet: Esc closes only the top sheet and focus returns to 'Approve for print'", one && back, `one=${one} back=${back}`);
+    }
   }
 
   // ---- 4. reduced motion ----

@@ -75,8 +75,17 @@ export async function launchBrowser() {
       } catch {
         /* already gone */
       }
+      // Wait for "exit", not "close": "close" also needs the stderr pipe to end, and Chrome's helper processes can hold
+      // that pipe open after the browser itself is gone, which hung the runners at teardown on macOS and Linux. The wait
+      // is bounded: ask politely, then SIGKILL, then stop waiting and drop the pipe.
+      const gone = new Promise((r) => (child.exitCode !== null || child.signalCode !== null ? r() : child.once("exit", r)));
+      const within = (ms) => Promise.race([gone.then(() => true), sleep(ms).then(() => false)]);
       child.kill();
-      await new Promise((r) => (child.exitCode !== null ? r() : child.once("close", r)));
+      if (!(await within(5000))) {
+        child.kill("SIGKILL");
+        await within(5000);
+      }
+      child.stderr.destroy();
       try {
         rmSync(profile, { recursive: true, force: true });
       } catch {
