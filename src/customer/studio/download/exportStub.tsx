@@ -86,8 +86,11 @@ export async function renderStubPng(stub: Stub, side: StubSide = "front"): Promi
     const rect = node.getBoundingClientRect();
     if (!rect.width || !rect.height) throw coded("unknown");
     const options = { scale: EXPORT_SCALE, backgroundColor: null, type: "image/png", timeout: 15_000, style: { margin: "0" } } as const;
-    // WebKit paints foreignObject images and fonts on the second pass only.
-    if (isWebKitOnly()) await domToBlob(node, options).catch(() => null);
+    // The first pass after load can rasterise before the cloned art inside the SVG has been decoded (a cold Linux Chrome
+    // produced a PNG with an empty art well), and WebKit paints foreignObject images and fonts on the second pass only.
+    // So every browser takes a warm-up pass first: full size on WebKit, a cheap 1x one elsewhere. Its output is discarded.
+    await domToBlob(node, isWebKitOnly() ? options : { ...options, scale: 1 }).catch(() => null);
+    await nextFrame();
     const blob = await domToBlob(node, options).catch((e) => {
       throw coded("unknown", e);
     });
