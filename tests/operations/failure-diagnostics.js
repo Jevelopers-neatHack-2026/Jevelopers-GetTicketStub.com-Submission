@@ -21,7 +21,7 @@ const C02_CONTROL_FAILURE_ERROR_CLASSES = new Set(['Error', 'RangeError', 'Synta
 const INCOMPLETE_C02_CONTROL_DIAGNOSTICS = Object.freeze({
   complete: false, recordCount: 0, records: Object.freeze([])
 });
-const OPS02_RACE_FAILURE_PREFIX = 'AH11_OPS_OPS02_C02_DIAGNOSTIC ';
+const OPS02_RACE_FAILURE_PREFIX = 'AH11_OPS_OPS02_C02_DIAGNOSTIC_V3 ';
 const OPS02_RACE_FAILURE_MAX_RECORDS = 64;
 const OPS02_RACE_FAILURE_MAX_LINE_BYTES = 320;
 const OPS02_RACE_FAILURE_MAX_BYTES = 16_384;
@@ -44,16 +44,71 @@ const OPS02_RACE_FAILURE_CODES = new Set([
   'UNSUPPORTED_SCHEMA_VERSION', 'UNVERSIONED_DATA', 'INVALID_INPUT', 'ERR_SQLITE_ERROR',
   'ERR_INVALID_ARG_TYPE', 'EACCES', 'ENOENT', 'ENOSPC', 'UNKNOWN', 'none', 'unobserved'
 ]);
+const OPS02_TRANSACTION_BOUNDARIES = new Set(['begin', 'body', 'commit', 'rollback', 'none', 'unobserved']);
+const OPS02_SQLITE_PRIMARY_CODES = new Set([null, 5, 6]);
+const OPS02_ROLLBACK_DISPOSITIONS = new Set([
+  'not_observed', 'inactive', 'unknown', 'rolled_back', 'rollback_failed', 'rollback_check_failed'
+]);
+const OPS02_RACE_WIRE_VALUES = Object.freeze({
+  boundaries: Object.freeze([
+    'case_started', 'diagnostic_no_canary', 'diagnostic_proxy_unread',
+    'diagnostic_child_exit', 'diagnostic_child_prefix', 'diagnostic_child_no_canary',
+    'seed_accept', 'contender_exit', 'child_exit_group', 'accepted_count',
+    'refusal_count', 'stored_counter', 'stored_rows', 'reservation'
+  ]),
+  raceKinds: Object.freeze([
+    'diagnostic', 'global_records', 'project_bytes_existing', 'project_bytes_new',
+    'project_records', 'global_bytes'
+  ]),
+  exits: Object.freeze(['not_applicable', 'zero', 'nonzero', 'signal', 'unknown']),
+  stages: Object.freeze([
+    'config', 'open', 'resource', 'validation', 'admission', 'result', 'close',
+    'unknown', 'none', 'unobserved'
+  ]),
+  codes: Object.freeze([
+    'OPS_CONFIG_INVALID', 'STORE_OPEN_FAILED', 'STORE_WRITE_FAILED', 'STORE_BUSY', 'STORE_CLOSED',
+    'UNSUPPORTED_SCHEMA_VERSION', 'UNVERSIONED_DATA', 'INVALID_INPUT', 'ERR_SQLITE_ERROR',
+    'ERR_INVALID_ARG_TYPE', 'EACCES', 'ENOENT', 'ENOSPC', 'UNKNOWN', 'none', 'unobserved'
+  ]),
+  transactionBoundaries: Object.freeze(['begin', 'body', 'commit', 'rollback', 'none', 'unobserved']),
+  rollbackDispositions: Object.freeze([
+    'not_observed', 'inactive', 'unknown', 'rolled_back', 'rollback_failed', 'rollback_check_failed'
+  ])
+});
 const INCOMPLETE_OPS02_RACE_DIAGNOSTICS = Object.freeze({
   complete: false, recordCount: 0, records: Object.freeze([])
 });
 const OPS06_CLOSE_PHASE_FAILURE_PREFIX = 'AH11_OPS_OPS06_CLOSE_PHASES ';
 const OPS06_CLOSE_PHASE_FAILURE_MAX_BYTES = 512;
 const OPS06_CLOSE_PHASE_KEYS = Object.freeze([
-  'finalStopElapsedMs', 'processCloseElapsedMs', 'readyToFinalRecordElapsedMs',
-  'restartWorkElapsedMs', 'schema', 'caseId', 'signalToFirstStopElapsedMs'
+  'caseId', 'exitCode', 'exitDisposition', 'exitSignal', 'failureClass', 'finalStopElapsedMs',
+  'processCloseElapsedMs', 'readyToFinalRecordElapsedMs', 'restartOwnership',
+  'restartProcessCloseElapsedMs', 'restartWorkElapsedMs', 'schema',
+  'signalToFirstStopElapsedMs', 'stage'
 ].sort());
 const INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS = Object.freeze({
+  complete: false, recordCount: 0, records: Object.freeze([])
+});
+const OPS12_RECOVERY_FAILURE_PREFIX = 'AH11_OPS_OPS12_RECOVERY_FAILURE ';
+const OPS12_RECOVERY_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS12_RECOVERY_DIAGNOSTIC ';
+const OPS12_RECOVERY_MAX_BYTES = 1_024;
+const OPS12_RECOVERY_MAX_LINE_BYTES = 512;
+const OPS12_RECOVERY_CASES = new Set([
+  'busy_store_spans_stop', 'store_unavailable', 'future_schema',
+  'stuck_runner_review_escalation', 'unknown_hold_restart_escalation', 'unknown'
+]);
+const OPS12_RECOVERY_STAGES = new Set([
+  'fixture_start', 'case_setup', 'busy_write', 'worker_stop', 'reopen_validate',
+  'compatibility_read', 'future_schema_write', 'worker_open', 'byte_compare',
+  'runner_pause', 'await_park', 'restart', 'hold_setup', 'intent_write',
+  'lease_expiry', 'hold_verify', 'case_complete', 'unknown'
+]);
+const OPS12_RECOVERY_ERROR_CLASSES = new Set([
+  'assertion', 'sqlite_busy', 'sqlite_other', 'type', 'range', 'error', 'unknown', 'none'
+]);
+const OPS12_RECOVERY_EXIT_DISPOSITIONS = new Set(['zero', 'nonzero', 'signal', 'unknown']);
+const OPS12_RECOVERY_SIGNALS = new Set(['SIGABRT', 'SIGINT', 'SIGKILL', 'SIGTERM']);
+const INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS = Object.freeze({
   complete: false, recordCount: 0, records: Object.freeze([])
 });
 const SAFE_ERROR_CODES = new Set([
@@ -163,10 +218,12 @@ function safeC02ControlReadDiagnostics(value) {
 function safeOps02RaceRecord(record) {
   const keys = record && typeof record === 'object' && !Array.isArray(record)
     ? Object.keys(record).sort() : [];
-  if (keys.length !== 9 || keys[0] !== 'boundary' || keys[1] !== 'caseId'
+  if (keys.length !== 13 || keys[0] !== 'boundary' || keys[1] !== 'caseId'
       || keys[2] !== 'childCode' || keys[3] !== 'childStage' || keys[4] !== 'contender'
-      || keys[5] !== 'exit' || keys[6] !== 'passed' || keys[7] !== 'raceKind' || keys[8] !== 'schema'
-      || record.schema !== 'agent-harness.ah11-ops02-race-diagnostic.v1'
+      || keys[5] !== 'exit' || keys[6] !== 'passed' || keys[7] !== 'raceKind' || keys[8] !== 'rollbackDisposition'
+      || keys[9] !== 'schema' || keys[10] !== 'sqlitePrimaryCode' || keys[11] !== 'transactionActive'
+      || keys[12] !== 'transactionBoundary'
+      || record.schema !== 'agent-harness.ah11-ops02-race-diagnostic.v3'
       || record.caseId !== 'OPS02.C02'
       || !OPS02_RACE_FAILURE_BOUNDARIES.has(record.boundary)
       || !OPS02_RACE_FAILURE_KINDS.has(record.raceKind)
@@ -174,23 +231,99 @@ function safeOps02RaceRecord(record) {
       || typeof record.passed !== 'boolean'
       || !OPS02_RACE_FAILURE_EXITS.has(record.exit)
       || !OPS02_RACE_FAILURE_STAGES.has(record.childStage)
-      || !OPS02_RACE_FAILURE_CODES.has(record.childCode)) return null;
+      || !OPS02_RACE_FAILURE_CODES.has(record.childCode)
+      || !OPS02_TRANSACTION_BOUNDARIES.has(record.transactionBoundary)
+      || !OPS02_SQLITE_PRIMARY_CODES.has(record.sqlitePrimaryCode)
+      || !(record.transactionActive === null || typeof record.transactionActive === 'boolean')
+      || !OPS02_ROLLBACK_DISPOSITIONS.has(record.rollbackDisposition)) return null;
   const childBoundary = record.boundary === 'contender_exit' || record.boundary === 'diagnostic_child_exit';
   if (!childBoundary && (record.exit !== 'not_applicable'
-      || record.childStage !== 'none' || record.childCode !== 'none' || record.contender !== null)) return null;
+      || record.childStage !== 'none' || record.childCode !== 'none' || record.contender !== null
+      || record.transactionBoundary !== 'none' || record.sqlitePrimaryCode !== null
+      || record.transactionActive !== null || record.rollbackDisposition !== 'not_observed')) return null;
+  if ((record.transactionBoundary === 'none' || record.transactionBoundary === 'unobserved')
+      !== (record.sqlitePrimaryCode === null)) return null;
+  if ((record.transactionBoundary === 'none' || record.transactionBoundary === 'unobserved')
+      && (record.transactionActive !== null || record.rollbackDisposition !== 'not_observed')) return null;
+  if (!['none', 'unobserved'].includes(record.transactionBoundary)
+      && (record.childStage !== 'admission' || record.childCode !== 'STORE_BUSY'
+        || ![5, 6].includes(record.sqlitePrimaryCode))) return null;
+  if (record.transactionBoundary === 'begin'
+      && (record.transactionActive !== null || record.rollbackDisposition !== 'not_observed')) return null;
+  if (['body', 'commit'].includes(record.transactionBoundary)
+      && !((record.rollbackDisposition === 'inactive' && record.transactionActive === false)
+        || (record.rollbackDisposition === 'rolled_back' && record.transactionActive === true)
+        || (record.rollbackDisposition === 'unknown' && record.transactionActive === null))) return null;
+  if (record.transactionBoundary === 'rollback'
+      && !((record.rollbackDisposition === 'rollback_failed' && record.transactionActive === true)
+        || (record.rollbackDisposition === 'rollback_check_failed' && record.transactionActive === null))) return null;
   if (record.boundary === 'contender_exit'
       && (record.contender === null || record.raceKind === 'diagnostic'
+        || !['zero', 'nonzero', 'signal', 'unknown'].includes(record.exit)
         || record.passed !== (record.exit === 'zero'))) return null;
+  if (record.boundary === 'contender_exit' && record.exit === 'zero'
+      && (record.childStage !== 'none' || record.childCode !== 'none'
+        || !['none', 'unobserved'].includes(record.transactionBoundary))) return null;
   if (record.boundary === 'diagnostic_child_exit'
       && (record.raceKind !== 'diagnostic' || record.contender !== null
-        || record.exit === 'not_applicable')) return null;
+        || record.exit === 'not_applicable'
+        || (record.passed && record.exit !== 'nonzero'))) return null;
+  if (!['none', 'unobserved'].includes(record.transactionBoundary)
+      && record.boundary !== 'contender_exit') return null;
   if (record.boundary === 'child_exit_group' && record.contender !== null) return null;
   return Object.freeze({
-    schema: 'agent-harness.ah11-ops02-race-diagnostic.v1',
+    schema: 'agent-harness.ah11-ops02-race-diagnostic.v3',
     caseId: 'OPS02.C02', boundary: record.boundary, raceKind: record.raceKind,
     contender: record.contender, passed: record.passed, exit: record.exit,
-    childStage: record.childStage, childCode: record.childCode
+    childStage: record.childStage, childCode: record.childCode,
+    transactionBoundary: record.transactionBoundary, sqlitePrimaryCode: record.sqlitePrimaryCode,
+    transactionActive: record.transactionActive, rollbackDisposition: record.rollbackDisposition
   });
+}
+
+function ops02WireIndex(values, value) {
+  return values.indexOf(value);
+}
+
+function ops02WireValue(values, code) {
+  return Number.isSafeInteger(code) && code >= 0 && code < values.length ? values[code] : null;
+}
+
+function decodeOps02RaceWireRecord(value) {
+  if (!Array.isArray(value) || value.length !== 11) return null;
+  const [boundaryCode, raceCode, contender, passed, exitCode, stageCode, codeCode,
+    transactionBoundaryCode, sqlitePrimaryCode, transactionActive, rollbackCode] = value;
+  const boundary = ops02WireValue(OPS02_RACE_WIRE_VALUES.boundaries, boundaryCode);
+  const raceKind = ops02WireValue(OPS02_RACE_WIRE_VALUES.raceKinds, raceCode);
+  const exit = ops02WireValue(OPS02_RACE_WIRE_VALUES.exits, exitCode);
+  const childStage = ops02WireValue(OPS02_RACE_WIRE_VALUES.stages, stageCode);
+  const childCode = ops02WireValue(OPS02_RACE_WIRE_VALUES.codes, codeCode);
+  const transactionBoundary = ops02WireValue(OPS02_RACE_WIRE_VALUES.transactionBoundaries, transactionBoundaryCode);
+  const rollbackDisposition = ops02WireValue(OPS02_RACE_WIRE_VALUES.rollbackDispositions, rollbackCode);
+  if ([boundary, raceKind, exit, childStage, childCode, transactionBoundary, rollbackDisposition].includes(null)) return null;
+  return {
+    schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
+    boundary, raceKind, contender, passed, exit, childStage, childCode,
+    transactionBoundary, sqlitePrimaryCode, transactionActive, rollbackDisposition
+  };
+}
+
+export function encodeOps02RaceDiagnostic(record) {
+  const safe = safeOps02RaceRecord(record);
+  if (!safe) return null;
+  const wire = [
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.boundaries, safe.boundary),
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.raceKinds, safe.raceKind),
+    safe.contender, safe.passed,
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.exits, safe.exit),
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.stages, safe.childStage),
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.codes, safe.childCode),
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.transactionBoundaries, safe.transactionBoundary),
+    safe.sqlitePrimaryCode, safe.transactionActive,
+    ops02WireIndex(OPS02_RACE_WIRE_VALUES.rollbackDispositions, safe.rollbackDisposition)
+  ];
+  const line = `${OPS02_RACE_FAILURE_PREFIX}${JSON.stringify(wire)}`;
+  return Buffer.byteLength(`${line}\n`, 'utf8') <= OPS02_RACE_FAILURE_MAX_LINE_BYTES ? line : null;
 }
 
 export function parseOps02RaceDiagnostics(channel) {
@@ -220,13 +353,20 @@ export function parseOps02RaceDiagnostics(channel) {
     try { value = JSON.parse(rawLine.slice(OPS02_RACE_FAILURE_PREFIX.length)); } catch {
       return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
     }
-    const safe = safeOps02RaceRecord(value);
+    const safe = safeOps02RaceRecord(decodeOps02RaceWireRecord(value));
     if (!safe) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
     records.push(safe);
   }
   if (records.length === 0 || records[0].boundary !== 'case_started'
-      || records[0].caseId !== 'OPS02.C02' || records[0].passed !== true) {
+      || records[0].caseId !== 'OPS02.C02' || records[0].passed !== true
+      || records.slice(1).some(record => record.boundary === 'case_started')) {
     return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  }
+  const exitGroups = new Set();
+  for (const record of records) {
+    if (record.boundary !== 'child_exit_group') continue;
+    if (exitGroups.has(record.raceKind)) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+    exitGroups.add(record.raceKind);
   }
   return Object.freeze({ complete: true, recordCount: records.length, records: Object.freeze(records) });
 }
@@ -257,22 +397,43 @@ function safeOps06ClosePhaseRecord(record) {
     ? Object.keys(record).sort() : [];
   if (keys.length !== OPS06_CLOSE_PHASE_KEYS.length
       || keys.some((key, index) => key !== OPS06_CLOSE_PHASE_KEYS[index])
-      || record.schema !== 'agent-harness.ah11-ops06-close-phases.v1'
-      || record.caseId !== 'OPS06.C01') return null;
+      || record.schema !== 'agent-harness.ah11-ops06-close-phases.v2'
+      || record.caseId !== 'OPS06.C01' || record.restartOwnership !== 'fresh_process'
+      || !new Set([
+        'ready_wait', 'worker_start', 'runner_wait', 'runner_pause', 'worker_stop', 'stop_validate',
+        'record_output', 'signal_delivery', 'flush_barrier', 'supervisor_close_wait',
+        'supervisor_exit', 'stopped_record', 'restart_spawn', 'restart_start', 'restart_wait',
+        'restart_stop', 'restart_verify', 'restart_close',
+        'restart_exit', 'restart_record', 'restart_state', 'complete', 'unknown'
+      ]).has(record.stage)
+      || !new Set(['none', 'assertion', 'child_exit', 'unknown']).has(record.failureClass)
+      || !new Set(['zero', 'nonzero', 'signal', 'unknown']).has(record.exitDisposition)
+      || !(record.exitCode === null || (Number.isSafeInteger(record.exitCode)
+        && record.exitCode >= 0 && record.exitCode <= 255))
+      || !(record.exitSignal === null || OPS12_RECOVERY_SIGNALS.has(record.exitSignal))) return null;
   const numericKeys = [
     'signalToFirstStopElapsedMs', 'restartWorkElapsedMs', 'finalStopElapsedMs',
-    'readyToFinalRecordElapsedMs', 'processCloseElapsedMs'
+    'readyToFinalRecordElapsedMs', 'processCloseElapsedMs', 'restartProcessCloseElapsedMs'
   ];
-  if (numericKeys.some(key => typeof record[key] !== 'number'
-      || !Number.isFinite(record[key]) || record[key] < 0 || record[key] > 30_000)) return null;
+  if (numericKeys.some(key => !(record[key] === null || (typeof record[key] === 'number'
+      && Number.isFinite(record[key]) && record[key] >= 0 && record[key] <= 30_000)))) return null;
+  if ((record.exitDisposition === 'zero' && (record.exitCode !== 0 || record.exitSignal !== null))
+      || (record.exitDisposition === 'nonzero' && (!Number.isSafeInteger(record.exitCode)
+        || record.exitCode === 0 || record.exitSignal !== null))
+      || (record.exitDisposition === 'signal' && (record.exitCode !== null || record.exitSignal === null))
+      || (record.exitDisposition === 'unknown' && (record.exitCode !== null || record.exitSignal !== null))) return null;
   return Object.freeze({
-    schema: 'agent-harness.ah11-ops06-close-phases.v1',
+    schema: 'agent-harness.ah11-ops06-close-phases.v2',
     caseId: 'OPS06.C01',
+    stage: record.stage, failureClass: record.failureClass,
+    exitDisposition: record.exitDisposition, exitCode: record.exitCode, exitSignal: record.exitSignal,
     signalToFirstStopElapsedMs: record.signalToFirstStopElapsedMs,
     restartWorkElapsedMs: record.restartWorkElapsedMs,
     finalStopElapsedMs: record.finalStopElapsedMs,
     readyToFinalRecordElapsedMs: record.readyToFinalRecordElapsedMs,
-    processCloseElapsedMs: record.processCloseElapsedMs
+    processCloseElapsedMs: record.processCloseElapsedMs,
+    restartOwnership: record.restartOwnership,
+    restartProcessCloseElapsedMs: record.restartProcessCloseElapsedMs
   });
 }
 
@@ -301,6 +462,124 @@ export function parseOps06ClosePhaseDiagnostics(channel) {
   const record = safeOps06ClosePhaseRecord(value);
   if (!record) return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
   return Object.freeze({ complete: true, recordCount: 1, records: Object.freeze([record]) });
+}
+
+function safeOps12RecoveryFailure(record) {
+  const keys = record && typeof record === 'object' && !Array.isArray(record)
+    ? Object.keys(record).sort() : [];
+  if (keys.length !== 5 || keys[0] !== 'caseId' || keys[1] !== 'errorClass'
+      || keys[2] !== 'nativePrimaryCode' || keys[3] !== 'schema' || keys[4] !== 'stage'
+      || record.schema !== 'agent-harness.ah11-ops12-recovery-failure.v1'
+      || !OPS12_RECOVERY_CASES.has(record.caseId)
+      || !OPS12_RECOVERY_STAGES.has(record.stage)
+      || !OPS12_RECOVERY_ERROR_CLASSES.has(record.errorClass)
+      || !(record.nativePrimaryCode === null || record.nativePrimaryCode === 5 || record.nativePrimaryCode === 6)) {
+    return null;
+  }
+  return Object.freeze({
+    schema: 'agent-harness.ah11-ops12-recovery-failure.v1',
+    caseId: record.caseId, stage: record.stage,
+    errorClass: record.errorClass, nativePrimaryCode: record.nativePrimaryCode
+  });
+}
+
+export function parseOps12RecoveryFailure(stderr) {
+  if (typeof stderr !== 'string' || Buffer.byteLength(stderr, 'utf8') > OPS12_RECOVERY_MAX_BYTES) return null;
+  const lines = stderr.split(/\r?\n/u).filter(line => line.length > 0);
+  if (lines.length !== 1 || Buffer.byteLength(lines[0], 'utf8') > OPS12_RECOVERY_MAX_LINE_BYTES
+      || !lines[0].startsWith(OPS12_RECOVERY_FAILURE_PREFIX)) return null;
+  let value;
+  try { value = JSON.parse(lines[0].slice(OPS12_RECOVERY_FAILURE_PREFIX.length)); } catch {
+    return null;
+  }
+  return safeOps12RecoveryFailure(value);
+}
+
+function safeOps12RecoveryRecord(record) {
+  const keys = record && typeof record === 'object' && !Array.isArray(record)
+    ? Object.keys(record).sort() : [];
+  if (keys.length !== 8 || keys[0] !== 'caseId' || keys[1] !== 'errorClass'
+      || keys[2] !== 'exitCode' || keys[3] !== 'exitDisposition' || keys[4] !== 'exitSignal'
+      || keys[5] !== 'nativePrimaryCode' || keys[6] !== 'schema' || keys[7] !== 'stage'
+      || record.schema !== 'agent-harness.ah11-ops12-recovery-child.v1'
+      || !(record.caseId === 'none' || OPS12_RECOVERY_CASES.has(record.caseId))
+      || !(record.stage === 'none' || OPS12_RECOVERY_STAGES.has(record.stage))
+      || !OPS12_RECOVERY_ERROR_CLASSES.has(record.errorClass)
+      || !OPS12_RECOVERY_EXIT_DISPOSITIONS.has(record.exitDisposition)
+      || !(record.nativePrimaryCode === null || record.nativePrimaryCode === 5 || record.nativePrimaryCode === 6)
+      || !(record.exitCode === null || (Number.isSafeInteger(record.exitCode) && record.exitCode >= 0 && record.exitCode <= 255))
+      || !(record.exitSignal === null || OPS12_RECOVERY_SIGNALS.has(record.exitSignal))) return null;
+  if (record.exitDisposition === 'zero'
+      && (record.exitCode !== 0 || record.exitSignal !== null || record.caseId !== 'none'
+        || record.stage !== 'none' || record.errorClass !== 'none' || record.nativePrimaryCode !== null)) return null;
+  if (record.exitDisposition === 'nonzero'
+      && (!Number.isSafeInteger(record.exitCode) || record.exitCode === 0 || record.exitSignal !== null)) return null;
+  if (record.exitDisposition === 'signal'
+      && (record.exitCode !== null || record.exitSignal === null)) return null;
+  if (record.exitDisposition === 'unknown'
+      && (record.exitCode !== null || record.exitSignal !== null)) return null;
+  if ((record.caseId === 'none') !== (record.stage === 'none')) return null;
+  return Object.freeze({
+    schema: 'agent-harness.ah11-ops12-recovery-child.v1',
+    caseId: record.caseId, stage: record.stage, errorClass: record.errorClass,
+    nativePrimaryCode: record.nativePrimaryCode, exitDisposition: record.exitDisposition,
+    exitCode: record.exitCode, exitSignal: record.exitSignal
+  });
+}
+
+export function buildOps12RecoveryDiagnosticRecord(result, childFailure) {
+  let exitDisposition = Number.isSafeInteger(result?.code) && result.code >= 0
+    ? (result.code === 0 ? 'zero' : 'nonzero')
+    : result?.code === null && typeof result?.signal === 'string' && result.signal.length > 0
+      ? 'signal' : 'unknown';
+  const exitSignal = typeof result?.signal === 'string' && OPS12_RECOVERY_SIGNALS.has(result.signal)
+    ? result.signal : null;
+  if (exitDisposition === 'signal' && exitSignal === null) exitDisposition = 'unknown';
+  const exitCode = Number.isSafeInteger(result?.code) && result.code >= 0 && result.code <= 255
+    ? result.code : null;
+  return safeOps12RecoveryRecord({
+    schema: 'agent-harness.ah11-ops12-recovery-child.v1',
+    caseId: childFailure?.caseId ?? (exitDisposition === 'zero' ? 'none' : 'unknown'),
+    stage: childFailure?.stage ?? (exitDisposition === 'zero' ? 'none' : 'unknown'),
+    errorClass: childFailure?.errorClass ?? (exitDisposition === 'zero' ? 'none' : 'unknown'),
+    nativePrimaryCode: childFailure?.nativePrimaryCode ?? null,
+    exitDisposition, exitCode,
+    exitSignal: exitDisposition === 'signal' ? exitSignal : null
+  });
+}
+
+export function parseOps12RecoveryDiagnostics(channel) {
+  if (!channel || typeof channel !== 'object' || Array.isArray(channel)) return INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS;
+  const expectedKeys = ['bytes', 'count', 'diagnosticsComplete', 'lines'];
+  const keys = Object.keys(channel).sort();
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])
+      || expectedKeys.some(key => !Object.hasOwn(channel, key))) return INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS;
+  const { lines, count, bytes, diagnosticsComplete } = channel;
+  if (typeof lines !== 'string' || count !== 1 || !Number.isSafeInteger(bytes) || bytes < 0
+      || bytes > OPS12_RECOVERY_MAX_BYTES || diagnosticsComplete !== true
+      || Buffer.byteLength(lines, 'utf8') !== bytes || !lines.endsWith('\n')) {
+    return INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS;
+  }
+  const rawLines = lines.slice(0, -1).split('\n');
+  if (rawLines.length !== 1 || Buffer.byteLength(`${rawLines[0]}\n`, 'utf8') > OPS12_RECOVERY_MAX_LINE_BYTES
+      || !rawLines[0].startsWith(OPS12_RECOVERY_DIAGNOSTIC_PREFIX)) return INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS;
+  let value;
+  try { value = JSON.parse(rawLines[0].slice(OPS12_RECOVERY_DIAGNOSTIC_PREFIX.length)); } catch {
+    return INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS;
+  }
+  const record = safeOps12RecoveryRecord(value);
+  if (!record) return INCOMPLETE_OPS12_RECOVERY_DIAGNOSTICS;
+  return Object.freeze({ complete: true, recordCount: 1, records: Object.freeze([record]) });
+}
+
+function safeOps12RecoveryDiagnostics(value) {
+  const safe = Array.isArray(value?.records) && value.records.length === 1
+    ? safeOps12RecoveryRecord(value.records[0]) : null;
+  const complete = value?.complete === true && value?.recordCount === 1 && safe !== null;
+  return Object.freeze({
+    complete, recordCount: complete ? 1 : 0,
+    records: Object.freeze(complete ? [safe] : [])
+  });
 }
 
 function safeOps06ClosePhaseDiagnostics(value) {
@@ -529,7 +808,8 @@ function makeRecord({
 export function buildSafeFailureDiagnostics({
   scenario, phase, stage, status = null, signal = null, error = null,
   stdout = '', stderr = '', missingCases = [], c02ControlReadDiagnostics = undefined,
-  ops02RaceDiagnostics = undefined, ops06ClosePhaseDiagnostics = undefined
+  ops02RaceDiagnostics = undefined, ops06ClosePhaseDiagnostics = undefined,
+  ops12RecoveryDiagnostics = undefined
 }) {
   const combined = `${typeof stdout === 'string' ? stdout : ''}\n${typeof stderr === 'string' ? stderr : ''}`;
   const outputBytes = Buffer.byteLength(combined, 'utf8');
@@ -634,6 +914,9 @@ export function buildSafeFailureDiagnostics({
     }),
     ...(ops06ClosePhaseDiagnostics === undefined ? {} : {
       ops06ClosePhaseDiagnostics: safeOps06ClosePhaseDiagnostics(ops06ClosePhaseDiagnostics)
+    }),
+    ...(ops12RecoveryDiagnostics === undefined ? {} : {
+      ops12RecoveryDiagnostics: safeOps12RecoveryDiagnostics(ops12RecoveryDiagnostics)
     })
   });
 }
