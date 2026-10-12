@@ -55,7 +55,7 @@ Legend. **Owner** is the module that owns the behaviour, not a person. **Access*
 
 ## API routes
 
-Mutating routes check `Origin` (`checkOrigin`); the access column is what the server enforces, by capability (`src/server/context.ts`).
+Guard behavior is route-specific. `checkOrigin`, checks that reject only a present foreign `Origin`, session/capability checks, consumer HMAC, provider webhook signatures, and intentionally public routes are distinct. The access column summarizes each route's caller boundary; it does not imply a shared Origin or capability guard. See the [HTTP API catalog](../api/HTTP-API.md) and [identity guide](identity.md) for the exact per-route behavior.
 
 | Route | Methods | Access | Demo vs live |
 |---|---|---|---|
@@ -76,7 +76,7 @@ Mutating routes check `Origin` (`checkOrigin`); the access column is what the se
 | `/api/orders` | POST, GET | create: public with email; read: account | sandbox orders only |
 | `/api/research` | POST | public | demo: fixtures only, arbitrary URLs refused (422). live: Ticketmaster / provider paths |
 | `/api/art` | POST | public, quota by account, device and IP | demo: `simulated` art |
-| `/api/agent` | POST | public | demo: 204 |
+| `/api/agent` | POST | action protocol and live legacy path: require `agent.use`; non-live legacy path returns 204 before capability enforcement | non-live action protocol returns JSON from the deterministic rules planner, which may propose typed actions; legacy `{ event, message }` returns 204 |
 | `/api/files/[name]` | GET | public (content-hashed name) | |
 | `/api/dev/email-preview` | GET | dev only; 404 in production | |
 

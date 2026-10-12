@@ -69,7 +69,7 @@ If owners approve a different canonical schema, reassess the app mapper, route e
 | `contract` | `"EventIntelligencePackage"` | real |
 | `schema_version` | `"1.1"` | real (constant `PACKAGE_SCHEMA_VERSION`) |
 | `event_id` | `ticketstub-research-<16 hex>`, a hash of package id and retrieval time | real, stable for redelivery of the same observation |
-| `tenant_id` | `placeholder-tenant` | **placeholder**: the studio has no tenant concept yet |
+| `tenant_id` | `placeholder-tenant` | **placeholder**: the app derives account and guest/device tenant identities in `src/server/context.ts`, but this mapper uses its static `PLACEHOLDER` and the research route does not pass trusted caller context into the package. |
 | `project_id` | `placeholder-project` | **placeholder** |
 | `correlation_id` | `placeholder-correlation` | **placeholder** |
 | `producer` | `getticketstub-research/ticketmaster-discovery-v2` | real (no build revision yet) |

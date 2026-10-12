@@ -122,7 +122,7 @@ use, so every customer-facing deployment must set the key.
   **Gap:** a kept weather fact also appears on the stub itself, which is both a digital and a printed keepsake,
   with no credit. Before commercial launch it needs a credit line agreed with the stub and print design.
 
-## Product analytics (optional, off by default)
+## Product analytics (optional; app default off, deployment state varies)
 
 GA4 product analytics ([analytics.md](analytics.md)) is **off** unless a deployment sets both
 `TICKETSTUB_ANALYTICS_ENV` (`production` or `preview`) and `TICKETSTUB_GA_MEASUREMENT_ID` (`G-...`). The
@@ -135,9 +135,7 @@ Even when configured, nothing loads in a browser until the visitor accepts the a
 - `TICKETSTUB_ANALYTICS_DISABLED=1` is the rollback switch; it overrides everything else.
 - No dependency was added: Web Vitals come from `next/web-vitals` bundled with Next.js. No CSP is configured;
   if one is added, allow the Google hosts listed in [analytics.md](analytics.md#configuration-and-environments).
-- The GA4 properties exist (preview `G-M2ELMGCNKW`, production `G-RVV7ZNF463`; record in
-  [analytics.md](analytics.md#ga4-setup-record)), but no deployment sets them, so every deployment collects
-  nothing today. Use the preview id for preview and local checks only. The final live readback is pending.
+- The GA4 properties and app defaults are described in [analytics.md](analytics.md#ga4-setup-record). The dated host record in [analytics-rollout.md](analytics-rollout.md#host-configuration) records separate Preview (`G-M2ELMGCNKW`) and Production (`G-RVV7ZNF463`) settings and post-restore host-specific requests on 2026-10-11; a later scoped capture for release `63406e1` also records the separation and Preview QA events. These are historical observations, not a current settings readback. After each publish or setting change, follow the manual restore and fresh-host verification there. Do not infer current host configuration from app defaults or historical evidence.
 
 Offline checks: `npm test` runs `tests/analytics.test.mjs` and `tests/analytics-browser.test.mjs` (fake
 transport and fake browser, no network). Server operational logging is configured separately with
