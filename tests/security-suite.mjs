@@ -951,6 +951,7 @@ function keyringFixture(initialKeys, options = {}) {
     keyringReference: KEYRING_REFERENCE,
     policy: options.policy ?? KEYRING_POLICY,
     clock: () => state.now,
+    ...(options.minActiveGeneration === undefined ? {} : { minActiveGeneration: options.minActiveGeneration }),
     source: {
       async load(request) {
         assert.deepEqual(request, { keyringReference: KEYRING_REFERENCE });
@@ -1073,9 +1074,11 @@ test("fingerprint keyring fails closed, never false, for a version past retentio
   const purgeableAt = retiredAt + KEYRING_POLICY.retiredKeyRetentionMs + SKEW;
   fixture.state.now = purgeableAt - 1;
   assert.equal(await fixture.keyring.matches("authorization_action", ACTION_IDENTITY, old), true);
+  assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion), ["tombstone-g2", "tombstone-g1"]);
   fixture.state.now = purgeableAt;
   await expectSecurityFailure(fixture.keyring.matches("authorization_action", ACTION_IDENTITY, old), "retention_unavailable");
-  assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion), ["tombstone-g2"]);
+  // N1: a store lookup cannot see tombstones under the purgeable version, so it fails closed too.
+  await expectSecurityFailure(fixture.keyring.candidates("authorization_action", ACTION_IDENTITY), "retention_unavailable");
   const status = await fixture.keyring.status();
   assert.deepEqual(status.purgeableKeyVersions, ["tombstone-g1"]);
   assert.equal(status.rotationDue, true);
@@ -1153,7 +1156,9 @@ test("fingerprint keyring fails closed when unconfigured or misconfigured", asyn
     { retiredKeyRetentionMs: DAY, maxKeyVersions: security.TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxKeyVersions + 1 },
     { retiredKeyRetentionMs: DAY, maxKeyVersions: 16.5 },
     { retiredKeyRetentionMs: DAY, maxClockSkewMs: -1 },
-    { retiredKeyRetentionMs: DAY, maxClockSkewMs: security.TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxClockSkewMs + 1 }
+    { retiredKeyRetentionMs: DAY, maxClockSkewMs: security.TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxClockSkewMs + 1 },
+    // N5: retention above the hard limit, even when the cadence would fit under the version cap.
+    { retiredKeyRetentionMs: Number.MAX_SAFE_INTEGER, rotationIntervalMs: Number.MAX_SAFE_INTEGER, maxActiveKeyAgeMs: Number.MAX_SAFE_INTEGER }
   ];
   for (const policy of invalidPolicies) {
     expectPolicyInvalid(() => security.createTombstoneFingerprintKeyring({ keyringReference: KEYRING_REFERENCE, source, policy }));
@@ -1239,7 +1244,8 @@ test("a key set over the version cap never stops verification or incident rotati
   const incident = security.planTombstoneFingerprintKeyRotation({ keys: metadata, reason: "incident", now: fixture.state.now, policy });
   assert.equal(incident.keys.length, 21);
   assert.equal(incident.newActiveKeyVersion, "tombstone-g21");
-  expectPolicyInvalid(() => security.planTombstoneFingerprintKeyRotation({ keys: metadata, reason: "scheduled", now: fixture.state.now, policy }));
+  // Even once the cadence allows a scheduled rotation, the cap refuses it.
+  expectPolicyInvalid(() => security.planTombstoneFingerprintKeyRotation({ keys: metadata, reason: "scheduled", now: activations[19] + 90 * DAY, policy }));
 });
 
 test("purge enforces the issued retention bound for wrapped keyrings and direct callers (H2)", async () => {
@@ -1377,6 +1383,139 @@ test("fingerprint keyring tolerates bounded clock skew after a rotation (M3)", a
   // The tolerance is a policy setting; zero restores the strict check.
   const strict = keyringFixture(keys, { now: rotatedAt - 1, policy: { ...KEYRING_POLICY, maxClockSkewMs: 0 } });
   await expectSecurityFailure(strict.keyring.status(), "retention_unavailable");
+});
+
+test("candidates fails closed for a tombstone that outlived its key through an inflating wrapper (N1)", async () => {
+  const { state, keyring } = keyringFixture([activeKey("tombstone-g1", FIXTURE_KEY_A)]);
+  const retained = [];
+  const retentionPort = { async purgePersonalDataAndRetainTombstone(input) { retained.push(input); } };
+  // A wrapper that inflates the bound is trusted data: purgeSensitiveRecord cannot tell.
+  const inflating = {
+    async fingerprint(purpose, identity) {
+      return { ...(await keyring.fingerprint(purpose, identity)), maxRetainUntil: Number.MAX_SAFE_INTEGER };
+    }
+  };
+  const tombstone = await security.purgeSensitiveRecord({
+    reference: "order-ref-fixture", trustedScope: scope, providerId: "provider-fixture",
+    authorizationId: "authorization-fixture", actionId: "action-fixture", idempotencyKey: "idem-fixture",
+    deletedAt: KEYRING_T0, retainUntil: KEYRING_T0 + 100 * YEAR, fingerprinter: inflating, retentionPort
+  });
+  assert.equal(retained.length, 1);
+  assert.equal(tombstone.actionFingerprint.keyVersion, "tombstone-g1");
+  const retiredAt = KEYRING_T0 + 90 * DAY;
+  state.keys = [activeKey("tombstone-g2", FIXTURE_KEY_B, retiredAt), retiredKey("tombstone-g1", FIXTURE_KEY_A, KEYRING_T0, retiredAt)];
+  const purgeableAt = retiredAt + KEYRING_POLICY.retiredKeyRetentionMs + SKEW;
+  // A store lookup by digest over the candidates.
+  const lookup = async () => {
+    const digests = (await keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => `${entry.keyVersion}:${entry.digest}`);
+    return digests.includes(`${tombstone.actionFingerprint.keyVersion}:${tombstone.actionFingerprint.digest}`);
+  };
+  state.now = purgeableAt - 1;
+  assert.equal(await lookup(), true);
+  // The key passes retention while the 100-year tombstone is still live: never "no tombstone".
+  state.now = purgeableAt;
+  await expectSecurityFailure(keyring.matches("authorization_action", ACTION_IDENTITY, tombstone.actionFingerprint), "retention_unavailable");
+  await expectSecurityFailure(lookup(), "retention_unavailable");
+  await expectSecurityFailure(keyring.candidates("idempotency_key", ACTION_IDENTITY), "retention_unavailable");
+  // Status keeps working, so the host can see and act on the purgeable version.
+  assert.deepEqual((await keyring.status()).purgeableKeyVersions, ["tombstone-g1"]);
+  // Once the host has dealt with the tombstones and removed the version, lookups resume.
+  state.keys = [activeKey("tombstone-g2", FIXTURE_KEY_B, retiredAt)];
+  assert.equal((await keyring.candidates("authorization_action", ACTION_IDENTITY)).length, 1);
+});
+
+test("removable versions are listed oldest first and can be removed one at a time (N2)", async () => {
+  const activations = [0, 100, 200, 300, 900].map((day) => KEYRING_T0 + day * DAY);
+  const metadata = keyChain(activations).map(({ key, ...rest }) => rest);
+  const now = KEYRING_T0 + 1000 * DAY;
+  const plan = security.planTombstoneFingerprintKeyRotation({ keys: metadata, reason: "scheduled", now, policy: KEYRING_POLICY });
+  // g1, g2, g3 retired at day 100, 200, 300; with 400-day retention they are purgeable at day 1000.
+  assert.deepEqual(plan.removableKeyVersions, ["tombstone-g1", "tombstone-g2", "tombstone-g3"]);
+  assert.deepEqual(plan.keys.map((entry) => entry.keyVersion), ["tombstone-g6", "tombstone-g5", "tombstone-g4", "tombstone-g3", "tombstone-g2", "tombstone-g1"]);
+  const fixture = keyringFixture(withMaterial(plan.keys), { now });
+  const issued = await fixture.keyring.fingerprint("authorization_action", ACTION_IDENTITY);
+  let remaining = plan.keys;
+  for (const [index, keyVersion] of plan.removableKeyVersions.entries()) {
+    remaining = remaining.filter((entry) => entry.keyVersion !== keyVersion);
+    fixture.state.keys = withMaterial(remaining);
+    // Every intermediate set is a valid chain: load, issue, verify and plan all succeed.
+    const status = await fixture.keyring.status();
+    assert.deepEqual(status.purgeableKeyVersions, plan.removableKeyVersions.slice(index + 1));
+    assert.equal((await fixture.keyring.fingerprint("authorization_action", ACTION_IDENTITY)).keyVersion, "tombstone-g6");
+    assert.equal(await fixture.keyring.matches("authorization_action", ACTION_IDENTITY, issued), true);
+    security.planTombstoneFingerprintKeyRotation({ keys: remaining, reason: "incident", now: now + DAY, policy: KEYRING_POLICY });
+  }
+  assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion),
+    ["tombstone-g6", "tombstone-g5", "tombstone-g4"]);
+  // Removing a newer removable version first leaves a gap and fails closed.
+  fixture.state.keys = withMaterial(plan.keys.filter((entry) => entry.keyVersion !== "tombstone-g3"));
+  await expectSecurityFailure(fixture.keyring.status(), "retention_unavailable");
+});
+
+test("a keyring rebuilt under a reused label fails closed below the persisted generation (N3)", async () => {
+  // The host persisted highWaterGeneration 5; the key set was then rebuilt from scratch as g1.
+  const rebuilt = keyringFixture([activeKey("tombstone-g1", FIXTURE_KEY_A)], { minActiveGeneration: 5 });
+  await expectSecurityFailure(rebuilt.keyring.fingerprint("authorization_action", ACTION_IDENTITY), "retention_unavailable");
+  await expectSecurityFailure(rebuilt.keyring.matches("authorization_action", ACTION_IDENTITY, { keyVersion: "tombstone-g1", digest: "A".repeat(43) }), "retention_unavailable");
+  await expectSecurityFailure(rebuilt.keyring.candidates("authorization_action", ACTION_IDENTITY), "retention_unavailable");
+  await expectSecurityFailure(rebuilt.keyring.status(), "retention_unavailable");
+  // At or above the floor the set loads.
+  for (const generation of [5, 6]) {
+    const ok = keyringFixture([activeKey(`tombstone-g${generation}`, FIXTURE_KEY_A)], { minActiveGeneration: 5 });
+    assert.equal((await ok.keyring.status()).activeKeyVersion, `tombstone-g${generation}`);
+  }
+  // A fresh label continues from the high-water mark through the planner.
+  const plan = security.planTombstoneFingerprintKeyRotation({
+    keys: [{ keyVersion: "rebuilt-g1", state: "active", activatedAt: KEYRING_T0 }],
+    reason: "incident", now: KEYRING_T0 + 1, policy: KEYRING_POLICY, highWaterGeneration: 5
+  });
+  assert.equal(plan.newActiveKeyVersion, "rebuilt-g6");
+  for (const minActiveGeneration of [0, 1.5, "5", Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => security.createTombstoneFingerprintKeyring({
+      keyringReference: KEYRING_REFERENCE, policy: KEYRING_POLICY, minActiveGeneration, source: { async load() { return undefined; } }
+    }), (error) => error instanceof security.SecurityBoundaryError && error.code === "retention_unavailable");
+  }
+});
+
+test("a scheduled rotation is refused before the rotation interval; an incident is not (N4)", () => {
+  const keys = [{ keyVersion: "tombstone-g1", state: "active", activatedAt: KEYRING_T0 }];
+  const plan = (reason, now) => security.planTombstoneFingerprintKeyRotation({ keys, reason, now, policy: KEYRING_POLICY });
+  for (const age of [1, 45 * DAY, 90 * DAY - 1]) {
+    expectPolicyInvalid(() => plan("scheduled", KEYRING_T0 + age));
+    assert.equal(plan("incident", KEYRING_T0 + age).newActiveKeyVersion, "tombstone-g2");
+  }
+  assert.equal(plan("scheduled", KEYRING_T0 + 90 * DAY).newActiveKeyVersion, "tombstone-g2");
+  // The reviewer's probe: 30-day scheduled rotations against a 90-day interval are refused outright,
+  // so they can never exhaust the version cap the capacity check sized for the 90-day cadence.
+  const short = { ...KEYRING_POLICY, rotationIntervalMs: 30 * DAY };
+  assert.equal(security.planTombstoneFingerprintKeyRotation({ keys, reason: "scheduled", now: KEYRING_T0 + 30 * DAY, policy: short }).newActiveKeyVersion, "tombstone-g2");
+  expectPolicyInvalid(() => plan("scheduled", KEYRING_T0 + 30 * DAY));
+});
+
+test("retention is capped at 100 years so every bound stays a safe integer (N5)", async () => {
+  const limit = security.TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxRetiredKeyRetentionMs;
+  assert.equal(limit, 100 * YEAR);
+  const longCadence = { rotationIntervalMs: 2 * YEAR, maxActiveKeyAgeMs: 2 * YEAR };
+  const source = { async load() { return { keys: [activeKey("tombstone-g1", FIXTURE_KEY_A)] }; } };
+  const create = (policy) => security.createTombstoneFingerprintKeyring({ keyringReference: KEYRING_REFERENCE, source, policy, clock: () => KEYRING_T0 });
+  const atLimit = create({ ...longCadence, retiredKeyRetentionMs: limit });
+  const issued = await atLimit.fingerprint("authorization_action", ACTION_IDENTITY);
+  assert.ok(Number.isSafeInteger(issued.maxRetainUntil));
+  assert.equal(issued.maxRetainUntil, KEYRING_T0 + limit - SKEW);
+  for (const retiredKeyRetentionMs of [limit + 1, Number.MAX_SAFE_INTEGER - 1]) {
+    expectPolicyInvalid(() => create({ ...longCadence, retiredKeyRetentionMs }));
+    expectPolicyInvalid(() => security.planTombstoneFingerprintKeyRotation({
+      keys: [{ keyVersion: "tombstone-g1", state: "active", activatedAt: KEYRING_T0 }], reason: "incident", now: KEYRING_T0 + 1,
+      policy: { ...longCadence, retiredKeyRetentionMs }
+    }));
+  }
+  // A clock so far out that the bound would overflow fails closed at issuance instead.
+  const farFuture = security.createTombstoneFingerprintKeyring({
+    keyringReference: KEYRING_REFERENCE, policy: { ...longCadence, retiredKeyRetentionMs: limit },
+    clock: () => Number.MAX_SAFE_INTEGER - 1,
+    source: { async load() { return { keys: [activeKey("tombstone-g1", FIXTURE_KEY_A, Number.MAX_SAFE_INTEGER - 2)] }; } }
+  });
+  await expectSecurityFailure(farFuture.fingerprint("authorization_action", ACTION_IDENTITY), "retention_unavailable");
 });
 
 export async function runSecuritySuite() {
