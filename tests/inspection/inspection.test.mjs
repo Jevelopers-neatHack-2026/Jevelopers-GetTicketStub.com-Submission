@@ -35,6 +35,7 @@ import {
   validateInspectionDecisionRequest,
   validateVisualObservation,
 } from "../../src/inspection/index.mjs";
+import { runSqliteDatabaseOperation } from "../../src/sqlite/admission.mjs";
 import { createBrief, DEFAULT_SCOPE, createVersion } from "../versions/helpers.mjs";
 import { decisionExecutionTargetHash } from "../../src/contracts/decision-port/v1.mjs";
 
@@ -1008,6 +1009,48 @@ test("repair claims refuse borrowed BEGIN and SAVEPOINT transactions", async (t)
   assert.equal(database.isTransaction, false);
   assert.equal(database.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count, 0);
   database.close();
+});
+
+test("direct synchronous repair controllers fail closed while another same-file owner is active", async (t) => {
+  const databasePath = await temporaryDatabase(t, "repair-controller-admission.sqlite");
+  const databaseA = new DatabaseSync(databasePath);
+  const databaseB = new DatabaseSync(databasePath);
+  t.after(() => { databaseA.close(); databaseB.close(); });
+  const ownerA = {};
+  const sameConnectionOwner = {};
+  const otherConnectionOwner = {};
+  const sameConnectionController = createSqliteInspectionRepairController({ database: databaseA,
+    now: () => 1_000, owner: sameConnectionOwner });
+  const otherConnectionController = createSqliteInspectionRepairController({ database: databaseB,
+    now: () => 1_000, owner: otherConnectionOwner });
+  const scope = { ...trustedScope, design_version_id: "design-admission" };
+  const identity = (inspection_id) => ({ scope, inspection_id,
+    brief_hash: digest("admission brief"), design_hash: digest("admission design") });
+  let enter;
+  let unblock;
+  const entered = new Promise((resolve) => { enter = resolve; });
+  const release = new Promise((resolve) => { unblock = resolve; });
+  const held = runSqliteDatabaseOperation({ database: databaseA, owner: ownerA, work: async () => {
+    databaseA.exec("BEGIN IMMEDIATE;");
+    enter();
+    try { await release; } finally { databaseA.exec("ROLLBACK;"); }
+  } });
+  await entered;
+  try {
+    assert.equal(databaseA.isTransaction, true);
+    assert.throws(() => sameConnectionController.startInspection(identity("same-connection-blocked")),
+      { code: "transaction_unavailable" });
+    assert.throws(() => otherConnectionController.startInspection(identity("other-connection-blocked")),
+      { code: "transaction_unavailable" });
+    assert.equal(databaseA.prepare("SELECT count(*) AS count FROM creative_inspection_state_v1 WHERE inspection_id LIKE '%-blocked'").get().count, 0);
+    assert.equal(databaseB.prepare("SELECT count(*) AS count FROM creative_inspection_state_v1 WHERE inspection_id LIKE '%-blocked'").get().count, 0);
+  } finally {
+    unblock();
+  }
+  await held;
+  assert.equal(databaseA.isTransaction, false);
+  assert.equal(sameConnectionController.startInspection(identity("same-connection-after-release")).status, "active");
+  assert.equal(otherConnectionController.startInspection(identity("other-connection-after-release")).status, "active");
 });
 
 test("persisted legacy repair references fail closed before public state projection", async (t) => {

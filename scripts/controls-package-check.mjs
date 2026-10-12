@@ -24,7 +24,7 @@ const packageFiles = [
   'src/api', 'src/contracts', 'src/controls', 'src/generation', 'src/inspection', 'src/models/index.mjs', 'src/models/index.d.mts',
   'src/models/image-adapter-core.mjs', 'src/models/image-routes.mjs', 'src/models/openai-images.mjs',
   'src/models/openrouter-images.mjs', 'src/models/codec-runtime/index.mjs', 'src/models/codec-runtime/package.json',
-  'src/models/codec-runtime/package-lock.json', 'src/planning', 'src/preflight', 'src/runtime', 'src/storage',
+  'src/models/codec-runtime/package-lock.json', 'src/planning', 'src/preflight', 'src/sqlite', 'src/runtime', 'src/storage',
   'src/telemetry', 'src/versions',
 ];
 assert.ok(acceptedNodeVersions.includes(process.versions.node),

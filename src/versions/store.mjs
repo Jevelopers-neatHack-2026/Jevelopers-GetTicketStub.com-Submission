@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
   canonicalHash,
@@ -23,6 +23,8 @@ import { compositionPreviewHash, snapshotCompositionBytesRecord, snapshotComposi
   createCompositionProductionEnvelope, validateCompositionProductionEnvelope,
   validateCompositionRevision } from "../contracts/composition-authority.mjs";
 import { imageProviderRoute } from "../models/image-routes.mjs";
+import { registerSqliteDatabaseConnection, runSqliteDatabaseOperation, runSqliteDatabaseOperationSync,
+  sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
 
 const STORAGE_VERSION = 13;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
@@ -33,6 +35,61 @@ const ATTEMPT_FIELDS = [
   "parent_design_hash", "transport_attempt_ids", "provider_request_ids", "usage_refs", "trace_refs",
 ];
 const publicationTransactionRegistries = new WeakMap();
+const inspectionRepairControllers = new WeakMap();
+const activeSqliteFiles = new Map();
+
+/** Internal adapter hook for the controller initialized by its owning store. */
+export function inspectionRepairControllerForStore(store) {
+  if (store?.closed === true) return undefined;
+  return inspectionRepairControllers.get(store);
+}
+
+function sqliteFileIdentity(databasePath) {
+  const canonicalPath = realpathSync(databasePath);
+  const stat = statSync(canonicalPath, { bigint: true });
+  // SQLite WAL/SHM files are addressed beside the opened pathname, so two
+  // hard-link names for one database file do not share the same sidecars.
+  if (stat.nlink > 1n) reject("unavailable", "database.hard_link_alias", true);
+  return { canonicalPath, key: `${stat.dev}:${stat.ino}` };
+}
+
+function rejectHardLinkAlias(databasePath) {
+  try {
+    const identity = sqliteFileIdentity(databasePath);
+    const active = activeSqliteFiles.get(identity.key);
+    if (active && active.canonicalPath !== identity.canonicalPath) {
+      reject("unavailable", "database.hard_link_alias", true);
+    }
+  } catch (error) {
+    if (error instanceof VersionStoreError || error?.code !== "ENOENT") throw error;
+  }
+}
+
+function registerSqliteFile(databasePath, objectRoot) {
+  const identity = sqliteFileIdentity(databasePath);
+  const canonicalObjectRoot = realpathSync(objectRoot);
+  let active = activeSqliteFiles.get(identity.key);
+  if (active && active.canonicalPath !== identity.canonicalPath) {
+    reject("unavailable", "database.hard_link_alias", true);
+  }
+  if (active && active.canonicalObjectRoot !== canonicalObjectRoot) {
+    reject("unavailable", "database.object_root_mismatch", true);
+  }
+  if (!active) {
+    active = { canonicalPath: identity.canonicalPath, canonicalObjectRoot, openConnections: 0 };
+    activeSqliteFiles.set(identity.key, active);
+  }
+  active.openConnections += 1;
+  return { ...identity, active };
+}
+
+function unregisterSqliteFile(identity) {
+  if (!identity) return;
+  identity.active.openConnections -= 1;
+  if (identity.active.openConnections === 0 && activeSqliteFiles.get(identity.key) === identity.active) {
+    activeSqliteFiles.delete(identity.key);
+  }
+}
 
 function providerTargetHash(value) {
   let serialized;
@@ -1738,11 +1795,35 @@ export class CreativeVersionStore {
     }
     if (this.databasePath !== ":memory:") mkdirSync(dirname(this.databasePath), { recursive: true, mode: 0o700 });
     mkdirSync(this.objectRoot, { recursive: true, mode: 0o700 });
+    if (this.databasePath !== ":memory:") rejectHardLinkAlias(this.databasePath);
     try {
       this.db = new DatabaseSync(this.databasePath);
-      makeSchema(this.db);
-      initializeCreativeBriefDatabase(this.db);
+      if (this.databasePath !== ":memory:") {
+        this.sqliteFileIdentity = registerSqliteFile(this.databasePath, this.objectRoot);
+      }
+      this.releaseSqliteAdmission = registerSqliteDatabaseConnection(this.db, this.sqliteFileIdentity?.key);
+      let inspectionRepairController;
+      runSqliteDatabaseOperationSync({ database: this.db, owner: this,
+        conflictError: () => new VersionStoreError("unavailable", "database", true),
+        work: () => {
+          makeSchema(this.db);
+          initializeCreativeBriefDatabase(this.db);
+          // Create the repair controller while this store owns its initial
+          // schema admission. Adapter factories can then reuse the initialized
+          // controller without running synchronous DDL during an active queue.
+          inspectionRepairController = createSqliteInspectionRepairController({
+            database: this.db, now: () => this.now(), owner: this,
+          });
+        } });
+      inspectionRepairControllers.set(this, inspectionRepairController);
     } catch (error) {
+      this.releaseSqliteAdmission?.();
+      this.releaseSqliteAdmission = null;
+      if (this.sqliteFileIdentity) {
+        unregisterSqliteFile(this.sqliteFileIdentity);
+        this.sqliteFileIdentity = null;
+      }
+      try { this.db?.close(); } catch { /* Preserve the original initialization failure. */ }
       if (error instanceof VersionStoreError) throw error;
       reject("unavailable", "database", true);
     }
@@ -1754,6 +1835,11 @@ export class CreativeVersionStore {
     if (this.closed) return;
     this.db.close();
     this.closed = true;
+    inspectionRepairControllers.delete(this);
+    this.releaseSqliteAdmission?.();
+    this.releaseSqliteAdmission = null;
+    unregisterSqliteFile(this.sqliteFileIdentity);
+    this.sqliteFileIdentity = null;
   }
 
   assertOpen() {
@@ -1790,10 +1876,10 @@ export class CreativeVersionStore {
     }
   }
 
-  isBriefUsable({ scope: inputScope, brief_id, brief_hash = undefined }) {
+  isBriefUsable({ scope: inputScope, brief_id, brief_hash = undefined }, options = undefined) {
     this.assertOpen();
     const scope = validScope(inputScope, brief_id);
-    const brief = this.getBrief({ scope, brief_id: scope.brief_id });
+    const brief = this.getBrief({ scope, brief_id: scope.brief_id }, options);
     if (!brief || (brief_hash !== undefined && canonicalHash(brief) !== brief_hash)) return false;
     try {
       this.#assertBriefNotInvalidated(scope, brief);
@@ -1819,7 +1905,7 @@ export class CreativeVersionStore {
     return version ? freezeReturned(version.brief) : null;
   }
 
-  getBrief({ scope: inputScope, brief_id }) {
+  getBrief({ scope: inputScope, brief_id }, { allowLegacyHistoryBackfill = true } = {}) {
     this.assertOpen();
     const scope = validScope(inputScope, brief_id);
     const row = this.db.prepare(`SELECT brief_hash,brief_json FROM creative_briefs
@@ -1832,6 +1918,7 @@ export class CreativeVersionStore {
     const historyStore = this.planningStore(scope);
     let history = historyStore.getBriefHistory(scope.brief_id);
     if (history.length === 0) {
+      if (!allowLegacyHistoryBackfill) return null;
       // Supported migration path for a validated legacy head: copy its exact
       // canonical CreativeBrief and hash into immutable history. This adds no
       // source verification or rights claim that was not already stored.
@@ -3775,6 +3862,13 @@ export class CreativeVersionStore {
 
   async recover() {
     this.assertOpen();
+    const identityError = () => new VersionStoreError("unavailable", "database.identity", true);
+    if (!sqliteDatabaseOperationOwnedBy(this.db, this, identityError)) {
+      return runSqliteDatabaseOperation({ database: this.db, owner: this,
+        identityError,
+        conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true),
+        work: () => this.recover() });
+    }
     if (this.db.isTransaction) reject("unavailable", "database", true);
     const pending = this.db.prepare(`SELECT tenant_id,project_id,brief_id,action_id,job_id FROM creation_actions WHERE state='commit_intent'
       ORDER BY created_at,action_id`).all();
@@ -3860,8 +3954,9 @@ export class CreativeVersionStore {
               let outcome;
               try {
                 const { result_hash: resultHash, ...unrecordedProof } = repairProof;
-                outcome = createSqliteInspectionRepairController({ database: this.db, now: this.now })
-                  .recordRepairOutcomeInPublication({
+                const repairController = inspectionRepairControllers.get(this);
+                if (!repairController) reject("unavailable", "inspection_repair.controller", true);
+                outcome = repairController.recordRepairOutcomeInPublication({
                     scope: { ...scope, design_version_id: repairProof.root_design_version_id },
                     inspection_id: repairProof.inspection_id, action_id: repairProof.action_id,
                     result_hash: resultHash, proof: unrecordedProof,

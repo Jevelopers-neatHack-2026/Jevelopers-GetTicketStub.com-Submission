@@ -19,7 +19,8 @@ if (version.error || version.status !== 0) throw version.error ?? new Error("Typ
 process.stdout.write(version.stdout.trim().replace(/^Version\s+/, "") + "\n");
 
 const test = spawnSync(process.execPath, ["--test", "tests/versions/api-integration.test.mjs", "tests/versions/store.test.mjs",
-  "tests/versions/composition-authority.test.mjs", "tests/api/creative-api.test.mjs"], { stdio: "inherit", env: process.env });
+  "tests/versions/composition-authority.test.mjs", "tests/versions/public-process-lifecycle.test.mjs",
+  "tests/api/creative-api.test.mjs"], { stdio: "inherit", env: process.env });
 if (test.error) throw test.error;
 if (test.status !== 0) process.exit(test.status ?? 2);
 

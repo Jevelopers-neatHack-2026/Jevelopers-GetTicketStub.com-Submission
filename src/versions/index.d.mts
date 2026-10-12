@@ -20,6 +20,7 @@ export {
 } from "./store.mjs";
 export type {
   BriefActionResult,
+  BriefHistoryReadOptions,
   PreparedVersion,
   SavedVersion,
   StaleVersion,
