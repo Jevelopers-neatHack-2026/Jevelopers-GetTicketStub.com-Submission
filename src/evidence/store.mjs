@@ -13,6 +13,7 @@ import {
   mkdir,
 } from 'node:fs/promises';
 import { lstatSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 import { types as utilTypes } from 'node:util';
 import { readTextPdf, PDF_TEXT_READER_LIMITS } from '../extraction/pdf/index.mjs';
@@ -552,6 +553,7 @@ function sqliteBusy(error) {
 }
 
 function createLockContext(timeoutMs, externalSignal) {
+  const deadlineAt = performance.now() + timeoutMs;
   const controller = new AbortController();
   let failureCode = null;
   const onExternalAbort = () => {
@@ -569,6 +571,12 @@ function createLockContext(timeoutMs, externalSignal) {
   return {
     signal: controller.signal,
     check() {
+      // Timer delivery can lag behind a synchronous host callback or SQLite
+      // operation. Every existing boundary uses the same original clock budget.
+      if (failureCode === null && performance.now() >= deadlineAt) {
+        failureCode = 'EVIDENCE_BUSY';
+        controller.abort();
+      }
       if (failureCode !== null) fail(failureCode);
       if (controller.signal.aborted) fail('EVIDENCE_CANCELLED');
     },
@@ -753,7 +761,9 @@ async function withTenantLock(directory, timeoutMs, operation, externalSignal, l
               continue;
             }
             try {
+              context.check();
               ensurePrivateReceiptSchema(database);
+              context.check();
               const result = operation(database, context.signal);
               if (utilTypes.isPromise(result)) {
                 observeNativeRejectedPromise(result);
@@ -784,6 +794,7 @@ async function withTenantLock(directory, timeoutMs, operation, externalSignal, l
             await lockRetryDelay(context);
           }
         }
+        context.check();
         ensurePrivateReceiptSchema(database);
         const pending = Promise.resolve().then(() => {
           context.check();
@@ -793,6 +804,7 @@ async function withTenantLock(directory, timeoutMs, operation, externalSignal, l
         context.check();
         while (true) {
           try {
+            context.check();
             database.exec('COMMIT');
             transactionOpen = false;
             break;
