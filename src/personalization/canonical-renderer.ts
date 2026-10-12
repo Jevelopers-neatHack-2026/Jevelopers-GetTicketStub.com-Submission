@@ -1,11 +1,14 @@
 import { z } from "zod";
-import { productionContentHash } from "@jevelopers/shared-contracts/production-operations";
+import {
+	productionContentHash,
+	productionErrorRegistry,
+} from "@jevelopers/shared-contracts/production-operations";
 import type {
 	JobRef,
 	PersonalizeBatchRequest,
 } from "@jevelopers/shared-contracts";
 import type { RendererPort } from "../jobs/durable-batch.js";
-import { hash, type Id } from "../internal/durability.js";
+import { DurabilityError, hash, type Id } from "../internal/durability.js";
 import { composeArtifact } from "../composition/private-model.js";
 import { exportPrivateFiles } from "../exporters/private-output.js";
 import { outputFile } from "../exporters/private-policy.js";
@@ -16,6 +19,7 @@ import { adaptInput, layoutCommitment } from "../api/canonical-layout.js";
 import { artifactReference } from "../api/canonical-artifacts.js";
 import { candidateOutputPolicy } from "../api/canonical-output-policy.js";
 import {
+	CandidateFailure,
 	contentHash,
 	jsonBytes,
 	requireCandidate,
@@ -40,7 +44,7 @@ export function canonicalBatchRenderer(
 		readonly rows: readonly Readonly<ReturnType<typeof rowSchema.parse>>[];
 	},
 ): RendererPort {
-	return async (claim, abort) => {
+	const render: RendererPort = async (claim, abort) => {
 		abort.throwIfAborted();
 		requireCandidate(
 			claim.job === job.id && hash(claim.pins) === hash(job.pins),
@@ -143,5 +147,17 @@ export function canonicalBatchRenderer(
 				}),
 			),
 		];
+	};
+	return async (claim, abort) => {
+		try {
+			return await render(claim, abort);
+		} catch (error) {
+			if (
+				error instanceof CandidateFailure &&
+				productionErrorRegistry[error.code].retryable
+			)
+				throw new DurabilityError("RENDER_RETRYABLE");
+			throw error;
+		}
 	};
 }
