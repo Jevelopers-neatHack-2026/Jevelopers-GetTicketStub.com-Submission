@@ -13,7 +13,7 @@ console.log(`Fixture consumes packed ${pkg.name}@${pkg.version}; ${files.length}
 
 await mkdir(`${destination}/node_modules/@jevelopers`, { recursive: true });
 await symlink(resolve(destination, 'package'), `${destination}/node_modules/@jevelopers/team-dashboard`, 'dir');
-await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, FinancialSummaryView, FinanceV2View, checkFinanceV2Page, type FinanceV2ViewProps, type FinanceV2Input, type FinanceV2Check, type OpaqueProductScope, evaluateFinancePacket, readFinancePage, type FinancialSummaryViewProps, type FinancePacketReferences, type TrustedPacketExpectation, type PacketOutcome, type FinanceWrapperMetadata, type FinancePageRequest, type FinancePageRead, type ProjectionResult, type SummaryProjection, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
+await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, FinancialSummaryView, FinanceV2View, checkFinanceV2Page, type FinanceV2ViewProps, type FinanceV2TransactionFilters, type FinanceV2Input, type FinanceV2Check, type OpaqueProductScope, evaluateFinancePacket, readFinancePage, type FinancialSummaryViewProps, type FinancePacketReferences, type TrustedPacketExpectation, type PacketOutcome, type FinanceWrapperMetadata, type FinancePageRequest, type FinancePageRead, type ProjectionResult, type SummaryProjection, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
 import { createElement } from 'react';
 import { routeHref } from '@jevelopers/team-dashboard/integration';
 import { createDashboardAuthorizer, createGuardedRouteReader, toHostAccessProjection, type HostSessionVerifier } from '@jevelopers/team-dashboard/server';
@@ -37,7 +37,8 @@ const wrapper: FinanceWrapperMetadata = { asOf: 'synthetic' };
 const summaryProps: FinancialSummaryViewProps = { result: outcome.outcome === 'refused' ? outcome.result : { status: 'missing', authority: 'read_only_projection' }, projectLabel: 'Synthetic', packet: outcome, wrapper };
 const v2Scope: OpaqueProductScope = { tenantId: 'account:synthetic', projectId: 'event:synthetic', environment: 'test', billingMode: 'simulated', actorId: 'account:synthetic' };
 const v2Input: FinanceV2Input = { status: 'restricted' };
-const v2Props: FinanceV2ViewProps = { mode: 'SYNTHETIC_PROPOSAL', view: 'budget', input: v2Input, expectedScope: v2Scope };
+const v2Filters: FinanceV2TransactionFilters = { valuation: 'unknown', currency: 'all' };
+const v2Props: FinanceV2ViewProps = { mode: 'SYNTHETIC_PROPOSAL', view: 'transactions', input: v2Input, expectedScope: v2Scope, filters: v2Filters, onFiltersChange: (next: FinanceV2TransactionFilters) => void next };
 const v2Check: FinanceV2Check = checkFinanceV2Page({}, v2Scope);
 void v2Check;
 const pageReader: (request: FinancePageRequest) => FinancePageRead = readFinancePage;

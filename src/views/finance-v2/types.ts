@@ -16,6 +16,9 @@ export type ReportingDimension = 'provider' | 'model' | 'feature' | 'repo' | 'wo
 export const REPORTING_DIMENSIONS: readonly ReportingDimension[] = ['provider', 'model', 'feature', 'repo', 'workflowId', 'productId', 'orderId', 'channel'];
 export type MetricName = 'expense' | 'grossSales' | 'netSales' | 'directCosts' | 'contribution' | 'cashReceipts' | 'cashPayouts';
 export const METRIC_NAMES: readonly MetricName[] = ['expense', 'grossSales', 'netSales', 'directCosts', 'contribution', 'cashReceipts', 'cashPayouts'];
+/** The eleven detail metric names of the frozen `ReportingDetail.metrics` (`additionalProperties: false`). Nothing else is rendered. */
+export type DetailMetricName = MetricName | 'simulatedGrossSales' | 'simulatedNetSales' | 'simulatedDirectCosts' | 'simulatedExpense';
+export const DETAIL_METRIC_NAMES: readonly DetailMetricName[] = [...METRIC_NAMES, 'simulatedGrossSales', 'simulatedNetSales', 'simulatedDirectCosts', 'simulatedExpense'];
 export type Metrics = Readonly<Record<MetricName, ReportingAmount>>;
 export type VersionedRef = Readonly<{ id: string; revision: number; contentHash: Sha256Ref }>;
 
@@ -30,7 +33,7 @@ export type ReportingDetail = Readonly<{
   valuation: 'estimated' | 'provider_confirmed' | 'unknown'; reconciliation: 'unmatched' | 'matched' | 'exception'; settlement: 'unpaid' | 'partly_paid' | 'paid';
   dimensions: Readonly<Record<ReportingDimension, string | null>>;
   amount: DecimalString | null;
-  metrics: Readonly<Record<string, DecimalString>>;
+  metrics: Readonly<Record<DetailMetricName, DecimalString>>;
   status: 'recognized' | 'unknown' | 'unsupported';
 }>;
 export type ReportingGroup = Readonly<{ dimension: ReportingDimension; value: string | null; bucket: 'known' | 'unknown_unallocated'; eventCount: number; metrics: Metrics }>;

@@ -7,12 +7,15 @@ import { StateBadge } from '../../components/StateBadge';
 import { TableScroll } from '../../components/TableScroll';
 import { checkFinanceV2Page } from './check';
 import {
-  METRIC_NAMES, REPORTING_DIMENSIONS,
+  DETAIL_METRIC_NAMES, METRIC_NAMES, REPORTING_DIMENSIONS,
   type FinanceV2Input, type FinanceV2Mode, type FinanceV2Page, type OpaqueProductScope, type ReportingAmount, type ReportingBudget, type ReportingCoverage,
   type ReportingCurrencySummary, type ReportingDetail, type ReportingGroup,
 } from './types';
 
 export type FinanceV2ViewName = 'budget' | 'breakdown' | 'transactions' | 'transaction-detail';
+/** Transaction list filter selection. `all` means unfiltered; `unknown` is a real valuation value and is never treated as `all`. */
+export type FinanceV2TransactionFilters = Readonly<{ valuation: string; currency: string }>;
+const VALUATION_FILTERS = ['all', 'estimated', 'provider_confirmed', 'unknown'] as const;
 export type FinanceV2ViewProps = Readonly<{
   /** Must be the literal `SYNTHETIC_PROPOSAL`. The frozen Finance v2 proposal is not accepted, so nothing else is rendered. */
   mode: FinanceV2Mode;
@@ -24,8 +27,16 @@ export type FinanceV2ViewProps = Readonly<{
   /** Detail id for `transaction-detail`. */
   detailId?: string;
   detailHref?: (detailId: string) => string;
+  /** Where "Back to transactions" goes. The host puts its filter and snapshot context in this href so return and deep links keep them. */
   listHref?: string;
   onNavigate?: (href: string) => void;
+  /**
+   * Host-owned transaction filters (for example kept in the URL query) so they survive detail navigation, reload and deep links.
+   * Used only together with `onFiltersChange`; otherwise the list keeps its own local selection. A value that is not one of the
+   * offered options is shown as `all`, never guessed.
+   */
+  filters?: FinanceV2TransactionFilters;
+  onFiltersChange?: (next: FinanceV2TransactionFilters) => void;
 }>;
 
 const known = (text: string, currency: string): AmountDisplay => ({ status: 'available', text, currency });
@@ -112,11 +123,11 @@ function BudgetCard({ budget }: { budget: ReportingBudget }) {
     <h3>{c} budget advisory</h3>
     <p>Advisory only. Remaining authorized capacity is not spend authority, and lifecycle consumption is not ledger expense.</p>
     <div className="td-metrics">
-      <MetricCard title="Limit" amount={orUnknown(budget.limit, c)} description={budget.limit === null ? 'No limit delivered. This is not zero.' : 'Producer limit, as delivered.'} />
-      <MetricCard title="Ledger expense" amount={known(budget.ledgerExpense, c)} description="Recognized in the ledger." />
-      <MetricCard title="Lifecycle consumed" amount={known(budget.lifecycleConsumed, c)} description="Lifecycle consumption. It is not ledger expense." />
-      <MetricCard title="Held" amount={known(budget.held, c)} description="Held, as delivered." />
-      <MetricCard title="Remaining authorized capacity (advisory)" amount={orUnknown(budget.remainingAuthorizedCapacity, c)} description={budget.remainingAuthorizedCapacity === null ? 'Not delivered. This is not zero and not spend authority.' : 'Advisory only. Not spend authority.'} />
+      <MetricCard title={`${c} limit`} amount={orUnknown(budget.limit, c)} description={budget.limit === null ? 'No limit delivered. This is not zero.' : 'Producer limit, as delivered.'} />
+      <MetricCard title={`${c} ledger expense`} amount={known(budget.ledgerExpense, c)} description="Recognized in the ledger." />
+      <MetricCard title={`${c} lifecycle consumed`} amount={known(budget.lifecycleConsumed, c)} description="Lifecycle consumption. It is not ledger expense." />
+      <MetricCard title={`${c} held`} amount={known(budget.held, c)} description="Held, as delivered." />
+      <MetricCard title={`${c} remaining authorized capacity (advisory)`} amount={orUnknown(budget.remainingAuthorizedCapacity, c)} description={budget.remainingAuthorizedCapacity === null ? 'Not delivered. This is not zero and not spend authority.' : 'Advisory only. Not spend authority.'} />
     </div>
     <dl>
       <Row term="Window">{budget.window}</Row>
@@ -190,10 +201,15 @@ function Anchor({ href, onNavigate, children }: { href: string; onNavigate: ((hr
     event.preventDefault(); onNavigate(href);
   }}>{children}</a>;
 }
-function TransactionList({ page, detailHref, onNavigate }: { page: FinanceV2Page } & Nav) {
-  const [valuation, setValuation] = useState('all');
-  const [currency, setCurrency] = useState('all');
+function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChange }: { page: FinanceV2Page } & Nav & Pick<FinanceV2ViewProps, 'filters' | 'onFiltersChange'>) {
+  const [local, setLocal] = useState<FinanceV2TransactionFilters>({ valuation: 'all', currency: 'all' });
   const currencies = page.summary.currencies.map((entry) => entry.currency);
+  const hostOwned = filters !== undefined && onFiltersChange !== undefined;
+  const selected = hostOwned ? filters : local;
+  const valuation = (VALUATION_FILTERS as readonly string[]).includes(selected.valuation) ? selected.valuation : 'all';
+  const currency = selected.currency === 'all' || currencies.includes(selected.currency) ? selected.currency : 'all';
+  const setValuation = (next: string) => { const value = { valuation: next, currency }; if (hostOwned) onFiltersChange(value); else setLocal(value); };
+  const setCurrency = (next: string) => { const value = { valuation, currency: next }; if (hostOwned) onFiltersChange(value); else setLocal(value); };
   const shown = page.details.filter((detail) => (valuation === 'all' || detail.valuation === valuation) && (currency === 'all' || detail.currency === currency));
   return <>
     <Section label="Transaction filters" title="Filters">
@@ -202,7 +218,7 @@ function TransactionList({ page, detailHref, onNavigate }: { page: FinanceV2Page
         <FilterSelect label="Currency" value={currency} onChange={setCurrency} options={[{ value: 'all', label: 'All currencies' }, ...currencies.map((code) => ({ value: code, label: code }))]} />
       </div>
     </Section>
-    <Section label="Transactions" title="Transactions">
+    <Section label="Transaction list" title="Transaction list">
       <dl>
         <Row term="Detail count (producer)">{page.detailCount}</Row>
         <Row term="More rows exist">{page.hasMore ? 'Yes. Only the delivered page is shown; no further page is fetched here.' : 'No'}</Row>
@@ -223,7 +239,7 @@ function TransactionList({ page, detailHref, onNavigate }: { page: FinanceV2Page
 function DetailBody({ detail, parent }: { detail: ReportingDetail; parent: ReportingCurrencySummary | undefined }) {
   const c = detail.currency;
   return <>
-    <Section label="Transaction detail" title="Transaction detail">
+    <Section label="Transaction record" title="Transaction record">
       <dl>
         <Row term="Detail">{detail.detailId}</Row>
         <Row term="Currency">{c}</Row>
@@ -242,10 +258,10 @@ function DetailBody({ detail, parent }: { detail: ReportingDetail; parent: Repor
       <dl>{REPORTING_DIMENSIONS.map((key) => <Row key={key} term={key}>{detail.dimensions[key] ?? 'Not set'}</Row>)}</dl>
     </Section>
     <Section label="Detail metrics" title="Detail metrics">
-      <dl>{Object.entries(detail.metrics).map(([name, value]) => <Row key={name} term={name}><AmountText amount={known(value, c)} /></Row>)}</dl>
+      <dl>{DETAIL_METRIC_NAMES.map((name) => <Row key={name} term={name}><AmountText amount={known(detail.metrics[name], c)} /></Row>)}</dl>
     </Section>
     {parent ? <Section label={`${c} parent totals for this snapshot`} title={`${c} parent totals for this snapshot`}>
-      <p>Authoritative totals for the same snapshot and currency, as delivered. This detail is not added to them.</p>
+      <p>Synthetic parent totals supplied for the same snapshot and currency, as delivered. This detail is not added to them.</p>
       <MetricsTable caption={`${c} parent totals`} metrics={parent.metrics} currency={c} />
     </Section> : null}
   </>;
@@ -266,7 +282,7 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
  */
 export function FinanceV2View(props: FinanceV2ViewProps) {
   const headingId = useId();
-  const { view, input, expectedScope, expectedSnapshotId, detailId, detailHref, listHref, onNavigate } = props;
+  const { view, input, expectedScope, expectedSnapshotId, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange } = props;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[view] ?? 'Finance v2'}</h2>{body}</section>;
   if (props.mode !== 'SYNTHETIC_PROPOSAL') return wrap(<Notice alert title="Unsupported mode">This presentation only renders in explicit SYNTHETIC_PROPOSAL mode. Nothing is shown. Code UNSUPPORTED_MODE.</Notice>);
   if (!input || typeof input !== 'object') return wrap(<Notice title="Finance state unknown">The state of this report could not be determined. No amounts are shown.</Notice>);
@@ -285,7 +301,7 @@ export function FinanceV2View(props: FinanceV2ViewProps) {
     <Banner page={page} />
     {view === 'budget' && <BudgetView page={page} />}
     {view === 'breakdown' && <BreakdownView page={page} />}
-    {view === 'transactions' && <TransactionList page={page} {...(detailHref ? { detailHref } : {})} {...(onNavigate ? { onNavigate } : {})} />}
+    {view === 'transactions' && <TransactionList page={page} {...(detailHref ? { detailHref } : {})} {...(onNavigate ? { onNavigate } : {})} {...(filters ? { filters } : {})} {...(onFiltersChange ? { onFiltersChange } : {})} />}
     {view === 'transaction-detail' && <DetailView page={page} detailId={detailId} {...(listHref ? { listHref } : {})} {...(onNavigate ? { onNavigate } : {})} />}
   </>);
 }

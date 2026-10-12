@@ -51,8 +51,17 @@ function FixtureHost() {
       access={authenticated ? authorizedFixture : { status: 'restricted' }} provider={connected ? provider : undefined}
       renderRoute={({ data, route }) => v2Name && !examples && Object.hasOwn(v2Views, route.id) ? (() => {
         const fixture = financeV2Fixture(v2Name);
+        // The URL query is the durable context: fixture, boundary state and transaction filters. Detail and return hrefs carry all of it, so reload, deep link and Back keep the same snapshot and filters.
+        const context = search.toString() ? `?${search.toString()}` : '';
+        const filters = { valuation: search.get('valuation') ?? 'all', currency: search.get('currency') ?? 'all' };
+        const changeFilters = (next: { valuation: string; currency: string }) => {
+          const params = new URLSearchParams(window.location.search);
+          for (const [key, value] of Object.entries(next)) { if (value === 'all') params.delete(key); else params.set(key, value); }
+          navigate(window.location.pathname + (params.toString() ? `?${params.toString()}` : ''));
+        };
         return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={v2Views[route.id]!} input={fixture.input} expectedScope={fixture.expectedScope} expectedSnapshotId={fixture.expectedSnapshotId}
-          {...(route.params.id ? { detailId: route.params.id } : {})} detailHref={(id) => routeHref(configuredBase, 'transaction-detail', { id })} listHref={routeHref(configuredBase, 'transactions')} onNavigate={navigate} />;
+          {...(route.params.id ? { detailId: route.params.id } : {})} detailHref={(id) => routeHref(configuredBase, 'transaction-detail', { id }) + context} listHref={routeHref(configuredBase, 'transactions') + context}
+          onNavigate={navigate} filters={filters} onFiltersChange={changeFilters} />;
       })() : summaryName && route.id === 'overview' && !examples ? <>
         <p role="note"><strong>SYNTHETIC FIXTURE</strong>: offline development data shaped like adapter output. Not real Finance data; the actual Finance summary route is unavailable until the accepted handoff.</p>
         <FinancialSummaryView {...summaryFixture(summaryName, evaluateFinancePacket)} projectLabel={syntheticProjectLabel} />

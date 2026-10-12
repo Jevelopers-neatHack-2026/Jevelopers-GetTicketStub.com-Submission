@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { useMemo, useState } from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Dashboard } from '../../src';
@@ -55,6 +56,48 @@ describe('checkFinanceV2Page', () => {
     page.summary.budgets[0]!.limit = 100;
     expect(checkFinanceV2Page(page, syntheticOpaqueScope)).toMatchObject({ ok: false, path: '/summary/budgets/0/limit' });
   });
+  describe('frozen detail metrics and currency scale', () => {
+    type Mutable = { details: { metrics: Record<string, unknown> }[]; summary: { currencies: { scale?: unknown }[] } };
+    const fresh = () => structuredClone((financeV2Fixture('ready').input as { page: Record<string, unknown> }).page) as unknown as Mutable;
+    it('accepts exactly the eleven frozen detail metric names and scale 18', () => {
+      const page = fresh();
+      expect(Object.keys(page.details[0]!.metrics)).toHaveLength(11);
+      expect(page.summary.currencies[0]!.scale).toBe(18);
+      expect(checkFinanceV2Page(page, syntheticOpaqueScope).ok).toBe(true);
+    });
+    it('refuses an invented authority metric replacing the frozen names, and renders nothing from it', () => {
+      const page = fresh();
+      page.details[0]!.metrics = { inventedSpendAuthority: `999.${'0'.repeat(18)}` };
+      expect(checkFinanceV2Page(page, syntheticOpaqueScope)).toMatchObject({ ok: false, code: 'INVALID_SHAPE', path: '/details/0/metrics' });
+      render(<FinanceV2View {...props('ready', 'transaction-detail', { detailId: detailIds.aiCost })} input={{ status: 'ready', page }} />);
+      expect(refusal()).toHaveTextContent('/details/0/metrics');
+      expect(document.body.textContent).not.toMatch(/inventedSpendAuthority|999\./u);
+    });
+    it('refuses an extra metric key, an empty metrics object, a missing required key and a non-string value', () => {
+      const extra = fresh(); extra.details[0]!.metrics.inventedSpendAuthority = `1.${'0'.repeat(18)}`;
+      expect(checkFinanceV2Page(extra, syntheticOpaqueScope)).toMatchObject({ ok: false, path: '/details/0/metrics' });
+      const empty = fresh(); empty.details[0]!.metrics = {};
+      expect(checkFinanceV2Page(empty, syntheticOpaqueScope)).toMatchObject({ ok: false, path: '/details/0/metrics' });
+      const missing = fresh(); delete missing.details[0]!.metrics.simulatedExpense;
+      expect(checkFinanceV2Page(missing, syntheticOpaqueScope)).toMatchObject({ ok: false, path: '/details/0/metrics' });
+      const swapped = fresh(); delete swapped.details[0]!.metrics.simulatedExpense; swapped.details[0]!.metrics.inventedSpendAuthority = `1.${'0'.repeat(18)}`;
+      expect(checkFinanceV2Page(swapped, syntheticOpaqueScope)).toMatchObject({ ok: false, path: '/details/0/metrics' });
+      const number = fresh(); number.details[0]!.metrics.expense = 12;
+      expect(checkFinanceV2Page(number, syntheticOpaqueScope)).toMatchObject({ ok: false, path: '/details/0/metrics' });
+    });
+    it.each([['absent', undefined], ['17', 17], ['19', 19], ['string 18', '18']] as const)('refuses a currency scale that is %s', (_label, scale) => {
+      const page = fresh();
+      if (scale === undefined) delete page.summary.currencies[0]!.scale; else page.summary.currencies[0]!.scale = scale;
+      expect(checkFinanceV2Page(page, syntheticOpaqueScope)).toEqual({ ok: false, code: 'INVALID_SHAPE', path: '/summary/currencies/0/scale' });
+      render(<FinanceV2View {...props('ready', 'breakdown')} input={{ status: 'ready', page }} />);
+      expect(refusal()).toHaveTextContent('/summary/currencies/0/scale');
+      expect(document.body.textContent).not.toMatch(/scale undefined/u);
+    });
+    it('renders the detail metrics in the frozen order and nothing else', () => {
+      show('ready', 'transaction-detail', { detailId: detailIds.aiCost });
+      expect(within(region('Detail metrics')).getAllByRole('term').map((term) => term.textContent)).toEqual(['expense', 'grossSales', 'netSales', 'directCosts', 'contribution', 'cashReceipts', 'cashPayouts', 'simulatedGrossSales', 'simulatedNetSales', 'simulatedDirectCosts', 'simulatedExpense']);
+    });
+  });
 });
 
 describe('FinanceV2View states', () => {
@@ -96,14 +139,14 @@ describe('budget advisory', () => {
     show('ready', 'budget');
     const card = region('USD budget advisory');
     expect(card).toHaveTextContent('Advisory only. Remaining authorized capacity is not spend authority');
-    const pair = (title: string) => within(card).getByRole('heading', { name: title }).closest('section')!;
-    expect(pair('Limit')).toHaveTextContent('100.000000000000000000 USD');
-    expect(pair('Ledger expense')).toHaveTextContent('42.000000000000000000 USD');
-    expect(pair('Lifecycle consumed')).toHaveTextContent('55.000000000000000000 USD');
-    expect(pair('Lifecycle consumed')).toHaveTextContent('It is not ledger expense');
-    expect(pair('Held')).toHaveTextContent('10.000000000000000000 USD');
-    expect(pair('Remaining authorized capacity (advisory)')).toHaveTextContent('35.000000000000000000 USD');
-    expect(pair('Remaining authorized capacity (advisory)')).toHaveTextContent('Not spend authority');
+    const pair = (title: string) => within(card).getByRole('heading', { name: `USD ${title}` }).closest('section')!;
+    expect(pair('limit')).toHaveTextContent('100.000000000000000000 USD');
+    expect(pair('ledger expense')).toHaveTextContent('42.000000000000000000 USD');
+    expect(pair('lifecycle consumed')).toHaveTextContent('55.000000000000000000 USD');
+    expect(pair('lifecycle consumed')).toHaveTextContent('It is not ledger expense');
+    expect(pair('held')).toHaveTextContent('10.000000000000000000 USD');
+    expect(pair('remaining authorized capacity (advisory)')).toHaveTextContent('35.000000000000000000 USD');
+    expect(pair('remaining authorized capacity (advisory)')).toHaveTextContent('Not spend authority');
     expect(card).toHaveTextContent('Yes: exposure is unresolved');
     expect(card).toHaveTextContent('budget-policy-synthetic revision 1');
   });
@@ -112,9 +155,9 @@ describe('budget advisory', () => {
     expect(region('USD budget advisory')).toHaveTextContent('100.000000000000000000 USD');
     const eur = region('EUR budget advisory');
     expect(eur).not.toHaveTextContent('USD');
-    expect(within(eur).getByRole('heading', { name: 'Limit' }).closest('section')).toHaveTextContent('Amount unknown');
-    expect(within(eur).getByRole('heading', { name: 'Limit' }).closest('section')).toHaveTextContent('This is not zero');
-    expect(within(eur).getByRole('heading', { name: 'Remaining authorized capacity (advisory)' }).closest('section')).toHaveTextContent('not zero and not spend authority');
+    expect(within(eur).getByRole('heading', { name: 'EUR limit' }).closest('section')).toHaveTextContent('Amount unknown');
+    expect(within(eur).getByRole('heading', { name: 'EUR limit' }).closest('section')).toHaveTextContent('This is not zero');
+    expect(within(eur).getByRole('heading', { name: 'EUR remaining authorized capacity (advisory)' }).closest('section')).toHaveTextContent('not zero and not spend authority');
     expect(eur).toHaveTextContent('No policy reference delivered');
     expect(eur).toHaveTextContent('No unresolved exposure reported');
   });
@@ -195,17 +238,17 @@ describe('transaction drilldown', () => {
     expect(within(table).getByRole('link', { name: detailIds.refund }).closest('tr')).toHaveTextContent('-10.000000000000000000 USD');
     expect(within(table).getByRole('link', { name: detailIds.refund }).closest('tr')).toHaveTextContent('sale.refunded');
     expect(within(table).getByRole('link', { name: detailIds.unknown }).closest('tr')).toHaveTextContent('Amount unknown');
-    expect(region('Transactions')).toHaveTextContent('Detail count (producer)4');
-    expect(region('Transactions')).toHaveTextContent('More rows exist');
+    expect(region('Transaction list')).toHaveTextContent('Detail count (producer)4');
+    expect(region('Transaction list')).toHaveTextContent('More rows exist');
     expect(within(table).getByRole('link', { name: detailIds.refund })).toHaveAttribute('href', href(detailIds.refund));
   });
   it('states that more rows exist without fetching them when hasMore is true', () => {
     const fixture = financeV2Fixture('ready');
     const page = { ...(fixture.input as { page: Record<string, unknown> }).page, hasMore: true, nextCursor: 'synthetic-cursor', detailCount: 40 };
     render(<FinanceV2View {...props('ready', 'transactions')} input={{ status: 'ready', page }} />);
-    expect(region('Transactions')).toHaveTextContent('Yes. Only the delivered page is shown');
-    expect(region('Transactions')).toHaveTextContent('synthetic-cursor');
-    expect(region('Transactions')).toHaveTextContent('Detail count (producer)40');
+    expect(region('Transaction list')).toHaveTextContent('Yes. Only the delivered page is shown');
+    expect(region('Transaction list')).toHaveTextContent('synthetic-cursor');
+    expect(region('Transaction list')).toHaveTextContent('Detail count (producer)40');
   });
   it('filters by valuation and currency without changing any amount, and reports an empty filter', () => {
     show('mixed-currency-partial', 'transactions');
@@ -220,10 +263,67 @@ describe('transaction drilldown', () => {
     fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'EUR' } });
     expect(table()).toHaveTextContent('No transactions match these filters.');
   });
+  describe('filter and snapshot context across detail and return (URL-owned, real Dashboard routes)', () => {
+    /** Stands in for a host that keeps context in the URL query, exactly like the fixture host: nothing here is local view state. */
+    function UrlHost({ start, fixture = 'mixed-currency-partial' }: { start: string; fixture?: FinanceV2FixtureName }) {
+      const [url, setUrl] = useState(start);
+      const provider = useMemo(() => fixtureProvider('ready'), []);
+      const [pathname, query] = url.split('?') as [string, string | undefined];
+      const search = new URLSearchParams(query ?? '');
+      const navigate = (href: string) => { const target = new URL(href, 'http://host.test'); setUrl(target.pathname + (target.search || (query ? `?${query}` : ''))); };
+      const context = query ? `?${query}` : '';
+      return <>
+        <output data-testid="url">{url}</output>
+        <Dashboard basePath="/admin/finance" pathname={pathname} navigate={navigate} access={authorizedFixture} provider={provider}
+          renderRoute={({ route }) => <FinanceV2View {...props(fixture, route.id === 'transaction-detail' ? 'transaction-detail' : 'transactions')}
+            {...(route.params.id ? { detailId: route.params.id } : {})} detailHref={(id) => href(id) + context} listHref={routeHref('/admin/finance', 'transactions') + context} onNavigate={navigate}
+            filters={{ valuation: search.get('valuation') ?? 'all', currency: search.get('currency') ?? 'all' }}
+            onFiltersChange={(next) => { const params = new URLSearchParams(query ?? ''); for (const [key, value] of Object.entries(next)) { if (value === 'all') params.delete(key); else params.set(key, value); } navigate(`${pathname}?${params.toString()}`); }} />} />
+      </>;
+    }
+    it('keeps an unknown valuation filter unknown (not all) through detail and Back, with the same rows', async () => {
+      render(<UrlHost start="/admin/finance/transactions?snapshot=s1" fixture="ready" />);
+      fireEvent.change(await screen.findByLabelText('Valuation'), { target: { value: 'unknown' } });
+      expect(screen.getByTestId('url')).toHaveTextContent('valuation=unknown');
+      const rows = () => within(screen.getByRole('table', { name: 'Transaction details' })).getAllByRole('row').length;
+      expect(rows()).toBe(2);
+      fireEvent.click(within(screen.getByRole('table', { name: 'Transaction details' })).getByRole('link', { name: detailIds.unknown }));
+      expect(await screen.findByRole('region', { name: 'Detail states' })).toBeVisible();
+      const back = screen.getByRole('link', { name: 'Back to transactions' });
+      expect(back.getAttribute('href')).toBe('/admin/finance/transactions?snapshot=s1&valuation=unknown');
+      fireEvent.click(back);
+      expect(await screen.findByLabelText('Valuation')).toHaveValue('unknown');
+      expect(screen.getByLabelText('Currency')).toHaveValue('all');
+      expect(rows()).toBe(2);
+      expect(screen.getByTestId('url')).toHaveTextContent('snapshot=s1');
+    });
+    it('keeps valuation and currency together through detail and Back, and restores them from a deep link', async () => {
+      render(<UrlHost start="/admin/finance/transactions?valuation=provider_confirmed&currency=EUR" />);
+      expect(await screen.findByLabelText('Valuation')).toHaveValue('provider_confirmed');
+      expect(screen.getByLabelText('Currency')).toHaveValue('EUR');
+      const table = () => screen.getByRole('table', { name: 'Transaction details' });
+      expect(within(table()).getAllByRole('row')).toHaveLength(2);
+      const link = within(table()).getByRole('link', { name: detailIds.eur });
+      expect(link.getAttribute('href')).toContain('?valuation=provider_confirmed&currency=EUR');
+      fireEvent.click(link);
+      expect(await screen.findByRole('region', { name: 'EUR parent totals for this snapshot' })).toBeVisible();
+      fireEvent.click(screen.getByRole('link', { name: 'Back to transactions' }));
+      expect(await screen.findByLabelText('Valuation')).toHaveValue('provider_confirmed');
+      expect(screen.getByLabelText('Currency')).toHaveValue('EUR');
+      expect(within(table()).getAllByRole('row')).toHaveLength(2);
+      expect(table()).toHaveTextContent('8.000000000000000000 EUR');
+    });
+    it('shows an offered-nowhere host value as all rather than guessing, and still lists every row', async () => {
+      render(<UrlHost start="/admin/finance/transactions?valuation=bogus&currency=JPY" />);
+      expect(await screen.findByLabelText('Valuation')).toHaveValue('all');
+      expect(screen.getByLabelText('Currency')).toHaveValue('all');
+      expect(within(screen.getByRole('table', { name: 'Transaction details' })).getAllByRole('row')).toHaveLength(6);
+    });
+  });
   it('shows a detail with all separate states, dimensions, metrics and the same-snapshot, same-currency parent totals verbatim', () => {
     show('refund-negative', 'transaction-detail', { detailId: detailIds.refund, listHref: '/admin/finance/transactions' });
-    expect(region('Transaction detail')).toHaveTextContent('-10.000000000000000000 USD');
-    expect(region('Transaction detail')).toHaveTextContent('sale.refunded');
+    expect(region('Transaction record')).toHaveTextContent('-10.000000000000000000 USD');
+    expect(region('Transaction record')).toHaveTextContent('sale.refunded');
     expect(region('Detail states')).toHaveTextContent('provider_confirmed');
     expect(region('Detail states')).toHaveTextContent('partly_paid');
     expect(region('Detail dimensions')).toHaveTextContent('Not set');
@@ -237,7 +337,7 @@ describe('transaction drilldown', () => {
   });
   it('shows an unknown detail amount as unknown and a missing detail as absent from the snapshot', () => {
     const unknown = show('unknown-coverage', 'transaction-detail', { detailId: detailIds.unknown });
-    expect(region('Transaction detail')).toHaveTextContent('Amount unknown');
+    expect(region('Transaction record')).toHaveTextContent('Amount unknown');
     expect(region('Detail states')).toHaveTextContent('unknown');
     unknown.unmount();
     show('ready', 'transaction-detail', { detailId: 'sha256:' + 'f'.repeat(64) });
@@ -275,6 +375,14 @@ describe('through the real Dashboard routes (synthetic fixture mode)', () => {
     await new Promise((settle) => setTimeout(settle, 20));
     expect(screen.queryByRole('region', { name: 'Budget advisory' })).toBeNull();
     expect(screen.queryByText('100.000000000000000000 USD')).toBeNull();
+  });
+  it.each([['/admin/finance/budgets', 'budget', 'mixed-currency-partial'], ['/admin/finance/ai-costs', 'breakdown', 'mixed-currency-partial'], ['/admin/finance/transactions', 'transactions', 'mixed-currency-partial'], [`/admin/finance/transactions/${detailIds.eur}`, 'transaction-detail', 'mixed-currency-partial']] as const)('%s exposes no duplicate landmark name (the axe landmark-unique rule)', async (pathname, view, fixture) => {
+    render(<Dashboard basePath="/admin/finance" pathname={pathname} navigate={() => undefined} access={authorizedFixture} provider={fixtureProvider('ready')}
+      renderRoute={({ route }) => <FinanceV2View {...props(fixture, view, route.params.id ? { detailId: route.params.id } : {})} />} />);
+    await screen.findByRole('note');
+    const names = screen.getAllByRole('region').map((element) => element.getAttribute('aria-label') ?? document.getElementById(element.getAttribute('aria-labelledby') ?? '')?.textContent ?? '');
+    expect(names.every((name) => name.length > 0)).toBe(true);
+    expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
   });
   it('covers every named fixture on every view without throwing', () => {
     for (const name of financeV2FixtureNames) for (const view of ['budget', 'breakdown', 'transactions', 'transaction-detail'] as const) { const { unmount } = show(name, view, { detailId: detailIds.aiCost }); unmount(); }

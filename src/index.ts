@@ -24,5 +24,5 @@ export {
 export type { ProjectionResult, SummaryProjection, MetricProjection } from './data/shared-contracts-adapter';
 export {
   FinanceV2View, checkFinanceV2Page,
-  type FinanceV2ViewProps, type FinanceV2ViewName, type FinanceV2Page, type FinanceV2Input, type FinanceV2Mode, type FinanceV2Result, type FinanceV2Check, type FinanceV2RefusalCode, type OpaqueProductScope,
+  type FinanceV2ViewProps, type FinanceV2ViewName, type FinanceV2TransactionFilters,type FinanceV2Page, type FinanceV2Input, type FinanceV2Mode, type FinanceV2Result, type FinanceV2Check, type FinanceV2RefusalCode, type OpaqueProductScope,
 } from './views/finance-v2';

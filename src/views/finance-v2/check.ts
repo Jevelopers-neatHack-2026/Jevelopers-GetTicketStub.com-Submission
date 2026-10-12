@@ -1,4 +1,4 @@
-import { METRIC_NAMES, REPORTING_DIMENSIONS, type FinanceV2Check, type FinanceV2Page, type FinanceV2RefusalCode, type OpaqueProductScope } from './types';
+import { DETAIL_METRIC_NAMES, METRIC_NAMES, REPORTING_DIMENSIONS, type FinanceV2Check, type FinanceV2Page, type FinanceV2RefusalCode, type OpaqueProductScope } from './types';
 
 /**
  * Presentation guard for a delivered Finance v2 page. It is NOT a producer validator and not a canonical schema: it only
@@ -36,6 +36,7 @@ function summaryPath(summary: unknown): string | undefined {
     const base = `/summary/currencies/${index}`;
     if (!record(entry)) return base;
     if (!text(entry.currency)) return `${base}/currency`;
+    if (entry.scale !== 18) return `${base}/scale`;
     const bad = metricsPath(entry.metrics, `${base}/metrics`); if (bad) return bad;
     if (!record(entry.valuation)) return `${base}/valuation`;
     for (const key of ['estimated', 'confirmed'] as const) { const worse = amountPath(entry.valuation[key], `${base}/valuation/${key}`); if (worse) return worse; }
@@ -89,7 +90,8 @@ function detailPath(detail: unknown, index: number, currencies: ReadonlySet<stri
   if (!['recognized', 'unknown', 'unsupported'].includes(detail.status as string)) return { path: `${base}/status`, code: 'INVALID_SHAPE' };
   if (!nullableText(detail.amount)) return { path: `${base}/amount`, code: 'INVALID_SHAPE' };
   if (!record(detail.dimensions) || !REPORTING_DIMENSIONS.every((key) => nullableText((detail.dimensions as Record<string, unknown>)[key]))) return { path: `${base}/dimensions`, code: 'INVALID_SHAPE' };
-  if (!record(detail.metrics) || !Object.values(detail.metrics).every(text)) return { path: `${base}/metrics`, code: 'INVALID_SHAPE' };
+  // Exactly the eleven frozen names, each a non-empty string: a missing, extra or invented metric key is refused, never displayed.
+  if (!record(detail.metrics) || Object.keys(detail.metrics).length !== DETAIL_METRIC_NAMES.length || !DETAIL_METRIC_NAMES.every((name) => text((detail.metrics as Record<string, unknown>)[name]))) return { path: `${base}/metrics`, code: 'INVALID_SHAPE' };
   if (!currencies.has(detail.currency as string)) return { path: `${base}/currency`, code: 'SNAPSHOT_MISMATCH' };
   return undefined;
 }

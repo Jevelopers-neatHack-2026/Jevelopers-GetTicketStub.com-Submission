@@ -65,7 +65,7 @@ const projection = (over: Partial<ReportingProjection> = {}): ReportingProjectio
   budgets: [budget('USD')], unitCosts: [], allocations: [], ...over,
 });
 const noDimensions = { provider: null, model: null, feature: null, repo: null, workflowId: null, productId: null, orderId: null, channel: null } as const;
-const detailMetrics = (over: Record<string, string> = {}): Record<string, string> => ({
+const detailMetrics = (over: Partial<ReportingDetail['metrics']> = {}): ReportingDetail['metrics'] => ({
   expense: zero, grossSales: zero, netSales: zero, directCosts: zero, contribution: zero, cashReceipts: zero, cashPayouts: zero,
   simulatedGrossSales: zero, simulatedNetSales: zero, simulatedDirectCosts: zero, simulatedExpense: zero, ...over,
 });
