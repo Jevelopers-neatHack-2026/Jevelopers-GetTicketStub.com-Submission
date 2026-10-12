@@ -43,6 +43,47 @@ async function assertReportingCapability(client) {
   ], 'the independent reporting capability preserves both immutable snapshot guards');
 }
 
+const FINANCE_CORE_SCOPE_POLICIES=Object.freeze([
+  ['financial_ledger_events','financial_ledger_events_scope_policy'],
+  ['financial_ledger_identity_bindings','financial_ledger_identity_bindings_scope_policy'],
+  ['financial_ledger_quarantine','financial_ledger_quarantine_scope_policy'],
+  ['financial_posting_attempt_mappings','financial_posting_attempt_mappings_scope_policy'],
+  ['financial_privacy_quarantine','financial_privacy_quarantine_scope_policy'],
+  ['financial_projection_amounts','financial_projection_amounts_scope_policy'],
+  ['financial_projection_quantities','financial_projection_quantities_scope_policy'],
+  ['financial_projection_snapshots','financial_projection_snapshots_scope_policy'],
+  ['financial_source_revision_heads','financial_source_revision_heads_scope_policy'],
+  ['pricing_estimate_snapshots','pricing_estimate_snapshots_scope_policy'],
+  ['pricing_fx_rate_versions','pricing_fx_rate_versions_scope_policy'],
+  ['pricing_operation_idempotency','pricing_operation_idempotency_scope_policy'],
+  ['pricing_rate_card_versions','pricing_rate_card_versions_scope_policy'],
+  ['pricing_rule_versions','pricing_rule_versions_scope_policy'],
+  ['usage_intake_attempts','usage_intake_attempts_scope_policy'],
+  ['usage_intake_inbox','usage_intake_inbox_scope_policy'],
+  ['usage_intake_outbox','usage_intake_outbox_scope_policy'],
+  ['usage_intake_quarantine','usage_intake_quarantine_scope_policy'],
+]);
+function normalizeScopePolicyExpression(value) {
+  // All operators in this reviewed expression are AND and NOT EXISTS. Formatting parentheses
+  // and the known schema qualification do not change it; extra tokens/operators are refused.
+  return String(value).replace(/\bcost_intelligence\./g,'').replace(/[\s()]/g,'');
+}
+function assertKnownScopedPolicies(rows) {
+  const expected=[...FINANCE_CORE_SCOPE_POLICIES,['reporting_snapshots','reporting_snapshots_scope_policy']]
+    .map(([table,name])=>({schema:'cost_intelligence',table,name})).sort((a,b)=>a.name.localeCompare(b.name));
+  assert.deepEqual(rows.map(({schema,table,name})=>({schema,table,name})),expected,
+    'the exact eighteen core policies and independent reporting policy must exist without substitutes');
+  const reporting=rows.find(row=>row.name==='reporting_snapshots_scope_policy');
+  assert.deepEqual({roles:reporting.roles,cmd:reporting.cmd,permissive:reporting.permissive},
+    {roles:['ci_finance_runtime'],cmd:'ALL',permissive:'PERMISSIVE'},'reporting policy belongs only to the restricted runtime role');
+  const expression=`finance_scope_matches(tenant_id,project_id,environment,billing_mode)
+    AND NOT EXISTS(SELECT 1 FROM financial_privacy_quarantine q
+      WHERE q.tenant_id=reporting_snapshots.tenant_id AND q.project_id=reporting_snapshots.project_id
+        AND q.environment=reporting_snapshots.environment AND q.billing_mode=reporting_snapshots.billing_mode)`;
+  for(const field of ['qual','with_check'])assert.equal(normalizeScopePolicyExpression(reporting[field]),normalizeScopePolicyExpression(expression),
+    `reporting ${field} preserves exact tenant/project/environment/billing scope and quarantine refusal`);
+}
+
 function hasDestructiveMigrationStatement(sql, allowedConstraintReplacements = []) {
   const tokens = [];
   let index = 0;
@@ -729,11 +770,13 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       assert.ok(scopedOwners.rows.length >= 14);
       assert.ok(scopedOwners.rows.every(row => row.owner === 'ci_finance_owner'),
         'runtime ledger and pricing tables are owned by the distinct non-login finance owner');
-      const policyCount = await client.query(
-        `SELECT count(*)::integer AS total FROM pg_policies WHERE schemaname = 'cost_intelligence'
-           AND policyname LIKE '%_scope_policy'`,
+      const scopedPolicies = await client.query(
+        `SELECT schemaname::text AS schema, tablename::text AS "table", policyname::text AS name,
+                roles::text[] AS roles, cmd, permissive, qual, with_check
+         FROM pg_policies WHERE schemaname='cost_intelligence' AND policyname LIKE '%_scope_policy'
+         ORDER BY policyname`,
       );
-      assert.equal(policyCount.rows[0].total, 18, 'each scoped runtime table has an explicit RLS policy');
+      assertKnownScopedPolicies(scopedPolicies.rows);
       const runtimePrivileges = await client.query(
         `SELECT has_table_privilege('ci_finance_runtime', 'cost_intelligence.financial_ledger_events', 'SELECT') AS can_read,
                 has_table_privilege('ci_finance_runtime', 'cost_intelligence.financial_ledger_events', 'UPDATE') AS can_update,
