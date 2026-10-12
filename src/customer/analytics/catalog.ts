@@ -142,6 +142,14 @@ export const EVENTS = {
   gift_unwrap: ev("share", {}),
   /** A download click starts an export; it is not proof a file was saved. */
   story_export: ev("share", { action: oneOf("download"), result: oneOf("generated", "failed") }),
+  /** The stub itself as a PNG (front or back). `result` is the image being made; `method` is how it was handed over, never proof it was kept. */
+  stub_download: ev("share", {
+    side: oneOf("front", "back"),
+    context: oneOf("editor", "lamp", "memory"),
+    method: oneOf("download", "share", "tab", "cancelled", "none"),
+    result: oneOf("generated", "failed"),
+    error_code: ERROR_CODE,
+  }),
   memory_photo_remove: ev("share", { photo_count: COUNT, storage: STORAGE }),
   stop_sharing_stub: ev("share", { result: oneOf("saved", "error"), error_code: ERROR_CODE }),
 
