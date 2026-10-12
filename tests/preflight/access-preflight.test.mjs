@@ -1066,3 +1066,67 @@ test('malformed primitive signals and accessor-backed native state fail without 
   }
   assert.equal(reads, 0, 'a malformed native-state accessor is never invoked');
 });
+
+
+test('real elapsed time during signal composition stops before reservation without a retained hold', async () => {
+  const fixture = createMockAccessFixture(); const controller = new AbortController();
+  const deadlineMs = Date.now() + 200;
+  fixture.cell.spend.deadline_at = new Date(deadlineMs).toISOString();
+  for (const method of ['verifyGrant', 'revalidateGrant']) {
+    const original = fixture.authorizationPort[method].bind(fixture.authorizationPort);
+    fixture.authorizationPort[method] = async (...args) => {
+      const decision = await original(...args); decision.grant.expires_at = new Date(deadlineMs - 1).toISOString(); return decision;
+    };
+  }
+  let reads = 0;
+  Object.defineProperty(controller.signal, 'aborted', { get() {
+    reads += 1; while (Date.now() < deadlineMs + 20) {} return false;
+  } });
+  const result = await executeAuthorizedAccessCell({ ...fixture.args, signal: controller.signal });
+  assert.ok(reads > 0, 'composition reaches the supported public property getter');
+  assert.equal(result.reason_code, 'preflight_deadline_passed'); assert.equal(result.status, 'failed');
+  assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.release, 0); assert.equal(fixture.calls.dispatch, 0);
+  assert.equal(result.financial_hold, 'none');
+});
+
+test('deterministic clock advance in signal composition stops before reservation', async () => {
+  const fixture = createMockAccessFixture(); const controller = new AbortController();
+  const deadlineMs = Date.parse(fixture.cell.spend.deadline_at); let reads = 0;
+  for (const method of ['verifyGrant', 'revalidateGrant']) {
+    const original = fixture.authorizationPort[method].bind(fixture.authorizationPort);
+    fixture.authorizationPort[method] = async (...args) => {
+      const decision = await original(...args); decision.grant.expires_at = new Date(deadlineMs - 1).toISOString(); return decision;
+    };
+  }
+  const result = await withClockAdvance(async (advance) => {
+    Object.defineProperty(controller.signal, 'aborted', { get() {
+      reads += 1; advance(Math.max(0, deadlineMs - Date.now()) + 1); return false;
+    } });
+    return executeAuthorizedAccessCell({ ...fixture.args, signal: controller.signal });
+  });
+  assert.ok(reads > 0); assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.release, 0); assert.equal(fixture.calls.dispatch, 0);
+  assert.equal(result.financial_hold, 'none');
+});
+
+
+test('scope validation after composition cannot begin a reservation after the deadline', async () => {
+  const fixture = createMockAccessFixture(); const controller = new AbortController(); let armed = false;
+  const deadlineMs = Date.parse(fixture.cell.spend.deadline_at);
+  for (const method of ['verifyGrant', 'revalidateGrant']) {
+    const original = fixture.authorizationPort[method].bind(fixture.authorizationPort);
+    fixture.authorizationPort[method] = async (...args) => {
+      const decision = await original(...args); decision.grant.expires_at = new Date(deadlineMs - 1).toISOString(); return decision;
+    };
+  }
+  const result = await withClockAdvance(async (advance) => {
+    const scope = { ...fixture.args.trustedScope }; const tenant = scope.tenant_id;
+    Object.defineProperty(scope, 'tenant_id', { enumerable: true, get() {
+      if (armed) advance(Math.max(0, deadlineMs - Date.now()) + 1); return tenant;
+    } });
+    Object.defineProperty(controller.signal, 'aborted', { get() { armed = true; return false; } });
+    return executeAuthorizedAccessCell({ ...fixture.args, trustedScope: scope, signal: controller.signal });
+  });
+  assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.dispatch, 0); assert.equal(result.financial_hold, 'none');
+});

@@ -1759,3 +1759,111 @@ test('direct dispatch rejects inherited signal facades without consuming a valid
     }
   }
 });
+
+
+test('direct dispatch rechecks real elapsed and deterministic deadlines after signal composition', async () => {
+  for (const mode of ['real', 'deterministic']) {
+    let currentTime = clock(); const now = mode === 'real' ? Date.now : () => currentTime;
+    const deadlineMs = now() + (mode === 'real' ? 200 : 30_000); const host = [];
+    const port = grantCredentialPort({ mutate: (value) => ({ ...value, expires_at: new Date(deadlineMs + 60_000).toISOString() }) });
+    const adapter = createOpenRouterImagesAdapter({ now, credentialPort: port, fetchImpl: interceptedFetch().fetchImpl,
+      dispatchPort: { async dispatch() { host.push('dispatch'); } } });
+    const input = billable('image_generation', { deadline_at: new Date(deadlineMs).toISOString() });
+    const prepared = await adapter.prepare(input); const controller = new AbortController(); let reads = 0;
+    Object.defineProperty(controller.signal, 'aborted', { get() {
+      reads += 1;
+      if (mode === 'real') { while (Date.now() < deadlineMs + 20) {} }
+      else currentTime = deadlineMs + 1;
+      return false;
+    } });
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, controller.signal)), (e) => e.code === 'preflight_deadline_passed', mode);
+    assert.ok(reads > 0); assert.deepEqual(host, [], mode);
+  }
+});
+
+test('the final dispatch clock rejects faults and catches cancellation after composition', async () => {
+  for (const mode of ['fault', 'abort']) {
+    const controller = new AbortController(); let armed = false; const host = [];
+    const adapter = createOpenRouterImagesAdapter({ now() {
+      if (armed && mode === 'fault') return NaN;
+      if (armed && mode === 'abort') controller.abort();
+      return clock();
+    }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async dispatch() { host.push('dispatch'); } } });
+    const input = billable(); const prepared = await adapter.prepare(input);
+    Object.defineProperty(controller.signal, 'aborted', { get() { armed = true; return false; } });
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, controller.signal)),
+      (e) => e.code === (mode === 'fault' ? 'adapter_unavailable' : 'preflight_deadline_passed'), mode);
+    assert.deepEqual(host, []); armed = false;
+    await adapter.dispatch(dispatchInput(input, prepared));
+    assert.deepEqual(host, ['dispatch'], 'rejection did not consume prepared authority');
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (e) => e.code === 'credential_unavailable');
+  }
+});
+
+test('validated credential response snapshots survive a post-validation clock mutation', async () => {
+  for (const mode of ['token', 'all-fields']) {
+    let response; const host = []; const inner = grantCredentialPort();
+    const adapter = createOpenRouterImagesAdapter({ now() {
+      if (response) {
+        response.token = 'mutated-synthetic-token\ninvalid';
+        if (mode === 'all-fields') {
+          response.decision = 'denied'; response.evidence_mode = 'mock'; response.expires_at = new Date(clock() - 1).toISOString();
+          response.binding.target_binding_sha256 = digest('changed');
+          response.evidence.ref = 'bad\nref'; response.evidence.independent_review.ref = 'bad\nreview';
+        }
+      }
+      return clock();
+    }, credentialPort: { evidence_mode: 'live', async resolveCredential(request) {
+      response = await inner.resolveCredential(request); return response;
+    } }, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async prepare(args) { host.push(args.credential.token === TOKEN_CANARY && !/[\r\n]/.test(args.credential.token)); },
+      async dispatch(args) { host.push(args.credential.token === TOKEN_CANARY && !/[\r\n]/.test(args.credential.token)); } } });
+    const input = billable(); const prepared = await adapter.prepare(input);
+    await adapter.dispatch(dispatchInput(input, prepared));
+    assert.deepEqual(host, [true, true], mode);
+    assert.equal(Object.isFrozen(response), false, 'the resolver-owned response is not mutated/frozen by capture');
+  }
+});
+
+test('credential response scalars binding and pinned evidence are read only once', async () => {
+  const reads = new Map(); const inner = grantCredentialPort();
+  const countFields = (value, prefix) => {
+    for (const key of Object.keys(value)) {
+      const captured = value[key]; Object.defineProperty(value, key, { enumerable: true, configurable: true,
+        get() { const label = `${prefix}.${key}`; reads.set(label, (reads.get(label) ?? 0) + 1); return captured; } });
+    }
+  };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: { evidence_mode: 'live', async resolveCredential(request) {
+    const response = await inner.resolveCredential(request);
+    countFields(response.binding, 'binding'); countFields(response.evidence.independent_review, 'review');
+    countFields(response.evidence, 'evidence'); countFields(response, 'response'); return response;
+  } }, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: { async dispatch() {} } });
+  const input = billable(); await adapter.dispatch(dispatchInput(input, await adapter.prepare(input)));
+  for (const [name, count] of reads) assert.equal(count, 1, name);
+});
+
+test('read-only credential lookup sends the captured validated token after clock mutation', async () => {
+  const { fetchImpl, requests } = interceptedFetch(); let response; const inner = credentialPort();
+  const adapter = createOpenRouterImagesAdapter({ now() {
+    if (response) response.token = 'mutated-synthetic-token\ninvalid'; return clock();
+  }, credentialPort: { evidence_mode: 'live', async resolveCredential(request) {
+    response = await inner.resolveCredential(request); return response;
+  } }, fetchImpl });
+  await inspect(adapter);
+  assert.equal(requests[0].init.headers.authorization === `Bearer ${TOKEN_CANARY}`, true);
+  assert.equal(/[\r\n]/.test(requests[0].init.headers.authorization), false);
+});
+
+
+test('a host dispatch accessor that consumes the deadline cannot start dispatch', async () => {
+  let current = clock(); let armed = false; const host = []; const input = billable();
+  const adapter = createOpenRouterImagesAdapter({ now: () => current, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { get dispatch() {
+      if (armed) current = Date.parse(input.deadline_at) + 1;
+      return async () => { host.push('dispatch'); };
+    } } });
+  const prepared = await adapter.prepare(input); armed = true;
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (e) => e.code === 'preflight_deadline_passed');
+  assert.deepEqual(host, []);
+});

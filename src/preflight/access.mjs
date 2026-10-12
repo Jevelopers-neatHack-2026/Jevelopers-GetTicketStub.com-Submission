@@ -1093,9 +1093,25 @@ export async function executeAuthorizedAccessCell(args) {
   let dispatchRejectCode = null;
   let dispatchEvidence = null;
   let providerOutcome = null;
+  let preReservationStop = null;
   const checkedMeteringPort = {
     reserveAttempt: async (attempt) => {
-      const reservation = await meteringPort.reserveAttempt(attempt);
+      const reserveAttempt = meteringPort.reserveAttempt;
+      const fields = { capability_observation: accessObservation, pin_evidence: pinEvidence.evidence,
+        authorization_evidence: grantEvidence.evidence, financial_hold: 'none', metering_status: 'not_started' };
+      let currentTime;
+      try { currentTime = Date.now(); } catch { currentTime = undefined; }
+      preReservationStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, fields);
+      if (!preReservationStop && !Number.isFinite(currentTime)) {
+        preReservationStop = resultRow(cell, mode, 'failed', 'adapter_unavailable', 'Restore a finite clock before reservation.', fields);
+      }
+      if (!preReservationStop && Date.parse(cell.spend.deadline_at) <= currentTime) {
+        preReservationStop = resultRow(cell, mode, 'failed', 'preflight_deadline_passed', 'The deadline stopped the operation before reservation.', fields);
+      }
+      // Metering validation and port access can run caller code after composition. A local refusal
+      // never called Finance, so return its no-hold result instead of an uncertain authority outcome.
+      if (preReservationStop) return { status: 'denied' };
+      const reservation = await Reflect.apply(reserveAttempt, meteringPort, [attempt]);
       if (!isRecord(reservation) || reservation.status !== 'reserved') return reservation;
       try {
         const verificationAt = new Date().toISOString();
@@ -1174,8 +1190,21 @@ export async function executeAuthorizedAccessCell(args) {
           financial_hold: 'none',
         });
       }
+      // Composition can invoke a supported public aborted getter and consume the deadline while
+      // its timer remains pending. Read the clock again, then preserve cancellation from that read.
+      try { nowMs = Date.now(); } catch { nowMs = undefined; }
       signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, preDispatchFields);
       if (signalStop) return signalStop;
+      if (!Number.isFinite(nowMs)) {
+        return resultRow(cell, mode, 'failed', 'adapter_unavailable', 'Restore a finite clock before reservation.', {
+          ...preDispatchFields, financial_hold: 'none',
+        });
+      }
+      if (deadlineAt <= nowMs) {
+        return resultRow(cell, mode, 'failed', 'preflight_deadline_passed', 'The deadline stopped the operation before reservation.', {
+          ...preDispatchFields, metering_status: 'not_started', financial_hold: 'none',
+        });
+      }
       const operationSignalState = nativeAbortSignalState(operationSignal);
       if (operationSignalState === undefined) {
         return resultRow(cell, mode, 'blocked', 'invalid_abort_signal', 'Provide a genuine native AbortSignal for this operation.', {
@@ -1549,6 +1578,7 @@ export async function executeAuthorizedAccessCell(args) {
     });
   }
 
+  if (preReservationStop) return preReservationStop;
   const meteringStatus = meterOutcome.status;
   if (meterOutcome.status === 'reservation_denied') {
     const reasonCode = reservationRejectCode ?? 'budget_reservation_denied';

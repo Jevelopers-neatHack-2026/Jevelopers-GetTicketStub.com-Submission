@@ -116,6 +116,20 @@ function runnerCancellationSignal(input) {
   return signal;
 }
 
+function assertTransportSignalCurrent(deadlineAt, callerSignal, signal, now) {
+  // Timers cannot abort while a synchronous caller getter is running. Read the finite clock after
+  // callbacks, then recheck cancellation in case this injected clock also aborted the operation.
+  remainingUntil(deadlineAt, now);
+  const callerAborted = nativeAbortSignalState(callerSignal);
+  const transportAborted = nativeAbortSignalState(signal);
+  if (callerAborted === undefined || transportAborted === undefined) {
+    throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.');
+  }
+  if (callerAborted || transportAborted) {
+    throw error('preflight_deadline_passed', 'Cancellation or the approved operation deadline stopped dispatch.');
+  }
+}
+
 function boundedTransportSignal(deadlineAt, callerSignal, now) {
   const callerAbortedBeforeComposition = nativeAbortSignalState(callerSignal);
   if (callerAbortedBeforeComposition === undefined) {
@@ -129,14 +143,7 @@ function boundedTransportSignal(deadlineAt, callerSignal, now) {
   let signal;
   try { signal = AbortSignal.any([callerSignal, deadlineSignal]); }
   catch { throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.'); }
-  const callerAbortedAfterComposition = nativeAbortSignalState(callerSignal);
-  const transportAborted = nativeAbortSignalState(signal);
-  if (callerAbortedAfterComposition === undefined || transportAborted === undefined) {
-    throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.');
-  }
-  if (callerAbortedAfterComposition || transportAborted) {
-    throw error('preflight_deadline_passed', 'Cancellation or the approved operation deadline stopped dispatch.');
-  }
+  assertTransportSignalCurrent(deadlineAt, callerSignal, signal, now);
   return signal;
 }
 
@@ -361,6 +368,40 @@ function safeCredentialEvidence(value) {
   }
 }
 
+function snapshotCredentialResponse(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw error('credential_unavailable', 'Trusted credential resolver did not return a response object.');
+  }
+  const decision = value.decision;
+  const evidenceMode = value.evidence_mode;
+  if (decision !== 'resolved' || evidenceMode !== 'live') {
+    throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
+  }
+  // Capture each resolver-owned field once. Only these captured scalars and copied nested records
+  // are validated or used after callback-capable evidence/clock reads; never freeze the port's object.
+  const token = value.token;
+  const expiresAt = value.expires_at;
+  const sourceBinding = value.binding;
+  const sourceEvidence = value.evidence;
+  if (!sourceBinding || typeof sourceBinding !== 'object' || Array.isArray(sourceBinding)
+    || !sourceEvidence || typeof sourceEvidence !== 'object' || Array.isArray(sourceEvidence)) {
+    throw error('credential_unavailable', 'Credential binding and pinned evidence must be response records.');
+  }
+  const bindingFields = Object.freeze(Object.keys(sourceBinding));
+  const binding = Object.freeze({ service: sourceBinding.service, account_ref: sourceBinding.account_ref,
+    project_ref: sourceBinding.project_ref, target_binding_sha256: sourceBinding.target_binding_sha256,
+    grant_ref: sourceBinding.grant_ref });
+  const sourceReview = sourceEvidence.independent_review;
+  if (!sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)) {
+    throw error('credential_unavailable', 'Credential evidence must include an independent review.');
+  }
+  const evidence = Object.freeze({ ref: sourceEvidence.ref, sha256: sourceEvidence.sha256,
+    pinned_revision: sourceEvidence.pinned_revision,
+    independent_review: Object.freeze({ ref: sourceReview.ref, sha256: sourceReview.sha256 }) });
+  return Object.freeze({ decision, evidence_mode: evidenceMode, token, expires_at: expiresAt,
+    binding, binding_fields: bindingFields, evidence });
+}
+
 async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt, now }) {
   try {
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
@@ -376,13 +417,13 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       target_binding: binding,
       ...(grantRef ? { grant_ref: grantRef } : {}),
     });
-    const resolved = await credentialPort.resolveCredential(request);
+    const resolved = snapshotCredentialResponse(await credentialPort.resolveCredential(request));
     if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
     }
     const allowedBindingFields = ['service', 'account_ref', 'project_ref', 'target_binding_sha256', ...(grantRef ? ['grant_ref'] : [])];
-    if (!resolved.binding || Object.keys(resolved.binding).some((key) => !allowedBindingFields.includes(key))
+    if (!resolved.binding || resolved.binding_fields.some((key) => !allowedBindingFields.includes(key))
       || resolved.binding.service !== OPENROUTER_PREFLIGHT_SERVICE
       || resolved.binding.account_ref !== scope.account_ref || resolved.binding.project_ref !== scope.project_ref
       || resolved.binding.target_binding_sha256 !== expectedBindingHash
@@ -711,7 +752,11 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       }
       // Check native internal cancellation state before and after composition. The checked-delete below also closes
       // reentrant signal getters: only the call that successfully consumes this exact WeakMap key may dispatch.
-      const signal = boundedTransportSignal(state.deadline_at, runnerCancellationSignal(args), now);
+      const callerSignal = runnerCancellationSignal(args);
+      const signal = boundedTransportSignal(state.deadline_at, callerSignal, now);
+      const dispatchHost = dispatchPort.dispatch;
+      // A trusted port accessor can run code too; leave authority unconsumed until the final fence.
+      assertTransportSignalCurrent(state.deadline_at, callerSignal, signal, now);
       if (!preparedState.delete(preparedValue)) {
         throw error('credential_unavailable', 'Prepared credentials were already consumed.');
       }
@@ -722,7 +767,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       else delete hostInput.authorization_evidence;
       if (state.has_configuration) hostInput.configuration = state.target.configuration;
       else delete hostInput.configuration;
-      return dispatchPort.dispatch(hostInput);
+      return Reflect.apply(dispatchHost, dispatchPort, [hostInput]);
     };
   } else {
     adapter.dispatch = async () => {
