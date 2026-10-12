@@ -676,3 +676,42 @@ test("a topic-changing instruction is never the literal answer to a pending venu
     assert.deepEqual(planDemo(request({ message: "fix the date to 2024-10-12", pending: typed(field), state: on1011 })).actions, setDate("2024-10-12"));
   }
 });
+
+test("a literal answer that merely contains a field word is still the answer to the pending question", () => {
+  const typed = (field) => ({ field, question: "q?" });
+  const reply = (field, message) => planDemo(request({ message, pending: typed(field), state: on1011 }));
+  assert.deepEqual(reply("venue", "The Venue").actions, [{ type: "set_fact", field: "venue", value: "The Venue" }]);
+  assert.deepEqual(reply("venue", "Venue77").actions, [{ type: "set_fact", field: "venue", value: "Venue77" }]);
+  assert.deepEqual(reply("venue", "Venue 9").actions, [{ type: "set_fact", field: "venue", value: "Venue 9" }]);
+  assert.deepEqual(reply("title", "The Title Bar").actions, [{ type: "set_text", field: "title", value: "The Title Bar" }]);
+  assert.deepEqual(reply("subtitle", "Date Night").actions, [{ type: "set_text", field: "subtitle", value: "Date Night" }]);
+  // a real instruction still wins
+  assert.deepEqual(reply("venue", "make it moodier").actions, [moodier]);
+  assert.deepEqual(reply("title", "please fix the date to 2024-10-12").actions, setDate("2024-10-12"));
+});
+
+test("'next month' / 'last month' bind to the day wherever they sit in the clause", () => {
+  for (const phrase of ["next month, on the 12th", "the 12th, next month", "on the 12th of next month", "12th next month", "next month the 12th", "the 12th of the next month"]) {
+    assert.deepEqual(findDate(phrase, 2024, 10), { iso: "2024-11-12", real: true }, phrase);
+    assert.deepEqual(askOn(`Fix the date to ${phrase} and make it moodier`).actions, [...setDate("2024-11-12"), moodier], phrase);
+  }
+  assert.deepEqual(findDate("last month, on the 12th", 2024, 10), { iso: "2024-09-12", real: true });
+  assert.deepEqual(findDate("the 12th, previous month", 2024, 1), { iso: "2023-12-12", real: true });
+  // cannot be bound with confidence: ask
+  for (const vague of ["next month, the 12th of last month", "the 12th next month or the month after", "next month and the 12th, make it moodier next month"]) {
+    assert.equal(findDate(vague, 2024, 10), null, vague);
+  }
+});
+
+test("a year qualifier next to a named month is honoured, and never dropped silently", () => {
+  assert.deepEqual(findDate("the 12th in November next year", 2024, 10), { iso: "2025-11-12", real: true });
+  assert.deepEqual(findDate("the 12th of November last year", 2024, 10), { iso: "2023-11-12", real: true });
+  assert.deepEqual(findDate("12 Nov next year", 2024, 10), { iso: "2025-11-12", real: true });
+  assert.deepEqual(findDate("November 12, last year", 2024, 10), { iso: "2023-11-12", real: true });
+  assert.deepEqual(findDate("the 12th in November this year", 2024, 10), { iso: "2024-11-12", real: true });
+  assert.deepEqual(findDate("the 12th in November 2026", 2024, 10), { iso: "2026-11-12", real: true });
+  assert.deepEqual(askOn("Fix the date to the 12th in November next year and make it moodier").actions, [...setDate("2025-11-12"), moodier]);
+  for (const vague of ["the 12th in November sometime next year or so", "12 Nov 2024 next year", "12 Oct 2024 next month", "the 12th in November, next week"]) {
+    assert.equal(findDate(vague, 2024, 10), null, vague);
+  }
+});
