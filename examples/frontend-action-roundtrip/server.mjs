@@ -53,6 +53,17 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
+    if (req.method === 'GET' && path === '/__fixture/composition-wait') {
+      // MOCK test synchronization only. UI button availability is not proof
+      // that a public action/job has reached the held preview callback.
+      const action_id=new URL(req.url,'http://localhost').searchParams.get('action_id'),principal=compositionPrincipal(req);
+      const row=host.composition.row(principal,action_id),binding=host.waitingBinding;
+      const job=row?.job_id?await host.ports.jobs.get({scope:principal,job_id:row.job_id}):null;
+      const held=host.waiting==='composition-preview'&&binding?.action_id===action_id&&binding.actor_id===principal.actor_id&&
+        binding.scope.tenant_id===principal.tenant_id&&binding.scope.project_id===principal.project_id&&binding.request_hash===row?.backend_request_hash&&
+        job?.job_id===row.job_id&&job.action_id===action_id&&job.request_hash===binding.request_hash&&job.status==='running';
+      return json(res,{mode:'mock',live_calls:0,held,action_id,backend_job_id:row?.job_id??null});
+    }
     if (req.method === 'GET' && path === '/api/composition/history') {
       const query = new URL(req.url, 'http://localhost').searchParams, options = {};
       if (query.has('limit')) options.limit = Number(query.get('limit'));

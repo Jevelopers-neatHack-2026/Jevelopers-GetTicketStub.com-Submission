@@ -40,8 +40,8 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     return value;
   };
   const store = new CreativeVersionStore({ databasePath: join(directory, 'creative.sqlite'), objectRoot: join(directory, 'objects'), now: () => clock });
-  let gate = null, gateKind, waiting;
-  const wait = async kind => { if (gateKind === kind) { waiting=kind;try{await gate;}finally{waiting=undefined;} } };
+  let gate = null, gateKind, waiting, waitingBinding;
+  const wait = async (kind,binding) => { if (gateKind === kind) { waiting=kind;waitingBinding=binding;try{await gate;}finally{waiting=undefined;waitingBinding=undefined;} } };
   let brief;
   const reservations = new Map(), acknowledgedTransports=new Set(), inspectionTransportStages=new Map();
   const native = nativeImagePorts({ store, getBrief: () => brief, counters, policy, reservations, wait, now: () => clock, format: nativeFormat });
@@ -165,6 +165,7 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
         attempt_binding_sha256: usage.attempt_binding_sha256, billable_attempt_id: usage.billable_attempt_id };
     },
     get waiting() { return waiting; },
+    get waitingBinding() { return waitingBinding; },
     block(kind) { gateKind = kind; gate = new Promise(resolve => { released = resolve; }); },
     release() { released?.(); gateKind = undefined; gate = null; },
     restartAdapter() { if (adapter.inflight.size) throw new Error('Use process restart for an in-flight operation'); reopenAdapter(); },

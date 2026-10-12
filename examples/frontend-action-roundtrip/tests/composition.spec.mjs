@@ -196,6 +196,14 @@ test('pending composition cancellation is authoritative and read-only status nev
   await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
   await request.post('/__fixture/state',{data:{block:'composition-preview'}});const applyResponse=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();
   await expect(page.getByRole('button',{name:'Cancel existing operation',exact:true})).toBeEnabled();
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1'))),action_id=cached.action.action_id;
+  let backend_job_id;
+  await expect.poll(async()=>{const read=(await(await request.post('/api/composition/lookup',{data:{action_id}})).json()).result;
+    if(read?.status!=='unknown'||read.action_id!==action_id||!read.backend_job_id)return false;
+    const marker=(await(await request.get(`/__fixture/composition-wait?action_id=${encodeURIComponent(action_id)}`)).json());backend_job_id=read.backend_job_id;
+    return marker.mode==='mock'&&marker.live_calls===0&&marker.held&&marker.action_id===action_id&&marker.backend_job_id===backend_job_id;
+  },{message:'Exact public action/job must reach its held MOCK preview stage before lookup and cancellation'}).toBe(true);
+  expect(backend_job_id).toBeTruthy();
   await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('unknown');expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0});
   await page.getByRole('button',{name:'Cancel existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('cancelled');
   await request.post('/__fixture/state',{data:{release:true}});const result=(await(await applyResponse).json()).result;expect(result.ok).toBe(false);await refresh(page);

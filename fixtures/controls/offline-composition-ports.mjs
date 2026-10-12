@@ -101,7 +101,7 @@ export function attachOfflineComposition(ports, { store, policy, counters, wait,
     },
     async readApprovedAssetBytes(input) { await wait('composition-rights'); assertAuthority(); return { asset_id: input.asset_id, content_hash: fixtureLogoHash, mime_type: 'image/png', bytes: Uint8Array.from(fixtureLogoBytes) }; },
     async preparePreview(input) {
-      assertAuthority(); await wait('composition-preview'); assertAuthority();
+      assertAuthority(); await wait('composition-preview',{scope:input.scope,actor_id:input.actor_id,action_id:input.action_id,request_hash:input.request_hash}); assertAuthority();
       if (!prepared.has(input.idempotency_key)) {
         counters.composition_previews++;
         const bytes = previewBytes(input.candidate), preview = metadata(input.candidate, bytes, input.candidate.revision_id);
