@@ -50,6 +50,7 @@ export const MESSAGES = {
   already_claimed: { message: "Someone already claimed this stub. Ask the organizer for your own link.", action: START },
   variant_not_orderable: { message: "That size and finish isn't orderable yet. Choose another, or keep it as a preview.", action: WALL },
   amount_mismatch: { message: "The price changed since you last looked. Reload to see the current price, then pay again.", action: RELOAD },
+  checkout_closed: { message: "That checkout has closed, and nothing more was charged. Start again.", action: RELOAD },
   payment_unavailable: { message: "We couldn't start the payment. Nothing was charged, so try again in a moment.", action: RETRY, retryable: true },
   payments_off: { message: "Payments aren't switched on here yet. Nothing was charged.", action: WALL },
   bad_signature: { message: "We couldn't verify that request, so it was ignored. Nothing was changed.", action: RETRY, retryable: true },

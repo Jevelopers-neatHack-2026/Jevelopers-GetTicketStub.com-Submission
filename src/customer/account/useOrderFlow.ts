@@ -4,7 +4,7 @@
 // `code` when the server didn't take it, in which case `retry` sends the same order again (no second local copy).
 import { useRef, useState } from "react";
 import { useProgress } from "@/customer/feedback-messages/progress";
-import { goToCheckout, isPayable, placeOrder, resendOrder, type Placed } from "./orders";
+import { goToCheckout, isPayable, newAttemptId, placeOrder, resendOrder, type Placed } from "./orders";
 
 export function useOrderFlow() {
   const { state, run } = useProgress();
@@ -16,6 +16,8 @@ export function useOrderFlow() {
   // for it runs only on success, so any error keeps the cart; a sandbox-only order keeps its local record either way.
   const afterPlaced = useRef<(() => void) | undefined>(undefined);
   const payable = useRef(false);
+  // One id per checkout attempt, kept until the order is placed, so a double press or a retry can't start a second checkout.
+  const attempt = useRef<string | undefined>(undefined);
 
   function settle(p: Placed | undefined) {
     if (!p) return;
@@ -25,14 +27,18 @@ export function useOrderFlow() {
       afterPlaced.current?.();
       afterPlaced.current = undefined;
     }
+    // A closed checkout can't be retried: the next press starts a fresh attempt.
+    if (!p.code || p.code === "checkout_closed") attempt.current = undefined;
     setHeld(p);
     setPlaced(p);
   }
   function place(draft: Parameters<typeof placeOrder>[0], onPlaced?: () => void) {
     afterPlaced.current = onPlaced;
     payable.current = isPayable(draft);
+    attempt.current ??= newAttemptId();
+    const attemptId = attempt.current;
     setPlaced(null);
-    void run(() => placeOrder(draft)).then(settle);
+    void run(() => placeOrder(draft, attemptId)).then(settle);
   }
   const retry = held?.code
     ? () => {

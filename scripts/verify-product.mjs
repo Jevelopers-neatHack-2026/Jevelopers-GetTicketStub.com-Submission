@@ -267,8 +267,8 @@ async function foundation({ base }) {
   } catch {
     /* asserted below */
   }
-  record("health is 200 with ok, version, mode and time", health.status === 200 && body.ok === true && typeof body.version === "string" && body.mode === "demo" && !Number.isNaN(Date.parse(body.time)), health.text.slice(0, 120));
-  record("health is uncached and carries nothing else", health.headers.get("cache-control") === "no-store" && Object.keys(body).sort().join() === "mode,ok,persistence,storage,time,version" && body.storage === "ok" && body.persistence === "configured", Object.keys(body).join());
+  record("health is 200 with ok, version, commit, mode and time", health.status === 200 && body.ok === true && typeof body.version === "string" && (body.commit === null || /^[0-9a-f]{7,40}$/.test(body.commit)) && body.mode === "demo" && !Number.isNaN(Date.parse(body.time)), health.text.slice(0, 120));
+  record("health is uncached and carries nothing else", health.headers.get("cache-control") === "no-store" && Object.keys(body).sort().join() === "commit,mode,ok,persistence,storage,time,version" && body.storage === "ok" && body.persistence === "configured", Object.keys(body).join());
 
   // admin: anonymous and non-staff never learn it exists; staff get reload and deep links
   const member = client(base);
