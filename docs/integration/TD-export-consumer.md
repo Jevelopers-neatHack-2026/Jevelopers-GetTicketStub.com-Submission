@@ -71,7 +71,7 @@ JSON-prepared receipt and is refused on format, which is the intended negative c
 
 ## Denial-capture supplement (SYNTHETIC_DENIAL_CAPTURE_SUPPLEMENT_ONLY)
 
-`tests/fixtures/export-denial-conformance/candidate-postgres-composition.json` is the Finance producer's accepted capture, committed byte for byte (1,021,876 bytes, SHA-256 `6305706d…203d07`; see `PROVENANCE.json` there). It is separate from the earlier `export-conformance` packet, which is unchanged.
+`tests/fixtures/export-denial-conformance/candidate-postgres-composition.json` is the Finance producer's accepted capture, committed byte for byte (1,021,876 bytes, SHA-256 `6305706d…203d07`; see `PROVENANCE.json` there). It is separate from the earlier 410a `export-conformance` packet, which is unchanged. The capture's 17 financial receipts / 34 artifact files are the same case family as the old packet, **not the same bytes**: 16 of 17 receipt objects and 32 of 34 artifact contents differ (fresh 3e8 run); only receipt 15 (1 object, 2 files) is identical. The test pins each namespace separately with independent old/new hash pairs and rejects old data standing in for new.
 
 - 92 captured cases: 60 late `FORBIDDEN_SCOPE`, 4 entry `SOURCE_UNAVAILABLE` (missing fourth fence), 28 positives (14 legacy 1.0.0, 14 rich 2.0.0).
 - `tests/components/finance-v2-export-denial.test.tsx` runs all 64 typed failures through the public async `checkPreparedExport`, the hook and the panel: only the closed code is kept, `safe_message` and `diagnostic_ref` are never echoed, nothing is downloadable, and a failure carrying a later `value` is refused.
