@@ -44,7 +44,7 @@ const v2Check: FinanceV2Check = checkFinanceV2Page({}, v2Scope);
 void v2Check;
 const exportPort: FinanceV2SyntheticExportPort = { kind: FINANCE_V2_EXPORT_KIND, async prepare() { return { ok: false, error: { code: 'SOURCE_UNAVAILABLE' } }; } };
 const exportAccess: FinanceV2ExportAccessReader = () => null;
-const exportCheck: FinanceV2PreparedCheck = checkPreparedExport(null, { snapshotId: 'x', queryContentHash: 'x', summaryContentHash: 'x', format: 'json', environment: 'test', billingMode: 'live', asOf: 'x', timezone: 'UTC', period: { start: 'x', end: 'x' }, currencies: [] });
+const exportCheck: Promise<FinanceV2PreparedCheck> = checkPreparedExport(null, { snapshotId: 'x', queryContentHash: 'x', summaryContentHash: 'x', format: 'json', environment: 'test', billingMode: 'live', asOf: 'x', timezone: 'UTC', period: { start: 'x', end: 'x' }, currencies: [] });
 const exportProps: Pick<FinanceV2ConnectedViewProps, 'exportAccess'> = { exportAccess };
 void exportCheck; void exportProps; void resolveFinanceV2ExportPort('INTEGRATED', exportPort);
 const pageReader: (request: FinancePageRequest) => FinancePageRead = readFinancePage;

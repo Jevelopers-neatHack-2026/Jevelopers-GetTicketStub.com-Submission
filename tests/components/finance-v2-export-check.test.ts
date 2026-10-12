@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { checkPreparedExport, type FinanceV2PreparedExpectation } from '../../src/views/finance-v2';
-import { readCsvRecords } from '../../src/views/finance-v2/export-check';
+import { type FinanceV2PreparedExpectation } from '../../src/views/finance-v2';
+import { inspectPreparedExportStructure as checkStructure, readCsvRecords } from '../../src/views/finance-v2/export-check';
 import { clone, expectationZero, ok, receiptZero, withContent, type Receipt } from './export-support';
 
 /**
@@ -10,7 +10,7 @@ import { clone, expectationZero, ok, receiptZero, withContent, type Receipt } fr
 const base = (): Receipt => receiptZero().receipt;
 const BOM = String.fromCharCode(0xfeff);
 const expectRefused = (answer: unknown, code: string, path?: string, expected: FinanceV2PreparedExpectation = expectationZero()) => {
-  const result = checkPreparedExport(answer, expected);
+  const result = checkStructure(answer, expected);
   expect(result.ok).toBe(false);
   if (result.ok || result.kind !== 'refused') throw new Error(`expected a refusal, got ${JSON.stringify(result).slice(0, 200)}`);
   expect(result.code).toBe(code);
@@ -21,7 +21,7 @@ const expectRefused = (answer: unknown, code: string, path?: string, expected: F
 describe('accepts the actual producer receipt exactly', () => {
   it('returns the delivered manifest fields and the exact artifact strings, unchanged', () => {
     const receipt = base();
-    const result = checkPreparedExport(ok(receipt), expectationZero());
+    const result = checkStructure(ok(receipt), expectationZero());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.manifest).toMatchObject({ exportId: receipt.manifest.exportId, createdAt: '2026-10-12T22:00:00.000Z', status: 'prepared', delivery: 'manual_prepared', deliveryReference: null, requestedFormat: 'json', itemCount: 11, currencies: ['USD'] });
@@ -38,7 +38,7 @@ describe('accepts the actual producer receipt exactly', () => {
     const summary = JSON.parse(base().artifacts[0]!.content) as { unavailableMetrics: unknown[]; currencies: { metrics: { metric: string; total: unknown }[] }[] };
     expect(summary.unavailableMetrics).toEqual([{ knownSubtotal: null, metric: 'cash_net', status: 'not_supplied_by_query', total: null }]);
     expect(summary.currencies[0]!.metrics.every((metric) => metric.total === null)).toBe(true);
-    const result = checkPreparedExport(ok(base()), expectationZero());
+    const result = checkStructure(ok(base()), expectationZero());
     expect(result.ok && result.files[1]!.content).toBe(csv);
   });
 });
@@ -59,7 +59,7 @@ describe('binding to what the host stated', () => {
   ];
   it.each(cases)('refuses %s, with no bytes', (_name, over, code, path) => { expectRefused(ok(base()), code, path, expectationZero(over)); });
   it('compares instants, not spellings: the same moment written with an offset is the same period', () => {
-    const result = checkPreparedExport(ok(base()), expectationZero({ period: { start: '2026-10-10T02:00:00.000+02:00', end: '2026-10-11T02:00:00.000+02:00' } }));
+    const result = checkStructure(ok(base()), expectationZero({ period: { start: '2026-10-10T02:00:00.000+02:00', end: '2026-10-11T02:00:00.000+02:00' } }));
     expect(result.ok).toBe(true);
   });
   it('refuses an unparseable host expectation instead of matching it', () => {
@@ -102,7 +102,7 @@ describe('closed shape: nothing invented, nothing missing', () => {
     ['non-plain prototype', () => Object.assign(Object.create({ inherited: true }) as object, clone(base()))],
     ['symbol member', () => { const value = clone(base()); Object.defineProperty(value, Symbol('s'), { value: 1, enumerable: true }); return value; }],
     ['throwing proxy', () => new Proxy({}, { ownKeys() { throw new Error('trap'); }, getPrototypeOf() { throw new Error('trap'); } })],
-  ])('refuses a %s without throwing', (_name, make) => { expect(() => checkPreparedExport(ok(make()), expectationZero())).not.toThrow(); expectRefused(ok(make()), 'INVALID_SHAPE'); });
+  ])('refuses a %s without throwing', (_name, make) => { expect(() => checkStructure(ok(make()), expectationZero())).not.toThrow(); expectRefused(ok(make()), 'INVALID_SHAPE'); });
 });
 
 describe('honest status: prepared and manual_prepared, never delivered', () => {
@@ -213,7 +213,7 @@ describe('metrics.csv content is bound to the same snapshot', () => {
 describe('typed producer failures carry no bytes and echo nothing', () => {
   it.each(['SOURCE_UNAVAILABLE', 'FORBIDDEN_SCOPE', 'IDEMPOTENCY_CONFLICT', 'VALIDATION_ERROR', 'UNSUPPORTED_VERSION'])('returns only the closed code %s', (code) => {
     const answer = { ok: false, error: { code, safe_message: 'CANARY-SAFE-MESSAGE-do-not-show', nested: { password: 'CANARY' } } };
-    const result = checkPreparedExport(answer, expectationZero());
+    const result = checkStructure(answer, expectationZero());
     expect(result).toEqual({ ok: false, kind: 'error', code });
     expect(JSON.stringify(result)).not.toContain('CANARY');
   });

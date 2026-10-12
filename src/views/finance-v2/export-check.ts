@@ -4,8 +4,8 @@
  * It is NOT the producer validator and not a canonical schema: the host port owns canonical validation and its own coherent authority fence. This guard only refuses what the
  * Dashboard could not hand to a person faithfully: a wrong or invented shape, a status other than `prepared` / `manual_prepared`, anything not bound to the snapshot, hashes, format,
  * period, timezone, environment, billing mode and currencies the HOST stated independently of the answer, and bytes whose encoding or record structure is not what the manifest says.
- * Strings are compared for equality; nothing is signed, summed, converted or re-encoded here, and no CSV is generated. This synchronous check is STRUCTURAL: it does not hash. The delivered
- * bytes' own declared SHA-256 is verified by `verifyPreparedFilesIntegrity` / `checkPreparedExportIntegrity` (content integrity only, not host authentication or financial authority), and
+ * Strings are compared for equality; nothing is signed, summed, converted or re-encoded here, and no CSV is generated. The structural step is internal and never an accepted result; the public
+ * `checkPreparedExport` also verifies each delivered file's declared SHA-256 over its exact bytes (content integrity only, not host authentication or financial authority), and
  * `usePreparedExport` never keeps or offers bytes that failed it. Whatever fails yields no bytes at all.
  *
  * The pinned producer manifest (`ReportingExportManifest@2.0.0`) is mirrored here as data (closed key set and constants); `tests/components/finance-v2-export-conformance.test.tsx`
@@ -251,12 +251,17 @@ function inspect(raw: unknown, expected: FinanceV2PreparedExpectation): FinanceV
 }
 
 /**
- * Validates an untrusted prepared-export answer against the host's expectation. Never throws; every failure is a typed refusal with a path and NO bytes
- * (`files` exists only on `ok: true`). A typed producer failure is returned as `kind: 'error'` with only its closed code.
+ * STRUCTURE ONLY, NOT PUBLIC and NEVER an accepted result. It validates shape, host binding and byte lengths but does not hash, so it cannot see an equal-length change of bytes under
+ * their declared hash. Its success carries `bytesVerified: false` and is a different type from `FinanceV2PreparedCheck`: only `checkPreparedExport` (which hashes) yields an accepted one.
  */
-export function checkPreparedExport(raw: unknown, expected: FinanceV2PreparedExpectation): FinanceV2PreparedCheck {
-  try { return inspect(raw, expected); }
-  catch (error) { return error instanceof Refusal ? { ok: false, kind: 'refused', code: error.code, path: error.path } : { ok: false, kind: 'refused', code: 'INVALID_SHAPE', path: '/' }; }
+export type FinanceV2StructuralCheck =
+  | Readonly<{ ok: true; bytesVerified: false; manifest: FinanceV2PreparedManifestView; files: readonly FinanceV2PreparedFile[] }>
+  | Extract<FinanceV2PreparedCheck, { ok: false }>;
+export function inspectPreparedExportStructure(raw: unknown, expected: FinanceV2PreparedExpectation): FinanceV2StructuralCheck {
+  try {
+    const result = inspect(raw, expected);
+    return result.ok ? { ok: true, bytesVerified: false, manifest: result.manifest, files: result.files } : result;
+  } catch (error) { return error instanceof Refusal ? { ok: false, kind: 'refused', code: error.code, path: error.path } : { ok: false, kind: 'refused', code: 'INVALID_SHAPE', path: '/' }; }
 }
 
 /**
@@ -278,15 +283,20 @@ export async function verifyPreparedFilesIntegrity(files: readonly FinanceV2Prep
 }
 
 /**
- * Structural check (`checkPreparedExport`) followed by the byte integrity check. A download-capable result must come from here or from `usePreparedExport`; the synchronous
- * `checkPreparedExport` alone does not detect an equal-length change of bytes under their declared hash.
+ * Validates an untrusted prepared-export answer against the host's expectation and verifies the real SHA-256 of each delivered file's exact bytes against its declared `contentHash`.
+ * This is the ONLY public path to `ok: true` (and so to `files`): a structure-valid answer whose bytes differ, even by an equal-length change, is refused with `CONTENT_MISMATCH` and
+ * no bytes. Never throws and never rejects; every failure is a typed refusal with a path and NO bytes. A typed producer failure is returned as `kind: 'error'` with only its closed code.
+ * A matching hash is content integrity only: host authentication and the Finance authority fence stay with the host port.
  */
-export async function checkPreparedExportIntegrity(raw: unknown, expected: FinanceV2PreparedExpectation): Promise<FinanceV2PreparedCheck> {
-  const structural = checkPreparedExport(raw, expected);
+export async function checkPreparedExport(raw: unknown, expected: FinanceV2PreparedExpectation): Promise<FinanceV2PreparedCheck> {
+  const structural = inspectPreparedExportStructure(raw, expected);
   if (!structural.ok) return structural;
-  const failed = await verifyPreparedFilesIntegrity(structural.files);
-  return failed === null ? structural : { ok: false, kind: 'refused', code: 'CONTENT_MISMATCH', path: failed };
+  let failed: string | null;
+  try { failed = await verifyPreparedFilesIntegrity(structural.files); } catch { failed = '/value/artifacts'; }
+  return failed === null ? { ok: true, manifest: structural.manifest, files: structural.files } : { ok: false, kind: 'refused', code: 'CONTENT_MISMATCH', path: failed };
 }
+/** The same function under its earlier name, so no caller can hold a differently-behaving entry point. */
+export const checkPreparedExportIntegrity: typeof checkPreparedExport = checkPreparedExport;
 
 /** The file a person asked for: the producer prepares both files, the manual representation selects one. */
 export const FINANCE_V2_FORMAT_FILE: Readonly<Record<FinanceV2ExportFormat, FinanceV2PreparedFileName>> = { json: 'summary.json', csv: 'metrics.csv' };

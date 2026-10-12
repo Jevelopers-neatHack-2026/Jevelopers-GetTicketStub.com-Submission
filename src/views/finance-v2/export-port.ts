@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FINANCE_EXPORT, FINANCE_READ } from '../../access/permissions';
 import { classifyFinanceV2Fault, type FinanceV2Authorization, type FinanceV2DataMode } from './async-port';
 import {
-  FINANCE_V2_FORMAT_FILE, checkPreparedExport, verifyPreparedFilesIntegrity,
+  FINANCE_V2_FORMAT_FILE, checkPreparedExport,
   type FinanceV2ExportErrorCode, type FinanceV2ExportFormat, type FinanceV2PreparedExpectation, type FinanceV2PreparedFile, type FinanceV2PreparedManifestView, type FinanceV2PreparedRefusalCode,
 } from './export-check';
 import type { FinanceV2Page, OpaqueProductScope } from './types';
@@ -207,6 +207,10 @@ function expectationOf(o: FinanceV2PreparedExportOptions, format: FinanceV2Expor
   };
 }
 
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) { Object.freeze(value); for (const member of Object.values(value)) deepFreeze(member); }
+  return value;
+}
 class Stale extends Error {}
 class Vetoed extends Error { constructor(readonly reason: FinanceV2ExportUnavailableReason) { super(reason); } }
 type Held = Readonly<{ key: string; fingerprint: string; format: FinanceV2ExportFormat; files: readonly FinanceV2PreparedFile[] }>;
@@ -277,23 +281,23 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
     void (async () => {
       try {
         renew();
-        // An immutable copy of the accepted source: the request and the expectation use it, so a later in-place change of the host's page object cannot alter what this run is bound to.
-        const source = structuredClone(o.page);
+        // The expectation is captured NOW from a PRIVATE copy of the accepted source and scope that nobody else holds. What the port receives is a different, deep-frozen copy, so nothing
+        // the port does to its request can reach what the answer is bound to; `renew` also re-reads the host's own page against the run's fingerprint.
+        const baseline = expectationOf({ ...o, scope: structuredClone(o.scope), page: structuredClone(o.page) }, wanted);
+        const requestScope = deepFreeze(structuredClone(o.scope));
+        const source = deepFreeze(structuredClone(o.page));
         const token = await o.authorization.token(controller.signal);
         renew();
         if (typeof token !== 'string' || token.length === 0) { finish({ phase: 'failed', code: 'unauthorized' }); return; }
         const answer = await resolved.port.prepare({
-          scope: o.scope, expectedSnapshotId: o.expectedSnapshotId, expectedQueryContentHash: o.expectedQueryContentHash, expectedSummaryContentHash: o.expectedSummaryContentHash,
+          scope: requestScope, expectedSnapshotId: o.expectedSnapshotId, expectedQueryContentHash: o.expectedQueryContentHash, expectedSummaryContentHash: o.expectedSummaryContentHash,
           format: wanted, destination: FINANCE_V2_EXPORT_DESTINATION, summarySnapshot: source, authorization: { token, revision: o.authorization.revision }, signal: controller.signal,
         });
         renew();
-        const checked = checkPreparedExport(answer, expectationOf({ ...o, page: source }, wanted));
+        // Structure, host binding and the real SHA-256 of the exact bytes in one verified step; everything is renewed once more before anything is kept.
+        const checked = await checkPreparedExport(answer, baseline);
         renew();
         if (!checked.ok) { finish(checked.kind === 'error' ? { phase: 'failed', code: checked.code } : { phase: 'refused', code: checked.code, path: checked.path }); return; }
-        // Browser crypto is async: the declared hashes are checked against the exact bytes in hand, then everything is renewed once more before anything is kept.
-        const mismatch = await verifyPreparedFilesIntegrity(checked.files);
-        renew();
-        if (mismatch !== null) { finish({ phase: 'refused', code: 'CONTENT_MISMATCH', path: mismatch }); return; }
         held.current = { key, fingerprint: bound, format: wanted, files: checked.files };
         finish({ phase: 'prepared', manifest: checked.manifest });
       } catch (error) {

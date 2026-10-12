@@ -38,9 +38,12 @@ to the manifest references; the UTF-8 byte length of each text equals its declar
 `summary.json` provenance and every `metrics.csv` row. A failure is a typed refusal with a path and **no bytes**; a typed producer failure keeps only its closed `code` and its
 `safe_message` / body is never read, stored or shown.
 
-`checkPreparedExport` is **structural and synchronous**: it does not hash, so on its own it does not detect an equal-length change of bytes under their declared hash. Byte integrity is
-checked by `checkPreparedExportIntegrity` (structural check, then the real Web Crypto SHA-256 of each file's exact UTF-8 bytes against the manifest's declared `contentHash`), and
-`usePreparedExport` always runs it before anything is held or offered: a mismatch, or no Web Crypto, is `CONTENT_MISMATCH` with a path and no bytes. Because Web Crypto is async,
+`checkPreparedExport` is **async and is the only public path to an accepted result**: the structural check runs, then the real Web Crypto SHA-256 of each file's exact UTF-8 bytes is
+compared with the manifest's declared `contentHash`; a mismatch (even an equal-length change), or no Web Crypto, is `CONTENT_MISMATCH` with a path and no bytes.
+`checkPreparedExportIntegrity` is the same function under its earlier name. The structural step alone (`inspectPreparedExportStructure`) is internal, is not exported from the package
+root, never returns `FinanceV2PreparedCheck`, and its success is typed `bytesVerified: false`. `usePreparedExport` uses the verified function before anything is held or offered.
+The answer is bound to a **private baseline captured before the port sees the request** (a separate copy of the accepted page and scope); the request itself carries different,
+deep-frozen copies, so a port that alters its request and returns matching bytes with a correct digest is still refused. Because Web Crypto is async,
 all host access and source checks are repeated after that await, before the bytes are kept. A match proves only that the bytes are the ones the manifest declared; it is **content
 integrity, not host authentication and not financial authority** (the manifest is as untrusted as the bytes), and no new hash is produced or offered as proof.
 

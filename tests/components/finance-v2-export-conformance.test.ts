@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkPreparedExport, type FinanceV2PreparedExpectation } from '../../src/views/finance-v2';
+import { inspectPreparedExportStructure as checkStructure } from '../../src/views/finance-v2/export-check';
 import { DIR, clone, expectationZero, hasReceipt, json, loadCandidate, ok, pins, receiptZero, sha256, ZERO, type Candidate } from './export-support';
 
 /**
@@ -80,9 +81,9 @@ describe('the committed candidate bytes are exactly the pinned bytes', () => {
 });
 
 describe('the consumer guard against the actual receipts', () => {
-  it('receipt 0, with the host\'s independently stated literals, is accepted with the exact delivered strings', () => {
+  it('receipt 0, with the host\'s independently stated literals, is accepted with the exact delivered strings', async () => {
     const { receipt } = receiptZero();
-    const result = checkPreparedExport(ok(receipt), expectationZero());
+    const result = await checkPreparedExport(ok(receipt), expectationZero());
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.exportId).toBe('sha256:3d33f92e69e26c63c6047a48c4e1dd7cb49f93798d180c0a35dbc13a636eccf1');
@@ -90,16 +91,16 @@ describe('the consumer guard against the actual receipts', () => {
       expect(result.files.map((file) => file.content)).toEqual(receipt.artifacts.map((artifact) => artifact.content));
     }
   });
-  it.each(present.filter(rich))('rich receipt %i is accepted for its own pinned snapshot and refused for every other receipt\'s snapshot', (index) => {
+  it.each(present.filter(rich))('rich receipt %i is accepted for its own pinned snapshot and refused for every other receipt\'s snapshot', async (index) => {
     const candidate = loadCandidate(index);
-    expect(checkPreparedExport(ok(candidate.receipt), expectationFor(index, candidate)).ok).toBe(true);
+    expect((await checkPreparedExport(ok(candidate.receipt), expectationFor(index, candidate))).ok).toBe(true);
     for (const other of present.filter(rich)) {
       if (other === index || pins.receipts[other]!.snapshotId === pins.receipts[index]!.snapshotId) continue;
-      const result = checkPreparedExport(ok(candidate.receipt), expectationFor(other, loadCandidate(other)));
+      const result = await checkPreparedExport(ok(candidate.receipt), expectationFor(other, loadCandidate(other)));
       expect(result.ok).toBe(false);
     }
   });
-  it.each(present.filter(rich))('rich receipt %i: preserved currencies, exact signed decimals, nulls and 11 rows per currency', (index) => {
+  it.each(present.filter(rich))('rich receipt %i: preserved currencies, exact signed decimals, nulls and 11 rows per currency', async (index) => {
     const { receipt } = loadCandidate(index);
     const manifest = receipt.manifest;
     const csv = receipt.artifacts[1]!.content;
@@ -117,21 +118,21 @@ describe('the consumer guard against the actual receipts', () => {
       for (const metric of entry.metrics) if (metric.status !== 'known') expect(metric.total).toBeNull();
     }
     // The consumer never rewrites the delivered text.
-    expect(checkPreparedExport(ok(receipt), expectationFor(index, loadCandidate(index)))).toMatchObject({ ok: true });
+    expect(await checkPreparedExport(ok(receipt), expectationFor(index, loadCandidate(index)))).toMatchObject({ ok: true });
   });
-  it.each(present.filter((index) => !rich(index)))('legacy receipt %i is refused by the Finance v2 consumer as UNSUPPORTED_SHAPE, with no bytes', (index) => {
-    const result = checkPreparedExport(ok(loadCandidate(index).receipt), expectationZero());
+  it.each(present.filter((index) => !rich(index)))('legacy receipt %i is refused by the Finance v2 consumer as UNSUPPORTED_SHAPE, with no bytes', async (index) => {
+    const result = await checkPreparedExport(ok(loadCandidate(index).receipt), expectationZero());
     expect(result).toEqual({ ok: false, kind: 'refused', code: 'UNSUPPORTED_SHAPE', path: '/value' });
   });
-  it('receipt 16 shares receipt 0\'s projection hash but another query: it cannot stand in for receipt 0', () => {
+  it('receipt 16 shares receipt 0\'s projection hash but another query: it cannot stand in for receipt 0', async () => {
     if (!hasReceipt(16)) return;
-    expect(checkPreparedExport(ok(loadCandidate(16).receipt), expectationZero())).toMatchObject({ ok: false, kind: 'refused', code: 'SNAPSHOT_MISMATCH' });
+    expect(await checkPreparedExport(ok(loadCandidate(16).receipt), expectationZero())).toMatchObject({ ok: false, kind: 'refused', code: 'SNAPSHOT_MISMATCH' });
   });
-  it('a receipt\'s own copy of its artifacts cannot be recombined: receipt 0 manifest with another receipt\'s files is refused', () => {
+  it('a receipt\'s own copy of its artifacts cannot be recombined: receipt 0 manifest with another receipt\'s files is refused', async () => {
     if (!hasReceipt(2)) return;
     const mixed = clone(receiptZero().receipt);
     mixed.artifacts = clone(loadCandidate(2).receipt.artifacts);
-    expect(checkPreparedExport(ok(mixed), expectationZero())).toMatchObject({ ok: false, kind: 'refused', code: 'ARTIFACT_MISMATCH' });
+    expect(await checkPreparedExport(ok(mixed), expectationZero())).toMatchObject({ ok: false, kind: 'refused', code: 'ARTIFACT_MISMATCH' });
   });
 });
 
@@ -149,7 +150,7 @@ describe('the consumer guard mirrors the pinned producer manifest schema (data o
       expect(receiptZero().receipt.manifest[name]).toBe(definition.const);
       const receipt = clone(receiptZero().receipt);
       receipt.manifest[name] = `${String(definition.const)}-changed`;
-      expect(checkPreparedExport(ok(receipt), expectationZero()).ok).toBe(false);
+      expect(checkStructure(ok(receipt), expectationZero()).ok).toBe(false);
     }
   });
   it('every enum member of the schema is accepted or refused by the guard exactly as the schema says (evidence mode, requested format)', () => {
@@ -162,10 +163,11 @@ describe('the consumer guard mirrors the pinned producer manifest schema (data o
       receipt.artifacts[0]!.content = `${JSON.stringify(summary)}\n`;
       receipt.artifacts[0]!.byteLength = Buffer.byteLength(receipt.artifacts[0]!.content, 'utf8');
       receipt.manifest.artifacts[0].byteLength = receipt.artifacts[0]!.byteLength;
-      expect(checkPreparedExport(ok(receipt), expectationZero()).ok).toBe(true);
+      // Test-built content under the original declared hashes: structure only (the byte hash is deliberately not what is under test here).
+      expect(checkStructure(ok(receipt), expectationZero()).ok).toBe(true);
     }
     const bad = clone(receiptZero().receipt); bad.manifest.evidenceMode = 'production';
-    expect(checkPreparedExport(ok(bad), expectationZero()).ok).toBe(false);
+    expect(checkStructure(ok(bad), expectationZero()).ok).toBe(false);
     expect(schema.properties.requestedFormat!.anyOf!.map((entry) => entry.const)).toEqual(['json', 'csv']);
   });
   it('every hash-shaped member must match the schema pattern', () => {
@@ -173,7 +175,7 @@ describe('the consumer guard mirrors the pinned producer manifest schema (data o
       if (definition.pattern !== '^sha256:[a-f0-9]{64}$' || name === 'artifacts') continue;
       const receipt = clone(receiptZero().receipt);
       receipt.manifest[name] = 'sha256:not-a-digest';
-      expect(checkPreparedExport(ok(receipt), expectationZero()).ok).toBe(false);
+      expect(checkStructure(ok(receipt), expectationZero()).ok).toBe(false);
     }
   });
 });
