@@ -539,17 +539,38 @@ test("Dodo returns to this deployment's canonical per-order route and ignores ob
   }
 });
 
-test("Dodo live checkout refuses missing or invalid APP_URL before any provider request", async () => {
+test("public Dodo checkout rejects missing or invalid APP_URL at the Origin guard before any provider request", async () => {
   const saved = { app: process.env.APP_URL, environment: process.env.DODO_PAYMENTS_ENVIRONMENT };
   try {
     process.env.DODO_PAYMENTS_ENVIRONMENT = "live_mode";
     const before = calls.length;
+    const storedBefore = await getStorage().listOrders("unowned-origin-control", "buyer@example.test");
     for (const [i, value] of [undefined, "", "not-a-url", "http://outside.example.test"].entries()) {
       if (value === undefined) delete process.env.APP_URL; else process.env.APP_URL = value;
       const r = await postOrder(orderBody("digital", `attempt-return-invalid-${i}0`));
+      assert.deepEqual([r.status, r.json.error.code], [403, "bad_origin"]);
+    }
+    assert.equal(calls.length, before);
+    assert.deepEqual(await getStorage().listOrders("unowned-origin-control", "buyer@example.test"), storedBefore);
+  } finally {
+    if (saved.app === undefined) delete process.env.APP_URL; else process.env.APP_URL = saved.app;
+    if (saved.environment === undefined) delete process.env.DODO_PAYMENTS_ENVIRONMENT; else process.env.DODO_PAYMENTS_ENVIRONMENT = saved.environment;
+  }
+});
+
+test("live Dodo checkout requires a configured return origin even when a loopback request passes the Origin guard", async () => {
+  const saved = { app: process.env.APP_URL, environment: process.env.DODO_PAYMENTS_ENVIRONMENT };
+  try {
+    process.env.DODO_PAYMENTS_ENVIRONMENT = "live_mode";
+    const before = calls.length;
+    const storedBefore = await getStorage().listOrders("unowned-origin-control", "buyer@example.test");
+    for (const [i, value] of [undefined, ""].entries()) {
+      if (value === undefined) delete process.env.APP_URL; else process.env.APP_URL = value;
+      const r = await postOrder(orderBody("digital", `attempt-return-loopback-${i}0`), "http://localhost:3000");
       assert.deepEqual([r.status, r.json.error.code], [502, "payment_unavailable"]);
     }
     assert.equal(calls.length, before);
+    assert.deepEqual(await getStorage().listOrders("unowned-origin-control", "buyer@example.test"), storedBefore);
   } finally {
     if (saved.app === undefined) delete process.env.APP_URL; else process.env.APP_URL = saved.app;
     if (saved.environment === undefined) delete process.env.DODO_PAYMENTS_ENVIRONMENT; else process.env.DODO_PAYMENTS_ENVIRONMENT = saved.environment;
