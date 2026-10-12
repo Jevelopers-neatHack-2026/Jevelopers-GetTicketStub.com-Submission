@@ -18,14 +18,16 @@ import { fixtureCompositionPolicy } from './composition-policy.mjs';
 
 export const fixturePrincipal = Object.freeze({ actor_id: 'fixture_actor', tenant_id: 'fixture_tenant', project_id: 'fixture_project' });
 const NOW = Date.parse('2026-10-10T12:30:00.000Z');
-const actor = () => ({ ...fixturePrincipal, expires_at: '2026-10-11T00:00:00.000Z',
+const hostActor = principal => ({ ...principal, expires_at: '2026-10-11T00:00:00.000Z',
   permissions: ['creative.generate', 'creative.inspect', 'creative.edit', 'creative.read', 'creative.restore', 'creative.cancel', 'creative.brief.create', 'creative.brief.invalidate'],
   budget_scope_id: 'fixture_budget', budget_policy_version: 'fixture-budget-policy/1' });
-const envelope = action => ({ contract: 'CreativeApiRequest', schema_version: '1.0', event_id: `event:${action}`,
-  request_id: `request:${action}`, tenant_id: fixturePrincipal.tenant_id, project_id: fixturePrincipal.project_id, correlation_id: `correlation:${action}`, producer: 'controls-mock-host/1',
+const hostEnvelope = (action, principal) => ({ contract: 'CreativeApiRequest', schema_version: '1.0', event_id: `event:${action}`,
+  request_id: `request:${action}`, tenant_id: principal.tenant_id, project_id: principal.project_id, correlation_id: `correlation:${action}`, producer: 'controls-mock-host/1',
   occurred_at: new Date(NOW).toISOString(), ingested_at: new Date(NOW).toISOString(), environment: 'test', billing_mode: 'simulated', source_refs: [], action_id: action });
 
-export async function createIntegratedHost(directory, { lockLogo = true, enableComposition = false, nativeFormat = 'png', preferences = [{ preference_id: 'style', value: 'calm' }, { preference_id: 'name_size', value: 'medium' }, { preference_id: 'layout', value: 'centered' }] } = {}) {
+export async function createIntegratedHost(directory, { principal = fixturePrincipal, lockLogo = true, enableComposition = false, nativeFormat = 'png', preferences = [{ preference_id: 'style', value: 'calm' }, { preference_id: 'name_size', value: 'medium' }, { preference_id: 'layout', value: 'centered' }] } = {}) {
+  const fixturePrincipal = Object.freeze({ ...principal });
+  const actor = () => hostActor(fixturePrincipal), envelope = action => hostEnvelope(action, fixturePrincipal);
   let host, released, closed=false; let clock = NOW;
   const counters = { image_calls: 0, jev_calls: 0, reservations: 0, releases: 0, holds: 0, bootstrap_image_calls: 0, publication_waits: 0, transport_acks: 0, observer_calls: 0, independent_decision_calls: 0, dependent_choice_calls: 0, independent_questions: 0, dependent_questions: 0, inspection_usage_observations: 0, observer_sends:0, independent_decision_sends:0, dependent_choice_sends:0 };
   const policy = { can_apply: true, available_operations: ['composition.update', 'artwork.edit'], permitted_asset_ids: ['asset-1'], logo_asset_id: 'asset-1' };

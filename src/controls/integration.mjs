@@ -136,10 +136,11 @@ export class CreativeControlsAdapter {
     const accepted = this.store.apply(principal, body);
     if (!accepted.ok) return accepted;
     const operationId = accepted.operation_id;
-    if (this.inflight.has(operationId)) return this.inflight.get(operationId);
+    const key = canonical([principal.tenant_id, principal.project_id, operationId]);
+    if (this.inflight.has(key)) return this.inflight.get(key);
     const running = this.consume(principal, operationId, accepted.replayed === true);
-    this.inflight.set(operationId, running);
-    try { return await running; } finally { this.inflight.delete(operationId); }
+    this.inflight.set(key, running);
+    try { return await running; } finally { this.inflight.delete(key); }
   }
   async consume(principal, operationId, replayed, readOnly = false) {
     try {

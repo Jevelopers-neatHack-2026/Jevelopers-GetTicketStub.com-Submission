@@ -195,7 +195,7 @@ export class CompositionControlsAdapter {
       const allowed = ['permission_denied','stale_version','invalid_request','unsupported_version','conflict','integrity_error'];
       return { ok: false, code: allowed.includes(error?.code) ? error.code : 'validation', status: error?.code === 'stale_version' ? 'stale' : 'failed', ...(action && validId(action.action_id) ? {action_id:action.action_id} : {}), approval: false, purchase: false };
     }
-    const key = `${principal.tenant_id}:${principal.project_id}:${action.action_id}`;
+    const key = canonical([principal.tenant_id, principal.project_id, action.action_id]);
     if (this.inflight.has(key)) return this.inflight.get(key);
     const promise = this.consume(principal, row); this.inflight.set(key, promise);
     try { return await promise; } finally { this.inflight.delete(key); }
