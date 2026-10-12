@@ -1,0 +1,48 @@
+{
+  "producer": "22a3237dd44f376017969ac881586ff396f19cf8",
+  "review": "SCOPED_APPROVE",
+  "review_sha": "3a9fb67fb1445cf22c57a180f8ad0f0a587576b15783ed56a075f685a5db2eb1",
+  "PG": "29/29pass",
+  "fullCI": "FAILmigration",
+  "authority": "syntheticreviewedoutputs notlivegrants orownerACK",
+  "files": [
+    {
+      "path": "producer-v2-page.json",
+      "sha256": "c272b9b8d25f3d73bed228554f95b448d3951bc2bb9b8defcabc4d633249ac3d"
+    },
+    {
+      "path": "producer-budget-v2-page.json",
+      "sha256": "5887fede39b86791972fcb57f35f549ec5869a2108a4f18a3a07bb7e61abfe85"
+    },
+    {
+      "path": "producer-unknown-simulated-v2-page.json",
+      "sha256": "a2fc429439d1a7488ed037ce499acb1d97aaf614997fd1d17afb1bebdfcf4755"
+    },
+    {
+      "path": "producer-v1-page.json",
+      "sha256": "0b9b7210c515d05af66eea0f48c9fd1b79b737bb60230dcf67b23b4588447be3"
+    },
+    {
+      "path": "src/reporting/schema-v2.ts",
+      "sha256": "0400a033d1bf13cf047cda507639126b362e99c1bb26348ad3b233758aa38fdb"
+    },
+    {
+      "path": "fixtures/reporting/query-export-handoff.json",
+      "sha256": "eca74fe6fd34b9631fcb3022f3417425ef94580043a67fce4832b52fa6993da9"
+    },
+    {
+      "path": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryPageSchema.json",
+      "sha256": "862900ad30b1e5684c98852cb93f0010eb73504d2fd9f58018673c9334ddf814"
+    },
+    {
+      "path": "fixtures/reporting/definition-registry.json",
+      "sha256": "577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1"
+    },
+    {
+      "path": "ie-ci06-pg-page.json",
+      "sha256": "4462b866d69c9da2d5f92086f89c6cec8cb898d4af08d9e2ac8e94c9cbb21e03"
+    }
+  ],
+  "owner_receipt": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2#issuecomment-6123320849",
+  "acceptance": "Finance-owneraccepted SYNTHETIC_CONFORMANCE_ONLY"
+}
