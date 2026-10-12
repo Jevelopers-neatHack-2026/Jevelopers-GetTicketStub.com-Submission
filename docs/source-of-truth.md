@@ -37,7 +37,7 @@ Where each part of the TicketStub brand is authoritative **today**. The full per
 
 ## Actual versus proposed paths
 
-[`OWNERSHIP.md`](architecture/OWNERSHIP.md) proposes a future layout and states that it does not relocate existing assets. **Decision: current paths stay canonical; no file moves in BK-01.**
+The [ownership view before the 2026-10-12 documentation refresh](https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/a664cc99884b2679f2c6ea15c6c3e8b98b768755/docs/architecture/OWNERSHIP.md) proposed the future layout below without relocating existing assets. The [current ownership guide](architecture/OWNERSHIP.md) describes the actual repository organization. **Decision: current paths stay canonical; no file moves in BK-01.**
 
 | Proposed | Actual today | Decision and rationale | If moved later |
 |---|---|---|---|
@@ -52,7 +52,7 @@ Imports affected by any future move: the README `@import "brand-kit/tokens/token
 
 ## Iconography
 
-**Current state: there is no approved reusable icon system.** The repository has no icon library or iconography guidance. `logo/favicon.svg` and `logo/app-icon.svg` are logo variants. The inline SVG illustrations in [`index.html`](../index.html) (for example the mute glyph) are reference/demo illustrations on the board only: not an icon set, not approved, not export candidates. Whatever UI icon implementation ships today is owned by the consumers (getticketstub.com and others), outside this repository's inventory. [`OWNERSHIP.md`](architecture/OWNERSHIP.md) lists "icon treatment" as a responsibility without a source.
+**Current state: there is no approved reusable icon system.** The repository has no icon library or iconography guidance. `logo/favicon.svg` and `logo/app-icon.svg` are logo variants. The inline SVG illustrations in [`index.html`](../index.html) (for example the mute glyph) are reference/demo illustrations on the board only: not an icon set, not approved, not export candidates. Whatever UI icon implementation ships today is owned by the consumers (getticketstub.com and others), outside this repository's inventory. The [ownership view before the 2026-10-12 documentation refresh](https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/a664cc99884b2679f2c6ea15c6c3e8b98b768755/docs/architecture/OWNERSHIP.md) listed "icon treatment" as a responsibility without a source; that historical wording supplies no icon-system decision or approval.
 
 **Future decision (unresolved, BK-02 with consumer owners).** Whether to create an owned icon family or style guidance here (owned guidance doc, an owned asset family, or staying consumer-owned) is not decided. No approval is inferred from this index.
 
