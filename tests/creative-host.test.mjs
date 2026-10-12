@@ -161,7 +161,7 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
   const image = "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d";
   docker(["image", "inspect", image]);
   docker(["run", "--rm", "--name", name, "-d", "-p", "127.0.0.1::5432", "--env-file", dockerEnvFile, image]);
-  let admin; let runtime; let host;
+  let admin; let runtime; let host; let failed = false;
   try {
     const port = Number(docker(["port", name, "5432/tcp"]).split(":").at(-1));
     for (let count = 0; count < 50; count += 1) {
@@ -288,7 +288,28 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
     } };
     const action = randomUUID(); const input = { projectId: entry.application_project_id, operation: "generate", actionId: action,
       payload: { brief_id: entry.brief_id, plan: plan("offline-generation"), decision_request: decisionRequest } };
-    const response = await POST(request(input)); const result = await response.json();
+    const commit = host.store.commitPreparedDesignVersion.bind(host.store);
+    let signalPublication; let releasePublication;
+    const publicationPaused = new Promise((resolve) => { signalPublication = resolve; });
+    const publicationGate = new Promise((resolve) => { releasePublication = resolve; });
+    t.mock.method(host.store, "commitPreparedDesignVersion", async (...args) => {
+      const answer = await commit(...args);
+      assert.equal(host.store.db.isTransaction, true, "the actual owner publication transaction remains open");
+      signalPublication(); await publicationGate;
+      return answer;
+    });
+    const publishing = POST(request(input));
+    await Promise.race([publicationPaused, publishing.then(async (response) => { throw new Error(`Publication did not reach its owner commit: ${JSON.stringify(await response.json())}`); })]);
+    let concurrentReadCompleted = false;
+    const reading = POST(request({ projectId: entry.application_project_id, operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id } }))
+      .then((response) => { concurrentReadCompleted = true; return response; });
+    await new Promise((resolve) => setImmediate(resolve));
+    const concurrentReadWasBlocked = !concurrentReadCompleted;
+    releasePublication();
+    const response = await publishing; const result = await response.json();
+    const readResponse = await reading; const readResult = await readResponse.json();
+    assert.equal(concurrentReadWasBlocked, true, "another request cannot observe an uncommitted artifact through another controller");
+    assert.equal(readResponse.status, 200); assert.equal(readResult.result.items.length, 1);
     const stageSummary = host.store.db.prepare("SELECT state FROM ticketstub_creative_attempts").all().map((row) => { const value = JSON.parse(row.state); return { state: value.state, authority_error: value.authority_error }; });
     assert.equal(response.status, 200, `${JSON.stringify(result)} ${JSON.stringify(stageSummary)}`); assert.equal(result.ok, true); assert.equal(dispatches.length, 1); assert.equal(decisionWrites.length, 1);
     const design = result.result.design ?? result.result.design_version ?? result.result;
@@ -435,11 +456,17 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
     assert.ok(!JSON.stringify(result).includes("offline-ce-only"), "credentials do not appear in the public result");
     assert.ok(!JSON.stringify(retained).includes("offline-ce-only"), "credentials do not appear in durable mapping state");
     t.diagnostic(`Real PostgreSQL16 with all ${readdirSync(migrations).filter((file) => file.endsWith(".sql")).length} pinned CI migrations; intercepted image writes=${dispatches.length}, decision writes=${decisionWrites.length}; immutable versions=1.`);
-  } finally {
+  } catch (error) { failed = true; throw error; } finally {
     globalThis.fetch = originalFetch;
     if (host) await host.close(); if (runtime) await runtime.end(); if (admin) await admin.end();
-    docker(["rm", "-f", name]);
-    unlinkSync(dockerEnvFile);
-    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved);
+    let cleanupFailed = false;
+    try { docker(["rm", "-f", name]); } catch { cleanupFailed = true; }
+    try { unlinkSync(dockerEnvFile); } finally {
+      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved);
+    }
+    if (cleanupFailed) {
+      t.diagnostic(`Disposable PostgreSQL container cleanup failed: ${name}; inspect the local Docker runtime. No other containers were changed.`);
+      if (!failed) assert.fail("The disposable PostgreSQL container could not be removed.");
+    }
   }
 });

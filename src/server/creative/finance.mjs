@@ -29,18 +29,27 @@ const resultValue = (result) => {
 };
 const versioned = (contract, id, value) => ({ contract, schema_version: "1.0.0", id, revision: 1, content_hash: canonicalHash(value) });
 
-/** Mapping and recovery state only. The PostgreSQL cost-intelligence event log
- * is the sole reservation/capacity authority. This table never grants money. */
-export function createCreativeFinance({ database, pool, authority, currentContext, environment, sourceRevision, now = Date.now }) {
+/** Run once before this connection has any active publication. */
+export function initializeCreativeFinanceMapping(database) {
+  required(!database.isTransaction);
   database.exec(`CREATE TABLE IF NOT EXISTS ticketstub_creative_attempts (
     billable_attempt_id TEXT PRIMARY KEY, state TEXT NOT NULL
   ); CREATE TABLE IF NOT EXISTS ticketstub_creative_finance_sources (
     request_digest TEXT PRIMARY KEY, billable_attempt_id TEXT NOT NULL,
     source_ref TEXT NOT NULL, maximum TEXT
   )`);
-  const save = (state) => database.prepare("INSERT INTO ticketstub_creative_attempts(billable_attempt_id,state) VALUES (?,?) ON CONFLICT(billable_attempt_id) DO UPDATE SET state=excluded.state")
-    .run(state.attempt.billable_attempt_id, JSON.stringify(state));
+}
+
+/** Mapping and recovery state only. PostgreSQL is the sole capacity authority.
+ * Mapping calls never borrow another request's owned publication transaction. */
+export function createCreativeFinance({ database, pool, authority, currentContext, environment, sourceRevision, now = Date.now }) {
+  const save = (state) => {
+    required(!database.isTransaction);
+    database.prepare("INSERT INTO ticketstub_creative_attempts(billable_attempt_id,state) VALUES (?,?) ON CONFLICT(billable_attempt_id) DO UPDATE SET state=excluded.state")
+      .run(state.attempt.billable_attempt_id, JSON.stringify(state));
+  };
   const load = (billable) => {
+    required(!database.isTransaction);
     const found = database.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(billable);
     return found ? JSON.parse(found.state) : null;
   };
@@ -59,6 +68,7 @@ export function createCreativeFinance({ database, pool, authority, currentContex
     occurred_at: timestamp(), observed_at: timestamp(), ingested_at: timestamp(), environment, billing_mode: "live", source_refs: [] });
   const register = async (request, row, sourceRef, maximum) => {
     const digest = await budgetDigest(normalizedBudgetRequest(request));
+    required(!database.isTransaction);
     database.prepare("INSERT OR IGNORE INTO ticketstub_creative_finance_sources(request_digest,billable_attempt_id,source_ref,maximum) VALUES (?,?,?,?)")
       .run(digest, row.attempt.billable_attempt_id, JSON.stringify(sourceRef), maximum ? JSON.stringify(maximum) : null);
   };
@@ -78,6 +88,7 @@ export function createCreativeFinance({ database, pool, authority, currentContex
     reservationAuthority: {
       async verifyCurrent(query) {
         const entry = await fresh();
+        required(!database.isTransaction);
         const row = load(query.billableAttemptId);
         if (!row || !scopeMatches(query.scope, entry) || !same(query.binding, row.binding) || !same(query.sourceAuthorityRef, row.source_ref) ||
             query.binding.grantRef !== row.access.grant_ref || row.access.evidence_sha256 !== (row.attempt.provider.name === "openrouter" ? entry.image_access.evidence_sha256 : entry.decision_access?.evidenceSha256) ||
@@ -90,11 +101,13 @@ export function createCreativeFinance({ database, pool, authority, currentContex
     budgetEvidence: {
       async verifyCurrent(query) {
         const entry = await fresh();
+        required(!database.isTransaction);
         const found = database.prepare("SELECT * FROM ticketstub_creative_finance_sources WHERE request_digest=?").get(query.requestDigest);
         if (!found || !scopeMatches(query.scope, entry) || !same(JSON.parse(found.source_ref), query.sourceAuthorityRef)) return null;
         const row = load(found.billable_attempt_id);
+        if (!row) return null;
         const maximum = entry.maximums[row.attempt.operation_kind];
-        if (!row || !maximum || !same(maximum.policy_ref, row.maximum.policy_ref) || maximum.amount !== row.maximum.amount) return null;
+        if (!maximum || !same(maximum.policy_ref, row.maximum.policy_ref) || maximum.amount !== row.maximum.amount) return null;
         return { status: "verified", queryDigest: await budgetDigest(query), verifiedAt: timestamp(),
           expiresAt: new Date(Math.min(Date.parse(maximum.expires_at), Date.parse(entry.expires_at))).toISOString(),
           ...(found.maximum ? { maximum: JSON.parse(found.maximum) } : {}) };

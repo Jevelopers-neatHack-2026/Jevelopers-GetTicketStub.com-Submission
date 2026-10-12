@@ -13,7 +13,7 @@ import { getRequestContext, requireCapability, issueContextV2 } from "../context
 import { HttpError } from "../http";
 import { deployedCommit } from "../commit";
 import { creativeHostConfig, currentProjectAuthority, providerCredentialPort, financeConnectionOptions, CreativeHostError } from "./config.mjs";
-import { createCreativeFinance } from "./finance.mjs";
+import { createCreativeFinance, initializeCreativeFinanceMapping } from "./finance.mjs";
 import ceManifest from "../vendor/creative-engine/MANIFEST.json" with { type: "json" };
 import ciManifest from "../vendor/cost-intelligence/MANIFEST.json" with { type: "json" };
 import harnessManifest from "../vendor/agent-harness/MANIFEST.json" with { type: "json" };
@@ -37,7 +37,11 @@ function hostSlot(config, env) {
     // error object, which can include connection parameters.
     pool.on("error", () => {});
     const store = new CreativeVersionStore({ databasePath: config.database_path, objectRoot: config.object_root });
-    slot = { pool, store, identity, databasePath: config.database_path }; slots.set(identity, slot);
+    initializeCreativeFinanceMapping(store.db);
+    // One owner adapter/controller/serialization queue for this physical
+    // connection. Request composition must not mint competing controllers.
+    const adapter = createCreativeVersionApiPorts({ store, idFactory: () => randomUUID() });
+    slot = { pool, store, adapter, identity, databasePath: config.database_path }; slots.set(identity, slot);
   }
   return slot;
 }
@@ -104,11 +108,11 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
     assetPort: { async readArtifact(input) {
       await currentContext();
       const record = authority();
-      const current = slot.store.getCurrentDesignVersion({ scope: input.scope, brief_id: record.brief_id });
+      const current = await slot.adapter.storage.getCurrentDesignVersion({ scope: input.scope, brief_id: record.brief_id });
       const matches = (design) => design?.artifact.artifact_id === input.artifact_id && design.artifact.content_hash === input.content_hash && design.artifact.media_type === input.media_type;
-      const design = matches(current) ? current : (await slot.store.listDesignVersions({ scope: input.scope, brief_id: record.brief_id, limit: 100 })).items.find(matches);
+      const design = matches(current) ? current : (await slot.adapter.storage.listDesignVersions({ scope: input.scope, brief_id: record.brief_id, limit: 100 })).items.find(matches);
       if (!design) fail("creative_asset_unavailable");
-      return slot.store.getArtifactBytes({ scope: input.scope, brief_id: record.brief_id, design_version_id: design.design_version_id });
+      return slot.adapter.storage.getArtifactBytes({ scope: input.scope, brief_id: record.brief_id, design_version_id: design.design_version_id });
     } },
   });
   const planning = {
@@ -157,10 +161,11 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
       });
     },
   };
-  const adapted = createCreativeVersionApiPorts({ store: slot.store, otherPorts: { provider, decisionPort, metering: finance.metering, planning }, idFactory: () => randomUUID() });
+  const adapted = slot.adapter;
   const authorizeDispatch = adapted.ports.jobs.authorizeDispatch;
   const assertDispatchCurrent = adapted.ports.jobs.assertDispatchCurrent;
-  const ports = { ...adapted.ports,
+  const ports = { ...adapted.ports, provider, decisionPort, metering: finance.metering,
+    planning: { ...adapted.ports.planning, ...planning },
     jobs: { ...adapted.ports.jobs,
       async authorizeDispatch(input) { await currentContext(); assertAuthorityCurrent(); const answer = await authorizeDispatch(input); finance.bindDispatchIntent(input, answer); return answer; },
       assertDispatchCurrent(input) { const answer = assertDispatchCurrent(input); assertAuthorityCurrent(); return answer; },

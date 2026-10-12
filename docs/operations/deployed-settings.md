@@ -112,7 +112,10 @@ journey. A repeated running creative job returns HTTP202 with its existing job r
 
 Configuration/profile/environment/DB connection changes and credential rotation require a process restart.
 The host refuses opening two different configurations on the same active creative database. Current creative
-main does not qualify multiprocess publication; separate CE PR50 remains its owner's work.
+main does not qualify multiprocess publication; separate CE PR50 remains its owner's work. Within one host
+process, every request uses the same store-owned adapter/controller and serialization queue. Request-specific
+actor, registry, planning, credential and cancellation closures are rebuilt for each request. Private Finance
+mapping writes refuse an active owner publication transaction; they never join a different request's transaction.
 
 ## Dependency order, hosting changes and rollback
 
