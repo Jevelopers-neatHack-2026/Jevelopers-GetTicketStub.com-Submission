@@ -1,6 +1,11 @@
 # Submission evidence index
 
-This index distinguishes planned evidence from dated records of actually verified artifacts. On `main`, SPN-01, SPN-02 and SPN-03 are owner-accepted with the qualifications below; every other criterion is planned. No cross-repository evaluator is merged ([draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23)). Add sanitized, reviewer-accessible records for each tested release.
+This index distinguishes planned evidence from dated records of actually verified artifacts. On `main`, SPN-01, SPN-02 and SPN-03 are owner-accepted with the qualifications below; every other criterion is planned. The cross-repository evaluator tooling is merged in [PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23), and [PR #51](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/51) connects evidence qualification to run reporting. Those changes provide tooling, not a completed product journey. Add sanitized, reviewer-accessible records for each tested release.
+
+The dated capture READMEs preserve their original review cutoff, including approvals
+that were still pending when written. Read this index and the
+[master checklist](../planning/acceptance-checklist.md) for the later recorded owner
+decisions; read each capture for its immutable artifact and provenance limits.
 
 | Evidence | Required record | State |
 | --- | --- | --- |
