@@ -57,17 +57,17 @@ export function validatePrivacySource(html, inventory) {
   }
   // Exact executable hashes also catch computed/aliased APIs and injected dynamic resource loaders.
   same(executable.map(digest), inventory.executableScriptSha256, 'Executable source changed; refresh privacy audit');
-  const forms = [...html.matchAll(/<form\b[^>]*>/gi)].map(m => attributes(m[0]));
-  assert.equal(forms.length, 1, 'Unreviewed collection form');
-  same([forms[0].id, forms[0].action, forms[0].method, forms[0].target], ['maker', inventory.studioUrl, 'get', '_blank'], 'Demo handoff changed');
-  assert.match(forms[0].rel, /\bnoopener\b/);
+  const forms = [...html.matchAll(/<form\b[^>]*>/gi)];
+  assert.equal(forms.length, 0, 'No capture form or native external submit is approved');
+  const group = html.match(/<div\b[^>]*id="maker"[^>]*>/i);
+  assert.ok(group && attributes(group[0]).role === 'group', 'Local editor group missing');
   const inputs = [...html.matchAll(/<input\b[^>]*>/gi)].map(m => attributes(m[0]));
-  same(inputs.map(a => [a.id, a.name, a.type]), [['ev', 'link', 'text']], 'Unreviewed input capture');
+  same(inputs.map(a => [a.id, a.name, a.type]), [['ev', undefined, 'text']], 'Unreviewed input capture');
   for (const control of markup.matchAll(/<(?:textarea|select|button)\b[^>]*>/gi)) assert.ok(!attributes(control[0]).name, 'Unreviewed named form control');
   for (const tag of markup.matchAll(/<(?:a|img|source|video|audio)\b[^>]*>/gi)) {
     const attrs = attributes(tag[0]);
     if (tag[0].toLowerCase().startsWith('<a ')) {
-      assert.ok(attrs.href?.startsWith('#') || attrs.href === inventory.studioUrl, 'Unreviewed external navigation');
+      assert.ok(attrs.href?.startsWith('#') || (inventory.studioUrl && attrs.href === inventory.studioUrl) || (!attrs.href && attrs.id === 'demoLink' && /\bhidden\b/.test(tag[0])), 'Unreviewed external navigation');
       if (attrs.href === inventory.studioUrl) assert.match(attrs.rel || '', /\bnoopener\b/);
     } else {
       for (const key of ['src', 'srcset', 'poster']) if (attrs[key]) assert.match(attrs[key], /^assets\/[a-z0-9_.-]+\.(?:webp|png|jpe?g|avif)$/, 'Unreviewed asset request');
@@ -89,7 +89,7 @@ function node() {
     setAttribute: (k, v) => attrs.set(k, v), removeAttribute: k => attrs.delete(k), hasAttribute: k => attrs.has(k), getAttribute: k => attrs.get(k),
     addEventListener(type, handler) { const list = handlers.get(type) || []; list.push(handler); handlers.set(type, list); },
     removeEventListener() {}, appendChild() {}, insertAdjacentHTML() {}, focus() {}, querySelector: () => node(),
-    dispatch(type) { let prevented = false; for (const handler of handlers.get(type) || []) handler({ preventDefault() { prevented = true; } }); return prevented; },
+    dispatch(type, details = {}) { let prevented = false; for (const handler of handlers.get(type) || []) handler({ ...details, preventDefault() { prevented = true; } }); return prevented; },
   };
 }
 function section(html, from, to) {
@@ -101,7 +101,8 @@ function section(html, from, to) {
 // Execute the real maker and in-page CTA handlers without CDN code or external requests.
 // This is a limited VM journey harness, not a browser/network/storage certification.
 export function exerciseJourney(html, { failure = 'blocked', reduced = true } = {}) {
-  const elements = Object.fromEntries(['maker', 'ev', 'finCard', 'finNote', 'finale', 'finFallback', 'finStatus'].map(id => [id, node()]));
+  const elements = Object.fromEntries(['maker', 'ev', 'finCard', 'finNote', 'finale', 'demoLink', 'demoUnavailable', 'finStatus', 'previewButton'].map(id => [id, node()]));
+  elements.maker.querySelector = () => elements.previewButton;
   const timers = [], frames = [], attempts = [], previews = [], moves = [];
   const fail = surface => { attempts.push(surface); throw new Error(`${surface} ${failure}`); };
   const anchors = [...html.matchAll(/<a\b[^>]*href=["'](#[^"']+)["'][^>]*>/gi)].map(match => { const a = node(); a.getAttribute = () => match[1]; return a; });
@@ -126,28 +127,35 @@ export function exerciseJourney(html, { failure = 'blocked', reduced = true } = 
     console: new Proxy({}, { get: () => () => fail('logging') }),
   });
   context.window = context;
+  context.open = () => fail('navigation');
+  Object.defineProperty(context, 'location', { get: () => fail('navigation'), set: () => fail('navigation') });
   for (const name of ['localStorage', 'sessionStorage', 'indexedDB', 'cookieStore']) Object.defineProperty(context, name, { get: () => fail(name) });
   vm.runInContext(section(html, '/* ---------- the one checkout:', '/* ---------- brand motion,'), context, { timeout: 1000 });
   vm.runInContext(section(html, '/* ---------- in-page links:', '// Progress follows native'), context, { timeout: 1000 });
   for (const anchor of anchors) { assert.equal(anchor.dispatch('click'), true); }
   while (frames.length) frames.shift()();
   assert.equal(moves.length, anchors.length, 'All real in-page CTA/navigation links remain usable');
-  const input = elements.ev, form = elements.maker;
-  input.value = ''; assert.equal(form.dispatch('submit'), true, 'Empty submit stays local');
+  const input = elements.ev;
+  input.value = ''; assert.equal(elements.previewButton.dispatch('click'), true, 'Empty preview click stays local');
+  assert.equal(input.dispatch('keydown', { key: 'Enter', isComposing: false }), true, 'Enter stays local');
   for (const chip of chips) { chip.dispatch('click'); assert.ok(input.value); }
   const synthetic = 'LP_PRIVACY_SYNTHETIC_ONLY, Fictional Hall, Jul 12 2025';
   input.value = synthetic; input.dispatch('input'); input.dispatch('change');
   // Run preview timers, including the animation completion branch.
   for (let i = 0; i < timers.length; i++) timers[i](); timers.length = 0;
   assert.ok(previews.some(p => p.a === 'LP_PRIVACY_SYNTHETIC_ONLY'), 'Real local preview updates');
-  assert.equal(form.dispatch('submit'), false, 'Native external demo submit remains possible');
-  const handoff = new URL(elements.finFallback.href);
-  assert.equal(handoff.searchParams.get('link'), synthetic, 'External GET handoff explicitly carries entered text');
-  assert.equal(handoff.origin + '/', form.action);
+  assert.equal(elements.previewButton.dispatch('click'), true, 'Preview button cannot submit input');
+  assert.equal(input.dispatch('keydown', { key: 'Enter', isComposing: false }), true, 'Typed Enter cannot submit input');
   for (const timer of timers) timer();
-  assert.equal(elements.finFallback.hidden, false, 'Plain handoff offered when tab did not open');
+  const external = elements.demoLink.href || null;
+  if (external) {
+    const target = new URL(external);
+    assert.equal(target.search, '', 'Link-only destination cannot carry query data');
+    assert.equal(target.hash, '', 'Link-only destination cannot carry fragment data');
+    assert.ok(!external.includes('LP_PRIVACY_SYNTHETIC_ONLY'));
+  } else assert.equal(elements.demoLink.hidden, true, 'Pending demo has no active link');
   same(attempts, [], 'Journey attempted tracking, storage, network or input logging');
-  return { anchors: anchors.length, previews: previews.length, externalHandoff: 'simulated-only', attempts };
+  return { anchors: anchors.length, previews: previews.length, externalHandoff: external ? 'link-only-fixture' : 'disabled', destination: external, localNote: elements.finNote.textContent, inputValue: input.value, demoStatus: elements.demoUnavailable.textContent, attempts };
 }
 
 export function validateReleaseReceipt(receipt, manifest, pageSha256) {
@@ -169,7 +177,7 @@ export function validateReleaseReceipt(receipt, manifest, pageSha256) {
   assert.ok(!Number.isNaN(Date.parse(browser.testedAt)), 'Invalid browser evidence date');
   assert.match(browser.evidenceUrl, new RegExp(`^https://github\\.com/Jevelopers-neatHack-2026/landing-page-repo/blob/${receipt.sourceRevision}/[a-zA-Z0-9_./-]+$`), 'Browser evidence must be a pinned repository URL');
   assert.equal(browser.trackingRequests, 0); assert.equal(browser.trackingStorageWrites, 0);
-  for (const mode of ['load', 'all-ctas', 'offline', 'blocked-cdn', 'form-handoff']) assert.ok(browser.scenarios?.includes(mode), `Missing browser scenario: ${mode}`);
+  for (const mode of ['load', 'all-ctas', 'offline', 'blocked-cdn', 'local-preview', 'link-only-demo']) assert.ok(browser.scenarios?.includes(mode), `Missing browser scenario: ${mode}`);
   assert.equal(receipt.lp03HandoffReviewed, true, 'LP-03 receiving endpoint and handling review pending');
   return { status: 'PASS' };
 }
@@ -218,6 +226,6 @@ export default async function run({ root, artifactDir, mode = 'draft' }) {
     await verifyReleaseEvidence(root, receipt, manifest);
     return approval;
   }
-  console.log(`privacy: ${result.scripts} audited scripts; real local CTA/form handlers exercised; CDN/browser certification and owner approvals PENDING`);
+  console.log(`privacy: ${result.scripts} audited scripts; real local editor/link handlers exercised; CDN/browser certification and owner approvals PENDING`);
   return { status: 'PASS_DRAFT' };
 }

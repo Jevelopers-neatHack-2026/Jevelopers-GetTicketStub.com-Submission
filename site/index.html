@@ -313,7 +313,7 @@ a{color:inherit}
 .fin-try button{font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;background:transparent;color:var(--stock);text-decoration:none;border:1.5px solid rgba(244,236,221,.4);border-radius:999px;padding:9px 13px 8px;transition:border-color .2s,background .2s}
 .fin-try button:hover,.fin-try button:focus-visible,.fin-try button[aria-pressed="true"]{border-color:var(--foil);background:rgba(124,198,210,.14)}
 .fin-note{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#a89d88;transition:color 160ms var(--ease-std)}
-.fin-note.err{color:#ff8f6b;display:block}   /* phones hide the note line, but never an error */
+.fin-note.err{color:#ff8f6b;display:block}   /* errors stay visible alongside local preview feedback */
 .maker input[aria-invalid="true"]{border-color:#ff8f6b}
 .finale .fin-copy>p.fin-terms{margin:-6px 0 0;font:500 11px/1.45 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--stock);opacity:.88;max-width:640px}
 @media (max-width:760px){.finale .fin-copy>p.fin-terms{font-size:10px;margin:-2px 0 0}.fin-try button{min-height:40px}}
@@ -569,7 +569,11 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
 @media (max-width:760px){.rail{display:none}
   #boardUI:before{height:26vh;background:linear-gradient(transparent,rgba(23,20,15,.92) 45%)}
   .finale:before{background:radial-gradient(90% 46% at 50% 50%,rgba(23,20,15,.9),rgba(23,20,15,.6) 70%,rgba(23,20,15,.2))}
-  .finale h2{font-size:15vw;transform-origin:center}.finale .in{grid-template-columns:1fr;gap:0;text-align:center;justify-items:center}.fin-copy{justify-items:center;gap:12px}.maker{justify-content:center}.fin-card{order:-1;padding:0 0 14px;margin-top:-6px}.fin-card .ts-stub{--w:104px;--rot:-6deg}.finale.typing .fin-copy>p{display:none}.finale .fin-copy>p{font-size:15px}.fin-try>span{display:none}.fin-try{justify-content:center}.fin-try button{padding:8px 10px 7px;font-size:10px}.fin-note{display:none}
+  .finale h2{font-size:15vw;transform-origin:center}.finale .in{grid-template-columns:1fr;gap:0;text-align:center;justify-items:center}.fin-copy{justify-items:center;gap:12px}.maker{justify-content:center}.fin-card{order:-1;padding:0 0 14px;margin-top:-6px}.fin-card .ts-stub{--w:104px;--rot:-6deg}.finale.typing .fin-copy>p:not(#demoUnavailable){display:none}.finale .fin-copy>p{font-size:15px}.fin-try>span{display:none}.fin-try{justify-content:center}.fin-try button{padding:8px 10px 7px;font-size:10px}.fin-note{display:block}
+}
+/* Short mobile viewports keep the local editor and both status messages reachable. */
+@media (max-width:760px) and (max-height:700px){
+  .finale{overflow-y:auto;max-height:100dvh;align-content:start;place-items:start center;padding-top:calc(70px + env(safe-area-inset-top,0px));padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
 }
 @media (prefers-reduced-motion:reduce){.marquee .track,.disc svg,.search .caret{animation:none}}
 </style>
@@ -595,17 +599,18 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
       <div class="fin-copy">
         <span class="eyebrow"><svg class="eb-stamp" viewBox="0 0 80 100" aria-hidden="true"><use href="#tsStamp"/></svg>Your wall starts with one stub</span>
         <h2>Make<span> yours!</span></h2>
-        <p>Try a fictional event or type your own details to update this local digital preview. The linked studio is a separate demo; physical ordering and delivery are pending.</p>
-        <form class="maker" id="maker" action="https://gvk66o79l1.c38.airoapp.ai/" method="get" target="_blank" rel="noopener" autocomplete="off" aria-label="Make your stub">
+        <p>Try a fictional event or type details to edit this local digital preview. Nothing entered here is sent to the studio; physical ordering and delivery are pending.</p>
+        <div class="maker" id="maker" role="group" aria-label="Edit your local preview">
           <label for="ev">Fictional event details or a public event link</label>
-          <input id="ev" name="link" type="text" maxlength="300" enterkeyhint="go" aria-describedby="finNote" placeholder="Paste a public event link, or type: Nova Riot, Palladium, Jul 12 2025">
-          <button class="btn punch" type="submit"><span class="lbl">Open demo studio <span class="arr">→</span></span></button>
-        </form>
+          <input id="ev" type="text" autocomplete="off" maxlength="300" enterkeyhint="done" aria-describedby="finNote" placeholder="Paste a public event link, or type: Nova Riot, Palladium, Jul 12 2025">
+          <button class="btn punch" type="button"><span class="lbl">Update preview <span class="arr">→</span></span></button>
+        </div>
         <p class="fin-terms" id="finTerms">Illustrative digital preview · pricing, printing and shipping pending</p>
         <div class="fin-try"><span>Or try one</span><button type="button" data-demo="gulls">Gulls v Miners</button><button type="button" data-demo="nova">Nova Riot</button><button type="button" data-demo="wolves">Wolves v Storm</button></div>
         <span class="fin-status" id="finStatus" aria-hidden="true"><i></i><span>Preview ready</span></span>
         <span class="fin-note" id="finNote" aria-live="polite">Illustrative keepsake, not an admission ticket. Preview text is unverified; entering details does not approve a design or authorize a purchase.</span>
-        <a class="fin-fallback" id="finFallback" href="https://gvk66o79l1.c38.airoapp.ai/" target="_blank" rel="noopener" hidden>Didn’t open? Continue to the studio →</a>
+        <p id="demoUnavailable" role="status">Demo studio destination awaiting confirmation. Keep editing the preview here; nothing is sent.</p>
+        <a class="fin-fallback" id="demoLink" target="_blank" rel="noopener noreferrer" hidden>Open demo studio →</a>
       </div>
       <div class="fin-card" id="finCard"></div>
     </div>
@@ -677,7 +682,7 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
     <div class="steps">
       <div class="step"><div class="viz"><div class="search" aria-hidden="true">⌁ <span>tix.link/nova-riot-palladium-0712</span><i class="caret"></i></div><span class="mono">or just type the night</span></div><b>01</b><h3>Tell us the night</h3><p>Try a fictional sample, or type an artist or team, venue and date. A public link supplies words from its address only; do not paste private ticket or booking links.</p></div>
       <div class="step"><div class="viz styles" id="styles" aria-hidden="true"></div><b>02</b><h3>Review the preview</h3><p>This page automatically formats a digital specimen; it does not verify event facts. Review and correct your details before any separate design approval.</p></div>
-      <div class="step"><div class="viz" aria-hidden="true"><div class="frame"><div id="framed"></div></div></div><b>03</b><h3>Explore the demo</h3><p>Opening the studio sends your entered text to a separate demo. Design approval and purchase authorization are separate steps; no purchase or physical fulfillment occurs on this page.</p></div>
+      <div class="step"><div class="viz" aria-hidden="true"><div class="frame"><div id="framed"></div></div></div><b>03</b><h3>Explore the demo</h3><p>Preview edits stay on this page. An approved studio link, when available, opens without your text. Design approval and purchase authorization are separate steps; no purchase or physical fulfillment occurs on this page.</p></div>
     </div>
   </section>
 
@@ -834,10 +839,26 @@ window.TS = (() => {
 (() => {
   const form = document.getElementById('maker'), ev = document.getElementById('ev'), slot = document.getElementById('finCard'), note = document.getElementById('finNote'), fin = document.getElementById('finale');
   if (!form) return;
-  // Separate demo handoff; this landing page does not place orders.
-  const STUDIO_URL = 'https://gvk66o79l1.c38.airoapp.ai/';
-  form.action = STUDIO_URL;
-  const fallback = document.getElementById('finFallback');
+  // Owner-approved link only. Local input is never part of this configuration or URL.
+  /* CTA_CONFIG_BEGIN */
+  const CTA_CONFIG = {"schema":"ticketstub.cta/1","environment":"preview","capture":"deferred","destinations":{"preview":{"status":"PENDING","url":null,"allowedOrigin":null,"allowedPath":null,"queryKeys":[],"availability":"unknown","ownerRole":"Receiving application owner (GT-10B #19)","receipt":null},"demo":{"status":"PENDING","url":null,"allowedOrigin":null,"allowedPath":null,"queryKeys":[],"availability":"unknown","ownerRole":"Receiving application owner (GT-10B #19)","receipt":null},"staging":{"status":"PENDING","url":null,"allowedOrigin":null,"allowedPath":null,"queryKeys":[],"availability":"unknown","ownerRole":"Receiving application owner (GT-10B #19)","receipt":null},"production":{"status":"PENDING","url":null,"allowedOrigin":null,"allowedPath":null,"queryKeys":[],"availability":"unknown","ownerRole":"Receiving application owner (GT-10B #19)","receipt":null}}};
+  /* CTA_CONFIG_END */
+  function studioDestination(config){
+    if (!config || config.schema !== 'ticketstub.cta/1' || config.capture !== 'deferred' || !['preview','demo','staging','production'].includes(config.environment)) return null;
+    const entry = config.destinations && config.destinations[config.environment];
+    if (!entry || entry.status !== 'APPROVED' || entry.availability !== 'verified' || !entry.ownerRole || !Array.isArray(entry.queryKeys) || entry.queryKeys.length !== 0) return null;
+    const receipt = entry.receipt;
+    if (!receipt || receipt.destination !== entry.url || receipt.environment !== config.environment || !receipt.reviewer || !/^[a-f0-9]{40}$/.test(receipt.sourceRevision || '') || !/^https:\/\/github\.com\/Jevelopers-neatHack-2026\/getticketstub\.com\/(?:blob|commit)\//.test(receipt.evidenceUrl || '') || !(receipt.evidenceUrl.startsWith('https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/' + receipt.sourceRevision + '/') || receipt.evidenceUrl === 'https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/' + receipt.sourceRevision) || /[?#\s]/.test(receipt.evidenceUrl) || !Number.isFinite(Date.parse(receipt.reviewedAt))) return null;
+    let url; try { url = new URL(entry.url); } catch (err) { return null; }
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || url.href !== entry.url || url.origin !== entry.allowedOrigin || url.pathname !== entry.allowedPath || !/^\/(?:[a-zA-Z0-9_-]+\/?)*$/.test(url.pathname)) return null;
+    if (!/^[a-z0-9.-]+$/.test(url.hostname) || !url.hostname.includes('.') || !url.hostname.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) || /^\d+(?:\.\d+){3}$/.test(url.hostname) || /(?:^|\.)(?:localhost|local|internal|test)$/.test(url.hostname) || /^\/(?:admin|api|signin|account|claim)(?:\/|$)/.test(url.pathname)) return null;
+    return url.href;
+  }
+  const demoLink = document.getElementById('demoLink'), unavailable = document.getElementById('demoUnavailable');
+  const destination = studioDestination(CTA_CONFIG);
+  if (destination){ demoLink.href = destination; demoLink.hidden = false; unavailable.textContent = 'The studio opens separately. Your preview text is not included; availability can change.'; }
+  else { demoLink.removeAttribute('href'); demoLink.hidden = true; }
+
   const NOTE_DEFAULT = note.textContent;
   const setNote = (text, err) => { note.textContent = text; note.classList.toggle('err', !!err); if (err){ ev.setAttribute('aria-invalid', 'true'); } else ev.removeAttribute('aria-invalid'); };
   const PALS = [['#17140f','#f2b33d'],['#7a0b1d','#e0b25a'],['#1b3fd1','#ffffff'],['#3a1c71','#ff5fa2'],['#0f5c3d','#f2b33d'],['#101820','#7ef0d3'],['#e4572e','#17140f']];
@@ -910,20 +931,16 @@ window.TS = (() => {
     if (TS.fine){ btn.addEventListener('pointerenter', () => show(d)); btn.addEventListener('pointerleave', () => { const v = ev.value.trim(); const hit = Object.keys(DEMO_TEXT).find(x => DEMO_TEXT[x] === v); show(hit ? DEMOS[hit] : v ? fromText(v) : BLANK); }); }
   });
   ev.addEventListener('input', () => { chips.forEach(c => c.setAttribute('aria-pressed', 'false')); if (ev.hasAttribute('aria-invalid')) setNote(NOTE_DEFAULT); });
-  if (matchMedia('(max-width:760px)').matches) ev.placeholder = 'Ticket link or event name';
-  form.addEventListener('submit', e => {
+  if (matchMedia('(max-width:760px)').matches) ev.placeholder = 'Public event link or fictional event';
+  const preview = e => {
+    e.preventDefault();
     const v = ev.value.trim();
-    if (!v){ e.preventDefault(); setNote('Add your ticket link or the event name, like Nova Riot, Palladium, Jul 12.', true); ev.focus(); window.TSMotion && TSMotion.shake(ev); return; }
-    window.TSMotion && TSMotion.sent(form.querySelector('button'), st);
-    setNote('Opening the TicketStub studio in a new tab with your night…');
-    st.classList.add('flipped'); // native submit carries on to the studio app
-    // if this tab never loses focus to the studio, offer a plain link instead
-    fallback.href = STUDIO_URL + '?' + new URLSearchParams({ link: v }); fallback.hidden = true;
-    let left = false; const away = () => { if (document.hidden) left = true; };
-    document.addEventListener('visibilitychange', away);
-    addEventListener('blur', () => { left = true; }, { once: true });
-    setTimeout(() => { document.removeEventListener('visibilitychange', away); if (!left){ fallback.hidden = false; setNote('The studio didn’t open. Use the link below to continue.'); } }, 4000);
-  });
+    if (!v){ setNote('Add a fictional event name or public event link to edit the local preview.', true); ev.focus(); window.TSMotion && TSMotion.shake(ev); return; }
+    upd();
+    setNote('Preview updated on this page. Nothing was sent to the studio.');
+  };
+  form.querySelector('button').addEventListener('click', preview);
+  ev.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) preview(e); });
   window.TS.fromText = fromText;
 })();
 
@@ -1055,21 +1072,6 @@ window.TSMotion = (() => {
     new MutationObserver(() => { if (fin.classList.contains('on') && !seen){ seen = true; if (ok){ btn.classList.add('gleam'); setTimeout(() => btn.classList.remove('gleam'), 1600); } } }).observe(fin, { attributes: true, attributeFilter: ['class'] }); }
   // empty submit: a short horizontal shake (never a modal)
   function shake(el){ if (!ok){ return; } M.animate(el, { translate: ['0px 0px', '-7px 0px', '6px 0px', '-4px 0px', '3px 0px', '0px 0px'] }, { duration: .42, ease: 'easeOut' }); window.TS && TS.buzz([10, 30, 10]); }
-  // sent: the label blurs out and the confirmation blurs in; the preview stub gets stamped
-  function sent(b, card){
-    const lbl = b && b.querySelector('.lbl'); if (!lbl) return;
-    const swap = txt => { lbl.innerHTML = txt; };
-    if (!ok){ swap('Sent to the studio ↗'); setTimeout(() => swap('Open demo studio <span class="arr">→</span>'), 3000); return; }
-    M.animate(lbl, { opacity: [1, 0], filter: ['blur(0px)', 'blur(4px)'], transform: ['translateY(0px)', 'translateY(-8px)'] }, { duration: .14, ease: [.4, 0, 1, 1] }).then(() => {
-      swap('Sent to the studio ↗');
-      M.animate(lbl, { opacity: [0, 1], filter: ['blur(4px)', 'blur(0px)'], transform: ['translateY(8px)', 'translateY(0px)'] }, { duration: .26, ease: OUT });
-    });
-    // spring-shaped easing (overshoot then settle), played on the independent scale property so rotations survive
-    const springEase = 'linear(0, 0.35 8%, 0.82 18%, 1.06 30%, 1.1 38%, 1.04 52%, 0.99 66%, 1 100%)';
-    b.animate([{ scale: '0.94' }, { scale: '1' }], { duration: 520, easing: springEase });
-    if (card) card.animate([{ scale: '1.06' }, { scale: '1' }], { duration: 620, easing: springEase });
-    setTimeout(() => M.animate(lbl, { opacity: [1, 0] }, { duration: .14 }).then(() => { swap('Open demo studio <span class="arr">→</span>'); M.animate(lbl, { opacity: [0, 1] }, { duration: .2, ease: OUT }); }), 3200);
-  }
   // hero press marks register once the loader lifts
   const marks = () => {
     const els = [...document.querySelectorAll('.hero .crop')], reg = document.getElementById('reg'), line = document.querySelector('.hero .proofline');
@@ -1086,7 +1088,7 @@ window.TSMotion = (() => {
     M.animate(0, 1, { type: 'spring', stiffness: 70, damping: 11, mass: 1, onUpdate: v => { window.__heroIntro = v; } });
     setTimeout(() => { if ((window.__heroIntro ?? 1) < .9) window.__heroIntro = 1; }, 3000);
   }
-  return { shutter, pin, ok, shake, sent, drop };
+  return { shutter, pin, ok, shake, drop };
 })();
 </script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>

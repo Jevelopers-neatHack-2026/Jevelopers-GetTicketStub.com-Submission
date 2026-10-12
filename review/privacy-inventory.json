@@ -5,9 +5,9 @@
     "Product and frontend",
     "Finance and reliability"
   ],
-  "auditedSourceRevision": "960d6684e1c251796c5d6115446e5968c2570a5f",
+  "auditedSourceRevision": "b6ae55cd48971c9ef292293252f1931744a91095",
   "executableScriptSha256": [
-    "ac092b43f3579eafe734c19867999511a73d0226010823783b3b9f44068341ec",
+    "09401ca9859680069e420e87dc9f9742773863d524677451dd7ca28c3332b815",
     "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
   ],
   "resourceLinks": [
@@ -22,13 +22,13 @@
     "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
   },
-  "studioUrl": "https://gvk66o79l1.c38.airoapp.ai/",
+  "studioUrl": null,
   "reviewStatus": "PENDING",
   "styleSha256": [
     "a4a477526673b7cbb466775e39698516d7867f308f9c94fd1f243e5ffe190c75",
-    "8e182d4de3bbdd7b6277089321c8a804c346f6cd8363d17e461b1b1e491acb3d"
+    "21e13959a2fd33f73c8d541512669391bd6a92a33f8880cfd99bcdc683305df4"
   ],
-  "markupTagsSha256": "2bbcfc3c39f8671bfdd8ce906ca863f46698cf69340f0459062e548f561e3ecc",
+  "markupTagsSha256": "0830af9df2676b5c86730b47ffc45f31d18dc64b1d9b725efb0dddb0bc4c4b67",
   "scriptTagsSha256": [
     "9dd69297ac344fd1e671b9a35840de9829937c6a9b43e06b6b4cf615b2bf26ce",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -38,5 +38,6 @@
   "styleTagsSha256": [
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  ]
+  ],
+  "auditNote": "Author re-audit of CTA patch against named immutable base; no owner or clean-browser approval. External form/query handoff withdrawn; local nameless editor and pending link-only config."
 }
