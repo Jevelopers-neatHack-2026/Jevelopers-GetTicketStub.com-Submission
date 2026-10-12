@@ -270,7 +270,10 @@ function rootAttributes(plan, trace) {
     ['neatlogs.workflow.input', trace.input]
   ];
   if (plan.tags.length > 0) entries.push(['neatlogs.tags', plan.tags.join(',')]);
-  for (const [key, value] of Object.entries(mapNeatlogsSourceRecord(trace.record))) {
+  // Outbox traces carry attributes validated when they were enqueued
+  // (neatlogs-outbox.js); captured traces are mapped from their record.
+  const extra = trace.attributes ?? Object.entries(mapNeatlogsSourceRecord(trace.record));
+  for (const [key, value] of extra) {
     entries.push([key, value]);
   }
   return entries;

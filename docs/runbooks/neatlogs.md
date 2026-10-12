@@ -111,6 +111,28 @@ This is how a trace of a real harness workflow reaches Neatlogs. It is off by de
 
 The cursor now advances when the batch is durably in the outbox. "Sent, awaiting readback" is the batch file's state.
 
+## Delivery queue for long-running hosts
+
+`src/observability/private/neatlogs-delivery-queue.js` keeps the "sent, awaiting readback" state in SQLite (WAL, `synchronous=FULL`), separate from the workflow store, for a host process that hands the harness events in-process and drains on a schedule. The harness worker's own telemetry cursor uses the file outbox in `neatlogs-outbox.js` (see "Runtime path").
+
+- **Producers enqueue locally.** `NeatlogsDeliveryQueue.enqueue(entries)` is one local transaction, idempotent by event token, and capped at 5,000 unsettled rows (further rows are refused and counted). Entries hold only `tok1_` tokens, a fixed event type, canonical input JSON, and up to 24 scalar attributes whose names may not start with `neatlogs.`.
+- **Drain.** `drainNeatlogsDeliveryQueue(queue, config, { tags })` takes a cross-process lease, then:
+  1. With a readback token, it reads back `sent` rows older than 30 s (one poll per pass): `verified` settles; `mismatch` (including `dlq`) settles as `failed`; a trace still 404 after 10 minutes moves to the next generation and is re-queued; after generation 3 it settles as `failed`. Pending for over a day settles as `failed` (`NOT_FINALIZED_IN_TIME`).
+  2. It sends due `queued` rows, at most 32 per request and 4 requests per pass. `receiver_accepted` and `partially_rejected` become `sent` (readback decides which spans landed). Other outcomes retry with backoff from 30 s to 30 min, and settle as `failed` after 8 attempts.
+  3. It deletes settled rows older than 7 days.
+- **Without a readback token, rows stay `sent` and are never reported as delivered.**
+- Span times are the send time. The event's own time is in the input. Diagnostics hold counts, trace IDs and status codes only.
+
+## TicketStub hand-off
+
+`@jevelopers/agent-harness-runtime/ticketstub` (`src/integrations/ticketstub/index.js`) is the intake contract for getticketstub.com product events (`ticketstub.event/1`). The app calls it in-process from `exportToHarness()`.
+
+- **Validation.** Every event is checked against the harness's copy of the contract (`TICKETSTUB_EVENT_SPEC`: types, field kinds, enums, 16-hex refs, request ID shape, and an email/URL/long-token screen on codes). Anything outside it is refused and counted as `invalid`, not repaired. Keep the copy in step with `src/server/events.ts` there.
+- **Tokens.** The request ID and the producer's actor/project refs are replaced by HMAC-SHA256 tokens under `AGENT_HARNESS_TELEMETRY_KEY`. Without that key the exported tokens cannot be joined to TicketStub IDs. The session is the project token, or the request token for events without a project.
+- **Export.** One trace per event, workflow `agent-harness.ticketstub-events`, tags `ticketstub` plus the host's (for example `ticketstub@<commit>`). The input is `agent-harness.ticketstub-intake.v1` JSON: type, time, mode, actor kind, fields and tokens. Attributes: `agent_harness.source`, `ticketstub.event_type`, `ticketstub.mode`, `ticketstub.actor`.
+- **Host API.** `createTicketstubHarnessExporter({ env, databasePath, tags })` reads `AGENT_HARNESS_TELEMETRY_KEY` and the `NEATLOGS_*` names from the explicit `env` object. It does not use the SDK capture, so the host keeps its `NEATLOGS_*` settings and nothing is scrubbed. `accept(events)` is synchronous and local, and schedules a drain; `drain()` does the network work; `status()` returns counts and trace IDs; `close()` waits for a running drain.
+- **Deployment settings (server secret storage).** `NEATLOGS_API_KEY` (required), `AGENT_HARNESS_TELEMETRY_KEY` (required), and `NEATLOGS_TOKEN` with `NEATLOGS_PROJECT_ID` (optional, enables server-side readback and recovery). The ingest key is the same project key the app's own operational exporter uses.
+
 ## Commands
 
 All commands use Node 22.23.3. Run them from the repository root with dependencies installed (`npm ci --ignore-scripts`).
