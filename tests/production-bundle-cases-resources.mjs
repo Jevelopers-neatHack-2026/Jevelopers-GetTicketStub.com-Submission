@@ -364,7 +364,9 @@ export function register(define_) {
     assert.equal(world.calls.read.length, 1, "only the commitment was read; no payload was requested or copied");
     // The per-view cap is also enforced before the copy is allocated.
     const before = process.memoryUsage().arrayBuffers;
-    assert.deepEqual(snap(new Uint8Array(8 * MiB), 1024), { ok: false, reason: "over_cap" });
+    // Assert on a small summary: if the code were wrong the result would hold 8 MiB of bytes, and rendering a diff of that must not exhaust the runner.
+    const oversized = snap(new Uint8Array(8 * MiB), 1024);
+    assert.deepEqual({ ok: oversized.ok, reason: oversized.reason }, { ok: false, reason: "over_cap" });
     assert.ok(process.memoryUsage().arrayBuffers - before < 9 * MiB);
     const copy = snap(new Uint8Array(1024), 1024);
     assert.equal(copy.ok, true);
