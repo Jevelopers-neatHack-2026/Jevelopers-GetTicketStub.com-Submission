@@ -20,8 +20,9 @@ Operational collection is a separate, server-side diagnostics policy. It never r
 browser analytics events, so it cannot be used to get around a visitor's analytics choice, and nothing in it is
 sent to Google. It carries nothing that identifies a person, which is why it does not depend on consent.
 
-Durable workflow tracing stays with the agent-harness repo (#17), and `exportToHarness` in `src/server/events.ts`
-remains a no-op stub. Separately, these operational events can be exported to **Neatlogs** as content-free traces
+Durable workflow tracing stays with the agent-harness repo (#17). Product events reach it through `exportToHarness`
+in `src/server/events.ts`, off unless `TICKETSTUB_HARNESS_EXPORT=neatlogs` (see
+[../architecture/events.md#harness-hand-off](../architecture/events.md#harness-hand-off)). Separately, these operational events can be exported to **Neatlogs** as content-free traces
 (see [Neatlogs traces](#neatlogs-traces)); that export sends only the allow-listed fields below, never prompts,
 page text, titles, URLs or anything that identifies a person.
 

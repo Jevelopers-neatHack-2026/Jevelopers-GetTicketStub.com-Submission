@@ -34,11 +34,31 @@ Hashes remain after an account is deleted until they age out; they cannot be tur
 - `POST /api/events`: the browser reports `version_selected` and `fact_corrected` (the server cannot see them). Use
   `reportEvent()` from `src/customer/feedback-messages/report.ts`.
 
-## Harness hand-off (not built)
+## Harness hand-off
 
-The agent-harness repo owns Neatlogs and durable workflow tracing. `exportToHarness()` in `src/server/events.ts` is a
-no-op stub marked TODO where that hand-off plugs in. Product events are not sent to Neatlogs; only the content-free
-operational events can be, when enabled (see docs/operations/observability.md#neatlogs-traces).
+The agent-harness repo owns Neatlogs and durable workflow tracing. `recordEvent()` gives every sanitized event to
+`exportToHarness()` (`src/server/events.ts`), which is **off** unless `TICKETSTUB_HARNESS_EXPORT=neatlogs`. When on, it
+loads `src/server/harness-export.ts`, which hands the event to the harness code vendored byte for byte from one
+pinned agent-harness commit (`src/server/vendor/agent-harness`, `MANIFEST.json`; refresh with
+`node scripts/vendor-agent-harness.mjs <commit>`; `tests/harness-handoff.test.mjs` fails on any drift).
+
+- **What the harness does.** It checks the event again against its own copy of `ticketstub.event/1` and refuses
+  anything outside it. It replaces the request id, actor ref and project ref with HMAC tokens under
+  `AGENT_HARNESS_TELEMETRY_KEY`, so Neatlogs never sees an id that can be joined back without that key. It stores the
+  result in its durable outbox (`agent-harness-outbox.sqlite` next to `TICKETSTUB_DB`, or `TICKETSTUB_HARNESS_DB`).
+- **Delivery.** A background drain sends each event as one trace (workflow `agent-harness.ticketstub-events`, session =
+  project token, tags `ticketstub`, `ticketstub@<TICKETSTUB_COMMIT_SHA>`, `environment:<TICKETSTUB_OPS_ENVIRONMENT>`).
+  A receiver acceptance is recorded as "sent", never as delivered. With `NEATLOGS_TOKEN` and `NEATLOGS_PROJECT_ID`, the
+  drain reads each trace back through the Neatlogs Public API, settles it as verified, and re-sends one that never
+  appears under a new trace id (up to three times). Details: agent-harness `docs/runbooks/neatlogs.md`.
+- **Cost to a request.** One local SQLite write after the event is built; the network work never runs inline, and any
+  failure is logged once (`[harness] …`, never a value) and dropped.
+- **Staff status.** `GET /api/admin/harness` (`admin.view`; anyone else gets a 404): on/off, the missing setting if
+  any, outbox counts (queued, sent, verified, failed) and the newest trace ids with status codes. `POST` runs one
+  delivery and readback pass now.
+- **What goes out.** Event type, time, mode, actor kind (account, guest, anonymous) and the allow-listed fields
+  (codes, counts, flags, hashed ids), plus tokens. The operational events (`ticketstub.ops/1`) keep their own,
+  separate Neatlogs exporter (docs/operations/observability.md#neatlogs-traces).
 
 ## Messages
 
