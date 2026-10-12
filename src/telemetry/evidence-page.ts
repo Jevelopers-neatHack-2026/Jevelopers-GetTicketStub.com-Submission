@@ -126,8 +126,10 @@ export function evidencePayloadDigest(payload: EvidencePagePayload): Digest {
 /** True when the commitment matches the exact payload fields of the page. */
 export function verifyEvidencePage(page: EvidencePage): boolean {
 	try {
-		// Untrusted input: read own data descriptors only, so no getter at any
-		// depth runs before canonicalJson has rejected accessors.
+		// Untrusted input: validate the whole graph as plain JSON first (this
+		// reads descriptors only), then extract root data descriptors, so no
+		// getter at any depth ever runs.
+		canonicalJson(page);
 		if (typeof page !== "object" || page === null) return false;
 		const proto = Object.getPrototypeOf(page);
 		if (proto !== Object.prototype && proto !== null) return false;
@@ -140,7 +142,6 @@ export function verifyEvidencePage(page: EvidencePage): boolean {
 			if (key === "integrity") integrity = descriptor.value;
 			else payload[key] = descriptor.value;
 		}
-		canonicalJson(integrity);
 		const commitment = integrity as EvidencePage["integrity"];
 		return (
 			commitment.algorithm === "sha256" &&
