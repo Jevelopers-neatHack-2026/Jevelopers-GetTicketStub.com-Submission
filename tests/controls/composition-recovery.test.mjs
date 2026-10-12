@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import { createIntegratedHost, fixturePrincipal as principal } from '../../fixtures/controls/integrated-host.mjs';
+import { canonicalHash } from 'creative-engine/contracts';
+import { fixtureCompositionPolicy } from '../../fixtures/controls/composition-policy.mjs';
 import { assertCompositionCompletion } from '../../src/controls/composition-view.mjs';
 
 // Real public API/jobs/SQLite; mock membership, rights and preview producer only.
@@ -49,21 +51,46 @@ test('superseded initialization and every valid-identity pre-admission failure r
   assert.deepEqual(cancellation,{ok:false,status:'unknown',action_id:'not-admitted',approval:false,purchase:false});
 });
 
-test('raced conflicting Apply has a closed envelope while genuine pending and identical replay remain pending until completion',async t=>{
+async function within(promise, label, ms=5000) {
+  let timer;
+  try { return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(`Timed out: ${label}`)),ms);})]); }
+  finally { clearTimeout(timer); }
+}
+
+test('raced conflicting Apply has a closed envelope while genuine pending and identical replay remain pending until completion',{timeout:20000},async t=>{
   const host=await setup(t), view=await initialized(host), first=edit(view,'raced-action','large'), changed=edit(view,'raced-action','small');
+  const before=host.store.getCurrentComposition({scope:host.scope,design_version_id:host.selection().design_version_id}).revision;
   host.block('composition-owner');const pending=host.composition.apply(principal,first), conflict=host.composition.apply(principal,changed);
   host.release();host.block('composition-preview');
-  let saved;
+  const operations=[pending,conflict];let saved,winner,row;
   try {
     const deadline=Date.now()+5000;while(host.waiting!=='composition-preview'&&Date.now()<deadline)await setImmediate();
-    assert.equal(host.waiting,'composition-preview');const refused=await conflict;failure(refused,first.action_id,'conflict');assert.equal(refused.recovery,'unknown');
-    const read=await host.composition.lookup(principal,first.action_id);failure(read,first.action_id,'unavailable');assert.equal(read.status,'unknown');
-    assert.ok(host.composition.row(principal,first.action_id).job_id);
-    const duplicate=host.composition.apply(principal,first);assert.equal(host.composition.inflight.size,1);
-    host.release();const results=await Promise.all([pending,duplicate]);assert.deepEqual(results[0],results[1]);saved=results[0];
-  } finally {host.release();await Promise.allSettled([pending,conflict]);}
-  assert.equal(saved.ok,true);assert.equal(host.counts().composition_previews,1);
+    assert.equal(host.waiting,'composition-preview');
+    row=host.composition.row(principal,first.action_id);assert.ok(row.job_id);
+    assert.equal(row.tenant_id,principal.tenant_id);assert.equal(row.project_id,principal.project_id);assert.equal(row.actor_id,principal.actor_id);
+    assert.equal(row.action_id,first.action_id);assert.equal(canonicalHash(JSON.parse(row.action_json)),row.action_hash);
+    const firstWon=row.action_hash===canonicalHash(first);winner=firstWon?first:changed;
+    assert.deepEqual(JSON.parse(row.action_json),winner);assert.equal(row.action_hash,canonicalHash(winner));
+    const binding=host.waitingBinding;
+    assert.equal(binding.scope.tenant_id,row.tenant_id);assert.equal(binding.scope.project_id,row.project_id);
+    assert.equal(binding.actor_id,row.actor_id);assert.equal(binding.action_id,row.action_id);assert.equal(binding.request_hash,row.backend_request_hash);
+    const job=await host.ports.jobs.get({scope:principal,job_id:row.job_id});
+    assert.equal(job.job_id,row.job_id);assert.equal(job.status,'running');assert.equal(job.action_id,row.action_id);assert.equal(job.request_hash,row.backend_request_hash);
+    t.diagnostic(`Admitted ${winner.draft.categories.name_size} action ${row.action_hash}, held job ${row.job_id}`);
+    // Both requests race; invocation order does not determine SQLite admission.
+    const winnerPromise=firstWon?pending:conflict,loserPromise=firstWon?conflict:pending;
+    const refused=await within(loserPromise,'losing concurrent request');failure(refused,first.action_id,'conflict');assert.equal(refused.recovery,'unknown');
+    const read=await host.composition.lookup(principal,first.action_id);failure(read,first.action_id,'unavailable');assert.equal(read.status,'unknown');assert.equal(read.backend_job_id,row.job_id);
+    const duplicate=host.composition.apply(principal,winner);operations.push(duplicate);assert.equal(host.composition.inflight.size,1);
+    host.release();const results=await within(Promise.all([winnerPromise,duplicate]),'winner and identical replay completion');assert.deepEqual(results[0],results[1]);saved=results[0];
+  } finally {host.release();await within(Promise.allSettled(operations),'released race cleanup');}
+  assert.equal(saved.ok,true);assert.equal(saved.backend_job_id,row.job_id);assert.equal(host.counts().composition_previews,1);
   const read=await host.composition.lookup(principal,first.action_id);assert.equal(read.ok,true);assert.equal(read.revision_sha256,saved.revision_sha256);
+  const current=host.store.getCurrentComposition({scope:host.scope,design_version_id:host.selection().design_version_id}).revision;
+  assert.equal(current.revision_sha256,saved.revision_sha256);assert.equal(current.parent_revision_sha256,before.revision_sha256);
+  assert.deepEqual(current.geometry.find(x=>x.layer_id==='layer:name').text_size,fixtureCompositionPolicy(0).name_sizes[winner.draft.categories.name_size]);
+  assert.equal(host.store.db.prepare('SELECT COUNT(*) AS n FROM creative_composition_revisions_v1').get().n,2);
+  assert.deepEqual([host.counts().image_calls,host.counts().jev_calls,host.counts().reservations],[0,0,0]);
 });
 
 test('revoked edit context rejects a duplicate but cannot turn the held original into a terminal operation',async t=>{
