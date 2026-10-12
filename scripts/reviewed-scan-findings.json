@@ -384,6 +384,16 @@
       ]
     },
     {
+      "path": "repositories/creative-engine/examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
+      "sha256": "e01fa271b1b9270d1d84dddcf8868c9d50994cfa0d4d170294b5386e9f8a6ac3",
+      "reason": "Explicit SyntheticCredentialValue test literals in malformed Apply-error checks. Updated file version reviewed; no operational credential.",
+      "reviewed_source_commit": "81e1fe6dd4203ac238660f91b98d2622877df474",
+      "findings": [
+        "github-pat:287:63:287:102",
+        "github-pat:290:16:290:55"
+      ]
+    },
+    {
       "path": "repositories/creative-engine/fixtures/controls/evidence-followup-setup-failed-node22.json",
       "sha256": "578a2557e79ecb49cb52b58e575fea9fbd1aa8af31fcf69f0a5d000d39656d0e",
       "reason": "Source-file SHA-256 integrity digests.",
