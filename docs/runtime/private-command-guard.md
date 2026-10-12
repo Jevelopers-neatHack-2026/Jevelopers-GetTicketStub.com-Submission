@@ -12,6 +12,8 @@ The tests use recording or throwing in-memory callbacks. They cover the selected
 
 This fixture does not implement atomic authorization with a real downstream effect. The trusted resolver and downstream owner must define that integration boundary. It does not provide durable replay protection, reconnect/reply processing, public adapters, canonical agreement, customer identity, finance authority, or provider behavior. The remaining original AH02 acceptance cases and external integration gates stay open.
 
+The [STATUS host agreement proposal](status-host-agreement.md) records the unaccepted narrow read-only slice and the exact owner inputs still needed; it does not promote this fixture into a public command or grant.
+
 Run the focused fake-only suite with Node 22.23.3 or later in Node 22:
 
 ```sh
