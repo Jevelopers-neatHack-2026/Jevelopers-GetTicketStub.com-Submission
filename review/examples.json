@@ -188,7 +188,16 @@
       "caption": "Harbor City Gulls vs. Ironhill Miners at Lakefront Field, Sun · Nov 23 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "The fourth-quarter comeback you still tell people about.",
+      "venue": "Lakefront Field",
+      "date": "Sun · Nov 23 · 2025",
+      "sampleSeat": {
+        "section": "112",
+        "row": "8",
+        "seat": "14"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "baseball",
@@ -198,7 +207,16 @@
       "caption": "Riverside Owls vs. Canyon Rattlers at Old Mill Park, Thu · Apr 03 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Opening day, a cold hot dog and extra innings.",
+      "venue": "Old Mill Park",
+      "date": "Thu · Apr 03 · 2025",
+      "sampleSeat": {
+        "section": "9",
+        "row": "21",
+        "seat": "3"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "concert",
@@ -208,7 +226,16 @@
       "caption": "Nova Riot — Afterglow World Tour at The Palladium Arena, Sat · Jul 12 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Two encores. No voice left by Sunday.",
+      "venue": "The Palladium Arena",
+      "date": "Sat · Jul 12 · 2025",
+      "sampleSeat": {
+        "section": "FLR",
+        "row": "GA",
+        "seat": "0421"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "basketball",
@@ -218,7 +245,16 @@
       "caption": "Bayside Comets vs. Desert Kings at Harbor Dome, Fri · Feb 14 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Courtside enough to hear the sneakers.",
+      "venue": "Harbor Dome",
+      "date": "Fri · Feb 14 · 2025",
+      "sampleSeat": {
+        "section": "104",
+        "row": "C",
+        "seat": "7"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "soccer",
@@ -228,7 +264,16 @@
       "caption": "Northgate FC vs. Southport United at Northgate Stadium, Sat · Mar 08 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "A ninety-third-minute save, and the keeper threw it to the stands.",
+      "venue": "Northgate Stadium",
+      "date": "Sat · Mar 08 · 2025",
+      "sampleSeat": {
+        "section": "N4",
+        "row": "17",
+        "seat": "230"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "festival",
@@ -238,7 +283,16 @@
       "caption": "Sunflare Festival — Weekend One at Desert Bloom Grounds, Apr 11–13 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Lawn games between sets, and a stub tossed into the crowd.",
+      "venue": "Desert Bloom Grounds",
+      "date": "Apr 11–13 · 2025",
+      "sampleSeat": {
+        "section": "3DAY",
+        "row": "GA",
+        "seat": "88213"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "theater",
@@ -248,7 +302,16 @@
       "caption": "Swan Lake — Bluebird Ballet at Royal Crescent Opera House, Wed · Oct 01 · 2025: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Opening night. The whole room stood up.",
+      "venue": "Royal Crescent Opera House",
+      "date": "Wed · Oct 01 · 2025",
+      "sampleSeat": {
+        "section": "ORCH",
+        "row": "F",
+        "seat": "101"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     },
     {
       "id": "hockey",
@@ -258,7 +321,16 @@
       "caption": "Ice Harbor Wolves vs. Summit Storm at Frost Arena, Tue · Jan 20 · 2026: illustrative fictional event, not verified product output.",
       "evidenceClass": "illustrative",
       "publicationPermission": "UNCONFIRMED",
-      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Sudden death. The stub came off the stick with the winner.",
+      "venue": "Frost Arena",
+      "date": "Tue · Jan 20 · 2026",
+      "sampleSeat": {
+        "section": "220",
+        "row": "4",
+        "seat": "9"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
     }
   ],
   "specimens": [
@@ -298,7 +370,279 @@
     "specimensSha256": "f5b609fab27b67705da9ceb502a8d9d208b673345018909ab90ee10f0756c113",
     "extraWallSha256": "0744b62008243603c965106d71a0372516a148e295d03da18b7783c1f3ec6f93",
     "count": 30,
-    "status": "illustrative fictional records; no before/after, metrics or actual product output"
+    "status": "illustrative fictional records; no before/after, metrics or actual product output",
+    "extraWallRecords": [
+      {
+        "type": "gig",
+        "title": "Kira Vale",
+        "subtitle": "Ghost Lights Tour",
+        "venue": "The Lyric Hall",
+        "date": "Sep 19 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Mountain Kings",
+        "subtitle": "Delta Herons",
+        "venue": "Summit Bowl",
+        "date": "Dec 06 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "The Glass Lantern",
+        "subtitle": "A new musical",
+        "venue": "The Majestic Theatre",
+        "date": "Mar 22 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Neon Pulse",
+        "subtitle": "All-night rave",
+        "venue": "Pier 9 Warehouse",
+        "date": "Aug 30 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Coastal Open",
+        "subtitle": "Centre Court Final",
+        "venue": "Seaside Tennis Club",
+        "date": "Jun 29 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "The Velvet Hour",
+        "subtitle": "Jazz at midnight",
+        "venue": "Blue Door Club",
+        "date": "Nov 07 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Port Avalon Grand Prix",
+        "subtitle": "Grandstand B",
+        "venue": "Avalon Circuit",
+        "date": "May 18 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "Midnight Comedy Hour",
+        "subtitle": "Late show",
+        "venue": "The Basement",
+        "date": "Jan 10 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Copperline Rodeo",
+        "subtitle": "Championship night",
+        "venue": "Copperline Arena",
+        "date": "Jul 04 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Harbour Lights",
+        "subtitle": "Orchestra under the stars",
+        "venue": "Bayfront Amphitheatre",
+        "date": "Aug 16 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Tidewater Regatta",
+        "subtitle": "Finals · Riverbank",
+        "venue": "Tidewater Basin",
+        "date": "Apr 26 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Saint Ember",
+        "subtitle": "Loud Quiet Tour",
+        "venue": "Union Ballroom",
+        "date": "Oct 24 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Glowfield",
+        "subtitle": "Lantern night",
+        "venue": "Glowfield Meadow",
+        "date": "Sep 06 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "La Traviata",
+        "subtitle": "Season gala",
+        "venue": "Grand Opera House",
+        "date": "Feb 08 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "City Derby",
+        "subtitle": "Boxing main event",
+        "venue": "Ironworks Hall",
+        "date": "Mar 15 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Paper Moons",
+        "subtitle": "Small Rooms Tour",
+        "venue": "Corner Stage",
+        "date": "Jun 12 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Granite Bay Rams",
+        "subtitle": "Lowell Foxes",
+        "venue": "Granite Field",
+        "date": "Oct 12 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Marlowe & The Tides",
+        "subtitle": "Homecoming Show",
+        "venue": "Riverside Bowl",
+        "date": "May 03 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Bloomwave",
+        "subtitle": "Spring sessions",
+        "venue": "Lakeside Park",
+        "date": "Mar 29 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "Hamlet",
+        "subtitle": "The Rep Season",
+        "venue": "Old Vic Lane Theatre",
+        "date": "Nov 14 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Westshore Pumas",
+        "subtitle": "Northridge Elks",
+        "venue": "Westshore Arena",
+        "date": "Jan 31 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "DJ Halcyon",
+        "subtitle": "Sunrise Set",
+        "venue": "The Glasshouse",
+        "date": "Jul 27 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Cross City Marathon",
+        "subtitle": "Finish line grandstand",
+        "venue": "Cross City",
+        "date": "Apr 13 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Lantern Market",
+        "subtitle": "Night of lights",
+        "venue": "Old Town Square",
+        "date": "Dec 13 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "Cirque Lumière",
+        "subtitle": "Big top premiere",
+        "venue": "Waterfront Big Top",
+        "date": "Aug 02 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "The Orchard Choir",
+        "subtitle": "Christmas at the Hall",
+        "venue": "St. Cecilia Hall",
+        "date": "Dec 20 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Pine Valley Open",
+        "subtitle": "Final round",
+        "venue": "Pine Valley Links",
+        "date": "Sep 14 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Echo Arcade",
+        "subtitle": "Synth City Tour",
+        "venue": "The Warehouse",
+        "date": "Feb 21 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Summit Classic",
+        "subtitle": "Ski jump finals",
+        "venue": "Summit Ridge",
+        "date": "Jan 17 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "The Magic Flute",
+        "subtitle": "Opera in the park",
+        "venue": "Greenhill Park",
+        "date": "Jun 21 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      }
+    ]
   },
   "requiredVisibleLabels": [
     "Illustrative digital preview",

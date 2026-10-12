@@ -61,8 +61,25 @@ Each row has local draft audit only. All rows have owner approval PENDING, produ
 | LP-COPY-32 | site/index.html:715 | illustrative | Photography |
 | LP-COPY-33 | site/index.html:716 | illustrative | 3D |
 | LP-COPY-34 | site/index.html:716 | illustrative | Illustrative 3D tickets, pins and corkboard with baked flight animation. The simulated motion does not verify materials, printing or a shipped product. |
-| LP-COPY-35 | site/index.html:1188 | illustrative | ${s.title} |
-| LP-COPY-36 | site/index.html:1188 | illustrative | ${s.line} |
+
+| LP-SCENE-FOOTBALL-TITLE | site/index.html SCENES[0].title → .scene .ttl h3 | illustrative | Harbor City Gulls vs. Ironhill Miners |
+| LP-SCENE-FOOTBALL-LINE | site/index.html SCENES[0].line → .scene .ttl p | illustrative | The fourth-quarter comeback you still tell people about. |
+| LP-SCENE-BASEBALL-TITLE | site/index.html SCENES[1].title → .scene .ttl h3 | illustrative | Riverside Owls vs. Canyon Rattlers |
+| LP-SCENE-BASEBALL-LINE | site/index.html SCENES[1].line → .scene .ttl p | illustrative | Opening day, a cold hot dog and extra innings. |
+| LP-SCENE-CONCERT-TITLE | site/index.html SCENES[2].title → .scene .ttl h3 | illustrative | Nova Riot — Afterglow World Tour |
+| LP-SCENE-CONCERT-LINE | site/index.html SCENES[2].line → .scene .ttl p | illustrative | Two encores. No voice left by Sunday. |
+| LP-SCENE-BASKETBALL-TITLE | site/index.html SCENES[3].title → .scene .ttl h3 | illustrative | Bayside Comets vs. Desert Kings |
+| LP-SCENE-BASKETBALL-LINE | site/index.html SCENES[3].line → .scene .ttl p | illustrative | Courtside enough to hear the sneakers. |
+| LP-SCENE-SOCCER-TITLE | site/index.html SCENES[4].title → .scene .ttl h3 | illustrative | Northgate FC vs. Southport United |
+| LP-SCENE-SOCCER-LINE | site/index.html SCENES[4].line → .scene .ttl p | illustrative | A ninety-third-minute save, and the keeper threw it to the stands. |
+| LP-SCENE-FESTIVAL-TITLE | site/index.html SCENES[5].title → .scene .ttl h3 | illustrative | Sunflare Festival — Weekend One |
+| LP-SCENE-FESTIVAL-LINE | site/index.html SCENES[5].line → .scene .ttl p | illustrative | Lawn games between sets, and a stub tossed into the crowd. |
+| LP-SCENE-THEATER-TITLE | site/index.html SCENES[6].title → .scene .ttl h3 | illustrative | Swan Lake — Bluebird Ballet |
+| LP-SCENE-THEATER-LINE | site/index.html SCENES[6].line → .scene .ttl p | illustrative | Opening night. The whole room stood up. |
+| LP-SCENE-HOCKEY-TITLE | site/index.html SCENES[7].title → .scene .ttl h3 | illustrative | Ice Harbor Wolves vs. Summit Storm |
+| LP-SCENE-HOCKEY-LINE | site/index.html SCENES[7].line → .scene .ttl p | illustrative | Sudden death. The stub came off the stick with the winner. |
+
+Generated scene titles/stories above are actual data values rendered by the page, not template placeholders. Their dates, venues, seats and additional wall specimen text are mapped in `review/examples.json` as fictional illustrations. Full capability/asset approvals remain pending; whole-page hash coverage alone is not complete LP-02.B acceptance.
 
 ## Validation and remaining acceptance
 

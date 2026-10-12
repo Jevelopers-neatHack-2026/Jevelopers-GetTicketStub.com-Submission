@@ -36,7 +36,7 @@ export async function validateProof({root, manifest, html, mode = 'draft', asset
     if (asset.path.endsWith('.webp') && webpChunks(bytes).some(chunk => ['EXIF','XMP '].includes(chunk))) throw new Error(`${asset.path}: embedded EXIF/XMP requires redaction`);
   }
   for (const scene of manifest.scenes) {
-    if (!paths.has(scene.asset) || !scene.alt || !scene.caption || scene.evidenceClass !== 'illustrative' || !html.includes(scene.title)) throw new Error('Uncovered illustrative scene');
+    if (!paths.has(scene.asset) || !scene.alt || !scene.caption || !scene.story || scene.storyStatus !== 'FICTIONAL_NOT_TESTIMONIAL' || !html.includes(scene.story) || scene.evidenceClass !== 'illustrative' || !html.includes(scene.title)) throw new Error('Uncovered illustrative scene');
   }
   for (const specimen of manifest.specimens) if (!specimen.caption || !specimen.alt || !html.includes(specimen.title) || specimen.productEvidence !== 'NONE_LOCAL_ILLUSTRATION') throw new Error('Uncovered local specimen');
   for (const label of manifest.requiredVisibleLabels) if (!html.includes(label)) throw new Error('Missing proof boundary label');
