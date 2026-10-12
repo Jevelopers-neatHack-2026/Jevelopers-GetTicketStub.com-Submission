@@ -154,6 +154,13 @@ describe('TD-01B environment and billing partitions stay separate', () => {
     expect(readFinancialSummary(request({ payload: { ...valid(), included_billing_modes: ['simulated', 'live'] } }))).toMatchObject({ code: 'SCOPE_MISMATCH', path: '/included_billing_modes' });
     expect(readFinancialSummary(request({ payload: { ...valid(), included_environments: ['test', 'production'] } }))).toMatchObject({ code: 'SCOPE_MISMATCH', path: '/included_billing_modes' });
   });
+  it('INCOMPATIBILITY (producer 0.9.7): checkFinancialSummary does not relate top-level environment/billing_mode to included_*; the adapter closes the gap', () => {
+    const lying = { ...valid(), environment: 'production', billing_mode: 'live' }; // included_* still say test/simulated
+    const ctx = { scope: { tenant_id: scopeOf().tenantId, project_id: scopeOf().projectId }, now: NOW, policy_version: '1.0.0', references: context.references, currency: 'USD', included_environments: ['test'], included_billing_modes: ['simulated'] };
+    expect(kit.checkFinancialSummary(lying, ctx).ok).toBe(true); // producer accepts the contradictory record
+    expect(readFinancialSummary(request({ payload: lying }))).toMatchObject({ status: 'refused', code: 'PARTITION_MISMATCH' });
+    expect(readFinancialSummary(request({ payload: lying, scope: scopeOf({ environment: 'production', billingMode: 'live' }) }))).toMatchObject({ status: 'refused', code: 'SCOPE_MISMATCH', path: '/included_billing_modes' });
+  });
   it('each partition reads only under its own scope and exposes no cross-partition total', () => {
     const live = readFinancialSummary(request({ payload: production(), scope: scopeOf({ environment: 'production', billingMode: 'live' }) }));
     const simulated = readFinancialSummary(request());
