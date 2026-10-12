@@ -26,8 +26,8 @@ jobs:
         run: |
           node --version
           npm --version
-          test "$(node --version)" = "v24.15.0"
-          test "$(npm --version)" = "11.12.1"
+          test "$(node --version)" = "v24.21.0"
+          test "$(npm --version)" = "11.19.0"
 
       - name: Install locked dependencies
         run: npm ci

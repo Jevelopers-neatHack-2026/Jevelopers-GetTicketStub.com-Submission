@@ -5,19 +5,24 @@
   "type": "module",
   "description": "Typed worker runtime foundation for fulfillment provider adapters",
   "engines": {
-    "node": "24.15.0"
+    "node": "24.21.0"
   },
-  "packageManager": "npm@11.12.1",
+  "packageManager": "npm@11.19.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./production-bundle": {
+      "types": "./dist/production-bundle.d.ts",
+      "import": "./dist/production-bundle.js"
     }
   },
   "files": [
     "dist",
+    "vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz",
     "README.md",
     "docs/runtime.md",
     "docs/provider-matrix.md",
@@ -59,6 +64,9 @@
     "verify:prodigi-product-details": "./scripts/verify-fulfillment --suite prodigi-product-details --mode simulated --evidence-dir evidence/FC-PRODIGI-PRODUCT-DETAILS",
     "verify:png-inspection": "./scripts/verify-fulfillment --suite png-inspection --mode simulated --evidence-dir evidence/FC-08-10-PNG",
     "verify:order-authorization": "./scripts/verify-fulfillment --suite order-authorization --mode simulated --evidence-dir evidence/FC-ORDER-AUTH"
+  },
+  "dependencies": {
+    "@jevelopers/shared-contracts": "file:vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

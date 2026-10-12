@@ -6,7 +6,7 @@ The simulator is not a selected supplier adapter, sandbox receipt, authorization
 
 ## Run the local suite
 
-With the pinned Node 24.15.0 and npm 11.12.1 toolchain and locked dependencies installed:
+With the pinned Node 24.21.0 and npm 11.19.0 toolchain and locked dependencies installed:
 
 ```sh
 npm run build

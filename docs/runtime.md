@@ -4,7 +4,7 @@ This branch provides a typed, injected worker-runtime foundation. It does not in
 
 ## Runtime and commands
 
-The package pins Node `24.15.0` in `.node-version` and `engines`, npm `11.12.1` in `packageManager`, and TypeScript `6.0.3` in the lockfile. TypeScript is a development dependency; the package has no runtime dependencies. The tests use private fixture bindings and a fake transport and do not call a provider or another repository.
+The package pins Node `24.21.0` in `.node-version` and `engines`, npm `11.19.0` in `packageManager`, and TypeScript `6.0.3` in the lockfile. TypeScript is a development dependency; the package has no runtime dependencies. The tests use private fixture bindings and a fake transport and do not call a provider or another repository.
 
 From a clean checkout:
 

@@ -262,7 +262,7 @@ else if (!allowedSuites.has(args.suite)) failureReasons.push("unknown_suite");
 if (args.mode === undefined) failureReasons.push("mode_required");
 else if (!allowedModes.has(args.mode)) failureReasons.push("invalid_mode");
 if (args["evidence-dir"] === undefined) failureReasons.push("evidence_dir_required");
-if (process.version !== "v24.15.0") failureReasons.push("runtime_version_mismatch");
+if (process.version !== "v24.21.0") failureReasons.push("runtime_version_mismatch");
 if (args.suite === "provider-matrix" && args.mode !== "simulated") failureReasons.push("provider_matrix_requires_simulated_mode");
 if (args.suite === "security" && args.mode !== "simulated") failureReasons.push("security_suite_requires_simulated_mode");
 if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(args.mode)) failureReasons.push("catalog_suite_requires_simulated_mode");
@@ -524,7 +524,7 @@ const result = {
   completedAt: new Date().toISOString(),
   runtime: {
     node: process.version,
-    expectedNode: "24.15.0",
+    expectedNode: "24.21.0",
     package: "@jevelopers/fulfillment-connectors@0.1.0",
     liveModeSupported: false
   },

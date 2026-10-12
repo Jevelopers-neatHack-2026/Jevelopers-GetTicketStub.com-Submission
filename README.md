@@ -12,7 +12,7 @@ Provider-neutral TypeScript runtime for TicketStub supplier quotes, order submis
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
   <a href="#status"><img alt="Status: local foundation candidate, simulated mode only" src="https://img.shields.io/badge/status-local%20foundation-B4693E?style=flat-square&labelColor=17140F"></a>
-  <a href=".node-version"><img alt="Node.js 24.15.0" src="https://img.shields.io/badge/node-24.15.0-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href=".node-version"><img alt="Node.js 24.21.0" src="https://img.shields.io/badge/node-24.21.0-26302A?style=flat-square&labelColor=17140F"></a>
   <a href="package.json"><img alt="TypeScript 6.0.3" src="https://img.shields.io/badge/typescript-6.0.3-7CC6D2?style=flat-square&labelColor=17140F"></a>
 </p>
 
@@ -47,7 +47,7 @@ Sandbox, live and release readiness are false for every slice, and sandbox and r
 
 ## Quickstart
 
-Requires Node.js 24.15.0 ([`.node-version`](.node-version), `engines`) and npm 11.12.1 (`packageManager`). Dev dependencies are TypeScript 6.0.3 and `@types/node`; there are no runtime dependencies.
+Requires Node.js 24.21.0 ([`.node-version`](.node-version), `engines`) and npm 11.19.0 (`packageManager`). Dev dependencies are TypeScript 6.0.3 and `@types/node`; there are no runtime dependencies.
 
 ```sh
 npm ci      # locked install; may need registry access
@@ -58,7 +58,7 @@ No test calls a provider or another repository.
 
 ## Checks
 
-Each `verify:*` script runs `scripts/verify-fulfillment` in simulated mode against the built package, prints a JSON result and writes `result.json` to the listed (git-ignored) evidence directory. Run `npm run build` or `npm test` first. The verifier exits nonzero on any failure, including a Node version other than 24.15.0.
+Each `verify:*` script runs `scripts/verify-fulfillment` in simulated mode against the built package, prints a JSON result and writes `result.json` to the listed (git-ignored) evidence directory. Run `npm run build` or `npm test` first. The verifier exits nonzero on any failure, including a Node version other than 24.21.0.
 
 | Command | Suite | Evidence directory |
 | --- | --- | --- |
