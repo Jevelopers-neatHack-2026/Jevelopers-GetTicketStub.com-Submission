@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { FinanceV2View, type FinanceV2TransactionFilters, type FinanceV2ViewName, type FinanceV2ViewProps } from './FinanceV2Views';
 import { FINANCE_V2_FAULT_COPY, useFinanceV2Read, type FinanceV2Authorization, type FinanceV2HostAvailability, type FinanceV2SyntheticReadPort } from './async-port';
 import type { FinanceV2TrustedReferences } from './check';
+import type { FinanceV2ExportAccessReader, FinanceV2SyntheticExportPort } from './export-port';
+import { PreparedExportPanel } from './PreparedExport';
 import type { OpaqueProductScope } from './types';
 
 type Shared = Readonly<{
@@ -26,6 +28,12 @@ type Shared = Readonly<{
   initialCursor?: string;
   /** Told the cursor of the page now requested (`null` for the first page), so the host can keep it in its own context. */
   onCursorChange?: (cursor: string | null) => void;
+  /**
+   * The host's synchronous CURRENT view of this user's Dashboard access (revision, complete scope, expiry and the separate `finance.read` / `finance.export` capabilities), read again
+   * around every await of a manual export and immediately before a download. Without it, or without an export port, the CFO export section stays unavailable and fail-closed.
+   * Its `revision` must equal `authorization.revision`. It is the host's statement: nothing is derived from the page, the port or a fixture receipt.
+   */
+  exportAccess?: FinanceV2ExportAccessReader;
 }> & Pick<FinanceV2ViewProps, 'detailId' | 'detailHref' | 'listHref' | 'onNavigate' | 'filters' | 'onFiltersChange'>;
 
 /**
@@ -33,7 +41,7 @@ type Shared = Readonly<{
  * no accepted Finance port type exists, so an integrated mount is always unavailable and there is no path from it to a fixture.
  */
 export type FinanceV2ConnectedViewProps = Shared & (
-  | Readonly<{ mode: 'SYNTHETIC_PROPOSAL'; port?: FinanceV2SyntheticReadPort }>
+  | Readonly<{ mode: 'SYNTHETIC_PROPOSAL'; port?: FinanceV2SyntheticReadPort; exportPort?: FinanceV2SyntheticExportPort }>
   | Readonly<{ mode: 'INTEGRATED'; port?: undefined }>
 );
 
@@ -52,7 +60,8 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
 /**
  * Read-only connected Finance v2 view. It requests the report through the injected port with the host's independent identity,
  * shows loading, typed errors with retry, and the missing/restricted/unauthorized/unknown states without any amount, and hands a
- * page to `FinanceV2View` only after the identity check passed. CFO export stays unavailable: no export port exists in this slice.
+ * page to `FinanceV2View` only after the identity check passed. CFO export stays unavailable (fail-closed) unless the host supplies BOTH an explicit synthetic export port and
+ * its own current-access reader; even then it is offered only for the original first page, as a manual prepared file, never as delivery.
  */
 export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
   const headingId = useId();
@@ -106,12 +115,20 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
     case 'refused': return shell(<section className="td-example-section" role="alert"><h3>Report refused</h3>
       <p>This report failed the presentation check, so it is not displayed. No amounts are shown.</p>
       <dl><div><dt>Refusal code</dt><dd>{state.code}</dd></div><div><dt>Refusal path</dt><dd>{state.path}</dd></div></dl></section>);
-    case 'ready':
+    case 'ready': {
+      // Offered only when the host configured export at all; otherwise the fixed "Export unavailable" section stays. The panel is keyed by nothing: its hook compares every identity itself.
+      const exportPort: unknown = (props as { exportPort?: unknown }).exportPort;
+      const exportSlot = props.exportAccess !== undefined || exportPort !== undefined
+        ? <PreparedExportPanel mode={props.mode} port={exportPort} access={props.exportAccess} authorization={props.authorization} scope={props.scope} expectedSnapshotId={props.expectedSnapshotId}
+          expectedQueryContentHash={props.expectedQueryContentHash} expectedSummaryContentHash={props.expectedSummaryContentHash} page={state.page} firstPage={!paging.canPrevious}
+          resetKey={JSON.stringify([filters.valuation, filters.currency])} {...(props.timeoutMs !== undefined ? { timeoutMs: props.timeoutMs } : {})} />
+        : undefined;
       return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={props.view} input={{ status: 'ready', page: state.page }} expectedScope={props.scope} expectedSnapshotId={props.expectedSnapshotId}
         expectedQueryContentHash={props.expectedQueryContentHash} expectedSummaryContentHash={props.expectedSummaryContentHash} {...(props.expectedReferences ? { expectedReferences: props.expectedReferences } : {})}
         {...(props.detailId !== undefined ? { detailId: props.detailId } : {})} {...(props.detailHref ? { detailHref: props.detailHref } : {})} {...(props.listHref ? { listHref: props.listHref } : {})}
         {...(props.onNavigate ? { onNavigate: props.onNavigate } : {})} filters={filters} onFiltersChange={onFiltersChange}
-        paging={{ pageLabel, hasPrevious: paging.canPrevious, hasNext: paging.canNext, onNavigate: onPage }} />;
+        paging={{ pageLabel, hasPrevious: paging.canPrevious, hasNext: paging.canNext, onNavigate: onPage }} {...(exportSlot ? { exportSlot } : {})} />;
+    }
     default:
       return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={props.view} input={{ status: state.phase }} expectedScope={props.scope} />;
     }

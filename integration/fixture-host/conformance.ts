@@ -6,6 +6,7 @@ import producerV1 from '../../tests/fixtures/finance-v2-conformance/producer-v1-
 import producerPg from '../../tests/fixtures/finance-v2-conformance/ie-ci06-pg-page.json';
 import registry from '../../tests/fixtures/finance-v2-conformance/definition-registry.json';
 import producerPagination from '../../tests/fixtures/finance-v2-pagination-conformance/producer-v2-pagination-page.json';
+import { exportConformanceIdentity, exportConformanceInput, exportConformanceScope } from './finance-v2-export';
 import { financeV2Fixture, financeV2FixtureNames, syntheticQueryContentHash, syntheticSummaryContentHash, type FinanceV2FixtureName } from '../../src/views/finance-v2/fixtures';
 
 /**
@@ -13,7 +14,7 @@ import { financeV2Fixture, financeV2FixtureNames, syntheticQueryContentHash, syn
  * fixtures. Not live Finance data, not a grant, not a production acknowledgement. The identities below are host literals stated independently of each page;
  * `tests/components/finance-v2-conformance.test.tsx` re-hashes the committed files and checks these literals against its own.
  */
-export const conformanceFixtureNames = ['conformance-base', 'conformance-budget', 'conformance-unknown-simulated', 'conformance-pg', 'conformance-v1-refused', 'conformance-forged-policy', 'conformance-pagination'] as const;
+export const conformanceFixtureNames = ['conformance-base', 'conformance-budget', 'conformance-unknown-simulated', 'conformance-pg', 'conformance-v1-refused', 'conformance-forged-policy', 'conformance-pagination', 'export-conformance'] as const;
 export type ConformanceFixtureName = (typeof conformanceFixtureNames)[number];
 export type HostFixtureName = FinanceV2FixtureName | ConformanceFixtureName;
 export const hostFixtureNames: readonly HostFixtureName[] = [...financeV2FixtureNames, ...conformanceFixtureNames];
@@ -48,6 +49,9 @@ export function hostFixture(name: HostFixtureName): HostFixture {
     // First page of the ACTUAL captured three-page chain. Continuations are served only by the captured-chain port (`v2port=captured`); the identity literals are the host's, stated independently of the pages.
     case 'conformance-pagination': return conformance(producerPagination.pages[0]!.response, scope('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'live'),
       'sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c', 'sha256:7288e98f5ac9273db9d8f0aa50e42b4531935e4900e92f11a40ad76a358dda12', 'sha256:e0465f3ee6f6715fd4e2ac107571bc19dc58eb718eddbda08be936d6c4a7685a');
+    // SYNTHETIC_EXPORT_CONFORMANCE_ONLY: the synthetic `ready` page re-bound to the identity of the producer's ACTUAL candidate receipt 0, so the export port can replay that receipt's exact bytes.
+    case 'export-conformance': return { input: exportConformanceInput(), expectedScope: exportConformanceScope, expectedSnapshotId: exportConformanceIdentity.snapshotId,
+      expectedQueryContentHash: exportConformanceIdentity.queryContentHash, expectedSummaryContentHash: exportConformanceIdentity.summaryContentHash };
     // The unknown-simulated page with its policy reference rewritten inside the payload. The host's registry-derived references must still win and refuse it.
     case 'conformance-forged-policy': {
       const forged = structuredClone(producerUnknownSimulated) as typeof producerUnknownSimulated;
