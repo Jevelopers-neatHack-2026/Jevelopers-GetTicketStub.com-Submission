@@ -258,6 +258,40 @@ test('receipt tampering never reaches the caller', async () => {
   assert.equal((await api.exportSummary(coherent.request, coherent.ports)).error.code, 'SOURCE_UNAVAILABLE', 'coherent timestamps cannot replace original independently authenticated preparation');
 });
 
+for (const stage of ['creation', 'replay']) {
+  test(`shared ${stage} adapter records cannot mutate authenticated bytes during final authorization`, async () => {
+    for (const mutateAfterVerification of [false, true]) {
+      const x = setup();
+      const originalCommit = x.ports.exports.artifactStore.commitImmutable;
+      x.ports.exports.artifactStore.commitImmutable = async (...args) => { await originalCommit(...args); return x.stored(); };
+      x.ports.exports.artifactStore.lookup = async () => { x.calls.lookup++; return x.stored(); };
+      if (stage === 'replay') assert.equal((await api.exportSummaryV2(x.request, x.ports)).ok, true);
+      let authenticated = false;
+      const originalVerify = x.ports.exports.artifactStore.verifyOriginal;
+      x.ports.exports.artifactStore.verifyOriginal = async (...args) => { const verified = await originalVerify(...args); authenticated = verified; return verified; };
+      const originalAuth = x.ports.financeAuthority.authorizeCurrent;
+      x.ports.financeAuthority.authorizeCurrent = async input => {
+        const decision = await originalAuth(input);
+        if (authenticated && mutateAfterVerification) x.tamperStored(record => {
+          record.prepared.artifacts[0].content = 'CORRUPTED_AFTER_VERIFICATION';
+          record.prepared.manifest.createdAt = record.prepared.artifactManifest.createdAt = '2099-01-01T00:00:00Z';
+        });
+        return decision;
+      };
+      const result = await api.exportSummaryV2(x.request, x.ports);
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.value.manifest.createdAt, '2026-10-10T13:00:00.000Z');
+      for (const artifact of result.value.artifacts) assert.equal(artifact.contentHash, digest(artifact.content), 'a successful response must contain exactly the authenticated bytes');
+      assert.equal(JSON.parse(result.value.artifacts[0].content).metrics.find(row => row.metric === 'expense').amount, '1.234567');
+      assert.equal(JSON.stringify(result).includes('CORRUPTED_AFTER_VERIFICATION'), false);
+      if (mutateAfterVerification) {
+        assert.equal(x.stored().prepared.artifacts[0].content, 'CORRUPTED_AFTER_VERIFICATION', 'negative control actually changed the shared adapter alias');
+        assert.equal((await api.getPreparedExportArtifacts(x.request, x.ports)).error.code, 'SOURCE_UNAVAILABLE', 'subsequent corrupted storage is not accepted');
+      }
+    }
+  });
+}
+
 test('filesystem adapter persists exact original across lost acknowledgement and concurrent preparations', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ci08x-own-artifacts-'));
   try {

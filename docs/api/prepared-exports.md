@@ -116,6 +116,10 @@ original bundle available for a retry. The host retains a separate HMAC-SHA256
 receipt key (at least 32 bytes) across restarts; it authenticates the full
 immutable record, first actual preparation time and restricted source binding.
 `verifyOriginal` checks the independently authenticated original before replay.
+The exporter privately copies and freezes lookup/commit results immediately
+when the adapter returns them. Validation, original-receipt verification and
+the response use that same immutable copy across later authorization waits;
+a shared adapter cache alias cannot change authenticated response bytes.
 Coherently changing both public receipt timestamps therefore fails verification.
 Tests use a fixture-only local key; no provider credential is loaded. Changing
 the receipt key makes earlier records unreadable until the host restores the

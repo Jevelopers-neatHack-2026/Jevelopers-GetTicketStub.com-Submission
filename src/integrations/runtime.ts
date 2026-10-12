@@ -315,7 +315,8 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     const fingerprint = requestFingerprint(parsed);
     let auth = await authorize();
     if (!auth.ok) return failure(auth.error);
-    const existing = await configuredExports.artifactStore.lookup(key);
+    const lookupResult = await configuredExports.artifactStore.lookup(key);
+    const existing = lookupResult === null ? null : freezeCopy(lookupResult);
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
     if (existing !== null && !validStoredExport(existing)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
@@ -356,7 +357,7 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
       if (!await configuredExports.artifactStore.verifyOriginal(key, existing)) return reject('SOURCE_UNAVAILABLE', 'The original preparation receipt could not be authenticated.', true);
       auth = await authorize();
       if (!auth.ok) return failure(auth.error);
-      return { ok: true, value: structuredClone(existing.prepared) };
+      return { ok: true, value: existing.prepared };
     }
     if (!allowPrepare) return reject('SOURCE_UNAVAILABLE', 'No immutable prepared export exists for this request.', true);
     const createdAt = ports.clock.now().toISOString();
@@ -381,7 +382,7 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     if (!validStoredExport(candidate)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
-    const stored = await configuredExports.artifactStore.commitImmutable(key, candidate);
+    const stored = freezeCopy(await configuredExports.artifactStore.commitImmutable(key, candidate));
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
     if (!validStoredExport(stored)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
@@ -391,7 +392,7 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     if (!await configuredExports.artifactStore.verifyOriginal(key, stored)) return reject('SOURCE_UNAVAILABLE', 'The original preparation receipt could not be authenticated.', true);
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
-    return { ok: true, value: structuredClone(stored.prepared) };
+    return { ok: true, value: stored.prepared };
   } catch (error) {
     return error instanceof UnsupportedExport
       ? reject('UNSUPPORTED_VERSION', 'The summary contains an unsupported metric definition or currency.')
