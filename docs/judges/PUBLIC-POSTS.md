@@ -12,7 +12,7 @@
 | Lars van der Zande | [Launch quote and video](https://x.com/Lmvdzande/status/2109763739222417841) | All three required tags. Clicking the quoted card opened the exact official launch. Displayed October 12, 5:50 PM. |
 | Crystal Aguilar | [Submission video](https://x.com/lajefahemp/status/2109734550331121877) | All three required tags. Standalone post; no launch quote was shown. Displayed October 12, 3:54 PM. |
 
-Times above are as displayed in the browser, used in New York. They fall after the website’s 2:25 PM New York cutoff. Discord controls final cutoff updates. **We have not verified an extension or organizer acceptance.**
+Times above are as displayed in the browser, used in New York. They fall after the website’s 2:25 PM New York cutoff. Discord controls final cutoff updates. The team supplied the text of October 12 organizer announcements in the neatHack Discord: a 2:05 PM message extended the submission window by 7 hours, and a 4:23 PM message said submissions were working again with 7 more hours. That would move the cutoff to about 9:25 PM New York, after all three posts. We have only the pasted text, not a screenshot or Discord link. **Organizer acceptance is not verified.**
 
 Timothy also posted a [standalone video](https://x.com/CompleteTechLLC/status/2109753079604166718). The launch quote is the clearest route for judges.
 
@@ -26,6 +26,16 @@ The earlier [merged social review](https://github.com/Jevelopers-neatHack-2026/J
 - [Timothy’s Day 2 quote · October 11](https://x.com/CompleteTechLLC/status/2109407964784382285): another public update. It quotes an earlier organizer post, not the required October 12 launch.
 
 Post copy is the team’s report. Usage figures, printing language, and claims about tracing every run need their own evidence. These posts do not prove customer demand, physical delivery, or a full live run.
+
+## Live streams
+
+Timothy streamed the build on Twitch at [twitch.tv/completedottech](https://www.twitch.tv/completedottech). Twitch lists seven public VODs titled *neatHack 2026 · Team Jevelopers Builds AI-Powered Ticket Keepsakes*. They run almost back to back from October 9 at 11:05 PM to October 12 at 5:20 PM New York time, about 65 hours, and the first starts before the official October 10 start. The longest are [32 hours](https://www.twitch.tv/videos/2897690589), [13.5 hours](https://www.twitch.tv/videos/2896851391), [7.5 hours](https://www.twitch.tv/videos/2896644167), [7 hours](https://www.twitch.tv/videos/2898815773) and [5.4 hours](https://www.twitch.tv/videos/2897466664). We checked the list through Twitch on October 12 but did not review what the VODs show. Twitch may expire VODs.
+
+The team also reports streaming in the [TypeSafe Discord](https://discord.gg/typesafe), which the kickoff post invites people to join. Discord keeps no public recording, so this is team-reported only.
+
+## Built with Jev
+
+The team built with TypeSafe's Jev. In code, [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness/tree/main/src/adapters/jev) implements a Jev decision adapter and a public DecisionPort, both covered by offline contract tests. A search of all 14 repositories found no caller outside agent-harness: the studio and creative engine do not call it yet, and no live Jev call is recorded.
 
 ## Organizer and cfo.ai context
 
