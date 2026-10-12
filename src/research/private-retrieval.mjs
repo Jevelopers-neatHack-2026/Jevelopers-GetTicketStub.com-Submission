@@ -1083,7 +1083,10 @@ export async function runPrivateRetrieval(value) {
     stopPersistenceStarted = true;
     if (!runCreated) return;
     const cleanup = new AbortController();
-    const timer = setTimeout(() => cleanup.abort(), STOP_PERSIST_CLEANUP_MS);
+    const remaining = Math.min(STOP_PERSIST_CLEANUP_MS, remainingCleanupMs());
+    let timer;
+    if (remaining <= 0) cleanup.abort();
+    else timer = setTimeout(() => cleanup.abort(), remaining);
     const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason, cleanup.signal))
       .catch(() => {}).finally(() => {
         clearTimeout(timer);
