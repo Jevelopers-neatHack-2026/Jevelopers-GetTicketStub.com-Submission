@@ -15,7 +15,7 @@ Cross-component verification for TicketStub, and the home of the master acceptan
   <a href="planning/acceptance-checklist.md"><img alt="Acceptance checklist: 47 criteria, 3 sponsor criteria owner-accepted, 44 planned" src="https://img.shields.io/badge/criteria-3%20accepted%20%C2%B7%2044%20planned-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
-[Status](#status) · [What's here](#whats-here) · [Docs](#docs) · [Related](#related-repositories)
+[Status](#status) · [Run the tooling](#run-the-tooling) · [Configuration](#configuration) · [What's here](#whats-here) · [Docs](#docs) · [Related](#related-repositories)
 
 ## Status
 
@@ -34,10 +34,12 @@ deferred until after deployment by explicit user instruction, as an initial-depl
 exception. Benchmark promotion stays blocked pending ratified evidence, and the 142
 obligations, master checklist states and policy are unchanged.
 
-Print-invalid component verification is **blocked** and out of this change. The experimental
-print slice (nested Docker plus Bubblewrap execution) did not run in CI and is kept as work
-in progress in draft [PR #40](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/40).
-Nothing here claims print containment or print execution evidence.
+The guarded print component test profile is merged in
+[PR #40](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/40), with
+revision-specific Linux execution and cleanup evidence. It is an explicit synthetic,
+offline test profile; the older nested-Bubblewrap failures remain preserved. Production
+CLI containment, ART-04 acceptance and the selected product journey remain separate gates.
+See the [print component runbook](docs/print-component.md) for supported execution and limits.
 
 - SPN-01 (Neatlogs), SPN-02 (Entire) and SPN-03 (CFO.ai) are owner-accepted as recorded in the
   [master checklist](planning/acceptance-checklist.md) and [evidence index](evidence/README.md).
@@ -70,25 +72,49 @@ Nothing here claims print containment or print execution evidence.
   product acceptance. Missing assembly is reported as blocked.
 - Accepting the owner decision memos does not grant any finance, payment or provider authority;
   see the Decisions section.
-- [PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23) carries this
-  incremental runner/SDK tooling under the user's merge-when-ready request. That request does
-  not approve or accept any producer release, adoption or product claim.
+- [PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23) merged the
+  incremental runner/SDK tooling; [PR #51](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/51)
+  connected evidence qualification and retained history to normal run reports. These merges
+  do not approve any producer release, adoption or product claim.
+- Captured Finance and Fulfillment component checks have their own pinned fixtures and
+  scoped receipts. They do not execute the selected business journey or supply current
+  host authority. Follow the [execution protocol](docs/execution-protocol.md) for each lane.
+- The selected journey `mvp-20261012-ie-acceptance-01` remains **NOT_RUN** in the
+  [release-gate record](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22#issuecomment-6126761501):
+  an accepted app-owned assembly, actual selected-run identity, owner grants and complete
+  component/approval/provider evidence are still required. A green tooling run does not
+  change that status.
 - Planned work is tracked in [IE-EPIC #1](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1)
   and its linked IE issues, ending with the [IE-12 release gate](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22).
 
 ## Run the tooling
 
-Install Python 3.13 and uv, then:
+The package requires Python **3.13 or later**; [`.python-version`](.python-version)
+pins development to **3.13.9**. Use uv and the committed [lockfile](uv.lock).
+Component lanes additionally need the exact Node, Linux/container and producer pins in
+their runbooks; those are not prerequisites for the standalone evidence audit below.
+
+From a fresh clone:
 
 ```sh
+git clone https://github.com/Jevelopers-neatHack-2026/integration-evals.git
+cd integration-evals
 uv sync --frozen
 uv run integration-evals validate
 uv run pytest
 uv run basedpyright
 uv run ruff check
 uv run ruff format --check
+```
+
+To produce a report of the currently missing product assembly:
+
+```sh
 uv run integration-evals run
 ```
+
+This command is expected to exit **2** while selected product boundaries are blocked.
+Inspect the resulting report; do not count that exit as a passing integration check.
 
 The standalone stdlib evidence-audit and rerun tools (`tools/`, `tests/test_audit_evidence.py`,
 `tests/test_rerun_report.py`) are excluded from the strict package scope above and have their
@@ -112,7 +138,7 @@ unchanged and are covered by their `SHA256SUMS` manifests and recorded artifact/
 verification; formatting them would invalidate the accepted capture. No project source
 or test file is excluded by this evidence exception.
 
-The final command writes JSON, JUnit, coverage, Markdown, and a per-criterion release
+The run command writes JSON, JUnit, coverage, Markdown, and a per-criterion release
 audit under `reports/runs/<run-id>/`. Exit 2 means required product boundaries are
 blocked; it is not a passing integration run. Offline tooling tests have their own
 pass/fail result. The current fixture catalog contains 20 original synthetic inputs,
@@ -125,9 +151,11 @@ component checkouts:
 ```sh
 uv run integration-evals run --manifest /approved/release.json --workspace /approved/workspace
 uv run integration-evals run --mode recorded --manifest /approved/release.json --workspace /approved/workspace
-uv run integration-evals inspect reports/runs/<run-id>/run.json
+uv run integration-evals inspect reports/runs/REPLACE_WITH_RUN_ID/run.json
 uv run integration-evals benchmark benchmarks/corpus.json /approved/raw-samples.json
 ```
+
+Use the actual directory printed by `run` in place of `REPLACE_WITH_RUN_ID`.
 
 Sandbox/live modes require explicit current authority, credential presence, eligibility,
 caps, permitted operations and cleanup. `--authorize-paid` is an execution confirmation
@@ -136,6 +164,27 @@ Provider modes and source origins are recorded separately.
 
 [Execution protocol and owner handoff](docs/execution-protocol.md) describes the manifest,
 runner observations, isolation, evidence, benchmarks, reruns, and remaining obligations.
+
+## Configuration
+
+No provider credentials are needed for fixture validation or the standalone integrity
+checks. The CLI defaults to `mock-only` mode and reads configuration from repository files
+and explicit options; it does not infer permission from a successful local test.
+
+| Input | Purpose |
+| --- | --- |
+| [`fixtures/catalog.json`](fixtures/catalog.json) | Synthetic fixture identities, provenance and requirement links |
+| [`scenarios/suite.json`](scenarios/suite.json) and [`selection.json`](scenarios/selection.json) | Scenario definitions and the selected cases |
+| [`planning/requirements.json`](planning/requirements.json) | Frozen local requirement inventory alongside the master tracker |
+| [`benchmarks/policy.json`](benchmarks/policy.json) | Benchmark methodology and promotion gates; smoke rows do not satisfy them |
+| `--manifest /approved/release.json` | App-owned assembly with exact component and authority records |
+| `--workspace /approved/workspace` | Clean component checkouts; defaults to the repository's parent directory |
+| `--mode mock-only`, `recorded`, `sandbox` or `live` | Explicit execution mode with distinct evidence and authorization requirements |
+| `--output reports/runs` | Destination for immutable run reports |
+
+Keep host credentials in the owning runtime's protected configuration. A manifest,
+`--authorize-paid`, a fixture key or an unsigned integrity digest is never an independent
+grant of spending, provider, customer or publication authority.
 
 ### Decisions
 
@@ -154,6 +203,16 @@ python3 -m unittest -v tests.test_entire_graph_workflow_security
 
 These stdlib-only checks (Python 3.11+, no package install) run separately from the Python 3.13 package suite above (`uv run pytest`). They check evidence integrity (for example, files and checksums) and workflow trust configuration. They do not promote any criterion to accepted or verified and are not acceptance evidence.
 
+### Continuous integration
+
+The [verification workflow](.github/workflows/verification.yml) covers package tooling,
+canonical compatibility and the configured component lanes.
+[Evidence audit](.github/workflows/evidence-audit.yml) and
+[rerun report](.github/workflows/rerun-report.yml) have separate path-filtered stdlib jobs.
+Other [workflows](.github/workflows/) retain their own producer/runtime pins and execution
+boundaries. A workflow result applies to its tested revision, selected lane and artifacts;
+it is not a blanket acceptance result for every component or later commit.
+
 ## What's here
 
 This repository owns reproducible evaluations across ownership boundaries: the customer journey, contract compatibility, recovery, artifact integrity and financial correctness. Repository-local tests stay with their implementations. See [ownership](docs/architecture/OWNERSHIP.md).
@@ -165,6 +224,16 @@ This repository owns reproducible evaluations across ownership boundaries: the c
 | [`planning/decisions/`](planning/decisions/) | Owner decision memos 0001-0003, accepted (owner-delegated 2026-10-12); nothing executed |
 | [`evidence/README.md`](evidence/README.md) | Index of submission evidence: three sponsor records plus planned entries |
 | [`docs/architecture/`](docs/architecture/OWNERSHIP.md) | [Ownership](docs/architecture/OWNERSHIP.md) and the [acceptance view](docs/architecture/ACCEPTANCE.md) for this repository |
+| [`src/integration_evals/`](src/integration_evals/) | CLI, schemas, execution boundaries, immutable reporting and evidence qualification |
+| [`tests/`](tests/) and [`integration_tests/`](integration_tests/) | Tooling regressions and composed checks; required runtime/context varies by suite |
+| [`component_tests/`](component_tests/) | Pinned retrieval and print test profiles |
+| [`finance_component_tests/`](finance_component_tests/), [`fulfillment_component_tests/`](fulfillment_component_tests/) and [`app_recovery_component_tests/`](app_recovery_component_tests/) | Independently scoped component/captured-fixture lanes |
+| [`tools/`](tools/) | Standalone evidence-integrity and retained-rerun utilities |
+
+The application supplies the assembly; this repository validates the chosen boundaries,
+captures observations and joins them to requirements and evidence. Producer repositories
+retain their runtime, authorization and domain responsibilities. Historical captures and
+their checksum manifests are immutable inputs, not current release claims.
 
 Other repositories link their `docs/architecture/ACCEPTANCE.md` views to this checklist. Change criterion state here, and only after recording actual evidence and the tested revisions ([state rules](planning/acceptance-checklist.md#state-and-dependency-tracking)).
 
@@ -187,4 +256,9 @@ Other repositories link their `docs/architecture/ACCEPTANCE.md` views to this ch
 
 ## Contributing
 
-Follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Use synthetic or approved fixtures and publish only sanitized evidence. Never fabricate component pins or financial outcomes. No license file is present in this repository.
+Follow [AGENTS.md](AGENTS.md) and the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Use synthetic or approved fixtures and publish only sanitized evidence. Never fabricate component pins or financial outcomes. Preserve historical captures, their hashes and acceptance chronology. Use a focused branch, neutral issue references and independent review of the exact documentation diff.
+
+## License
+
+No repository license file is present. Component packages and retained evidence keep
+their own provenance and applicable terms; do not infer a project-wide license.
