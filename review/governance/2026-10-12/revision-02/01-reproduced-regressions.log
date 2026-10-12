@@ -1,0 +1,191 @@
+✔ LP-09 supported update: replay the retained physical-to-illustrative correction as a pending draft (255.146465ms)
+✔ LP-09 unsupported/stale update: rehashing or changing an approval label cannot publish a claim (44.53428ms)
+✔ LP-09 withdrawal: real built claim/asset disappear, a safe local replacement is present, rollback restores exact bytes (499.528709ms)
+✔ withdrawal rejects stale active inventories and hiding content in comments (328.97184ms)
+✔ withdrawal rejects original asset bytes under a renamed file and a stale scene reference (284.049515ms)
+▶ GOV-R1: character references cannot retain withdrawn rendered text or attributes
+  ✖ decimal (107.299926ms)
+  ✖ hexadecimal (135.456195ms)
+  ✖ omitted numeric semicolon (153.076433ms)
+  ✖ encoded whitespace (130.523553ms)
+  ✖ named whitespace (151.220834ms)
+  ✖ unsupported named reference (124.356125ms)
+  ✖ inline element split (184.48511ms)
+  ✖ accessible attribute (141.130592ms)
+✖ GOV-R1: character references cannot retain withdrawn rendered text or attributes (1130.194433ms)
+▶ GOV-R2: renamed and padded public payloads cannot retain the complete original asset bytes
+  ✖ original followed by newline (172.844642ms)
+  ✖ original embedded between padding (178.779361ms)
+✖ GOV-R2: renamed and padded public payloads cannot retain the complete original asset bytes (353.790119ms)
+✔ withdrawal requires an immutable known nonempty selection and rejects still-packaged media (334.677072ms)
+✔ changed destination dry run withdraws both native and no-JavaScript links (12.678381ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 7
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3421.239952
+
+✖ failing tests:
+
+test at tests/governance.test.mjs:147:52
+✖ decimal (107.299926ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ hexadecimal (135.456195ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ omitted numeric semicolon (153.076433ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ encoded whitespace (130.523553ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ named whitespace (151.220834ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ unsupported named reference (124.356125ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ inline element split (184.48511ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:147:52
+✖ accessible attribute (141.130592ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:153:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:147:44)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn claim remains|Unsupported HTML character reference/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:162:14
+✖ original followed by newline (172.844642ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:174:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:162:6)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn asset bytes remain/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/governance.test.mjs:162:14
+✖ original embedded between padding (178.779361ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:174:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async TestContext.<anonymous> (file:///workspace/scratch/f79c57b98c5b/governance-worktree/tests/governance.test.mjs:162:6)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Withdrawn asset bytes remain/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

@@ -1,0 +1,35 @@
+✔ LP-09 supported update: replay the retained physical-to-illustrative correction as a pending draft (166.537783ms)
+✔ LP-09 unsupported/stale update: rehashing or changing an approval label cannot publish a claim (22.625134ms)
+✔ LP-09 withdrawal: real built claim/asset disappear, a safe local replacement is present, rollback restores exact bytes (382.081672ms)
+✔ withdrawal rejects stale active inventories and hiding content in comments (223.136011ms)
+✔ withdrawal rejects original asset bytes under a renamed file and a stale scene reference (254.140085ms)
+▶ GOV-R1: character references cannot retain withdrawn rendered text or attributes
+  ✔ decimal (118.024181ms)
+  ✔ hexadecimal (141.656853ms)
+  ✔ omitted numeric semicolon (144.111933ms)
+  ✔ encoded whitespace (179.539488ms)
+  ✔ named whitespace (215.125916ms)
+  ✔ legacy whitespace without semicolon (217.427039ms)
+  ✔ unsupported named reference (179.807064ms)
+  ✔ unsupported legacy prefix (232.907648ms)
+  ✔ inline element split (264.605645ms)
+  ✔ accessible attribute (184.882781ms)
+✔ GOV-R1: character references cannot retain withdrawn rendered text or attributes (1880.812021ms)
+✔ a once-escaped character reference remains literal text instead of being recursively decoded (177.646464ms)
+▶ GOV-R2: renamed and padded public payloads cannot retain the complete original asset bytes
+  ✔ original followed by newline (198.558783ms)
+  ✔ original embedded between padding (180.497908ms)
+✔ GOV-R2: renamed and padded public payloads cannot retain the complete original asset bytes (380.470406ms)
+✔ withdrawal requires an immutable known nonempty selection and rejects still-packaged media (450.461919ms)
+✔ changed destination dry run withdraws both native and no-JavaScript links (14.222089ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4082.501751
+governance: supported historical update replayed as draft; unsupported/stale evidence rejected; synthetic local withdrawal/replacement/rollback exercised; release acceptance PENDING
+PASS_DRAFT governance
+PASS_DRAFT selected suites: release approvals remain pending

@@ -1,0 +1,131 @@
+{
+  "kind": "local diagnostic index; not an acceptance or approval schema",
+  "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+  "runs": [
+    {
+      "command": "node --test tests/governance.test.mjs",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:14.447472+00:00",
+      "finishedAt": "2026-10-12T16:32:19.536214+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "outcome": "pass",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/03-focused-tests.log",
+      "logSha256": "173f378de0a2f54ef7fdf1e4f96d03adc2fb9df4f147a569995e6e1dc1e376dd"
+    },
+    {
+      "command": "node scripts/build.mjs",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:19.541823+00:00",
+      "finishedAt": "2026-10-12T16:32:19.678432+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "outcome": "pass",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/04-build.log",
+      "logSha256": "c005ef06372299c25d7799129dbf09098a9aebb7deb7c2f3c034e0d67b0869b4"
+    },
+    {
+      "command": "./scripts/validate-landing --suite governance --mode draft",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:19.684146+00:00",
+      "finishedAt": "2026-10-12T16:32:24.279012+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "outcome": "pass",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/05-governance-draft.log",
+      "logSha256": "10af08200b9c6716c177b486e755ccf66fb8037ca6353bd1f89c84fc1bddb3db"
+    },
+    {
+      "command": "./scripts/validate-landing --suite governance --mode release",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:24.284871+00:00",
+      "finishedAt": "2026-10-12T16:32:31.285072+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "outcome": "fail",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/06-governance-release.log",
+      "logSha256": "80da56753fb336f8176cbb627a7e8c4dc63abc728ce5769db7ae61e8663f6d87"
+    },
+    {
+      "command": "node --test tests/content-proof.test.mjs tests/cta.test.mjs tests/foundation.test.mjs tests/governance.test.mjs tests/metadata.test.mjs tests/privacy.test.mjs tests/scroll.test.mjs tests/ux.test.mjs",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:31.301950+00:00",
+      "finishedAt": "2026-10-12T16:32:37.198971+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "outcome": "pass",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/07-all-tests.log",
+      "logSha256": "fbb6a807716c39727c04a04e6fd50e8284fe8db21c2c22506d8b3d3a284d3b59"
+    },
+    {
+      "command": "./scripts/validate-landing --mode draft",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:37.204400+00:00",
+      "finishedAt": "2026-10-12T16:32:45.049254+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "outcome": "fail",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/08-all-draft.log",
+      "logSha256": "6c8aa8b201039a62a09b85c6bfcc3ced5dd307d2405a042ed881fea35395f6dd"
+    },
+    {
+      "command": "git diff --check",
+      "testedRevision": "1fc0c39046e7904a9ba7eff774fe72130b6fe90b",
+      "startedAt": "2026-10-12T16:32:45.053603+00:00",
+      "finishedAt": "2026-10-12T16:32:45.056196+00:00",
+      "runtime": "v24.15.0",
+      "mode": "mock/offline; local only, no provider request",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "outcome": "pass",
+      "expectationMet": true,
+      "log": "review/governance/2026-10-12/revision-02/09-diff-check.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "reviewedPreviousHead": "8b0abe50bc000e3d7ef1976f8d3ccf7511a16233",
+  "preFixRegressionRevision": "521fcca7a6c91e675caf15ea589a13086efd2ec8",
+  "findingsAddressed": [
+    "GOV-R1",
+    "GOV-R2"
+  ],
+  "reviewDecision": "Pending independent re-review of repaired head; no owner acceptance inferred",
+  "artifactManifestSha256": "389e41ab3e2f32b9169cd70db129b01466a329dde74e1c6874ebbdba1df56470",
+  "preservedEvidence": [
+    {
+      "path": "review/governance/2026-10-12/revision-02/independent-review-request-changes.json",
+      "sha256": "5a804c4a2d3d057b75491d06ee67b9cef42e91cd35384165c92bddc1e211fc01"
+    },
+    {
+      "path": "review/governance/2026-10-12/revision-02/01-reproduced-regressions.log",
+      "sha256": "6fd66f2f2cd1a2cded9915a5fb6c43506ddb047107c620ad58d21c5f787c685b"
+    },
+    {
+      "path": "review/governance/2026-10-12/revision-02/02-working-tree-repair-check.log",
+      "sha256": "ebfe96a64b023f6643065cf1644b45ee48fee501fe84a957b3743616cfd99dc9"
+    },
+    {
+      "path": "review/governance/2026-10-12/revision-02/reproduction.json",
+      "sha256": "f39e2c0e16fd00ac7c94bb4f0536e5103fc518ec5bc71ec9ff0e6f907a4a1035"
+    }
+  ],
+  "workingTreeRepairCheckScope": "02-working-tree-repair-check.log records an exploratory 19-test run before three additional character-reference coverage cases; not an immutable candidate check. Exact committed validation follows at testedRevision."
+}
