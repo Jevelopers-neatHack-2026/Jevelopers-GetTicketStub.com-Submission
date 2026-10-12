@@ -16,7 +16,7 @@ Typed creative API runtime for TicketStub: creative briefs, immutable design ver
   <a href="examples/frontend-action-roundtrip/package.json"><img alt="Types checked with TypeScript 5.9.3, strict NodeNext" src="https://img.shields.io/badge/types-TS%205.9.3%20NodeNext-7CC6D2?style=flat-square&labelColor=17140F"></a>
 </p>
 
-[Status](#status) · [Package subpaths](#package-subpaths) · [Quickstart](#quickstart) · [Checks](#checks) · [Docs](#docs) · [Related](#related-repositories)
+[Status](#status) · [Architecture](#architecture-and-responsibilities) · [Package subpaths](#package-subpaths) · [Quickstart](#quickstart) · [Configuration](#configuration) · [Checks](#checks) · [Docs](#docs) · [Related](#related-repositories)
 
 ## Status
 
@@ -24,6 +24,7 @@ Implemented locally and exercised with synthetic fixtures (no paid provider call
 
 - A non-UI API handler for `generate`, `edit`, `inspect`, `list`, `compare`, `restore`, `cancel`, `handoff`, `job.status`, `brief.create` and `brief.invalidate` around injected ports. Missing ports return `unavailable`; the API never substitutes a mock success.
 - Parentless `concepts.create` is a separately versioned Creative API 1.1 operation. It edits two authorized image references and persists each candidate as an independent immutable version; legacy 1.0 requests and results retain their prior shape.
+- Creative API 1.2 adds durable `composition.create`, `composition.get` and `composition.update`; API 1.3 adds identity-only `composition.history` and fresh-proof `composition.revalidate`. The versioned operation arms stay distinct. Composition uses injected owner evidence and does not itself dispatch image generation, JEV or a Finance reservation ([API versions](docs/api/creative-api.md)).
 - Deterministic brief planning, a durable SQLite version store with content-addressed bytes, a controls Apply outbox, inspection checks with a bounded repair counter, and a usage-evidence outbox. Brief history and attempt evidence share the API store's SQLite connection.
 
 Boundaries that local checks do not cross:
@@ -34,7 +35,15 @@ Boundaries that local checks do not cross:
 - **Live provider access** is fail-closed: the access-preflight, image-adapter, openrouter-image-adapter and inspection live gates exit 2 with zero dispatches, and `MODE=live` is not implemented.
 - Application authentication, finance authority, approval issuance and rendering are not implemented here. Local process-restart tests do not certify production-host durability.
 
-Pending: the C01–C04 contract and schema proposals await external owner agreement ([agreement status](docs/contracts/canonical-owner-agreements.json)). Every `make acceptance` target exits 2 until that owner evidence is published and independently verified. See [development and acceptance gates](docs/development.md#detailed-package-status) for the full statement.
+Pending: the C01–C04 contract and schema proposals await external owner agreement ([agreement status](docs/contracts/canonical-owner-agreements.json)). Every `make acceptance` target exits 2 until that owner evidence is published and independently verified. The [creative release gate #12](https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/12) remains open. See [development and acceptance gates](docs/development.md#detailed-package-status) for the full statement.
+
+## Architecture and responsibilities
+
+The application supplies authenticated project scope and composes the creative API with research, rights, provider, DecisionPort, Finance, approval and storage ports. This repository owns brief planning, creative operations, immutable design/composition history, provider adapters and their local recovery/usage boundaries.
+
+The customer application owns approval issuance. `cost-intelligence` owns spending authority and reconciliation; `agent-harness` owns the JEV transport. `print-production` owns final event text, personalized typography, rendering and print validation. A local composition preview or selected artwork version is not a production approval.
+
+The core API is a library handler, not an HTTP service. The [frontend roundtrip example](examples/frontend-action-roundtrip/) provides a separate local host with synthetic application authority; its successful fixtures do not establish production-host integration.
 
 ## Package subpaths
 
@@ -48,6 +57,7 @@ Exports from [`package.json`](package.json); each has an ESM `.mjs` runtime and 
 | `creative-engine/contracts/decision-port/v1` | DecisionPort consumer proposal (CE-C02) | [DecisionPort proposal](docs/contracts/decision-port.md) |
 | `creative-engine/contracts/metering` | C03 metering boundary proposal | [Metering proposal](docs/contracts/metering.md) |
 | `creative-engine/contracts/approval-handoff` | Approval and exact-artifact handoff proposal | [Handoff proposal](docs/contracts/approval-handoff.md) |
+| `creative-engine/contracts/composition-authority` | Versioned composition authority, revision and preview validators | [Composition API](docs/api/creative-api.md) |
 | `creative-engine/preflight` | CE-A01 eight-cell provider access preflight | [Provider access](docs/operations/provider-access.md) |
 | `creative-engine/planning` | Deterministic CreativeBrief planner (CE-02) | [Brief planning](docs/creative-brief.md) |
 | `creative-engine/versions` | SQLite version store, selection CAS and API ports | [Version state](docs/creative/version-state-machine.md) |
@@ -58,14 +68,37 @@ Exports from [`package.json`](package.json); each has an ESM `.mjs` runtime and 
 
 The package is `private` at version `0.0.0`; it is not published to a registry.
 
+## Requirements
+
+Use Node.js **22.23.3** for production-target checks. CI also runs **24.15.0**, which [`.node-version`](.node-version) pins for development; `engines` accepts `>=22.23.3`. Make and npm are required for the documented targets. Strict NodeNext typechecks use TypeScript **5.9.3** from the locked browser example, and the image codec has its own locked dependency install.
+
 ## Quickstart
 
-Use Node.js 22.23.3 for production-target checks; CI also runs 24.15.0, which [`.node-version`](.node-version) pins for development. `engines` accepts `>=22.23.3`. From the repository root:
+For a fresh checkout, install all three locked dependency sets from the repository root:
 
 ```sh
-make bootstrap   # locked installs; the root install is --offline (needs a primed npm cache)
-make build       # syntax checks plus strict public-consumer typechecks
+npm ci --ignore-scripts
+npm ci --prefix examples/frontend-action-roundtrip
+npm ci --prefix src/models/codec-runtime --ignore-scripts
+make build
+make check TARGET=contracts MODE=mock
 ```
+
+`make build` checks source syntax and strict public-consumer types. With the root packages already cached, `make bootstrap` runs the same three installs with `--offline` on the root install. Browser checks require the separate Chromium installation in [controls integration](docs/controls-integration.md); the quickstart above does not launch the browser example or call a provider.
+
+## Configuration
+
+Core modules receive configuration and credentials through trusted host ports; they do not implicitly read a `.env` file or choose a default live provider.
+
+| Configuration boundary | Required host input |
+| --- | --- |
+| API and durable storage | Current authenticated scope, explicit dependencies, SQLite database path and content-addressed object root |
+| Research, rights and composition | Versioned source packages, current permission/invalidation checks and exact preview/revision evidence |
+| Provider and DecisionPort routes | Explicit model/operation/profile pins, server-side credential resolver and owned dispatch fences |
+| Finance and telemetry | Current reservation authority, attempt identities, usage profiles and durable evidence delivery |
+| Approval and production | Independently issued exact-artifact approval and an accepted handoff consumer |
+
+See [API composition](docs/api/creative-api.md), [execution target preparation](docs/operations/execution-target-preparation.md), [provider access](docs/operations/provider-access.md) and the individual provider guides. Names such as `CREATIVE_ENGINE_OPENROUTER_API_KEY` in host examples are injection placeholders; the adapter does not load that environment variable. Missing or unverified authority leaves the affected operation unavailable.
 
 ## Checks
 
@@ -75,12 +108,27 @@ All offline; synthetic fixtures, no paid provider calls:
 make check TARGET=all MODE=mock        # aggregate offline suite
 make check TARGET=api MODE=mock        # writes build/api-check-evidence.json
 make check TARGET=versions MODE=mock   # durable store and process-restart cases
+make check TARGET=composition MODE=mock # API 1.2/1.3 composition and strict types
 make acceptance TARGET=all             # expected to exit 2 while owner evidence is pending
 ```
 
-Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `openrouter-image-adapter`, `inspection`, `creative-metering`), their live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The concepts target is described below. The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
+Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `openrouter-image-adapter`, `inspection`, `creative-metering`), their live-gate behavior, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The [Makefile](Makefile) defines the executable target/mode combinations. The concepts target is described below. Install the Chromium prerequisites in [controls integration](docs/controls-integration.md) before browser verification.
 
 `make check TARGET=concepts MODE=mock` runs the native-edit fixture journey, public persistence and recovery cases, and an offline installed-package API consumer. `MODE=CI` runs the same local checks; `MODE=failclosedlive` exits 2 without dispatching or reading provider credentials. The local Creative API 1.1 mapping and external owner agreements remain pending acceptance.
+
+CI has separate [API](.github/workflows/api.yml), [contracts](.github/workflows/contracts.yml) and [controls](.github/workflows/controls.yml) workflows with pinned Node matrices. There is no separate Markdown or application lint script; syntax and strict type checks are part of the build.
+
+## Repository structure
+
+| Path | Contents |
+| --- | --- |
+| [`src/api/`](src/api/), [`src/runtime/`](src/runtime/) | Versioned request handler and operation orchestration |
+| [`src/contracts/`](src/contracts/), [`src/preflight/`](src/preflight/) | Local contract proposals and explicit access checks |
+| [`src/planning/`](src/planning/), [`src/generation/`](src/generation/), [`src/models/`](src/models/) | Briefs, concepts, provider adapters and isolated codec |
+| [`src/versions/`](src/versions/), [`src/storage/`](src/storage/), [`src/telemetry/`](src/telemetry/) | Durable history, immutable bytes and usage evidence |
+| [`src/controls/`](src/controls/), [`src/inspection/`](src/inspection/) | Creative actions, inspection and bounded repairs |
+| [`examples/frontend-action-roundtrip/`](examples/frontend-action-roundtrip/) | Separate local browser host and locked test tools |
+| [`tests/`](tests/), [`fixtures/`](fixtures/), [`evals/`](evals/), [`docs/`](docs/) | Offline checks, historical migration custody, evaluation policy and guides |
 
 ## Docs
 
@@ -101,9 +149,15 @@ Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-p
 - [event-intelligence](https://github.com/Jevelopers-neatHack-2026/event-intelligence): research packages, permissions and invalidation consumed by planning.
 - [shared-contracts](https://github.com/Jevelopers-neatHack-2026/shared-contracts): canonical schemas for the pending contract agreements.
 - [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence): metering and budget authority behind the C03 port.
-- [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness): DecisionPort/JEV transport and customer-review workflow.
+- [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness): DecisionPort/JEV transport and workflow coordination; application authentication and approval remain external.
 - [print-production](https://github.com/Jevelopers-neatHack-2026/print-production): exact event text, typography and print validation downstream of a selected version.
+- [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com): authenticated application host and approval issuer.
+- [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals): cross-component acceptance and selected journey evidence.
 
 ## Contributing
 
-Follow the organisation [contribution workflow](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/standards/contribution-workflow.md). Update acceptance states in the [integration-evals master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md), not here.
+Read [AGENTS.md](AGENTS.md) and follow the organization [contribution workflow](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/standards/contribution-workflow.md). Record the exact tested source and fixture scope in PRs. Accepted product states are owned by the [integration-evals master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+
+## License
+
+No license file is present in this repository; no license terms are asserted here.
