@@ -102,19 +102,62 @@ new admissions for existing leases. Admission and accounting occur atomically;
 exact historical replay remains deduplicated at full capacity and never grants
 another dispatch. Denial leaves the new attempt and its counters uncommitted.
 
-Schema 4 migrates v1–v3 databases atomically, retaining their old rows, run
+Schema 5 migrates v1–v4 databases atomically, retaining their old rows, run
 configuration hashes, deadlines, counters and uncertainty. Exposure already
 above the new tenant limit is preserved; available capacity saturates at zero.
 History and existing settlement remain accessible with the matching policy,
-while new work stays bounded. V3 and older binaries reject schema 4, so reverting
-the code is not a database downgrade procedure. Missing or corrupted schema-4
-policy metadata fails with `FRONTIER_VERSION`, without silently rebinding or
-clearing debt. The host owner must coordinate any later policy migration or
-rollback; no production database or policy was changed by the local fixtures.
+while new work stays bounded. An existing v4 policy is validated and retained;
+it is never rebound during the fence migration.
+
+A version-header check alone cannot exclude an already-opening older writer.
+Schema 5 adds a durable write-fence row and native SQLite triggers on all eleven
+frontier application tables, including the immutable tenant policy. A current
+operation validates the complete fence and policy after `BEGIN IMMEDIATE`,
+opens the guard only inside that same write transaction, and closes it before
+commit. Every other writer sees a closed committed guard. Callback failures,
+aborts and process exits roll back both admission changes and the uncommitted
+open guard. The migration installs a closed fence under the same writer lock
+as policy binding. This uses native SQL with `trusted_schema = OFF`; it does
+not register a SQLite function or grant a new external write API.
+
+Fresh v1–v4 binaries reject schema 5. Already-opening versions may finish their
+additive schema handling, but their later application writes are refused by
+the closed guard. A v1 initializer can even write an older `user_version`
+outside its schema transaction. The triggers do not prevent that PRAGMA or
+claim to fence arbitrary DDL: the intact fence and matching immutable policy
+are the authoritative migration records. Current code validates both under
+the lock before restoring a lower header, and rechecks them at its separate
+operation boundary. It never repeats a legacy migration, rebinds a policy or
+clears uncertainty because of that stale header. An older write transaction
+that acquires the lock before migration finishes first; its resulting history
+is retained as pre-migration exposure.
+
+Missing, changed or partial fence objects, an absent/invalid guard row, a
+committed open guard, unknown newer versions and corrupted policy metadata
+fail with `FRONTIER_VERSION`. A mismatched configured policy still fails with
+`FRONTIER_CONFLICT`, including when the header is stale. Neither failure clears
+debt or resets the database. An unfenced older header with an existing v4
+policy is inconsistent state and is also refused. A storage owner must diagnose
+that state and provide an explicit reviewed recovery; the component does not
+invent a repair authority. Reverting code is not a database downgrade procedure.
+These controls coordinate supported store writers; the private filesystem and
+database owner remain trusted and can deliberately change database files.
 
 The tenant tests use real temporary SQLite databases, independent Node
 processes and synthetic identities/settings without transport or provider
-calls. Two older per-run byte-contention fixtures explicitly select six tenant
+calls. Rolling-version controls import the exact pinned v1/v2/v3/v4 source and
+its complete local dependency closure from repository history, schedule a real
+current child before the old writer resumes, and verify persisted capacity and
+header recovery. The existing workflow supplies full history; absent historical
+objects fail fixture setup rather than being fetched or skipped. Separate
+controls check unguarded DML refusal, transaction abort, actual process-exit
+rollback and corrupt-fence refusal. Existing receipt/policy corruption tests use
+an explicitly privileged **test-only** transaction helper to preserve their
+intentional local row mutations and unchanged higher-level assertions. The
+unauthorized and historical-writer controls do not use that helper. No production
+database or policy was changed by these local fixtures.
+
+Two older per-run byte-contention fixtures explicitly select six tenant
 lease slots to retain their four unsettled reservations and two racing workers;
 their original 20 MiB and 100 MiB assertions remain intact. This is a scoped
 EI-02 AC4 mechanism and does not close issue #8, the release gate or the epic.

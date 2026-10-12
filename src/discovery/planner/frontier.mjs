@@ -4,7 +4,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { hasSensitiveUrlMaterial, parseAndValidateUrl } from '../../security/url-policy.mjs';
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
+const WRITE_FENCE_VERSION = 1;
 const CLAIM_BINDING_VERSION = 1;
 const MAX_SEEDS = 10;
 const MAX_DEPTH = 2;
@@ -524,6 +525,65 @@ function schemaSql() {
   `;
 }
 
+const FENCED_TABLES = Object.freeze([
+  'frontier_tenant_policy', 'frontier_runs', 'frontier_candidates', 'frontier_claims',
+  'frontier_attempts', 'frontier_observations', 'frontier_completions', 'frontier_stops',
+  'frontier_transport_hops', 'frontier_transport_legacy_uncertainty', 'frontier_private_release',
+]);
+
+const WRITE_FENCE_SCHEMA = Object.freeze([
+  Object.freeze({ type: 'table', name: 'frontier_write_fence', sql: `CREATE TABLE frontier_write_fence (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    protocol_version INTEGER NOT NULL CHECK (protocol_version = ${WRITE_FENCE_VERSION}),
+    is_open INTEGER NOT NULL CHECK (is_open IN (0, 1))
+  ) STRICT` }),
+  ...FENCED_TABLES.flatMap((table) => ['INSERT', 'UPDATE', 'DELETE'].map((operation) => {
+    const name = `frontier_write_fence_${table}_${operation.toLowerCase()}`;
+    return Object.freeze({ type: 'trigger', name, sql: `CREATE TRIGGER ${name}
+      BEFORE ${operation} ON ${table}
+      WHEN (SELECT is_open FROM frontier_write_fence
+        WHERE singleton = 1 AND protocol_version = ${WRITE_FENCE_VERSION}) IS NOT 1
+      BEGIN SELECT RAISE(ABORT, 'frontier write fence closed'); END` });
+  })),
+]);
+
+function validateWriteFence(database) {
+  const objects = database.prepare(`SELECT type, name, sql FROM sqlite_master
+    WHERE name GLOB 'frontier_write_fence*'`).all();
+  if (objects.length === 0) return false;
+  // Never silently repair a partial fence or a committed open guard. Only a
+  // complete, closed fence proves that an older writer has been excluded.
+  if (objects.length !== WRITE_FENCE_SCHEMA.length) fail('FRONTIER_VERSION');
+  for (const expected of WRITE_FENCE_SCHEMA) {
+    const actual = objects.find(({ name }) => name === expected.name);
+    if (actual?.type !== expected.type || actual.sql !== expected.sql) fail('FRONTIER_VERSION');
+  }
+  const rows = database.prepare('SELECT singleton, protocol_version, is_open FROM frontier_write_fence').all();
+  if (rows.length !== 1 || rows[0].singleton !== 1
+    || rows[0].protocol_version !== WRITE_FENCE_VERSION || rows[0].is_open !== 0) fail('FRONTIER_VERSION');
+  return true;
+}
+
+function installWriteFence(database) {
+  for (const { sql } of WRITE_FENCE_SCHEMA) database.exec(sql);
+  database.prepare(`INSERT INTO frontier_write_fence (singleton, protocol_version, is_open)
+    VALUES (1, ?, 0)`).run(WRITE_FENCE_VERSION);
+  if (!validateWriteFence(database)) fail('FRONTIER_VERSION');
+}
+
+function validateTenantPolicy(database, tenantHash, tenantPolicy) {
+  const policyTable = database.prepare(`SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name = 'frontier_tenant_policy'`).get();
+  if (!policyTable) fail('FRONTIER_VERSION');
+  const policies = database.prepare('SELECT * FROM frontier_tenant_policy').all();
+  if (policies.length !== 1 || policies[0].tenant_hash !== tenantHash
+    || typeof policies[0].policy_json !== 'string'
+    || policies[0].policy_hash !== digest(policies[0].policy_json)) fail('FRONTIER_VERSION');
+  if (policies[0].policy_json !== tenantPolicy.json || policies[0].policy_hash !== tenantPolicy.hash) {
+    fail('FRONTIER_CONFLICT');
+  }
+}
+
 async function ensureDirectory(directory) {
   try {
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -580,25 +640,20 @@ async function openDatabase(directory, tenantHash, tenantPolicy, deadline, signa
         // A peer may finish migration before this connection obtains the lock.
         // Read the version under the lock before choosing binding or validation.
         const version = database.prepare('PRAGMA user_version').get().user_version;
-        if (![0, 1, 2, 3, SCHEMA_VERSION].includes(version)) fail('FRONTIER_VERSION');
-        if (version === SCHEMA_VERSION) {
-          // A missing policy in a current database is corruption, not permission
-          // to bind a new limit. Old binaries reject this schema version.
-          const policyTable = database.prepare(`SELECT name FROM sqlite_master
-            WHERE type = 'table' AND name = 'frontier_tenant_policy'`).get();
-          if (!policyTable) fail('FRONTIER_VERSION');
-          const policies = database.prepare('SELECT * FROM frontier_tenant_policy').all();
-          if (policies.length !== 1 || policies[0].tenant_hash !== tenantHash
-            || typeof policies[0].policy_json !== 'string'
-            || policies[0].policy_hash !== digest(policies[0].policy_json)) fail('FRONTIER_VERSION');
-          if (policies[0].policy_json !== tenantPolicy.json || policies[0].policy_hash !== tenantPolicy.hash) {
-            fail('FRONTIER_CONFLICT');
-          }
-        }
+        if (![0, 1, 2, 3, 4, SCHEMA_VERSION].includes(version)) fail('FRONTIER_VERSION');
+        const fenced = validateWriteFence(database);
+        if (version === SCHEMA_VERSION && !fenced) fail('FRONTIER_VERSION');
+        if (fenced || version === 4) validateTenantPolicy(database, tenantHash, tenantPolicy);
+        else if (database.prepare(`SELECT name FROM sqlite_master
+          WHERE name = 'frontier_tenant_policy'`).get()) fail('FRONTIER_VERSION');
+        // An already-opening v1/v2/v3 binary can lower user_version after our
+        // commit. Its additive DDL leaves this validated fence and policy intact.
+        // Treat those records as authoritative; do not rebind or rerun a legacy
+        // migration based on the lowered header. Its later DML remains fenced.
         database.exec(schemaSql());
         const claimColumns = new Set(database.prepare('PRAGMA table_info(frontier_claims)').all()
           .map((column) => column.name));
-        if (version < SCHEMA_VERSION) {
+        if (!fenced && version < 4) {
           if (!claimColumns.has('claim_binding_version')) {
             database.exec(`ALTER TABLE frontier_claims ADD COLUMN claim_binding_version INTEGER NOT NULL DEFAULT 0
               CHECK (claim_binding_version IN (0, 1))`);
@@ -611,7 +666,7 @@ async function openDatabase(directory, tenantHash, tenantPolicy, deadline, signa
           .map((column) => column.name));
         if (!migratedClaimColumns.has('claim_binding_version')
           || !migratedClaimColumns.has('claim_observation_sequence')) fail('FRONTIER_VERSION');
-        if (version === 1) {
+        if (!fenced && version === 1) {
           // V1 recorded planner admissions but had no durable transport or body
           // accounting. Any such admission may have reached the network and
           // consumed decoded bytes. Preserve that uncertainty as a full-run
@@ -621,12 +676,13 @@ async function openDatabase(directory, tenantHash, tenantPolicy, deadline, signa
             SELECT tenant_hash, run_id, ${MAX_DECODED_BYTES_PER_RUN}
             FROM frontier_attempts GROUP BY tenant_hash, run_id`).run();
         }
-        if (version !== SCHEMA_VERSION) {
+        if (!fenced && version < 4) {
           // Bind once in the same atomic migration. Retain every historical
           // row even when its exposure already exceeds the selected policy.
           database.prepare(`INSERT INTO frontier_tenant_policy (tenant_hash, policy_json, policy_hash)
             VALUES (?, ?, ?)`).run(tenantHash, tenantPolicy.json, tenantPolicy.hash);
         }
+        if (!fenced) installWriteFence(database);
         if (version !== SCHEMA_VERSION) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
         checkOperationSignal(signal);
         database.exec('COMMIT');
@@ -656,7 +712,7 @@ function pageBytes(database) {
   return size * count;
 }
 
-async function transaction(database, callback, deadline, signal) {
+async function transaction(database, callback, deadline, signal, tenantHash, tenantPolicy) {
   let open = false;
   try {
     while (true) {
@@ -670,8 +726,21 @@ async function transaction(database, callback, deadline, signal) {
       }
     }
     open = true;
+    if (!validateWriteFence(database)) fail('FRONTIER_VERSION');
+    validateTenantPolicy(database, tenantHash, tenantPolicy);
+    const version = database.prepare('PRAGMA user_version').get().user_version;
+    if (![0, 1, 2, 3, 4, SCHEMA_VERSION].includes(version)) fail('FRONTIER_VERSION');
+    // Only the current writer sees this uncommitted open guard. SQLite excludes
+    // every other writer until it is closed and committed, or rolled back.
+    if (version !== SCHEMA_VERSION) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+    const opened = database.prepare(`UPDATE frontier_write_fence SET is_open = 1
+      WHERE singleton = 1 AND protocol_version = ? AND is_open = 0`).run(WRITE_FENCE_VERSION);
+    if (opened.changes !== 1) fail('FRONTIER_VERSION');
     const result = callback(database);
     if (pageBytes(database) > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
+    const closed = database.prepare(`UPDATE frontier_write_fence SET is_open = 0
+      WHERE singleton = 1 AND protocol_version = ? AND is_open = 1`).run(WRITE_FENCE_VERSION);
+    if (closed.changes !== 1) fail('FRONTIER_VERSION');
     while (true) {
       checkOperationSignal(signal);
       try {
@@ -1225,7 +1294,8 @@ export function createDiscoveryFrontierStore(options) {
     try {
       assertOpen();
       checkOperationSignal(signal);
-      return await transaction(database, (db) => operation(db, scopeInfo), deadline, signal);
+      return await transaction(database, (db) => operation(db, scopeInfo), deadline, signal,
+        scopeInfo.tenantHash, tenantPolicy);
     } catch (error) {
       throw safeStorageError(error);
     } finally {
