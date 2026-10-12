@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
+import { createProgressEmitter } from "./ci-workload-progress.mjs";
 
 export default async function* report(events) {
 	const files = new Map();
+	const progress = createProgressEmitter((line) => process.stderr.write(line));
 	let summary;
 	const state = (path) => {
 		if (!files.has(path))
@@ -14,6 +16,7 @@ export default async function* report(events) {
 		return files.get(path);
 	};
 	for await (const event of events) {
+		progress(event);
 		const file = event.data.entryFile ?? event.data.file;
 		switch (event.type) {
 			case "test:stdout":

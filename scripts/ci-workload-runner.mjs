@@ -4,6 +4,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { createProgressForwarder } from "./ci-workload-progress.mjs";
 import { digest, selectGroup } from "./ci-workload-plan.mjs";
 import {
 	reportSchema,
@@ -21,7 +22,7 @@ export async function executeFiles(options) {
 	const started = performance.now();
 	let stdout, stderr, exitCode;
 	try {
-		({ stdout, stderr } = await promisify(execFile)(
+		const execution = promisify(execFile)(
 			process.execPath,
 			[
 				"--test",
@@ -34,7 +35,14 @@ export async function executeFiles(options) {
 				env: { ...environment, ...options.environment },
 				maxBuffer: 4 * 1024 * 1024,
 			},
-		));
+		);
+		execution.child.stderr?.on(
+			"data",
+			createProgressForwarder(
+				options.onProgress ?? ((line) => process.stderr.write(line)),
+			),
+		);
+		({ stdout, stderr } = await execution);
 		exitCode = 0;
 	} catch (error) {
 		assert.ok(error instanceof Error);
