@@ -1,5 +1,5 @@
 import {
-  closeSync, constants, fstatSync, fsyncSync, mkdirSync, openSync, readdirSync,
+  closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, opendirSync, openSync, readdirSync,
   readFileSync, readSync, renameSync, statSync, unlinkSync, writeSync
 } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -42,6 +42,8 @@ const BATCH_FILE = /^batch-(\d{12,16})-(\d{12,16})\.json$/;
 // under this hard cap. Oversize persistence fails before the dependent POST.
 const MAX_BATCH_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_BATCHES_PER_DRAIN = 32;
+const DEFAULT_MAX_RETAINED_BATCHES = 128;
+const MAX_RETAINED_BATCHES = 1024;
 const DRAIN_CURSOR_FILE = 'drain-cursor.json';
 const DRAIN_CURSOR_SCHEMA = 'agent-harness.neatlogs.outbox-drain-cursor.v1';
 const MAX_DRAIN_CURSOR_BYTES = 256;
@@ -154,6 +156,37 @@ function recordsJson(records) {
   return JSON.stringify(records.map(record => ({ ...record })));
 }
 
+// Admission must not allocate an array for an already over-cap directory.
+// Only batch files and the one scheduling cursor belong in this directory.
+// Unexpected artifacts (including abandoned temporary writes) are retained
+// for diagnosis and refuse admission rather than escaping the inventory.
+function admissionInventory(root, maxRetainedBatches) {
+  const paths = [];
+  const directory = opendirSync(root, { bufferSize: 32 });
+  try {
+    let entry;
+    let examined = 0;
+    while ((entry = directory.readSync()) !== null) {
+      if (++examined > maxRetainedBatches + 1) return null;
+      if (!entry.isFile()) return null;
+      const path = join(root, entry.name);
+      if (entry.name === DRAIN_CURSOR_FILE) {
+        const stats = lstatSync(path);
+        if (!stats.isFile() || stats.size < 1 || stats.size > MAX_DRAIN_CURSOR_BYTES) return null;
+        continue;
+      }
+      if (!BATCH_FILE.test(entry.name) || paths.length === maxRetainedBatches) return null;
+      batchRange(path);
+      const stats = lstatSync(path);
+      if (!stats.isFile() || stats.size < 1 || stats.size > MAX_BATCH_FILE_BYTES) return null;
+      paths.push(path);
+    }
+    return paths.sort((left, right) => compareBatchNames(basename(left), basename(right)));
+  } finally {
+    directory.closeSync();
+  }
+}
+
 /**
  * Tags for a trace emitted by the harness runtime itself. Never includes
  * `evidence:synthetic`; the harness dependency mode is recorded explicitly.
@@ -175,23 +208,32 @@ export function runtimeNeatlogsTags({ revision, harnessMode }) {
  * `directory`. It performs no network I/O. Its filesystem operations are
  * synchronous and cannot be preempted by the exporter's timeout. Records
  * already stored are accepted again without rewriting; a record that differs
- * from the stored copy is refused.
+ * from the stored copy is refused. A bounded inventory reserves one full
+ * 2-MiB slot for each retained batch; admission never prunes existing data.
  */
-export function createNeatlogsOutboxSink({ directory }) {
+export function createNeatlogsOutboxSink({ directory, maxRetainedBatches = DEFAULT_MAX_RETAINED_BATCHES }) {
   if (typeof directory !== 'string' || directory.length === 0) throw new NeatlogsOutboxError('INVALID_DIRECTORY');
+  if (!Number.isSafeInteger(maxRetainedBatches) || maxRetainedBatches < 1 || maxRetainedBatches > MAX_RETAINED_BATCHES) {
+    throw new NeatlogsOutboxError('INVALID_OUTBOX_LIMIT');
+  }
   const root = resolve(directory);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   return function neatlogsOutboxSink(records, { signal } = {}) {
     if (signal?.aborted) return { accepted: false, acceptedCount: 0 };
     const validated = validateNeatlogsSourceRecords(records);
+    const paths = admissionInventory(root, maxRetainedBatches);
+    if (paths === null) return { accepted: false, acceptedCount: 0 };
     // A retry after a sink timeout can carry a page that has grown since the
     // first attempt. Records already in the outbox must match exactly; only
     // the uncovered suffix is written, so no event is stored twice.
     const stored = new Map();
-    for (const existingPath of listNeatlogsOutbox(root)) {
+    const requested = new Set(validated.map(record => record.sequence));
+    for (const existingPath of paths) {
       const { first, last } = batchRange(existingPath);
       if (last < validated[0].sequence || first > validated.at(-1).sequence) continue;
-      for (const record of readBatch(existingPath).records) stored.set(record.sequence, record);
+      for (const record of readBatch(existingPath).records) {
+        if (requested.has(record.sequence)) stored.set(record.sequence, record);
+      }
     }
     const fresh = [];
     for (const record of validated) {
@@ -204,6 +246,7 @@ export function createNeatlogsOutboxSink({ directory }) {
       syncDirectory(root);
       return { accepted: true, acceptedCount: validated.length };
     }
+    if (paths.length === maxRetainedBatches) return { accepted: false, acceptedCount: 0 };
     const first = fresh[0].sequence;
     const last = fresh.at(-1).sequence;
     const path = join(root, `batch-${pad(first)}-${pad(last)}.json`);
@@ -614,8 +657,8 @@ export function loadNeatlogsTelemetryOptIn({ enabled = false, env = {}, envFile 
  * not linkable across runs. The caller closes the returned store after the
  * worker has stopped.
  */
-export function createNeatlogsOperationsTelemetry({ databasePath, outboxDirectory, busyTimeoutMs = 20, limits }) {
-  const sink = createNeatlogsOutboxSink({ directory: outboxDirectory });
+export function createNeatlogsOperationsTelemetry({ databasePath, outboxDirectory, busyTimeoutMs = 20, limits, maxRetainedBatches }) {
+  const sink = createNeatlogsOutboxSink({ directory: outboxDirectory, maxRetainedBatches });
   const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs });
   const tokenizer = createHmacTokenizer(randomBytes(32));
   let exporter;
