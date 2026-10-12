@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { contextOf, expectPrivate, reseed } from './private-context';
 
 /**
  * SYNTHETIC_CONFORMANCE_ONLY. Real Chromium + axe over the real, hydrated client (no SSR shortcut). The fixture host injects a read port that serves the ACTUAL captured Finance-producer
@@ -61,6 +62,8 @@ async function expectNoLeak(page: Page) {
   const html = await page.locator('body').innerHTML();
   const secrets: string[] = [CURSOR_2, CURSOR_3, 'fixture-token', ...refusals.observations.flatMap((entry: any) => [entry.result.error.safe_message, entry.result.error.diagnostic_ref, entry.request.cursor ?? '']).filter(Boolean)]; // eslint-disable-line @typescript-eslint/no-explicit-any
   for (const secret of secrets) expect(html, secret.slice(0, 40)).not.toContain(secret);
+  // Every attribute, resolved href, URL (address, referrer, resources) and web storage as well; the cursor and the token each get their own independent checks.
+  await expectPrivate(page, secrets);
 }
 const recordIds = (page: Page, prefixes: string[]) => page.addInitScript((wanted) => {
   const seen = new Set<string>();
@@ -102,31 +105,72 @@ test('three actual pages by keyboard alone: exact ordered ids, replaced rows, de
   expect(page.url()).not.toContain('fixture-token');
 });
 
-test('reload keeps the actual cursor as request metadata only, labels the position honestly, and Previous returns to the first page', async ({ page }) => {
+test('reload restores the validated private context with no cursor in the page or address, labels the position honestly, and Previous returns to the first page', async ({ page }) => {
   await open(page);
+  expect(await contextOf(page)).toBeNull();
   await page.getByRole('button', { name: 'Next page' }).click();
   await expect(pageStatus(page, 'Page 2')).toBeVisible();
-  expect(page.url()).toContain(`cursor=${encodeURIComponent(CURSOR_2)}`);
+  expect(page.url()).not.toContain('cursor');
+  expect(page.url()).not.toContain(encodeURIComponent(CURSOR_2));
+  expect((await contextOf(page))?.cursor).toBe(CURSOR_2);
+  expect(JSON.stringify(await page.evaluate(() => window.history.state))).not.toContain('fixture-token');
+  await expectNoLeak(page);
   await page.reload();
   await expect(pageStatus(page, 'Linked page')).toBeVisible();
   expect(await rows(page)).toEqual([IDS[2], IDS[3]]);
+  await expectNoLeak(page);
   await page.getByRole('button', { name: 'Previous page' }).click();
   await expect(pageStatus(page, 'Page 1')).toBeVisible();
   expect(await rows(page)).toEqual([IDS[0], IDS[1]]);
-  expect(page.url()).not.toContain('cursor=');
+  expect(await contextOf(page)).toBeNull();
+  expect(page.url()).not.toContain('cursor');
   await expectNoLeak(page);
 });
 
-test('Back from a transaction opened on page 2 returns to that page, read again from the live URL cursor', async ({ page }) => {
+test('a detail opened by keyboard on page 2 carries the private context, no href or URL holds the cursor, and Back returns to that page', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Next page' }).click();
   await expect(pageStatus(page, 'Page 2')).toBeVisible();
-  await page.getByRole('link', { name: IDS[2]! }).click();
+  const link = page.getByRole('link', { name: IDS[2]! });
+  expect(await link.getAttribute('href')).not.toMatch(/cursor/u);
+  await expectNoLeak(page);
+  await tabTo(page, link);
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 2, name: 'Transaction detail view' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Transaction record' })).toContainText(IDS[2]!);
+  expect((await contextOf(page))?.cursor).toBe(CURSOR_2);
+  await expectNoLeak(page);
+  const backLink = page.getByRole('link', { name: 'Back to transactions' });
+  expect(await backLink.getAttribute('href')).not.toMatch(/cursor/u);
+  await tabTo(page, backLink);
+  await page.keyboard.press('Enter');
+  await expect(pageStatus(page, 'Linked page')).toBeVisible();
+  expect(await rows(page)).toEqual([IDS[2], IDS[3]]);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+  await expectNoLeak(page);
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 2, name: 'Transaction detail view' })).toBeVisible();
   await page.goBack();
   await expect(pageStatus(page, 'Linked page')).toBeVisible();
   expect(await rows(page)).toEqual([IDS[2], IDS[3]]);
+  await page.goForward();
+  await expect(page.getByRole('heading', { level: 2, name: 'Transaction detail view' })).toBeVisible();
+  await expectNoLeak(page);
+});
+
+test('a detail URL opened in a new tab has no private context: the first page only is read and the transaction is honestly not delivered', async ({ page, context }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(pageStatus(page, 'Page 2')).toBeVisible();
+  const href = (await page.getByRole('link', { name: IDS[2]! }).getAttribute('href'))!;
+  const shared = await context.newPage();
+  await shared.goto(href);
+  await expect(shared.getByRole('heading', { name: 'Transaction not in this snapshot' })).toBeVisible();
+  await noAmounts(shared);
+  expect(await answered(shared)).toEqual([null]);
+  expect(await contextOf(shared)).toBeNull();
+  await expectNoLeak(shared);
+  await shared.close();
 });
 
 test('a filter change on page 2 returns to the first page, drops the history and reads fresh', async ({ page }) => {
@@ -137,7 +181,9 @@ test('a filter change on page 2 returns to the first page, drops the history and
   await expect(pageStatus(page, 'Page 1')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
   expect(await rows(page)).toEqual([IDS[1]]);
-  expect(page.url()).not.toContain('cursor=');
+  expect(page.url()).not.toContain('cursor');
+  expect(await contextOf(page)).toBeNull();
+  await expectNoLeak(page);
   expect(await answered(page)).toEqual([null, 1, null]);
 });
 
@@ -192,9 +238,14 @@ test('a producer revocation after the first page is committed refuses the next p
 // Nine actual typed refusals, each replayed through the real hydrated client as the recorded query. A foreign scope reads as restricted; a lost CURRENT grant as unauthorized.
 const FORGED = observation('unsigned_cursor_forgery').request.cursor as string;
 const SIZE_MISMATCH = observation('cursor_page_size_mismatch').request.cursor as string;
+// The two cursor refusals are replayed from a restored PRIVATE context (the cursor and, for the size mismatch, its matching page-size binding), never from the address.
+const SEEDED: Readonly<Record<string, { cursor: string; binding?: Record<string, unknown>; search?: string }>> = {
+  unsigned_cursor_forgery: { cursor: FORGED },
+  cursor_page_size_mismatch: { cursor: SIZE_MISMATCH, binding: { pageSize: 3 }, search: '?state=ready&v2=conformance-pagination&v2port=captured&v2size=3' },
+};
 const REFUSAL_CASES: ReadonlyArray<readonly [string, string, string, string]> = [
-  ['unsigned_cursor_forgery', `cursor=${encodeURIComponent(FORGED)}`, 'Report could not be loaded', 'VALIDATION_ERROR'],
-  ['cursor_page_size_mismatch', `cursor=${encodeURIComponent(SIZE_MISMATCH)}&v2size=3`, 'Report could not be loaded', 'IDEMPOTENCY_CONFLICT'],
+  ['unsigned_cursor_forgery', '', 'Report could not be loaded', 'VALIDATION_ERROR'],
+  ['cursor_page_size_mismatch', '', 'Report could not be loaded', 'IDEMPOTENCY_CONFLICT'],
   ['snapshot_period_mismatch', 'v2tamper=period', 'Report could not be loaded', 'IDEMPOTENCY_CONFLICT'],
   ['snapshot_filter_mismatch', 'v2tamper=filters', 'Report could not be loaded', 'IDEMPOTENCY_CONFLICT'],
   ['foreign_scope', 'v2scope=foreign', 'Report restricted', 'FORBIDDEN_SCOPE'],
@@ -205,6 +256,13 @@ const REFUSAL_CASES: ReadonlyArray<readonly [string, string, string, string]> = 
 for (const [name, query, title, code] of REFUSAL_CASES) {
   test(`actual refusal ${name} (${code}) shows "${title}" with no amount, no Retry and nothing the producer kept private`, async ({ page }) => {
     await open(page, query);
+    const seed = SEEDED[name];
+    if (seed) {
+      await expect(pageStatus(page, 'Page 1')).toBeVisible();
+      await page.getByRole('button', { name: 'Next page' }).click();
+      await expect(pageStatus(page, 'Page 2')).toBeVisible();
+      await reseed(page, { cursor: seed.cursor, ...(seed.binding ? { binding: seed.binding } : {}) }, seed.search);
+    }
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
     await noAmounts(page);
     await expect(page.getByRole('table', { name: 'Transaction details' })).toHaveCount(0);
@@ -215,28 +273,129 @@ for (const [name, query, title, code] of REFUSAL_CASES) {
   });
 }
 
-test('a URL cursor the producer never signed is not authority: no amount and no fallback, and the way back is the first page', async ({ page }) => {
-  await open(page, 'cursor=not-a-signed-cursor');
+test('a restored cursor the producer never signed is not authority: no amount and no fallback, and the way back is the first page', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(pageStatus(page, 'Page 2')).toBeVisible();
+  await reseed(page, { cursor: 'not-a-signed-cursor' });
   await expect(page.getByRole('heading', { name: 'Report could not be loaded' })).toBeVisible();
   await noAmounts(page);
+  await expectNoLeak(page);
   await page.getByRole('button', { name: 'Return to first page' }).click();
   await expect(pageStatus(page, 'Page 1')).toBeVisible();
-  expect(page.url()).not.toContain('cursor=');
+  expect(page.url()).not.toContain('cursor');
+  expect(await contextOf(page)).toBeNull();
 });
 
-test('an empty URL cursor is refused before any read, not turned into a first-page read', async ({ page }) => {
-  await open(page, 'cursor=');
-  await expect(page.getByRole('alert')).toContainText('/cursor');
+for (const [label, cursor] of [['empty', ''], ['overlong', 'c'.repeat(2049)]] as const) {
+  test(`an ${label} restored cursor is refused before any read, not turned into a first-page read`, async ({ page }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(pageStatus(page, 'Page 2')).toBeVisible();
+    await reseed(page, { cursor });
+    await expect(page.getByRole('alert')).toContainText('/cursor');
+    await noAmounts(page);
+    expect(await readsLog(page)).toEqual([]);
+  });
+}
+
+for (const [field, value] of [
+  ['actorId', 'account:synthetic-actor-b'], ['tenantId', 'account:other-tenant'], ['projectId', 'event:other-project'], ['environment', 'live'], ['billingMode', 'real'],
+  ['snapshotId', 'sha256:00'], ['queryContentHash', 'sha256:00'], ['summaryContentHash', 'sha256:00'], ['revision', '99'], ['pageSize', 3], ['valuation', 'estimated'], ['currency', 'USD'],
+] as const) {
+  test(`a restored context bound to a different ${field} is discarded: the actual first page is read and page 2 does not resurface`, async ({ page }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(pageStatus(page, 'Page 2')).toBeVisible();
+    await reseed(page, { binding: { [field]: value } });
+    await expect(pageStatus(page, 'Page 1')).toBeVisible();
+    expect(await rows(page)).toEqual([IDS[0], IDS[1]]);
+    expect(await answered(page)).toEqual([null]);
+    await expectNoLeak(page);
+  });
+}
+
+for (const [label, replacement] of [['a string', 'forged'], ['an unknown key', { tdFinancePagingContext: { version: 1, cursor: 'x', binding: {}, token: 'fixture-token-1' } }], ['an empty binding', { tdFinancePagingContext: { version: 1, cursor: CURSOR_2, binding: {} } }]] as const) {
+  test(`a forged history context (${label}) is discarded and the actual first page is read`, async ({ page }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(pageStatus(page, 'Page 2')).toBeVisible();
+    await reseed(page, { replaceState: replacement });
+    await expect(pageStatus(page, 'Page 1')).toBeVisible();
+    expect(await answered(page)).toEqual([null]);
+    await expectNoLeak(page);
+  });
+}
+
+for (const [label, value] of [['forged', FORGED], ['unsigned', 'not-a-signed-cursor'], ['empty', ''], ['overlong', 'c'.repeat(2049)], ['actual', CURSOR_2]] as const) {
+  test(`a ${label} cursor in the address is unsupported: no read, no paging, no echo, and no URL or href repeats it`, async ({ page }) => {
+    await open(page, `cursor=${encodeURIComponent(value)}`);
+    await expect(page.getByRole('heading', { level: 2, name: 'Address paging is not supported' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('no report was read');
+    await noAmounts(page);
+    await expect(page.getByRole('table', { name: 'Transaction details' })).toHaveCount(0);
+    expect(await readsLog(page)).toEqual([]);
+    expect(page.url()).not.toContain('cursor');
+    await expectNoLeak(page);
+    await expectPrivate(page, [value || CURSOR_3]);
+    await scan(page, `pagination-conformance-address-${label}`);
+    await page.getByRole('button', { name: 'Open the first page' }).click();
+    await expect(pageStatus(page, 'Page 1')).toBeVisible();
+    expect(await rows(page)).toEqual([IDS[0], IDS[1]]);
+    await expectNoLeak(page);
+  });
+}
+
+test('actor A to B to A never resurrects the actual page 2: each return reads the first page and the private context is cleared', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(pageStatus(page, 'Page 2')).toBeVisible();
+  await page.getByLabel('Finance v2 actor').selectOption('b');
+  await expect(page.getByRole('heading', { name: 'Report restricted' })).toBeVisible();
   await noAmounts(page);
-  expect(await readsLog(page)).toEqual([]);
+  expect(await contextOf(page)).toBeNull();
+  await page.getByLabel('Finance v2 actor').selectOption('a');
+  await expect(pageStatus(page, 'Page 1')).toBeVisible();
+  expect(await rows(page)).toEqual([IDS[0], IDS[1]]);
+  expect(await contextOf(page)).toBeNull();
+  expect((await readsLog(page)).filter((entry) => entry.page === 1)).toHaveLength(1);
+  await expectNoLeak(page);
 });
 
-test('INTEGRATED mode with an actual cursor stays unavailable and never reads', async ({ page }) => {
+test('browser Back after the host token is revoked stays no-amount: the restored private context is no authority', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(pageStatus(page, 'Page 2')).toBeVisible();
+  await page.getByRole('link', { name: IDS[2]! }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Transaction detail view' })).toBeVisible();
+  await page.getByLabel('Finance v2 host token').uncheck();
+  await expect(page.getByRole('alert')).toContainText('not authorized');
+  await page.goBack();
+  await expect(page.getByRole('alert')).toContainText('not authorized');
+  await noAmounts(page);
+  await expect(page.getByRole('table', { name: 'Transaction details' })).toHaveCount(0);
+  await expectNoLeak(page);
+});
+
+test('INTEGRATED mode with an actual cursor in the address stays unavailable, never reads, and the address is cleaned', async ({ page }) => {
   await open(page, `v2mode=integrated&cursor=${encodeURIComponent(CURSOR_2)}`);
   await expect(page.getByRole('status').filter({ hasText: 'no accepted read port exists' })).toBeVisible();
   await noAmounts(page);
   await expect(page.getByRole('navigation', { name: 'Transaction pages' })).toHaveCount(0);
   expect(await readsLog(page)).toEqual([]);
+  await expectNoLeak(page);
+});
+
+test('INTEGRATED mode with a restored private context stays unavailable and reaches no port', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(pageStatus(page, 'Page 2')).toBeVisible();
+  await reseed(page, {}, '?state=ready&v2=conformance-pagination&v2port=captured&v2mode=integrated');
+  await expect(page.getByRole('status').filter({ hasText: 'no accepted read port exists' })).toBeVisible();
+  await noAmounts(page);
+  await expect(page.getByRole('navigation', { name: 'Transaction pages' })).toHaveCount(0);
+  expect(await readsLog(page)).toEqual([]);
+  await expectNoLeak(page);
 });
 
 test('the CFO export stays disabled on every actual page', async ({ page }) => {
@@ -266,4 +425,5 @@ test('the loaded actual page 2 reflows at 320 CSS pixels without page-level hori
   await page.keyboard.press('Home');
   await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBe(0);
   await scan(page, 'pagination-conformance-page-2-320');
+  await expectNoLeak(page);
 });
