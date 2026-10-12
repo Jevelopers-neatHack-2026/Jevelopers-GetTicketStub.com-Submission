@@ -47,6 +47,8 @@ const CASES_ALL = [
   { key: "harbour", edition: "risograph", finish: "foil", art: "procedural" },
   { key: "pale", edition: "classic", finish: "matte", art: "image" },
   { key: "harbour", edition: "minimal", finish: "holo", art: "procedural" },
+  // the researched painters lay a grain SVG over the art; it once made the export drop the whole art window
+  { key: "neathack", edition: "researched", finish: "foil", art: "procedural" },
 ];
 // DOWNLOAD_ONLY=<n> runs the first n cases at 390 only (for working on the renderer).
 const ONLY = Number(process.env.DOWNLOAD_ONLY) || 0;
