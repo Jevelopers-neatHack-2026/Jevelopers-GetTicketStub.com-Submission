@@ -21,6 +21,22 @@ function checkoutBlocks(source) {
   });
 }
 
+test("every action reference is a verified full-SHA pin, never a mutable tag", async () => {
+  const source = await readFile(workflow, "utf8");
+  const actionReferences = [...source.matchAll(/^[ \t]*-[ \t]+uses:[ \t]*([^ \t#]+)(?:[ \t]+#.*)?$/gm)]
+    .map((match) => match[1]);
+
+  assert.deepEqual(actionReferences, [
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+  ]);
+  for (const reference of actionReferences) {
+    assert.match(reference, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/);
+  }
+  assert.doesNotMatch(source, /^[ \t]*-[ \t]+uses:.*@(v[0-9]|main|master)\b/m,
+    "mutable release tags and branches are not permitted");
+});
+
 test("workflow runs only on trusted main pushes, never on PR or selected dispatch refs", async () => {
   const source = await readFile(workflow, "utf8");
   const triggers = topLevelBlock(source, "on");

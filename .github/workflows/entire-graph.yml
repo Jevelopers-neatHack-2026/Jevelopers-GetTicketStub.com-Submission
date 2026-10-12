@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install pinned Entire CLI
@@ -61,7 +61,7 @@ jobs:
           cp .entire/graph-agent.md "$out/.entire/graph-agent.md"
           cp AGENTS.md CLAUDE.md "$out/"
           echo "- Generated instruction candidates are included under init-agents/ for manual review; nothing is pushed." >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: entire-graph-${{ github.sha }}
           path: ${{ runner.temp }}/out
