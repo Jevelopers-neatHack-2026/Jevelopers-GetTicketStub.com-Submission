@@ -58,7 +58,7 @@ export const DEFAULT_AUDIENCE = "ticketstub.finance";
 export type VerifyFailure = "unknown" | "forged" | "stale" | "revoked" | "expired" | "unsupported_version" | "wrong_audience";
 export type VerifyResult = { ok: true; ctx: AnyContext } | { ok: false; reason: VerifyFailure };
 
-/** Options a verifier brings itself. `audience` is the host the verifier is: a /2 token for another audience is wrong_audience. */
+/** Options a verifier brings itself. `audience` is the host the verifier is: a /2 token for another audience, or checked with no audience named, is wrong_audience. */
 export interface VerifyOptions {
   audience?: string;
 }
@@ -158,7 +158,7 @@ export function tokenSessionRef(token: string): string | null {
 /**
  * Checks a token in this order: shape (unknown), HMAC in constant time (forged), schema version
  * (unsupported_version), that version's own shape (unknown), expiry (expired), audience (wrong_audience: /2
- * only, and only when the verifier names its audience), session and project membership (revoked), membership
+ * only, and a verifier that names no audience is refused the same way), session and project membership (revoked), membership
  * revision (stale). The last two run only when `state` is given.
  */
 export function verifyWithKey(token: string, key: string | Buffer, now = Date.now(), state?: TokenState, opts?: VerifyOptions): VerifyResult {
@@ -184,7 +184,7 @@ export function verifyWithKey(token: string, key: string | Buffer, now = Date.no
   const ctx = raw as unknown as AnyContext;
   const v2 = ctx.schema === CONTEXT_SCHEMA_V2;
   if (Date.parse(ctx.expiresAt) <= now) return { ok: false, reason: "expired" };
-  if (v2 && opts?.audience !== undefined && ctx.audience !== opts.audience) return { ok: false, reason: "wrong_audience" };
+  if (v2 && (typeof opts?.audience !== "string" || opts.audience === "" || ctx.audience !== opts.audience)) return { ok: false, reason: "wrong_audience" };
   if (ctx.revoked || state?.sessionLive === false || (v2 && state?.projectMember === false)) return { ok: false, reason: "revoked" };
   if (state?.membershipRevision !== undefined && state.membershipRevision !== ctx.membershipRevision) return { ok: false, reason: "stale" };
   return { ok: true, ctx };

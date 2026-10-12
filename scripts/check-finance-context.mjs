@@ -89,7 +89,7 @@ async function main() {
   let sent = 0;
   const verify = (token, extra = {}) => {
     if (++sent % 90 === 0) verifier = client();
-    return verifier.api("POST", "/api/context/verify", { token, ...extra });
+    return verifier.api("POST", "/api/context/verify", { token, audience: "ticketstub.finance", ...extra });
   };
 
   // --- versions: /1 stays the default, /2 is asked for
@@ -131,7 +131,7 @@ async function main() {
   // --- the verification port
   const v = await verify(evCtx.json.token);
   check("verify: a fresh /2 token verifies with the same context", v.status === 200 && v.json.ok === true && v.json.context.project.ref === e.project.ref && v.json.context.economicMode === "none");
-  const back = verifyContext(evCtx.json.token, SECRET, { now: Date.now() });
+  const back = verifyContext(evCtx.json.token, SECRET, { now: Date.now(), audience: "ticketstub.finance" });
   check("verify: the offline verifier accepts the same token with the issuer's key", back.ok === true && back.ctx.actor.id === e.actor.id);
   check("verify: the right audience passes, another host is wrong_audience (401)", (await verify(evCtx.json.token, { audience: "ticketstub.finance" })).status === 200 && (await verify(evCtx.json.token, { audience: "another-host" })).json?.reason === "wrong_audience");
   check("verify: a non-string audience is a 400", (await verify(evCtx.json.token, { audience: 7 })).status === 400);
@@ -155,11 +155,14 @@ async function main() {
 
   // --- parity: identical malformed input, identical reason, from the server and from verify.mjs
   const corpus = malformedContexts();
+  const noAud = await verify(evCtx.json.token, { audience: undefined }); // a /2 verifier must name its audience
+  const noAudOffline = verifyContext(evCtx.json.token, SECRET, { now: Date.now() });
+  check("verify: a /2 token with no expected audience is refused (401 wrong_audience), by the server and by verify.mjs alike", noAud.status === 401 && noAud.json?.reason === "wrong_audience" && noAudOffline.ok === false && noAudOffline.reason === "wrong_audience");
   let bad = [];
   for (const { name, ctx } of corpus) {
     const token = signContext(ctx, SECRET, null);
     const server = await verify(token);
-    const offline = verifyContext(token, SECRET, { now: Date.now() });
+    const offline = verifyContext(token, SECRET, { now: Date.now(), audience: "ticketstub.finance" });
     if (!(server.status === 401 && server.json?.reason === "unknown" && offline.ok === false && offline.reason === server.json.reason)) bad.push(`${name}: server ${server.status} ${server.json?.reason}, offline ${offline.reason}`);
   }
   check(`parity: all ${corpus.length} malformed shapes (the seven GT-FIN-003 shapes, the /2 ones, and the wrong-typed enums) are unknown from the server and from verify.mjs`, bad.length === 0 && corpus.length === MALFORMED.length, bad.join(" | "));
@@ -168,7 +171,7 @@ async function main() {
   for (const { name, ctx } of wrongTypeSchemaContexts()) {
     const token = signContext(ctx, SECRET, null);
     const server = await verify(token);
-    const offline = verifyContext(token, SECRET, { now: Date.now() });
+    const offline = verifyContext(token, SECRET, { now: Date.now(), audience: "ticketstub.finance" });
     if (!(server.status === 401 && server.json?.reason === "unsupported_version" && offline.ok === false && offline.reason === "unsupported_version")) schemaBad.push(`${name}: server ${server.status} ${server.json?.reason}, offline ${offline.reason}`);
   }
   check("parity: a wrong-typed schema (array, object, null, number, boolean; /1 and /2) is unsupported_version from the server and from verify.mjs", schemaBad.length === 0, schemaBad.join(" | "));
@@ -207,7 +210,7 @@ async function main() {
   ];
   for (const [name, token, extra, reason] of other) {
     const server = await verify(token, extra);
-    const offline = verifyContext(token, SECRET, { now: Date.now(), audience: extra.audience });
+    const offline = verifyContext(token, SECRET, { now: Date.now(), audience: "audience" in extra ? extra.audience : "ticketstub.finance" });
     check(`parity: ${name} is ${reason} from both`, server.status === 401 && server.json?.reason === reason && offline.ok === false && offline.reason === reason, `server ${server.json?.reason}, offline ${offline.reason}`);
   }
   const v1 = { ...v1Base(), issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 300_000).toISOString() };

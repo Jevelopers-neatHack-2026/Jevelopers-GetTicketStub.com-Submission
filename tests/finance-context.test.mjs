@@ -15,7 +15,11 @@ import { checkVendored, loadConsumer } from "../fixtures/context/finance-scope-c
 const KEY = "unit-test-key-not-the-fixture-key-0123456789";
 const DIR = join(fileURLToPath(new URL("../fixtures/context", import.meta.url)));
 const sign = (c) => signContext(c, KEY, null);
-const both = (token, opts = {}) => [verifyWithKey(token, KEY, opts.now ?? NOW, opts.state, opts.audience === undefined ? undefined : { audience: opts.audience }), verifyContext(token, KEY, { now: NOW, ...opts })];
+// A /2 verifier must name its audience, so `both` names the published one unless a case passes `audience` itself (even undefined).
+const both = (token, opts = {}) => {
+  const o = "audience" in opts ? opts : { ...opts, audience: AUDIENCE };
+  return [verifyWithKey(token, KEY, o.now ?? NOW, o.state, o.audience === undefined ? undefined : { audience: o.audience }), verifyContext(token, KEY, { now: NOW, ...o })];
+};
 
 // ---- GT-FIN-001: grants ----
 
@@ -212,7 +216,7 @@ test("every adapter scope over the published and boundary fixtures passes the Tr
   let refused = 0;
   let v1 = 0;
   for (const fx of rows) {
-    const v = verifyContext(fx.token, key, { now: Date.parse(fx.verifyAt) });
+    const v = verifyContext(fx.token, key, { now: Date.parse(fx.verifyAt), audience: AUDIENCE });
     if (!v.ok) continue; // expired, forged, revoked...: no context, nothing to map
     const r = toFinanceScope(v.ctx);
     if (fx.expect.financeAdapter) assert.deepEqual(r, fx.expect.financeAdapter, fx.fixture);
@@ -300,6 +304,10 @@ test("every other verdict agrees too: forged, expired, unsupported_version, wron
     ["unsupported_version", sign({ ...v2Base(), schema: "ticketstub.context/3" }), {}, "unsupported_version"],
     ["wrong_audience", good, { audience: "another-host" }, "wrong_audience"],
     ["right audience", good, { audience: AUDIENCE }, null],
+    ["a /2 token with no expected audience is refused", good, { audience: undefined }, "wrong_audience"],
+    ["a /2 token with an empty expected audience is refused", good, { audience: "" }, "wrong_audience"],
+    ["no expected audience is refused before revocation is looked at", good, { audience: undefined, state: { sessionLive: false } }, "wrong_audience"],
+    ["a /1 token needs no expected audience", sign(v1Base()), { audience: undefined }, null],
     ["a /1 token has no audience", sign(v1Base()), { audience: "another-host" }, null],
     ["revoked flag", sign(v2Base({ revoked: true })), {}, "revoked"],
     ["session gone", good, { state: { membershipRevision: 3, sessionLive: false } }, "revoked"],
@@ -338,8 +346,8 @@ test("every published /2 fixture and malformed shape gets its expected outcome f
   for (const f of files) {
     const fx = JSON.parse(readFileSync(join(DIR, "v2", f), "utf8"));
     const now = Date.parse(fx.verifyAt);
-    const server = verifyWithKey(fx.token, key, now, fx.state, fx.audience ? { audience: fx.audience } : undefined);
-    const offline = verifyContext(fx.token, key, { now, state: fx.state, audience: fx.audience });
+    const server = verifyWithKey(fx.token, key, now, fx.state, { audience: fx.audience ?? AUDIENCE });
+    const offline = verifyContext(fx.token, key, { now, state: fx.state, audience: fx.audience ?? AUDIENCE });
     assert.deepEqual(offline, server, fx.fixture);
     assert.equal(server.ok, fx.expect.ok, fx.fixture);
     if (server.ok) {
@@ -368,7 +376,7 @@ test("every published /2 fixture and malformed shape gets its expected outcome f
 test("the finance fixtures cover read, export and command, each allowed and denied, and paid_test against sandbox", () => {
   const load = (n) => JSON.parse(readFileSync(join(DIR, "v2", `${n}.json`), "utf8"));
   const key = JSON.parse(readFileSync(join(DIR, "fixture-key.json"), "utf8")).key;
-  const ctx = (n) => verifyContext(load(n).token, key, { now: Date.parse(load(n).verifyAt) }).ctx;
+  const ctx = (n) => verifyContext(load(n).token, key, { now: Date.parse(load(n).verifyAt), audience: AUDIENCE }).ctx;
   const can = (n, cap) => ctx(n).capabilities.includes(cap);
   assert.ok(can("finance-read-allowed", "finance.read") && !can("finance-read-denied", "finance.read"));
   assert.ok(can("finance-export-allowed", "finance.export") && !can("finance-export-denied", "finance.export"));

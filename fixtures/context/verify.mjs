@@ -90,7 +90,7 @@ export function verifyContext(token, key, { now = Date.now(), state, audience } 
   if (c.schema === SCHEMA_V1 ? !shapedV1(c) : !shapedV2(c)) return { ok: false, reason: "unknown" };
   const v2 = c.schema === SCHEMA_V2;
   if (Date.parse(c.expiresAt) <= now) return { ok: false, reason: "expired" };
-  if (v2 && audience !== undefined && c.audience !== audience) return { ok: false, reason: "wrong_audience" };
+  if (v2 && (typeof audience !== "string" || audience === "" || c.audience !== audience)) return { ok: false, reason: "wrong_audience" };
   if (c.revoked || state?.sessionLive === false || (v2 && state?.projectMember === false)) return { ok: false, reason: "revoked" };
   if (state?.membershipRevision !== undefined && state.membershipRevision !== c.membershipRevision) return { ok: false, reason: "stale" };
   return { ok: true, ctx: c };
@@ -164,7 +164,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   };
   for (const f of files) {
     const fx = JSON.parse(readFileSync(f, "utf8"));
-    const r = verifyContext(fx.token, key, { now: Date.parse(fx.verifyAt), state: fx.state, audience: fx.audience });
+    const r = verifyContext(fx.token, key, { now: Date.parse(fx.verifyAt), state: fx.state, audience: fx.audience ?? "ticketstub.finance" });
     let ok = r.ok === fx.expect.ok && (r.ok ? r.ctx.role === fx.expect.role && r.ctx.tenant.id === fx.expect.tenant : r.reason === fx.expect.reason);
     if (ok && r.ok && fx.expect.grants) {
       ok = fx.expect.grants.allow.every((c) => r.ctx.capabilities.includes(c)) && fx.expect.grants.deny.every((c) => !r.ctx.capabilities.includes(c));
@@ -177,7 +177,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   if (existsSync(shapes)) {
     const list = JSON.parse(readFileSync(shapes, "utf8")).cases;
     for (const c of list) {
-      const r = verifyContext(c.token, key, { now: Date.parse(c.verifyAt) });
+      const r = verifyContext(c.token, key, { now: Date.parse(c.verifyAt), audience: "ticketstub.finance" });
       report(!r.ok && r.reason === c.expect.reason, `malformed ${c.name}: ${r.ok ? "ok (should be rejected)" : r.reason}`);
     }
   }
