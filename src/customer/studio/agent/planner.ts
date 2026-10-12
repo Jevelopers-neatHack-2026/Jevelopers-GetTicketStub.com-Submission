@@ -276,7 +276,7 @@ export function resolvePending(message: string, pending: PendingQuestion, state:
     // a different request (a question, or something the planner can act on) is a change of topic
     if (raw.endsWith("?")) return undefined;
     // a day that is plainly meant as the date but is ambiguous ("the 12th or 13th") stays an attempt at the answer
-    const attempt = pending.field === "date" && /\b\d{1,2}(?:st|nd|rd|th)\b/i.test(raw);
+    const attempt = pending.field === "date" && hasDateCandidate(raw);
     // (including one that only asks, like "fix the date to the 12th or 13th": it is never the literal answer to another field)
     if (isInstruction(raw, state, pending.field) && !(pending.field === "date" && (attempt || findDate(raw, stateYear(state), stubMonth(state))))) return undefined;
   }

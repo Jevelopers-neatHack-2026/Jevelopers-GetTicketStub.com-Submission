@@ -754,3 +754,12 @@ test("the composed instruction patterns really carry word-boundary and whitespac
   assert.equal(namesOtherField("Date Night", "subtitle"), false);
   assert.equal(namesOtherField("fix the date", "date"), false);
 });
+
+test("a pending date answer that is date-like but unresolvable keeps the date ask beside the other actions", () => {
+  const d1 = askOn("fix the date");
+  for (const msg of ["12 Nov 2024 next year and make it moodier and show the back", "12 Oct 2024 next month and make it moodier and show the back"]) {
+    const plan = answerOn(d1, msg);
+    assert.deepEqual(plan.actions.map((a) => a.type), ["remix_art", "show_back", "ask_user"], msg);
+    assert.equal(plan.actions[2].field, "date");
+  }
+});

@@ -252,6 +252,8 @@ try {
         await page.eval(`(() => { const b = [...document.querySelectorAll("button")].find((x) => /^(Flip|Show the back)$/i.test((x.textContent || "").trim()) && x.getBoundingClientRect().width > 0); if (b) b.click(); return !!b; })()`);
         await sleep(900);
       }
+      // the art must have loaded on screen before it is the reference: a cold first load can still be fetching it
+      await page.waitFor(`[...document.querySelectorAll('figure[data-edition="${c.edition}"] [class*="artImg"]')].every((i) => i.complete && i.naturalWidth > 0)`, 15000);
       const info = await page.eval(`(() => {
         window.scrollTo(0, 0);
         const figs = [...document.querySelectorAll('figure[data-edition="${c.edition}"]')].map((f) => ({ f, r: f.getBoundingClientRect() })).filter((o) => o.r.width > 0 && o.r.height > 0);
@@ -289,8 +291,19 @@ try {
       const rec = { viewport: vp.name, ...c };
       evidence.cases.push(rec);
       try {
-        if (!check(`${label}: the stub is on the studio desk`, await openStudio(c))) continue;
-        const got = await download("front");
+        // the very first capture of the run is also taken slow (CPU 6x, a slow link): the cold-load race must not show
+        const cold = !evidence.cases.slice(0, -1).length;
+        if (cold) {
+          await page.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+          await page.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: 200_000, uploadThroughput: 200_000 });
+        }
+        const opened = await openStudio(c);
+        const got = opened ? await download("front") : { error: "no studio" };
+        if (cold) {
+          await page.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+          await page.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+        }
+        if (!check(`${label}: the stub is on the studio desk${cold ? " (first load, throttled)" : ""}`, opened)) continue;
         if (!check(`${label}: the Download button saved a file`, !got.error, got.error)) continue;
         const shot = await screenStub(c, { checkout: true });
         if (!check(`${label}: the on-screen stub was captured`, !!shot)) continue;
