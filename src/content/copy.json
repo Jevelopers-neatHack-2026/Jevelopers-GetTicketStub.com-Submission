@@ -1249,5 +1249,11 @@
       "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
       "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
     }
-  ]
+  ],
+  "auditedSource": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html"
+  },
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval."
 }

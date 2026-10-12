@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { validateArtifact } from '../artifact.mjs';
+import { validateAuditedSource } from './content.mjs';
 
 export const digest = value => createHash('sha256').update(value).digest('hex');
 const attributes = tag => Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(m => [m[1].toLowerCase(), m[2]]));
@@ -16,7 +17,25 @@ export function markupDigest(html) {
 }
 const blocked = /\b(?:localStorage|sessionStorage|indexedDB|cookieStore|sendBeacon|XMLHttpRequest|WebSocket|EventSource|gtag|dataLayer|fbq|posthog|mixpanel|amplitude|analytics|trackEvent)\b|\bdocument\s*(?:\.\s*cookie|\[\s*['"]cookie['"]\s*\])/i;
 
-export function validatePrivacySource(html, inventory) {
+// Structural privacy checks alone do not establish which commit was audited.
+// Bind the complete current page and the inventory to actual local commit bytes.
+export function validatePrivacyAudit(html, inventory, { root } = {}) {
+  const repository = 'Jevelopers-neatHack-2026/landing-page-repo';
+  const revision = inventory.auditedSourceRevision;
+  const pinned = validateAuditedSource(html, { repository, revision,
+    url: `https://github.com/${repository}/blob/${revision}/site/index.html` }, inventory.pageSha256, { root });
+  return inspectPrivacySource(pinned, inventory);
+}
+
+export function validatePrivacySource(html, inventory, options = {}) {
+  const result = inspectPrivacySource(html, inventory);
+  validatePrivacyAudit(html, inventory, options);
+  return result;
+}
+
+// This structural inspection is intentionally narrower than source validation.
+// Metadata declarations do not fetch, but any page edit still needs an audit pin.
+export function inspectPrivacySource(html, inventory) {
   assert.equal(inventory.schema, 'ticketstub.privacy-inventory/1', 'Privacy inventory schema');
   assert.equal(inventory.analytics, 'deferred', 'No enabled analytics implementation is approved');
   assert.equal(inventory.reviewStatus, 'PENDING', 'Draft audit is not owner approval');
@@ -218,7 +237,7 @@ export default async function run({ root, artifactDir, mode = 'draft' }) {
   const inventory = JSON.parse(await readFile(resolve(root, 'review/privacy-inventory.json'), 'utf8'));
   await validateArtifact(root, artifactDir);
   const html = await readFile(resolve(artifactDir, 'index.html'), 'utf8');
-  const result = validatePrivacySource(html, inventory);
+  const result = validatePrivacySource(html, inventory, { root });
   // The current artifact contains no executable asset files. Future ones require a reviewed boundary.
   const manifest = JSON.parse(await readFile(resolve(artifactDir, 'manifest.json'), 'utf8'));
   for (const path of Object.keys(manifest.files)) {
