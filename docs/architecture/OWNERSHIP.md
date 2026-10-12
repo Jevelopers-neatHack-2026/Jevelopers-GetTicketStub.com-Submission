@@ -4,7 +4,7 @@
 
 This repository owns the agent's internal orchestration and durability surfaces: workflow and checkpoint storage, bounded local execution, recovery classification, operational scheduling, the TypeSafe decision integration, the development invocation boundary, and telemetry projection and delivery mechanics. The harness records execution state and evidence references; it does not become the authority for customer orders, identity, project membership, provider eligibility, financial authorization, spend reservations, or settlement.
 
-The code at [`main` revision `0d5e5b1`](https://github.com/Jevelopers-neatHack-2026/agent-harness/tree/0d5e5b1e379ecc0fb504d54c5d4f6ebf79ab09dd) is an experimental internal implementation. `package.json` declares package version `0.1.0`, `private: true`, and Node `>=22.23.3 <23`; it is not published as a registry package. Its module exports are the package root, `/ticketstub`, `/decisions`, and `/development`. They are package boundaries, not a hosted customer API or a stable public contract.
+The code at [`main` revision `fce81e4`](https://github.com/Jevelopers-neatHack-2026/agent-harness/tree/fce81e4f31f4047827d7de69a4e2da35415bc4c8) is an experimental internal implementation. `package.json` declares package version `0.1.0`, `private: true`, and Node `>=22.23.3 <23`; it is not published as a registry package. Its module exports are the package root, `/ticketstub`, `/decisions`, and `/development`. They are package boundaries, not a hosted customer API or a stable public contract.
 
 Current implementation surfaces include:
 
@@ -13,7 +13,7 @@ Current implementation surfaces include:
 - `src/worker/private/` and `src/health/private/`: the private local operations supervisor and fixed-schema health snapshot.
 - `src/adapters/jev/` and `src/decisions/`: the private TypeSafe wire adapter and a typed DecisionPort integration composed with the host application's existing validators, authorization, and Finance controls.
 - `src/development/` and `src/integrations/ticketstub/`: the development-only call into the authenticated application host and the TicketStub integration surface.
-- `src/observability/private/`: telemetry projection, local Neatlogs SDK capture, and bounded file-outbox mechanics.
+- `src/observability/private/`: telemetry projection, local Neatlogs SDK capture, bounded file-outbox admission, and immutable per-batch send/recovery intents with recorded receiver retry minima.
 
 The private synthetic controller rejects `mode: "live"`. Development and local tests do not grant an issuer permission, provider entitlement, Finance reservation, spending authority, or a live execution path. Package checks and mock fixtures are internal evidence only. Runtime/setup constraints and the commands that actually exist are recorded in the [runtime setup runbook](../runbooks/runtime-setup.md), [local runtime runbook](../local-runtime-runbook.md), and [`package.json`](../../package.json).
 
@@ -33,7 +33,7 @@ The current organization architecture belongs in `getticketstub.com`. The [archi
 
 ## Acceptance boundary
 
-The master checklist and JSON tracker in [`integration-evals` at `89141b4`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/89141b4e9237d7cc1548254b99dbd0f01589eaa4/planning) govern statuses and evidence. The [local acceptance view](ACCEPTANCE.md) identifies selected harness-related criteria and records the tracker revision it reflects. At that revision, CON-03, AGT-02, AGT-03, and AGT-04 are planned; SPN-01 and SPN-02 are owner-accepted in the master tracker with the qualification recorded there. Local code, documentation, a merged implementation PR, or mock tests do not independently update any master status.
+The master checklist and JSON tracker in [`integration-evals` at `5601857`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/56018576a9450a2bb46aa55ed3b2f9d9ae97e50d/planning) govern statuses and evidence. The [local acceptance view](ACCEPTANCE.md) identifies selected harness-related criteria and records the tracker revision it reflects. At that revision, CON-03, AGT-02, AGT-03, and AGT-04 are planned; SPN-01 and SPN-02 are owner-accepted in the master tracker with the qualification recorded there. Local code, documentation, a merged implementation PR, or mock tests do not independently update any master status.
 
 The full event-to-approved-artwork journey, revision handling, bounded external failure recovery, and integrated durable evidence remain broader product objectives. Issue [#13](https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/13) remains open. Its merged [STATUS host agreement](https://github.com/Jevelopers-neatHack-2026/agent-harness/blob/0d5e5b1e379ecc0fb504d54c5d4f6ebf79ab09dd/docs/runtime/status-host-agreement.md) is explicitly an unaccepted proposal for one narrow read-only snapshot; it does not provide an authenticated public command API, a schema agreement, a grant, or consumer acceptance.
 
