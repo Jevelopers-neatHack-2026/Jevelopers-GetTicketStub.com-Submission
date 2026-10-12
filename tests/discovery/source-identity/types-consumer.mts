@@ -1,7 +1,8 @@
-import { composeSourceIdentity } from "../../../src/discovery/identity/from-extraction.mjs";
+import { composeSourceIdentity, SourceIdentityCompositionError } from "../../../src/discovery/identity/from-extraction.mjs";
 import type {
   ComposeSourceIdentityInput,
   SourceIdentityCompositionResult,
+  SourceIdentityCompositionErrorCode,
 } from "../../../src/discovery/identity/from-extraction.mjs";
 import type { EvidenceStore } from "../../../src/evidence/store.mjs";
 import type { RetrievedDocument } from "../../../src/security/index.mjs";
@@ -28,3 +29,14 @@ void result.then((composition) => {
   const transitionCount: number = composition.transitionLinks.length;
   void [authority, hash, storedAt, observedAt, occurrenceCount, transitionCount];
 });
+
+const refusalCodes: readonly SourceIdentityCompositionErrorCode[] = [
+  "JS_REQUIRED", "ACCESS_RESTRICTED", "UNSUPPORTED_MEDIA", "UNSUPPORTED_ENCODING", "MALFORMED_ENCODING",
+];
+for (const code of refusalCodes) {
+  const refusal: SourceIdentityCompositionErrorCode = new SourceIdentityCompositionError(code).code;
+  void refusal;
+}
+
+// @ts-expect-error Untrusted extractor content cannot introduce an arbitrary error code.
+new SourceIdentityCompositionError("SOURCE_TEXT_AS_ERROR");

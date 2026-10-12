@@ -242,6 +242,52 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
   };
 }
 
+for (const [name, expectedLimitation, content] of [
+  ['javascript-shell', 'dynamic_rendering_required', '<html><body><noscript>JavaScript is required to continue</noscript></body></html>'],
+  ['access-gate', 'source_access_restricted', '<html><body><h1>Access denied</h1></body></html>'],
+  ['legacy-encoding', 'malformed_or_unsupported_encoding', '<html><head><meta charset="iso-8859-1"></head><body>Legacy encoding</body></html>'],
+  // SafeFetcher rejects malformed UTF-8 before the source composer runs.
+  ['malformed-encoding', 'unsupported_media', Buffer.concat([
+    Buffer.from('<!doctype html><html><body><p>'), Buffer.from([0xff]), Buffer.from('</p></body></html>'),
+  ])],
+]) {
+  test(`retains ${name} refusal after receipt restart without another request`, async (t) => {
+    const h = await harness(t);
+    const paths = [];
+    const server = await startFixture((incoming, response) => {
+      paths.push(incoming.url);
+      respond(response, 200, { 'content-type': 'text/html' }, content);
+    });
+    t.after(() => server.close());
+    const runId = `private-source-refusal-${name}`;
+    const seeds = [{ url: sourceUrl('/refused') }];
+    const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 10_000 };
+    const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+    assert.equal(first.status, 'incomplete', JSON.stringify(first));
+    assert.equal(first.draft, null);
+    assert.ok(first.limitations.includes(expectedLimitation), JSON.stringify(first));
+    assert.equal(first.limitations.includes('source_incomplete_or_access_restricted'), false);
+    const transport = await h.frontier.getTransportProgress(h.scope, runId);
+
+    const reopenedFrontier = h.openFrontier();
+    const reopenedStore = createEvidenceStore(h.evidenceConfig);
+    const replay = await runPrivateRetrieval(h.makeInput({
+      runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+    }));
+    assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+    assert.equal(replay.draft, null);
+    assert.deepEqual(replay.limitations, first.limitations);
+    assert.deepEqual(paths, ['/refused'], 'no retry, browser or parser subresource request is made');
+    const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+    assert.deepEqual(await reopenedFrontier.getTransportProgress(reopenedScope, runId), transport,
+      'the completed transport admission and decoded-byte accounting survive restart');
+    const evidenceScope = await reopenedStore.scopeForAuthenticatedRequest(request());
+    const stored = await reopenedStore.integritySnapshot(evidenceScope);
+    assert.equal(stored.availableEvidence, 0);
+    assert.equal(stored.availableFacts, 0);
+  });
+}
+
 async function legacyOvercapWorkspace(t, requestCounter, fixtureName = 'private-run-receipt-v1-overcap') {
   const fixtureDirectory = new URL(`../evidence/fixtures/${fixtureName}/`, import.meta.url);
   const fixtureBytes = await readFile(new URL('fixture.json', fixtureDirectory));
@@ -4141,6 +4187,112 @@ test('deadline returns with an unresolved admission when stop persistence never 
   assert.equal(afterRestart.candidates[0].state, 'unresolved');
   assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
   assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
+});
+
+test('late deadline delivery cannot renew cleanup for a stalled stop write', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  let runAuthorizedAt;
+  let persistedDeadlineAtMs;
+  let stopEnteredAt;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  let stopCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    createRun: async (...args) => {
+      const created = await h.frontier.createRun(...args);
+      persistedDeadlineAtMs = created.deadlineAtMs;
+      return created;
+    },
+    stopRun: async () => {
+      stopCalls += 1;
+      stopEnteredAt = performance.now();
+      return new Promise(() => {});
+    },
+  });
+  const runId = 'private-delayed-deadline-never-stop';
+  const durationMs = 1_500;
+  const cancellation = new AbortController();
+  t.after(() => cancellation.abort());
+  const input = h.makeInput({
+    runId, server, frontier, signal: cancellation.signal,
+    seeds: [{ url: sourceUrl('/delayed-deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+    authorizeCurrent() {
+      if (runAuthorizedAt === undefined) runAuthorizedAt = performance.now();
+      return true;
+    },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  });
+  const runEnteredAt = performance.now();
+  const running = runPrivateRetrieval(input);
+  const phase = await Promise.race([
+    retentionCallbackStarted.then(() => 'retention-entered'),
+    running.then(() => 'returned-before-retention'),
+  ]);
+  assert.equal(phase, 'retention-entered', 'the admitted body completes before the deadline-delivery fault');
+  const deadlineLowerAt = runEnteredAt + durationMs;
+  const deadlineUpperAt = runAuthorizedAt + durationMs;
+  await waitUntilPerfAtOrAfter(deadlineLowerAt - 100);
+  const blockStartedAt = performance.now();
+  assert.ok(blockStartedAt < deadlineLowerAt, 'the controlled delay starts before the original deadline');
+  assert.equal(stopCalls, 0, 'deadline cleanup has not started before the fault is injected');
+  // Deliberately prevent timer delivery across the original deadline. The
+  // blocking interval ends inside its existing 750ms cleanup envelope; it does
+  // not demand an impossible return while JavaScript is still blocked.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0,
+    Math.max(0, deadlineUpperAt + 300 - performance.now()));
+  const blockEndedAt = performance.now();
+  assert.ok(blockEndedAt >= deadlineUpperAt + 250, 'deadline delivery is delayed by at least 250ms');
+  assert.ok(blockEndedAt < deadlineLowerAt + 650, 'at least 100ms of the original cleanup envelope remains');
+  const result = await running;
+  const elapsedMs = performance.now() - runAuthorizedAt;
+  t.diagnostic(JSON.stringify({
+    mode: 'synthetic-deadline-delivery-delay', durationMs, elapsedMs,
+    runEnteredAt, runAuthorizedAt, deadlineLowerAt, deadlineUpperAt,
+    blockStartedAt, blockEndedAt, stopEnteredAt, persistedDeadlineAtMs,
+    resultStatus: result.status, requestCount, stopCalls,
+  }));
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('deadline_exceeded'));
+  assert.equal(requestCount, 1);
+  assert.equal(stopCalls, 1);
+  assert.ok(stopEnteredAt >= blockEndedAt, 'the stop write starts only after delayed deadline delivery');
+  const interrupted = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(interrupted.deadlineAtMs, persistedDeadlineAtMs, 'fault injection cannot reset the stored deadline');
+  assert.equal(interrupted.candidates[0].state, 'unresolved');
+  assert.equal(interrupted.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(interrupted.candidates[0].admittedAttemptCount, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0);
+  assert.ok(transport.spentBytes > 0);
+  const reopened = h.openFrontier();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const restarted = await runPrivateRetrieval(h.makeInput({
+    runId, server, frontier: reopened,
+    seeds: [{ url: sourceUrl('/delayed-deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+  }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'restart cannot redispatch the expired unresolved admission');
+  const afterRestart = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.deadlineAtMs, persistedDeadlineAtMs);
+  assert.equal(afterRestart.candidates[0].state, 'unresolved');
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.deepEqual(await reopened.getTransportProgress(reopenedScope, runId), transport,
+    'restart cannot release spent bytes or create another transport attempt');
+  assert.ok(elapsedMs <= durationMs + 850,
+    `late timer delivery cannot renew the original 750ms cleanup budget plus 100ms scheduling tolerance (${elapsedMs.toFixed(1)}ms)`);
 });
 
 test('a stop before the first admission keeps the lease cancellation reason', { timeout: 8_000 }, async (t) => {

@@ -224,56 +224,170 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
 
 
 for (const mode of ['control', 'cancel-success', 'deadline-success', 'cancel-rejection', 'deadline-rejection', 'cancel-never', 'deadline-never']) {
- test(`R4 independent bounded final preparation: ${mode}`, async(t)=>{
-  const paths=[];
-  const page=Buffer.from('<!doctype html><meta property="og:image" content="/logo.svg"><script type="application/ld+json">{"@type":"Event","name":"Final Tail Event","startDate":"2027-06-20"}</script>');
-  const svg='<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect height="3" width="2"/></svg>';
-  const server=await startFixture((req,res)=>{paths.push(req.url);respond(res,200,{'content-type':req.url==='/logo.svg'?'image/svg+xml':'text/html'},req.url==='/logo.svg'?svg:page);});t.after(()=>server.close());
-  const h=await harness(t); const abort=new AbortController(); let entered=false, gateRelease, enteredResolve;
-  const counts={discard:0,finalize:0};
-  const enteredPromise=new Promise(r=>enteredResolve=r); const gate=new Promise(r=>gateRelease=r);
-  const store={...h.evidenceStore,
-   revalidateControlledAssetRelease:async(...args)=>{
-    if(mode.endsWith('-never')){entered=true;enteredResolve();return await new Promise(()=>{});}
-    const result=await h.evidenceStore.revalidateControlledAssetRelease(...args);entered=true;enteredResolve();
-    if(mode!=='control')await gate;
-    if(mode.endsWith('-rejection'))throw new Error('late-preparation-rejection');
-    return result;
-   },
-   discardControlledAssetRelease:(...args)=>{counts.discard++;return h.evidenceStore.discardControlledAssetRelease(...args);},
-   finalizeControlledAssetRelease:(...args)=>{counts.finalize++;return h.evidenceStore.finalizeControlledAssetRelease(...args);},
-  };
-  const policy={schemaVersion:1,policyVersion:'ei-private-svg-acquisition/1',policyId:'r4-bounded-final-prep',allowedOrigins:['http://fixture.example.org']};
-  let pending;
-  t.after(async()=>{
-   abort.abort();
-   gateRelease();
-   if(pending)await Promise.race([pending.then(()=>undefined,()=>undefined),new Promise(r=>setTimeout(r,2000))]);
+  test(`R4 independent bounded final preparation: ${mode}`, { timeout: 10_000 }, async (t) => {
+    const paths = [];
+    const page = Buffer.from('<!doctype html><meta property="og:image" content="/logo.svg"><script type="application/ld+json">{"@type":"Event","name":"Final Tail Event","startDate":"2027-06-20"}</script>');
+    const svg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect height="3" width="2"/></svg>';
+    const server = await startFixture((req, res) => {
+      paths.push(req.url);
+      respond(res, 200, { 'content-type': req.url === '/logo.svg' ? 'image/svg+xml' : 'text/html' },
+        req.url === '/logo.svg' ? svg : page);
+    });
+    t.after(() => server.close());
+    const h = await harness(t);
+    const abort = new AbortController();
+    const runId = `r4-bounded-${mode}`;
+    const durationMs = 5_000;
+    const finalPhaseWindowMs = 1_000;
+    let originalDeadlineAtMonotonic;
+    let persistedDeadlineAtMs;
+    let preparationReadyAt;
+    let phaseEnteredAt;
+    let gateRelease;
+    let enteredResolve;
+    const counts = { discard: 0, finalize: 0 };
+    const enteredPromise = new Promise((resolve) => { enteredResolve = resolve; });
+    const gate = new Promise((resolve) => { gateRelease = resolve; });
+    const enterFinalPhase = async () => {
+      preparationReadyAt = performance.now();
+      if (mode.startsWith('deadline')) {
+        // Real HTTP, SQLite and release preparation have a bounded setup window.
+        // Hold this exact callback until the original run has at most the same
+        // 1000ms final-phase budget as the probe; never reset its stored deadline.
+        await waitUntilPerfAtOrAfter(originalDeadlineAtMonotonic - finalPhaseWindowMs);
+      }
+      phaseEnteredAt = performance.now();
+      enteredResolve();
+    };
+    const store = {
+      ...h.evidenceStore,
+      revalidateControlledAssetRelease: async (...args) => {
+        if (mode.endsWith('-never')) {
+          await enterFinalPhase();
+          return new Promise(() => {});
+        }
+        const result = await h.evidenceStore.revalidateControlledAssetRelease(...args);
+        await enterFinalPhase();
+        if (mode !== 'control') await gate;
+        if (mode.endsWith('-rejection')) throw new Error('late-preparation-rejection');
+        return result;
+      },
+      discardControlledAssetRelease: (...args) => {
+        counts.discard += 1;
+        return h.evidenceStore.discardControlledAssetRelease(...args);
+      },
+      finalizeControlledAssetRelease: (...args) => {
+        counts.finalize += 1;
+        return h.evidenceStore.finalizeControlledAssetRelease(...args);
+      },
+    };
+    const frontier = frontierWithMethodOverrides(h.frontier, {
+      createRun: async (...args) => {
+        const created = await h.frontier.createRun(...args);
+        persistedDeadlineAtMs = created.deadlineAtMs;
+        return created;
+      },
+    });
+    const policy = {
+      schemaVersion: 1, policyVersion: 'ei-private-svg-acquisition/1',
+      policyId: 'r4-bounded-final-prep', allowedOrigins: ['http://fixture.example.org'],
+    };
+    let pending;
+    let entryWatchdog;
+    let settlementWatchdog;
+    t.after(async () => {
+      clearTimeout(entryWatchdog);
+      clearTimeout(settlementWatchdog);
+      abort.abort();
+      gateRelease();
+      if (pending) {
+        let drainWatchdog;
+        try {
+          await Promise.race([
+            pending.then(() => undefined, () => undefined),
+            new Promise((resolve) => { drainWatchdog = setTimeout(resolve, 2_000); }),
+          ]);
+        } finally { clearTimeout(drainWatchdog); }
+      }
+    });
+    const runStartedAt = performance.now();
+    pending = runPrivateRetrieval(h.makeInput({
+      runId, server, store, frontier, seeds: [{ url: sourceUrl('/event') }],
+      limits: { durationMs }, signal: abort.signal, assetAcquisitionPolicyFor: () => policy,
+      assetAcquisitionReleaseAuthorityFor: (authenticated, context) => {
+        originalDeadlineAtMonotonic = context.deadlineAtMonotonic;
+        return releaseAuthorityFor(authenticated, context);
+      },
+    }));
+    const entry = await Promise.race([
+      enteredPromise.then(() => ({ kind: 'entered', atPerfMs: phaseEnteredAt })),
+      pending.then(
+        (result) => ({ kind: 'resolved-before-entry', status: result.status, atPerfMs: performance.now() }),
+        (error) => ({ kind: 'rejected-before-entry', error: String(error), atPerfMs: performance.now() }),
+      ),
+      new Promise((resolve) => {
+        entryWatchdog = setTimeout(() => resolve({ kind: 'fixture-watchdog', atPerfMs: performance.now() }), durationMs + 500);
+      }),
+    ]);
+    clearTimeout(entryWatchdog);
+    const remainingAtEntryMs = originalDeadlineAtMonotonic - phaseEnteredAt;
+    t.diagnostic(JSON.stringify({
+      stage: 'entry-race', mode, entry, runStartedAt, originalDeadlineAtMonotonic,
+      persistedDeadlineAtMs, preparationReadyAt, remainingAtEntryMs,
+    }));
+    assert.equal(entry.kind, 'entered', 'run must reach the controlled-release preparation callback before its deadline or completion');
+    assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the real frontier persisted the original run deadline');
+    assert.ok(remainingAtEntryMs > 0, 'the selected callback is entered before the original deadline');
+    if (mode.startsWith('deadline')) {
+      assert.ok(remainingAtEntryMs <= finalPhaseWindowMs, 'the phase gate leaves at most the original 1000ms final-preparation window');
+    }
+    if (mode.startsWith('cancel')) abort.abort();
+    const waitMs = mode.startsWith('deadline') ? 1_500 : 250;
+    const measured = await Promise.race([
+      pending.then((result) => ({ settled: true, result, atPerfMs: performance.now() })),
+      new Promise((resolve) => {
+        settlementWatchdog = setTimeout(() => resolve({ settled: false, atPerfMs: performance.now() }), waitMs);
+      }),
+    ]);
+    clearTimeout(settlementWatchdog);
+    if (mode !== 'control' && !mode.endsWith('-never')) gateRelease();
+    const eventual = await pending;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    t.diagnostic(JSON.stringify({
+      stage: 'settlement', mode, settled: measured.settled, finalPhaseElapsedMs: measured.atPerfMs - phaseEnteredAt,
+      measuredStatus: measured.result?.status, eventualStatus: eventual.status, paths, counts,
+    }));
+    assert.deepEqual(paths, ['/event', '/logo.svg']);
+    const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+    assert.equal(snapshot.deadlineAtMs, persistedDeadlineAtMs, 'phase synchronization never resets the stored deadline');
+    if (mode === 'control') {
+      assert.equal(measured.result?.assetAcquisitions?.length, 1);
+      assert.equal(counts.finalize, 1);
+    } else {
+      assert.equal(measured.settled, true, 'cancellation/deadline must settle the run without waiting for the async store adapter');
+      assert.notEqual(measured.result?.status, 'draft');
+      assert.notEqual(eventual.status, 'draft');
+      assert.equal(counts.finalize, 0);
+      if (mode.endsWith('-success')) assert.equal(counts.discard, 1, 'late opaque preflight check must be discarded exactly once');
+      if (mode.endsWith('-rejection') || mode.endsWith('-never')) assert.equal(counts.discard, 0);
+      const transport = await h.frontier.getTransportProgress(h.scope, runId);
+      const reopened = h.openFrontier();
+      const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+      const restarted = await runPrivateRetrieval(h.makeInput({
+        runId, server, frontier: reopened, seeds: [{ url: sourceUrl('/event') }],
+        limits: { durationMs }, assetAcquisitionPolicyFor: () => policy,
+      }));
+      if (mode.startsWith('deadline')) {
+        assert.notEqual(restarted.status, 'draft', 'restarting cannot renew the original expired deadline');
+      }
+      // A fresh authorized invocation can reconstruct a sealed, unexpired run
+      // after post-seal cancellation. It cannot use this abandoned invocation's
+      // release check or dispatch either acquisition again.
+      assert.equal(counts.finalize, 0, 'recovery cannot finalize the abandoned preparation');
+      assert.deepEqual(paths, ['/event', '/logo.svg'], 'recovery cannot redispatch either completed acquisition');
+      assert.equal((await reopened.getSnapshot(reopenedScope, runId)).deadlineAtMs, persistedDeadlineAtMs);
+      assert.deepEqual(await reopened.getTransportProgress(reopenedScope, runId), transport,
+        'recovery preserves the original transport accounting');
+    }
   });
-  const runStartedAt=performance.now();
-  t.diagnostic(JSON.stringify({stage:'run-start',mode,atPerfMs:runStartedAt}));
-  pending=runPrivateRetrieval(h.makeInput({runId:`r4-bounded-${mode}`,server,store,seeds:[{url:sourceUrl('/event')}],limits:{durationMs:1000},signal:abort.signal,assetAcquisitionPolicyFor:()=>policy}));
-  const entry=await Promise.race([
-   enteredPromise.then(()=>({kind:'entered',atPerfMs:performance.now()})),
-   pending.then(result=>({kind:'resolved-before-entry',status:result.status,atPerfMs:performance.now()}),error=>({kind:'rejected-before-entry',error:String(error),atPerfMs:performance.now()})),
-   new Promise(r=>setTimeout(()=>r({kind:'fixture-watchdog',atPerfMs:performance.now()}),2500)),
-  ]);
-  t.diagnostic(JSON.stringify({stage:'entry-race',mode,entry}));
-  assert.equal(entry.kind,'entered','run must reach the controlled-release preparation callback before its deadline or completion');
-  if(mode.startsWith('cancel'))abort.abort();
-  const waitMs=mode.startsWith('deadline')?1500:250;
-  const measured=await Promise.race([pending.then(result=>({settled:true,result})),new Promise(r=>setTimeout(()=>r({settled:false}),waitMs))]);
-  if(mode!=='control'&&!mode.endsWith('-never'))gateRelease();
-  const eventual=await pending;
-  await new Promise(r=>setTimeout(r,25));
-  console.log(JSON.stringify({mode,entered,measured,eventual,paths,counts}));
-  assert.deepEqual(paths,['/event','/logo.svg']);assert.equal(entered,true);
-  if(mode==='control'){assert.equal(measured.result?.assetAcquisitions?.length,1);assert.equal(counts.finalize,1);}
-  else {
-   assert.equal(measured.settled,true,'cancellation/deadline must settle the run without waiting for the async store adapter');
-   assert.notEqual(measured.result?.status,'draft');assert.notEqual(eventual.status,'draft');assert.equal(counts.finalize,0);
-   if(mode.endsWith('-success'))assert.equal(counts.discard,1,'late opaque preflight check must be discarded exactly once');
-   if(mode.endsWith('-rejection')||mode.endsWith('-never'))assert.equal(counts.discard,0);
-  }
- });
 }
