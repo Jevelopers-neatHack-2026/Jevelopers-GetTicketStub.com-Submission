@@ -49,7 +49,7 @@ In words: the studio sends work to the app’s server routes. Live research may 
 
 **Artifact verified:** four public screenshots show research success, a research timeout, an agent reply, and an art workflow. A trace means a record of a run’s steps. The art screen labels two model steps `openai/gpt-image-2`; this is the October 11 record, not a claim about the latest image model.
 
-[Research success screenshot](../../repositories/integration-evals/evidence/neatlogs/2026-10-11/trace-research-success.jpg) · [Art screenshot](../../repositories/integration-evals/evidence/neatlogs/2026-10-11/trace-art-image.jpg) · [Full dated record](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md)
+[Research success screenshot](../../repositories/integration-evals/evidence/neatlogs/2026-10-11/trace-research-success.jpg) · [Art screenshot](../../repositories/integration-evals/evidence/neatlogs/2026-10-11/trace-art-image.jpg) · [Full dated record](https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md)
 
 The record names studio producer `e4a19931b5febbf6efdb85e11d1d3da1b88106fe`. That binding is **owner-reported**, not shown in the screenshots. Trace IDs, deployment identity, and exact timestamps are not visibly joined to the images. The malformed-art recovery is summary-only. Billing, delivery of all reported sessions, and comparable before/after improvement remain unverified. No new live run was made for this guide.
 
@@ -57,7 +57,7 @@ The record names studio producer `e4a19931b5febbf6efdb85e11d1d3da1b88106fe`. Tha
 
 **Artifact verified:** public `entire-graph` output maps source code at studio commit `c384776771eaa6b64beba99607007b5b9d47066d`. The snapshot header names that revision and the retained checksum file matches all four files when rerun in this pass.
 
-[Graph evidence and source revision](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md) · [Original GitHub Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087)
+[Graph evidence and source revision](https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md) · [Original GitHub Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087)
 
 This graph was made on GitHub Actions without an agent session. It proves graph output, not agent improvement. The broader record reports one Claude checkpoint and later synced mirrors; the hosted Sessions view did not show a transcript. Checkpoint contents remain private and were not copied or inspected here. The record’s later caveat says plugin installation was unpinned; a displayed version is not a reproducible dependency lock.
 
@@ -65,7 +65,7 @@ This graph was made on GitHub Actions without an agent session. It proves graph 
 
 **Artifact verified:** revision 2 includes a saved plan, screenshot, and exported workbook. They cover prices, costs, revenue, and runway—the time before money runs out.
 
-**[Read the business plan](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md)** · **[Download the reviewer workbook](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx)** · [Canvas screenshot](../../repositories/integration-evals/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-overview.jpg) · [Full qualification record](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md)
+**[Read the business plan (text)](https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md)** · **[Download the reviewer workbook](https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx)** · [Canvas screenshot](../../repositories/integration-evals/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-overview.jpg) · [Full qualification record](https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md)
 
 The plan’s numbers are **forecasts, not sales**. Actual cash is unknown; owner-reported expenses are not reconciled bills. Physical sales are excluded. The record reports desktop Excel checks; this pass rechecked the file hashes, not those spreadsheet calculations.
 
