@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { checkFinancialSummary, type VersionedReference } from '@jevelopers/shared-contracts';
-import { authorizeFinanceOperation, errorEnvelope, failure, validateRequest, TrustedScopeSchema, type ApiResult, type ErrorCode, type RuntimePorts, type TrustedScope } from '../shared/contracts.js';
+import { errorEnvelope, failure, validateRequest, TrustedScopeSchema, type ApiResult, type ErrorCode, type RuntimePorts, type TrustedScope } from '../shared/contracts.js';
 import { validateFinancialSummaryPageBoundary, type FinancialSummaryPage } from '../reporting/index.js';
 import { ExportManifestSchema, validateExportRequestBoundary, type ExportManifest, type ExportRequest } from './index.js';
 import { encodeCsv, encodeMoneyCell, encodeTextCell, type CsvCell } from './csv.js';
-import { reportingExportBridge, checkRegisteredCanonicalSummary, type ReportingExportBridge } from './reporting-bridge.js';
+import { reportingExportBridge, authorizeExportAccess, checkRegisteredCanonicalSummary, type ReportingExportBridge } from './reporting-bridge.js';
 import { prepareReportingExport, type ReportingExportRequest, type ReportingPreparedExportArtifacts } from './reporting-export.js';
 
 const MAX_BYTES = 1_048_576;
@@ -305,7 +305,7 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
   const configuredExports = ports.exports;
   const capturedBridge = reportingExportBridge(ports);
   const frozenRegistry = configuredExports?.syntheticFixtureRegistry === undefined ? undefined : freezeCopy(configuredExports.syntheticFixtureRegistry);
-  const authorize = () => authorizeFinanceOperation({ module: 'integrations', requestOperation: 'exportSummary', operation: 'integrations.exportSummary', scope: envelope.value.scope, requestId: envelope.value.requestId, clock: ports.clock, financeAuthority: ports.financeAuthority });
+  const authorize = () => authorizeExportAccess(ports, envelope.value, capturedBridge);
   const reject = (code: ErrorCode, message: string, retryable = false) => failure(errorEnvelope('integrations', 'exportSummary', code, envelope.value.requestId, message, retryable));
   const initial = await authorize();
   if (!initial.ok) return failure(initial.error);

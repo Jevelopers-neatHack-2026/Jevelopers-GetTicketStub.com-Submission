@@ -1,11 +1,11 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { createHash } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
-import { authorizeFinanceOperation, errorEnvelope, failure, TrustedScopeSchema, type Validation, type ApiResult, type ErrorCode } from '../shared/contracts.js';
+import { errorEnvelope, failure, TrustedScopeSchema, type Validation, type ApiResult, type ErrorCode } from '../shared/contracts.js';
 import { FinancialSummaryPageV2Schema, validateFinancialSummaryPageV2Boundary, type FinancialSummaryPageV2 } from '../reporting/index.js';
 import { encodeCsv, encodeMoneyCell, type CsvCell } from './csv.js';
 import { canonicalExportJson, freezeExportValue, hashExportCanonical, type ExportArtifact, type ExportRuntimePorts } from './runtime.js';
-import { reportingExportBridge, checkRegisteredCanonicalSummary, REPORTING_EXPORT_REGISTRY_PIN, type ReportingExportBridge } from './reporting-bridge.js';
+import { reportingExportBridge, authorizeExportAccess, checkRegisteredCanonicalSummary, REPORTING_EXPORT_REGISTRY_PIN, type ReportingExportBridge } from './reporting-bridge.js';
 
 const MAX_BYTES = 1_048_576;
 const Hash = Type.String({ pattern: '^sha256:[a-f0-9]{64}$' });
@@ -148,8 +148,8 @@ export async function prepareReportingExport(value: ReportingExportRequest, port
     if (!bounded(value)) return reject('VALIDATION_ERROR', 'The export request exceeds supported content bounds.');
     const request = freezeExportValue(value);
     if (!Value.Check(ReportingExportRequestSchema, request)) return reject('VALIDATION_ERROR', 'The reporting export request does not match its exact version.');
-    const authorize = () => authorizeFinanceOperation({ module: 'integrations', requestOperation: 'exportSummary', operation: 'integrations.exportSummary', scope: request.scope, requestId: request.requestId, clock: ports.clock, financeAuthority: ports.financeAuthority });
     const bridge = reportingExportBridge(ports);
+    const authorize = () => authorizeExportAccess(ports, request, bridge);
     let auth = await authorize(); if (!auth.ok) return failure(auth.error);
     const boundary = validateReportingExportRequestBoundary(request); if (!boundary.ok) return failure(boundary.error);
     if (!bridge?.artifactStoreV2) return reject('SOURCE_UNAVAILABLE', 'Reporting export requires the verified Finance reader, registry and artifact store.', true);

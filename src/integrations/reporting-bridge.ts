@@ -3,7 +3,7 @@ import { createReportingSnapshotReader, readVerifiedSummarySnapshotV2, REPORTING
 import { checkFinancialSummary, type VersionedReference } from '@jevelopers/shared-contracts';
 import type { FinancialSummaryPage } from '../reporting/index.js';
 import { hashExportCanonical, freezeExportValue, type ExportRuntimePorts, type ExportArtifactStorePort } from './runtime.js';
-import type { TrustedScope } from '../shared/contracts.js';
+import { authorizeFinanceOperation, errorEnvelope, type FinanceAuthorizationResult, type TrustedScope } from '../shared/contracts.js';
 import type { ReportingExportArtifactStorePort } from './reporting-export.js';
 
 /** Exact immutable Finance-owned registry body; raw committed fixture SHA is independently tested. */
@@ -30,6 +30,7 @@ type SnapshotReference = { readonly scope: TrustedScope; readonly snapshotId: st
 export type ReportingExportBridge = {
   readonly registry: Registry;
   readonly artifactStoreV2?: ReportingExportArtifactStorePort;
+  authorizeCurrentRead(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<FinanceAuthorizationResult>;
   readVerifiedSnapshotV2(request: SnapshotReference): Promise<FinancialSummaryPageV2 | null>;
 };
 const bridges = new WeakMap<object, ReportingExportBridge>();
@@ -44,6 +45,11 @@ export function createReportingExportRuntimePorts(ports: ReportingPorts, artifac
   bridges.set(configured, Object.freeze({
     registry: PINNED_REGISTRY,
     ...(artifactStoreV2 ? { artifactStoreV2 } : {}),
+    async authorizeCurrentRead(request: { readonly scope: TrustedScope; readonly requestId: string }) {
+      const frozen = freezeExportValue(request);
+      return authorizeFinanceOperation({ module: 'integrations', requestOperation: 'exportSummary', operation: 'reporting.querySummary',
+        scope: frozen.scope, requestId: frozen.requestId, clock: ports.clock, financeAuthority: ports.financeAuthority });
+    },
     async readVerifiedSnapshotV2(request: SnapshotReference) {
       const result = await readVerifiedSummarySnapshotV2({ ...freezeExportValue(request), schemaVersion: '1.0.0', requestId: 'finance-export-verified-snapshot' }, ports);
       return result.ok ? freezeExportValue(result.value) : null;
@@ -53,6 +59,35 @@ export function createReportingExportRuntimePorts(ports: ReportingPorts, artifac
 }
 export function reportingExportBridge(ports: ExportRuntimePorts): ReportingExportBridge | undefined {
   return ports.exports ? bridges.get(ports.exports) : undefined;
+}
+/** Renew both independently scoped operations after every composed export await.
+ * The read issuer is the captured Finance reporting host, never a caller flag.
+ * Copy each decision immediately and validate freshness once both awaits finish.
+ */
+export async function authorizeExportAccess(ports: ExportRuntimePorts, request: { readonly scope: TrustedScope; readonly requestId: string }, bridge?: ReportingExportBridge): Promise<FinanceAuthorizationResult> {
+  try {
+    const checks = [authorizeFinanceOperation({ module: 'integrations', requestOperation: 'exportSummary', operation: 'integrations.exportSummary',
+      scope: request.scope, requestId: request.requestId, clock: ports.clock, financeAuthority: ports.financeAuthority })];
+    if (bridge) checks.push(bridge.authorizeCurrentRead({ scope: request.scope, requestId: request.requestId }));
+    const decisions = await Promise.all(checks.map(async check => freezeExportValue(await check)));
+    for (const decision of decisions) if (!decision.ok) return decision;
+    const now = ports.clock.now().getTime();
+    if (!Number.isFinite(now)) return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'SOURCE_UNAVAILABLE', 'unavailable', 'Current financial authorization is temporarily unavailable.', true) };
+    for (const result of decisions) {
+      if (!result.ok) return result;
+      if (result.decision.status !== 'allowed') return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'FORBIDDEN_SCOPE', 'unavailable', 'Current financial authorization does not match this scope and operation.') };
+      const verified = Date.parse(result.decision.verifiedAt); const expires = Date.parse(result.decision.expiresAt);
+      // Each shared checker enforces these bounds at its own completion. Renew
+      // that freshness at the joint disclosure gate, after the other permission wait.
+      if (!Number.isFinite(verified) || !Number.isFinite(expires) || verified > now || now - verified > 60_000
+          || expires <= now || expires <= verified || expires - verified > 300_000) {
+        return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'FORBIDDEN_SCOPE', 'unavailable', 'Current financial authorization does not match this scope and operation.') };
+      }
+    }
+    return decisions[0]!;
+  } catch {
+    return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'SOURCE_UNAVAILABLE', 'unavailable', 'Current financial authorization is temporarily unavailable.', true) };
+  }
 }
 export function checkRegisteredCanonicalSummary(page: Pick<FinancialSummaryPage, 'summary'>, scope: TrustedScope, now: string): boolean {
   if (page.summary.tenant_id !== scope.tenantId || page.summary.project_id !== scope.projectId) return false;

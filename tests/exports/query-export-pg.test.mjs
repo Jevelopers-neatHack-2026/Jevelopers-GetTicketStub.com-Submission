@@ -150,6 +150,32 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
       const verify = store.verifyOriginal; store.verifyOriginal = async (...args) => { const valid = await verify(...args); x.host.state.denied = true; return valid; };
       const revoked = finance.createReportingExportRuntimePorts(x.host.ports, finance.createFileExportArtifactStore(x.storeOptions), store);
       assert.equal((await finance.getPreparedExportArtifacts(x.request, revoked)).error.code, 'FORBIDDEN_SCOPE');
+      for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) for (const denied of ['denyRead', 'denyExport']) {
+        const current = await setup(); let page = current.page;
+        if (version === '1.0.0') {
+          const legacy = { ...current.q, schemaVersion: version, filters: { ...current.q.filters, currency: 'USD' } }; delete legacy.policyVersion; delete legacy.groupings;
+          page = await checked(finance.querySummary(legacy, current.host.ports));
+        }
+        const request = exportRequest(page, current.scope);
+        const legacyStore = finance.createFileExportArtifactStore(current.storeOptions);
+        const richStore = finance.createFileReportingExportArtifactStore(current.storeOptions);
+        const selected = version === '1.0.0' ? legacyStore : richStore;
+        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore);
+        const first = replay ? await checked(finance.exportSummaryV2(request, ports)) : null;
+        const originalVerification = selected.verifyOriginal; let triggered = false;
+        selected.verifyOriginal = async (...args) => {
+          const original = await originalVerification(...args); assert.equal(original, true, 'real filesystem original receipt authenticated before grant revocation');
+          if (!triggered) { current.host.state[denied] = true; triggered = true; }
+          return original;
+        };
+        const response = await (replay ? finance.getPreparedExportArtifacts : finance.exportSummaryV2)(request, ports);
+        assert.equal(triggered, true); assert.equal(response.ok, false); assert.equal(response.error.code, 'FORBIDDEN_SCOPE');
+        current.host.state[denied] = false;
+        const control = await checked(finance.getPreparedExportArtifacts(request, ports));
+        if (first) assert.deepEqual(control, first);
+        else assert.equal(control.manifest.createdAt, '2026-10-12T22:00:00.000Z');
+      }
+
     });
   } finally {
     await mkdir(new URL('../../artifacts/exports/', import.meta.url), { recursive: true });
