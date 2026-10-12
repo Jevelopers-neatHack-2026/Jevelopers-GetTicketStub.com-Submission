@@ -4,7 +4,7 @@ A local, offline, dependency-free check of the **shape** of a filled [consumer a
 
 ```sh
 node scripts/check-consumer-receipt.mjs receipt.json
-node --test tests/consumer-receipt.test.mjs
+node --test tests/consumer-receipt.test.mjs tests/consumer-receipt-duplicates.test.mjs
 ```
 
 Library use: `import { checkReceipt } from './scripts/check-consumer-receipt.mjs'` returns `{ status, errors, notice }` for an already-parsed value.
@@ -37,3 +37,24 @@ Output is JSON on stdout: `status`, `errors` (`{code, path}`) and a fixed `notic
 ## Limits
 
 Output lists at most 100 diagnostics, but status severity is computed over every finding: a malformed value past the cap still makes the result `INVALID`. The file is opened non-blocking and must be a regular file (checked with `fstat` before any read), so FIFOs, devices and directories are `FILE_UNREADABLE` without hanging. Files over 1 MiB, nesting deeper than 64, non-UTF-8 text, directories, and unparseable JSON are `INVALID` with a fixed code (`FILE_TOO_LARGE`, `DEPTH_EXCEEDED`, `JSON_MALFORMED`, `FILE_UNREADABLE`, `USAGE`). The checker makes no network calls and never writes files. Free-text fields (limitations, commands) are length- and control-character-checked, not scanned for secrets; keep secrets out of receipts as the evidence rules require.
+
+## Duplicate JSON member names
+
+The CLI and `checkReceiptFile` reject repeated names in the same object with
+`INVALID`, exit 2, and the fixed diagnostic `{ "code": "DUPLICATE_KEY", "path": "$" }`.
+This prevents last-key-wins parsing from silently replacing a failure, skip,
+source pin, or authority claim. Equal repeated values also reject. Comparison
+uses decoded JSON names, including Unicode escapes; the same name in separate
+objects is permitted. Names and values are never included in diagnostics.
+
+The size, UTF-8, depth and JSON grammar checks run first. An iterative scan then
+checks member-name uniqueness within those bounds, before metadata validation.
+Malformed JSON remains `JSON_MALFORMED`. `checkReceipt` accepts already-parsed
+objects and cannot recover duplicates discarded by a caller's parser; use the
+file/CLI boundary for raw JSON receipts. Completeness still verifies no authority,
+consumer adoption, review, or release permission.
+
+The read-only `Receipt metadata` workflow runs the original and duplicate-key
+regressions on Node 22.23.3 and 24.21.0. It uses no npm install, provider calls,
+credentials persisted in checkout, or graph execution. Candidate and post-merge
+runs record the actual checkout, runtime, file hashes and TAP results as artifacts.

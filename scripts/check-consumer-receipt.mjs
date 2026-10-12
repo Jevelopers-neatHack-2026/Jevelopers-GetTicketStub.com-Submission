@@ -314,6 +314,35 @@ function maxDepth(text) {
   return depth;
 }
 
+// Only scan JSON whose grammar has already been validated by JSON.parse.
+// Object-member names are compared after decoding escapes, in their own object
+// scope. Strings used as values and names reused in siblings are not duplicates.
+// The existing byte/depth ceilings bound this iterative scan and its key sets.
+function hasDuplicateKeys(text) {
+  const objects = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') objects.push(new Set());
+    else if (ch === '}') objects.pop();
+    else if (ch === '"') {
+      const start = i;
+      for (i++; i < text.length; i++) {
+        if (text[i] === '\\') i++;
+        else if (text[i] === '"') break;
+      }
+      let next = i + 1;
+      while (next < text.length && /[ \t\r\n]/.test(text[next])) next++;
+      if (text[next] === ':') {
+        const key = JSON.parse(text.slice(start, i + 1));
+        const keys = objects[objects.length - 1];
+        if (keys.has(key)) return true;
+        keys.add(key);
+      }
+    }
+  }
+  return false;
+}
+
 function failure(code) {
   return { status: 'INVALID', errors: [{ code, path: '$' }], notice: NOTICE };
 }
@@ -332,7 +361,9 @@ export function checkReceiptFile(file) {
     if (n > MAX_BYTES) return failure('FILE_TOO_LARGE');
     const text = new TextDecoder('utf-8', { fatal: true }).decode(buf.subarray(0, n));
     if (maxDepth(text) > MAX_DEPTH) return failure('DEPTH_EXCEEDED');
-    return checkReceipt(JSON.parse(text));
+    const parsed = JSON.parse(text);
+    if (hasDuplicateKeys(text)) return failure('DUPLICATE_KEY');
+    return checkReceipt(parsed);
   } catch (e) {
     return failure(e instanceof SyntaxError || e instanceof TypeError ? 'JSON_MALFORMED' : 'FILE_UNREADABLE');
   } finally {
