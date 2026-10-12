@@ -7,7 +7,7 @@
 
 # event-intelligence
 
-Sourced event facts and research cache for TicketStub, built as internal Node 22 components that keep every fact tied to its source.
+Internal Node 22 research components for TicketStub: controlled retrieval, extracted source candidates, evidence provenance and scoped research reuse.
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
@@ -16,7 +16,7 @@ Sourced event facts and research cache for TicketStub, built as internal Node 22
   <a href=".github/workflows/verify.yml"><img alt="Python 3.11.17 in CI" src="https://img.shields.io/badge/python-3.11.17%20CI-7CC6D2?style=flat-square&labelColor=17140F"></a>
 </p>
 
-[Status](#status) · [Quickstart](#quickstart) · [Checks](#checks) · [Docs](#docs) · [Related](#related-repositories)
+[Status](#status) · [Architecture](#architecture-and-responsibilities) · [Quickstart](#quickstart) · [Configuration](#configuration) · [Checks](#checks) · [Docs](#docs) · [Related](#related-repositories)
 
 ## Status
 
@@ -32,16 +32,44 @@ These do not establish the accepted public research request/response API or full
 
 The full inventory, with source paths, reference docs and issues, is in [Components, status and checks](docs/components.md).
 
+The npm package `@jevelopers/event-intelligence-safe-retrieval` is private and unpublished at version `0.1.0`. Its declared exports expose retrieval primitives; they do not expose an accepted research service. Release acceptance remains tracked in [EI-12R #22](https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/22).
+
+## Architecture and responsibilities
+
+An authenticated host supplies research scope and policy. The private retrieval lifecycle combines the bounded frontier, connection-validated `SafeFetcher`, deterministic extraction, encrypted evidence store and source identity into a private draft. Reopening durable state does not grant a new request budget or authorize disclosure; current evidence and scope checks still apply.
+
+| Boundary | Owner and current surface |
+| --- | --- |
+| Retrieval package | Root export plus `/security/url-policy`, `/security/dns-resolver` and `/security/controlled-fetch`; exact map in [`package.json`](package.json) |
+| Private research components | Source discovery, extraction, evidence, correction history, reuse and asset preparation inside this repository |
+| Authenticated request and disclosure authority | Supplied by the host; a source URL, candidate or permission field is not an authority grant |
+| Decision transport and Finance | Injected owner boundaries; JEV transport belongs to `agent-harness`, spending authority to `cost-intelligence` |
+| Creative handoff | Intended downstream consumer is `creative-engine`; accepted canonical package mapping remains gated |
+
+There is no application server or `npm start` command. Use the [private lifecycle reference](docs/discovery/private-retrieval.md) and [handoff contracts](docs/contracts/research-contract-handoff.md) when composing a host.
+
+## Requirements
+
+Use Node **22.23.3** ([`.nvmrc`](.nvmrc), [`.node-version`](.node-version); package engines require Node 22), npm, Make and Python **3.9 or newer**. CI pins Python **3.11.17**. Linux integration routes require Linux and fail on unsupported platforms. TypeScript **7.0.2** and parser dependencies are locked in [`package-lock.json`](package-lock.json).
+
 ## Quickstart
 
-Requires Node **22.23.3** ([`.nvmrc`](.nvmrc), [`.node-version`](.node-version)) and Python 3.9 or newer (CI pins 3.11.17).
+From a checkout of this repository:
 
 ```sh
 npm ci
 node tools/install-typescript-host.mjs
+npm run typecheck
+make verify CASE=safe-retrieval MODE=mock
 ```
 
-The helper installs the exact locked TypeScript 7.0.2 host compiler for your platform, which is required after optional packages are omitted.
+The helper installs the exact locked TypeScript host compiler for your platform, which is required because [`.npmrc`](.npmrc) omits optional packages. Runtime modules execute directly as ESM source; no separate build script is declared.
+
+## Configuration
+
+Offline checks use repository fixtures and require no provider credentials. `SafeFetcher` receives a URL and optional cancellation signal; its [`DEFAULT_RUN_LIMITS`](src/security/controlled-fetch.mjs) define request, redirect, time and byte ceilings. They are code constants, not environment-variable settings.
+
+Private composition additionally requires host-controlled tenant scope, evidence encryption/storage, authorization and run policy. Asset acquisition is disabled unless the host supplies its versioned acquisition policy and one-use release authority; enabling it still does not establish asset rights or creative approval. See [controlled retrieval](docs/security/controlled-retrieval.md), [evidence storage](docs/evidence/provenance-store.md) and [private retrieval configuration](docs/discovery/private-retrieval.md#opt-in-controlled-svg-acquisition). No implicit credential discovery or production host is installed by this package.
 
 ## Checks
 
@@ -49,11 +77,27 @@ The helper installs the exact locked TypeScript 7.0.2 host compiler for your pla
 make verify CASE=safe-retrieval MODE=mock
 make verify CASE=content-privacy MODE=mock
 make verify CASE=eval-policy-unit MODE=unit
+make verify CASE=research-api MODE=mock
+make verify CASE=question-preparation MODE=mock
 npm run test:runner
 npm run typecheck
 ```
 
 These are the checks in the [`verify` workflow](.github/workflows/verify.yml). They use local fixtures only: no deployment, provider connection or live retrieval. `make verify` fails unless every collected test runs and passes with none skipped. The Python route covers local policy and runner unit tests only; it is not the held-out benchmark or evidence that the policy is promotion-ready. Live mode and the reserved `evals` route stay fail-closed. All cases, Linux-only routes and the per-component CI workflows are listed under [verification routes](docs/components.md#verification-routes).
+
+The `research-api` route checks copied candidate contracts against offline fixtures; it does not establish the accepted public API. The separate [installed 0.9.7 consumer diagnostic](docs/contracts/installed-research-consumer-0.9.7.md) requires its owner-pinned archive and retains an expected incompatibility hold. Consult [`tools/verify.mjs`](tools/verify.mjs) for the executable route inventory. The package does not declare a separate lint script.
+
+## Repository structure
+
+| Path | Contents |
+| --- | --- |
+| [`src/security/`](src/security/), [`src/privacy/`](src/privacy/) | URL/DNS/transport controls and untrusted-content boundaries |
+| [`src/discovery/`](src/discovery/), [`src/research/`](src/research/) | Bounded source frontier, identity and private retrieval composition |
+| [`src/extraction/`](src/extraction/), [`src/evidence/`](src/evidence/) | Deterministic parsers, PDF support and provenance storage |
+| [`src/review/`](src/review/), [`src/cache/`](src/cache/), [`src/decisions/`](src/decisions/) | Immutable corrections, scoped reuse and question preparation |
+| [`tests/`](tests/), [`evals/`](evals/) | Synthetic component checks and evaluation-policy work |
+| [`tools/`](tools/), [`.github/workflows/`](.github/workflows/) | Verification runners, compiler setup and per-component CI |
+| [`docs/`](docs/) | Component limits, internal interfaces and pending handoff agreements |
 
 ## Docs
 
@@ -80,4 +124,8 @@ The architecture documents describe intended boundaries. They do not establish c
 
 ## Contributing
 
-Follow the organization [contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Keep tests on local fixtures and never commit credentials or customer data.
+Read [AGENTS.md](AGENTS.md) and follow the organization [contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Keep tests on local fixtures and never commit credentials or customer data. Record source revisions and distinguish component, candidate-contract and release evidence in PRs.
+
+## License
+
+No license file is present in this repository; no license terms are asserted here.
