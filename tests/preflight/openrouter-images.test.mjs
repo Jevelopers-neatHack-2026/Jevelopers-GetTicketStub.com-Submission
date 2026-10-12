@@ -1699,3 +1699,63 @@ test('public cancellation during credential resolution stops host preparation an
   assert.equal(result.reason_code, 'preflight_deadline_passed');
   assert.equal(hostPrepares, 0); assert.equal(run.fixture.calls.reserve, 0); assert.equal(run.hostDispatches.length, 0);
 });
+
+
+test('direct preparation rejects inherited signal facades with zero credential or host effects', async () => {
+  for (const kind of ['hostile', 'revoked', 'plain', 'state-shadow']) {
+    for (const levels of [1, 3]) {
+      const controller = new AbortController(); controller.abort(); let traps = 0;
+      const wrapped = Proxy.revocable(controller.signal, {
+        get(target, key, receiver) { traps += 1;
+          if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+          return Reflect.get(target, key, receiver);
+        }, getPrototypeOf() { traps += 1; throw new Error('prototype trap must not run'); },
+      });
+      let signal = ['plain', 'state-shadow'].includes(kind) ? controller.signal : wrapped.proxy;
+      for (let level = 0; level < levels; level += 1) signal = Object.create(signal);
+      if (kind === 'revoked') wrapped.revoke();
+      if (kind === 'state-shadow') {
+        const key = Object.getOwnPropertySymbols(controller.signal).find((candidate) => String(candidate) === 'Symbol(kAborted)');
+        Object.defineProperty(signal, key, { value: false });
+      }
+      const calls = []; const host = [];
+      const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }),
+        fetchImpl: async () => { throw new Error('network must not run'); }, dispatchPort: {
+          async prepare() { host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+      await assert.rejects(adapter.prepare({ ...billable(), signal }), (e) => e.code === 'invalid_abort_signal', `${kind}/${levels}`);
+      assert.equal(calls.length, 0); assert.deepEqual(host, []); assert.equal(traps, 0);
+    }
+  }
+});
+
+test('direct dispatch rejects inherited signal facades without consuming a valid prepared value', async () => {
+  for (const kind of ['hostile', 'revoked', 'plain', 'state-shadow']) {
+    for (const levels of [1, 3]) {
+      const controller = new AbortController(); controller.abort(); let traps = 0;
+      const wrapped = Proxy.revocable(controller.signal, {
+        get(target, key, receiver) { traps += 1;
+          if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+          return Reflect.get(target, key, receiver);
+        }, getPrototypeOf() { traps += 1; throw new Error('prototype trap must not run'); },
+      });
+      let signal = ['plain', 'state-shadow'].includes(kind) ? controller.signal : wrapped.proxy;
+      for (let level = 0; level < levels; level += 1) signal = Object.create(signal);
+      if (kind === 'revoked') wrapped.revoke();
+      if (kind === 'state-shadow') {
+        const key = Object.getOwnPropertySymbols(controller.signal).find((candidate) => String(candidate) === 'Symbol(kAborted)');
+        Object.defineProperty(signal, key, { value: false });
+      }
+      const calls = []; const host = [];
+      const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }),
+        fetchImpl: async () => { throw new Error('network must not run'); }, dispatchPort: {
+          async prepare() { host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+      const input = billable(); const prepared = await adapter.prepare(input);
+      await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, signal)), (e) => e.code === 'invalid_abort_signal', `${kind}/${levels}`);
+      assert.equal(calls.length, 1); assert.deepEqual(host, ['prepare']); assert.equal(traps, 0);
+      const active = new AbortController();
+      await adapter.dispatch(dispatchInput(input, prepared, active.signal));
+      assert.deepEqual(host, ['prepare', 'dispatch'], 'valid native control still dispatches once');
+      await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, active.signal)), (e) => e.code === 'credential_unavailable');
+    }
+  }
+});

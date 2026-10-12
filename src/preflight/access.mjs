@@ -28,9 +28,8 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}$/;
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const MAX_CAPABILITY_AGE_MS = 5 * 60_000;
-// Accept genuine, non-Proxy AbortSignals, including subclasses. Proxy wrappers are explicitly invalid:
-// their traps can falsify both the public property and Node's internal aborted symbol.
-// After excluding proxies, the prototype getter bypasses an own public `aborted` value/getter.
+// Accept native AbortSignals with own data state and proxy-free prototypes, including normal subclasses.
+// Public `aborted` shadows are bypassed; inherited-state facades and accessor-backed state are invalid.
 const nativeAbortSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
 const SENSITIVE_KEY = /(?:(?:^|[_-])(?:credential|secret|password|authorization|bearer|cookie|api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|token)(?:$|[_-])|(?<!s)token$|(?:credentials?|secrets?|password|authorization|bearer|cookie|apiKey|privateKey))$/i;
 const RAW_CONTENT_KEY = /^(?:prompt|prompt_text|raw_text|image_bytes|authorization_header|headers?)$/i;
@@ -138,12 +137,32 @@ function fail(code, message, field) {
 }
 
 function nativeAbortSignalState(value) {
-  // V8's isProxy does not invoke traps (including for revoked proxies). Node's aborted getter reads
-  // a JS symbol on its receiver, so calling it on a Proxy is not a trustworthy native-state read.
-  if (utilTypes.isProxy(value)) return undefined;
+  if (value === null || typeof value !== 'object') return undefined;
   try {
-    const aborted = nativeAbortSignalAborted?.call(value);
-    return typeof aborted === 'boolean' ? aborted : undefined;
+    // isProxy itself invokes no traps. Check every node before reflecting on it: Object.create(proxy)
+    // is not a Proxy, but Node's getter otherwise follows that hostile prototype for its state reads.
+    const prototypes = [];
+    for (let current = value; current !== null; current = Object.getPrototypeOf(current)) {
+      if (utilTypes.isProxy(current)) return undefined;
+      if (current !== value) prototypes.push(current);
+    }
+    // Node's getter reads JS storage rather than an unspoofable private slot. Give it our own receiver,
+    // forwarding only the candidate's own data descriptors, never inherited values or caller accessors.
+    // The getter selects its opaque keys; no Node-private symbol name is part of this adapter's contract.
+    const readKeys = new Set();
+    const receiver = new Proxy(value, { get(target, key) {
+      readKeys.add(key);
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+    } });
+    const aborted = nativeAbortSignalAborted?.call(receiver);
+    if (typeof aborted !== 'boolean') return undefined;
+    // A facade may shadow copied state while still inheriting a real signal. Native state must belong
+    // to this receiver alone; ordinary subclass prototypes carry methods, not another signal's storage.
+    for (const prototype of prototypes) {
+      for (const key of readKeys) if (Object.hasOwn(prototype, key)) return undefined;
+    }
+    return aborted;
   } catch {
     return undefined;
   }

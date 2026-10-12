@@ -159,7 +159,7 @@ export interface AccessProviderAdapter {
     grant_ref: string;
     deadline_at: string;
     authorization_evidence: PinnedAccessEvidence;
-    /** Optional preparation cancellation. Genuine non-Proxy AbortSignals only; omitted by legacy direct callers. */
+    /** Optional preparation cancellation. Native signals with own state and proxy-free prototypes only; omitted by legacy direct callers. */
     signal?: AbortSignal;
   }>): Promise<unknown>;
   dispatch(input: Readonly<{
@@ -177,7 +177,7 @@ export interface AccessProviderAdapter {
 }
 
 export interface AccessProviderMeteringContext extends MeteredDispatchContext {
-  /** Genuine non-Proxy runner cancellation/deadline signal; required for every billable provider dispatch. */
+  /** Native runner cancellation/deadline signal with own state and proxy-free prototypes; required for every billable provider dispatch. */
   readonly signal: AbortSignal;
   /** Revalidate the current grant, provider capability, and Finance lease after transport acknowledgement. */
   authorizeTransport(): Promise<void>;
@@ -260,7 +260,7 @@ export interface AccessExecutionPorts {
   readonly trustedScope: TrustedAccessScope;
   readonly mode: AccessMode;
   readonly now?: string | (() => string);
-  /** Genuine non-Proxy AbortSignal; Proxy wrappers fail explicitly with invalid_abort_signal. */
+  /** Native AbortSignal with own state and proxy-free prototypes; Proxy and inherited-state wrappers fail invalid_abort_signal. */
   readonly signal?: AbortSignal;
 }
 
