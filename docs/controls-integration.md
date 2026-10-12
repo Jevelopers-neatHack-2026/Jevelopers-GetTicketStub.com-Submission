@@ -53,10 +53,13 @@ and API cancellation can still drain held work on the retiring host. These
 fixtures do not serialize the entire HTTP API.
 
 Reset constructs a replacement before finalizing the previous host. Failed
-initialization cleans its temporary directory and preserves the previous usable
-host. A capture failure returns failure and retains the original directory for
+initialization preserves the previous usable host. Temporary directories are
+removed after their partial host closes successfully; failed initialization
+cleanup retains its close handle and directory until a later reset or stop. A capture failure returns failure and retains the original directory for
 a later capture attempt; unique capture directories preserve earlier evidence.
-The test client checks reset and capture responses. The locked-logo case chooses
+A failed component close remains retryable, blocks ordinary admission, and
+cannot produce a successful capture or removal. The test client checks reset
+and capture responses. The locked-logo case chooses
 its lock before the first navigation, and context teardown stops new browser
 requests and releases any explicit MOCK latch before final capture. Temporary databases are removed after successful
 reset or orderly shutdown. Separate-process tests preserve their explicit

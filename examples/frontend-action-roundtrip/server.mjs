@@ -1,22 +1,14 @@
 /** Loopback only, explicit MOCK trusted host. No actual authentication or calls. */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { mkdtempSync, rmSync, mkdirSync, cpSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
+import { closeAndCaptureHost } from './host-capture.mjs';
 import { createHostLifecycle } from './host-lifecycle.mjs';
-import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
+import { createHostSessions } from './host-session.mjs';
+import { fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
 const port = Number(process.env.CONTROLS_FIXTURE_PORT ?? 4317);
-async function createSession(options = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
-  try { return { dir, host: await createIntegratedHost(dir, { enableComposition: true, ...options }) }; }
-  catch (error) {
-    try { rmSync(dir, { recursive: true, force: true }); }
-    catch (cleanup) { throw new AggregateError([error, cleanup], 'MOCK session initialization and cleanup failed'); }
-    throw error;
-  }
-}
+const sessions = createHostSessions();
+const createSession = sessions.create;
 const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/javascript'], '/messages.mjs': ['messages.mjs', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript'],
   '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
   '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
@@ -30,31 +22,14 @@ Object.assign(files, { '/composition.html': ['composition.html', 'text/html'], '
 const compositionPrincipal = req => req.headers['x-mock-controls-principal'] === 'other-tenant' ? { ...fixturePrincipal, tenant_id: 'other_fixture_tenant' } : req.headers['x-mock-controls-principal'] === 'other-actor' ? { ...fixturePrincipal, actor_id: 'other_fixture_actor' } : fixturePrincipal;
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
-let captureSequence = 0;
-function closeAndCaptureHost(session, reason) {
-  const { host, dir } = session;
-  if (!session.closed) { session.counters = host.counts(); session.closed = true; host.close(); }
-  const counters = session.counters;
-  const evidence = process.env.CONTROLS_BROWSER_EVIDENCE_DIR;
-  if (!evidence) { session.finalized = true; return; }
-  mkdirSync(evidence, { recursive: true });
-  const target = mkdtempSync(join(evidence, `session-${String(++captureSequence).padStart(4,'0')}-`)); cpSync(dir, join(target, 'store-root'), { recursive: true });
-  const files = [];
-  function walk(directory, prefix = '') {
-    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a,b)=>a.name.localeCompare(b.name))) {
-      const path = join(directory, entry.name), relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) throw new TypeError('Browser fixture store must not contain links');
-      if (entry.isDirectory()) walk(path, relative);
-      else { const bytes = readFileSync(path); files.push({ path: relative, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }); }
-    }
-  }
-  walk(join(target, 'store-root'));
-  writeFileSync(join(target, 'manifest.json'), JSON.stringify(files, null, 2) + '\n');
-  writeFileSync(join(target, 'receipt.json'), JSON.stringify({ reason, captured_at: new Date().toISOString(), node: process.version, node_executable: process.execPath,
-    cwd: process.cwd(), mode: 'mock', live_calls: 0, counters, membership: 'explicit MOCK fixture', files: files.length }, null, 2) + '\n');
-  session.finalized = true;
+let initialSession;
+try { initialSession = await createSession(); }
+catch (error) {
+  try { sessions.cleanup(); }
+  catch (cleanup) { throw new AggregateError([error, cleanup], 'MOCK fixture startup and cleanup failed'); }
+  throw error;
 }
-const lifecycle = createHostLifecycle(await createSession(), { create: createSession, finalize: closeAndCaptureHost, remove: session => rmSync(session.dir, { recursive: true, force: true }) });
+const lifecycle = createHostLifecycle(initialSession, { create: createSession, finalize: closeAndCaptureHost, remove: session => rmSync(session.dir, { recursive: true, force: true }) });
 const server = createServer(async (req, res) => {
   let lease, host;
   try {
@@ -165,7 +140,10 @@ const server = createServer(async (req, res) => {
 });
 server.listen(port, '127.0.0.1', () => console.log(`MOCK integrated controls fixture http://127.0.0.1:${server.address().port}; actual local API/store, intercepted transport`));
 const stop = () => server.close(async () => {
-  try { await lifecycle.stop(); process.exit(0); }
-  catch { console.error('MOCK fixture finalization failed'); process.exit(1); }
+  const errors = [];
+  try { await lifecycle.stop(); } catch (error) { errors.push(error); }
+  try { sessions.cleanup(); } catch (error) { errors.push(error); }
+  if (errors.length) { console.error('MOCK fixture finalization failed'); process.exit(1); }
+  process.exit(0);
 });
 process.on('SIGTERM', stop); process.on('SIGINT', stop);

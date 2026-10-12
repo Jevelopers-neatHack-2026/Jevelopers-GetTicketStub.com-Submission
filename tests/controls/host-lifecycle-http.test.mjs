@@ -20,10 +20,17 @@ async function server(t) {
     assert.equal(response.status, 200, `${path} must succeed`); return response.json();
   };
   t.after(async () => {
-    // Failure cleanup must release an outstanding fixture latch before stop.
-    try { await call('/__fixture/state', { release: true }); } catch { /* Capture may already have finalized this host. */ }
+    let releaseError;
+    try {
+      const state = await call('/__fixture/lifecycle');
+      if (!state.closed) assert.equal((await call('/__fixture/state', { release: true })).ok, true);
+    } catch (error) { releaseError = error; }
     child.kill('SIGTERM'); const kill = setTimeout(() => child.kill('SIGKILL'), 2000);
-    await once(child, 'exit'); clearTimeout(kill);
+    const [code, signal] = child.exitCode !== null || child.signalCode !== null ? [child.exitCode, child.signalCode] : await once(child, 'exit');
+    clearTimeout(kill);
+    assert.equal(signal, null, 'MOCK fixture must stop without a forced signal');
+    assert.equal(code, 0, 'MOCK fixture must finalize successfully on orderly stop');
+    if (releaseError) throw releaseError;
     if (!process.env.CONTROLS_LIFECYCLE_EVIDENCE_DIR) rmSync(evidence, { recursive: true, force: true });
   });
   return { call, evidence };
