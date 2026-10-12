@@ -3,9 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 const fixture = new URL('../../examples/frontend-action-roundtrip/server.mjs', import.meta.url);
@@ -45,14 +45,25 @@ async function initialize(call) {
   const action = { action_version: 'creative-composition-initialize/1.0', action_id: 'lifecycle-initialize', intent: 'initialize', review_sha256: current.view.review.review_sha256 };
   const applied = await call('/api/composition/apply', action); assert.equal(applied.result.ok, true); return applied.result;
 }
+function captureFiles(root, prefix = '') {
+  const files = [];
+  for (const entry of readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const path = join(root, entry.name), relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) files.push(...captureFiles(path, relative));
+    else {
+      assert.equal(entry.isFile(), true, 'Captured evidence must contain only regular files and directories');
+      const bytes = readFileSync(path); files.push({ path: relative, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+    }
+  }
+  return files;
+}
 function validateCapture(evidence, expectedPreviewCount) {
   const sessions = readdirSync(evidence); assert.equal(sessions.length, 1, 'one completed capture of the retired host');
   const root = join(evidence, sessions[0]), receipt = JSON.parse(readFileSync(join(root, 'receipt.json')));
   assert.equal(receipt.counters.composition_previews, expectedPreviewCount); assert.equal(receipt.live_calls, 0);
-  for (const file of JSON.parse(readFileSync(join(root, 'manifest.json')))) {
-    const bytes = readFileSync(join(root, 'store-root', file.path)); assert.equal(bytes.length, file.bytes);
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256);
-  }
+  const manifest = JSON.parse(readFileSync(join(root, 'manifest.json')));
+  assert.equal(receipt.files, manifest.length);
+  assert.deepEqual(captureFiles(join(root, 'store-root')), manifest, 'Manifest must match complete captured membership and bytes');
   return join(root, 'store-root');
 }
 for (const transition of ['reset', 'capture']) test(`${transition} drains an admitted current read and preserves its own counters and exact store`, { timeout: 15000 }, async t => {
@@ -83,9 +94,18 @@ for (const transition of ['reset', 'capture']) for (const cancel of [false, true
   if (cancel) assert.equal((await call('/api/composition/cancel', { action_id: action.action_id })).result.status, 'cancelled');
   assert.equal((await call('/__fixture/state', { release: true })).ok, true);
   const applied = await apply; assert.equal(applied.result.status, cancel ? 'cancelled' : 'saved'); assert.equal((await change).ok, true);
-  const store = validateCapture(evidence, 1), db = new DatabaseSync(join(store, 'creative.sqlite'), { readOnly: true });
-  try { assert.equal(db.prepare('SELECT status FROM creative_jobs WHERE action_id=?').get(action.action_id).status, cancel ? 'cancelled' : 'completed'); }
-  finally { db.close(); }
+  const store = validateCapture(evidence, 1), sealed = captureFiles(dirname(store));
+  const inspection = mkdtempSync(join(tmpdir(), 'lifecycle-store-inspection-'));
+  try {
+    // Read-only SQLite WAL inspection can create sidecars. Inspect a disposable
+    // copy so that terminal-job assertions cannot alter sealed custody.
+    const copy = join(inspection, 'store-root'); cpSync(store, copy, { recursive: true });
+    const db = new DatabaseSync(join(copy, 'creative.sqlite'), { readOnly: true });
+    try { assert.equal(db.prepare('SELECT status FROM creative_jobs WHERE action_id=?').get(action.action_id).status, cancel ? 'cancelled' : 'completed'); }
+    finally { db.close(); }
+  } finally { rmSync(inspection, { recursive: true, force: true }); }
+  assert.deepEqual(captureFiles(dirname(store)), sealed, 'Inspection must preserve every sealed member and byte hash');
+  validateCapture(evidence, 1);
   if (transition === 'capture') assert.equal((await call('/__fixture/reset', {})).ok, true);
   assert.ok((await call('/api/schema')).schema); assert.equal((await call('/api/composition/current')).view.status, 'not_initialized');
 });
