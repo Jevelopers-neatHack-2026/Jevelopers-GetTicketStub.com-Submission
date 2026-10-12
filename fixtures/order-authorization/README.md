@@ -98,12 +98,19 @@ Scenarios (`scenarios/<name>.json`: ordered steps over labelled authorizations a
 
 ## Supported and unsupported
 
-Supported (fixture-verified here, and in `npm run verify:product -- --suite order-auth`): valid; wrong scope; changed terms; expired and revoked; replay under distinct keys; concurrent claim; claim committed with the response lost; unknown-claim lookup and reconciliation; dispatch-time revalidation after revoke, expiry, approval revoked, art changed and terms changed.
+Supported by the standalone fixtures and the `order-auth` product suite: valid; wrong scope; changed terms; expired and revoked; replay under distinct keys; concurrent claim; claim committed with the response lost; unknown-claim lookup and reconciliation; dispatch-time revalidation after revoke, expiry, approval revoked, art changed and terms changed. Use the [application toolchain](../../README.md#quickstart) and run from the repository root after installing dependencies:
+
+```sh
+npm run build
+npm run verify:product -- --suite order-auth --mode fixture --evidence-dir out/evidence
+```
+
+The product suite starts an isolated production-build fixture server. The dependency-free `node fixtures/order-authorization/verify.mjs` command checks the local token fixtures and reference model without starting that server.
 
 **Unsupported, stated plainly:**
 
 - **No real provider, payment or address.** `provider: prodigi` can never be issued today: no variant carries a confirmed SKU, and the gate refuses it. `sandbox` is the only issuable provider, and only outside live mode.
-- **Not the canonical `OrderAuthorization`.** shared-contracts #26 is open and has no schema. This record is the app's own `ticketstub.order-authorization/1`. No mapping has been accepted by shared-contracts, fulfillment-connectors or agent-harness.
+- **Application-local `OrderAuthorization` boundary.** [shared-contracts #26](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/26) owns the canonical contract. Its unmerged candidate and any scoped private-development approval do not establish adoption of this app's `ticketstub.order-authorization/1` record or release acceptance. These fixtures check the [application issuer](../../src/server/order-authorization.ts) and its reference verifier; accepted cross-repository mapping remains separate.
 - **No cancel, refund, reship or change-of-destination action.** Only `fulfillment.submit`.
 - **No consumer adoption.** fulfillment-connectors has not run against this port. Its in-memory fixtures are not this protocol, and these fixtures are not its conformance receipt.
 - **Consumer authentication is a stopgap**: one shared HMAC key, one consumer id, no audience separation per consumer, no rotation, no mTLS. A captured signed request can be replayed for five minutes (claims are idempotent per key; verify, lookup and revalidate are read only).

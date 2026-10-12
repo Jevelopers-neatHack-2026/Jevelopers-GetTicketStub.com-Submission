@@ -4,7 +4,7 @@
 
 Synthetic stub, synthetic art bytes, synthetic ids. Regenerate with `node fixtures/approval/generate.mjs` (deterministic). Check with `node fixtures/approval/verify.mjs`, which has no dependencies: copy `verifyApproval` and `contentHashes` into a consumer.
 
-An approval says: this signed-in owner approved this exact design version, art, printed facts and composition, for one purpose, until `expiresAt`. **It is not a purchase authorization, a payment, an order or an asset-rights grant.** The signed record carries `notAuthorizes: ["purchase","payment","order","asset_rights"]`, and there is no purchase purpose: asking for one is `wrong_purpose`. Purchase authorization is a separate, later record (GT-07 / issue #16).
+An approval says: this signed-in owner approved this exact design version, art, printed facts and composition, for one purpose, until `expiresAt`. **It is not a purchase authorization, a payment, an order or an asset-rights grant.** The signed record carries `notAuthorizes: ["purchase","payment","order","asset_rights"]`, and there is no purchase purpose: asking for one is `wrong_purpose`. The separate [order-authorization record](../order-authorization/README.md) covers the application-local fulfillment authorization boundary (GT-07 / issue #16); it also grants no payment or asset rights.
 
 ## The token
 
