@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
 	fixtureArtifact,
 	fixtureLayout,
@@ -27,6 +29,33 @@ test("replays normalized file bytes and semantic descriptors in independent brow
 	);
 	assert.deepEqual(a.descriptors, b.descriptors);
 	assert.equal(a.pixelDigest, b.pixelDigest);
+	const directory = process.env["PP_OUTPUT_EVIDENCE_DIR"];
+	if (directory)
+		await writeFile(
+			join(directory, "exporter-reproducibility.json"),
+			JSON.stringify(
+				{
+					executionNonce: process.env["PP_DURABILITY_EXECUTION_NONCE"],
+					mode: "independent-browser-normalized-byte-comparison",
+					byteEquality: true,
+					semanticEquality: true,
+					pixelEquality: true,
+					files: a.files.map((file, index) => ({
+						name: file.name,
+						firstDigest: file.digest,
+						secondDigest: b.files[index]?.digest,
+						length: file.length,
+					})),
+					descriptors: a.descriptors,
+					environment: a.environment,
+					browser: a.browser,
+					pixelDigest: a.pixelDigest,
+					handoffEligible: false,
+				},
+				null,
+				2,
+			),
+		);
 });
 for (const [id, name, rtl] of [
 	["arabic", "مرحبا بالعالم", true],
