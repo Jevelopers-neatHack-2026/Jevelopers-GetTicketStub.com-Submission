@@ -33,5 +33,5 @@ See [PostgreSQL evidence reader](./evidence-postgres.md) for the required host a
 
 - Real PostgreSQL qualification and host/consumer acceptance remain required. Adding the adapter and test source does not establish those outcomes.
 - Trace, run, design, artifact, commit/build and session/checkpoint refs are reported `unavailable: source_not_integrated`; the ledger has no stored source for them, and an accepted shared-contracts mapping is required.
-- Intake observations outside `financial_ledger_events` are not promoted into ledger evidence rows. Their independent durable lineage is a follow-up slice.
+- Intake observations outside `financial_ledger_events` are not promoted into ledger evidence rows. The additive [stored-lineage reader](stored-lineage.md) now reads bounded intake/outbox and known reporting-snapshot input metadata, but does not promote those facts to ledger rows, return amounts, or re-fetch original provider bytes. Broader reconciliation, adjustment, export lineage and host/consumer acceptance remain separate gaps.
 - Reconciliation, adjustment and export lineage linkage; CI-10.3 and CI-10.4 behavior.
