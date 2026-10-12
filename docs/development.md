@@ -41,10 +41,10 @@ The public script names are `test:accounting`, `test:adapters`, `test:budgets`, 
 | Suite | Test files at this revision | Runner |
 | --- | --- | --- |
 | `contracts` | `tests/contracts/shared-contracts.test.mjs`, `tests/contracts/api-contract-shapes.test.mjs` | Node only |
-| `exports` | `tests/exports/public-exports.test.mjs` (includes the `npm pack` clean-consumer check) | Node only |
+| `exports` | `tests/exports/public-exports.test.mjs` (includes the `npm pack` clean-consumer check), `tests/exports/csv-encoding.test.mjs` | Node only |
 | `smoke` | `tests/smoke/api-boundaries.test.mjs`, `tests/smoke/postgres-cleanup.test.mjs` | Node only |
-| `traceability` | `tests/traceability/release-gates.test.mjs` | Node only |
-| `unit` | the five foundation files above | Node only |
+| `traceability` | Complete `leafPaths.traceability` list in [`scripts/suite-policy.mjs`](../scripts/suite-policy.mjs), including release gates, migration-policy and evidence/model checks | Node only |
+| `unit` | The exact five `foundationTestFiles` in [`scripts/suite-policy.mjs`](../scripts/suite-policy.mjs); other leaves listed in this table are not implicitly added | Node only |
 | `pricing` | `tests/pricing/pricing.test.mjs` | PostgreSQL 16 |
 | `ledger` | `tests/ledger/ledger.test.mjs` | PostgreSQL 16 |
 | `migrations` | `tests/migrations/migrations.test.mjs` | PostgreSQL 16 |
@@ -94,7 +94,7 @@ An empty, repeated, unknown, or unsupported selector fails without falling back 
 
 ## Package layout
 
-All modules export typed request/result schemas and ESM entry points under `src/`. `npm run build` generates JSON Schema documents under `schemas/cost-intelligence/1.0.0/` (and pricing v2 under `schemas/cost-intelligence/2.0.0/pricing/`) with their SHA-256 index in [`docs/api/schema-index.json`](api/schema-index.json). Migrations live in [`migrations/`](../migrations/).
+All modules export typed request/result schemas and ESM entry points under `src/`. `npm run build` generates JSON Schema documents under `schemas/cost-intelligence/1.0.0/` and `schemas/cost-intelligence/2.0.0/`. The [schema index](api/schema-index.json) lists the exact generated modules, versions and SHA-256 hashes, including v2 pricing, reconciliation, integrations and reporting. Migrations live in [`migrations/`](../migrations/).
 
 Sanitized finance-owned request and response proposal examples live in [`fixtures/api/`](../fixtures/api/); contract and smoke tests consume the same files. Synthetic acceptance inputs for the implemented leaves are [`fixtures/ledger/ci02-synthetic-acceptance.json`](../fixtures/ledger/ci02-synthetic-acceptance.json) and [`fixtures/pricing/ci03-synthetic-acceptance.json`](../fixtures/pricing/ci03-synthetic-acceptance.json).
 

@@ -4,7 +4,7 @@ These decisions describe implemented local boundaries, deferred operations, and 
 
 ## Typed boundary policy
 
-- **API schema:** finance-owned requests use exact `1.0.0`, reject unknown fields and enums, and return bounded safe errors with opaque diagnostic references.
+- **API schema:** finance-owned requests require the exact schema version supported by the operation: legacy v1 boundaries use `1.0.0`, while separate v2 operations use `2.0.0`. Follow each operation's request schema and API guide for required fields, allowed enums and bounded safe errors with opaque diagnostic references.
 - **Economics:** decimal strings support up to 18 fractional digits. `billingMode` means economic execution (`live`, `sandbox`, `simulated`); funding state is modeled separately.
 - **Unknown usage:** unknown completeness uses explicit `null` measurements and missing-field evidence. Unknown is not numeric zero.
 - **Authorization:** partial grants require explicit caller consent and a caller replan before dispatch. Uncertain outcomes retain the hold until fenced non-dispatch proof or final usage evidence resolves it.
