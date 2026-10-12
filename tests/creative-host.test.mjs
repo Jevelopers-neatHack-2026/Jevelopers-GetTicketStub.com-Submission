@@ -39,7 +39,7 @@ const temp = mkdtempSync(join(tmpdir(), "ticketstub-creative-host-"));
 const { creativeHostConfig, currentProjectAuthority, providerCredentialPort, financeConnectionOptions } = await import("../src/server/creative/config.mjs");
 const { canonicalHash } = await import("creative-engine/contracts");
 const { buildCreativeBrief } = await import("creative-engine/planning");
-const { changeBudgetPolicy, budgetDigest } = await import("@jevelopers/cost-intelligence/budgets");
+const { changeBudgetPolicy, budgetDigest, readReservationSnapshot } = await import("@jevelopers/cost-intelligence/budgets");
 const { registerPricingRuleV2, registerRateCardV2 } = await import("@jevelopers/cost-intelligence/pricing");
 const { ingestUsage } = await import("@jevelopers/cost-intelligence/metering");
 const { invokeAgentCreativeDevelopment } = await import("../src/server/vendor/agent-harness/src/development/index.js");
@@ -479,7 +479,13 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
         const history = await admin.query(`SELECT event_type,held_amount::text,consumed_amount::text,released_amount::text
           FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1 AND reservation_id=$2 ORDER BY event_sequence`, [entry.tenant_id, dispatch.reservation_ref]);
         assert.deepEqual(history.rows.map((row) => row.event_type), ["authorized", "dispatched"], "a real Finance hold cannot be settled or released after final revocation");
-        assert.ok(Number(history.rows.at(-1).held_amount) > 0); assert.equal(Number(history.rows.at(-1).consumed_amount), 0); assert.equal(Number(history.rows.at(-1).released_amount), 0);
+        // Event amounts are deltas. A separately seeded external Finance-owner
+        // read grant inspects the actual SQL reducer after app authority closes.
+        const snapshot = await readReservationSnapshot({ schemaVersion: "1.0.0", requestId: randomUUID(), scope: retained.scope, reservationId: dispatch.reservation_ref }, pricingPorts);
+        assert.equal(snapshot.ok, true); assert.equal(snapshot.value.reservation.billable_attempt_id, dispatch.billable_attempt_id);
+        assert.equal(snapshot.value.state, "dispatched"); assert.equal(snapshot.value.reservation.lifecycle, "uncertain_in_flight");
+        assert.ok(Number(snapshot.value.heldAmount) > 0); assert.equal(Number(snapshot.value.effectiveConsumedAmount), 0); assert.equal(Number(snapshot.value.releasedAmount), 0);
+        assert.equal(snapshot.value.expectedRevision, 2); assert.equal(snapshot.value.reservation.usage_completeness, "unknown");
         assert.equal((await host.store.listDesignVersions({ scope: { tenant_id: entry.tenant_id, project_id: entry.project_id }, brief_id: entry.brief_id, limit: 100 })).items.length, 1,
           `${provider}/${scenario.name} cannot publish another artifact`);
       } finally { await scenario.restore(); }
