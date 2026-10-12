@@ -41,7 +41,7 @@ process.env.TICKETSTUB_FILES = join(scratch, "files");
 delete process.env.TICKETSTUB_OPS_TELEMETRY;
 
 const P = await import("../src/customer/studio/agent/protocol.ts");
-const { planDemo, findDate } = await import("../src/customer/studio/agent/planner.ts");
+const { planDemo, findDate, INSTRUCTION, namesOtherField } = await import("../src/customer/studio/agent/planner.ts");
 const { applyToStub } = await import("../src/customer/studio/agent/apply.ts");
 const { PALE_HOURS, newStub } = await import("../src/customer/studio/fixtures.ts");
 const { currentVersion } = await import("../src/customer/studio/types.ts");
@@ -733,4 +733,24 @@ test("leading politeness or discourse words never hide an instruction while a fi
   assert.deepEqual(reply("venue", "Venue77").actions, [{ type: "set_fact", field: "venue", value: "Venue77" }]);
   assert.deepEqual(reply("subtitle", "Date Night").actions, [{ type: "set_text", field: "subtitle", value: "Date Night" }]);
   assert.deepEqual(reply("title", "The Title Bar").actions, [{ type: "set_text", field: "title", value: "The Title Bar" }]);
+});
+
+test("the four more-thing cases", () => {
+  const reply = (field, message) => planDemo(request({ message, pending: { field, question: "q?" }, state: on1011 }));
+  for (const field of ["venue", "title", "subtitle", "note"]) {
+    for (const msg of ["One more thing, fix the date: 2024-10-12", "One more thing and fix the date: 2024-10-12", "Before we continue, set the date: 2024-10-12", "Thanks; update the date: 2024-10-12"]) {
+      assert.deepEqual(reply(field, msg).actions, setDate("2024-10-12"), `${field} / ${msg}`);
+    }
+  }
+});
+
+test("the composed instruction patterns really carry word-boundary and whitespace escapes (a cooked backspace would never match)", () => {
+  const bs = String.fromCharCode(92);
+  assert.ok(INSTRUCTION.source.includes(bs + "b") && INSTRUCTION.source.includes(bs + "s"), INSTRUCTION.source);
+  assert.equal(INSTRUCTION.test("Thanks; update the date"), true);
+  assert.equal(INSTRUCTION.test("The Venue"), false);
+  assert.equal(namesOtherField("One more thing, fix the date: 2024-10-12", "venue"), true);
+  assert.equal(namesOtherField("the date was 2024-10-12", "venue"), true);
+  assert.equal(namesOtherField("Date Night", "subtitle"), false);
+  assert.equal(namesOtherField("fix the date", "date"), false);
 });

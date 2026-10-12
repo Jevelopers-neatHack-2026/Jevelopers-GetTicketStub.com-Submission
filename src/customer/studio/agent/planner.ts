@@ -252,12 +252,12 @@ const FIELD_MAX: Record<AskField, number> = { date: LIMITS.value, venue: LIMITS.
 const LEAD = String.raw`(?:(?:hi|hey|hello|ok(?:ay)?|so|well|actually|oh|u+m+|uh+|sorry|also|and|then|but|please|pls|kindly|(?:can|could|would|will) you(?: please)?|i'd like you to|i want you to|i (?:want|need|would like) to|i'd like to|let's|lets)\b[\s,.:;!-]*)*`;
 const VERB = String.raw`(?:fix|set|change|correct|update|switch|make|remix|regenerate|redo|show|flip|view|turn|keep|include|add|print|unkeep|drop|remove|hide|use|try|go|simulate|force)\b`;
 // an instruction verb opens the message, or any clause after a comma, colon, semicolon, "and" or "then"
-const INSTRUCTION = new RegExp(`(?:^|[,:;]|\b(?:and|then)\b)[\s,.:;!-]*${LEAD}${VERB}`, "i");
+export const INSTRUCTION = new RegExp(String.raw`(?:^|[,:;]|\b(?:and|then|also)\b)[\s,.:;!-]*${LEAD}${VERB}`, "i");
 const FIELD_STATEMENT = /\b(?:date|venue|title|subtitle)\b[^.?!]*?\b(?:is|was|to|should be)\b/i;
 const FIELDS = ["date", "venue", "title", "subtitle"];
 /** An explicit instruction naming a field other than the one being asked about, wherever it sits in the message. */
-function namesOtherField(raw: string, field?: string): boolean {
-  return FIELDS.filter((f) => f !== field).some((f) => new RegExp(`\b(?:fix|set|change|update|correct)\s+(?:the\s+)?${f}\b|\bthe\s+${f}\s+(?:is|was|should be)\b`, "i").test(raw));
+export function namesOtherField(raw: string, field?: string): boolean {
+  return FIELDS.filter((f) => f !== field).some((f) => new RegExp(String.raw`\b(?:fix|set|change|update|correct)\s+(?:the\s+)?${f}\b|\bthe\s+${f}\s+(?:is|was|should be)\b`, "i").test(raw));
 }
 function isInstruction(raw: string, state: StateSummary, field?: string): boolean {
   return (INSTRUCTION.test(raw) || FIELD_STATEMENT.test(raw) || namesOtherField(raw, field)) && fromMessage(raw, state).actions.length > 0;
