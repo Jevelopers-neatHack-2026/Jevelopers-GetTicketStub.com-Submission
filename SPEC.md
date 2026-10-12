@@ -31,7 +31,7 @@ Every design decision below has to serve that sentence. "Keep the night" asks fo
 ## Two tiers
 
 1. **Master brand** (this repo): the app UI, logo, marketing, packaging. Six colours, two typefaces, fixed.
-2. **Stub editions** (`ticket-studio/docs/stub-system.md`): Classic, Letterpress, Risograph, Minimal and Researched. Each has its own palette and type, because the stub is the user's artwork, not our chrome. The only parts of the master brand that appear on an edition are the "Ts" stamp on the back and the foil material.
+2. **Stub editions** ([getticketstub.com `docs/studio/stub-system.md`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/43bb721f00de1c616e8e8d27efbb87c6bf75bcbf/docs/studio/stub-system.md)): Classic, Letterpress, Risograph, Minimal and Researched. Each has its own palette and type, because the stub is the user's artwork, not our chrome. The only parts of the master brand that appear on an edition are the "Ts" stamp on the back and the foil material.
 
 ## Colour
 

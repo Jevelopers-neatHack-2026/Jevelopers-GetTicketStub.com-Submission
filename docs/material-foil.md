@@ -1,6 +1,6 @@
 # Foil and holo material
 
-The technique is adapted from lmvdz/coven-cave (`feat/cave-3rz-conjure-flow`, `src/lib/foil/*`, `src/styles/familiar-card.css`). The full engineering notes live in `ticket-studio/research/holo-foil-technique.md`.
+The technique is adapted from lmvdz/coven-cave (`feat/cave-3rz-conjure-flow`, `src/lib/foil/*`, `src/styles/familiar-card.css`). The full engineering notes live in [getticketstub.com `docs/studio/research/holo-foil-technique.md`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/43bb721f00de1c616e8e8d27efbb87c6bf75bcbf/docs/studio/research/holo-foil-technique.md).
 
 ## Principle: the pattern stays fixed, the colour moves
 
