@@ -95,4 +95,8 @@ test('review hardening: Unicode whitespace, BOM, C1/bidi controls, separator dir
   rejects(() => encodeCsv(['a'], [[null]]), 'INVALID_CELL');
   rejects(() => encodeCsv(['a'], [[{ kind: 'formula', value: '=1' }]]), 'INVALID_CELL');
   rejects(() => encodeMoneyCell('-0.5', 0), 'INVALID_MONEY');
+  rejects(() => encodeTextCell('\u061C=1+1'), 'INVALID_TEXT');
+  rejects(() => encodeCsv(['a', 'b'], [[{ kind: 'text', value: 'x' }, ,]]), 'INVALID_CELL');
+  rejects(() => encodeCsv(['a', ,], []), 'INVALID_TEXT');
+  rejects(() => encodeCsv(['a'], [null]), 'INVALID_CELL');
 });

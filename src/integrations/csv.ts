@@ -49,9 +49,9 @@ const FORMULA_TRIGGERS = new Set(['=', '+', '-', '@', '\t', '\r', '\n', '＝', '
 const LEADING_WHITESPACE = /^[\s\u200B]*/u;
 const NEEDS_QUOTING = /[",\r\n]/;
 // C0 controls other than tab, CR and LF, C1 controls, bidirectional controls (which can visually reorder
-// digits) and the byte-order mark (which readers strip, exposing what follows) have no place in a
+// digits; upstream must strip direction marks from right-to-left names) and the byte-order mark (which readers strip, exposing what follows) have no place in a
 // consumer file.
-const DISALLOWED_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/;
+const DISALLOWED_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\p{Bidi_Control}\uFEFF]/u;
 // A first line such as `sep=;` makes some readers switch delimiter, which would split guarded text.
 const SEPARATOR_DIRECTIVE = /^[\s\u200B]*sep=/iu;
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
@@ -123,14 +123,16 @@ export function encodeCsv(header: readonly string[], rows: readonly (readonly Cs
     throw new CsvEncodingError('INVALID_HEADER', 'The first header cell must not be a separator directive.', 0, 0);
   }
   const records: string[] = [];
+  // Array.from visits holes in sparse arrays, so a missing cell is rejected instead of written as empty.
   const encodeRecord = (cells: readonly string[]) => cells.join(',') + CSV_RECORD_SEPARATOR;
-  records.push(encodeRecord(header.map((name, column) => withPosition(() => encodeTextCell(name), 0, column))));
-  rows.forEach((row, index) => {
+  records.push(encodeRecord(Array.from(header, (name, column) => withPosition(() => encodeTextCell(name), 0, column))));
+  Array.from(rows, (row, index) => {
     const record = index + 1;
+    if (!Array.isArray(row)) throw new CsvEncodingError('INVALID_CELL', 'Rows must be arrays of typed cells.', record, null);
     if (row.length !== header.length) {
       throw new CsvEncodingError('ROW_WIDTH_MISMATCH', `Row has ${row.length} cells; the header has ${header.length}.`, record, null);
     }
-    records.push(encodeRecord(row.map((cell, column) => withPosition(() => encodeCell(cell), record, column))));
+    records.push(encodeRecord(Array.from(row, (cell, column) => withPosition(() => encodeCell(cell), record, column))));
   });
   return records.join('');
 }
