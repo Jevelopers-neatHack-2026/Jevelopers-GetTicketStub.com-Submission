@@ -152,7 +152,8 @@ await test('CI-10 stored intake and snapshot input lineage on actual PostgreSQL'
       const correction = observation(scope, { logical_operation_id: original.usageEvent.logical_operation_id,
         provider_attempt_id: original.usageEvent.provider_attempt_id, billable_attempt_id: original.usageEvent.billable_attempt_id,
         transport_attempt_id: original.usageEvent.transport_attempt_id, provider_request_id: original.usageEvent.provider_request_id,
-        supersedes_observation_id: original.usageEvent.source_observation_id });
+        supersedes_observation_id: original.usageEvent.source_observation_id,
+        source_refs: [{ kind: 'evidence', id: 'fixture:ci10-lineage:correction', content_hash: hash('ci10-lineage-synthetic-correction') }] });
       let injected = false;
       const database = { async connect() { const raw = await runtime.connect(); return {
         release: () => raw.release(),
@@ -271,8 +272,12 @@ await test('CI-10 stored intake and snapshot input lineage on actual PostgreSQL'
       assert.deepEqual(await counts(scope), before);
     });
     await run('published legacy v1 snapshots retain their original recognized encoding', async () => {
-      const legacy = { ...query, schemaVersion: '1.0.0' }; delete legacy.policyVersion; delete legacy.groupings;
+      const emptyLegacy = { ...query, schemaVersion: '1.0.0' }; delete emptyLegacy.policyVersion; delete emptyLegacy.groupings;
+      // V1 requires an observed currency; the original v2 period deliberately excludes this posting.
+      await refused(querySummary(emptyLegacy, ports(reportScope)), 'SOURCE_UNAVAILABLE');
+      const legacy = { ...emptyLegacy, period: { ...query.period, end: '2026-10-12T00:00:00.000Z' } };
       const page = await checked(querySummary(legacy, ports(reportScope)));
+      assert.equal(page.summary.currency, 'USD');
       const value = await checked(reader(reportScope).reader.readSnapshotInputLineage(snapshotRequest(reportScope, page.snapshotId, posting.eventId)));
       assert.equal(value.status, 'recorded_input'); assert.equal(value.snapshot.encoding, '1.0.0');
       assert.equal(value.snapshot.queryContentHash, page.queryContentHash);
