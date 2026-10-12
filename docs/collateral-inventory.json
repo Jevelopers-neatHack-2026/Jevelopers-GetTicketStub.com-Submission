@@ -1303,12 +1303,12 @@
     },
     {
       "assetId": "LAUNCH-X-COPY-001",
-      "type": "Pending-template X announcement copy; placeholders and posting authorization remain unresolved.",
+      "type": "Pending-template X announcement copy; known team, project, repository, and business-plan locator fields are draft and pending review, while submitter name, public demo URL, official post, cutoff, posting authorization, and all approvals remain unresolved.",
       "disposition": "existing",
       "path": "launch/announcement-copy.md",
       "pathAvailability": "created_in_candidate",
       "lifecycleState": "draft",
-      "intendedUse": "Pending-template X announcement copy; placeholders and posting authorization remain unresolved.",
+      "intendedUse": "Pending-template X announcement copy; known team, project, repository, and business-plan locator fields are draft and pending review, while submitter name, public demo URL, official post, cutoff, posting authorization, and all approvals remain unresolved.",
       "destination": "X quote-post; official post, exact destination and submitter to be confirmed",
       "requiredForV1": true,
       "implementationIssue": "MM-04",
@@ -1317,7 +1317,11 @@
       "claimReferences": [
         "MM-02 claims ledger, pending",
         "EVAL-03",
-        "CLAIM-NO-RESULTS-VERIFIED-001"
+        "CLAIM-NO-RESULTS-VERIFIED-001",
+        "CLAIM-X-DEST-TEAM-001",
+        "CLAIM-X-DEST-PROJECT-001",
+        "CLAIM-X-DEST-REPO-001",
+        "CLAIM-X-DEST-PLAN-001"
       ],
       "provenanceReferences": [
         "https://neatlogs.com/hackathon, checked 2026-10-11 UTC; MM-05 rights/approval pending"

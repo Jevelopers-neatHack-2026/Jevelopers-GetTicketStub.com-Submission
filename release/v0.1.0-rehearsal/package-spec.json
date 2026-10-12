@@ -8,7 +8,7 @@
     "official hackathon submission",
     "public X post"
   ],
-  "assetRevision": "r04",
+  "assetRevision": "r05",
   "assets": [
     {
       "recordId": "DEMO-EXPLAINER-001-text",
@@ -227,9 +227,9 @@
       "package": true,
       "requiredForV1": true,
       "sceneRefs": ["scene-10-status-and-docs-cta"],
-      "claimIds": ["CLAIM-NO-RESULTS-VERIFIED-001"],
+      "claimIds": ["CLAIM-NO-RESULTS-VERIFIED-001", "CLAIM-X-DEST-TEAM-001", "CLAIM-X-DEST-PROJECT-001", "CLAIM-X-DEST-REPO-001", "CLAIM-X-DEST-PLAN-001"],
       "ctaIds": ["CTA-REPOSITORY-DOCS-001"],
-      "limitations": ["Draft templates only; no automatic posting or authorization to publish.", "Team, project, and repository are known draft fields (review pending, not approved); submitter, public demo URL, official post, cutoff, and approvals remain pending."]
+      "limitations": ["Draft templates only; no automatic posting or authorization to publish.", "Team, project, and repository are known draft fields and the business-plan entry is a locator only (all review pending, not approved; not Finance approval, CFO-R2-001 unresolved); human submitter name, public demo URL, official post, cutoff, and all approvals remain pending."]
     },
     {
       "recordId": "LAUNCH-X-KEY-VISUAL-001-svg",

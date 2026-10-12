@@ -10,9 +10,9 @@ New package copies use this deterministic form:
 {family}-{assetId}-{revision}-{destination}-{dimensions}-{locale}-{variant}.{extension}
 ```
 
-For example, the existing `demo/recording-checklist.md` source maps to `demo-001-demo-recording-checklist-001-r04-repository-internal-review-text-en-us-rehearsal-recording-plan.md`. A visual source and its export keep the same asset ID but have distinct variants and extensions. A dynamic rehearsal MP4 and its SRT/VTT sidecars receive distinct role and format records, exact hashes, scene references, and receipt checks. The `text` dimension token means dimensions do not apply; raster/video dimensions come from the actual bytes and are never inferred from a filename.
+For example, the existing `demo/recording-checklist.md` source maps to `demo-001-demo-recording-checklist-001-r05-repository-internal-review-text-en-us-rehearsal-recording-plan.md`. A visual source and its export keep the same asset ID but have distinct variants and extensions. A dynamic rehearsal MP4 and its SRT/VTT sidecars receive distinct role and format records, exact hashes, scene references, and receipt checks. The `text` dimension token means dimensions do not apply; raster/video dimensions come from the actual bytes and are never inferred from a filename.
 
-The older working names remain intact and are source paths, not release names. Existing r01 package-copy names remain immutable; the current rehearsal rebuild uses r04 after source text changed (r02 and r03 copies are likewise retained):
+The older working names remain intact and are source paths, not release names. Existing r01 package-copy names remain immutable; the current rehearsal rebuild uses r05 after the X announcement copy source changed (r02, r03, and r04 copies are likewise retained; r04 remains the prior revision):
 
 | Existing source path | Stable package asset ID | Package role |
 | --- | --- | --- |

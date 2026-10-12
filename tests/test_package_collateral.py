@@ -1259,7 +1259,7 @@ class PackagePolicyTests(unittest.TestCase):
         row = next(item for item in spec["assets"] if item["assetId"] == "DEMO-RECORDING-CHECKLIST-001")
         name = package.package_filename(row, ROOT / row["path"], {"status": "not_applicable"}, spec)
         self.assertEqual(
-            "demo-001-demo-recording-checklist-001-r04-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+            "demo-001-demo-recording-checklist-001-r05-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
             name,
         )
         self.assertTrue((ROOT / row["path"]).is_file())
