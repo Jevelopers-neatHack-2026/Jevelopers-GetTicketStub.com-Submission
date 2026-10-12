@@ -235,7 +235,12 @@ test("N2: a retired key refuses a token issued after its retirement (plus skew),
   const at = (issued) => signApproval(record({ issuedAt: iso(issued), expiresAt: iso(issued + APPROVAL_TTL_MS) }), g1Signer);
   assert.equal(verifyWith(kr, at(retiredAt - 3600_000)), "ok", "issued before retirement: verifies through retention");
   assert.equal(verifyWith(kr, at(retiredAt + 5 * 60_000)), "ok", "inside the skew: still accepted");
-  assert.equal(verifyWith(kr, at(retiredAt + 5 * 60_000 + 1)), "forged", "a leaked retired key can't mint fresh tokens");
+  assert.equal(verifyWith(kr, at(retiredAt + 5 * 60_000 + 1)), "forged", "a token claiming issue after retirement is refused (accidental late signing; a leaked key could backdate)");
   assert.equal(kr.lookup("approval-g1", NOW, Number.NaN), null, "an unreadable issue time is refused for a retired key");
+  // Documented limit: a holder of the retired key can backdate issuedAt, and the token then verifies until retention ends.
+  // Only deleting the entry stops that.
+  assert.equal(verifyWith(kr, signApproval(record({ issuedAt: iso(retiredAt), expiresAt: iso(NOW + APPROVAL_TTL_MS) }), g1Signer)), "ok");
+  const deleted = ring({ v: 1, keys: [rotated().keys[0]] });
+  assert.equal(verifyWith(deleted, signApproval(record({ issuedAt: iso(retiredAt), expiresAt: iso(NOW + APPROVAL_TTL_MS) }), g1Signer)), "forged");
   assert.ok(kr.lookup("approval-g2", NOW, Number.NaN), "the active key is not affected");
 });

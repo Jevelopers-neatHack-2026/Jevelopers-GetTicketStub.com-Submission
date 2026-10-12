@@ -77,8 +77,9 @@ export interface Keyring {
   signer(): SigningKey;
   /**
    * The key for `kid` if it may verify at `now`, else null. Never throws. With `issuedAt` (ms, from the token being verified),
-   * a retired key also refuses a token issued after it was retired (plus skew), or with an unreadable issue time: a leaked
-   * retired key can't mint fresh tokens during its retention window.
+   * a retired key also refuses a token issued after it was retired (plus skew), or with an unreadable issue time. That stops
+   * accidental post-retirement signing (a process that missed the restart). It is not a defence against a compromised key,
+   * whose holder can backdate issuedAt: delete a compromised entry from the set at once.
    */
   lookup(kid: unknown, now?: number, issuedAt?: number): Buffer | null;
   /** Versions and rotation state only, never key bytes. */
