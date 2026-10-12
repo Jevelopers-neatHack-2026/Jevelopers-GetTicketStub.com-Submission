@@ -1666,6 +1666,17 @@ function closedFrame(frame:FinanceBindingMutationFrame):{ frame:FinanceBindingMu
   const action=parseClosed(copy.signedMaintainerActionCanonicalBytes);if(!check(ACTION_SCHEMA,action,ACTION_SCHEMA))refuse('denied','invalid_action');return {frame:freeze(copy),action,hash:contentHash(copy)};
 }
 
+interface FinanceSqliteDatabase {
+  readonly isTransaction: boolean;
+  exec(sql: string): void;
+  prepare(sql: string): {
+    get(...values: (string | number | bigint | null | Uint8Array)[]): Record<string, unknown> | undefined;
+    all(...values: (string | number | bigint | null | Uint8Array)[]): Record<string, unknown>[];
+    run(...values: (string | number | bigint | null | Uint8Array)[]): { changes: number | bigint; lastInsertRowid: number | bigint };
+  };
+  close(): void;
+}
+
 const NATIVE_EXEC=DatabaseSync.prototype.exec;
 const NATIVE_PREPARE=DatabaseSync.prototype.prepare;
 function nativeTransaction(db:DatabaseSync):boolean { const descriptor=Object.getOwnPropertyDescriptor(db,'isTransaction');if(!descriptor?.get||descriptor.configurable!==false)refuse('unavailable','unsupported_custody');return descriptor.get.call(db)===true; }
@@ -1674,7 +1685,7 @@ function nativeRead(db:DatabaseSync,sql:string,...values:(string|number|null)[])
 type Snapshot = { epoch:number; body:RecordData };
 const sourceInstances=new WeakMap<FinanceBindingCustodySource,{database:DatabaseSync; provenance:'isolated_fixture'}>();
 /** Explicit isolated adapter. Reads already maintained owner records; creates no tables, issuers, keys or grants. */
-export function createIsolatedFinanceSqliteCustodySource(database:DatabaseSync):FinanceBindingCustodySource {
+export function createIsolatedFinanceSqliteCustodySource(database:FinanceSqliteDatabase):FinanceBindingCustodySource {
   if(types.isProxy(database)||!(database instanceof DatabaseSync))throw new TypeError('A native owned SQLite connection is required.');
   const probe=nativeRead(database,'SELECT 1 AS native_identity');if(probe?.native_identity!==1)throw new TypeError('Native SQLite identity unavailable.');
   const source=Object.freeze({kind:'finance_sqlite_custody_source' as const});sourceInstances.set(source,{database,provenance:'isolated_fixture'});return source;
