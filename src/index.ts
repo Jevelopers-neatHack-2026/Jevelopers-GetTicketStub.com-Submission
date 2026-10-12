@@ -208,3 +208,25 @@ export type {
   ProdigiSizing,
   ProdigiStepState
 } from "./prodigi-sandbox.js";
+export {
+  createInMemoryProdigiReconciliationStore,
+  decideProdigiOrdering,
+  parseProdigiCallbackEvent,
+  ProdigiCallbackError,
+  ProdigiCallbackReconciler
+} from "./prodigi-callbacks.js";
+export type {
+  ProdigiCallbackErrorCode,
+  ProdigiCallbackHint,
+  ProdigiCallbackOutcome,
+  ProdigiCallbackReconcilerOptions,
+  ProdigiCallbackResult,
+  ProdigiEventClaim,
+  ProdigiOrderingDecision,
+  ProdigiOrderReader,
+  ProdigiPollPolicy,
+  ProdigiReconcileResult,
+  ProdigiReconcileStatus,
+  ProdigiReconciledOrderState,
+  ProdigiReconciliationStore
+} from "./prodigi-callbacks.js";

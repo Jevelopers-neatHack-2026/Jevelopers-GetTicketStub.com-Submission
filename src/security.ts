@@ -64,7 +64,8 @@ const SAFE_MESSAGES: Readonly<Record<SecurityErrorCode, string>> = {
 };
 
 const SAFE_REFERENCE_PATTERN = /^diag-[A-Za-z0-9][A-Za-z0-9._:-]{0,122}$/;
-const SAFE_CALLBACK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+// Underscore is allowed after the first character for documented supplier IDs such as Prodigi `evt_…`/`ord_…`.
+const SAFE_CALLBACK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const OPAQUE_TEXT_LIMIT = 512;
 const SUPPORTED_ASSET_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const REDACTED = "[REDACTED]";
