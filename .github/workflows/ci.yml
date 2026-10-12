@@ -43,6 +43,8 @@ jobs:
         run: npm run test:recovery -- --offline
       - name: Verify scoped reproducible financial reporting
         run: npm run test:reporting -- --offline
+      - name: Verify PostgreSQL query-to-export financial composition
+        run: npm run build --silent && node scripts/with-postgres.mjs exports --suite=postgres
       - name: Verify financial authorization and tenant isolation
         run: npm run test:security -- --offline
       - name: Verify atomic budget reservation authorization
@@ -65,6 +67,9 @@ jobs:
           if-no-files-found: warn
           path: |
             artifacts/test-manifests/*.json
+            artifacts/test-database/migrations-*.log
             artifacts/reporting/producer-*-page.json
             artifacts/reporting/ie-ci06-pg-page.json
             artifacts/reporting/failures-*.json
+            artifacts/exports/postgres-composition.json
+            artifacts/exports/synthetic-sql-composition.json
