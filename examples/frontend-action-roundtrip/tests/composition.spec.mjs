@@ -381,6 +381,12 @@ test('delayed preview bytes never revive a refreshed stale image or steal focus'
 
 test('late pending lookup cannot downgrade an authoritative cancellation terminal',async({page,request})=>{
   await initialize(page);await request.post('/__fixture/state',{data:{block:'composition-preview'}});await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();const applyResponse=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1'))),action_id=cached.action.action_id;
+  await expect.poll(async()=>{const read=(await(await request.post('/api/composition/lookup',{data:{action_id}})).json()).result;
+    if(read?.status!=='unknown'||read.action_id!==action_id||!read.backend_job_id)return false;
+    const marker=(await(await request.get(`/__fixture/composition-wait?action_id=${encodeURIComponent(action_id)}`)).json());
+    return marker.mode==='mock'&&marker.live_calls===0&&marker.held&&marker.action_id===action_id&&marker.backend_job_id===read.backend_job_id;
+  },{message:'Exact public action/job must reach its held MOCK preview stage before the delayed lookup and cancellation'}).toBe(true);
   let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});await page.route('**/api/composition/lookup',async route=>{const response=await route.fetch();expect((await response.json()).result.status).toBe('unknown');entered();await blocked;await route.fulfill({response});},{times:1});
   await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await started;await page.getByRole('button',{name:'Cancel existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('cancelled');
   await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForTimeout(50);await expect(page.locator('#operation-status')).toContainText('cancelled');await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();
