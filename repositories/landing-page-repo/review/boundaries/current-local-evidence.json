@@ -1,0 +1,392 @@
+{
+  "schema": "ticketstub.current-local-boundary-evidence/1",
+  "observedAt": "2026-10-12T11:47:40Z",
+  "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+  "issues": [
+    "LP-07 #9",
+    "LP-08 #10",
+    "LP-10 #12"
+  ],
+  "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+  "evidenceClass": "local executable/source evidence; synthetic fixtures and loopback HTTP only",
+  "runtime": {
+    "node": "v24.15.0",
+    "pinnedNode": "24.15.0",
+    "platform": "Darwin",
+    "architecture": "arm64",
+    "shell": "/bin/zsh -lc",
+    "networkMode": "No external credential/provider/receiver call. Metadata/foundation fixtures include loopback HTTP; privacy release stops at missing approval receipt."
+  },
+  "artifact": {
+    "manifestPath": "dist/site/manifest.json",
+    "manifestSha256": "e64d9bcaf5b26f0a1bc1d104e679a5f26a2f4fda30cde023dba506692bdc06ad",
+    "manifestBytes": 1652,
+    "schema": "ticketstub.landing-artifact/1",
+    "sourceByteEquality": "Verified all payloads equal actual source bytes at recorded SHA",
+    "files": {
+      "assets/ballet-clean.webp": {
+        "bytes": 53684,
+        "sha256": "2195943b492e4cd54d082bb09804e20e2317e5b8866d346a1440a1417f1e22d4"
+      },
+      "assets/fan-clean.webp": {
+        "bytes": 41546,
+        "sha256": "a28d2a81943ea441c259faa4d23027c05dc094c4be279e5cf2437a67b2166a48"
+      },
+      "assets/flight.json": {
+        "bytes": 556743,
+        "sha256": "8a69e3e289014de675a6249b004c28e1ffe4e603f550678ab5a95c1a161d9e15"
+      },
+      "assets/hockey-clean.webp": {
+        "bytes": 51778,
+        "sha256": "314e749eda387b3b0426238965ecd8350135fc9257f9c083e8f85d9bb92107cc"
+      },
+      "assets/hoops-clean.webp": {
+        "bytes": 64550,
+        "sha256": "dc58c6f5f79a3625bad5e7337f865593073b55af780d1dfd01c242f70cfc230c"
+      },
+      "assets/keeper-clean.webp": {
+        "bytes": 96974,
+        "sha256": "a14ee8df327cffae8ff3de4ff70f18f7b1beedf799ac84026f1992b7ee541cab"
+      },
+      "assets/pitcher-clean.webp": {
+        "bytes": 85802,
+        "sha256": "d870f2afa43831cc1ad1eb7c7175d8f699c8b0244dc16e47042f91c81e310b07"
+      },
+      "assets/qb-clean.webp": {
+        "bytes": 67992,
+        "sha256": "cb361142ff8821cf1df6610e9a2e958edfcd6683fb15eb493c1d1dbdaaf328cd"
+      },
+      "assets/singer-clean.webp": {
+        "bytes": 100472,
+        "sha256": "e87628c1117385dff1463e03663f26f6b82ea56a2a6b5bebabd56ec1cd5e398e"
+      },
+      "assets/ticketstub.gltf.json": {
+        "bytes": 1594648,
+        "sha256": "c36b5d0af494390fd2fdd18d581033e60dc156b45604c00060b0dd6bd8153936"
+      },
+      "index.html": {
+        "bytes": 196605,
+        "sha256": "9c3b80588cfa0e4c226e04102f0b14e6bb820fb0d88c61b2965bdd8f01038159"
+      }
+    }
+  },
+  "checkedInputs": {
+    ".nvmrc": {
+      "sha256": "b911698dc3cf3227d34d0ad6727f1c4408791203c9665de99ab959331a1fb07d",
+      "bytes": 8
+    },
+    "review/cta-navigation-decision.json": {
+      "sha256": "48465bcbb33ee6449e817530bf6f3c70bc8f877be32111869ea810072be9730d",
+      "bytes": 1265
+    },
+    "review/examples.json": {
+      "sha256": "0dfc586dad4583e653c60b794f7f740036a4a83acf7de284701471be92b1de0d",
+      "bytes": 29904
+    },
+    "review/privacy-inventory.json": {
+      "sha256": "680e0b3a74402dff91d7543437ecb5ec8e4e47ea461ff4ac2ba3978826876582",
+      "bytes": 2191
+    },
+    "scripts/artifact.mjs": {
+      "sha256": "4bb039c1850ce2004c0e0029ec0acdbc17050018f68177bf3442f288d9689908",
+      "bytes": 2599
+    },
+    "scripts/build.mjs": {
+      "sha256": "850e4699e8a15b593a9f2bf5b1af057b79e5fcf3f61bf0b2b3048f1dc5b5a43d",
+      "bytes": 3309
+    },
+    "scripts/preview.mjs": {
+      "sha256": "4b8da2c5158b5f688298fdf3daca8260769acd5445bba00eec7ff4b17bdfdbac",
+      "bytes": 3260
+    },
+    "scripts/suites/content.mjs": {
+      "sha256": "182f972faba854aa76f3db5b38c17e035d4e1bf9080a97533fc78211daf5ee32",
+      "bytes": 3673
+    },
+    "scripts/suites/cta.mjs": {
+      "sha256": "4070b85048cd3748df3ad4a685741e3c5fc9df06073f9ddc63cbfe0d9eb17a24",
+      "bytes": 4414
+    },
+    "scripts/suites/foundation.mjs": {
+      "sha256": "b5558e103ff8477b57a745bb0e0884bdb2fd0798996129397ceafc17a8f9cfb7",
+      "bytes": 490
+    },
+    "scripts/suites/metadata.mjs": {
+      "sha256": "e168538ba46e1ea38349eff7919a5b064bc5b33d56b2ec2365a60440b2ea860e",
+      "bytes": 8607
+    },
+    "scripts/suites/privacy.mjs": {
+      "sha256": "cb31b665b3fa95ad706f3dd169b5f7dfa59f0a05cf75f649bd8a92e4330d0d79",
+      "bytes": 18754
+    },
+    "scripts/suites/proof.mjs": {
+      "sha256": "eecd8c8b6d4e720bf9934030f52b27077aebf66b434ebb619213eecc794bbce3",
+      "bytes": 5172
+    },
+    "scripts/suites/ux.mjs": {
+      "sha256": "399ea37a4171147e18176af9e314aeeb07a510787ddae8387762ce2f910e2d62",
+      "bytes": 6768
+    },
+    "scripts/validate-content-proof.mjs": {
+      "sha256": "250b5aa9e2e91f592a64af06d48b3a843f47b08e9c7d348c88f59bf48d5ab9cb",
+      "bytes": 837
+    },
+    "scripts/validate-landing": {
+      "sha256": "7dc26b7b0629948ba5e11f0e0c49971087942413a83a00764fd22320e25842c4",
+      "bytes": 145
+    },
+    "scripts/validate.mjs": {
+      "sha256": "ffeb6144e1fd7ff2b2d064e706a4462befdc5711fd029afc7600050b4adaf32b",
+      "bytes": 2514
+    },
+    "src/content/copy.json": {
+      "sha256": "27075aa57ca61daf10d180ddcea2f7bad8dc0806b505744769fc12a3ff6addc1",
+      "bytes": 68768
+    },
+    "src/content/cta.json": {
+      "sha256": "50c46d338c63488f48705e4377a09da147e21f65c370312ccab9890116108e23",
+      "bytes": 2775
+    },
+    "src/content/metadata.json": {
+      "sha256": "32b6274724a5a94e674fb5fe23fe1cc79b32fe3dd270d4fd2314ab2ed3e2982f",
+      "bytes": 1848
+    },
+    "tests/content-proof.test.mjs": {
+      "sha256": "88ab84df794fc3a67cb9b3fe7cd94154837c0db80ec7314fd5f91e892c2beb3e",
+      "bytes": 4090
+    },
+    "tests/cta.test.mjs": {
+      "sha256": "d510158eba22adf690203a08a66c54893486fa4c9397f674527de5fa70f62652",
+      "bytes": 8258
+    },
+    "tests/foundation.test.mjs": {
+      "sha256": "aa3e3631f30d3c294dfcb6e17d1929406c9d673935d376aab70433080607d609",
+      "bytes": 7813
+    },
+    "tests/metadata.test.mjs": {
+      "sha256": "a465d8d0ef16f2c0af43bfd46bf4cd80a973e2f8c5cb3fc2fc4487da941c4f1d",
+      "bytes": 8280
+    },
+    "tests/privacy.test.mjs": {
+      "sha256": "ff8a0da95349a04e1b1e8cc2e7e0919900890a6510f5fbd3bd2b87c71ee614b0",
+      "bytes": 7947
+    },
+    "tests/scroll.test.mjs": {
+      "sha256": "c3075a5c1f423c8cea34b24975d848d2c4cb0af3efeef13e2edeccd7af7f017a",
+      "bytes": 9976
+    },
+    "tests/ux.test.mjs": {
+      "sha256": "8021536d29c01e900c0bfffd462dee9c23f2c324bee4916e09706b3fd9440596",
+      "bytes": 5384
+    }
+  },
+  "commands": [
+    {
+      "id": "build",
+      "command": "node scripts/build.mjs",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:38Z",
+      "finishedAt": "2026-10-12T11:47:38Z",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "executionOutcome": "passed",
+      "expectationMatched": true,
+      "releaseAcceptance": "NOT_ESTABLISHED",
+      "output": {
+        "path": "review/boundaries/logs/build.log",
+        "bytes": 35,
+        "sha256": "c005ef06372299c25d7799129dbf09098a9aebb7deb7c2f3c034e0d67b0869b4",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "Built 11 source files in dist/site"
+    },
+    {
+      "id": "all-tests",
+      "command": "node --test tests/*.test.mjs",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:38Z",
+      "finishedAt": "2026-10-12T11:47:39Z",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "executionOutcome": "passed",
+      "expectationMatched": true,
+      "releaseAcceptance": "NOT_ESTABLISHED",
+      "output": {
+        "path": "review/boundaries/logs/all-tests.log",
+        "bytes": 9555,
+        "sha256": "7bd7d50cd53afe800ccb0c1538b5f3fa5c81a3dc93c2dc0cd7391a0f72233b7b",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "\u2139 duration_ms 963.060959"
+    },
+    {
+      "id": "metadata-draft",
+      "command": "./scripts/validate-landing --suite metadata --mode draft",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:39Z",
+      "finishedAt": "2026-10-12T11:47:39Z",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "executionOutcome": "passed",
+      "expectationMatched": true,
+      "releaseAcceptance": "NOT_ESTABLISHED",
+      "output": {
+        "path": "review/boundaries/logs/metadata-draft.log",
+        "bytes": 1462,
+        "sha256": "6d441a22ca57c62352f18987a9ddac3f32775f0086abaf47292dcf75f56fe271",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "PASS_DRAFT selected suites: release approvals remain pending"
+    },
+    {
+      "id": "privacy-draft",
+      "command": "./scripts/validate-landing --suite privacy --mode draft",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:39Z",
+      "finishedAt": "2026-10-12T11:47:39Z",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "executionOutcome": "passed",
+      "expectationMatched": true,
+      "releaseAcceptance": "NOT_ESTABLISHED",
+      "output": {
+        "path": "review/boundaries/logs/privacy-draft.log",
+        "bytes": 205,
+        "sha256": "11fc906cb06dddd9ac9fc6cef2e8614e1be3dd34daa983bf061cb891e3283883",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "PASS_DRAFT selected suites: release approvals remain pending"
+    },
+    {
+      "id": "cta-draft",
+      "command": "./scripts/validate-landing --suite cta --mode draft",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:39Z",
+      "finishedAt": "2026-10-12T11:47:40Z",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "executionOutcome": "passed",
+      "expectationMatched": true,
+      "releaseAcceptance": "NOT_ESTABLISHED",
+      "output": {
+        "path": "review/boundaries/logs/cta-draft.log",
+        "bytes": 1437,
+        "sha256": "6daeedaa9189981a4245e0e4b3fcc1516a98660f9e036d290c36202f8e18ff9e",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "PASS_DRAFT selected suites: release approvals remain pending"
+    },
+    {
+      "id": "metadata-release",
+      "command": "./scripts/validate-landing --suite metadata",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:40Z",
+      "finishedAt": "2026-10-12T11:47:40Z",
+      "expectedExitCode": 1,
+      "actualExitCode": 1,
+      "executionOutcome": "failed",
+      "expectationMatched": true,
+      "releaseAcceptance": "PENDING",
+      "output": {
+        "path": "review/boundaries/logs/metadata-release.log",
+        "bytes": 1320,
+        "sha256": "6bb80f90536b2f60aad7484e34f9f18067bd520046394ff5adb8c71915196d5f",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "FAIL metadata: Production origin pending: app/hosting owner must supply it"
+    },
+    {
+      "id": "privacy-release",
+      "command": "./scripts/validate-landing --suite privacy",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:40Z",
+      "finishedAt": "2026-10-12T11:47:40Z",
+      "expectedExitCode": 1,
+      "actualExitCode": 1,
+      "executionOutcome": "failed",
+      "expectationMatched": true,
+      "releaseAcceptance": "PENDING",
+      "output": {
+        "path": "review/boundaries/logs/privacy-release.log",
+        "bytes": 119,
+        "sha256": "f81403e1edd7c9784a61c56335e3a229f5db9772ed52f185554463cbdba94405",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "FAIL privacy: Privacy release approval receipt missing: owner review, LP-03 handoff and clean-browser evidence pending"
+    },
+    {
+      "id": "cta-release",
+      "command": "./scripts/validate-landing --suite cta",
+      "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+      "startedAt": "2026-10-12T11:47:40Z",
+      "finishedAt": "2026-10-12T11:47:40Z",
+      "expectedExitCode": 1,
+      "actualExitCode": 1,
+      "executionOutcome": "failed",
+      "expectationMatched": true,
+      "releaseAcceptance": "PENDING",
+      "output": {
+        "path": "review/boundaries/logs/cta-release.log",
+        "bytes": 1382,
+        "sha256": "82d7513e350a8b7ed7b8cc5b4ad6f35e75e9c95eb67739d149207478b96b4839",
+        "stream": "stdout and stderr combined in execution order",
+        "redaction": "No edits; checked output contains local paths/synthetic test data, no credentials/customer input"
+      },
+      "summary": "FAIL cta: Release CTA deployed revision/artifact identity, broader owner acceptance and browser evidence pending; navigation-only approval cannot pass release"
+    }
+  ],
+  "status": {
+    "allTests": "104 passed; see exact log",
+    "metadataDraft": "PASS_DRAFT; actual static preview head plus environment/negative fixtures",
+    "privacyDraft": "PASS_DRAFT; pinned source and limited VM journey harness",
+    "ctaDraft": "PASS_DRAFT; approved navigation remains distinct from broader release",
+    "releaseMetadata": "FAIL: production origin pending",
+    "releasePrivacy": "FAIL: real owner approval receipt and clean-browser evidence missing",
+    "releaseCta": "FAIL: deployed identity, broader acceptance and browser evidence pending",
+    "cleanBrowserNetworkStorage": "NOT_EXECUTED in this evidence capture",
+    "cdnOrTransitiveExecutionCertification": "NOT_ESTABLISHED",
+    "socialCardImageDimensionsAltRender": "NOT_EXECUTED; image omitted pending rights",
+    "socialCardExternalRenderer": "NOT_EXECUTED",
+    "deploymentSourceOrArtifactIdentity": "UNKNOWN",
+    "productionIndexingOriginApproval": "PENDING",
+    "assetPublicationRights": "PENDING",
+    "publicLandingReleaseAcceptance": "PENDING",
+    "centralAcceptance": "UNCHANGED; no LP/EVAL criterion closed"
+  },
+  "navigationDecision": {
+    "classification": "Existing actual owner-thread approval; referenced unchanged, not reissued by local tests",
+    "receiptPath": "review/cta-navigation-decision.json",
+    "receiptSha256": "48465bcbb33ee6449e817530bf6f3c70bc8f877be32111869ea810072be9730d",
+    "sourceThread": "01a12764-1eaa",
+    "scope": "public-navigation-only",
+    "label": "Open studio",
+    "destination": "https://getticketstub.com/make",
+    "mode": "live",
+    "access": "public-guest",
+    "ownerDecisionAt": "UNKNOWN",
+    "relayedAt": "2026-10-12T10:17:35Z",
+    "observationFreshness": "10:14Z/10:17:08Z observations preserved as prior relayed evidence; not refreshed by this local capture",
+    "deployedRevision": "UNKNOWN",
+    "notApproved": [
+      "Try demo wording",
+      "sandbox or physical orders",
+      "deployed artifact identity",
+      "landing publication",
+      "LP-12 release acceptance",
+      "marketing copy or asset publication"
+    ]
+  },
+  "limits": [
+    "Node tests and source pins do not certify a fresh browser, CDN code, crawler behavior, real social rendering or a deployed landing revision.",
+    "Expected release failure is an executed failed gate, not release acceptance.",
+    "Native public Open studio navigation is approved only for the exact existing contract; no customer input, query or sandbox/physical-order claim is approved.",
+    "This evidence changes no site/config/validator code and activates no account, provider, deployment or publication."
+  ]
+}

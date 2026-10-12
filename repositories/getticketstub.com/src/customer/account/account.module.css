@@ -1,0 +1,181 @@
+/* Sign-in sheet, the stamped confirmation and the nav's account line. Desk tokens only. */
+.body {
+  display: grid;
+  gap: 16px;
+  justify-items: stretch;
+}
+/* after paying: the stamp keeps its own width, block buttons fill the column */
+.after {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+.lede {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink);
+}
+.addr {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* signed in on the way to paying: a paper note, not an alert */
+.resume {
+  margin: 0;
+  padding: 10px 12px;
+  font: var(--type-body);
+  color: var(--desk-ink);
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 3px 0 0 var(--desk-ink), inset 0 0 0 1px var(--desk-rule);
+}
+.small {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.err {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-error);
+  padding-left: 10px;
+  border-left: 3px solid var(--desk-error);
+  overflow-wrap: anywhere;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.sandbox {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 14px 14px 12px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 0 0 1px var(--desk-rule);
+}
+.sandboxNote {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.open {
+  text-decoration: none;
+}
+
+/* the stamped confirmation: a paper slip that lands at the top of the screen */
+.toast {
+  position: fixed;
+  z-index: 60;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  /* starts at the sidebar's right edge (--nav-w), so it never sits under it */
+  left: calc(var(--nav-w, 0px) + 16px);
+  right: 16px;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100vw - var(--nav-w, 0px) - 32px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    0 1px 0 var(--desk-ledge),
+    0 14px 24px -12px rgb(40 24 8 / 0.5);
+  animation: slipIn 520ms var(--ts-ease-enter) both;
+}
+.toast[data-leaving="true"] {
+  animation: slipOut 320ms var(--ts-ease-exit) both;
+}
+.toastText {
+  margin: 0;
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes slipIn {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) rotate(-1.5deg);
+  }
+}
+@keyframes slipOut {
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+/* on the desktop the slip sits in the corner, clear of the page's own header */
+@media (min-width: 960px) {
+  .toast {
+    top: auto;
+    bottom: 24px;
+    left: auto;
+    right: 24px;
+    margin: 0;
+    animation-name: slipUp;
+  }
+  .toast[data-leaving="true"] {
+    animation-name: slipOut;
+  }
+}
+@keyframes slipUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px) rotate(1.5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast[data-leaving="true"] {
+    animation-duration: 120ms;
+  }
+}
+
+/* the account line in the sidebar foot (AccountLine) */
+.nav {
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px 6px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.navLine {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.navEmail {
+  color: var(--desk-ink);
+  font-variant-numeric: tabular-nums;
+}
+.navLink {
+  justify-self: start;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--desk-ink);
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.navLink:focus-visible,
+.navEmail:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}
+.small a {
+  color: var(--desk-ink);
+}
+.plain {
+  color: var(--desk-ink);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.plain:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}

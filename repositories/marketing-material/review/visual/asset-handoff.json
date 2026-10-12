@@ -1,0 +1,109 @@
+{
+  "purpose": "Consumer metadata handoff to canonical inventory/claims/provenance owner; not a competing schema",
+  "assets": [
+    {
+      "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "source": "demo/diagrams/demo-workflow.svg",
+      "export": "demo/diagrams/demo-workflow.png",
+      "width": 1440,
+      "height": 900,
+      "visibleText": [
+        "Draft \u2022 conceptual workflow \u2022 review required",
+        "From a memory to a reviewed stub",
+        "An intended journey. These are process states, not working product screens.",
+        "1  Event context",
+        "Synthetic details only",
+        "Choose permitted material.",
+        "2  Design draft",
+        "Conceptual artwork",
+        "Check facts",
+        "and appearance.",
+        "3  Human review",
+        "Approval checkpoint",
+        "Revise or hold if unclear.",
+        "4  Handoff",
+        "Planned; blocked",
+        "Owner approval required.",
+        "Hold or revise \u2192 return to design review",
+        "No production or payment action is performed by this walkthrough.",
+        "Synthetic concept only. No product behavior, live sponsor integration,",
+        "or measured savings are demonstrated. Brand and content approval pending."
+      ],
+      "evidenceClassification": "synthetic conceptual draft",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "blockedClaimReferences": [
+        "CLAIM-PRODUCT-CAPABILITY-001"
+      ],
+      "publishability": "pending; no public release approval",
+      "providerMode": "none; first-party code-native shapes/text"
+    },
+    {
+      "assetId": "DEMO-SCREENSHOT-SET-001",
+      "source": "demo/screenshots/synthetic-stub-mockup.svg",
+      "export": "demo/screenshots/synthetic-stub-mockup.png",
+      "width": 1200,
+      "height": 900,
+      "visibleText": [
+        "Draft \u2022 synthetic artwork \u2022 not a product screenshot",
+        "A stub concept to review",
+        "Fictional event. First-party shapes and text only.",
+        "FICTIONAL EVENT / SYNTHETIC EXAMPLE",
+        "The paper moon",
+        "A made-up night worth remembering",
+        "01",
+        "DRAFT",
+        "No venue, date, person, barcode, or purchase is represented.",
+        "Review the facts, artwork rights, and intended destination.",
+        "Approval checkpoint: revise or hold before any production.",
+        "No product behavior or sponsor results are demonstrated."
+      ],
+      "evidenceClassification": "synthetic conceptual draft",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "blockedClaimReferences": [
+        "CLAIM-PRODUCT-CAPABILITY-001"
+      ],
+      "publishability": "pending; no public release approval",
+      "providerMode": "none; first-party code-native shapes/text"
+    },
+    {
+      "assetId": "LAUNCH-X-KEY-VISUAL-001",
+      "source": "launch/assets/x-submission-key-visual.svg",
+      "export": "launch/assets/x-submission-key-visual.png",
+      "width": 1200,
+      "height": 675,
+      "visibleText": [
+        "Draft \u2022 synthetic concept \u2022 review required",
+        "TicketStub",
+        "A keepsake concept",
+        "Context \u2192 design \u2192 human review",
+        "Approval before production",
+        "No product or sponsor results verified",
+        "Explore the repository docs"
+      ],
+      "evidenceClassification": "synthetic conceptual draft",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001"
+      ],
+      "blockedClaimReferences": [
+        "CLAIM-PRODUCT-CAPABILITY-001"
+      ],
+      "publishability": "pending; no public release approval",
+      "providerMode": "none; first-party code-native shapes/text"
+    }
+  ],
+  "additionalPaths": [
+    "demo/deck/concept-overview.html",
+    "launch/assets/x-submission-alt-text.md",
+    "examples/synthetic/redaction-before.svg",
+    "examples/synthetic/redaction-after.svg",
+    "examples/synthetic/redaction-before.png",
+    "examples/synthetic/redaction-after.png",
+    "examples/synthetic/redaction-after-alt-text.md"
+  ],
+  "redactionFixtureId": "PROV-SYNTHETIC-CANARY-001",
+  "approval": "pending"
+}

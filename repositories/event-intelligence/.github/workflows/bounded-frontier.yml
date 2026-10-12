@@ -1,0 +1,49 @@
+name: bounded-frontier
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  planner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
+      - name: Test bounded discovery frontier
+        run: node --test tests/discovery/planner/*.test.mjs
+      - name: Test bounded private retrieval lifecycle
+        run: node --test tests/research/private-retrieval.test.mjs
+      - name: Test controlled asset release protocol and revalidation regressions
+        run: >-
+          node --test tests/research/private-asset-release.test.mjs
+          tests/research/private-retrieval-r5-bounded-prep.test.mjs
+          tests/research/private-asset-release-r5-rejected-projection.test.mjs
+          tests/research/r4-reviewer-r3-joint-tail.test.mjs
+          tests/research/r2-reviewer-final-release.test.mjs
+          tests/research/r2-reviewer-final-release-stage-order.test.mjs
+          tests/research/r2-reviewer-shared-asset.test.mjs
+          tests/research/reviewer-r2-last-await.test.mjs
+          tests/research/reviewer-r2-extended-await.test.mjs
+      - name: Typecheck private frontier consumer
+        run: >-
+          ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
+          --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
+          --noErrorTruncation tests/discovery/planner/types-consumer.mts
+      - name: Typecheck private retrieval consumer
+        run: >-
+          ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
+          --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
+          --noErrorTruncation tests/research/types-consumer.mts

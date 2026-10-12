@@ -1,0 +1,337 @@
+name: Verification tooling
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      guarded_print_lifetime:
+        description: Run the development-only distinct-role print lifetime falsification suite
+        type: boolean
+        default: false
+      legacy_print_containment:
+        description: Characterize the unchanged nested Bubblewrap print boundary, retaining actual failures
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  tooling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - run: uv run basedpyright
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run basedpyright -p pyrightconfig.stdlib.json
+      - run: uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
+      - run: uv run integration-evals validate
+      - name: Verify print source preparation, default-off gates and privacy diagnostics
+        run: uv run pytest component_tests/test_print_setup.py component_tests/test_print_clock.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py component_tests/test_guarded_defaults.py component_tests/test_guarded_compose_probe.py component_tests/test_guarded_custody.py component_tests/test_print_containment.py::test_diagnostic_output_excludes_private_unknown_lines component_tests/test_print_containment.py::test_diagnostic_output_marks_capture_limit component_tests/test_print_containment.py::test_diagnostic_output_keeps_unknown_denial_unknown component_tests/test_print_containment.py::test_diagnostic_output_bounds_namespace_denial_detail --junitxml=reports/runs/verification/print-defaults-junit.xml
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .contract-producer
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Reproduce and privately install the reviewed package
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contract-packager" --ignore-scripts --no-audit --no-fund npm@10.9.8
+          export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"
+          mkdir -p reports/runs/verification
+          node integration_tests/prepare-package.mjs .contract-producer "$RUNNER_TEMP/contract-runtime" > reports/runs/verification/private-install.json
+          npm install --prefix "$RUNNER_TEMP/contract-types" --ignore-scripts --no-audit --no-fund typescript@5.9.3
+          cp integration_tests/installed-caller.mts integration_tests/installed-scenarios.mjs "$RUNNER_TEMP/contract-runtime/"
+          node "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --verbatimModuleSyntax --noFallthroughCasesInSwitch --noPropertyAccessFromIndexSignature --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 "$RUNNER_TEMP/contract-runtime/installed-caller.mts"
+          node "$RUNNER_TEMP/contract-runtime/installed-scenarios.mjs" > reports/runs/verification/installed-caller.json
+      - name: Install platform isolation tooling
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap libseccomp2
+      - name: Record ordinary-user namespace availability diagnostics
+        run: |
+          mkdir -p reports/runs/verification
+          set +e
+          {
+            id
+            uname -sr
+            bwrap --version
+            bwrap --help > reports/runs/verification/bwrap-help.txt
+            stat -Lc 'bwrap_mode=%a uid=%u gid=%g' "$(command -v bwrap)"
+            if command -v getcap >/dev/null; then getcap "$(command -v bwrap)"; fi
+            for namespace in user pid net mnt; do
+              printf 'host_namespace[%s]=' "$namespace"
+              readlink "/proc/self/ns/$namespace"
+            done
+            for fact in /proc/self/uid_map /proc/self/gid_map /proc/self/attr/current /proc/sys/user/max_user_namespaces /proc/sys/kernel/unprivileged_userns_clone /proc/sys/kernel/apparmor_restrict_unprivileged_userns /sys/module/apparmor/parameters/enabled; do
+              printf 'fact[%s]=' "$fact"
+              if test -r "$fact"; then head -c 1024 "$fact"; else printf 'unavailable\n'; fi
+              printf '\n'
+            done
+            awk '/^(Uid|Gid|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp):/' /proc/self/status
+            run_probe() {
+              probe_name="$1"
+              shift
+              printf 'probe=%s additional_args=' "$probe_name"
+              printf '%s ' "$@"
+              printf '\n'
+              timeout 15s bwrap "$@" --unshare-pid --die-with-parent --unshare-net --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc -- /bin/sh -eu -c '
+                printf "payload_started=1\n"
+                id
+                test "$(id -u)" -ne 0
+                for namespace in user pid net mnt; do
+                  printf "child_namespace[%s]=" "$namespace"
+                  readlink "/proc/self/ns/$namespace"
+                done
+                cat /proc/self/uid_map /proc/self/gid_map
+                awk "/^(Uid|Gid|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp):/" /proc/self/status
+              '
+              printf 'probe_exit[%s]=%s\n' "$probe_name" "$?"
+            }
+            run_probe baseline
+            run_probe explicit-user-namespace --unshare-user
+            run_probe explicit-current-id --unshare-user --uid "$(id -u)" --gid "$(id -g)"
+          } > reports/runs/verification/linux-isolation-capability.log 2>&1
+          set -e
+          test -s reports/runs/verification/linux-isolation-capability.log
+          test -s reports/runs/verification/bwrap-help.txt
+      - name: Verify real Linux isolation and retained owner output
+        run: |
+          mkdir -p reports/runs/verification
+          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py tests/test_evidence_index_execution.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/runs/verification/linux-owner-junit.xml
+      - run: uv run pytest --ignore=tests/test_private_network.py --ignore=tests/test_retrieval_inputs.py --ignore=tests/test_process_seccomp.py --ignore=tests/test_process_reads.py --ignore=tests/test_process_inputs.py --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --ignore=tests/test_retrieval_capability.py --ignore=tests/test_diagnostic_execution.py --ignore=tests/test_diagnostic_denials.py --ignore=tests/test_seeded_history.py --ignore=tests/test_evidence_index_execution.py --junitxml=reports/runs/verification/tooling-junit.xml
+      - name: Verify complete canonical scope and controlled failures
+        shell: bash
+        run: |
+          uv run integration-evals contract-runtime --node "$(command -v node)" --output reports/runs/verification/node-runtime.json
+          mkdir -p reports/runs/verification/contracts
+          sudo -n env IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/runs/verification/node-runtime.json" IE_CONTRACT_INSTALLED_RUNTIME="$RUNNER_TEMP/contract-runtime/installed-runtime.json" IE_CONTRACT_CALLER_ROOT="$RUNNER_TEMP/contract-runtime" IE_CONTRACT_TYPESCRIPT="$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" IE_CONTRACT_EVIDENCE="$PWD/reports/runs/verification/installed-negatives" .venv/bin/python -m pytest integration_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-canonical-cache" --junitxml=reports/runs/verification/canonical-junit.xml
+          .venv/bin/python - <<'PYTHON'
+          from pathlib import Path
+          from integration_evals.validation import git_value, source_fingerprint
+
+          repository = Path.cwd()
+          if git_value(repository, "status", "--porcelain"):
+              raise SystemExit("Canonical verification requires a clean checkout")
+          identity = (git_value(repository, "rev-parse", "HEAD"), source_fingerprint(repository))
+          Path("reports/runs/verification/source-identity.txt").write_text("\n".join(identity) + "\n")
+          PYTHON
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/runs/verification/node-runtime.json --output reports/runs/verification/contracts --candidate-scope
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/runs/verification/node-runtime.json --output reports/runs/verification/contracts
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/verification/contracts --candidate-scope
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/verification/contracts
+          .venv/bin/python - <<'PYTHON'
+          from pathlib import Path
+          from integration_evals.artifacts import load_record
+          from integration_evals.contract_records import ContractReceipt
+          from integration_evals.validation import git_value, source_fingerprint
+
+          repository = Path.cwd()
+          output = Path("reports/runs/verification")
+          expected = output.joinpath("source-identity.txt").read_text().splitlines()
+          current = [git_value(repository, "rev-parse", "HEAD"), source_fingerprint(repository)]
+          if git_value(repository, "status", "--porcelain") or current != expected:
+              raise SystemExit("Canonical verification changed the clean source identity")
+          receipts = tuple(load_record(path, ContractReceipt) for path in output.glob("contracts/*/contracts.json"))
+          if len(receipts) != 4 or {(item.execution_surface, item.candidate_scope) for item in receipts} != {
+              ("source", True), ("source", False), ("installed-package", True), ("installed-package", False)
+          }:
+              raise SystemExit("Canonical verification requires all four distinct receipts")
+          for receipt in receipts:
+              if receipt.integration_dirty or [receipt.integration_revision, receipt.integration_source_digest] != expected:
+                  raise SystemExit("Canonical receipt does not bind the clean source identity")
+          print("PASS: all four canonical receipts bind the unchanged clean source identity")
+          PYTHON
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/event-intelligence
+          ref: d91e08d666abc243ae456a7f9f1bc9c745ca4f8d
+          path: .event-producer
+          persist-credentials: false
+      - name: Verify source retrieval boundary in an isolated Linux component workspace
+        run: |
+          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/runs/verification/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/runs/verification/retrieval-component" .venv/bin/python -m pytest component_tests/test_retrieval.py -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/runs/verification/component-junit.xml
+      - name: Verify missing assembly is reported as blocked
+        shell: bash
+        run: |
+          set +e
+          uv run integration-evals run --output reports/runs/verification/product-runs
+          status=$?
+          set -e
+          test "$status" -eq 2
+      - name: Preserve sanitized diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verification-tooling-${{ github.sha }}
+          path: reports/runs/verification/
+          retention-days: 30
+
+  print-container-lifetime-prototype:
+    if: github.event_name == 'workflow_dispatch' && inputs.guarded_print_lifetime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+      IE_PRINT_CONTAINER_PROTOTYPE: guarded-development
+    steps:
+      - name: Initialize isolated prototype paths
+        run: |
+          {
+            printf 'UV_PYTHON_INSTALL_DIR=%s/lifetime-python\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_SOURCE=%s/lifetime-producer\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_LIFETIME_EVIDENCE=%s/lifetime-evidence\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/print-production
+          ref: 0ef7398bb94caacf6b48068747142883470fbdaf
+          path: .lifetime-producer
+          persist-credentials: false
+      - run: mv .lifetime-producer "$IE_PRINT_SOURCE"
+      - name: Falsify the isolated EOF guard lifetime hypothesis
+        run: bash component_tests/container-prototype-ci.sh
+      - name: Archive private staging without disposing unknown containers
+        if: always()
+        run: |
+          mkdir -p "$IE_PRINT_LIFETIME_EVIDENCE"
+          sudo -n tar --exclude='*/control/lease' -cf "$RUNNER_TEMP/lifetime-evidence.tar" -C "$IE_PRINT_LIFETIME_EVIDENCE" .
+          sudo -n chmod 0644 "$RUNNER_TEMP/lifetime-evidence.tar"
+      - name: Preserve prototype diagnostics even when falsified
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-lifetime-prototype-${{ github.sha }}
+          path: ${{ runner.temp }}/lifetime-evidence.tar
+          if-no-files-found: error
+          retention-days: 30
+
+  print-component:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+      IE_PRINT_CONTAINER_PROTOTYPE: guarded-development
+    steps:
+      - name: Initialize isolated prototype paths
+        run: |
+          {
+            printf 'UV_PYTHON_INSTALL_DIR=%s/guarded-python\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_SOURCE=%s/guarded-producer\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_LIFETIME_EVIDENCE=%s/guarded-lifetime-evidence\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_EVIDENCE=%s/guarded-print-evidence\n' "$RUNNER_TEMP"
+            printf 'IE_CONTRACT_SOURCE=%s/guarded-contracts\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/print-production
+          ref: 0ef7398bb94caacf6b48068747142883470fbdaf
+          path: .guarded-producer
+          persist-credentials: false
+      - name: Stage a fresh local clone without inherited Git credentials
+        run: |
+          mv .guarded-producer "$RUNNER_TEMP/guarded-checkout"
+          git clone --no-hardlinks "$RUNNER_TEMP/guarded-checkout" "$IE_PRINT_SOURCE"
+          git -C "$IE_PRINT_SOURCE" checkout --detach 0ef7398bb94caacf6b48068747142883470fbdaf
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .guarded-contracts
+          persist-credentials: false
+      - run: mv .guarded-contracts "$IE_CONTRACT_SOURCE"
+      - name: Prepare the exact approved image with bounded setup-only retries
+        timeout-minutes: 10
+        run: bash component_tests/prepare-print-image.sh
+      - name: Run all lifetime cases and the original owner protocol through the explicit test backend
+        run: bash component_tests/guarded-print-ci.sh
+      - name: Archive private staging without disposing unknown containers
+        if: always()
+        run: |
+          mkdir -p "$IE_PRINT_LIFETIME_EVIDENCE" "$IE_PRINT_EVIDENCE"
+          sudo -n tar --exclude='*/control/lease' -cf "$RUNNER_TEMP/guarded-lifetime-evidence.tar" -C "$RUNNER_TEMP" guarded-lifetime-evidence guarded-print-evidence
+          sudo -n chmod 0644 "$RUNNER_TEMP/guarded-lifetime-evidence.tar"
+      - name: Preserve prototype diagnostics even when falsified
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-guarded-development-${{ github.sha }}
+          path: ${{ runner.temp }}/guarded-lifetime-evidence.tar
+          if-no-files-found: error
+          retention-days: 30
+
+  print-component-legacy-characterization:
+    if: github.event_name == 'workflow_dispatch' && inputs.legacy_print_containment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+    steps:
+      - name: Initialize print paths on the assigned runner
+        run: |
+          {
+            printf 'UV_PYTHON_INSTALL_DIR=%s/print-python\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_SOURCE=%s/print-production\n' "$RUNNER_TEMP"
+            printf 'IE_CONTRACT_SOURCE=%s/print-contracts\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_EVIDENCE=%s/print-evidence\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/print-production
+          ref: 0ef7398bb94caacf6b48068747142883470fbdaf
+          path: .print-producer
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .contract-producer
+          persist-credentials: false
+      - name: Stage isolated sources and verify the approved owner pins
+        run: |
+          mv .print-producer "$IE_PRINT_SOURCE"
+          mv .contract-producer "$IE_CONTRACT_SOURCE"
+          mkdir -p "$IE_PRINT_EVIDENCE"
+          uv run python -c 'import os; from pathlib import Path; from integration_evals.print_setup import verify_source; print(verify_source(Path.cwd(), Path(os.environ["IE_PRINT_SOURCE"])).model_dump_json(indent=2))' > "$IE_PRINT_EVIDENCE/source-pins.json"
+      - name: Run real print-invalid under both unchanged security boundaries
+        run: bash component_tests/print-ci.sh
+      - name: Preserve actual print diagnostics, including blocked execution
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-component-${{ github.sha }}
+          path: ${{ runner.temp }}/print-evidence/
+          if-no-files-found: error
+          retention-days: 30

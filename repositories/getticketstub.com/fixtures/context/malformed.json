@@ -1,0 +1,10 @@
+{
+  "fixture": "malformed",
+  "description": "Not a token at all.",
+  "verifyAt": "2026-10-10T12:00:00.000Z",
+  "token": "not-a-token",
+  "expect": {
+    "ok": false,
+    "reason": "unknown"
+  }
+}

@@ -1,0 +1,342 @@
+{
+  "$defs": {
+    "CandidatePin": {
+      "additionalProperties": false,
+      "description": "An immutable candidate/question/model/configuration approved before testing.",
+      "properties": {
+        "candidate": {
+          "enum": [
+            "rules",
+            "generative",
+            "jev"
+          ],
+          "title": "Candidate",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "config_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Config Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate",
+        "question",
+        "component",
+        "revision",
+        "model",
+        "config_digest"
+      ],
+      "title": "CandidatePin",
+      "type": "object"
+    },
+    "NumericRules": {
+      "additionalProperties": false,
+      "description": "Owner values are required inputs; no numeric target is invented by the harness.",
+      "properties": {
+        "owner_decision_ref": {
+          "title": "Owner Decision Ref",
+          "type": "string"
+        },
+        "ratified": {
+          "default": false,
+          "title": "Ratified",
+          "type": "boolean"
+        },
+        "uncertainty_method": {
+          "const": "paired-family-accuracy",
+          "title": "Uncertainty Method",
+          "type": "string"
+        },
+        "minimum_held_out": {
+          "minimum": 1,
+          "title": "Minimum Held Out",
+          "type": "integer"
+        },
+        "minimum_families": {
+          "minimum": 2,
+          "title": "Minimum Families",
+          "type": "integer"
+        },
+        "bootstrap_repeats": {
+          "minimum": 100,
+          "title": "Bootstrap Repeats",
+          "type": "integer"
+        },
+        "maximum_interval_width": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Maximum Interval Width",
+          "type": "number"
+        },
+        "minimum_lower_difference": {
+          "maximum": 1,
+          "minimum": -1,
+          "title": "Minimum Lower Difference",
+          "type": "number"
+        },
+        "safety_row_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Safety Row Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "owner_decision_ref",
+        "uncertainty_method",
+        "minimum_held_out",
+        "minimum_families",
+        "bootstrap_repeats",
+        "maximum_interval_width",
+        "minimum_lower_difference",
+        "safety_row_ids"
+      ],
+      "title": "NumericRules",
+      "type": "object"
+    },
+    "Threshold": {
+      "additionalProperties": false,
+      "description": "An owner-ratified numerical target for a particular question and slice.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "macro_f1",
+            "precision",
+            "recall",
+            "coverage",
+            "abstention_rate",
+            "p95_latency_ms",
+            "critical_false_negatives",
+            "unknown_cost_rate"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "minimum",
+            "maximum"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Limit"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "decision_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Decision Ref"
+        },
+        "ratified": {
+          "default": false,
+          "title": "Ratified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "stratum",
+        "metric",
+        "relation",
+        "limit",
+        "owner",
+        "decision_ref"
+      ],
+      "title": "Threshold",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Freeze thresholds and corpus identity before observing final evaluation.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "frozen_at": {
+      "format": "date-time",
+      "title": "Frozen At",
+      "type": "string"
+    },
+    "corpus_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Corpus Digest",
+      "type": "string"
+    },
+    "required_questions": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Required Questions",
+      "type": "array"
+    },
+    "thresholds": {
+      "items": {
+        "$ref": "#/$defs/Threshold"
+      },
+      "title": "Thresholds",
+      "type": "array"
+    },
+    "required_mode": {
+      "enum": [
+        "sandbox",
+        "live"
+      ],
+      "title": "Required Mode",
+      "type": "string"
+    },
+    "minimum_cost_reduction": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Minimum Cost Reduction"
+    },
+    "maximum_f1_loss": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Maximum F1 Loss"
+    },
+    "uncertainty_rule_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Uncertainty Rule Ref"
+    },
+    "cost_policy_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cost Policy Ref"
+    },
+    "latency_policy_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Latency Policy Ref"
+    },
+    "required_trials": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Required Trials",
+      "type": "integer"
+    },
+    "candidates": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CandidatePin"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "numeric_rules": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NumericRules"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "frozen_at",
+    "corpus_digest",
+    "required_questions",
+    "thresholds",
+    "required_mode",
+    "minimum_cost_reduction",
+    "maximum_f1_loss"
+  ],
+  "title": "Policy",
+  "type": "object"
+}

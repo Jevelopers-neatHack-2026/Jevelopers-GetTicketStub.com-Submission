@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="101.6mm" height="50.8mm" viewBox="0 0 384 192">
+<rect width="384" height="192" fill="white"/>
+<g font-family="PP Calibration" font-size="18" font-weight="400" fill="black">
+<text id="line-1" x="12" y="30">Calibration office AV fi</text>
+<text id="line-2" x="12" y="60">Café Ångström 0123456789</text>
+<text id="line-3" x="12" y="90">Café • –</text>
+</g>
+<rect x="264" y="96" width="96" height="48" fill="#e00000"/>
+<rect x="264" y="96" width="48" height="48" fill="#0000e0"/>
+<path d="M12 156H372" stroke="black" stroke-width="1"/>
+</svg>

@@ -1,0 +1,195 @@
+TicketStub — neatHack Business Plan — 2026-10-11
+Decision: validate a $9 digital keepsake before scaling
+
+TicketStub, built by Jevelopers / neatHack, is a pre-revenue hackathon prototype. It turns an event link and personal memories into a researched, editable commemorative ticket design. It is a digital keepsake, not an admission ticket. The initial offer is one digital design for $9, with no subscription, one design/charge per order and no basket savings.
+
+All financial projections on this page are assumptions, not actual sales. All amounts are USD. Measured project costs and revenue are UNKNOWN: no reconciled invoices, usage logs or paid order receipts were supplied. Sandbox checkout is not revenue. No validated demand, market size, customer traction, signed organizer partners or production readiness is claimed. The $1,000 opening balance is hypothetical—not the team’s actual cash.
+
+The Base hypothesis is 10,000 monthly visits, 10% studio starts and 2% paid conversion of visits: 1,000 starts and 200 digital orders. It projects $1,800 revenue and $702.81 monthly operating profit before founder pay, versus a $2,297.19 loss with $3,000 monthly founder pay. This is a willingness-to-pay and usage-control hypothesis, not a sustainable business proven by the demo.
+
+Bootstrap’s unpaid founder labor is a real omission from economic sustainability, not free labor. Three months of illustrative prelaunch spending plus six months of postlaunch protection requires $2,416.011 bootstrap or $25,199.151 with founder pay, before unpriced tax/legal/insurance obligations. The $1,000 opening assumption does not finance that ramp. Do not confuse a cash-positive postlaunch month with a funded launch.
+
+Product, customers and differentiation
+
+Target customers are concert, sports and theatre attendees plus gift buyers. The intended job is to preserve the story of an event in a personalized collectible rather than another screenshot. The prototype’s product scope includes research and fact review, ticket styles, art remix, personal details, sharing/wall, matching sets, gifts and organizer flows. Personalization and event provenance are differentiation hypotheses; facts and intellectual-property rights still need review.
+
+Alternatives include generic design tools, screenshots and commodity printers. Generic tools offer flexibility but leave event research and assembly to the user; screenshots are free but less personal; printers provide output without necessarily supplying trustworthy event context. TicketStub must prove that convenience and personal significance merit $9. Do not claim a market-size figure or defensible moat without evidence.
+
+Launch in one community/event with digital-only delivery. Run referral and sharing tests, invite small opt-in cohorts, observe willingness-to-pay and record conversion of visits—not conversion of studio starts. Organizers are a future referral/distribution channel, not signed partners or forecast revenue. Matching sets and gift flows are future demand tests; no uplift is assumed. Physical products, shipping income, foil and holographic upsells contribute zero forecast sales in every scenario.
+
+Implementation boundary and production acceptance
+
+The accepted main pin is 660cc5e0c92e0e338fe6d75db445c737c8fdfc10. Main disables external calls by default. Checkout, payments, shipping, refunds, sign-in, wallet and QR are sandbox/simulated. Browser storage and share payloads are not production persistence. PR20 remains separate work, not accepted main functionality. Creative interfaces/local synthetic checks and finance synthetic tariffs are not production finance or measured costs. No CFO API sync exists or is needed; no financial accounts are connected.
+
+Before a paid digital launch, accept production payment and refund reconciliation, identity/privacy, durable persistence, reliable digital delivery, rights and factual review, budget enforcement, cost receipts, recovery and incident procedures. Suggested controls—not implemented claims—include procedural free previews, paid-generation gates and quotas, abuse limits, traceable inference receipts, capped budgets and rights review. Existing output caps of 600 research tokens and 300 chat tokens do not measure input usage or guarantee cost. No automatic retry is currently assumed; the separate retry sensitivity shows future billed retries.
+
+A practical stage sequence is: (1) instrument consented studio starts, abandoned-session costs and per-call/image receipts; (2) qualify payment/identity/delivery/persistence/budget/recovery acceptance in sandbox then authorized production; (3) test one digital cohort and reconcile actual paid receipts; (4) compare conversion, refund and revision distributions with the hypotheses before buying more traffic; (5) validate a physical supplier separately. These are proposed gates, not completed milestones or promised dates.
+
+Evidence classes and pricing basis — observed 2026-10-11
+
+Source facts: pinned implementation and sandbox catalog behavior. Digital $9; Card $29; Print $49; Framed $89; physical customer shipping $6. These are product price hypotheses found in the sandbox, not accepted supplier prices or sales. Foil +$6 and holo +$9 are excluded because support and cost are unknown.
+
+Public vendor rates: independently retrieved official unauthenticated OpenRouter endpoints on October 11, 2026. anthropic/claude-sonnet-5.5 research and openai/gpt-6.1-sol chat each list $2/million input and $10/million output tokens at the ordinary tier. No cache savings or paid search-tool calls are assumed; research consumes a fetched page. Image model openai/gpt-image-2 lists text input $5/million, image input $8/million and image output $30/million tokens. The table uses per-million rates to avoid rounding tiny token prices to zero. Model defaults, quality, size and actual billed quantities remain unknown. The listed OpenRouter models are planning benchmarks, not proof of the running demo’s selected models. The pinned provider code requires live mode plus configured providers; its direct-provider defaults include gpt-image-1 and claude-sonnet-5-5, while OpenRouter model IDs require configuration. The model deliberately uses the supplied gpt-image-2 / gpt-6.1-sol benchmark assumptions. Reconcile production requested/returned models and cost receipts before relying on these tariffs.
+
+Estimated usage: research/start = 4,000 input + 600 output = $0.014; chat/call = 3,000 input + 300 output = $0.009. Image generation budgets 150 text-input + 4,000 image-output tokens and zero input-image tokens, giving $0.12075 estimated cost/generation, not a flat vendor image price. True editing with 4,000 input-image tokens adds $0.032 before funding allowance. All starts, including abandoned designs, incur full average estimated usage.
+
+Payment benchmark: Stripe US domestic cards 2.9% + $0.30 per transaction; not a selected integrated payment provider. Jurisdiction, cross-border, tax and dispute fees are unknown. Digital refund allowance is 2% of receipts and retains original fees. Variable ops are $0.15 support + $0.03 delivery/storage/egress + $0.02 email per order. These are estimates; founder labor is excluded from contribution.
+
+Funding fee update: the retrieved official OpenRouter FAQ states 5.5% with a $0.80 minimum (crypto 5%). Preserve the user’s 6% planning allowance as an estimate, not the verified fee. The 0–10% sensitivity and published-fee comparison are proportional approximations; small top-ups may be more expensive due to the minimum. Inference credits are a prepayment, not a second inference expense. Extra inference prepayment requirements and actual funding cadence remain unknown. No credits are purchased by this plan.
+
+Budget estimates: fixed monthly budgets are $150/$300/$900 for Conservative/Base/Growth and marketing $100/$300/$1,500. Hosting, database/backups/base storage, email base, monitoring/security, domain/admin/accounting, licensing contingency and development AI/tools are budget buckets—not vendor quotes. Variable email/storage covers incremental provision above the base; reconcile invoices and usage to avoid double counting. Future CFO subscription expense is excluded and needs separate approval. User reports cancellation/no renewal and access through October 25; this plan neither asserts renewal nor changes billing.
+
+Unknowns: legal/entity/insurance/payroll burden, commercial weather/data licensing, taxes, measured traffic/tokens/revisions, suppliers, cost receipts, actual cash and founder remuneration. Budget placeholders do not convert unknown obligations into measured zero. Prize cash is assumed $0. Promotional credits are noncash subsidies and never discount sustainable list-rate inference costs.
+
+Scenario mechanics and how to edit
+
+Main Scenario is the Base case. TicketStub — Conservative and TicketStub — Growth are separate editable futures. The scenario comparison reads those saved futures, not additive case totals. Change visible assumptions and budget lines in the selected scenario; formulas propagate through unit economics, sensitivities, funding and the monthly cash projection. The prefix TS keeps TicketStub variables separate from future business models.
+
+Conservative/Base/Growth assume visits 5,000/10,000/25,000; studio start rate 10% each; paid conversion of visits 1%/2%/4%; chats/start 8/4/3; total images/start 4/2/1.5 (one initial image plus expected revisions 3/1/0.5). Fractional images are averages, not a fractional image delivered to a person. Steady-state operating profits before founder pay are -$148.62/$702.81/$5,070.36875; with $3,000 founder pay they are -$3,148.62/-$2,297.19/$2,070.36875.
+
+AI/start = (research cost + chats × chat cost + total images × image cost) × (1 + funding allowance) × (1 + billed retry rate). Orders = visits × paid conversion; starts = visits × studio start rate. Monthly AI = starts × AI/start; AI/order = monthly AI/orders. Digital contribution/order = price − original card fee − refund allowance − variable operations − AI/order. Operating profit = total contribution − fixed budget − marketing − modeled founder pay, before income tax, depreciation and unpriced legal costs.
+
+Break-even orders are rounded up from fixed + marketing (+ founder pay) divided by contribution/order. They assume proportional traffic/starts/usage as orders scale: Conservative/Base/Growth 124/93/322 bootstrap and 1,603/553/723 with founder pay. This is not fixed-traffic conversion break-even. In a fixed-traffic sensitivity, studio AI spend stays constant while paid orders change. Division by zero and non-positive contribution return no meaningful break-even; a blank runway with no burn means cash-positive steady state, never guaranteed infinite runway.
+
+The one-factor table includes conversion 1% and 3%, half/double traffic, four images/start, eight chats/start, studio starts 20%, funding allowances 0%, 5.5% and 10%, 2,000/8,000 image-output tokens, true-edit input tokens and 10% future billed retries. Each changes only the named factor against the currently selected saved scenario. Its default Main results are Base sensitivities. Shared scalar inputs are read explicitly without the sensitivity/SKU dimension; costs are allocated at the order, not summed twice.
+
+Cash, reserve and hypothetical ramp
+
+Launch reserve = $500 contingency + 7/30 of monthly variable costs. Seven-day payout timing is an estimate; the reserve is held aside from usable cash, not expensed again. Monthly burn = max(0, negative operating profit). Finite runway = max(0, opening cash − reserve)/burn. Any opening below reserve is UNFUNDED LAUNCH, including a projected profitable Growth case with zero cash. $5,000 is an alternative funding hypothesis, not committed financing.
+
+Correct formula-derived launch reserves are $581.3446667/$616.011/$856.9139583. The supplied Conservative checkpoint $581.3366667 was $0.008 low; variable costs are $450 − 50 × $2.0276 = $348.62. Its six-month bootstrap requirement is therefore $1,473.0646667, and founder requirement $19,473.0646667. Base and Growth supplied funding checkpoints reconcile. $1,000 gives Conservative approximately 2.82 months bootstrap/0.13 founder; Base is cash-positive steady state bootstrap/0.17 founder; Growth is cash-positive steady state in both, subject to reserve and ramp. $5,000 gives Conservative 29.73/1.40 months and Base cash-positive/1.91; Growth remains positive in steady state. $0 does not fund any launch reserve.
+
+The dated projection is an illustrative calendar, not history or a launch commitment: start October 1, 2026; hypothetical production launch January 1, 2027; three prelaunch months; projection ends December 2027. Prelaunch revenue and variable sales costs are zero; fixed and marketing burn continues. Base prelaunch burn is $600/month bootstrap or $3,600/month founder. Constant postlaunch run rates deliberately omit ramp growth and seasonality rather than invent evidence. Negative projected cash remains visible and signals financing is required; the model does not pretend an unfunded business can continue spending in reality.
+
+Conditional physical expansion — not in forecasts
+
+Single matte Card/Print/Framed item receipts including $6 customer shipping are $35/$55/$95. Estimated printing $5/$12/$35, supplier shipping $6/$8/$12 and packing $1/$2/$3 are unquoted hypotheses. Deduct benchmark card fees on the full receipt, 5% receipt refund/reprint allowance, $0.50 support/delivery and the selected scenario’s AI/order (Base $1.54495 in Main). Base contributions are $17.89005/$26.31005/$35.15005 and margins 51.11%/47.84%/37.00%. A 25% supplier-cost increase reduces contributions to $14.89005/$20.81005/$22.65005.
+
+At hypothetical 100 Card orders/month, supplier cash is $1,200; 14-day float is $560; a 5% receipt reserve is $175; extra physical working cash is $735, separate from the digital reserve and cash forecast. Other SKU rows use the same illustrative 100-order test, not actual volume. There is no accepted supplier adapter/SKU/quote. Before any sale, validate finish, dimensions, assets, destination, shipping, quote, taxes, defects, sandbox reconciliation and production authorization. Prodigi documents a quote mechanism; no project quote is implied.
+
+Risks, validation priorities and submission
+
+The largest risks are unvalidated demand/conversion; abusive free generation and abandonment; revision and model-default token usage; seasonality; rights and research accuracy; refunds/disputes; unpaid labor; physical print quality; and missing identity, payments, persistence, budget and recovery acceptance. Test willingness-to-pay, abandoned-start spend and actual receipts in the same cohort, and stop or revise a test whose contribution does not cover acquisition and overhead. Prototype functionality is not launch acceptance.
+
+The official neatHack page requires cfo.ai planning of pricing, cost, revenue and runway in the submission and explicit cfo.ai demo coverage. Demonstrate the saved editable assumptions, an input-to-output change, the funding shortfall, the scenario alternatives and this artifact/export—not a purported runtime CFO API sync. Submission publication is the team’s separate action; this plan creates no public share link or public post. The Welcome chat remains untouched.
+
+Dated source register
+
+Observed October 11, 2026. Pin links identify code evidence; vendor endpoint snapshots identify current public rates; modeled quantities remain estimates. Creative commit 5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74 and harness c3a4960ee40b9bba46a0072255c2122a3bd75b55 were supplied without repository URLs, so their source locations are not independently verified and no runtime financial claim relies on them.
+
+Main README — Prototype boundaries; PR20 separate. Retrieved pinned code.
+
+Sandbox prices — Digital9 Card29 Print49 Framed89; not sales. Retrieved pinned code.
+
+Commerce sandbox — Payments and shipping sandbox; shipping6. Retrieved pinned code.
+
+AI providers — Defaults and external-call boundary. Retrieved pinned code.
+
+Research route — Output cap600; input quantity unmeasured. Retrieved pinned code.
+
+Agent route — Output cap300; input quantity unmeasured. Retrieved pinned code.
+
+Finance evidence — Synthetic tariffs are not quotes. Retrieved pinned evidence.
+
+Fulfillment matrix — No accepted project SKU/adapter/quote. Retrieved pinned evidence.
+
+Integration baseline — SPN-03 CFO plan; launch acceptance. Retrieved pinned evidence.
+
+OpenRouter text models — Sonnet5.5 and gpt6.1-sol $2/$10 per million. Official endpoint independently retrieved.
+
+OpenRouter image models — gpt-image-2 identity. Official endpoint independently retrieved.
+
+OpenRouter image endpoints — Image input_text5 input_image8 output_image30 per million. Official endpoint independently retrieved.
+
+OpenRouter FAQ — 5.5% fee / $0.80 minimum; retain 6% estimate. Official public FAQ retrieved.
+
+Stripe US pricing — US domestic benchmark2.9% +.30, provider unselected. Official public pricing retrieved.
+
+Prodigi API docs — Quote mechanism, not a project quote. Official reference retrieved.
+
+neatHack official — Business-plan and demo evidence requirements. Official page search evidence.
+
+Tracker27 — Work tracker, not sales. User-supplied public source pointer.
+
+PR20 — Separate work; not accepted main. User-supplied public pointer; main README confirms separation.
+
+Creative and harness — Creative5ab7f0ed; harnessc3a4960e; no runtime finance claim. User-provided commit pins; not independently verified; Repository URLs not supplied.
+
+
+
+
+Visible source links:
+[
+  {
+    "text": "Retrieved pinned code",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/README.md"
+  },
+  {
+    "text": "Retrieved pinned code",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/src/customer/studio/types.ts"
+  },
+  {
+    "text": "Retrieved pinned code",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/src/customer/pages/commerce.ts"
+  },
+  {
+    "text": "Retrieved pinned code",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/src/server/ai/providers.ts"
+  },
+  {
+    "text": "Retrieved pinned code",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/src/app/api/research/route.ts"
+  },
+  {
+    "text": "Retrieved pinned code",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/660cc5e0c92e0e338fe6d75db445c737c8fdfc10/src/app/api/agent/route.ts"
+  },
+  {
+    "text": "Retrieved pinned evidence",
+    "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/blob/d5a51894e8987cef078583ef63692f38eb265593/docs/api/pricing-source-evidence-2026-10-11.md"
+  },
+  {
+    "text": "Retrieved pinned evidence",
+    "url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/blob/a710358e93370681eadd2615e1dd4fdc0cd6cc12/docs/provider-matrix.md"
+  },
+  {
+    "text": "Retrieved pinned evidence",
+    "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/ff1f6d2df816ebbff34742f51be728fcb5c28cb5/planning/acceptance-checklist.md"
+  },
+  {
+    "text": "Official endpoint independently retrieved",
+    "url": "https://openrouter.ai/api/v1/models"
+  },
+  {
+    "text": "Official endpoint independently retrieved",
+    "url": "https://openrouter.ai/api/v1/images/models"
+  },
+  {
+    "text": "Official endpoint independently retrieved",
+    "url": "https://openrouter.ai/api/v1/images/models/openai/gpt-image-2/endpoints"
+  },
+  {
+    "text": "Official public FAQ retrieved",
+    "url": "https://openrouter.ai/docs/faq"
+  },
+  {
+    "text": "Official public pricing retrieved",
+    "url": "https://stripe.com/us/pricing"
+  },
+  {
+    "text": "Official reference retrieved",
+    "url": "https://www.prodigi.com/print-api/docs/reference/"
+  },
+  {
+    "text": "Official page search evidence",
+    "url": "https://neatlogs.com/hackathon"
+  },
+  {
+    "text": "User-supplied public source pointer",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27"
+  },
+  {
+    "text": "User-supplied public pointer; main README confirms separation",
+    "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20"
+  }
+]

@@ -1,0 +1,700 @@
+{
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/154.0.8037.98",
+    "revision": "@b859317bf11f6be47f9b7799ec690a0a42a1fb33",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "jsVersion": "15.4.80.20"
+  },
+  "node": "v24.15.0",
+  "results": [
+    {
+      "cue": 0,
+      "output": "demo/exports/frames/cue-00.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "SYNTHETIC CONCEPT ONLY",
+          "TicketStub — project name only; product availability is unverified",
+          "A keepsake concept",
+          "No product behavior, live sponsor integration, or measured savings are demonstrated."
+        ],
+        "caption": "TicketStub. Project name only; product availability is unverified. A keepsake concept. Synthetic concept only.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 438.09375
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 1,
+      "output": "demo/exports/frames/cue-01.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "SYNTHETIC CONCEPT ONLY",
+          "TicketStub — project name only; product availability is unverified",
+          "A keepsake concept",
+          "No product behavior, live sponsor integration, or measured savings are demonstrated."
+        ],
+        "caption": "No product behavior, live sponsor integration, or measured savings are demonstrated.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 438.09375
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 2,
+      "output": "demo/exports/frames/cue-02.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "CONCEPTUAL ONLY",
+          "Context → design → human review",
+          "Conceptual only; implementation is unverified."
+        ],
+        "caption": "Here, one ticket idea moves from context to design and a human review. Context → design → human review.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 394.984375
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 3,
+      "output": "demo/exports/frames/cue-03.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "CONCEPTUAL ONLY",
+          "Context → design → human review",
+          "Conceptual only; implementation is unverified."
+        ],
+        "caption": "Conceptual only; implementation is unverified.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 394.984375
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 4,
+      "output": "demo/exports/frames/cue-04.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "PROPOSED REVIEW RULE",
+          "Hold or revise draft",
+          "Production handoff: planned",
+          "This is a proposed review rule, not a verified product feature."
+        ],
+        "caption": "A reviewer may hold or revise this draft; production handoff is planned. Approval before production.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 419.53125
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 5,
+      "output": "demo/exports/frames/cue-05.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "PROPOSED REVIEW RULE",
+          "Hold or revise draft",
+          "Production handoff: planned",
+          "This is a proposed review rule, not a verified product feature."
+        ],
+        "caption": "This is a proposed review rule, not a verified product feature.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 419.53125
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 6,
+      "output": "demo/exports/frames/cue-06.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "PINNED PRODUCT SOURCE: DOCUMENTATION ONLY",
+          "Product capability, automation, and transaction copy is pending pinned product-release evidence.",
+          "No product or sponsor results verified."
+        ],
+        "caption": "Product capability, automation, and transaction copy is pending pinned product-release evidence. No product or sponsor results verified.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 413.53125
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 7,
+      "output": "demo/exports/frames/cue-07.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "NEATLOGS — SPN-01 — PENDING",
+          "Architecture: PENDING",
+          "Implementation: PENDING",
+          "Runtime: PENDING",
+          "Reasoning: PENDING",
+          "Result: PENDING",
+          "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+          "providerMode: not_run"
+        ],
+        "caption": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 479.40625
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 8,
+      "output": "demo/exports/frames/cue-08.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "NEATLOGS — SPN-01 — PENDING",
+          "Architecture: PENDING",
+          "Implementation: PENDING",
+          "Runtime: PENDING",
+          "Reasoning: PENDING",
+          "Result: PENDING",
+          "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+          "providerMode: not_run"
+        ],
+        "caption": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 479.40625
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 9,
+      "output": "demo/exports/frames/cue-09.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "ENTIRE — SPN-02 — PENDING",
+          "Architecture: PENDING",
+          "Implementation: PENDING",
+          "Runtime: PENDING",
+          "Reasoning: PENDING",
+          "Result: PENDING",
+          "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+          "providerMode: not_run"
+        ],
+        "caption": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 479.40625
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 10,
+      "output": "demo/exports/frames/cue-10.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "ENTIRE — SPN-02 — PENDING",
+          "Architecture: PENDING",
+          "Implementation: PENDING",
+          "Runtime: PENDING",
+          "Reasoning: PENDING",
+          "Result: PENDING",
+          "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+          "providerMode: not_run"
+        ],
+        "caption": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 479.40625
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 11,
+      "output": "demo/exports/frames/cue-11.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "CFO.AI — SPN-03 — PENDING",
+          "Architecture: PENDING",
+          "Implementation: PENDING",
+          "Runtime: PENDING",
+          "Reasoning: PENDING",
+          "Result: PENDING",
+          "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+          "providerMode: not_run"
+        ],
+        "caption": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 479.40625
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 12,
+      "output": "demo/exports/frames/cue-12.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "CFO.AI — SPN-03 — PENDING",
+          "Architecture: PENDING",
+          "Implementation: PENDING",
+          "Runtime: PENDING",
+          "Reasoning: PENDING",
+          "Result: PENDING",
+          "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+          "providerMode: not_run"
+        ],
+        "caption": "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 479.40625
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 13,
+      "output": "demo/exports/frames/cue-13.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "EVAL-02 — PENDING",
+          "No measured improvement or savings claim is approved; comparable baseline evidence is pending.",
+          "No product or sponsor results verified."
+        ],
+        "caption": "No measured improvement or savings claim is approved; comparable baseline evidence is pending. No product or sponsor results verified.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 413.53125
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 14,
+      "output": "demo/exports/frames/cue-14.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "Team name: PENDING",
+          "Submitter name: PENDING",
+          "Project name: PENDING SUBMITTER CONFIRMATION",
+          "Public repository URL: PENDING",
+          "Public demo URL: PENDING",
+          "Official X quote-post: PENDING PUBLICATION/LINK",
+          "Confirmed cutoff: PENDING DISCORD ANNOUNCEMENT"
+        ],
+        "caption": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 493.203125
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 15,
+      "output": "demo/exports/frames/cue-15.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "Team name: PENDING",
+          "Submitter name: PENDING",
+          "Project name: PENDING SUBMITTER CONFIRMATION",
+          "Public repository URL: PENDING",
+          "Public demo URL: PENDING",
+          "Official X quote-post: PENDING PUBLICATION/LINK",
+          "Confirmed cutoff: PENDING DISCORD ANNOUNCEMENT"
+        ],
+        "caption": "Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 493.203125
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    },
+    {
+      "cue": 16,
+      "output": "demo/exports/frames/cue-16.png",
+      "measurement": {
+        "status": "DRAFT • SYNTHETIC REHEARSAL\nNOT A PRODUCT DEMO • SILENT / CAPTIONED",
+        "screenText": [
+          "REHEARSAL ONLY — SUBMISSION READINESS BLOCKED",
+          "No product or sponsor results verified.",
+          "Explore the repository docs."
+        ],
+        "caption": "No product or sponsor results verified. Explore the repository docs.",
+        "captionBounds": {
+          "x": 48,
+          "y": 526,
+          "width": 1184,
+          "height": 154,
+          "top": 526,
+          "right": 1232,
+          "bottom": 680,
+          "left": 48
+        },
+        "overflow": [
+          {
+            "tag": "MAIN",
+            "scrollHeight": 350,
+            "clientHeight": 350
+          },
+          {
+            "tag": "ASIDE",
+            "scrollHeight": 154,
+            "clientHeight": 154
+          }
+        ],
+        "lastTextBottom": 394.984375
+      },
+      "pageErrors": [],
+      "externalRequests": []
+    }
+  ]
+}

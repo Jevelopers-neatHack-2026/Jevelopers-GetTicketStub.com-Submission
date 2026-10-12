@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/ledger/LedgerEventTypeSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "anyOf": [
+    {
+      "const": "usage_observation",
+      "type": "string"
+    },
+    {
+      "const": "reservation_authorized",
+      "type": "string"
+    },
+    {
+      "const": "dispatch",
+      "type": "string"
+    },
+    {
+      "const": "charge",
+      "type": "string"
+    },
+    {
+      "const": "consumption",
+      "type": "string"
+    },
+    {
+      "const": "reservation_release",
+      "type": "string"
+    },
+    {
+      "const": "expense",
+      "type": "string"
+    },
+    {
+      "const": "revenue",
+      "type": "string"
+    },
+    {
+      "const": "refund",
+      "type": "string"
+    },
+    {
+      "const": "credit",
+      "type": "string"
+    },
+    {
+      "const": "discount",
+      "type": "string"
+    },
+    {
+      "const": "fee",
+      "type": "string"
+    },
+    {
+      "const": "tax",
+      "type": "string"
+    },
+    {
+      "const": "reimbursement",
+      "type": "string"
+    },
+    {
+      "const": "cash_movement",
+      "type": "string"
+    },
+    {
+      "const": "reversal",
+      "type": "string"
+    },
+    {
+      "const": "adjustment",
+      "type": "string"
+    },
+    {
+      "const": "correction",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+name: Entire graph
+# Graph generation remains disabled until its plugin source, release, digest, and output contract are independently reviewed.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/entire-graph.yml
+      - .entire/settings.json
+      - AGENTS.md
+      - CLAUDE.md
+      - docs/api/entire-graph-agent-fallback.md
+      - scripts/validate-entire-graph-artifact.mjs
+  workflow_dispatch:
+    inputs:
+      push_branch:
+        description: Publish reviewed generated instruction files to an entire-graph/<sha> branch
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      plugin_ready: ${{ steps.plugin_guard.outputs.plugin_ready }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Gate graph execution until plugin is pinned
+        id: plugin_guard
+        run: |
+          echo "plugin_ready=false" >> "$GITHUB_OUTPUT"
+          echo "Graph generation is disabled until a compatible plugin source, release tag, immutable digest, and generated-file contract are independently reviewed and recorded." >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: needs.graph.outputs.plugin_ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.push_branch == true && github.ref == 'refs/heads/main' && github.repository == 'Jevelopers-neatHack-2026/cost-intelligence'
+    needs: graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: entire-graph-instructions-${{ github.sha }}
+          path: ${{ runner.temp }}/generated
+      - name: Validate exact generated-file allowlist
+        run: node scripts/validate-entire-graph-artifact.mjs "$RUNNER_TEMP/generated"
+      - name: Stage and publish only validated generated instruction files
+        run: |
+          cp "$RUNNER_TEMP/generated/.entire/graph-agent.md" .entire/graph-agent.md
+          cp "$RUNNER_TEMP/generated/AGENTS.md" AGENTS.md
+          cp "$RUNNER_TEMP/generated/CLAUDE.md" CLAUDE.md
+          git diff --check
+          git add -- .entire/graph-agent.md AGENTS.md CLAUDE.md
+          if git diff --cached --quiet; then
+            echo "No generated instruction changes to publish."
+            exit 0
+          fi
+          branch="entire-graph/${GITHUB_SHA::7}"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Refresh entire-graph instructions"
+          git push origin "HEAD:refs/heads/$branch"

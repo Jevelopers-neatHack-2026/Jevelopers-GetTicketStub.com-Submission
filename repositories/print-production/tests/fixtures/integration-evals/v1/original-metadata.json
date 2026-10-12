@@ -1,0 +1,20 @@
+{
+	"id": "asset-negative",
+	"path": "data/asset-negative.txt",
+	"sha256": "969bc670d1540ffce4823ea9ca7b9c9bd5154052c78a0460cf8c235f88cca4de",
+	"media_type": "text/plain",
+	"family": "asset",
+	"origin": "synthetic",
+	"source_ref": "https://fixtures.example/asset-negative",
+	"collected_at": "2026-10-10T00:00:00Z",
+	"creator": "integration-evals synthetic fixture generator",
+	"permission": "Fictional original test input; no customer or sponsor content",
+	"tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+	"redaction": "Synthetic identities; no private source content",
+	"retention": "Versioned immutable fixture; revocation requires digest tombstone",
+	"revoked": false,
+	"quarantined": true,
+	"requirements": ["IE-02B.AC4", "ART-05", "EVAL-04"],
+	"expected": "typed rejection/uncertainty; no unauthorized effect",
+	"modes": ["mock-only", "recorded", "sandbox", "live"]
+}

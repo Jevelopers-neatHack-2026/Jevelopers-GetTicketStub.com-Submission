@@ -1,0 +1,101 @@
+{
+  "sourceCommit": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+  "sourcePageSHA": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
+  "url": "http://127.0.0.1:4181/",
+  "capturedAtEnd": "2026-10-12T15:02:48.559Z",
+  "status": "LOCAL_KEYBOARD_FOCUS_RECOVERY_OBSERVED_WITH_LARGER_VIEWPORT_CONTROLS",
+  "observations": [
+    {
+      "step": "320x568 final actual skip Enter focus revealed",
+      "observed": {
+        "active": "ev",
+        "h": 568,
+        "innerScroll": 346,
+        "input": {
+          "bottom": 311.609375,
+          "height": 56,
+          "left": 34,
+          "right": 256,
+          "top": 255.609375,
+          "width": 222,
+          "x": 34,
+          "y": 255.609375
+        },
+        "opacity": "1",
+        "w": 320,
+        "y": 19855
+      }
+    },
+    {
+      "step": "375x812 actual skip Enter focus control",
+      "observed": {
+        "active": "ev",
+        "h": 812,
+        "innerScroll": 0,
+        "input": {
+          "bottom": 649.984375,
+          "height": 56,
+          "left": 34,
+          "right": 311,
+          "top": 593.984375,
+          "width": 277,
+          "x": 34,
+          "y": 593.984375
+        },
+        "opacity": "1",
+        "w": 375,
+        "y": 25179
+      }
+    },
+    {
+      "step": "1440x900 actual skip Enter focus control",
+      "observed": {
+        "active": "ev",
+        "h": 900,
+        "innerScroll": 0,
+        "input": {
+          "bottom": 533.953125,
+          "height": 57,
+          "left": 222.09375,
+          "right": 635.453125,
+          "top": 476.953125,
+          "width": 413.359375,
+          "x": 222.09375,
+          "y": 476.953125
+        },
+        "opacity": "1",
+        "w": 1440,
+        "y": 26709
+      }
+    }
+  ],
+  "negativeControl": "/tmp/landing-maker-focus-negative.json",
+  "historicalOtherChecks": {
+    "sourceCommit": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+    "sourcePageSHA": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
+    "receipt": "/tmp/landing-maker-final-candidate.json",
+    "note": "Other viewport, motion and no-JavaScript checks remain explicitly tied to prior4cc; currentruntime changes only active-finale focus invocation and retains identical markup/styles."
+  },
+  "limitations": [
+    "Actual320keyboardfocus revealed; no full keyboard or WCAG acceptance",
+    "Native200percenttextzoom, screenreader, measuredcontrast, physicaltouch/scrollbardrag, three-run labperformance and deployed acceptance remain open",
+    "Target-specific device metrics are responsive viewport testing, nottextzoom",
+    "Existing-profile Chrome static WebGL fallback"
+  ],
+  "restored": {
+    "scriptsEnabled": true,
+    "mediaDefault": true,
+    "deviceMetricsCleared": true,
+    "browserViewportReset": true,
+    "actual": {
+      "cardTransition": "0.9s, 0.5s",
+      "h": 721,
+      "w": 1523
+    }
+  },
+  "screenshots": [
+    "/tmp/landing-maker-focus-final-320.jpg",
+    "/tmp/landing-maker-focus-final-375.jpg",
+    "/tmp/landing-maker-focus-final-1440.jpg"
+  ]
+}

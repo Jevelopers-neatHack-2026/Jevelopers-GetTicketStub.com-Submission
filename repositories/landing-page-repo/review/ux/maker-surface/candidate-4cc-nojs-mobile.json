@@ -1,0 +1,45 @@
+{
+  "sourceCommit": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+  "sourcePageSHA": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
+  "observedAt": "2026-10-12T14:49:01.344Z",
+  "status": "LOCAL_MOBILE_NO_JAVASCRIPT_FALLBACK_OBSERVED",
+  "observation": {
+    "h": 812,
+    "heroTransform": "none",
+    "loaderDisplay": "none",
+    "nativeLink": {
+      "href": "https://getticketstub.com/make",
+      "rect": {
+        "bottom": 315.890625,
+        "height": 57.5,
+        "left": 16,
+        "right": 174.265625,
+        "top": 258.390625,
+        "width": 158.265625,
+        "x": 16,
+        "y": 258.390625
+      }
+    },
+    "nav": {
+      "bottom": 99.375,
+      "height": 99.375,
+      "left": 0,
+      "right": 360,
+      "top": 0,
+      "width": 360,
+      "x": 0,
+      "y": 0
+    },
+    "note": {
+      "bottom": 315.890625,
+      "height": 183.5,
+      "left": 16,
+      "right": 344,
+      "top": 132.390625,
+      "width": 328,
+      "x": 16,
+      "y": 132.390625
+    },
+    "w": 375
+  }
+}

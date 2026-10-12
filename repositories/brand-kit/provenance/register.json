@@ -1,0 +1,1439 @@
+{
+  "schema_version": 1,
+  "synthetic": false,
+  "repository": "Jevelopers-neatHack-2026/brand-kit",
+  "source_revision": "28e64dd",
+  "hash_algorithm": "sha256",
+  "scope_prefixes": [
+    "logo/",
+    "fonts/",
+    "references/",
+    "tokens/",
+    "docs/assets/"
+  ],
+  "statement": "Records what the repository itself shows. UNKNOWN means no evidence is recorded; nothing here is an approval, a rights clearance or a legal conclusion.",
+  "adjacent_credits": [
+    {
+      "subject": "Foil/holo technique described in docs/material-foil.md",
+      "credit": "lmvdz/coven-cave (branch feat/cave-3rz-conjure-flow)",
+      "evidence": "docs/material-foil.md",
+      "licence": "UNKNOWN",
+      "note": "Technique credit only; no file in this register is recorded as copied from it."
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/assets/readme/banner-day.svg",
+      "sha256": "ca1e8bc7ed18e89f70aadccd737d10dfebd08091d0cca0b6d922ad414a3fcfae",
+      "size_bytes": 28349,
+      "introduced_in": "5feec6d",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Added in commit 5feec6d; the commit does not record who created the artwork."
+      ],
+      "classification": "first-party-readme",
+      "core": false,
+      "origin": "Hand-authored README banner per inventory/brand-inventory.json; author not recorded",
+      "origin_evidence": [
+        "inventory/brand-inventory.json",
+        "README.md"
+      ],
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "README front-door banner"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate for README-only use; rights and approval are UNKNOWN."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "docs/assets/readme/banner-night.svg",
+      "sha256": "dbc5c1a5a36ea2aee7d5a2becc19e750432b5de97744d7a15b13a872e2d7a93c",
+      "size_bytes": 28380,
+      "introduced_in": "5feec6d",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Added in commit 5feec6d; the commit does not record who created the artwork."
+      ],
+      "classification": "first-party-readme",
+      "core": false,
+      "origin": "Hand-authored README banner per inventory/brand-inventory.json; author not recorded",
+      "origin_evidence": [
+        "inventory/brand-inventory.json",
+        "README.md"
+      ],
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "README front-door banner"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate for README-only use; rights and approval are UNKNOWN."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "fonts/Fraunces-OFL.txt",
+      "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b",
+      "size_bytes": 4391,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "The Fraunces Project Authors (copyright line in this file)",
+      "source_version": "UNKNOWN",
+      "tooling": "NOT-APPLICABLE",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Covers fonts/Fraunces[SOFT,WONK,opsz,wght].ttf."
+      ],
+      "classification": "licence-notice",
+      "core": false,
+      "origin": "Licence text bundled with the font; names https://github.com/undercasetype/Fraunces as the upstream project",
+      "origin_evidence": [
+        "fonts/Fraunces-OFL.txt"
+      ],
+      "derivation": "NOT-APPLICABLE",
+      "notice_required": "no",
+      "notice_files": [],
+      "intended_uses": [
+        "Notice kept beside fonts/Fraunces[SOFT,WONK,opsz,wght].ttf"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Accompanies a font that is itself excluded (source-only); it would have to ship with any future approved font distribution."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+      "sha256": "177ff6c0f14e5550a3c624247cd1189611d4eb65d000b14944c63d967958abbb",
+      "size_bytes": 360440,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "The Fraunces Project Authors (copyright line in fonts/Fraunces-OFL.txt)",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": [
+        "Source-only: fonts are not self-hosted and no runtime font file is exported (standing constraint, docs/brand-governance.md)",
+        "SIL OFL 1.1 terms as stated in fonts/Fraunces-OFL.txt (not interpreted here)"
+      ],
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Fraunces upstream version, download location and checksum are not recorded."
+      ],
+      "classification": "licensed-dependency",
+      "core": true,
+      "origin": "https://github.com/undercasetype/Fraunces (upstream project named in the bundled notice); the exact upstream download is not recorded",
+      "origin_evidence": [
+        "fonts/Fraunces-OFL.txt"
+      ],
+      "derivation": "UNKNOWN (bundled binary; any build, subsetting or modification is not recorded)",
+      "notice_required": "yes",
+      "notice_files": [
+        "fonts/Fraunces-OFL.txt"
+      ],
+      "intended_uses": [
+        "Input to tools/build_logos.py",
+        "Typography reference in SPEC.md"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Source-only under the no-self-host-fonts constraint; runtime font files are excluded from the first-party release."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "fonts/InterTight-OFL.txt",
+      "sha256": "50240ab035cf1b6b3307940235481d515c4b6de3ab1fa843dbe59e7892cb9d58",
+      "size_bytes": 4383,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "The Inter Project Authors (copyright line in this file)",
+      "source_version": "UNKNOWN",
+      "tooling": "NOT-APPLICABLE",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Covers fonts/InterTight[wght].ttf."
+      ],
+      "classification": "licence-notice",
+      "core": false,
+      "origin": "Licence text bundled with the font; names https://github.com/rsms/inter-tight as the upstream project",
+      "origin_evidence": [
+        "fonts/InterTight-OFL.txt"
+      ],
+      "derivation": "NOT-APPLICABLE",
+      "notice_required": "no",
+      "notice_files": [],
+      "intended_uses": [
+        "Notice kept beside fonts/InterTight[wght].ttf"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Accompanies a font that is itself excluded (source-only); it would have to ship with any future approved font distribution."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "fonts/InterTight[wght].ttf",
+      "sha256": "b81b73dcb64df3c230cabade7df6c5773bf863233f24c9ee51087519f1f88b6f",
+      "size_bytes": 581588,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "The Inter Project Authors (copyright line in fonts/InterTight-OFL.txt)",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": [
+        "Source-only: fonts are not self-hosted and no runtime font file is exported (standing constraint, docs/brand-governance.md)",
+        "SIL OFL 1.1 terms as stated in fonts/InterTight-OFL.txt (not interpreted here)"
+      ],
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Inter Tight upstream version, download location and checksum are not recorded."
+      ],
+      "classification": "licensed-dependency",
+      "core": true,
+      "origin": "https://github.com/rsms/inter-tight (upstream project named in the bundled notice); the exact upstream download is not recorded",
+      "origin_evidence": [
+        "fonts/InterTight-OFL.txt"
+      ],
+      "derivation": "UNKNOWN (bundled binary; any build, subsetting or modification is not recorded)",
+      "notice_required": "yes",
+      "notice_files": [
+        "fonts/InterTight-OFL.txt"
+      ],
+      "intended_uses": [
+        "Typography reference in SPEC.md"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Source-only under the no-self-host-fonts constraint; runtime font files are excluded from the first-party release."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/app-icon.svg",
+      "sha256": "22129ff127d1c229d33206d5df48c36f7e3338cb697ac04fe97090448b77456e",
+      "size_bytes": 3979,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/favicon.svg",
+      "sha256": "ad9701d4ae6416c6a9d789c80b422ace7ab70cf1feac57adab4bbcc25d47d3b1",
+      "size_bytes": 2815,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/lockup-horizontal-mono.svg",
+      "sha256": "07c25323b72a10cf98b023b95c13fd3e51851405731b04b83f30eaf1d1b6cfe3",
+      "size_bytes": 12394,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/lockup-horizontal.svg",
+      "sha256": "1f810daf26caebd3f661b30a4406dbea61d5cd294e6e887c0b994780d9b3750f",
+      "size_bytes": 12619,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/lockup-stacked.svg",
+      "sha256": "66a16141405d18cca1ea709c0a8a9d59f248b442e7fc27ffb4e655501741edb0",
+      "size_bytes": 12631,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/ts-stamp-currentcolor.svg",
+      "sha256": "61007e1795eac0582f20f57bcdaf83eab5d8c9cadc054e824ce686cf1796a5a9",
+      "size_bytes": 3291,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/ts-stamp-mono-cream.svg",
+      "sha256": "077f0b2936af1a842991d5922f5471067486447fb3e9c570b8510f2260f9dae5",
+      "size_bytes": 3286,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/ts-stamp-mono-ink.svg",
+      "sha256": "2b3ec01e538a1ff55250965c324ac0e999234a9039b8dbbf8864c09430ea8bae",
+      "size_bytes": 3286,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/ts-stamp-mono-orange.svg",
+      "sha256": "f00077dfb41815c3e26d8b32e4d572eff66834861433e301bb208108c21f07a8",
+      "size_bytes": 3286,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/ts-stamp.svg",
+      "sha256": "a1279c701ff62a20288854bef1e7a7718128125d745485e30a019f2a2c78efd8",
+      "size_bytes": 3501,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/wordmark-compact.svg",
+      "sha256": "9c147c238f5734d0673760ca95c8ea031e313b3fbeb4d91e440e746e49bfa9dc",
+      "size_bytes": 8976,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/wordmark-cream.svg",
+      "sha256": "4a0bb63ef3d4712e0ada667d36b8b1f8b4b22cc4049468260d1742ab69cc4478",
+      "size_bytes": 9194,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/wordmark-orange.svg",
+      "sha256": "ba247fb4be9ee19803f487ee3abb048b5f0905ef944673a5a78cc4544a2a5906",
+      "size_bytes": 9194,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "logo/wordmark.svg",
+      "sha256": "4efa5c6a27904c18dcb2dc482d1d6c525fbcaabed74914129efa1af9e834fb4c",
+      "size_bytes": 9194,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "Generator dependencies are unpinned; README.md records one reproduction run on 2026-10-11 with Python 3.14.4, fonttools 4.66.1, uharfbuzz 0.56.3",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Whether the Fraunces OFL notice attaches to outlines derived from the font is a rights-reviewer decision; not concluded here."
+      ],
+      "classification": "first-party-generated",
+      "core": true,
+      "origin": "Generated by tools/build_logos.py from the bundled Fraunces font (docs/logo.md, README.md); authorship of the mark design is not recorded",
+      "origin_evidence": [
+        "docs/logo.md",
+        "README.md",
+        "tools/build_logos.py"
+      ],
+      "derivation": {
+        "generator": "tools/build_logos.py",
+        "inputs": [
+          "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+          "tools/build_logos.py"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Brand mark, selected per situation in docs/logo.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated first-party mark per repository docs. Rights holder, rights status and approval are UNKNOWN, so it is not release eligible."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/mockup-art-glasgow.webp",
+      "sha256": "8041fade930456965ef0b746bdb1b41f7662004a83deaec08adb668c05467bad",
+      "size_bytes": 337214,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: file sits in references/, index.html shows it on the internal board, and inventory records origin and rights as unknown. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone.",
+        "index.html caption reads 'Generated art, one orange accent' and docs/imagery.md describes a Glasgow generated-art test series; the generating tool, prompt, model terms and output rights are UNKNOWN."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Internal visual reference on the brand board (index.html)"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/mood-holo-light.webp",
+      "sha256": "bf2935f8e0db7ed568b9f1839e0a7976fb49c37d09650808b8552e8391036a26",
+      "size_bytes": 83156,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: file sits in references/, index.html shows it on the internal board, and inventory records origin and rights as unknown. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Internal visual reference on the brand board (index.html); named in docs/imagery.md"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/mood-stub-back-golden-hour.webp",
+      "sha256": "63cf425858a83246b749c17a04e220e31267a55c461ff52d210a4e1b7423cb3a",
+      "size_bytes": 354560,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: file sits in references/, index.html shows it on the internal board, and inventory records origin and rights as unknown. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Internal visual reference on the brand board (index.html); named in docs/imagery.md"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/ts-stamp-emboss-lightleak.webp",
+      "sha256": "fb7a818beb44a4b35ee52486d44ba5b3dfa059398ebc23cf9a1aa6398aa8df74",
+      "size_bytes": 557836,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: file sits in references/, index.html shows it on the internal board, and inventory records origin and rights as unknown. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Internal visual reference on the brand board (index.html)"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/ts-stamp-holo-rainbow.webp",
+      "sha256": "b3fc55964c28795c6ec94bdbded4a4ddab9d23ac49712772b7d0f02b36cb3926",
+      "size_bytes": 610854,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: file sits in references/, index.html shows it on the internal board, and inventory records origin and rights as unknown. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Internal visual reference on the brand board (index.html); named in docs/imagery.md"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/ts-stamp-square-velvet.webp",
+      "sha256": "825bd0fb2367a47829355f8d54645b733a911a11f01234f37f263d49be445b27",
+      "size_bytes": 350626,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: the file sits in references/ and inventory/brand-inventory.json records origin and rights as unknown. Not referenced by index.html (the board renders 6 of the 7 references; this is the one not rendered) nor named in docs/imagery.md, checked at 91157ac. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Reference image kept in references/; not shown on the brand board"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "references/ts-stamp-vertical-velvet.webp",
+      "sha256": "bc447d7200291944b236048285fc64f55b92d15e02a403359b02018c3d206eae",
+      "size_bytes": 350030,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "UNKNOWN",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Classified reference-only from evidence: file sits in references/, index.html shows it on the internal board, and inventory records origin and rights as unknown. No origin, creator, tool or licence is recorded. It is not treated as first-party or generated on visual appearance alone."
+      ],
+      "classification": "reference-unknown",
+      "core": false,
+      "origin": "UNKNOWN",
+      "origin_evidence": "UNKNOWN",
+      "derivation": "UNKNOWN",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Internal visual reference on the brand board (index.html)"
+      ],
+      "disposition": {
+        "release": "excluded",
+        "rationale": "Reference-only with unknown provenance and rights; excluded from every export. Retained in the repository, not deleted."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/tailwind.preset.js",
+      "sha256": "af3b702e62cb43965bef1d38385f880a9f90bc966b47e21979811240780b4fc1",
+      "size_bytes": 2939,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "tools/build_tokens.py",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over."
+      ],
+      "classification": "first-party-derived",
+      "core": true,
+      "origin": "Generated from tokens/tokens.json by tools/build_tokens.py (header: GENERATED FILE); replaces the manually derived file recorded at 91157ac",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": {
+        "generator": "tools/build_tokens.py",
+        "inputs": [
+          "tokens/tokens.json",
+          "tokens/profile.json",
+          "tokens/mapping.json"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Tailwind preset adapter for products"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated from first-party tokens. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/tokens.css",
+      "sha256": "a536e16aa1d25e45449a02e6ed46eeed376dfdbb71fa7c8a33cbc3a070f359b0",
+      "size_bytes": 3946,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "tools/build_tokens.py",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over."
+      ],
+      "classification": "first-party-derived",
+      "core": true,
+      "origin": "Generated from tokens/tokens.json by tools/build_tokens.py (header: GENERATED FILE); replaces the manually derived file recorded at 91157ac",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": {
+        "generator": "tools/build_tokens.py",
+        "inputs": [
+          "tokens/tokens.json",
+          "tokens/profile.json",
+          "tokens/mapping.json"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "CSS custom properties (--ts-*) for products"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated from first-party tokens. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/tokens.json",
+      "sha256": "649e570dc1397ef78bc00b28127ce166d640a4187eb2889fb2f57cc54054f228",
+      "size_bytes": 8345,
+      "introduced_in": "42625c0",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Revised in PR #20 (BK-03A). The prior hash for source revision 91157ac is superseded; no approval existed for it. Rights holder is UNKNOWN."
+      ],
+      "classification": "first-party-canonical",
+      "core": true,
+      "origin": "In-repository token source (SPEC.md, tokens/tokens.json), revised by BK-03A PR #20; original author not recorded",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": "NOT-APPLICABLE",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Design tokens consumed by products, per SPEC.md"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: first-party token source per repository docs. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/token-matrix.md",
+      "sha256": "c9fc0a1d799880c9625490582d472913d67d8585da4b97b37bf0277c98a1846c",
+      "size_bytes": 15459,
+      "introduced_in": "28e64dd",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "tools/build_tokens.py",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over."
+      ],
+      "classification": "first-party-derived",
+      "core": true,
+      "origin": "Generated coverage matrix from tokens/tokens.json, profile.json and mapping.json by tools/build_tokens.py (header: GENERATED FILE)",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": {
+        "generator": "tools/build_tokens.py",
+        "inputs": [
+          "tokens/tokens.json",
+          "tokens/profile.json",
+          "tokens/mapping.json"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Documentation of token coverage; not a runtime asset"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: generated documentation. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/external-fonts-google.css",
+      "sha256": "e197c96f9db0463aee326cb5db657cd9b9952d47a08e60420de6c6db117ba458",
+      "size_bytes": 1394,
+      "introduced_in": "28e64dd",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "tools/build_tokens.py",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over.",
+        "External font hosting only: loading it makes the visitor's browser contact fonts.googleapis.com and fonts.gstatic.com. No font provider or delivery strategy has been approved; the Google font licences and terms were not reviewed here. Distinct from the source-only font binaries in fonts/."
+      ],
+      "classification": "first-party-derived",
+      "core": true,
+      "origin": "Generated by tools/build_tokens.py: a CSS source script containing one @import of Google-hosted font CSS (fonts.googleapis.com), an explicit opt-in not imported by tokens.css. It is not a self-hosted font binary and contains no @font-face rules or font files",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": {
+        "generator": "tools/build_tokens.py",
+        "inputs": [
+          "tokens/tokens.json",
+          "tokens/profile.json",
+          "tokens/mapping.json"
+        ]
+      },
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Optional external font import for consumers that opt in (see tokens/external-fonts-google.css header)"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only, and not a provider or strategy approval: it is an opt-in CSS source script, not a font binary. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/profile.json",
+      "sha256": "18ce404d9e9f667bcab5a6cc0a87ca7be9e9866c5b7e69bff0c529e21742fef3",
+      "size_bytes": 4411,
+      "introduced_in": "28e64dd",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Input of tools/build_tokens.py; added at main 28e64dd."
+      ],
+      "classification": "first-party-canonical",
+      "core": true,
+      "origin": "Hand-authored token profile (rules for tokens/tokens.json) added by BK-03A PR #20; author not recorded",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": "NOT-APPLICABLE",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Defines token validation rules; generator input"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: first-party token rules. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    },
+    {
+      "path": "tokens/mapping.json",
+      "sha256": "7db9104591711ff10a86f2fa26f2ec64fc995f3fb5eec9b7040be6ae363ffb45",
+      "size_bytes": 9128,
+      "introduced_in": "28e64dd",
+      "creator_rights_holder": "UNKNOWN",
+      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "tooling": "UNKNOWN",
+      "rights_status": "UNKNOWN",
+      "permitted_uses": "UNKNOWN",
+      "restrictions": "UNKNOWN",
+      "reviewer": "UNKNOWN",
+      "notes": [
+        "Input of tools/build_tokens.py; added at main 28e64dd."
+      ],
+      "classification": "first-party-canonical",
+      "core": true,
+      "origin": "Hand-authored token-to-output mapping (CSS/Tailwind) added by BK-03A PR #20; author not recorded",
+      "origin_evidence": [
+        "SPEC.md",
+        "docs/source-of-truth.md",
+        "docs/token-profile.md"
+      ],
+      "derivation": "NOT-APPLICABLE",
+      "notice_required": "UNKNOWN",
+      "notice_files": [],
+      "intended_uses": [
+        "Defines token output mapping; generator input"
+      ],
+      "disposition": {
+        "release": "candidate",
+        "rationale": "Provisional candidate only: first-party token mapping. Rights and approval are UNKNOWN; code review of the generator is not an approval."
+      },
+      "approval": {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "date": "UNKNOWN"
+      }
+    }
+  ]
+}

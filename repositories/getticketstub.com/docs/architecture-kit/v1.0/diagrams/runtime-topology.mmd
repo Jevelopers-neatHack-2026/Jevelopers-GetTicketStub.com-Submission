@@ -1,0 +1,8 @@
+flowchart TD
+    WEB["Web application"] -->|"Durable jobs"| DB[("PostgreSQL")]
+    WORKER["Background worker"] -->|"Claim and checkpoint"| DB
+    WEB -->|"Authorized assets"| OBJECTS[("Object storage")]
+    WORKER -->|"Versioned artifacts"| OBJECTS
+    WORKER -->|"Metered requests"| PROVIDERS["Research, image and fulfillment providers"]
+    WORKER -->|"Traces and evidence"| NEAT["Neatlogs"]
+    WORKER -->|"Financial summaries"| CFO["CFO.ai export"]

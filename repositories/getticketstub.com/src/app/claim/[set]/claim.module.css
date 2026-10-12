@@ -1,0 +1,96 @@
+.layout {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.desk {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.seat {
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.panel {
+  display: grid;
+  gap: 26px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  min-width: 0;
+}
+.head {
+  display: grid;
+  gap: 6px;
+}
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lede {
+  font: var(--type-lede);
+  color: var(--desk-ink);
+  overflow-wrap: anywhere;
+}
+.meta {
+  font: var(--type-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.form {
+  display: grid;
+  gap: 22px;
+}
+.signIn {
+  display: grid;
+  gap: 10px;
+}
+.signRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.signed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: var(--type-ui);
+}
+.qr {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+    gap: 80px;
+    align-items: start;
+    padding-top: 16px;
+  }
+  .desk {
+    position: sticky;
+    top: 96px;
+  }
+  .panel {
+    margin: 0;
+  }
+  .qr {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    padding-top: 18px;
+    border-top: 1px dotted var(--desk-rule-strong);
+  }
+  .qr > figure {
+    width: 96px;
+  }
+}

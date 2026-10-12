@@ -1,0 +1,63 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"properties": {
+		"schema_version": {
+			"type": "string",
+			"const": "print-invalid-owner/v1"
+		},
+		"case_id": {
+			"type": "string",
+			"const": "print-invalid"
+		},
+		"fixture_id": {
+			"type": "string",
+			"const": "asset-negative"
+		},
+		"supplement_id": {
+			"type": "string",
+			"const": "print-invalid-synthetic/v1"
+		},
+		"payload_sha256": {
+			"type": "string",
+			"const": "969bc670d1540ffce4823ea9ca7b9c9bd5154052c78a0460cf8c235f88cca4de"
+		},
+		"mode": {
+			"type": "string",
+			"const": "mock-only"
+		},
+		"origin": {
+			"type": "string",
+			"const": "synthetic"
+		},
+		"accepted": {
+			"type": "boolean",
+			"const": false
+		},
+		"node_sha256": {
+			"type": "string",
+			"pattern": "^[a-f0-9]{64}$"
+		},
+		"browser_root": {
+			"type": "string",
+			"maxLength": 4096
+		},
+		"renderer_image": {
+			"type": ["string", "null"]
+		}
+	},
+	"required": [
+		"schema_version",
+		"case_id",
+		"fixture_id",
+		"supplement_id",
+		"payload_sha256",
+		"mode",
+		"origin",
+		"accepted",
+		"node_sha256",
+		"browser_root",
+		"renderer_image"
+	],
+	"additionalProperties": false
+}

@@ -1,0 +1,191 @@
+/* Research review: grouped facts, the targeted question, the correction history. Colour only from the desk tokens. */
+
+.review {
+  display: grid;
+  gap: 18px;
+}
+.empty {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+
+.questions {
+  display: grid;
+  gap: 10px;
+}
+.question {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 0 0 1px var(--desk-rule);
+}
+.qText {
+  margin: 0;
+  font: var(--type-h3);
+  font-size: 1.05rem;
+  font-variation-settings: "SOFT" 30, "opsz" 20;
+  letter-spacing: -0.02em;
+}
+.req {
+  display: block;
+  margin-top: 2px;
+  font: var(--type-label);
+  letter-spacing: 0;
+  color: var(--desk-ink-soft);
+}
+.typed {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.fieldLabel {
+  font: var(--type-label);
+  color: var(--desk-ink);
+}
+.opt {
+  color: var(--desk-ink-soft);
+}
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+.input:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}
+.notice {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink);
+  font-weight: 600;
+}
+
+.group {
+  display: grid;
+  gap: 6px;
+}
+.groupHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+.count {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.groupNote {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.fact {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--desk-rule);
+}
+.fact:first-child {
+  border-top: 0;
+}
+.factTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.factText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 11rem;
+}
+.factLabel {
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.source {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+  overflow-wrap: anywhere;
+}
+.source a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.fact[data-group="corrected"] .factLabel {
+  font-weight: 600;
+}
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font: var(--type-label);
+  color: var(--desk-ink);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+.badge[data-status="blocked"] {
+  background: var(--desk-paper-sunk);
+  text-decoration: line-through;
+  text-decoration-color: var(--desk-rule-strong);
+}
+
+.original {
+  display: grid;
+  gap: 6px;
+}
+.originalBody {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--desk-paper-sunk);
+}
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.entry {
+  display: grid;
+  gap: 1px;
+}
+.entryHead {
+  font: var(--type-label);
+  font-weight: 600;
+}
+.when {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.entryBody {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  overflow-wrap: anywhere;
+}

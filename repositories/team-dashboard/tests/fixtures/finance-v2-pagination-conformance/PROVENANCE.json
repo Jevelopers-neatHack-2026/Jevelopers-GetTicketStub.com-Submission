@@ -1,0 +1,33 @@
+{
+  "classification": "SYNTHETIC_CONFORMANCE_ONLY",
+  "note": "Byte-for-byte copies of the two actual synthetic Finance-producer pagination captures named in the Finance-owner-accepted handoff. They are not live grants, not production data, not real billing evidence and not a consumer or production acknowledgement. The captured cursors were signed by a disposed producer host and cannot be replayed outside it; the fixture host only looks up the recorded answer to the exact recorded query. tests/components/finance-v2-pagination-conformance.test.tsx re-hashes both files against the digests below and reads nothing from outside the repository.",
+  "producer": {
+    "head": "924cdd2b5489681434790b5d1d7aac138198ccfd",
+    "tree": "88c0bcaeaaee050678ca59261229c5f9ad1bfd13",
+    "actualMerge": "06dafe24183c0243b30e5b851b3a6ff218bd88d1",
+    "actualMergeTree": "88c0bcaeaaee050678ca59261229c5f9ad1bfd13",
+    "candidateRun": 38248332764,
+    "mainRun": 38249053428,
+    "mainRunNote": "Reported PASS by the root coordinator; the handoff packet itself still records mainVerification as pending. Neither claim is re-verified by this repository.",
+    "baseRevision": "815c3f9f9a2979d2c695b687ea26863c99e01d3a",
+    "baseRevisionNote": "Recorded inside the captures as the explicit synthetic placeholder revision; the captured producerPayloadRevisionMeaning says the actual test source and run are bound by the producer CI checkout and manifest."
+  },
+  "handoff": {
+    "status": "FINANCE_OWNER_ACCEPTED_SYNTHETIC_CONFORMANCE_ONLY",
+    "packetSha256": "a193d27f4bbfea7211a809be2f312606312daef531913b4163ea465a6798fded",
+    "ownerReceipt": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2#issuecomment-6124267724",
+    "independentReviewSha256": "59977ebcb04a7c2d2a97830d05c7930098b57ceeb3391c85199218aad1b87387",
+    "consumerTargets": { "dashboard": "f8323a918bd9ab66af121e5b4066fe6678fac518", "integrationEvals": "59df31706612fbff869b7c6cf04ba8f9969ddcdf", "ack": "pending for these exact bytes; no consumer ACK is claimed here" }
+  },
+  "committed": [
+    { "path": "producer-v2-pagination-page.json", "sha256": "0b69c52a47e13cb181c0abcf388a15753ed9673dc74b583da0a0d305330e4423", "content": "3 captured requests/responses, 6 ordered unique details (USD and EUR), terminal page" },
+    { "path": "producer-v2-refusals-page.json", "sha256": "eefdaa7f7f55ce9f5340d63e0fe527a63dd12126f9ccf030b950af6fbfe74953", "content": "9 captured typed ApiResult refusals" }
+  ],
+  "limits": [
+    "Requested billingMode live and environment test are validated scope selectors only; the capture says it is a mocked synthetic fixture, not actual provider billing proof.",
+    "The mounted Product has no current Finance grants; the handoff's optional ci-finance-host-action-mapping is not adopted and INTEGRATED mode stays unavailable.",
+    "Captured cursors cannot be replayed against a live Finance host; the port in integration/fixture-host/finance-v2-captured.ts is a presentation fixture, not a Finance implementation.",
+    "The hash-only snapshot reader returns the FIRST page, not a continuation; this fixture port serves continuations only from the captured chain.",
+    "CFO export (a241 / PR41) stays held and the UI export stays disabled; no export adoption is claimed."
+  ]
+}

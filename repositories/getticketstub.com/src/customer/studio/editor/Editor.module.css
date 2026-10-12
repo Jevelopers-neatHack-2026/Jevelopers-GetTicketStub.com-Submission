@@ -1,0 +1,940 @@
+/* Studio editor. Phone first (390px); the desk layout takes over at 960px.
+   Paper by day: every colour is a desk token. The stub sizes itself from --cap-w, --cap-h and --ar
+   (see overlays.module.css, .frame), so the stage can be sized to it before it renders. */
+
+.root {
+  min-height: calc(100dvh - var(--demo-reserve, 0px));
+  /* nothing highlights while a stub is dragged; fields stay selectable */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.root :is(input, textarea) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.loading {
+  min-height: calc(100dvh - var(--demo-reserve, 0px));
+}
+
+.missing {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: 56px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+.missing h1 {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.missing p {
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+}
+.missingActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------- The stub on its stock (phone and desktop) ---------- */
+.deck {
+  position: relative;
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  transform: scale(var(--zoom, 1));
+  transition: transform 320ms var(--ts-ease-standard);
+}
+.deck > * {
+  grid-area: 1 / 1;
+}
+.drag {
+  position: relative;
+  transition:
+    transform 380ms var(--desk-spring),
+    scale 300ms var(--ts-ease-standard);
+  -webkit-user-drag: none;
+}
+.drag[data-dragging="true"] {
+  transition: none;
+  cursor: grabbing;
+}
+/* the press-in: the stub sinks a little under a held finger, before the sheet opens */
+[data-pressing="true"] .drag {
+  scale: 0.968;
+  transition-duration: 380ms, 440ms;
+}
+.drag[data-wiggle="true"] {
+  animation: wiggle 1.4s var(--ts-ease-standard) 0.8s 2;
+}
+.card {
+  position: relative;
+  animation: setDown 480ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.leaving {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+  animation: slideOff 400ms cubic-bezier(0.55, 0, 0.9, 0.55) both;
+}
+.guided {
+  position: relative;
+  display: grid;
+  width: fit-content;
+}
+
+/* set down: it arrives from a little above and to the side, like a card laid on the desk */
+@keyframes setDown {
+  from {
+    opacity: 0;
+    transform: translate(calc(var(--dir) * 34px), -24px) rotate(calc(var(--dir) * 4deg)) scale(1.05);
+  }
+  55% {
+    opacity: 1;
+  }
+}
+@keyframes slideOff {
+  from {
+    transform: translateX(var(--from-x, 0px)) rotate(calc(var(--from-r, 0) * 1deg));
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(calc(var(--dir) * -135%)) rotate(calc(var(--dir) * -10deg));
+    opacity: 0;
+  }
+}
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+  20% {
+    transform: translateX(-18px) rotate(-1.6deg);
+  }
+  45% {
+    transform: translateX(12px) rotate(1.1deg);
+  }
+  65% {
+    transform: translateX(-4px);
+  }
+}
+
+.safety,
+.bleed {
+  position: absolute;
+  pointer-events: none;
+  /* hairlines keep their weight while the camera zooms (--inv is 1 / zoom, set on the world layer) */
+  border: calc(1.5px * var(--inv, 1)) dashed;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 260ms var(--ts-ease-standard);
+}
+.safety[data-on],
+.bleed[data-on] {
+  opacity: 1;
+}
+.safety {
+  inset: 10px;
+  border-color: var(--desk-ink);
+}
+.bleed {
+  inset: -6px;
+  border-color: var(--desk-stamp);
+}
+
+.hiddenRow {
+  padding: 0 16px;
+}
+
+/* ---------- Phone ---------- */
+.phone {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+  /* a stub pinched bigger can reach past the edge; it never makes the page scroll sideways */
+  overflow-x: clip;
+}
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 56px;
+  padding: env(safe-area-inset-top) max(6px, var(--corner-reserve, 0px)) 0 6px;
+  background: var(--desk-paper);
+  box-shadow: 0 1px 0 var(--desk-rule);
+}
+.crumbs {
+  flex: none;
+  padding-left: 10px;
+}
+.title {
+  flex: 1;
+  min-width: 0;
+  padding-right: 10px;
+  text-align: right;
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage {
+  --cap-w: min(calc(100vw - var(--nav-w, 0px) - 32px), 608px);
+  --cap-h: clamp(300px, 46dvh, 440px);
+  --box-h: min(calc((var(--cap-w) - var(--mat)) / var(--ar) + var(--mat)), var(--cap-h));
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* sized to the stub, so changing style moves everything under it smoothly and leaves no gap */
+  height: calc(var(--box-h) + 40px);
+  padding: 16px 16px 24px;
+  touch-action: pan-y;
+  cursor: grab;
+  transition: height 420ms var(--ts-ease-standard);
+}
+
+.caption {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-top: -6px;
+}
+.dots {
+  display: flex;
+  align-items: center;
+}
+.dot {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--desk-rule-strong);
+  transition:
+    width 300ms var(--desk-spring),
+    background-color var(--desk-release) ease;
+}
+.dot[aria-current="true"]::before {
+  width: 22px;
+  background: var(--desk-ink);
+}
+.styleName {
+  font: var(--type-ui);
+  font-weight: 600;
+}
+.styleName span {
+  font-weight: 400;
+  color: var(--desk-ink-soft);
+}
+
+/* The same sheet a long press opens, for anyone who cannot hold. */
+.allStyles {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  font: var(--type-ui);
+  font-weight: 600;
+  color: var(--desk-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toolsWrap {
+  padding: 0 12px;
+}
+.trayWrap {
+  padding: 4px 16px 0;
+}
+.agentSheet {
+  display: flex;
+  flex-direction: column;
+  height: min(68dvh, 560px);
+  min-height: 320px;
+}
+
+.reviewSheet {
+  max-height: min(68dvh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
+}
+
+/* ---------- Desktop ---------- */
+.desk {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: calc(100dvh - var(--demo-reserve, 0px));
+  overflow: hidden;
+  /* the desk answers to the room it has beside the nav, not to the viewport. Fixed overlays are siblings of this element. */
+  container: desk / inline-size;
+}
+/* one compact row: where you are on the left, the stub's name in the middle, the path and Share on the right */
+.deskHeader {
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 10px max(20px, var(--corner-reserve, 0px)) 10px 20px;
+  box-shadow: 0 1px 0 var(--desk-rule);
+}
+.track {
+  padding: 2px 16px 0;
+}
+.deskHeader .track {
+  flex: none;
+  width: 300px;
+  padding: 0;
+}
+.crumb {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.crumbTitle {
+  flex: none;
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 36;
+  letter-spacing: -0.015em;
+}
+.crumbSub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.crumbSub::before {
+  content: "· ";
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+.deskGrid {
+  --rail-w: 240px;
+  --insp-w: 340px;
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
+  min-height: 0;
+  /* the side panels fold to a thin edge; the mat follows the centre column as it grows */
+  transition: grid-template-columns 380ms var(--ts-ease-standard);
+}
+.deskGrid[data-rail="folded"] {
+  --rail-w: 44px;
+}
+.deskGrid[data-insp="folded"] {
+  --insp-w: 44px;
+}
+.rail {
+  overflow: hidden;
+  min-height: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 1px 0 0 var(--desk-rule);
+  transition: padding 380ms var(--ts-ease-standard);
+}
+.railBody {
+  flex: 1;
+  min-height: 0;
+  min-width: 240px;
+  /* the style cards may spill a little into the column's padding, as before */
+  margin-inline: -16px;
+  padding-inline: 16px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  transition: opacity 220ms ease;
+}
+.railTitle {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  transition: opacity 220ms ease;
+}
+.panelHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  margin: -4px 0 -4px;
+}
+.inspector .panelHead {
+  justify-content: flex-start;
+}
+/* the « » handle, as on the sidebar */
+.fold {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink-soft);
+  transition:
+    background var(--desk-release) ease,
+    color var(--desk-release) ease;
+}
+.fold svg {
+  width: 20px;
+  height: 20px;
+}
+.fold:hover {
+  background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
+  color: var(--desk-ink);
+}
+.fold:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 1px;
+}
+.rail[data-folded],
+.inspector[data-folded] {
+  padding-inline: 4px;
+}
+.rail[data-folded] .railBody,
+.inspector[data-folded] .inspBody {
+  opacity: 0;
+  pointer-events: none;
+}
+.rail[data-folded] .railTitle,
+.inspector[data-folded] .railTitle {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.rail[data-folded] .panelHead,
+.inspector[data-folded] .panelHead {
+  justify-content: center;
+}
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 16px 14px;
+  box-shadow: -1px 0 0 var(--desk-rule);
+  transition: padding 380ms var(--ts-ease-standard);
+}
+.inspBody {
+  flex: 1;
+  min-height: 0;
+  min-width: 308px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: opacity 220ms ease;
+}
+.inspectorScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: -4px -8px;
+  padding: 4px 8px;
+}
+.inspectorTray {
+  flex: none;
+}
+
+.deskCentre {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+  padding: 10px 16px 14px;
+  container: centre / inline-size;
+}
+/* The cutting mat: muted green, self-healing, inch grid, lit from the top left. Still paper family. */
+.mat {
+  --mat-base: #93ab90;
+  --line: rgb(255 255 255 / 0.5);
+  --line-fine: rgb(255 255 255 / 0.2);
+  --in: 180px;
+  --ox: 0px;
+  --oy: 0px;
+  position: relative;
+  min-height: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--mat-base);
+  box-shadow:
+    inset 0 0 0 1px rgb(23 20 15 / 0.28),
+    0 1px 0 var(--desk-ledge),
+    0 24px 40px -28px rgb(23 20 15 / 0.6);
+  isolation: isolate;
+}
+.mat::before {
+  /* self-healing sheen: fine grain and a soft diagonal catch of light */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: soft-light;
+  background-image:
+    linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.35) 46%, transparent 60%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.12 0 0 0 0 0.1 0 0 0 1.5 -0.3'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.mat::after {
+  /* the window light on the top left */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(110% 80% at 6% -4%, rgb(255 250 232 / 0.5), transparent 62%);
+}
+
+.rulerTop,
+.rulerLeft {
+  position: absolute;
+  z-index: 3;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--desk-paper) 78%, transparent);
+  color: var(--desk-ink);
+  font: var(--type-label);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.rulerTop {
+  top: 0;
+  left: 24px;
+  right: 0;
+  height: 24px;
+  box-shadow: 0 1px 0 var(--desk-rule-strong);
+  background-image:
+    linear-gradient(90deg, var(--desk-ink-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--desk-ink-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--desk-ink-soft) 1px, transparent 1px);
+  background-size:
+    var(--in) 12px,
+    calc(var(--in) / 2) 8px,
+    calc(var(--in) / 8) 4px;
+  background-position:
+    var(--ox) 100%,
+    var(--ox) 100%,
+    var(--ox) 100%;
+  background-repeat: repeat-x;
+}
+.rulerLeft {
+  top: 24px;
+  bottom: 0;
+  left: 0;
+  width: 24px;
+  box-shadow: 1px 0 0 var(--desk-rule-strong);
+  background-image:
+    linear-gradient(180deg, var(--desk-ink-soft) 1px, transparent 1px),
+    linear-gradient(180deg, var(--desk-ink-soft) 1px, transparent 1px),
+    linear-gradient(180deg, var(--desk-ink-soft) 1px, transparent 1px);
+  background-size:
+    12px var(--in),
+    8px calc(var(--in) / 2),
+    4px calc(var(--in) / 8);
+  background-position:
+    100% var(--oy),
+    100% var(--oy),
+    100% var(--oy);
+  background-repeat: repeat-y;
+}
+.band {
+  position: absolute;
+  background: color-mix(in srgb, var(--desk-stamp) 26%, transparent);
+}
+.rulerTop .band {
+  top: 0;
+  bottom: 0;
+}
+.rulerLeft .band {
+  left: 0;
+  right: 0;
+}
+.num {
+  position: absolute;
+  line-height: 1;
+}
+.rulerTop .num {
+  top: 3px;
+  left: 0;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.rulerLeft .num {
+  left: 3px;
+  top: 0;
+  margin-top: 4px;
+}
+
+.matBody {
+  position: absolute;
+  inset: 24px 0 0 24px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  background-image:
+    linear-gradient(90deg, var(--line) 1px, transparent 1px),
+    linear-gradient(180deg, var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-fine) 1px, transparent 1px),
+    linear-gradient(180deg, var(--line-fine) 1px, transparent 1px);
+  background-size:
+    var(--in) 100%,
+    100% var(--in),
+    calc(var(--in) / 4) 100%,
+    100% calc(var(--in) / 4);
+  background-position: var(--ox) 0, 0 var(--oy), var(--ox) 0, 0 var(--oy);
+}
+.area {
+  --cap-w: min(560px, calc(100cqw - 96px));
+  --cap-h: clamp(260px, calc(100dvh - 330px), 560px);
+  --box-h: min(calc((var(--cap-w) - var(--mat)) / var(--ar) + var(--mat)), var(--cap-h));
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  container-type: inline-size;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.area:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: -4px;
+  border-radius: 4px;
+}
+.area[data-panning="true"],
+.area[data-panning="true"] * {
+  cursor: grabbing !important;
+}
+.area[data-space="true"],
+.area[data-space="true"] * {
+  cursor: grab !important;
+}
+/* the world layer is what the camera moves: transform from the area's top left, set by useCamera */
+/* the window onto the mat: the panned and zoomed stub is clipped here, the toolbar and the notes are not */
+.view {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+}
+.world {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform-origin: 0 0;
+}
+/* kept as a layer while moving for smoothness, dropped at rest so the stub is re-sharpened at its size */
+.world[data-moving="true"] {
+  will-change: transform;
+}
+.stageBox {
+  display: grid;
+  place-items: center;
+  height: var(--box-h);
+  transition: height 420ms var(--ts-ease-standard);
+}
+/* lit from the top left, so the stub's shadow falls to the bottom right */
+.mat .card {
+  filter: drop-shadow(10px 16px 12px rgb(24 40 26 / 0.34));
+}
+
+.deskFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+.footTools {
+  flex: 0 1 300px;
+  min-width: 0;
+}
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.zoom > button {
+  min-width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+.zoom > .fit {
+  min-width: 0;
+  padding: 0 14px;
+  transition: opacity 200ms var(--ts-ease-standard);
+}
+.zoom > .fit[data-fit="true"] {
+  opacity: 0.55;
+}
+/* print preview as a toggle button beside the zoom: sunk and inked while it is on */
+.zoom > .previewToggle {
+  gap: 6px;
+  padding: 0 14px 0 10px;
+}
+.previewToggle svg {
+  width: 18px;
+  height: 18px;
+}
+.zoom > .previewToggle[aria-pressed="true"] {
+  background: var(--desk-ink);
+  color: var(--desk-paper);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+/* zoomed in, the guides come on by themselves: the button says so with a dashed edge */
+.zoom > .previewToggle[data-auto] {
+  outline: 1.5px dashed var(--desk-edge, var(--desk-rule-strong));
+  outline-offset: 2px;
+}
+
+.zoomValue {
+  min-width: 48px;
+  text-align: center;
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+.keys {
+  margin-left: auto;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.keys kbd {
+  font: inherit;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 1px 0 var(--desk-ledge);
+}
+
+@container centre (max-width: 639.98px) {
+  .keys {
+    display: none;
+  }
+}
+@container desk (min-width: 1280px) {
+  .deskGrid {
+    --rail-w: 300px;
+    --insp-w: 380px;
+  }
+  .deskGrid[data-rail="folded"] {
+    --rail-w: 44px;
+  }
+  .deskGrid[data-insp="folded"] {
+    --insp-w: 44px;
+  }
+}
+/* too narrow for the subtitle beside the title: the title keeps the row to itself */
+@container desk (max-width: 1179.98px) {
+  .crumbSub {
+    display: none;
+  }
+}
+@container desk (max-width: 959.98px) {
+  .deskHeader .track {
+    width: 270px;
+  }
+}
+@container desk (max-width: 959.98px) {
+  .deskGrid {
+    --insp-w: 320px;
+    grid-template-columns: minmax(0, 1fr) var(--insp-w);
+  }
+  .deskGrid[data-insp="folded"] {
+    --insp-w: 44px;
+  }
+  .rail {
+    display: none;
+  }
+}
+
+/* ---------- Minimap, measure tool, auto print preview ---------- */
+/* the overview card: the stub's silhouette and the viewport. Fades in once the camera leaves fit. */
+.mini {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--desk-paper-raised) 88%, transparent);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 1px 0 var(--desk-ledge),
+    0 12px 18px -12px rgb(23 20 15 / 0.5);
+  cursor: pointer;
+  touch-action: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition:
+    opacity 260ms var(--ts-ease-standard),
+    transform 320ms var(--desk-spring),
+    visibility 0s linear 260ms;
+}
+.mini[data-on="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+.mini[data-dragging="true"] {
+  cursor: grabbing;
+}
+.miniStub {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 0 0 1px var(--desk-ink-soft);
+  pointer-events: none;
+}
+.miniView {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--desk-stamp) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--desk-stamp);
+  cursor: grab;
+}
+.mini[data-dragging="true"] .miniView {
+  cursor: grabbing;
+}
+
+/* the measure tool: a thin ink line on each ruler and the position in inches beside the cursor */
+.hairX,
+.hairY {
+  position: absolute;
+  background: var(--desk-ink);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.hairX {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+}
+.hairY {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+}
+.hairX[data-on="true"],
+.hairY[data-on="true"] {
+  opacity: 0.85;
+}
+.read {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 7;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--desk-ink);
+  color: var(--desk-paper);
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.read[data-on="true"] {
+  opacity: 0.94;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini,
+  .hairX,
+  .hairY,
+  .read,
+  .safety,
+  .bleed,
+  .deskGrid,
+  .rail,
+  .inspector,
+  .railBody,
+  .inspBody {
+    transition: none;
+  }
+  .deck,
+  .drag,
+  .stage,
+  .stageBox,
+  .dot::before {
+    transition: none;
+  }
+  .card,
+  .leaving,
+  .drag[data-wiggle="true"] {
+    animation: none;
+  }
+  .leaving {
+    display: none;
+  }
+}
+
+/* a tool label that leaves the screen: the name and its mark stay on one line */
+.toolGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.toolGo svg {
+  width: 12px;
+  height: 12px;
+}

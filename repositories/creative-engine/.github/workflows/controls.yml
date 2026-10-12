@@ -1,0 +1,53 @@
+name: Controls offline roundtrip
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  controls:
+    runs-on: ubuntu-24.04
+    env:
+      CONTROLS_PACKAGE_EVIDENCE: build/controls-package-evidence
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.23.3', '24.15.0']
+    name: Controls (Node ${{ matrix.node }})
+    steps:
+      # The populated CE-05 migration regression reads 4e28839ea8baeb4112a4f12340ef2fe84f5c8efe via git show.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 tag verified 2026-10-10
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 tag verified 2026-10-10
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/frontend-action-roundtrip/package-lock.json
+            src/models/codec-runtime/package-lock.json
+      - name: Locked root dependencies
+        run: npm ci --ignore-scripts
+      - name: Locked fixture dependencies
+        run: npm ci --prefix examples/frontend-action-roundtrip
+      - name: Locked native codec dependencies
+        run: npm ci --prefix src/models/codec-runtime --ignore-scripts
+      - name: Browser runtime
+        working-directory: examples/frontend-action-roundtrip
+        run: npx playwright install --with-deps chromium
+      - name: Full build and types
+        run: make build
+      - name: Aggregate offline mock checks
+        run: make check TARGET=all MODE=mock
+      - name: Validate server, public types and browser roundtrip (mock boundaries)
+        run: node fixtures/controls/check.mjs --browser --out examples/frontend-action-roundtrip/test-results/controls-evidence.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 tag verified 2026-10-10
+        if: always()
+        with:
+          name: controls-mock-evidence-node-${{ matrix.node }}
+          path: |
+            examples/frontend-action-roundtrip/test-results/
+            build/controls-package-evidence/
+          if-no-files-found: error

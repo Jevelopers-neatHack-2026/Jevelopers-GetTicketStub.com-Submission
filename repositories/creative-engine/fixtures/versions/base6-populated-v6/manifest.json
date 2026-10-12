@@ -1,0 +1,32 @@
+{
+  "contract": "CreativeVersionPopulatedMigrationFixture",
+  "schema_version": "1.0",
+  "storage_user_version": 6,
+  "source_commit": "5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74",
+  "source_fixture": "base4-populated-v4",
+  "source_fixture_database_sha256": "sha256:d2ecd75c9663fae6913f53c75017e7e91b6ff9bb485c364cc491a87781086db4",
+  "database_sha256": "sha256:1b5b7f68bf44fed3fe767243c50412fdde0d0ffec11cc2205b5f69f719f77a41",
+  "requests_sha256": "sha256:c6edffa50161611ce925852a72497a5eaa53dc8d646b47c51053d8c0862aa6c0",
+  "artifact_sha256": "sha256:9ef5fef2ad2679ad041e37fdf846e8391f0dfe1ea5227779e0cf4e7ac6625240",
+  "expected_actions": [
+    {
+      "action_id": "base4-generate-action",
+      "operation": "generate"
+    },
+    {
+      "action_id": "base4-edit-action",
+      "operation": "edit"
+    },
+    {
+      "action_id": "base4-inspect-action",
+      "operation": "inspect"
+    }
+  ],
+  "v6_recovery": {
+    "examined": 0,
+    "committed": 0,
+    "conflicts": 0,
+    "unknown": 0
+  },
+  "dependency_mode": "offline_fixture"
+}

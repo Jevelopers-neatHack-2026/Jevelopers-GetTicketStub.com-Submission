@@ -1,0 +1,30 @@
+{
+	"id": "print-invalid",
+	"requirements": ["ART-04", "IE-05D.AC1"],
+	"fixtures": ["asset-negative"],
+	"component": "print-production",
+	"interface": "production",
+	"invariant": "typed_rejection; production_artifacts",
+	"assertions": [
+		{
+			"observation": "typed_rejection",
+			"expected": true
+		},
+		{
+			"observation": "production_artifacts",
+			"expected": 0
+		}
+	],
+	"artifacts": ["owner-observations", "sanitized-evidence"],
+	"modes": ["mock-only", "recorded", "sandbox", "live"],
+	"provider_ids": [],
+	"operations": [],
+	"platform": "any",
+	"safety": false,
+	"mandatory": true,
+	"timeout_seconds": 30,
+	"fault": "print-invalid",
+	"dependencies": [],
+	"artifact_producers": [],
+	"required_evidence_kinds": ["evaluation"]
+}

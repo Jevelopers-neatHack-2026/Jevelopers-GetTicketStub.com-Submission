@@ -1,0 +1,77 @@
+{
+  "ok": true,
+  "value": {
+    "manifest": {
+      "schemaVersion": "1.0.0",
+      "requestId": "export:9985f057b9da4ff14cc0d1f3de9b81beae5bf000886b755ffadceadcc9009a12",
+      "exportId": "export:9985f057b9da4ff14cc0d1f3de9b81beae5bf000886b755ffadceadcc9009a12",
+      "status": "prepared",
+      "destination": "cfo.ai",
+      "summaryId": "89b3197e-2fdf-4c1f-8a4a-1bde92fb86f8",
+      "summaryRevision": 1,
+      "summaryContentHash": "sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7",
+      "snapshotId": "snapshot:86513085fec018b1fc3f7450488da48df3ab3e77d46ed054eb38f3ecd61fee04",
+      "snapshotAsOf": "2026-10-12T22:00:00.000Z",
+      "snapshotTimezone": "UTC",
+      "watermarkId": "watermark:08ee0dd8361cfa89b9d2e6a76e4d4897661529bb6a7198e08535d7d45b9a83cf",
+      "queryContentHash": "sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e",
+      "createdAt": "2026-10-12T22:00:00.000Z",
+      "itemCount": 7,
+      "evidenceMode": "mocked",
+      "deliveryReference": null
+    },
+    "artifactManifest": {
+      "schemaVersion": "2.0.0",
+      "status": "prepared",
+      "destination": "cfo.ai",
+      "exportId": "export:9985f057b9da4ff14cc0d1f3de9b81beae5bf000886b755ffadceadcc9009a12",
+      "createdAt": "2026-10-12T22:00:00.000Z",
+      "requestedFormat": "json",
+      "evidenceMode": "mocked",
+      "snapshotId": "snapshot:86513085fec018b1fc3f7450488da48df3ab3e77d46ed054eb38f3ecd61fee04",
+      "summaryContentHash": "sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7",
+      "queryContentHash": "sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e",
+      "snapshotEnvelopeHash": "sha256:dc14f07ffa077487ec45611ee17baa8d9ca593b80b305c2523aaa9e79fc45ddb",
+      "artifactSetHash": "sha256:620983e2cdda7bcc580f16188929f5e40366b0fb4ce83698e1325a9115f36cb5",
+      "artifacts": [
+        {
+          "fileName": "summary.json",
+          "mediaType": "application/json",
+          "contentHash": "sha256:0fc1062106526bc110f57cfc96e28b4a9e7d9e4a5f4c8e36903f60b99e81efd1",
+          "byteLength": 5926
+        },
+        {
+          "fileName": "metrics.csv",
+          "mediaType": "text/csv",
+          "contentHash": "sha256:5f39afd6302a7b81f6213e3674e39252ca10be722a22ab69827901537e23fde5",
+          "byteLength": 2953
+        }
+      ],
+      "compatibility": {
+        "financialSummarySchema": "1.0.0",
+        "financeExportSchema": "2.0.0",
+        "sharedContractsPackage": "0.3.0",
+        "adoption": "proposal_only",
+        "financeDefinitions": "pending_owner_review",
+        "dashboardSdkMapping": "pending_consumer_ack"
+      },
+      "delivery": "manual_prepared"
+    },
+    "artifacts": [
+      {
+        "fileName": "summary.json",
+        "mediaType": "application/json",
+        "content": "{\"accounting\":{\"appliedPolicyStatus\":\"pending_query_producer_verification\",\"definitionsStatus\":\"pending_owner_review\",\"mappingAllocationVersion\":\"ci06-allocation-policy-1.0.0\",\"mappingPolicyVersion\":\"ci06-accounting-policy-1.0.0\",\"producerPolicy\":{\"contentHash\":\"sha256:62ffb8e5e2723cde437e9fd3fe1e69c5383fe62874635afce6496c10982c47a0\",\"revision\":1,\"schemaVersion\":\"1.0.0\"}},\"asOf\":\"2026-10-12T22:00:00.000Z\",\"assumptions\":{\"businessPlanInputs\":[],\"forecast\":[],\"note\":\"No forecasts or business-plan assumptions are inferred from observed financial events.\",\"status\":\"not_supplied\"},\"billingMode\":\"live\",\"completeness\":\"incomplete\",\"coverage\":{\"expected\":null,\"missingSourceCount\":4,\"missingSources\":[\"cash\",\"unclassified_source\",\"unclassified_source\",\"unclassified_source\"],\"observed\":2},\"currency\":\"USD\",\"environment\":\"test\",\"evidenceMode\":\"mocked\",\"kind\":\"finance_export_proposal\",\"limitations\":[\"Finance metric definitions and shared FinancialSummary remain proposals pending owner review.\",\"Unknown values are null; absent metrics are unavailable, never zero.\",\"No provider connector, cash completeness, CFO.ai plan or dashboard consumer acknowledgement is asserted.\"],\"metrics\":[{\"amount\":null,\"currency\":\"USD\",\"definition\":\"observed actual cash-movement payouts and payout transfers, never new sales or expense\",\"definitionHash\":\"sha256:04da34e6bb4c701f3072e2258b8c8633f3268c3864cf7ad683832aa9f5a18268\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"cash_payouts\",\"producerDefinition\":{\"contentHash\":\"sha256:8958d658e3fb0df2e22f238fe757000ef76b2f5965e3ce6ac7fa41d6f84e8eb3\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"},{\"amount\":null,\"currency\":\"USD\",\"definition\":\"observed actual cash-movement receipts, separate from recognized sales\",\"definitionHash\":\"sha256:0adc4628b2d7cfef2ec8af5b63e805180732daaaf219dbec114669158774048d\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"cash_receipts\",\"producerDefinition\":{\"contentHash\":\"sha256:57dcba2d9dc6d144772bdabe415cc40f9daa61c4df13d4be51cc119be189af4c\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"},{\"amount\":null,\"currency\":\"USD\",\"definition\":\"net_sales - direct_costs\",\"definitionHash\":\"sha256:df79733b6a5f16332bb0b87c123ec9ff30f274a238b1d52abdd1de67911b455b\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"contribution\",\"producerDefinition\":{\"contentHash\":\"sha256:83c479253ff348ce30c06951eee5a759ca535aaa1fb34c5c77bc1ddc62dadf16\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"},{\"amount\":null,\"currency\":\"USD\",\"definition\":\"actual attributed AI and supplier direct expense plus fees, less supplier credits and reimbursements; excludes separately classified operating expense and payable labor\",\"definitionHash\":\"sha256:402fefb56e94c2f83b858723082c48bf56363e027b7c43470f734ca3d97cb99c\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"direct_costs\",\"producerDefinition\":{\"contentHash\":\"sha256:07bbdeed6d0262316fed38ca4c4913f17fecc431c043298f945a3f9b5f300295\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"},{\"amount\":null,\"currency\":\"USD\",\"definition\":\"actual direct, supplier, operating and payable-labor expense plus fees, less supplier credits and reimbursements; excludes simulation, tax, financing and cash movements\",\"definitionHash\":\"sha256:cb22ef181f48ea62b1cef6ba20179dd09140e4a550e914954f03d81dfdf41705\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"expense\",\"producerDefinition\":{\"contentHash\":\"sha256:88c64fd36b4958bebb504c576a751952d75ffe2ac878bf5f29d286700727c378\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"},{\"amount\":null,\"currency\":\"USD\",\"definition\":\"recognized actual sale magnitudes before discount and refund, excluding tax\",\"definitionHash\":\"sha256:6de2a385ef1b535bae3276aca1440f802e5ea28283c9efd10b7d15529130fe6f\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"gross_sales\",\"producerDefinition\":{\"contentHash\":\"sha256:9c457c0b8728708d52477cc719a1ad2d156736382956a68b9654d1a466a669e4\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"},{\"amount\":null,\"currency\":\"USD\",\"definition\":\"gross_sales - actual discounts - actual sale refunds\",\"definitionHash\":\"sha256:851b8576e43f92f6c702ec90128acb250fef103244d899f46ec309561e0c6b2c\",\"definitionStatus\":\"pending_owner_review\",\"metric\":\"net_sales\",\"producerDefinition\":{\"contentHash\":\"sha256:ab3dfd0832296ba49c49c3c3d4b017c13b45cfe9e04479c532ac7f3a31da5352\",\"revision\":1,\"schemaVersion\":\"1.0.0\"},\"scale\":18,\"sourceHashes\":[],\"status\":\"unknown\",\"valuationBasis\":\"provider_confirmed\"}],\"period\":{\"end\":\"2026-10-11T00:00:00.000Z\",\"start\":\"2026-10-10T00:00:00.000Z\"},\"provenance\":{\"policyVersion\":\"1.0.0\",\"queryContentHash\":\"sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\",\"snapshotEnvelopeHash\":\"sha256:dc14f07ffa077487ec45611ee17baa8d9ca593b80b305c2523aaa9e79fc45ddb\",\"snapshotId\":\"snapshot:86513085fec018b1fc3f7450488da48df3ab3e77d46ed054eb38f3ecd61fee04\",\"sourceEvidenceStatus\":\"not_exposed_by_query\",\"sourceWatermarks\":[{\"completeness\":\"partial\",\"contentHash\":\"sha256:d435524004742cff1ac0028cba48ff2da3d0149f868d4aeaff9c4956f2a7a4f4\",\"observedThrough\":\"2026-10-12T22:00:00.000Z\",\"revisionHash\":\"sha256:5ceef0c526c5b6a00b854fc9bbfa5772ecd34231e7b75d77412922fe8550b498\",\"source\":\"unclassified_source\"}],\"summaryContentHash\":\"sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7\"},\"reconciliation\":\"unmatched\",\"rounding\":\"none\",\"roundingBoundary\":\"none\",\"scale\":18,\"schemaVersion\":\"2.0.0\",\"settlement\":\"unpaid\",\"timezone\":\"UTC\",\"valuationBasis\":\"provider_confirmed\"}\n",
+        "contentHash": "sha256:0fc1062106526bc110f57cfc96e28b4a9e7d9e4a5f4c8e36903f60b99e81efd1",
+        "byteLength": 5926
+      },
+      {
+        "fileName": "metrics.csv",
+        "mediaType": "text/csv",
+        "content": "metric,definition,definition_status,status,currency,scale,amount,valuation_basis,completeness,reconciliation,period_start,period_end,timezone,environment,billing_mode,summary_content_hash,query_content_hash\r\ncash_payouts,\"observed actual cash-movement payouts and payout transfers, never new sales or expense\",pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\ncash_receipts,\"observed actual cash-movement receipts, separate from recognized sales\",pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\ncontribution,net_sales - direct_costs,pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\ndirect_costs,\"actual attributed AI and supplier direct expense plus fees, less supplier credits and reimbursements; excludes separately classified operating expense and payable labor\",pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\nexpense,\"actual direct, supplier, operating and payable-labor expense plus fees, less supplier credits and reimbursements; excludes simulation, tax, financing and cash movements\",pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\ngross_sales,\"recognized actual sale magnitudes before discount and refund, excluding tax\",pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\nnet_sales,gross_sales - actual discounts - actual sale refunds,pending_owner_review,unknown,USD,18,,provider_confirmed,incomplete,unmatched,2026-10-10T00:00:00.000Z,2026-10-11T00:00:00.000Z,UTC,test,live,sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7,sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e\r\n",
+        "contentHash": "sha256:5f39afd6302a7b81f6213e3674e39252ca10be722a22ab69827901537e23fde5",
+        "byteLength": 2953
+      }
+    ]
+  }
+}

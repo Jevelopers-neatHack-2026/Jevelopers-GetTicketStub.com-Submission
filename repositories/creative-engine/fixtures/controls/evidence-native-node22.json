@@ -1,0 +1,880 @@
+{
+  "evidence_version": "controls-offline-evidence/2.0",
+  "dependency_mode": "mock",
+  "billing_mode": "simulated",
+  "runtime": "v22.23.3",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "host_validation": "local_only",
+  "schema_version": "creative-controls/1.1",
+  "action_version": "creative-apply/1.1",
+  "contract_status": "local-consumer-proposal",
+  "source_fingerprint_sha256": "fc3c5b61be41218773ec2e2e579dd6d8fab5458edfbf3a4b58181b261b4b3bd5",
+  "source_files": [
+    "src/controls/actions.mjs",
+    "src/controls/contract.mjs",
+    "src/controls/index.d.mts",
+    "src/controls/index.mjs",
+    "src/controls/integration.mjs",
+    "src/controls/runtime.mjs",
+    "src/controls/schema.mjs",
+    "tests/controls/actions.test.mjs",
+    "tests/controls/concurrent-worker.mjs",
+    "tests/controls/integration.test.mjs",
+    "tests/controls/native.test.mjs",
+    "tests/controls/review-regressions.test.mjs",
+    "tests/controls/types/consumer.mts",
+    "tests/controls/types/tsconfig.json",
+    "examples/frontend-action-roundtrip/.gitignore",
+    "examples/frontend-action-roundtrip/app.mjs",
+    "examples/frontend-action-roundtrip/foundation-server.mjs",
+    "examples/frontend-action-roundtrip/index.html",
+    "examples/frontend-action-roundtrip/messages.mjs",
+    "examples/frontend-action-roundtrip/package-lock.json",
+    "examples/frontend-action-roundtrip/package.json",
+    "examples/frontend-action-roundtrip/playwright.config.mjs",
+    "examples/frontend-action-roundtrip/server.mjs",
+    "examples/frontend-action-roundtrip/style.css",
+    "examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
+    "examples/frontend-action-roundtrip/tests/roundtrip.spec.mjs",
+    "fixtures/controls/check.mjs",
+    "fixtures/controls/integrated-crash-worker.mjs",
+    "fixtures/controls/integrated-host.mjs",
+    "fixtures/controls/integrated-restart-worker.mjs",
+    "fixtures/controls/integrated-transcript.mjs",
+    "fixtures/controls/invalid.json",
+    "fixtures/controls/native-image-ports.mjs",
+    "fixtures/controls/older.json",
+    "fixtures/controls/state.mjs",
+    "fixtures/controls/unknown-field.json",
+    "fixtures/controls/valid.json",
+    ".github/workflows/controls.yml",
+    "docs/controls-integration.md"
+  ],
+  "fixture_schema_sha256": "c8c4ec7ece4ea3b8a79eee93cbc704e0e3bf11a5ba123e220700192da6e34516",
+  "fixture_action_sha256": "0cf4804a8b81f338c9a9e17961b6d37b61266da7d20a72b8d6897f18c77c5dc3",
+  "checks": [
+    {
+      "command": "node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs",
+      "exit_code": 0,
+      "passed": true,
+      "counts": {
+        "tests": 67,
+        "pass": 67,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "command": "tsc --strict --module NodeNext (public ESM consumer)",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "command": "npm test (Playwright Chromium + axe)",
+      "exit_code": 0,
+      "passed": true
+    }
+  ],
+  "review_probes": [
+    {
+      "controls_probe": "native_bytes",
+      "format": "png",
+      "decoded": {
+        "format": "png",
+        "width": 16,
+        "height": 16,
+        "has_alpha": true,
+        "has_transparency": false
+      },
+      "capture": {
+        "operation": "edit",
+        "endpoint_kind": "images.edits",
+        "method": "POST",
+        "parent": {
+          "content_hash": "sha256:b7c24545bd8244d9b313b088c27b90271b4d9f750a62e990a1a54e60c8d3c0cd",
+          "media_type": "image/png",
+          "byte_length": 627
+        },
+        "output": {
+          "content_hash": "sha256:dfffc1c4ae901ede1d9b61c7cba88f8bddc3c3bf3c8952d4331eab7966ebcd79",
+          "media_type": "image/png",
+          "byte_length": 628
+        }
+      },
+      "artifact_hash": "sha256:dfffc1c4ae901ede1d9b61c7cba88f8bddc3c3bf3c8952d4331eab7966ebcd79",
+      "raw_usage_sha256": "sha256:4dc803db73906a50e233d1ec60088f727319106f75655aa752669633a3806e54",
+      "mapped": "settled_owner_mapping",
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 0,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "native_bytes",
+      "format": "jpeg",
+      "decoded": {
+        "format": "jpeg",
+        "width": 16,
+        "height": 16,
+        "has_alpha": false,
+        "has_transparency": false
+      },
+      "capture": {
+        "operation": "edit",
+        "endpoint_kind": "images.edits",
+        "method": "POST",
+        "parent": {
+          "content_hash": "sha256:c5f2e0203cf8799cc200033e9f2f54ae17e1d8c788557d9878783a1804b5755b",
+          "media_type": "image/jpeg",
+          "byte_length": 225
+        },
+        "output": {
+          "content_hash": "sha256:c5f2e0203cf8799cc200033e9f2f54ae17e1d8c788557d9878783a1804b5755b",
+          "media_type": "image/jpeg",
+          "byte_length": 225
+        }
+      },
+      "artifact_hash": "sha256:c5f2e0203cf8799cc200033e9f2f54ae17e1d8c788557d9878783a1804b5755b",
+      "raw_usage_sha256": "sha256:919ff237edef39cafac4d9ae4c5597597d7be9ebea27d4f45c274337e600ef78",
+      "mapped": "settled_owner_mapping",
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 0,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "native_bytes",
+      "format": "webp",
+      "decoded": {
+        "format": "webp",
+        "width": 16,
+        "height": 16,
+        "has_alpha": false,
+        "has_transparency": false
+      },
+      "capture": {
+        "operation": "edit",
+        "endpoint_kind": "images.edits",
+        "method": "POST",
+        "parent": {
+          "content_hash": "sha256:968cb24ca1297731f31c9d98532872bd28e6ece6db849483157953eb6fd06e78",
+          "media_type": "image/webp",
+          "byte_length": 38
+        },
+        "output": {
+          "content_hash": "sha256:968cb24ca1297731f31c9d98532872bd28e6ece6db849483157953eb6fd06e78",
+          "media_type": "image/webp",
+          "byte_length": 38
+        }
+      },
+      "artifact_hash": "sha256:968cb24ca1297731f31c9d98532872bd28e6ece6db849483157953eb6fd06e78",
+      "raw_usage_sha256": "sha256:b9b35dad1a71d6027cdd0931b5b237d80e7217c5cdae6b6fe0cb288676f07767",
+      "mapped": "settled_owner_mapping",
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 0,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "native_unknown_usage",
+      "fault": "unmapped",
+      "code": "unavailable",
+      "raw_completeness": "unknown",
+      "raw_missing_fields": [
+        "usage.profile_mapping_pending"
+      ],
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 1,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "native_unknown_usage",
+      "fault": "usage-extension",
+      "code": "unavailable",
+      "raw_completeness": "unknown",
+      "raw_missing_fields": [
+        "usage.profile_mapping_pending",
+        "usage.unmapped_fields"
+      ],
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 1,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "native_unknown_usage",
+      "fault": "malformed-usage",
+      "code": "unavailable",
+      "raw_completeness": "unknown",
+      "raw_missing_fields": [
+        "usage.profile_mapping_pending",
+        "usage.input_tokens"
+      ],
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 1,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "own_arrays",
+      "cases": 49,
+      "hooks": 0
+    },
+    {
+      "controls_probe": "base_migration",
+      "base": "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe",
+      "populated_jobs": 1,
+      "completed_receipts": 1,
+      "jobs_hash": "bfbddb5cfaade372ed0cf6c502514ea1f1a87dbd0786063e8a2c86d7051cb069",
+      "receipts_hash": "7226df0004b545985f692fc6aff8eaadc455277bd4825fc25b0e9d8c4a3e58af",
+      "exact_rows_preserved": true,
+      "fabricated_backend_bindings": 0,
+      "reopened_replay": "replayed"
+    },
+    {
+      "controls_probe": "postdispatch_outcome",
+      "fault": "connection-loss",
+      "code": "unavailable",
+      "operation_id": "op_89b91bb3-a600-419e-8971-b9319555db58",
+      "backend_field": "metering",
+      "message": "Apply outcome unavailable. An attempt may have been dispatched, and a reservation may remain held. Check the existing operation before retrying.",
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 1,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "postdispatch_outcome",
+      "fault": "artifact-hash",
+      "code": "failed",
+      "operation_id": "op_6b1397ff-3abe-487e-86bc-0692e648a9f5",
+      "backend_field": "artifact_content_hash",
+      "message": "Apply failed. An attempt may have been dispatched. Check the existing operation and usage evidence before retrying.",
+      "counts": {
+        "image_calls": 1,
+        "jev_calls": 0,
+        "reservations": 1,
+        "releases": 0,
+        "holds": 0,
+        "bootstrap_image_calls": 1,
+        "publication_waits": 0,
+        "transport_acks": 1,
+        "jobs": 1
+      },
+      "live_application_calls": 0
+    },
+    {
+      "controls_probe": "privacy_differential",
+      "cases": 234,
+      "rejected": 181,
+      "accepted": 53,
+      "sensitive_accepted": 0
+    }
+  ],
+  "browser_summary": {
+    "startTime": "2026-10-11T00:02:16.259Z",
+    "duration": 18770.581,
+    "expected": 39,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browser_exercised": true,
+  "types_checked": true,
+  "dependency_files": {
+    "src/api/v1.d.mts": "9c8d50b415a927d2e0bfaafe61217d20a4ba4971b18894a70205424341711b89",
+    "src/api/v1.mjs": "a9e0fa7156b4e33817da68382e212b0a8bd62d158832d16f8fca5d5713b10d84",
+    "src/runtime/creative-runtime.mjs": "eeb4fd1d97db6d6313a2887d8fb33b95786ef080cc6d7823762d747723c5eb74",
+    "src/planning/index.d.mts": "5f405d1e40dedbc4c2b20a49bb5aa33252ac345c354a1001335f9093937bd0df",
+    "src/planning/index.mjs": "d23d4edf0ca885fd3773d680a188d918a22dfe68a82b4f6ef5042f4052dea7db",
+    "src/planning/store.mjs": "23b88b42e355806353482b59e9b1ce1f99264c41df8dc7e46dbc49b6ee78a20b",
+    "src/versions/api-ports.d.mts": "c67d09d89d61991160a1c5a6327d61da57636d21cb0bcf027107f7b21f645ab1",
+    "src/versions/api-ports.mjs": "931935800d662e9c866806b6bc4fce863c8ccc8d71ba9ea7f4ef7eddecce576c",
+    "src/versions/index.d.mts": "682820d8061ff853d48357a872b8d5dee5cebfabc71f1d026b4fe7715de2a39c",
+    "src/versions/index.mjs": "3181a0f8c84fdff36be208ac09add7e34069f263fab10524b2ab3c50c556445a",
+    "src/versions/store.d.mts": "9472ec404be39255b1ee02cf2aca93ba4bff416aa213b1490ab396dc76134c10",
+    "src/versions/store.mjs": "0bf07731bfa01245933f527985f89fbae58185617dcbdabda1ae785538a33313",
+    "src/storage/content-addressed.d.mts": "e9da2f6ff88fadb23bd5782e2b0b1271dd138a6bc6f5c48a3bef9bfbdbfc1e5f",
+    "src/storage/content-addressed.mjs": "924ba59f00eaa2e60556f17b3cc7f709d049f182a4283fd49250ea4186c7af8b",
+    "src/telemetry/evidence.mjs": "db7dd70de421b7e355b8a37648d710ddf4c7f3f7a73db4a7ce195ac6ff7fa4d3",
+    "src/telemetry/index.d.mts": "5256c2e01b8e13c175fb73428824ae855a43e2d678e6a5a7f956d15d77e9c3a9",
+    "src/telemetry/index.mjs": "8b0cadb13dbc55298bb8e9d4919e54684f21694d8759a5d060df2f1bcf5bc86b",
+    "src/telemetry/privacy.mjs": "acf33ba2310fd21b287e8efeb161d703239953f86b23299e0f1a908c57bd9cd1",
+    "src/telemetry/retry.mjs": "493304e86f621ee9d9aa4aef691eff6ca425686d6c2a02974312fa83bf7c65dd",
+    "src/telemetry/sqlite-outbox.mjs": "d8a963e5af0d838472fd11473b1bdf3cc817a75ad52914b4cd720643010f2c0d",
+    "src/telemetry/usage.mjs": "a933a02c80ccb56c327b5203b1ee90ad962b444cf8c2aa3bee7e6e4f6240695f",
+    "src/contracts/approval-handoff.d.mts": "cb7859a007e5e3a27386a15d061297252be88748b310b65b3db4b68864ca1f8b",
+    "src/contracts/approval-handoff.mjs": "5bbc71f5443d65b093682f95052f6cee08f083594190506160a310b8e23769e9",
+    "src/contracts/creative/v1.d.mts": "cd19cc754f7b9896026da02e36c972aa62dfa01d226ee750e59f79d163484237",
+    "src/contracts/creative/v1.mjs": "59982160a9b508203bae13f97e661977f7f24a610e0533ec9164bdc4908e1c1d",
+    "src/contracts/decision-port/v1.d.mts": "ce0ad8a53a32ecae747d07f6230d2fce87c16687c3652a642be4c9e73fb89563",
+    "src/contracts/decision-port/v1.mjs": "05f88b25bb8f1a5ecb808539400da4fb91e6dbddb34a61957fec5da2902dda6b",
+    "src/contracts/index.d.mts": "29261a67743868e363aa7c255614d69876f23ce1c6770187d79fe2e8493bf03d",
+    "src/contracts/index.mjs": "a299c4478b2a026856f20df4922122f1695b8b7543c1fc235e4aa9a91accc206",
+    "src/contracts/metering.d.mts": "aea8b94a94ae55841faae981146a473f2bc76eedf079b5ac3dbe0e97cac4e938",
+    "src/contracts/metering.mjs": "93b99bb745a1fb32818bada4b5c7e44db17556db2dca1bc3ba389e736dd14beb",
+    "src/contracts/scope.d.mts": "fd6d8d90f034a37d8357c21139b72ad8a7e0b266deff2d32902b9829ecd2adc4",
+    "src/contracts/scope.mjs": "48e9fb0d169490b9cfaa9e0582c322df9d646fa9f91ba51cf72cf378ffa403c5",
+    "src/contracts/validation.d.mts": "f66c7d85bf1e80413c9dc8ec63c46e54175981625f819131b57d622fd2e6dc36",
+    "src/contracts/validation.mjs": "0b0d86975d33359e30a49620ebe95cb83a870864493375f2a799155fc2a9ca7d",
+    "src/models/codec-runtime/index.mjs": "45ede93abe1bddbe19b76faddcde67cf9a1a27edfe6b6d94627eda3d560283ec",
+    "src/models/codec-runtime/package-lock.json": "86103fe4f78da655a2a70e5c86fdfd791bd05f6d3a08ac553271470366f251c9",
+    "src/models/codec-runtime/package.json": "a7de167c75444528f365439f5a49081d11f58700699a37c4f54a9911e106c948",
+    "src/models/index.d.mts": "a40c12dfc97ea365b7778b698b25c1c741497e753aefce373f35dd17afdc4316",
+    "src/models/index.mjs": "f249da191111140c89b551e43d50e5a2c541644aca76934bb037a9cdd36137ee",
+    "src/models/openai-images.mjs": "9d3c1e2ce6e14ccf0258530dcae6b7822759a7438279006b075da83e897e6ee3",
+    "package.json": "6bc19858cc5a7656f16c9daf14ccc0aad0f8e66f3c20c3a43c38eb237f65d68f",
+    "package-lock.json": "b3ed125f7e401c6d01ccdf5f2d442991d18f869abbf3b2a3d501c3a78a4a5da4",
+    "Makefile": "669538157c05309c77a6e18ba10ab84eea9eb3a228687604728ab16c3202f4a3",
+    "fixtures/planning/research-packages.mjs": "d11782a3acdbeb21c4bbf146dece4f3ac872581c449993b1c0a679c665260740",
+    "fixtures/contracts/creative/current.json": "7fcafcdc22c57857e4f3b91930c6c93ac19d2e4c73642452f05b927be4292034",
+    "fixtures/models/png.mjs": "6cf55e78a89b9dc6ad272d6109fc0993c2ce4ec4c7e59cb3c6fb7c77242239ad",
+    "fixtures/models/valid-16x16.jpg": "c5f2e0203cf8799cc200033e9f2f54ae17e1d8c788557d9878783a1804b5755b",
+    "fixtures/models/valid-16x16.webp": "968cb24ca1297731f31c9d98532872bd28e6ece6db849483157953eb6fd06e78"
+  },
+  "base_revision": "5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74",
+  "authoritative_contract_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+  "authoritative_checklist_revision": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+  "actual_api_transcript": {
+    "evidence_version": "controls-actual-api-transcript/2",
+    "mode": "mock",
+    "authority": "MOCK trusted host fixture; no actual membership",
+    "transport": "public native provider with intercepted offline fetch",
+    "local_modules": [
+      "public planning",
+      "public creative API",
+      "selected native image provider and fully decoding codec",
+      "C03 port boundary",
+      "CE08 durable jobs/artifact/selection",
+      "CE11 durable usage evidence"
+    ],
+    "live_application_calls": 0,
+    "schema_hash": "sha256:e6eac420d7754357d527ca94ca505e28dd7788d303cc8f48d49ce20194e81aa2",
+    "action_hash": "sha256:fe67322b032e5006f10d7a2d1ef5f9e5077ad3f68bad4d91b2c50f30988ab56f",
+    "schema": {
+      "schema_version": "creative-controls/1.1",
+      "contract_status": "local-consumer-proposal",
+      "tenant_id": "fixture_tenant",
+      "project_id": "fixture_project",
+      "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+      "expected_versions": {
+        "brief": "brief_6a2a91384f12b26bfb583c72eb58576ff02f870c2faf1bc9c5b313bdd71f3f39",
+        "design": "selection_f900cb06b7ef92f4175d346c01e7d6c537c595c34ab27838010b247efa82ab18",
+        "composition": "composition_661b173e84c4c5c04f88388a2440e53032af01df7eef7e55fce6b4150557c532"
+      },
+      "controls": [
+        {
+          "id": "c01",
+          "label": "Name size",
+          "kind": "select",
+          "value_type": "string",
+          "field": "name_size",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "small",
+              "label": "Small"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "large",
+              "label": "Large"
+            }
+          ],
+          "default_value": "medium",
+          "locked": false
+        },
+        {
+          "id": "c02",
+          "label": "Layout",
+          "kind": "select",
+          "value_type": "string",
+          "field": "layout",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "centered",
+              "label": "Centered"
+            },
+            {
+              "value": "stacked",
+              "label": "Stacked"
+            }
+          ],
+          "default_value": "centered",
+          "locked": false
+        },
+        {
+          "id": "c03",
+          "label": "Approved logo position",
+          "kind": "select",
+          "value_type": "string",
+          "field": "logo_position",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "top",
+              "label": "Top"
+            },
+            {
+              "value": "bottom",
+              "label": "Bottom"
+            }
+          ],
+          "default_value": "top",
+          "locked": true,
+          "asset_id": "asset-1"
+        },
+        {
+          "id": "c04",
+          "label": "Artwork style",
+          "kind": "select",
+          "value_type": "string",
+          "field": "style",
+          "route": "artwork.edit",
+          "options": [
+            {
+              "value": "calm",
+              "label": "Calm"
+            },
+            {
+              "value": "vibrant",
+              "label": "Vibrant"
+            }
+          ],
+          "default_value": "calm",
+          "locked": false
+        }
+      ],
+      "follow_up_questions": [
+        {
+          "id": "q01",
+          "label": "Stacked layout emphasis",
+          "field": "layout_emphasis",
+          "route": "composition.update",
+          "when": {
+            "control_id": "c02",
+            "value": "stacked"
+          },
+          "required": true,
+          "locked": false,
+          "options": [
+            {
+              "value": "balanced",
+              "label": "Balanced"
+            },
+            {
+              "value": "name",
+              "label": "Name"
+            }
+          ],
+          "default_value": "balanced"
+        }
+      ],
+      "submit_intent": "apply",
+      "approval": false,
+      "purchase": false
+    },
+    "action": {
+      "action_version": "creative-apply/1.1",
+      "schema_version": "creative-controls/1.1",
+      "action_id": "fixture-evidence-apply",
+      "tenant_id": "fixture_tenant",
+      "project_id": "fixture_project",
+      "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+      "expected_versions": {
+        "brief": "brief_6a2a91384f12b26bfb583c72eb58576ff02f870c2faf1bc9c5b313bdd71f3f39",
+        "design": "selection_f900cb06b7ef92f4175d346c01e7d6c537c595c34ab27838010b247efa82ab18",
+        "composition": "composition_661b173e84c4c5c04f88388a2440e53032af01df7eef7e55fce6b4150557c532"
+      },
+      "intent": "apply",
+      "draft": {
+        "selections": {
+          "c01": "medium",
+          "c02": "centered",
+          "c03": "top",
+          "c04": "vibrant"
+        },
+        "answers": {}
+      },
+      "draft_hash": "c857e921d4def49c79aae3977bac01530634279997ba6010720774dc5d113984",
+      "control_schema_hash": "sha256:e6eac420d7754357d527ca94ca505e28dd7788d303cc8f48d49ce20194e81aa2"
+    },
+    "backend_request": {
+      "action_id": "controls:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "billing_mode": "simulated",
+      "contract": "CreativeApiRequest",
+      "correlation_id": "op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "environment": "test",
+      "event_id": "event:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "ingested_at": "2026-10-10T12:30:00.000Z",
+      "occurred_at": "2026-10-10T12:30:00.000Z",
+      "operation": "edit",
+      "payload": {
+        "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+        "design_version_id": "d30a4ba8-79c7-4629-930b-2b47ccca699a",
+        "plan": {
+          "base": {
+            "brief_hash": "sha256:03433fab5310806e12b03a0feced5f921099daffc3eb3d8f4a6534f6cc1bfcfa",
+            "design_hash": "sha256:26a510c51d861aba071982ec6a2646e0f97ed2a8b2665550b212ed7460712aad",
+            "design_version_id": "d30a4ba8-79c7-4629-930b-2b47ccca699a"
+          },
+          "billing_mode": "simulated",
+          "contract": "EditPlan",
+          "correlation_id": "op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "environment": "test",
+          "event_id": "event:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "expected_result": {
+            "artifact_kind": "image",
+            "contract": "DesignVersion",
+            "parent_version_id": "d30a4ba8-79c7-4629-930b-2b47ccca699a",
+            "schema_version": "1.0"
+          },
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "invalidates": [],
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "operation": "image.edit",
+          "plan_id": "plan:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "producer": "creative-controls-local-adapter/1",
+          "project_id": "fixture_project",
+          "schema_version": "1.0",
+          "source_refs": [
+            "page-1"
+          ],
+          "steps": [
+            {
+              "action": "image.edit",
+              "parameters": {
+                "artifact_id": "artifact-cee8395a-ecd8-4593-b951-689737ae1204",
+                "design_version_id": "d30a4ba8-79c7-4629-930b-2b47ccca699a",
+                "instruction": "Set style to vibrant. Preserve verified facts, approved assets and locked fields."
+              },
+              "source_refs": [],
+              "step_id": "step:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5"
+            }
+          ],
+          "tenant_id": "fixture_tenant"
+        },
+        "selection_mode": "advance"
+      },
+      "producer": "creative-controls-local-adapter/1",
+      "project_id": "fixture_project",
+      "request_id": "request:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "schema_version": "1.0",
+      "source_refs": [
+        "page-1"
+      ],
+      "tenant_id": "fixture_tenant"
+    },
+    "full_request_hash": "sha256:dbf89e2e90e7e740b713eb30cea7e4181a496ddc5899807f5af8f005f87bb6a1",
+    "backend_request_hash": "sha256:ea3cbed6eb888119469712c7e2dec4eafab6d4f0707ce59de3def1dce484e567",
+    "result": {
+      "ok": true,
+      "code": "completed",
+      "operation_id": "op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "status": "completed",
+      "replayed": false,
+      "audit_ref": "audit_0320d204-1a98-4d34-895c-b922568e4fbc",
+      "backend_job_id": "4ee9fc5c-dbcb-4e62-a6ba-4c45e99fa6ee",
+      "backend_operation_id": "4ee9fc5c-dbcb-4e62-a6ba-4c45e99fa6ee",
+      "result": {
+        "design_version": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0",
+          "event_id": "a1988735-86ae-49bf-9cd4-b2bd2d5d6ea9",
+          "tenant_id": "fixture_tenant",
+          "project_id": "fixture_project",
+          "correlation_id": "op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "producer": "creative-runtime",
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [
+            "page-1"
+          ],
+          "logical_operation_id": "controls:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "design_version_id": "43a222dd-fb29-4426-8589-0ddb1f8ed952",
+          "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+          "parent_version_id": "d30a4ba8-79c7-4629-930b-2b47ccca699a",
+          "brief_hash": "sha256:03433fab5310806e12b03a0feced5f921099daffc3eb3d8f4a6534f6cc1bfcfa",
+          "artifact": {
+            "artifact_id": "artifact-769e15a5-afa9-4686-b8d2-36e03cb3b1b6",
+            "content_hash": "sha256:dfffc1c4ae901ede1d9b61c7cba88f8bddc3c3bf3c8952d4331eab7966ebcd79",
+            "media_type": "image/png"
+          },
+          "provider": "openai",
+          "model": "gpt-image-2.5-sunburst-2026-09-08",
+          "billable_attempt_id": "dc511fcb-b287-458e-acdd-ada413698c01",
+          "usage_status": "complete",
+          "design_hash": "sha256:153a7f46e53fd7f32d5e4bd86a1104f54f78ed7960a74ac197d129aea0ed19d1"
+        },
+        "usage": {
+          "completeness": "complete"
+        },
+        "telemetry_evidence": {
+          "local_status": "recorded"
+        }
+      },
+      "action_id": "controls:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "request_hash": "sha256:dbf89e2e90e7e740b713eb30cea7e4181a496ddc5899807f5af8f005f87bb6a1",
+      "approval": false,
+      "purchase": false
+    },
+    "replay": {
+      "ok": true,
+      "code": "replayed",
+      "operation_id": "op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "status": "completed",
+      "replayed": true,
+      "audit_ref": "audit_75cffd50-7148-4c42-a4f3-d77469f5cacd",
+      "backend_job_id": "4ee9fc5c-dbcb-4e62-a6ba-4c45e99fa6ee",
+      "backend_operation_id": "4ee9fc5c-dbcb-4e62-a6ba-4c45e99fa6ee",
+      "result": {
+        "design_version": {
+          "artifact": {
+            "artifact_id": "artifact-769e15a5-afa9-4686-b8d2-36e03cb3b1b6",
+            "content_hash": "sha256:dfffc1c4ae901ede1d9b61c7cba88f8bddc3c3bf3c8952d4331eab7966ebcd79",
+            "media_type": "image/png"
+          },
+          "billable_attempt_id": "dc511fcb-b287-458e-acdd-ada413698c01",
+          "billing_mode": "simulated",
+          "brief_hash": "sha256:03433fab5310806e12b03a0feced5f921099daffc3eb3d8f4a6534f6cc1bfcfa",
+          "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+          "contract": "DesignVersion",
+          "correlation_id": "op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "design_hash": "sha256:153a7f46e53fd7f32d5e4bd86a1104f54f78ed7960a74ac197d129aea0ed19d1",
+          "design_version_id": "43a222dd-fb29-4426-8589-0ddb1f8ed952",
+          "environment": "test",
+          "event_id": "a1988735-86ae-49bf-9cd4-b2bd2d5d6ea9",
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "logical_operation_id": "controls:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+          "model": "gpt-image-2.5-sunburst-2026-09-08",
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "parent_version_id": "d30a4ba8-79c7-4629-930b-2b47ccca699a",
+          "producer": "creative-runtime",
+          "project_id": "fixture_project",
+          "provider": "openai",
+          "schema_version": "1.0",
+          "source_refs": [
+            "page-1"
+          ],
+          "tenant_id": "fixture_tenant",
+          "usage_status": "complete"
+        },
+        "telemetry_evidence": {
+          "local_status": "recorded"
+        },
+        "usage": {
+          "completeness": "complete"
+        }
+      },
+      "action_id": "controls:op_18df9a7c-6fb6-454a-9fed-fcba7295b4e5",
+      "request_hash": "sha256:dbf89e2e90e7e740b713eb30cea7e4181a496ddc5899807f5af8f005f87bb6a1",
+      "approval": false,
+      "purchase": false
+    },
+    "draft_counters": {
+      "image_calls": 0,
+      "jev_calls": 0,
+      "reservations": 0,
+      "releases": 0,
+      "holds": 0,
+      "bootstrap_image_calls": 1,
+      "publication_waits": 0,
+      "transport_acks": 0,
+      "jobs": 0
+    },
+    "final_counters": {
+      "image_calls": 1,
+      "jev_calls": 0,
+      "reservations": 1,
+      "releases": 0,
+      "holds": 0,
+      "bootstrap_image_calls": 1,
+      "publication_waits": 0,
+      "transport_acks": 1,
+      "jobs": 1
+    },
+    "artifact_hash_verified": "sha256:dfffc1c4ae901ede1d9b61c7cba88f8bddc3c3bf3c8952d4331eab7966ebcd79",
+    "native": {
+      "profile": {
+        "mode": "mock",
+        "profile": "controls-native-offline/1",
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "meaning": "Synthetic token subsets only; no production owner agreement or local valuation"
+      },
+      "captures": [
+        {
+          "operation": "generate",
+          "endpoint_kind": "images.generations",
+          "method": "POST",
+          "output": {
+            "content_hash": "sha256:b7c24545bd8244d9b313b088c27b90271b4d9f750a62e990a1a54e60c8d3c0cd",
+            "media_type": "image/png",
+            "byte_length": 627
+          }
+        },
+        {
+          "operation": "edit",
+          "endpoint_kind": "images.edits",
+          "method": "POST",
+          "parent": {
+            "content_hash": "sha256:b7c24545bd8244d9b313b088c27b90271b4d9f750a62e990a1a54e60c8d3c0cd",
+            "media_type": "image/png",
+            "byte_length": 627
+          },
+          "output": {
+            "content_hash": "sha256:dfffc1c4ae901ede1d9b61c7cba88f8bddc3c3bf3c8952d4331eab7966ebcd79",
+            "media_type": "image/png",
+            "byte_length": 628
+          }
+        }
+      ],
+      "decoded": {
+        "format": "png",
+        "width": 16,
+        "height": 16,
+        "has_alpha": true,
+        "has_transparency": false
+      },
+      "parent_hash_verified": "sha256:b7c24545bd8244d9b313b088c27b90271b4d9f750a62e990a1a54e60c8d3c0cd",
+      "private_raw_usage_hash": "sha256:66ead7e050fae82f53fd3df6f0e30c3cfe5b7a592f3e3112e1d17fc2f47b39dd",
+      "private_raw_completeness": "unknown",
+      "private_raw_missing_fields": [
+        "usage.profile_mapping_pending"
+      ],
+      "settled_evidence": {
+        "attempt_binding_sha256": "sha256:ca60fd9e3f8be193e93e4a356f014b63471a0716620ed109129ba43fecd28bab",
+        "billable_attempt_id": "dc511fcb-b287-458e-acdd-ada413698c01",
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "observation_ref": "be6c0da9-fae9-49d0-a1c0-b7c453e7b769",
+        "observation_sha256": "sha256:081d1da0b3d68a3847f5abec2888ce487954256a0824df7c4bdaa0f7f9679f7a",
+        "profile_ref": "mock-owner-profile:controls-native-offline/1",
+        "profile_sha256": "sha256:ac02f6810281fe7d5e0c4520be2a778aa46b494515572f234102d813902e1fee",
+        "provider_name": "openai",
+        "raw_usage_sha256": "sha256:66ead7e050fae82f53fd3df6f0e30c3cfe5b7a592f3e3112e1d17fc2f47b39dd",
+        "source_observation_id": "usage:7e9def2a-ef5e-4b7b-9aab-fe61141bd63b",
+        "status": "settled_owner_mapping",
+        "target_binding_sha256": "sha256:6efda796ef6999673cffa2d2b3ebcd65f3fc5b8b33064bf1b1bb62246b637dfd",
+        "transport_attempt_id": "08d17254-d8ba-42d1-8e9e-da97f8e8632b"
+      },
+      "raw_provider_request_id_public": false
+    },
+    "trace_refs": [
+      {
+        "event_id": "5ec57b9a-1aa5-43c5-b9c9-5fdcda1579a9",
+        "event_type": "attempt_intent",
+        "payload_hash": "sha256:ef8034c4a50e7d22d7638e07ea09cb96af7373c389e11353dd8e8d37c9c1b126"
+      },
+      {
+        "event_id": "5f1c6caa-f2d7-4a43-8e62-43a1268afe1e",
+        "event_type": "transport_intent",
+        "payload_hash": "sha256:785c7d9a8b3369a97a5a8d4ca2be1ac94276f2f0e908dd89290d5b9e5846f556"
+      },
+      {
+        "event_id": "8ef9cd3e-b1a5-45d5-9ac6-c72cb1293f61",
+        "event_type": "attempt_outcome",
+        "payload_hash": "sha256:19ce1383768959e5d5b742bee3327dfca3311a90e44b45f5d9933ff73cb596c2"
+      }
+    ],
+    "approval_created": false,
+    "purchase_created": false,
+    "pending_local": [
+      "actual CE06 composition consumer",
+      "compound consumer",
+      "research correction consumer",
+      "actual inspection integration",
+      "public controls package export/build and package consumer"
+    ],
+    "pending_external": [
+      "canonical contracts",
+      "real application identity",
+      "actual harness/JEV/provider/Finance/Neatlogs",
+      "production composition renderer",
+      "release acceptance"
+    ]
+  },
+  "calls": {
+    "application_provider_live": 0,
+    "fixture_apply_image": 1,
+    "fixture_apply_jev": 0,
+    "fixture_apply_reservations": 1
+  },
+  "approval_created": false,
+  "purchase_created": false,
+  "pending": [
+    "canonical external schema publication and consumer acknowledgement",
+    "actual CE06 composition, compound and correction consumers",
+    "actual inspection integration",
+    "public controls package export/build and package consumer",
+    "application authentication/authorization",
+    "harness outbox consumer and paid artwork dispatch",
+    "live providers and external release acceptance",
+    "CloudLinux/CageFS x86_64 host validation (exact Node 22 patch unknown)"
+  ],
+  "passed": true
+}

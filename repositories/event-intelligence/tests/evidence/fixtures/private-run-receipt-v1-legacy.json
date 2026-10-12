@@ -1,0 +1,37 @@
+{
+  "tenantId": "legacy-receipt-fixture-tenant",
+  "runId": "private-receipt-v1-legacy-fixture",
+  "configHash": "91e2d2e1a01740c458b64d7418118a3bad5f59095d337f4387863efa614ef523",
+  "candidate": {
+    "candidateId": "b3fc8f83cf93f44b3b043485fbec191ea4baef22ae778cf9fdea06ce32c92223",
+    "canonicalUrl": "https://events.example.test/event",
+    "depth": 0,
+    "seed": true,
+    "sourceRefs": []
+  },
+  "claim": {
+    "claimKey": "claim:legacy-fixture",
+    "workerId": "worker:legacy-fixture",
+    "leaseToken": "00000000-0000-4000-8000-000000000001"
+  },
+  "completion": {
+    "completionKey": "complete:legacy-fixture",
+    "outcome": "no_links",
+    "suggestions": [],
+    "limitations": [],
+    "identity": {
+      "entityCandidates": [],
+      "occurrenceCandidates": [],
+      "transitionLinks": [],
+      "unresolvedTransitions": []
+    }
+  },
+  "tenantHash": "0d0f90b3a3c345f065234f62eb1ea8219c1745fad8e0b5c1899b929bc626a54a",
+  "receiptKey": "5c491fdc4b7cef48222c8bddaf4ed3f4948c605861edf8f7fbcb6910e1cf397f",
+  "schemaVersion": 1,
+  "state": "complete",
+  "keyId": "payload-legacy-fixture-v1",
+  "payloadHash": "23efbd0e5b4125f0f2f90bf350d047840f523c931caa66e671f3d090fe330277",
+  "payloadBytes": 773,
+  "sealedBase64": "eyJ2ZXJzaW9uIjoxLCJrZXlJZCI6InBheWxvYWQtbGVnYWN5LWZpeHR1cmUtdjEiLCJpdiI6IlNKY1R2WTdpVkRyYmI4VlIiLCJ0YWciOiJYdkhXRmV4cEtYZ3dDM1pFZUd5THV3PT0iLCJjaXBoZXJ0ZXh0IjoicVBoZnpTSVFsL2Ftb3R5RGtaNzZ5V0NqSG1vMFNHVWc0QW9lZFAzQytJbnE4d2Nya2t0MHR3a2o5ZjVROFlMb0tvY0VRYjJQdXI4c2Q4MUIyY1RWL1NSWG8wZi9iZ0RveHJmOUdXSmh0T2VyUFVFaW91OFZ1azA4WElkS2dWQUhiQzl0RWRIcGlXM3hKNVAxVW81UFRwTkhaT1RpNVYzWk11UnRlWG15MStjSWozUTZXRjBaSnNkdm1aOEZqOHhSVDZNNlBncStvSFFzY3FoWjBXZEc4NnJyUkdvSDhVc0dCbXpGVzVreE9LUHJKdDh4eG5wRVFWUGhFWk9KdGZjLzhNQUlnbkRhSlJTQndEY3dsYzRiQVZPQ2VWZG5CcElrR3pKRzFUUENKR1pNaUZPMWRXQTZ6R05iSjBXVVB4ZHhON0pBS0NCUUVkalh6N0pId1Nxa1BNSEk2a0JvUk9LSkRTRWdjcUg0dHlvOWlaMXJwSUpubFozdUdORm50TFRoM1NzMyt1RmFvZVZmQXIxQ05pR0hlcVpPc0Z6dS9ENTUyaUk2Zis5TFY3Nm9VL0xFUk1Ia2prYW5aaHVqajJ3ckxMRDI3MDU2OFA5MEpJbkdHTTVia25XdDE1VE9MUXhEZ3ViaE5KNzRBUWNLczdheXRydURQZVJwTkNMbUlLSDhtLy9obDNvZkNlN1M3ZU13VUdTY2t4UUhObkdQcVBISjExckJyeXJFU1dFa2FGQUJJTmN5S2JFTWJMT0ZJcE1yQ0hRQ0dYc3k1M21keDQvdlRvb2ZhbU5neHBQRDBDbDR6V2FrM0J6Wm9zcXVaanc0R3B4SGQyVjdTSnN5MXJmK2JuOWwvQ0dIbWhDM3FPQTR1Q2hhUnBCVjl4ZlEvRzMxM3I1VWtZN3plcXR6NEIxWW5ZNVBDbmJyMmFnbUUrdzZ1cVprRGxTZkVFME5ZbHhjTm9Oei9KeUJZelhCUVRFUTVzUmYxeXc1djZ0eU5NUHozVldZMEkzUVdWKzhhTTZRSjZIQk56NCtHeDkrQnF0b09JL3NTdjExaVZZOVQvUlJzSGpFMGlQV2ZOVW84eTlMelZvckhxOGhHMHVmUXRyY0FSYktvWXVxdkhFYjF6MDg3QmdWd2VsTmxwdVA0aGNnaFdINWMyQ05FWmZ5NDhEOEg2QkUyUWxxOFo0RmhnbS8wcnc5dVFwNDkwL0xITGlBV0FPbGVkOWZYbThQSm44YWNSdWpmdVZFWWQyZUFuMlBHYVRKQWdNREtaamgvNjRiOWJXaUZyaWMxTUtaS1VVeFZEY3BRN1ZWN3BIVCtxbkE1SGw3RityOU1IZU1YUURWUUp1dXg3OCt0ZUtSaTRnS0FGVXdaNGs9In0="
+}

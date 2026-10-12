@@ -1,0 +1,78 @@
+{
+  "name": "@jevelopers/fulfillment-connectors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed worker runtime foundation for fulfillment provider adapters",
+  "engines": {
+    "node": "24.21.0"
+  },
+  "packageManager": "npm@11.19.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./production-bundle": {
+      "types": "./dist/production-bundle.d.ts",
+      "import": "./dist/production-bundle.js"
+    }
+  },
+  "files": [
+    "dist",
+    "vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz",
+    "README.md",
+    "docs/runtime.md",
+    "docs/provider-matrix.md",
+    "docs/catalog.md",
+    "docs/simulator.md",
+    "docs/quotes.md",
+    "docs/comparison.md",
+    "docs/attempt-store.md",
+    "docs/status.md",
+    "docs/prodigi-product-details.md",
+    "docs/png-inspection.md",
+    "docs/prodigi-sandbox.md",
+    "docs/prodigi-callbacks.md",
+    "docs/order-authorization.md",
+    "docs/production-bundle.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node scripts/run-contract-tests.mjs && node scripts/run-provider-matrix-tests.mjs && node scripts/run-metering-tests.mjs && node scripts/run-security-tests.mjs && node scripts/run-catalog-tests.mjs && node scripts/run-mock-tests.mjs && node scripts/run-quote-tests.mjs && node scripts/run-attempt-store-tests.mjs && node scripts/run-comparison-tests.mjs && node scripts/run-status-tests.mjs && node scripts/run-prodigi-product-details-tests.mjs && node scripts/run-png-inspection-tests.mjs && node scripts/run-prodigi-sandbox-tests.mjs && node scripts/run-prodigi-callback-tests.mjs && node scripts/run-order-authorization-tests.mjs && node scripts/run-package-tests.mjs",
+    "test:catalog": "node scripts/run-catalog-tests.mjs",
+    "test:quote": "npm run build && node scripts/run-quote-tests.mjs",
+    "test:attempt-store": "npm run build && node scripts/run-attempt-store-tests.mjs",
+    "test:comparison": "npm run build && node scripts/run-comparison-tests.mjs",
+    "test:status": "npm run build && node scripts/run-status-tests.mjs",
+    "test:prodigi-product-details": "npm run build && node scripts/run-prodigi-product-details-tests.mjs",
+    "test:png-inspection": "npm run build && node scripts/run-png-inspection-tests.mjs",
+    "test:prodigi-sandbox": "npm run build && node scripts/run-prodigi-sandbox-tests.mjs",
+    "test:prodigi-callbacks": "npm run build && node scripts/run-prodigi-callback-tests.mjs",
+    "test:order-authorization": "npm run build && node scripts/run-order-authorization-tests.mjs",
+    "test:package": "npm run build && node scripts/run-package-tests.mjs",
+    "verify:contract": "./scripts/verify-fulfillment --suite contract --mode simulated --evidence-dir evidence/FC-01",
+    "verify:provider-matrix": "./scripts/verify-fulfillment --suite provider-matrix --mode simulated --evidence-dir evidence/FC-02",
+    "verify:security": "./scripts/verify-fulfillment --suite security --mode simulated --evidence-dir evidence/FC-11",
+    "verify:metering": "./scripts/verify-fulfillment --suite metering --mode simulated --evidence-dir evidence/FC-10",
+    "verify:catalog": "./scripts/verify-fulfillment --suite catalog --mode simulated --evidence-dir evidence/FC-03",
+    "verify:mock": "./scripts/verify-fulfillment --suite mock --mode simulated --evidence-dir evidence/FC-02-MOCK",
+    "verify:quote": "./scripts/verify-fulfillment --suite quote --mode simulated --evidence-dir evidence/FC-04",
+    "verify:attempt-store": "./scripts/verify-fulfillment --suite attempt-store --mode simulated --evidence-dir evidence/FC-06-ATTEMPT-STORE",
+    "verify:comparison": "./scripts/verify-fulfillment --suite comparison --mode simulated --evidence-dir evidence/FC-09-COMPARISON",
+    "verify:status": "./scripts/verify-fulfillment --suite status --mode simulated --evidence-dir evidence/FC-07-STATUS",
+    "verify:prodigi-product-details": "./scripts/verify-fulfillment --suite prodigi-product-details --mode simulated --evidence-dir evidence/FC-PRODIGI-PRODUCT-DETAILS",
+    "verify:png-inspection": "./scripts/verify-fulfillment --suite png-inspection --mode simulated --evidence-dir evidence/FC-08-10-PNG",
+    "verify:order-authorization": "./scripts/verify-fulfillment --suite order-authorization --mode simulated --evidence-dir evidence/FC-ORDER-AUTH",
+    "verify:package": "./scripts/verify-fulfillment --suite package --mode simulated --evidence-dir evidence/FC-08"
+  },
+  "dependencies": {
+    "@jevelopers/shared-contracts": "file:vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  }
+}

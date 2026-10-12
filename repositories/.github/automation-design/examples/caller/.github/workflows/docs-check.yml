@@ -1,0 +1,33 @@
+name: Documentation check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Reuse documentation checker
+    uses: Jevelopers-neatHack-2026/.github/.github/workflows/docs-check.yml@<REVIEWED_40_HEX_COMMIT>
+    with:
+      scope: docs
+    permissions:
+      contents: read
+
+  report:
+    name: Report reusable workflow outputs
+    needs: docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Show non-sensitive result
+        env:
+          CONTRACT_VERSION: ${{ needs.docs.outputs.contract_version }}
+          CHECKED_FILES: ${{ needs.docs.outputs.checked_files }}
+          CHECK_RESULT: ${{ needs.docs.outputs.result }}
+        run: |
+          printf 'contract_version=%s checked_files=%s result=%s\n' "$CONTRACT_VERSION" "$CHECKED_FILES" "$CHECK_RESULT"

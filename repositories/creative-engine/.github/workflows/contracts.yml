@@ -1,0 +1,89 @@
+name: Standalone contract checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: contracts / Node ${{ matrix.node-version }} / Linux x64
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 22.23.3
+          - 24.15.0
+    steps:
+      # The populated CE-05 migration regression reads 4e28839ea8baeb4112a4f12340ef2fe84f5c8efe via git show.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci --ignore-scripts --offline
+      - run: npm ci --prefix examples/frontend-action-roundtrip
+      - run: npm ci --prefix src/models/codec-runtime --ignore-scripts
+      - run: node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --version
+      - run: make typecheck-contracts
+      - run: make check TARGET=eval-policy MODE=mock
+      - name: Capture pending creative evaluation acceptance
+        run: |
+          mkdir -p test-results/eval-policy
+          set +e
+          make --no-print-directory --silent acceptance TARGET=eval-policy > test-results/eval-policy/acceptance.json
+          status=$?
+          set -e
+          if [ "$status" -ne 2 ]; then
+            echo "Expected pending CE-Q01 acceptance to exit 2, received $status" >&2
+            exit 1
+          fi
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(r.schema_version!=="creative-eval-acceptance-result/v1"||r.accepted!==false||r.finding_count<1)process.exit(1)' test-results/eval-policy/acceptance.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 tag verified 2026-10-10
+        if: always()
+        with:
+          name: eval-policy-evidence-node-${{ matrix.node-version }}
+          path: test-results/eval-policy/acceptance.json
+          if-no-files-found: error
+      - run: make check TARGET=metering-contract MODE=mock
+      - run: make check TARGET=handoff-contract MODE=mock
+      - run: make check TARGET=versions MODE=mock
+      - name: Run CE-11 API and durable telemetry checks
+        run: |
+          mkdir -p test-results/creative-metering
+          set +e
+          make check TARGET=creative-metering MODE=mock > test-results/creative-metering/check.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "CE-11 offline checks failed with exit $status" >&2
+            exit "$status"
+          fi
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(r.schema_version!=="creative-metering-check-evidence/v1"||r.status!=="passed"||r.dependency_mode!=="mock"||r.test_summary.tests<1||r.test_summary.pass!==r.test_summary.tests||r.test_summary.fail!==0||r.test_summary.cancelled!==0||r.test_summary.skipped!==0||r.case_coverage.length!==5||r.case_coverage.some(x=>x.status!=="passed")||r.local_integration.length!==2||r.local_integration.some(x=>x.status!=="implemented_and_offline_tested"||x.full_acceptance_status!=="pending_external_owner_and_live_evidence"))process.exit(1)' build/creative-metering-evidence.json
+      - name: Confirm CE-11 external acceptance remains pending
+        run: |
+          set +e
+          make --no-print-directory --silent acceptance TARGET=creative-metering > test-results/creative-metering/acceptance.txt 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 2 ]; then
+            echo "Expected pending CE-11 external acceptance to exit 2, received $status" >&2
+            exit 1
+          fi
+          node -e 'const fs=require("node:fs");const s=fs.readFileSync(process.argv[1],"utf8");if(!s.includes("No authoritative Neatlogs evidence-sink agreement reference is available")||!s.includes("actual ingestion and readback remain unverified"))process.exit(1)' test-results/creative-metering/acceptance.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 tag verified 2026-10-10
+        if: always()
+        with:
+          name: creative-metering-evidence-node-${{ matrix.node-version }}
+          path: |
+            test-results/creative-metering/
+            build/creative-metering-evidence.json
+          if-no-files-found: error
+      - run: make check TARGET=all MODE=mock

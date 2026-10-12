@@ -1,0 +1,28 @@
+.wrap {
+  display: grid;
+  gap: 22px;
+  padding-top: 8px;
+  min-width: 0;
+}
+.head {
+  display: grid;
+  gap: 8px;
+}
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.form {
+  display: grid;
+  gap: 24px;
+}
+.group {
+  display: grid;
+  gap: 10px;
+}
+.note {
+  min-height: 96px;
+}

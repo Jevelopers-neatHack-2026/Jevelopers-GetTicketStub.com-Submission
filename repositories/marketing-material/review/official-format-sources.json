@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0",
+  "assetId": "OFFICIAL-FORMAT-SOURCES-001",
+  "status": "checked_for_draft_planning",
+  "checkedAt": "2026-10-11 UTC",
+  "sources": [
+    {
+      "sourceId": "OFFICIAL-NEATHACK-2026",
+      "publisher": "neatlogs",
+      "title": "neatHack — AI agent hackathon",
+      "url": "https://neatlogs.com/hackathon",
+      "checkedAt": "2026-10-11 UTC",
+      "usedFor": [
+        "Demo duration and required sponsor coverage",
+        "X quote-post fields and required official post attachment",
+        "Public repository and supporting evidence requirements",
+        "Building-in-public tag and final cutoff channel"
+      ],
+      "observedRequirements": {
+        "videoMaximumSeconds": 180,
+        "publicRepositoryRequired": true,
+        "supportingEvidenceRequired": true,
+        "quotePostRequired": true,
+        "quotePostFields": [
+          "team",
+          "name",
+          "project",
+          "public repository",
+          "demo link"
+        ],
+        "officialPostMustBeAttached": true,
+        "finalCutoffAnnouncedOn": "Discord",
+        "buildingInPublicTag": "#neatHack",
+        "sponsors": [
+          {
+            "name": "neatlogs",
+            "evidenceClass": "SPN-01"
+          },
+          {
+            "name": "Entire",
+            "evidenceClass": "SPN-02"
+          },
+          {
+            "name": "cfo.ai",
+            "evidenceClass": "SPN-03"
+          }
+        ],
+        "perSponsorVideoFacets": [
+          "architecture",
+          "implementation",
+          "runtime",
+          "reasoning",
+          "result"
+        ],
+        "videoAspectRatio": {
+          "value": null,
+          "status": "not_specified_in_checked_source"
+        },
+        "videoFileSizeLimit": {
+          "value": null,
+          "status": "not_specified_in_checked_source"
+        },
+        "officialQuotePost": {
+          "url": null,
+          "status": "not_supplied_in_checked_source; recheck when submission opens"
+        },
+        "confirmedFinalCutoff": {
+          "value": null,
+          "status": "pending_discord_announcement"
+        }
+      },
+      "scopeNote": "This is an event-format source only. It is not product, comparison, finance, or sponsor-use evidence. No post, upload, or submission was performed."
+    },
+    {
+      "sourceId": "OFFICIAL-X-POST-2026",
+      "publisher": "X Help Center",
+      "title": "How to Post",
+      "url": "https://help.x.com/en/using-x/how-to-post",
+      "checkedAt": "2026-10-11 UTC",
+      "usedFor": [
+        "Ordinary post text limit for the draft quote-post and build update"
+      ],
+      "observedRequirements": {
+        "ordinaryPostMaximumCharacters": 280,
+        "scope": "Standard X post; this package does not rely on longer-post features."
+      },
+      "scopeNote": "Recount the final filled text and confirm it in the current X composer. A placeholder shell does not guarantee the completed text will fit."
+    },
+    {
+      "sourceId": "OFFICIAL-X-IMAGE-2026",
+      "publisher": "X Help Center",
+      "title": "How to post photos or GIFs on X",
+      "url": "https://help.x.com/en/using-x/posting-gifs-and-pictures",
+      "checkedAt": "2026-10-11 UTC",
+      "usedFor": [
+        "Single-image display range for the optional X key visual"
+      ],
+      "observedRequirements": {
+        "singleImageStandardAspectRatiosDisplayedInFull": {
+          "wideLimit": "2:1",
+          "tallLimit": "3:4"
+        },
+        "localDraftDimensions": {
+          "width": 1200,
+          "height": 675,
+          "status": "local_choice_not_platform_requirement"
+        }
+      },
+      "scopeNote": "The ratio statement is for a single X image. It does not specify demo-video dimensions, video aspect ratio, or file-size limit. Inspect the final composer crop and preserve concept labels."
+    }
+  ],
+  "releaseStatus": "Drafts only. Refresh all official sources and unresolved submission fields immediately before final export or external use."
+}

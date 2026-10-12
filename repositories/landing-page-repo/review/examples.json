@@ -1,0 +1,686 @@
+{
+  "schemaVersion": 1,
+  "scope": "Existing illustrative assets retained for local review; release blocked",
+  "pageSha256": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
+  "source": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+  },
+  "assets": [
+    {
+      "path": "site/assets/ballet-clean.webp",
+      "sha256": "2195943b492e4cd54d082bb09804e20e2317e5b8866d346a1440a1417f1e22d4",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/ballet-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/fan-clean.webp",
+      "sha256": "a28d2a81943ea441c259faa4d23027c05dc094c4be279e5cf2437a67b2166a48",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/fan-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/flight.json",
+      "sha256": "8a69e3e289014de675a6249b004c28e1ffe4e603f550678ab5a95c1a161d9e15",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/flight.json"
+      },
+      "evidenceClass": "simulated",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "JSON bytes hash-pinned; embedded glTF buffers not visually/privacy approved"
+    },
+    {
+      "path": "site/assets/hockey-clean.webp",
+      "sha256": "314e749eda387b3b0426238965ecd8350135fc9257f9c083e8f85d9bb92107cc",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/hockey-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Existing footer credits Gerhard Crous / Unsplash; original URL, license scope and permission not verified",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/hoops-clean.webp",
+      "sha256": "dc58c6f5f79a3625bad5e7337f865593073b55af780d1dfd01c242f70cfc230c",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/hoops-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/keeper-clean.webp",
+      "sha256": "a14ee8df327cffae8ff3de4ff70f18f7b1beedf799ac84026f1992b7ee541cab",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/keeper-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/pitcher-clean.webp",
+      "sha256": "d870f2afa43831cc1ad1eb7c7175d8f699c8b0244dc16e47042f91c81e310b07",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/pitcher-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/qb-clean.webp",
+      "sha256": "cb361142ff8821cf1df6610e9a2e958edfcd6683fb15eb493c1d1dbdaaf328cd",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/qb-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/singer-clean.webp",
+      "sha256": "e87628c1117385dff1463e03663f26f6b82ea56a2a6b5bebabd56ec1cd5e398e",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/singer-clean.webp"
+      },
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "RIFF chunk scan rejects EXIF/XMP; not a complete visual privacy review"
+    },
+    {
+      "path": "site/assets/ticketstub.gltf.json",
+      "sha256": "c36b5d0af494390fd2fdd18d581033e60dc156b45604c00060b0dd6bd8153936",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/ticketstub.gltf.json"
+      },
+      "evidenceClass": "simulated",
+      "publicationPermission": "UNCONFIRMED",
+      "rights": "Source/creator/license receipts not available in inspected landing repository",
+      "sanitization": "PENDING_VISUAL_OWNER_REVIEW",
+      "reviewer": "Product, marketing and rights/privacy owners: PENDING",
+      "restrictions": "Retained existing artwork for local review. No new publication permission, likeness license, event authenticity or sanitization approval inferred.",
+      "byteMetadataCheck": "JSON bytes hash-pinned; embedded glTF buffers not visually/privacy approved"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "football",
+      "title": "Harbor City Gulls vs. Ironhill Miners",
+      "asset": "site/assets/qb-clean.webp",
+      "alt": "Illustrative Football scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Harbor City Gulls vs. Ironhill Miners at Lakefront Field, Sun · Nov 23 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "The fourth-quarter comeback you still tell people about.",
+      "venue": "Lakefront Field",
+      "date": "Sun · Nov 23 · 2025",
+      "sampleSeat": {
+        "section": "112",
+        "row": "8",
+        "seat": "14"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "baseball",
+      "title": "Riverside Owls vs. Canyon Rattlers",
+      "asset": "site/assets/pitcher-clean.webp",
+      "alt": "Illustrative Baseball scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Riverside Owls vs. Canyon Rattlers at Old Mill Park, Thu · Apr 03 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Opening day, a cold hot dog and extra innings.",
+      "venue": "Old Mill Park",
+      "date": "Thu · Apr 03 · 2025",
+      "sampleSeat": {
+        "section": "9",
+        "row": "21",
+        "seat": "3"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "concert",
+      "title": "Nova Riot — Afterglow World Tour",
+      "asset": "site/assets/singer-clean.webp",
+      "alt": "Illustrative Concert scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Nova Riot — Afterglow World Tour at The Palladium Arena, Sat · Jul 12 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Two encores. No voice left by Sunday.",
+      "venue": "The Palladium Arena",
+      "date": "Sat · Jul 12 · 2025",
+      "sampleSeat": {
+        "section": "FLR",
+        "row": "GA",
+        "seat": "0421"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "basketball",
+      "title": "Bayside Comets vs. Desert Kings",
+      "asset": "site/assets/hoops-clean.webp",
+      "alt": "Illustrative Basketball scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Bayside Comets vs. Desert Kings at Harbor Dome, Fri · Feb 14 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Courtside enough to hear the sneakers.",
+      "venue": "Harbor Dome",
+      "date": "Fri · Feb 14 · 2025",
+      "sampleSeat": {
+        "section": "104",
+        "row": "C",
+        "seat": "7"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "soccer",
+      "title": "Northgate FC vs. Southport United",
+      "asset": "site/assets/keeper-clean.webp",
+      "alt": "Illustrative Soccer scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Northgate FC vs. Southport United at Northgate Stadium, Sat · Mar 08 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "A ninety-third-minute save, and the keeper threw it to the stands.",
+      "venue": "Northgate Stadium",
+      "date": "Sat · Mar 08 · 2025",
+      "sampleSeat": {
+        "section": "N4",
+        "row": "17",
+        "seat": "230"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "festival",
+      "title": "Sunflare Festival — Weekend One",
+      "asset": "site/assets/fan-clean.webp",
+      "alt": "Illustrative Festival scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Sunflare Festival — Weekend One at Desert Bloom Grounds, Apr 11–13 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Lawn games between sets, and a stub tossed into the crowd.",
+      "venue": "Desert Bloom Grounds",
+      "date": "Apr 11–13 · 2025",
+      "sampleSeat": {
+        "section": "3DAY",
+        "row": "GA",
+        "seat": "88213"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "theater",
+      "title": "Swan Lake — Bluebird Ballet",
+      "asset": "site/assets/ballet-clean.webp",
+      "alt": "Illustrative Ballet scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Swan Lake — Bluebird Ballet at Royal Crescent Opera House, Wed · Oct 01 · 2025: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Opening night. The whole room stood up.",
+      "venue": "Royal Crescent Opera House",
+      "date": "Wed · Oct 01 · 2025",
+      "sampleSeat": {
+        "section": "ORCH",
+        "row": "F",
+        "seat": "101"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    },
+    {
+      "id": "hockey",
+      "title": "Ice Harbor Wolves vs. Summit Storm",
+      "asset": "site/assets/hockey-clean.webp",
+      "alt": "Illustrative Hockey scene for a fictional stub; image permissions unconfirmed",
+      "caption": "Ice Harbor Wolves vs. Summit Storm at Frost Arena, Tue · Jan 20 · 2026: illustrative fictional event, not verified product output.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION",
+      "story": "Sudden death. The stub came off the stick with the winner.",
+      "venue": "Frost Arena",
+      "date": "Tue · Jan 20 · 2026",
+      "sampleSeat": {
+        "section": "220",
+        "row": "4",
+        "seat": "9"
+      },
+      "storyStatus": "FICTIONAL_NOT_TESTIMONIAL"
+    }
+  ],
+  "specimens": [
+    {
+      "id": "gulls",
+      "title": "Harbor City Gulls",
+      "location": "#studio / #make; TS.NIGHTS",
+      "alt": "Fictional digital football stub showing Harbor City Gulls vs Ironhill Miners, venue, date and sample seat details.",
+      "caption": "Harbor City Gulls vs Ironhill Miners: fictional local digital specimen; flip/tear effects are simulated.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+    },
+    {
+      "id": "nova",
+      "title": "Nova Riot",
+      "location": "#studio / #make; TS.NIGHTS",
+      "alt": "Fictional digital concert stub showing Nova Riot, venue, date and sample seat details.",
+      "caption": "Nova Riot: fictional local digital specimen; flip/tear effects are simulated.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+    },
+    {
+      "id": "wolves",
+      "title": "Ice Harbor Wolves",
+      "location": "#studio / #make; TS.NIGHTS",
+      "alt": "Fictional digital hockey stub showing Ice Harbor Wolves vs Summit Storm, venue, date and sample seat details.",
+      "caption": "Ice Harbor Wolves vs Summit Storm: fictional local digital specimen; flip/tear effects are simulated.",
+      "evidenceClass": "illustrative",
+      "publicationPermission": "UNCONFIRMED",
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION"
+    }
+  ],
+  "dynamicFixtures": {
+    "scenesSha256": "870e1c13b4cbe1c7e8d219a07887e4e23f42908377760085b73866970d40ee6d",
+    "specimensSha256": "f5b609fab27b67705da9ceb502a8d9d208b673345018909ab90ee10f0756c113",
+    "extraWallSha256": "0744b62008243603c965106d71a0372516a148e295d03da18b7783c1f3ec6f93",
+    "count": 30,
+    "status": "illustrative fictional records; no before/after, metrics or actual product output",
+    "extraWallRecords": [
+      {
+        "type": "gig",
+        "title": "Kira Vale",
+        "subtitle": "Ghost Lights Tour",
+        "venue": "The Lyric Hall",
+        "date": "Sep 19 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Mountain Kings",
+        "subtitle": "Delta Herons",
+        "venue": "Summit Bowl",
+        "date": "Dec 06 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "The Glass Lantern",
+        "subtitle": "A new musical",
+        "venue": "The Majestic Theatre",
+        "date": "Mar 22 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Neon Pulse",
+        "subtitle": "All-night rave",
+        "venue": "Pier 9 Warehouse",
+        "date": "Aug 30 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Coastal Open",
+        "subtitle": "Centre Court Final",
+        "venue": "Seaside Tennis Club",
+        "date": "Jun 29 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "The Velvet Hour",
+        "subtitle": "Jazz at midnight",
+        "venue": "Blue Door Club",
+        "date": "Nov 07 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Port Avalon Grand Prix",
+        "subtitle": "Grandstand B",
+        "venue": "Avalon Circuit",
+        "date": "May 18 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "Midnight Comedy Hour",
+        "subtitle": "Late show",
+        "venue": "The Basement",
+        "date": "Jan 10 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Copperline Rodeo",
+        "subtitle": "Championship night",
+        "venue": "Copperline Arena",
+        "date": "Jul 04 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Harbour Lights",
+        "subtitle": "Orchestra under the stars",
+        "venue": "Bayfront Amphitheatre",
+        "date": "Aug 16 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Tidewater Regatta",
+        "subtitle": "Finals · Riverbank",
+        "venue": "Tidewater Basin",
+        "date": "Apr 26 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Saint Ember",
+        "subtitle": "Loud Quiet Tour",
+        "venue": "Union Ballroom",
+        "date": "Oct 24 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Glowfield",
+        "subtitle": "Lantern night",
+        "venue": "Glowfield Meadow",
+        "date": "Sep 06 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "La Traviata",
+        "subtitle": "Season gala",
+        "venue": "Grand Opera House",
+        "date": "Feb 08 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "City Derby",
+        "subtitle": "Boxing main event",
+        "venue": "Ironworks Hall",
+        "date": "Mar 15 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Paper Moons",
+        "subtitle": "Small Rooms Tour",
+        "venue": "Corner Stage",
+        "date": "Jun 12 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Granite Bay Rams",
+        "subtitle": "Lowell Foxes",
+        "venue": "Granite Field",
+        "date": "Oct 12 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Marlowe & The Tides",
+        "subtitle": "Homecoming Show",
+        "venue": "Riverside Bowl",
+        "date": "May 03 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Bloomwave",
+        "subtitle": "Spring sessions",
+        "venue": "Lakeside Park",
+        "date": "Mar 29 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "Hamlet",
+        "subtitle": "The Rep Season",
+        "venue": "Old Vic Lane Theatre",
+        "date": "Nov 14 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Westshore Pumas",
+        "subtitle": "Northridge Elks",
+        "venue": "Westshore Arena",
+        "date": "Jan 31 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "DJ Halcyon",
+        "subtitle": "Sunrise Set",
+        "venue": "The Glasshouse",
+        "date": "Jul 27 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Cross City Marathon",
+        "subtitle": "Finish line grandstand",
+        "venue": "Cross City",
+        "date": "Apr 13 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "fest",
+        "title": "Lantern Market",
+        "subtitle": "Night of lights",
+        "venue": "Old Town Square",
+        "date": "Dec 13 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "Cirque Lumière",
+        "subtitle": "Big top premiere",
+        "venue": "Waterfront Big Top",
+        "date": "Aug 02 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "The Orchard Choir",
+        "subtitle": "Christmas at the Hall",
+        "venue": "St. Cecilia Hall",
+        "date": "Dec 20 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Pine Valley Open",
+        "subtitle": "Final round",
+        "venue": "Pine Valley Links",
+        "date": "Sep 14 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "gig",
+        "title": "Echo Arcade",
+        "subtitle": "Synth City Tour",
+        "venue": "The Warehouse",
+        "date": "Feb 21 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "sport",
+        "title": "Summit Classic",
+        "subtitle": "Ski jump finals",
+        "venue": "Summit Ridge",
+        "date": "Jan 17 · 2026",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      },
+      {
+        "type": "theater",
+        "title": "The Magic Flute",
+        "subtitle": "Opera in the park",
+        "venue": "Greenhill Park",
+        "date": "Jun 21 · 2025",
+        "evidenceClass": "illustrative",
+        "status": "fictional local wall artwork; no verified event or product result"
+      }
+    ]
+  },
+  "requiredVisibleLabels": [
+    "Illustrative digital preview",
+    "publication permissions remain unconfirmed",
+    "not approved product outputs",
+    "These three fictional digital specimens"
+  ],
+  "fallback": {
+    "staticDescription": "Fictional digital samples · Gulls vs Miners, Nova Riot and Wolves vs Storm",
+    "behavior": "Static studio names, venue/date/seat and prose remain in HTML independently of image loading; generated scene names are separate from image markup. Existing no3d fallback retained.",
+    "browserMissingMediaCheck": "PENDING",
+    "limitations": "Suite rejects missing packaged files. It does not claim browser loading, screen-reader fallback, successful image decode, QR-decoder analysis or owner sanitization approval."
+  },
+  "recheckBy": "2026-11-12",
+  "auditedSource": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/36c0a841d5b5c5f6e7c3870e65c541825026d214/site/index.html"
+  },
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
+  "historicalSourceReferences": [
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html",
+      "relationship": "Previous verified immutable author audit before the CSS-only maker reading surface; preserved without upgrading owner or publication approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b5205f0c749ec81e1d75e3da75cc236dd79f692e/site/index.html",
+      "relationship": "Earlier CSS-only maker surface audit before the reduced-motion correction; preserved as historical, not approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3c510591150e3bb44eb1fa44e9993ae32677ad3d/site/index.html",
+      "relationship": "Earlier maker surface/motion audit before native overflow and no-JavaScript escape; historical only, not current approval."
+    }
+  ]
+}

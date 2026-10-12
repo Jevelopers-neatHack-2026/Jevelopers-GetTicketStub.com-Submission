@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": []
+  },
+  "files": [
+    "consumer.mts",
+    "inspection-consumer.mts",
+    "public-result.mts",
+    "actual-inspection.mts"
+  ]
+}

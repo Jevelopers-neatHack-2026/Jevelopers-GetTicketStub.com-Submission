@@ -1,0 +1,289 @@
+{
+  "policy_version": "1.0.0",
+  "status": "foundation_candidate_pending_owner_review",
+  "schema_version": "exact_semver",
+  "package_version": "independent_semver",
+  "mapping": "generated/schema-manifest.json",
+  "unknown_fields": "reject",
+  "unknown_enums": "reject",
+  "optional": "absent_only_unless_null_is_explicit",
+  "null": "unknown_only_where_explicitly_permitted",
+  "breaking_changes": [
+    "required_addition",
+    "field_removal",
+    "type_change",
+    "semantic_or_unit_change",
+    "constraint_narrowing",
+    "unsafe_enum_addition",
+    "canonical_hash_change",
+    "unknown_field_policy_change"
+  ],
+  "compatible_changes": [
+    "documentation_only",
+    "new_separate_export_with_no_existing_binding_change"
+  ],
+  "optional_field_addition": "new_exact_schema_version; old-version encoding retained; compatibility fixtures required",
+  "review": [
+    "producer",
+    "consumer",
+    "impact_record"
+  ],
+  "deprecation": {
+    "minimum_days": 90,
+    "supported_majors": "current_and_previous_accepted_major",
+    "removal_conditions": [
+      "notice_with_replacement",
+      "all_named_consumer_acknowledgements",
+      "all_migration_fixtures_pass",
+      "exact_revision_review"
+    ],
+    "records": []
+  },
+  "pinning": "exact_source_sha_or_integrity_locked_package_plus_schema_hash_and_consumer_sha",
+  "rollback": "retain_previous_exact_pin_and_encoding; failed_consumer_blocks_upgrade",
+  "accepted_schema_versions": [],
+  "candidate_schema_versions": {
+    "CommonEnvelope": [
+      "1.0.0"
+    ],
+    "EvidenceProjection": [
+      "1.0.0"
+    ],
+    "ErrorEnvelope": [
+      "1.0.0"
+    ],
+    "PartialFailure": [
+      "1.0.0"
+    ],
+    "JobStatus": [
+      "1.0.0"
+    ],
+    "JobProgress": [
+      "1.0.0"
+    ],
+    "Cancellation": [
+      "1.0.0"
+    ],
+    "JobCommandAcknowledgement": [
+      "1.0.0"
+    ],
+    "UsageEvent": [
+      "1.0.0"
+    ],
+    "BudgetReservation": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "FinancialSummary": [
+      "1.0.0"
+    ],
+    "DecisionPortRequest": [
+      "1.0.0"
+    ],
+    "DecisionPortResult": [
+      "1.0.0"
+    ],
+    "DecisionReceipt": [
+      "1.0.0"
+    ],
+    "ReserveRequest": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "ReserveResult": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "SettleRequest": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "SettleResult": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "ReleaseRequest": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "ReleaseResult": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "QueryRequest": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "QueryResult": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "ProjectRequest": [
+      "1.0.0"
+    ],
+    "ResearchRequest": [
+      "1.0.0"
+    ],
+    "EventIntelligencePackage": [
+      "1.0.0"
+    ],
+    "ResearchRequestReceipt": [
+      "1.0.0"
+    ],
+    "ResearchAnswerReceipt": [
+      "1.0.0"
+    ],
+    "ResearchBatchReceipt": [
+      "1.0.0"
+    ],
+    "ResearchCorrectionRequest": [
+      "1.0.0"
+    ],
+    "ResearchCorrectionReceipt": [
+      "1.0.0"
+    ],
+    "ResearchInvalidation": [
+      "1.0.0"
+    ],
+    "CreativeBrief": [
+      "1.0.0"
+    ],
+    "DesignControlSchema": [
+      "1.0.0"
+    ],
+    "DesignVersion": [
+      "1.0.0"
+    ],
+    "ApprovalReceipt": [
+      "1.0.0"
+    ],
+    "ApprovalReference": [
+      "1.0.0"
+    ],
+    "ApprovalVerificationRequest": [
+      "1.0.0"
+    ],
+    "ApprovalVerificationOutcome": [
+      "1.0.0"
+    ],
+    "ArtifactHandoffManifest": [
+      "1.0.0"
+    ],
+    "ArtifactConsumptionReceipt": [
+      "1.0.0"
+    ],
+    "ProductionBundle": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "FulfillmentQuote": [
+      "1.0.0"
+    ],
+    "OrderAuthorization": [
+      "1.0.0"
+    ],
+    "FulfillmentStatus": [
+      "1.0.0"
+    ],
+    "EvaluationEvidence": [
+      "1.0.0"
+    ],
+    "ProductionReference": [
+      "1.0.0"
+    ],
+    "ProductionPolicy": [
+      "1.0.0"
+    ],
+    "ProductionRuntime": [
+      "1.0.0"
+    ],
+    "ProductionResource": [
+      "1.0.0"
+    ],
+    "ArtifactRef": [
+      "1.0.0"
+    ],
+    "JobRef": [
+      "1.0.0"
+    ],
+    "ComposeArtifactRequest": [
+      "1.0.0"
+    ],
+    "PersonalizeBatchRequest": [
+      "1.0.0"
+    ],
+    "InspectArtifactRequest": [
+      "1.0.0"
+    ],
+    "ExportBundleRequest": [
+      "1.0.0"
+    ],
+    "CompareTemplateRequest": [
+      "1.0.0"
+    ],
+    "ArtifactStatusRequest": [
+      "1.0.0"
+    ],
+    "ProductionError": [
+      "1.0.0"
+    ],
+    "ProductionDiagnostic": [
+      "1.0.0"
+    ],
+    "TemplateSpec": [
+      "1.0.0"
+    ],
+    "PersonalizationSchema": [
+      "1.0.0"
+    ],
+    "Composition": [
+      "1.0.0"
+    ],
+    "CompatibilityReport": [
+      "1.0.0"
+    ],
+    "PreflightReport": [
+      "1.0.0"
+    ],
+    "ArtifactFile": [
+      "2.0.0"
+    ],
+    "ProductionBundleDetached": [
+      "1.0.0"
+    ],
+    "ProductionBundleRef": [
+      "1.0.0"
+    ],
+    "RowResult": [
+      "1.0.0"
+    ],
+    "BatchResult": [
+      "1.0.0"
+    ],
+    "ArtifactManifestStatus": [
+      "1.0.0"
+    ],
+    "CsvDialect": [
+      "1.0.0"
+    ],
+    "CsvMapping": [
+      "1.0.0"
+    ],
+    "CsvCheckpoint": [
+      "1.0.0"
+    ],
+    "ProductionExecutionPins": [
+      "1.0.0"
+    ]
+  },
+  "previous_accepted_major": null,
+  "finance_migration": {
+    "current_proposal": "2.0.0",
+    "retained_legacy_candidate": "1.0.0",
+    "legacy_semantics": "preserved_for_explicit_characterization_only_without_v2_safety_guarantees",
+    "accepted": false,
+    "impact_record": "compatibility/finance-v2-impact.json",
+    "exact_decoder": "validateContractVersion/parseContractVersion",
+    "root_types": "union_of_every_supported_version"
+  }
+}

@@ -1,0 +1,1 @@
+{"operation":"op-1","billable_attempt":"bill-1","transport":"delivery-1","cost":"0.000123","billing_mode":"synthetic"}

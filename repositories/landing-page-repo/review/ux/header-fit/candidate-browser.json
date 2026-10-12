@@ -1,0 +1,304 @@
+{
+  "sourceCommit": "096fe76f8f559ac504693168e3cd6068337d0bb3",
+  "sourcePageSHA": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "url": "http://127.0.0.1:4180/",
+  "observedAt": "2026-10-12T12:02:50.372Z",
+  "observations": [
+    {
+      "step": "375x812 header hero",
+      "observed": {
+        "client": 360,
+        "cta": {
+          "bottom": 85.375,
+          "height": 33.375,
+          "left": 165.75,
+          "right": 344,
+          "top": 52,
+          "width": 178.25,
+          "x": 165.75,
+          "y": 52
+        },
+        "fontStatus": "loaded",
+        "heroTop": {
+          "bottom": 166,
+          "height": 52,
+          "left": 16,
+          "right": 344,
+          "top": 114,
+          "width": 328,
+          "x": 16,
+          "y": 114
+        },
+        "logo": {
+          "bottom": 44,
+          "height": 30,
+          "left": 16,
+          "right": 212.03125,
+          "top": 14,
+          "width": 196.03125,
+          "x": 16,
+          "y": 14
+        },
+        "nav": {
+          "bottom": 99.375,
+          "height": 99.375,
+          "left": 0,
+          "right": 360,
+          "top": 0,
+          "width": 360,
+          "x": 0,
+          "y": 0
+        },
+        "width": 375
+      }
+    },
+    {
+      "step": "320x568 header hero",
+      "observed": {
+        "client": 305,
+        "cta": {
+          "bottom": 85.375,
+          "height": 33.375,
+          "left": 110.75,
+          "right": 289,
+          "top": 52,
+          "width": 178.25,
+          "x": 110.75,
+          "y": 52
+        },
+        "fontStatus": "loaded",
+        "heroTop": {
+          "bottom": 184,
+          "height": 70,
+          "left": 16,
+          "right": 300.96875,
+          "top": 114,
+          "width": 284.96875,
+          "x": 16,
+          "y": 114
+        },
+        "logo": {
+          "bottom": 44,
+          "height": 30,
+          "left": 16,
+          "right": 212.03125,
+          "top": 14,
+          "width": 196.03125,
+          "x": 16,
+          "y": 14
+        },
+        "nav": {
+          "bottom": 99.375,
+          "height": 99.375,
+          "left": 0,
+          "right": 305,
+          "top": 0,
+          "width": 305,
+          "x": 0,
+          "y": 0
+        },
+        "width": 320
+      }
+    },
+    {
+      "step": "320x568 maker entry reduced motion",
+      "observed": {
+        "finale": {
+          "clientHeight": 568,
+          "scrollHeight": 1109,
+          "scrollTop": 0
+        },
+        "heading": {
+          "bottom": 449.8943176269531,
+          "height": 91.94488525390624,
+          "left": 88.47046661376953,
+          "right": 201.5295257568359,
+          "top": 357.9494323730469,
+          "width": 113.0590591430664,
+          "x": 88.47046661376953,
+          "y": 357.9494323730469
+        },
+        "input": {
+          "bottom": 639.609375,
+          "height": 56,
+          "left": 16,
+          "right": 274,
+          "top": 583.609375,
+          "width": 258,
+          "x": 16,
+          "y": 583.609375
+        },
+        "nav": {
+          "bottom": -9.9375,
+          "height": 99.375,
+          "left": 0,
+          "right": 305,
+          "top": -109.3125,
+          "width": 305,
+          "x": 0,
+          "y": -109.3125
+        },
+        "navClass": "nav hide",
+        "y": 19855
+      }
+    },
+    {
+      "step": "320 empty Enter focused reachable input",
+      "observed": {
+        "focus": "ev",
+        "input": {
+          "bottom": 311.609375,
+          "height": 56,
+          "left": 21.630149841308594,
+          "right": 279.6301498413086,
+          "top": 255.609375,
+          "width": 258,
+          "x": 21.630149841308594,
+          "y": 255.609375
+        },
+        "invalid": "true",
+        "nav": {
+          "bottom": -9.9375,
+          "height": 99.375,
+          "left": 0,
+          "right": 305,
+          "top": -109.3125,
+          "width": 305,
+          "x": 0,
+          "y": -109.3125
+        },
+        "navClass": "nav hide"
+      }
+    },
+    {
+      "step": "320 fictional preview no query and no form",
+      "observed": {
+        "forms": 0,
+        "href": "https://getticketstub.com/make",
+        "input": {
+          "bottom": 187.109375,
+          "height": 56,
+          "left": 16,
+          "right": 274,
+          "top": 131.109375,
+          "width": 258,
+          "x": 16,
+          "y": 131.109375
+        },
+        "url": "http://127.0.0.1:4180/#make"
+      }
+    },
+    {
+      "step": "320 maker wheel",
+      "observed": {
+        "clientHeight": 568,
+        "link": {
+          "bottom": 536.28125,
+          "height": 16.890625,
+          "left": 109.46875,
+          "right": 180.53125,
+          "top": 519.390625,
+          "width": 71.0625,
+          "x": 109.46875,
+          "y": 519.390625
+        },
+        "scrollHeight": 899,
+        "scrollTop": 331
+      }
+    },
+    {
+      "step": "375x812 maker entry reduced motion",
+      "observed": {
+        "finale": {
+          "clientHeight": 812,
+          "scrollHeight": 1063
+        },
+        "fontStatus": "loaded",
+        "heading": {
+          "bottom": 465.2481384277344,
+          "height": 107.77752685546876,
+          "left": 106.25027465820312,
+          "right": 238.74972534179688,
+          "top": 357.4706115722656,
+          "width": 132.49945068359375,
+          "x": 106.25027465820312,
+          "y": 357.4706115722656
+        },
+        "input": {
+          "bottom": 631.984375,
+          "height": 56,
+          "left": 16,
+          "right": 329,
+          "top": 575.984375,
+          "width": 313,
+          "x": 16,
+          "y": 575.984375
+        },
+        "navClass": "nav hide",
+        "y": 25179
+      }
+    },
+    {
+      "step": "375 empty Enter focused reachable input",
+      "observed": {
+        "focus": "ev",
+        "input": {
+          "bottom": 433.984375,
+          "height": 56,
+          "left": 16,
+          "right": 329,
+          "top": 377.984375,
+          "width": 313,
+          "x": 16,
+          "y": 377.984375
+        },
+        "invalid": "true"
+      }
+    },
+    {
+      "step": "375 fresh reload then logo top navigation",
+      "observed": {
+        "disc": {
+          "bottom": 424.5,
+          "height": 232.5,
+          "left": 63.75,
+          "right": 296.25,
+          "top": 192,
+          "width": 232.5,
+          "x": 63.75,
+          "y": 192
+        },
+        "fontStatus": "loaded",
+        "heroTop": {
+          "bottom": 166,
+          "height": 52,
+          "left": 16,
+          "right": 344,
+          "top": 114,
+          "width": 328,
+          "x": 16,
+          "y": 114
+        },
+        "nav": {
+          "bottom": 99.375,
+          "height": 99.375,
+          "left": 0,
+          "right": 360,
+          "top": 0,
+          "width": 360,
+          "x": 0,
+          "y": 0
+        },
+        "y": 0
+      }
+    }
+  ],
+  "status": "LOCAL_BOUNDED_HEADER_FIT_OBSERVATIONS_NOT_RELEASE_ACCEPTANCE",
+  "limitations": [
+    "WebGL unavailable; existing-profile Chrome static fallback",
+    "No full viewport, touch, accessibility, privacy, performance or deployment acceptance",
+    "Broader page overflow and maker text/art readability remain unresolved"
+  ],
+  "viewportReset": true,
+  "mediaReset": true
+}

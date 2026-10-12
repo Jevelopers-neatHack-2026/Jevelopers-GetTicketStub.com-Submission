@@ -1,0 +1,42 @@
+{
+  "label": "SYNTHETIC_DENIAL_CAPTURE_SUPPLEMENT_ONLY",
+  "scope": "Consumer conformance against the Finance producer's ACTUAL captured authorization composition. The authority is a synthetic single-state host (NOT a live issuer) over a task-local PostgreSQL holding synthetic postings. No real issuer, fence, billing, CFO delivery or run approval is involved or claimed.",
+  "ownerAcceptance": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3#issuecomment-6126114381",
+  "handoff": { "name": "finance3e8-accepted-denial-capture-supplement.json", "sha256": "8a38eaaf8af1c2723124958cd2ea0d0e4ce37925cab8268374a1a284ece4bfc3" },
+  "producer": {
+    "head": "3e88311d481052f522e8e79ed20155334ab526e7",
+    "tree": "fc3541edcc80ed9c0b30908cd4bbb0425ff15305",
+    "merge": "794dc8b98ad589b553b805f2b8d04d67c07744fb",
+    "candidateCheckout": "ffe2ae493b61dd7010b2883933d39fecb96d0ec4",
+    "candidateRun": 38259518439
+  },
+  "capturedFile": {
+    "name": "candidate-postgres-composition.json",
+    "sha256": "6305706dbac8f366ca20601e62594b3a534fd79e69c0e1087cb3a9e815203d07",
+    "byteLength": 1021876,
+    "copy": "byte for byte; never reformatted"
+  },
+  "counts": {
+    "authorizationCases": 92,
+    "lateForbiddenScope": 60,
+    "entryMissingFourthFenceSourceUnavailable": 4,
+    "positives": 28,
+    "positivesLegacy1_0_0": 14,
+    "positivesRich2_0_0": 14,
+    "typedFailurePayloads": 64,
+    "originalReceipts": 17,
+    "originalReceiptArtifactFiles": 34,
+    "positiveCaseArtifactFiles": 56,
+    "capturedArtifactFiles": 90
+  },
+  "qualifications": [
+    "Late FORBIDDEN_SCOPE cases are NOT a claim of fresh database execution and NOT a claim of zero SQL reads: the captured counters show sourceQueries increasing before the denial.",
+    "The four missing-fourth-fence SOURCE_UNAVAILABLE cases are protected at entry: the captured before and after counters are equal and storeLookups is 0.",
+    "The embedded receipts[].query holds only hashes; it is NOT the full captured request and NOT the actual PostgreSQL request.",
+    "authorizationCases[].sourceBinding supplies the query and projection hashes; the snapshot id, scope, as-of, period and currencies used for a positive expectation are TEST_BUILT hydration from the captured answer.",
+    "reportedCheckoutCommit in the capture is null and its `producer` label is reporting lineage only, NOT the export execution revision.",
+    "The earlier SYNTHETIC_EXPORT_CONFORMANCE_ONLY packet (tests/fixtures/export-conformance) is unchanged and is not relabelled as this capture."
+  ],
+  "consumerAcknowledgement": "pending",
+  "actualProviderCharges": "not_tested"
+}

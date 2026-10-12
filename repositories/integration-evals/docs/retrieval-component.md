@@ -1,0 +1,265 @@
+# Source retrieval component
+
+This adapter exercises the pinned event-intelligence `SafeFetcher` through its
+public source export and owner-owned local fixture hooks. It is partial mock-only
+component evidence, not installed-package adoption, accepted research API behavior,
+provider behavior, authoritative external egress capture, or composed acceptance.
+The original 42 cases, modes, requirements and 142 obligations remain unchanged.
+
+## Run on Linux
+
+Use three clean, physically separate checkouts named `integration-evals`,
+`event-intelligence` and `shared-contracts` under one workspace directory. Pin
+event-intelligence to `d91e08d666abc243ae456a7f9f1bc9c745ca4f8d`, and shared-contracts
+to the exact `contracts/producer-pin.json` revision. The evaluator checkout must
+include this adapter and be clean/committed. No producer files are edited by setup.
+
+Stage and review the actual Linux Node 22.23.3 binary identity, then create the
+component manifest outside the checkouts:
+
+```sh
+cd /workspace/integration-evals
+uv sync --frozen
+uv run integration-evals contract-runtime --node /approved/node --output /workspace/node-runtime.json
+uv run python -m integration_evals.retrieval_setup /workspace /workspace/node-runtime.json /workspace/retrieval-assembly.json
+uv run integration-evals run --workspace /workspace --manifest /workspace/retrieval-assembly.json --mode mock-only --output /workspace/reports
+```
+
+Execution needs the repository's existing Linux Bubblewrap environment. CI uses
+its existing privileged test invocation. The process layer retains `--unshare-net`,
+`--unshare-pid`, read-only root, an isolated writable directory, and bounded cleanup.
+No host-network exception, firewall change, new capability or private infrastructure
+probe is part of this adapter. A missing or unusable namespace fails closed.
+All fixture servers are created inside the same task-local network namespace as the
+fetcher. An allowed request must reach its fixture server and return known bytes.
+
+The manifest fixes Git commit/tree/lock bytes, the original fixture catalog,
+canonical schema artifact, Python runtime and adapter profile. Its command fixes
+the Node executable and SHA256; the adapter checks its own binary bytes and version
+before importing owner hooks. The owner profile is a reviewed source-only test
+configuration, not an approval or provider authorization.
+
+`Component.supported_modes` is optional for archive compatibility. This component
+declares only mock-only. Dispatcher, direct owner calls and passed-archive validation
+enforce that declaration; the Node entrypoint also rejects other modes and non-Linux
+execution before importing fixture hooks. Omitted declarations retain the old
+component behavior. The global case modes are not narrowed.
+
+## Observations and their limits
+
+The sanitized artifact records per-scenario typed result codes and incoming TCP
+connection/HTTP request counts from the fixture servers. These are independent
+of fetcher onDial callbacks. It stores no raw URLs, headers, private payloads,
+credentials or approvals. It records the child network namespace so the integration
+test can compare it with its parent namespace.
+
+`private_targets_reached` means connections to the protected task-local loopback
+fixture only. It does not assert visibility of every possible destination or
+production/external traffic. Private, metadata, encoded IPv4, IPv6-loopback and
+unsupported-scheme cases are calls to the real SafeFetcher; their pre-transport
+rejections are distinguished from the allowed transport and redirect observations.
+Separate `parser_rows` are direct URL-parser unit observations and cannot establish
+transport containment.
+
+`redirects_checked` requires a successful positive transport control, rejected
+negative calls, no protected fixture connection, a received redirect response that
+is rejected before the protected endpoint, the actual redirect-limit error, and
+all injected resolver-input, HTTPS authentication and actual DNS-wire redirect checks
+described below.
+`resource_limits_enforced` is limited to declared wire length, chunked identity
+and gzip encoded-body bytes, actual gzip decoded bytes, cumulative decoded bytes,
+per-instance request count, the bounded concurrency/cancellation checks, and the
+nominal ten-second connect/TLS-handshake timer, each with
+the required typed error and fixture counters. It is not a claim about all resource
+limits.
+
+`chunked_wire` uses two dedicated owner fixture servers and a fresh SafeFetcher
+per request. Each sends identity-encoded, chunked HTTP with no Content-Length.
+Exactly 10 MiB must return the known bytes and SHA256; 10 MiB plus one byte must
+return `RESOURCE_LIMIT`. Both sizes remain below the separate decoded-text and
+aggregate caps. Incoming connections, requests, response closure and socket closure
+are observed before forced fixture cleanup. These counts cover only those fixture
+servers. The wire cap counts encoded body bytes, excluding HTTP framing; it does
+not establish packet-level byte counts, wire DNS/TLS behavior or external egress.
+
+`resource_budgets` adds two gzip controls and a cumulative decoded-byte sequence.
+All responses use gzip and chunked transfer without Content-Length. A small gzip
+positive must return known bytes/hash. A valid stored-block gzip fixture (level 0)
+exceeds the 10 MiB encoded-body cap while its decoded text remains below 20 MiB and
+its fresh fetcher remains below 100 MiB; it must produce `RESOURCE_LIMIT`.
+The artifact records actual encoded/decoded lengths and hashes, including gzip level.
+
+A single separate fetcher then receives five compressible 20 MiB text bodies,
+each independently within its encoded/decoded request limits. All five must return
+exact bytes/hash, totaling precisely 100 MiB decoded. Its next one-byte response
+must produce `RESOURCE_LIMIT`; a fresh fetcher must accept that identical one-byte
+fixture. Six requests stay below the 30-request limit. Accepted decoded totals are
+sums of returned bodies, not access to private owner state. Each attempt records
+actual incoming HTTP/TCP and natural response/socket closure before forced cleanup.
+Bodies are measured and released sequentially; the existing 30-second case timeout
+is unchanged. Linux CI must establish runtime fit as well as the typed verdicts.
+
+`resolver_inputs` exercises same-host relative redirects through the owner's
+`localTestSeam` resolver hook. The safe-alias control requires two resolver calls,
+two incoming HTTP requests/connections, and exact returned bytes/SHA256. Four
+negative cases change only the second injected result: private address, mixed
+fixture/private addresses, metadata alias, or IP-shaped alias. They require the
+actual typed rejection, two resolver calls, one received redirect request and no
+final-hop request/connection. Every accepted connection must close naturally before
+forced fixture cleanup. Counts cover each dedicated task-local server only.
+Sanitized profiles and address/alias counts identify the injected metadata; raw
+hostnames/addresses are not retained. A safe alias is validated as metadata; it is
+not followed by another DNS query. No public address is remapped onto local transport.
+
+`concurrency` has three event-gated scenarios. Eight tiny known-body fetches share
+one instance. A synchronous resolver-hook admission snapshot after one Promise
+microtask depends on the pinned owner's synchronous acquire path. The fixture then
+waits for that entire admitted wave to reach actual HTTP before releasing any
+response. All eight bodies must match their known length/hash and HTTP peak must
+be four. `peak_http` counts outstanding server responses until finish/close;
+resolver admissions and TCP connections/closures have separate counters.
+
+Queued cancellation first holds four actual HTTP requests before response headers.
+A fifth call starts with a live native signal and passes the admission checkpoint
+while all four remain held. Its queue residency follows from that pinned synchronous
+enqueue path; there is no public queue-enter event or private-state observation.
+Native abort must yield `CANCELED` before any held response is released, with no
+fifth resolver admission or HTTP request. A survivor then completes after one slot
+is released, before the other held responses are ended. Active cancellation uses
+a fresh instance and an actual received HTTP request with headers withheld; native
+abort must yield `CANCELED` and natural peer closure before a normal recovery fetch.
+This covers active HTTP awaiting headers, not body-read, resolver, connect or TLS
+cancellation. All event ordering, outcomes and natural closure precede forced cleanup.
+No fixed sleeps, fake clock, private state changes or timeout increases are used.
+
+`dns_wire` imports the pinned owner's internal `DnsWireResolver` through the
+adapter's confined source path. This class is not an installed public package
+export. A bounded integration-owned packet responder supplies specified DNS bytes
+on task-local UDP/TCP; the owner's actual implementation performs resolution and
+policy checks. No system resolver settings or host DNS configuration are changed.
+
+Two supporting controls resolve only: a safe UDP CNAME chain and a valid UDP-TC/TCP
+fallback return known public-answer digests. Those addresses never enter an HTTP
+client or get remapped onto a fixture. Four negative cases first receive an actual
+local HTTP request, then redirect to a valid synthetic DNS name on the same fixture
+port. The second-hop hook delegates to the actual wire resolver: private/mixed
+answers and a forbidden CNAME must return `POLICY_DENIED`; a wrong-ID TCP reply
+must return `DNS_FAILURE`. Each requires initial HTTP and no final HTTP transport.
+
+If a negative lookup unexpectedly returns data, the hook first records that actual
+accepted result/digest and then unconditionally stops before forwarding any address.
+`control_stop`, its code and provenance distinguish this injected fixture stop from
+the owner's DNS verdict. Such acceptance fails the DNS group and redirects_checked,
+even if the final fetch reports the controlled denial. Valid OwnerResponse output
+retains the complete failed capture; no artificial runtime error discards it.
+
+The live verdict requires the actual root A/AAAA pair per transport, exact alias
+queries, expected reply flags/IDs, successful sends, no fixture socket/protocol
+errors, matching UDP/TCP query IDs/questions/frames and HTTP-before-wire ordering.
+Replies wait for both query types; TCP replies also wait for the empty AAAA sibling's
+natural close before the A reply, preventing cancellation from hiding its trace.
+Query arrival order and random16-bit IDs are observed, not assumed unique or fixed.
+Captures retain query/reply/frame hashes, numeric source/destination ports and event
+order. TCP peer closes are observed; UDP has no invented peer-close telemetry.
+
+`tls_redirects` uses owner-generated certificates A/B inside the existing private
+TMPDIR and the actual HTTPS fixture. A trusted relative redirect must return known
+bytes/hash. A redirect to a whitelisted hostname absent from A's SANs must fail TLS
+identity validation. Another fixture rotates its native secure context from A to B
+after the initial HTTP request, then redirects relatively while the client still
+trusts A. Both rejections require actual `TRANSPORT_FAILURE`, two incoming TCP
+connections, one initial HTTP request and zero final HTTP requests, plus natural
+closures. The positive requires two HTTP requests and exact returned bytes/hash.
+Server secureConnection/tlsClientError events are recorded separately: a server
+handshake event does not mean the client trusted its peer. Only public DER certificate
+digests are retained; fixtures and both certificate cleanup handles run in finally.
+
+The existing Linux PATH must provide OpenSSL with `req -addext` support inside the
+unchanged PID/network namespace and writable TMPDIR. Successful owner certificate
+generation is the runtime capability check. Missing tooling is an honest execution
+error, not permission to use host trust stores, system CA/DNS changes or wider
+isolation. No OpenSSL availability or successful TLS rotation is inferred on macOS.
+
+`handshake_deadline` uses a separate raw local TCP listener that accepts and consumes
+client bytes but sends none. Actual SafeFetcher attempts HTTPS through the owner
+TLS seam; its real nominal 10,000ms connect/handshake timer must yield
+`DEADLINE_EXCEEDED`, no returned body and natural peer closure. Monotonic invocation,
+connection, first-client-byte and closure times are retained. The predeclared outcome
+window is 9,900–20,000ms, separating this timer from the 30,000ms overall deadline.
+There is no delayed fixture response/close, sleep oracle or fake clock. This raw
+listener has no TLS/HTTP parser; its byte counts are not validated ClientHello,
+HTTP-request or handshake-success telemetry. Early rejections retain an unreached
+stage. Linux CI must prove all groups fit the unchanged 30-second case timeout.
+
+Uncovered obligations remain explicit in every artifact: system/recursive DNS,
+TTL rebinding, reply races, arbitrary CNAME graphs, IPv6 wire answers and untested
+packet guards; the overall deadline and cancellation during
+body reads/resolution/connect/TLS, plus real job cancellation;
+production TLS/public CA/networking; image/PDF and downstream parser limits; real rejection
+handoff into research, JEV or creative; and authoritative external egress capture.
+IE-11A.AC3 content-authority containment is a separate unchanged case. A passing
+mock component execution leaves criterion status in progress and product acceptance
+blocked. All unselected original cases remain planned, not implicitly passed.
+
+## Regression and Linux evidence
+
+The separately invoked `component_tests` suite uses actual `execute` and `save_run`
+with clean owned snapshots and all 42 original cases. It compares a real baseline
+with sixteen deliberately weakened owned copies: an always-reject fetcher, unchecked
+loopback fetching, and removal of only the identity-body streaming wire counter.
+The positive control detects always-reject behavior; incoming protected server
+counters detect unchecked loopback fetching. The wire-counter mutation must accept
+the oversized body with its exact bytes/hash and fail the resource observation.
+The Content-Length, gzip, decoded and aggregate guards remain intact in that copy.
+Four resolver mutations independently reuse the first resolution across redirects,
+validate only the first answer, remove the alias hostname guard, or remove the
+IP-alias guard. The first reuses the safe fixture answer; the others expose failures
+by reaching the local final-hop fixture. Injected private/alias addresses are never
+used as replacement transport destinations. Each mutation must fail its resolver
+observation and the component while retaining the other controls.
+Two further copies disable only the gzip encoded-body guard or only the cumulative
+decoded-byte check. The corresponding overflow must then return its exact body and
+make the new resource observation/component fail. The per-request decoded limit,
+other byte guard, request budget and existing controls remain in place.
+The concurrency copy changes only the semaphore admission comparison from `<` to
+`<=`. The adaptive HTTP gate must expose five actual held requests and peak five.
+If the fifth queued-cancellation request is admitted, the probe waits for its HTTP
+arrival before aborting so an early abort cannot hide the defect; its peer must
+close before launching the survivor. The cap remains declared as four, and both
+observations/component must fail while all outcomes and cleanup are retained.
+TLS copies replace only the hostname-check callback, or disable both certificate
+authorization enforcement points. They must expose final HTTP and exact known-body
+acceptance, failing the explicit TLS group and redirects observation. The trust
+bypass can also bypass hostname rejection; tests retain that effect honestly. Its
+second successful handshake must expose certificate B's public digest, proving
+fixture rotation rather than assuming it. A separate timer copy divides only the
+connect-timer delay by ten while declared limits remain unchanged. Its real early
+deadline and closure must fail the lower timing bound and resource observation.
+Three DNS copies remove both redundant wire-address guards, only the CNAME hostname
+validation, or only the transaction-ID comparison. The actual wire verdict/query
+trace must expose each defect and make the explicit DNS/redirect group fail. Any
+returned addresses are stopped by the negative-only safety hook, so mutation tests
+cannot dial public/private answers. The independent resolver-only positives remain
+required; no competing resolver or copied domain policy is introduced.
+The existing cached-resolution copy also affects this group: it reuses the owned
+origin loopback result at the redirect and skips wire resolution entirely. Tests
+require actual final local HTTP/known bytes, no DNS queries and a failed DNS group.
+That bypass is distinct from the negative hook's control stop, which never ran;
+it is not a successful fetch to a wire-returned public address.
+Original producer checkouts stay unchanged.
+
+```sh
+sudo -n env IE_EVENT_SOURCE=/pinned/event-intelligence \
+  IE_CONTRACT_SOURCE=/pinned/shared-contracts \
+  IE_CONTRACT_RUNTIME=/reviewed/node-runtime.json \
+  IE_COMPONENT_EVIDENCE=/approved/reports/retrieval-component \
+  .venv/bin/python -m pytest component_tests \
+  -o cache_dir=/isolated/component-cache --junitxml=/approved/reports/component-junit.xml
+```
+
+The workflow checks out the exact owner sources and runs this suite after canonical
+runtime staging. Only revalidated sanitized archives are exported to the upload
+directory. Raw owned source copies remain in pytest temporary storage. Non-Linux
+invocation retains platform-blocked runs and fails the mandatory suite instead of
+skipping it. Local macOS checks cannot establish this Linux boundary; actual Linux
+CI artifacts are required before claiming it verified.

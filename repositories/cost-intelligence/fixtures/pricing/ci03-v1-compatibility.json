@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1.0.0",
+  "versionedReference": {
+    "contract": "RateCard",
+    "schema_version": "1.0.0",
+    "id": "ci03-legacy-card",
+    "revision": 1,
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "rate_card": {
+    "schemaVersion": "1.0.0",
+    "id": "ci03-legacy-card",
+    "revision": 1,
+    "provider": "openai",
+    "product": "responses",
+    "modelOrSku": "ci03-legacy-model",
+    "currency": "USD",
+    "unitRates": [
+      { "category": "input", "unit": "token", "rate": "2", "relation": "standalone" }
+    ],
+    "effectiveFrom": "2026-10-11T03:30:00.000Z",
+    "effectiveTo": null,
+    "retrievedAt": "2026-10-11T03:30:00.000Z",
+    "sourceUrl": "https://fixtures.invalid/legacy-pricing",
+    "sourceContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "approvalRef": {
+      "contract": "SyntheticFixtureApproval",
+      "schema_version": "1.0.0",
+      "id": "ci03-legacy-approval",
+      "revision": 1,
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "provenance": "synthetic_fixture"
+  },
+  "estimate_result": {
+    "schemaVersion": "1.0.0",
+    "requestId": "ci03-legacy-result",
+    "estimatedAt": "2026-10-11T03:30:10.000Z",
+    "status": "complete",
+    "knownSubtotal": "0.000002",
+    "currency": "USD",
+    "rateCardRef": {
+      "contract": "RateCard",
+      "schema_version": "1.0.0",
+      "id": "ci03-legacy-card",
+      "revision": 1,
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "missingDimensions": [],
+    "assumptions": ["Synthetic legacy compatibility fixture."],
+    "boundedConservativeAuthorizationAmount": null,
+    "calculation": [
+      {
+        "category": "input",
+        "quantity": "1",
+        "unit": "token",
+        "rate": "2",
+        "extendedAmount": "0.000002",
+        "relation": "standalone"
+      }
+    ]
+  }
+}

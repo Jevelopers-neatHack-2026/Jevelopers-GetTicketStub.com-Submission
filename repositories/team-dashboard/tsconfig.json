@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
+    "noEmit": true,
+    "paths": {
+      "@jevelopers/team-dashboard": [
+        "./src/index.ts"
+      ],
+      "@jevelopers/team-dashboard/integration": [
+        "./integration/index.ts"
+      ],
+      "@jevelopers/team-dashboard/server": [
+        "./src/server.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "integration",
+    "tests",
+    "*.ts"
+  ],
+  "exclude": [
+    "tests/fixtures/finance-v2-conformance/source"
+  ]
+}

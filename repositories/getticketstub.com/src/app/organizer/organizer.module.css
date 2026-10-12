@@ -1,0 +1,517 @@
+/* Organizer: desktop first. The design panel on the left, the stub life size on the desk on the right.
+   On a phone the panel is the page and the preview shows for the design step only. */
+
+.intro {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+  max-width: 46rem;
+}
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+@media (min-width: 960px) {
+  .title {
+    font: var(--type-hero);
+    font-variation-settings: "SOFT" 30, "opsz" 96;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+}
+
+/* Steps: numbered stamps on a perforated line */
+.steps ol {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 640px;
+}
+.steps li {
+  position: relative;
+}
+.steps li + li::before {
+  content: "";
+  position: absolute;
+  top: 21px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  z-index: 0;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 7px 2px;
+  background-repeat: repeat-x;
+}
+.steps li[data-state="done"] + li::before,
+.steps li[data-state="now"]::before {
+  background-image: radial-gradient(circle, var(--desk-ink) 1.1px, transparent 1.4px);
+}
+.stepBtn {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--desk-ink-soft);
+  font: var(--type-label);
+  -webkit-tap-highlight-color: transparent;
+}
+.stepBtn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.stepNo {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--desk-paper);
+  box-shadow: inset 0 0 0 1.5px var(--desk-rule-strong);
+  font: var(--type-h3);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink);
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    background-color 240ms ease,
+    box-shadow 240ms ease;
+}
+.stepBtn:not([disabled]):hover .stepNo {
+  transform: rotate(-6deg);
+}
+.steps li[data-state="done"] .stepNo {
+  background: var(--desk-ink);
+  color: var(--desk-paper);
+  box-shadow: none;
+}
+.steps li[data-state="now"] .stepNo {
+  background: var(--desk-stamp);
+  color: var(--desk-stamp-label);
+  box-shadow: inset 0 0 0 1.5px var(--desk-stamp-ledge), 0 2px 0 var(--desk-stamp-ledge);
+  transform: rotate(-4deg);
+}
+.stepLabel {
+  font: var(--type-ui);
+  font-size: 0.9rem;
+  color: var(--desk-ink-soft);
+}
+.steps li[data-state="now"] .stepLabel {
+  color: var(--desk-ink);
+  font-weight: 620;
+}
+
+/* Layout */
+.layout {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+}
+.panel {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  min-width: 0;
+}
+.stepTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 48;
+  letter-spacing: -0.02em;
+}
+.stepTitleNo {
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.body {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.group {
+  display: grid;
+  gap: 10px;
+}
+.locks {
+  display: grid;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+/* Preview: the stub, life size, on the desk. Phone shows it for the design step only. */
+.previewCol {
+  display: none;
+  justify-items: center;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+.layout[data-step="0"] .previewCol {
+  display: grid;
+}
+.caption {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  text-align: center;
+}
+.lockList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 18px;
+  font: var(--type-ui);
+}
+.lockList li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lockList svg {
+  width: 22px;
+  height: 22px;
+}
+.styles {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+
+/* CSV tray: a tray of paper you drop the list into */
+.tray {
+  position: relative;
+  min-height: 160px;
+  padding-top: 18px;
+  border-radius: 8px 8px 4px 4px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 2px 6px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  overflow: hidden;
+  transition: box-shadow 260ms ease;
+}
+.tray[data-over] {
+  box-shadow: inset 0 2px 6px var(--desk-ledge), inset 0 0 0 2px var(--desk-ink);
+}
+.trayBack {
+  position: absolute;
+  inset: 16px 0 auto;
+  display: grid;
+  place-items: start center;
+}
+.trayPaper {
+  position: relative;
+  display: block;
+  width: min(70%, 260px);
+  height: 120px;
+  border-radius: 3px 3px 0 0;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 1px 0 var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  transform: translateY(26px) rotate(-1.5deg);
+  transition: transform 520ms var(--desk-spring);
+}
+.tray[data-over] .trayPaper {
+  transform: translateY(0) rotate(0deg);
+}
+.tray[data-filled] .trayPaper {
+  transform: translateY(8px) rotate(-1deg);
+}
+.trayLines {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 14px;
+  height: 50px;
+  background-image: repeating-linear-gradient(to bottom, var(--desk-rule-strong) 0 1px, transparent 1px 9px);
+  opacity: 0.7;
+}
+.trayTag {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  font: var(--type-label);
+  letter-spacing: 0.1em;
+  color: var(--desk-ink-soft);
+}
+.trayLip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  min-height: 82px;
+  margin-top: 74px;
+  padding: 14px 16px;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 -1px 0 var(--desk-rule-strong), 0 -8px 12px -8px rgb(23 20 15 / 0.3);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+.trayHint {
+  font: var(--type-ui);
+  color: var(--desk-ink-soft);
+  text-align: center;
+}
+.trayName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.trayActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+.filePick {
+  position: relative;
+  cursor: pointer;
+}
+.filePick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.filePick:focus-within {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 3px;
+}
+
+/* Column matching with paper tags */
+.match {
+  display: grid;
+  gap: 16px;
+}
+.colRow {
+  display: grid;
+  gap: 8px;
+}
+.firstGuests {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+}
+.firstGuests li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--desk-rule);
+}
+.gName {
+  font: var(--type-ui);
+  font-weight: 560;
+  overflow-wrap: anywhere;
+}
+.gMeta {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+
+/* Contact sheet: every guest's stub on a light table */
+.contact {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 4px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 2px 6px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  justify-items: start;
+}
+.contactHead {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 14px;
+}
+.grid li {
+  min-width: 0;
+  --stub-max: 100%;
+  animation: lay 460ms var(--ts-ease-enter) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+.cell {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  width: 100%;
+  padding: 6px 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--desk-ink);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 200ms ease,
+    transform 300ms var(--desk-spring);
+}
+.cell > :first-child {
+  margin-inline: auto;
+}
+.cell:hover {
+  background: color-mix(in srgb, var(--desk-ink) 5%, transparent);
+  transform: translateY(-2px);
+}
+.cell[aria-pressed="true"] {
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1.5px var(--desk-ink), 0 1px 0 var(--desk-ledge);
+}
+@keyframes lay {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Publish */
+.publish {
+  display: grid;
+  gap: 18px;
+}
+.runLine {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+.runLine::after {
+  content: "";
+  order: 1;
+  flex: 1;
+  height: 2px;
+  align-self: center;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 6px 2px;
+  background-repeat: repeat-x;
+}
+.receipt {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.receipt dt {
+  min-width: 0;
+}
+.receipt dd {
+  order: 2;
+  margin: 0;
+  white-space: nowrap;
+}
+.runTotal {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+}
+.runLine strong {
+  order: 2;
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+}
+.done {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+/* Desktop */
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(420px, 540px) minmax(0, 1fr);
+    gap: 96px;
+    align-items: start;
+  }
+  .previewCol,
+  .layout[data-step="0"] .previewCol {
+    display: grid;
+    position: sticky;
+    top: 96px;
+    --stub-max: 420px;
+  }
+  .contact {
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid li {
+    animation: none;
+  }
+  .stepNo,
+  .trayPaper,
+  .cell {
+    transition: none;
+  }
+}
+
+.line {
+  display: block;
+  text-wrap: balance;
+}
+
+
+/* published guest links */
+.links {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.linkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.linkRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--desk-rule-strong);
+  font: var(--type-body);
+}
+.linkName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.linkSeat {
+  color: var(--desk-ink-soft);
+  font-variant-numeric: tabular-nums;
+}

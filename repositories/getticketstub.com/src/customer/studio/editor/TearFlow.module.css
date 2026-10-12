@@ -1,0 +1,47 @@
+/* The tear: the paper desk fades in (600 ms), then the stub flies out and the wall takes over. */
+.stage.stage {
+  /* doubled so it wins over .desk-surface { position: relative } whatever the bundle order */
+  position: fixed;
+  inset: 0 0 0 var(--nav-w, 0px);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  animation: paperIn 600ms var(--ts-ease-standard) both;
+}
+.leaving {
+  animation: paperOut 600ms var(--ts-ease-standard) both;
+  pointer-events: none;
+}
+.area {
+  flex: 1;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+@keyframes paperIn {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes paperOut {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .leaving {
+    animation-duration: 200ms;
+  }
+}
+.track {
+  flex: none;
+  /* below the corner cart button on narrow screens */
+  padding-top: max(env(safe-area-inset-top), calc(var(--corner-reserve, 0px) * 0.62 - 16px));
+}

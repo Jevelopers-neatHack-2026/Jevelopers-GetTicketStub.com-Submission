@@ -1,0 +1,583 @@
+{
+  "schema_version": "1.0",
+  "fixtures": [
+    {
+      "id": "research-positive",
+      "path": "data/research-positive.txt",
+      "sha256": "d47fef940618d15e2e18dfd26db226b459f3bdf5ed56bcc2c8e60270d5025e21",
+      "media_type": "text/plain",
+      "family": "research",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/research-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC1",
+        "AGT-01",
+        "AGT-04"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "research-negative",
+      "path": "data/research-negative.txt",
+      "sha256": "e965a4802c8f6405109ba98b04cca06774baa60211895aa041d25113ca0b1926",
+      "media_type": "text/plain",
+      "family": "research",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/research-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC1",
+        "AGT-01",
+        "AGT-04"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "source-positive",
+      "path": "data/source-positive.txt",
+      "sha256": "af1bfb5248f2ed08a5be70c5d4ac167b47dcd7a60c9cea3dde0847764841ccba",
+      "media_type": "text/plain",
+      "family": "source",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/source-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC1",
+        "AGT-05",
+        "IE-11A.AC1"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "source-negative",
+      "path": "data/source-negative.txt",
+      "sha256": "a76ceca99af57fbdde69dcaaab84e21204e4f08541bf6763ada44bd2a2ce33e6",
+      "media_type": "text/plain",
+      "family": "source",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/source-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC1",
+        "AGT-05",
+        "IE-11A.AC1"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "creative-positive",
+      "path": "data/creative-positive.txt",
+      "sha256": "d4543155711862a11383383d066db4988ea40deb7740a80d57c6cdff271d63b7",
+      "media_type": "text/plain",
+      "family": "creative",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/creative-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC2",
+        "ART-01"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "creative-negative",
+      "path": "data/creative-negative.txt",
+      "sha256": "53a007aac34b5d9980510281195e1d9b0d12de47e6e432745bb03e3e26b3bb8e",
+      "media_type": "text/plain",
+      "family": "creative",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/creative-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC2",
+        "ART-01"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "approval-positive",
+      "path": "data/approval-positive.txt",
+      "sha256": "f29d9efaa2336ab7c0ab05628c4dc1a03b3b251b3322cfe6af6e65fdded3b1d3",
+      "media_type": "text/plain",
+      "family": "approval",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/approval-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC2",
+        "ART-02",
+        "CON-02"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "approval-negative",
+      "path": "data/approval-negative.txt",
+      "sha256": "3a3ed77b9a0890681f12461476675456365ab6e2ff4a30955ba1029f75329dce",
+      "media_type": "text/plain",
+      "family": "approval",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/approval-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC2",
+        "ART-02",
+        "CON-02"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "permission-positive",
+      "path": "data/permission-positive.txt",
+      "sha256": "0fc3960cbb08e953d833c31e44257ee18703cc520c34dc597025638e665c49e8",
+      "media_type": "text/plain",
+      "family": "permission",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/permission-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC2",
+        "ART-05"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "permission-negative",
+      "path": "data/permission-negative.txt",
+      "sha256": "570943349bee89bf4f475d91add3283fa56f1d511838117d7beaee39614f12d5",
+      "media_type": "text/plain",
+      "family": "permission",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/permission-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC2",
+        "ART-05"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "usage-positive",
+      "path": "data/usage-positive.txt",
+      "sha256": "8dd21ddefaef699514c82fbd183743a903aebf20e2b91a73f45fce8b131f69b6",
+      "media_type": "text/plain",
+      "family": "usage",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/usage-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC3",
+        "FIN-01",
+        "FIN-04",
+        "FIN-07"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "usage-negative",
+      "path": "data/usage-negative.txt",
+      "sha256": "8a8076c3f177d5623025b7283d143c1a2ac8198885fe5cd3b0b5189520a1d825",
+      "media_type": "text/plain",
+      "family": "usage",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/usage-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC3",
+        "FIN-01",
+        "FIN-04",
+        "FIN-07"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "finance-positive",
+      "path": "data/finance-positive.txt",
+      "sha256": "67acafc7c679c71b9309afc0fc28f53b6c4c085a7a3aefb35080574b629ad3f4",
+      "media_type": "text/plain",
+      "family": "finance",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/finance-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC3",
+        "FIN-05",
+        "FIN-09"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "finance-negative",
+      "path": "data/finance-negative.txt",
+      "sha256": "1f671ecfba8e902fdea3521ab2641621cec27452b17a3a59a81de68673580573",
+      "media_type": "text/plain",
+      "family": "finance",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/finance-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC3",
+        "FIN-05",
+        "FIN-09"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "asset-positive",
+      "path": "data/asset-positive.txt",
+      "sha256": "51dfc9148ee019421107635f76842590437eb677861e24ef4e7b5294cebdf30b",
+      "media_type": "text/plain",
+      "family": "asset",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/asset-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC4",
+        "ART-05",
+        "EVAL-04"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "asset-negative",
+      "path": "data/asset-negative.txt",
+      "sha256": "969bc670d1540ffce4823ea9ca7b9c9bd5154052c78a0460cf8c235f88cca4de",
+      "media_type": "text/plain",
+      "family": "asset",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/asset-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": true,
+      "requirements": [
+        "IE-02B.AC4",
+        "ART-05",
+        "EVAL-04"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "email-positive",
+      "path": "data/email-positive.txt",
+      "sha256": "80b9b19d044aee269903311b96f22c41e05dd18bca31e1716a9aa1a865d29e50",
+      "media_type": "text/plain",
+      "family": "email",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/email-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC1",
+        "AGT-04"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "email-negative",
+      "path": "data/email-negative.txt",
+      "sha256": "b1585e5c86a528cb9d2cb12f97282af968bb2314e70bef955f5e046267773d83",
+      "media_type": "text/plain",
+      "family": "email",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/email-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC1",
+        "AGT-04"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "payload-positive",
+      "path": "data/payload-positive.txt",
+      "sha256": "05e03ba7f9866f07afa2fa76cc6275b99fcb92ea6d3e55ebf685bb3c29100d0f",
+      "media_type": "text/plain",
+      "family": "payload",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/payload-positive",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC3",
+        "CON-01",
+        "CON-02"
+      ],
+      "expected": "accepted through owner boundary",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    },
+    {
+      "id": "payload-negative",
+      "path": "data/payload-negative.txt",
+      "sha256": "884596e94b7c29fc6ee8b6f1218c8eebc32d1cb2184f2d96f2f4324297b6c09d",
+      "media_type": "text/plain",
+      "family": "payload",
+      "origin": "synthetic",
+      "source_ref": "https://fixtures.example/payload-negative",
+      "collected_at": "2026-10-10T00:00:00Z",
+      "creator": "integration-evals synthetic fixture generator",
+      "permission": "Fictional original test input; no customer or sponsor content",
+      "tenant_scope": "tenant-a/project-a; negative scope tenant-b/project-b",
+      "redaction": "Synthetic identities; no private source content",
+      "retention": "Versioned immutable fixture; revocation requires digest tombstone",
+      "revoked": false,
+      "quarantined": false,
+      "requirements": [
+        "IE-02B.AC3",
+        "CON-01",
+        "CON-02"
+      ],
+      "expected": "typed rejection/uncertainty; no unauthorized effect",
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ]
+    }
+  ],
+  "upstream_revision": null,
+  "canonical_schema_digest": null
+}

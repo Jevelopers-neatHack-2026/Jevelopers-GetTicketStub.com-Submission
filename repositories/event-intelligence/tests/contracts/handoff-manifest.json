@@ -1,0 +1,1722 @@
+{
+  "baseline_revision": "070279d179ca65cf3a336beeea73feb53f27831f",
+  "component_manifest": "release/component-manifest.json",
+  "evidence_verifier_id": null,
+  "handoffs": {
+    "handoff-consumer": {
+      "acceptance_roles": {
+        "ART-02": "Product and frontend",
+        "ART-05": "Creative and fulfillment",
+        "CON-01": "Agent and research",
+        "CON-02": "Agent and research",
+        "CON-03": "Agent and research",
+        "EVAL-01": "Finance and reliability",
+        "EVAL-03": "Product and frontend",
+        "SPN-01": "Finance and reliability",
+        "SPN-02": "Agent and research"
+      },
+      "artifacts": {
+        "agreed_representative_package_fixture": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:producer-consumer-agreed-representative-package-fixture",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "consumer_ack_retry_error_contract": {
+          "component": "creative-engine",
+          "evidence": null,
+          "identity": "creative-engine:consumer-rejection-acknowledgement-retry-and-safe-error-behavior",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "required_review_roles": [
+            "Creative and fulfillment",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "consumer_owner_acknowledgement": {
+          "component": "creative-engine",
+          "evidence": null,
+          "identity": "creative-engine:consumer-owner-role-acknowledgement",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "required_review_roles": [
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "correction_invalidation_idempotency_contract": {
+          "component": "creative-engine",
+          "evidence": null,
+          "identity": "creative-engine:corrected-package-idempotent-invalidation-and-history",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "required_review_roles": [
+            "Creative and fulfillment",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "pinned_runnable_creative_consumer": {
+          "component": "creative-engine",
+          "evidence": null,
+          "identity": "creative-engine:actual-runnable-research-package-consumer-revision",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "required_review_roles": [
+            "Creative and fulfillment",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "trusted_scope_approval_contract_pin": {
+          "component": "getticketstub.com",
+          "evidence": null,
+          "identity": "application-owned:trusted-scope-and-asset-approval-revision",
+          "mode": "unknown",
+          "owner_role": "Product and frontend",
+          "required_review_roles": [
+            "Product and frontend",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "crosswalk": {
+        "acceptance_contribution_scope": {
+          "expectation": "EVAL-01 retains global export/sandbox/reporting scope; this handoff is contribution only.",
+          "owner_role": "Finance and reliability",
+          "resolution": null
+        },
+        "consumer_error_ack_retry": {
+          "expectation": "Define safe rejection, acknowledgement and retry behavior for incompatible/stale/untrusted inputs.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        },
+        "correction_invalidation_identity_and_history": {
+          "expectation": "Correction identifies affected downstream artifacts; invalidation is idempotent and history is retained.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        },
+        "external_approval_authority": {
+          "expectation": "Product owns authenticated scope and approval authority; consumer must fail closed on untrusted claims.",
+          "owner_role": "Product and frontend",
+          "resolution": null
+        },
+        "locked_facts_unresolved_questions": {
+          "expectation": "Keep locked facts and unresolved questions visible to consumer behavior.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        },
+        "package_identity_version_hash": {
+          "expectation": "Consumer carries package ID, version and hash unchanged.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        },
+        "permitted_asset_identity_hash_scope_expiry_revocation": {
+          "expectation": "Carry permission-bound asset identity/hash/scope/expiry/revocation or original-artwork fallback.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        },
+        "program_epic_reference": {
+          "expectation": "Point to the sole harness coordinator epic; links/closure are not executable evidence.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "trace_decision_usage_references": {
+          "expectation": "Preserve trace, decision and usage references without claiming provider success.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        }
+      },
+      "dependency_mode": "unknown",
+      "fixtures": {
+        "actual_consumer_revision_not_local_double": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "agreed representative fixture runs on the actual pinned consumer; a local double is insufficient",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "revision_pins": {
+            "creative-engine": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "actual_consumer",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "corrected_package_invalidation_is_idempotent": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "corrected package invalidates affected artifacts idempotently and retains history",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "revision_pins": {
+            "creative-engine": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "actual_consumer",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "preserves_package_identity_locked_facts_and_uncertainty": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "consumer preserves package ID/version/hash, locked facts and unresolved questions",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "revision_pins": {
+            "creative-engine": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "actual_consumer",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "rejects_incompatible_scope_unresolved_or_stale_approval": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "consumer rejects incompatible schema, forged scope, unresolved required fact and stale/revoked approval",
+          "mode": "unknown",
+          "owner_role": "Product and frontend",
+          "revision_pins": {
+            "creative-engine": null,
+            "getticketstub.com": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "actual_consumer",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "rights_assets_or_original_artwork_fallback": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "consumer preserves asset identity/hash/scope/expiry/revocation or explicit original-artwork fallback",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "revision_pins": {
+            "creative-engine": null,
+            "getticketstub.com": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "actual_consumer",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "trace_decision_usage_and_sponsor_refs_are_preserved": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "consumer preserves trace/decision/usage references; scoped EVAL contribution is not whole-criterion proof",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "creative-engine": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "actual_consumer",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "local_requirement_ids": [
+        "EI-10",
+        "EI-12"
+      ],
+      "owner_role": "Agent and research",
+      "pins": {
+        "creative-engine": {
+          "evidence": null,
+          "revision": null
+        },
+        "getticketstub.com": {
+          "evidence": null,
+          "revision": null
+        },
+        "shared-contracts": {
+          "evidence": null,
+          "revision": null
+        }
+      },
+      "required_components": [
+        "shared-contracts",
+        "creative-engine",
+        "getticketstub.com"
+      ],
+      "triage_key": "EI-X04",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      },
+      "workflow_state": "blocked"
+    },
+    "handoff-contracts": {
+      "acceptance_roles": {
+        "CON-01": "Agent and research",
+        "CON-02": "Agent and research",
+        "CON-03": "Agent and research"
+      },
+      "artifacts": {
+        "canonical_field_crosswalk": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:producer-consumer-reviewed-field-crosswalk",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment",
+            "Product and frontend"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "consumer_binding_pin": {
+          "component": "creative-engine",
+          "evidence": null,
+          "identity": "creative-engine:generated-consumer-binding-revision",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "consumer_review_acknowledgement": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:consumer-role-acknowledgement",
+          "mode": "unknown",
+          "owner_role": "Creative and fulfillment",
+          "required_review_roles": [
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "correction_schema": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:versioned-correction-schema",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "decision_port_contract": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:contract-only-injected-decision-port",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "dependency_direction_evidence": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "contract-boundary:engines-import-contracts-no-engine-imports-harness",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "event_intelligence_package_schema": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:versioned-event-intelligence-package-schema",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "identity_approval_owner_acknowledgement": {
+          "component": "getticketstub.com",
+          "evidence": null,
+          "identity": "getticketstub.com:identity-approval-owner-role-acknowledgement",
+          "mode": "unknown",
+          "owner_role": "Product and frontend",
+          "required_review_roles": [
+            "Product and frontend"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "invalidation_schema": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:versioned-invalidation-schema",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "producer_binding_pin": {
+          "component": "event-intelligence",
+          "evidence": null,
+          "identity": "event-intelligence:generated-producer-binding-revision",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "producer_review_acknowledgement": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:producer-role-acknowledgement",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "progress_receipt_schema": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:versioned-progress-and-request-answer-batch-receipt-schemas",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "research_request_schema": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:versioned-research-request-schema",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "trusted_scope_approval_contract": {
+          "component": "getticketstub.com",
+          "evidence": null,
+          "identity": "application-owned:authenticated-scope-and-approval-verification-contract",
+          "mode": "unknown",
+          "owner_role": "Product and frontend",
+          "required_review_roles": [
+            "Product and frontend",
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "typed_error_schema": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:versioned-safe-typed-error-schema",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Creative and fulfillment"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "crosswalk": {
+        "billable_attempt_id": {
+          "expectation": "Billable attempt identity is distinct from transport retry.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "billing_mode": {
+          "expectation": "billing_mode is explicit and does not itself prove billing.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "correction_fields": {
+          "expectation": "External owner decides correction fields, revision semantics and history behavior.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "correlation_id": {
+          "expectation": "correlation_id links the approved execution context.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "environment": {
+          "expectation": "environment is explicit.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "event_id": {
+          "expectation": "event_id identifies an emitted event, not occurrence identity or package identity.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "ingested_at": {
+          "expectation": "ingested_at is distinct from occurred_at.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "invalidation_fields": {
+          "expectation": "External owner decides invalidation identity, ordering and deduplication fields.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "logical_operation_id": {
+          "expectation": "Logical operation identity is distinct from attempts and source observation.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "noul_confidence": {
+          "expectation": "Noul has only type and noul; no confidence field.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "occurred_at": {
+          "expectation": "occurred_at is distinct from ingested_at.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "package_alias": {
+          "expectation": "Decide the EventIntelligencePackage/ResearchPackage alias; this catalog does not choose the wire name.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "permitted_asset_wire_field": {
+          "expectation": "permittedAssets is conceptual only; external owner decides exact wire field.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "producer_build_revision": {
+          "expectation": "Record producer/build revision; exact composite field spelling remains for owner review.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "project_id": {
+          "expectation": "project_id is an externally authenticated scope value.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "provider_request_id": {
+          "expectation": "Provider request identity may be absent and is distinct from local identities.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "receipt_fields": {
+          "expectation": "External owner decides request/answer/batch receipt fields and typed errors.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "schema_version": {
+          "expectation": "schema_version is required; pin supported compatibility policy.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "scope_approval_fields": {
+          "expectation": "Issuer/audience/actor/tenant/project/asset version/hash/use/expiry/revocation and trusted lookup/signature rule require Product-owned agreement.",
+          "owner_role": "Product and frontend",
+          "resolution": null
+        },
+        "score_legend": {
+          "expectation": "EI v1 keeps Score criteria/legend string-only pending the official discrepancy decision.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "source_observation_identity": {
+          "expectation": "Decide exact source observation identity field and duplicate semantics.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "source_refs": {
+          "expectation": "source_refs preserve provenance references.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "tenant_id": {
+          "expectation": "tenant_id is an externally authenticated scope value.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "transport_attempt_id": {
+          "expectation": "Transport attempt identity is distinct from billable attempt.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "workflow_run_package_version_hash_parent_refs": {
+          "expectation": "Decide exact workflow/run/package/version/hash/parent reference fields.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        }
+      },
+      "dependency_mode": "unknown",
+      "fixtures": {
+        "choice_score_noul_shapes_and_noul_has_no_confidence": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "real generated bindings parse valid Choice/Score/Noul and reject missing/extra/invalid fields",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "creative-engine": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "compatibility_minor_additive_and_unknown_major": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "supported old minor/additive fields follow reviewed rule; unknown major returns typed error",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "creative-engine": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "crosswalk_identity_and_canonical_binding_roundtrip": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "producer and consumer generated bindings compare canonical bytes/hashes and preserve distinct identities",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "creative-engine": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "dependency_graph_has_no_engine_harness_import": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "contract-layer imports are acyclic and no engine imports the complete harness package",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null,
+            "creative-engine": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "dependent_questions_use_separate_stages": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "identity then support assessment uses immutable separate batches without sibling reads",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "official_score_legend_discrepancy_decision": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "record the official Score legend discrepancy decision; retain string-only criteria/legend until owners decide",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "creative-engine": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "package_uncertainty_asset_policy_and_invalidation_receipts": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "representative package preserves facts/uncertainty, source and transformed hashes, policy, refs and ordered invalidation identity",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "creative-engine": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "timeouts_abstentions_malformed_results_preserve_capabilities": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "timeout, abstention and malformed result leave eligible capability set unchanged",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null,
+            "event-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "trusted_approval_fails_closed": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "trusted mechanism rejects forged issuer, wrong scope/hash/version/use, expiry/revocation and boolean claims",
+          "mode": "unknown",
+          "owner_role": "Product and frontend",
+          "revision_pins": {
+            "creative-engine": null,
+            "getticketstub.com": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "local_requirement_ids": [
+        "EI-01",
+        "EI-06",
+        "EI-07",
+        "JEV-EI-01",
+        "JEV-EI-02"
+      ],
+      "owner_role": "Agent and research",
+      "pins": {
+        "agent-harness": {
+          "evidence": null,
+          "revision": null
+        },
+        "creative-engine": {
+          "evidence": null,
+          "revision": null
+        },
+        "getticketstub.com": {
+          "evidence": null,
+          "revision": null
+        },
+        "shared-contracts": {
+          "evidence": null,
+          "revision": null
+        }
+      },
+      "required_components": [
+        "shared-contracts",
+        "agent-harness",
+        "creative-engine",
+        "getticketstub.com"
+      ],
+      "triage_key": "EI-X01",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      },
+      "workflow_state": "blocked"
+    },
+    "handoff-metering": {
+      "acceptance_roles": {
+        "BUD-01": "Finance and reliability",
+        "BUD-02": "Finance and reliability",
+        "BUD-03": "Finance and reliability",
+        "FIN-01": "Finance and reliability",
+        "FIN-02": "Finance and reliability",
+        "FIN-03": "Finance and reliability",
+        "FIN-04": "Finance and reliability",
+        "FIN-08": "Finance and reliability",
+        "SPN-01": "Finance and reliability"
+      },
+      "artifacts": {
+        "durable_observation_recovery_contract": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:bounded-durable-usage-observation-and-recovery-contract",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Finance and reliability",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "finance_review_acknowledgement": {
+          "component": "cost-intelligence",
+          "evidence": null,
+          "identity": "cost-intelligence:finance-owner-role-acknowledgement",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "required_review_roles": [
+            "Finance and reliability"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "harness_review_acknowledgement": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:harness-contract-role-acknowledgement",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "identity_and_deduplication_rules": {
+          "component": "shared-contracts",
+          "evidence": null,
+          "identity": "shared-contracts:operation-attempt-observation-identity-rules",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "required_review_roles": [
+            "Finance and reliability",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "per_provider_billability_mapping": {
+          "component": "cost-intelligence",
+          "evidence": null,
+          "identity": "cost-intelligence:provider-retry-and-billability-mapping",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "required_review_roles": [
+            "Finance and reliability",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "reviewed_metering_budget_trace_protocol": {
+          "component": "cost-intelligence",
+          "evidence": null,
+          "identity": "cost-intelligence:finance-harness-reviewed-reservation-usage-trace-protocol",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "required_review_roles": [
+            "Finance and reliability",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "valuation_and_rate_card_rules": {
+          "component": "cost-intelligence",
+          "evidence": null,
+          "identity": "cost-intelligence:currency-rate-card-effective-date-and-valuation-basis",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "required_review_roles": [
+            "Finance and reliability"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "crosswalk": {
+        "billable_attempt_id": {
+          "expectation": "A genuinely new billable attempt remains distinct under retries.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "consume_release": {
+          "expectation": "Define consume/release semantics and conservation rules.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "event_observation_identity": {
+          "expectation": "event_id and observation identity are distinct and dedupe is specified.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "exact_amount_currency": {
+          "expectation": "Use exact amount and currency; no rounding or currency is assumed here.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "logical_operation_id": {
+          "expectation": "Logical operation is distinct from billable and transport attempts.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "predispatch_authorization": {
+          "expectation": "Define authorization immediately before dispatch and revocation behavior.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "provider_request_id": {
+          "expectation": "Missing provider request ID has an explicit representation.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "rate_card_version_effective_date": {
+          "expectation": "Record rate-card version/source and effective date when known.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "research_reuse_allocation": {
+          "expectation": "EI emits original usage lineage and reuse telemetry; Finance owns allocation.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "reserve": {
+          "expectation": "Define owner, action, blocker and authoritative state for reservation.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "trace_delivery_ack_recovery": {
+          "expectation": "Define acknowledgement, durable delivery, retry and reconciliation boundaries.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "transport_attempt_id": {
+          "expectation": "SDK/transport retries are mapped per provider and may be nonbillable.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "unknown_inflight_outcome": {
+          "expectation": "Unknown in-flight cost remains held until external reconciliation.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "valuation": {
+          "expectation": "Unknown, estimated and provider-confirmed are distinct; unknown is never zero.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "worker_lease": {
+          "expectation": "Worker lease expiry/restart is never a financial reservation expiry signal.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        }
+      },
+      "dependency_mode": "unknown",
+      "fixtures": {
+        "cache_reuse_keeps_original_charge_lineage": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "cache reuse references original research usage and adds no research charge",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "cost-intelligence": null,
+            "event-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "competing_reservations_only_one_uses_last_capacity": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "two competing reservations cannot both consume the final capacity",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "cost-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "declined_reservation_blocks_dispatch": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "declined reservation prevents billable dispatch",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "duplicate_direct_and_trace_observation_dedupes": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "duplicate direct/trace observation dedupes by agreed identity",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "new_billable_attempt_is_retained": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "second billable execution remains a distinct attempt for one logical operation",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "cost-intelligence": null,
+            "shared-contracts": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "timeout_cancel_restart_hold_until_reconcile": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "unknown in-flight outcome holds capacity through timeout/cancel/restart until reconciliation",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "trace_outage_is_durable_or_fails_closed": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "trace outage uses bounded durable delivery or fail-closed dispatch, never silent loss",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "unused_predispatch_capacity_releases_safely": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "known unused pre-dispatch capacity follows reviewed release semantics",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "local_requirement_ids": [
+        "EI-11",
+        "JEV-EI-05"
+      ],
+      "owner_role": "Agent and research",
+      "pins": {
+        "agent-harness": {
+          "evidence": null,
+          "revision": null
+        },
+        "cost-intelligence": {
+          "evidence": null,
+          "revision": null
+        },
+        "shared-contracts": {
+          "evidence": null,
+          "revision": null
+        }
+      },
+      "required_components": [
+        "shared-contracts",
+        "cost-intelligence",
+        "agent-harness"
+      ],
+      "triage_key": "EI-X02",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      },
+      "workflow_state": "blocked"
+    },
+    "provider-readiness": {
+      "acceptance_roles": {
+        "EVAL-03": "Product and frontend",
+        "EVAL-04": "Finance and reliability",
+        "FIN-01": "Finance and reliability",
+        "SPN-01": "Finance and reliability"
+      },
+      "artifacts": {
+        "budget_authorization_and_predispatch_revocation": {
+          "component": "cost-intelligence",
+          "evidence": null,
+          "identity": "cost-intelligence:authorized-budget-reference-and-revalidation-contract",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "required_review_roles": [
+            "Finance and reliability",
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "explicit_runtime_and_model_configuration": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:explicit-runtime-sdk-model-parameters-retry-limit-and-mode",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "implemented_sole_jev_adapter_pin": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:implemented-compatible-sole-jev-adapter-revision",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "jev_account_project_readiness_record": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:sanitized-jev-account-and-project-eligibility-record",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Finance and reliability"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "nonbillable_readiness_procedure_or_limitation": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:nonbillable-account-readiness-procedure-or-no-safe-check-limitation",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "research_vision_reasoning_readiness_record": {
+          "component": "agent-harness",
+          "evidence": null,
+          "identity": "agent-harness:sanitized-research-vision-reasoning-access-and-model-record",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "required_review_roles": [
+            "Agent and research",
+            "Finance and reliability"
+          ],
+          "revision": null,
+          "role_claims": [],
+          "status": "pending",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "crosswalk": {
+        "account_project_eligibility": {
+          "expectation": "Record account/project eligibility; never expose credentials.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "budget_owner_and_revocation": {
+          "expectation": "Finance owns budget authority and pre-dispatch revocation checks.",
+          "owner_role": "Finance and reliability",
+          "resolution": null
+        },
+        "dependency_mode": {
+          "expectation": "Classify simulated, recorded, sandbox or live separately.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "explicit_model_id_version": {
+          "expectation": "Record explicit model ID/version; do not substitute latest or auto.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "gpt_image_readiness_owner": {
+          "expectation": "Creative and fulfillment owns GPT Image readiness as a separate provider surface.",
+          "owner_role": "Creative and fulfillment",
+          "resolution": null
+        },
+        "neatlogs_readiness_owner": {
+          "expectation": "Agent and research records Neatlogs separately as a harness-owned related surface.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "parameters_retry_limit": {
+          "expectation": "Record parameters and retry limit without inferred defaults.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "provider_identity": {
+          "expectation": "Record provider and endpoint/API version only after owner verification.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "rate_card_source_effective_date": {
+          "expectation": "Record source and effective date when verified; no prices are assumed.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "runtime_sdk": {
+          "expectation": "Record actual runtime and SDK version; no value is selected here.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        },
+        "usage_basis_and_reference": {
+          "expectation": "Separate unknown, estimated and provider-confirmed usage; unknown is not zero.",
+          "owner_role": "Agent and research",
+          "resolution": null
+        }
+      },
+      "dependency_mode": "unknown",
+      "fixtures": {
+        "budget_revocation_rechecked_before_dispatch": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "budget permission revoked after readiness is revalidated before dispatch",
+          "mode": "unknown",
+          "owner_role": "Finance and reliability",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "dependency_modes_and_sanitized_refs_are_distinct": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "simulated/recorded/sandbox/live are distinguished with redacted provider and usage references",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "explicit_model_pin_has_no_latest_substitution": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "unavailable explicit model pin fails rather than substituting a moving latest alias",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "missing_access_model_or_budget_blocks_before_dispatch": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "missing/revoked access, unavailable explicit model or absent budget blocks before billable dispatch",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null,
+            "cost-intelligence": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        },
+        "readiness_is_nonbillable_or_limitation_is_explicit": {
+          "case_count": 0,
+          "evidence": null,
+          "expected": "readiness records accessible metadata without inference, or states no safe check exists",
+          "mode": "unknown",
+          "owner_role": "Agent and research",
+          "revision_pins": {
+            "agent-harness": null
+          },
+          "status": "pending",
+          "subject_kind": "implementation_or_contract",
+          "usage": {
+            "amount": null,
+            "basis_ref": null,
+            "currency": null,
+            "status": "unknown"
+          }
+        }
+      },
+      "local_requirement_ids": [
+        "EI-03",
+        "EI-12",
+        "JEV-EI-01"
+      ],
+      "owner_role": "Agent and research",
+      "pins": {
+        "agent-harness": {
+          "evidence": null,
+          "revision": null
+        },
+        "cost-intelligence": {
+          "evidence": null,
+          "revision": null
+        }
+      },
+      "required_components": [
+        "agent-harness",
+        "cost-intelligence"
+      ],
+      "triage_key": "EI-X03",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      },
+      "workflow_state": "blocked"
+    }
+  },
+  "repository": "event-intelligence",
+  "schema": "event-intelligence/handoff-manifest",
+  "schema_version": 1
+}

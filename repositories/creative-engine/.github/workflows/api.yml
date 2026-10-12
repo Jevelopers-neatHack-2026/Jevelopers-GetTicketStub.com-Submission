@@ -1,0 +1,303 @@
+name: Creative API offline checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: api / Node ${{ matrix.node-version }} / Linux x64
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 22.23.3
+          - 24.15.0
+    steps:
+      # The populated CE-05 migration regression reads 4e28839ea8baeb4112a4f12340ef2fe84f5c8efe via git show.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install the locked root package
+        run: npm ci --ignore-scripts --offline
+      - name: Install the isolated locked image codec
+        run: npm ci --prefix src/models/codec-runtime --ignore-scripts
+      - name: Install locked TypeScript consumer tools
+        run: npm ci --prefix examples/frontend-action-roundtrip
+      - name: Verify TypeScript compiler version
+        run: node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --version
+      - name: Clean build and strict public consumer types
+        run: make build
+      - name: API tests and sanitized machine-readable evidence
+        run: make check TARGET=api MODE=mock
+      - name: Access preflight mock matrix and runtime evidence
+        run: make check TARGET=access-preflight MODE=mock
+      - name: CE-02 public brief and invalidation API checks
+        run: make check TARGET=brief MODE=mock
+      - name: CE-03 native Images adapter and actual API/C03/CE08 fixtures
+        run: make check TARGET=image-adapter MODE=mock
+      - name: Composition authority contracts, SQLite lifecycle, recovery and strict public types
+        env:
+          COMPOSITION_AUTHORITY_EVIDENCE_DIR: build/composition-authority-evidence
+        run: make check TARGET=composition MODE=mock
+      - name: CE-03-OR OpenRouter Images adapter, API/C03/CE08/CE11 and store fixtures
+        run: make check TARGET=openrouter-image-adapter MODE=mock
+      - name: CE-04 parentless concepts API, recovery, metering, package and type fixtures
+        run: make check TARGET=concepts MODE=CI
+      - name: Verify CE-04 external live execution stays fail-closed
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=concepts MODE=failclosedlive > build/concepts-failclosedlive.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending CE-04 live gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/concepts-failclosedlive.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-04');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          NODE
+      - name: CE-09 public inspection, seven fixtures, migration and restart evidence
+        run: make check TARGET=inspection MODE=mock
+      - name: Verify CE-09 live inspection gate fails before any dispatch
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=inspection MODE=live > build/inspection-live-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending CE-09 live gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/inspection-live-gate.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-09');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.promotion_status, 'not_promoted');
+          assert.ok(gate.missing_owner_evidence.includes('finance_metering_budget_protocol_and_accepted_usage_mapping'));
+          NODE
+      - name: Verify CE-09 external owner acceptance remains pending
+        shell: bash
+        run: |
+          set +e
+          make acceptance TARGET=inspection > build/inspection-acceptance-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected CE-09 owner acceptance to remain pending with exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/inspection-acceptance-gate.stdout.json', 'utf8'));
+          assert.equal(gate.schema_version, 'creative-inspection-acceptance-result/v1');
+          assert.equal(gate.target, 'CE-09');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.promotion_status, 'not_promoted');
+          assert.ok(gate.missing_owner_evidence.includes('finance_metering_budget_protocol'));
+          assert.ok(gate.missing_owner_evidence.includes('shared_contracts_decision_port'));
+          NODE
+      - name: Verify CE-02 external acceptance remains pending
+        shell: bash
+        run: |
+          mkdir -p build
+          set +e
+          make --no-print-directory --silent acceptance TARGET=brief > build/brief-acceptance-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected CE-02 owner acceptance to remain pending with exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/brief-acceptance-gate.stdout.json', 'utf8'));
+          assert.equal(gate.schema_version, 'creative-brief-acceptance-result/v1');
+          assert.equal(gate.target, 'CE-02');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.ok(gate.missing_owner_evidence.includes('event_intelligence_asset_permission_protocol'));
+          assert.ok(gate.missing_owner_evidence.includes('event_intelligence_invalidation_delivery'));
+          assert.ok(gate.missing_owner_evidence.includes('application_approval_staleness_consumer'));
+          NODE
+      - name: Verify live access gate fails before dispatch
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=access-preflight MODE=live > build/access-preflight-live-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending live access gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const stdout = readFileSync('build/access-preflight-live-gate.stdout.json', 'utf8');
+          const gate = JSON.parse(stdout);
+          assert.equal(gate.target, 'CE-A01');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.required_cell_count, 8);
+          assert.equal(gate.cells.length, 8);
+          assert.ok(gate.cells.every((cell) => cell.status === 'blocked'));
+          NODE
+      - name: Verify CE-A01 acceptance remains pending
+        shell: bash
+        run: |
+          set +e
+          make acceptance TARGET=access-preflight > build/access-preflight-acceptance-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected CE-A01 acceptance to remain pending with exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/access-preflight-acceptance-gate.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-A01');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.cells.length, 8);
+          assert.ok(gate.missing_owner_evidence.includes('external_grant_and_finance_reservation'));
+          NODE
+      - name: Verify CE-03 live gate fails before provider dispatch
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=image-adapter MODE=live > build/image-adapter-live-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending CE-03 live gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/image-adapter-live-gate.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-03');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.ok(gate.missing_owner_evidence.includes('owner_selected_image_model_and_exact_operation_profile'));
+          assert.ok(gate.missing_owner_evidence.includes('trusted_live_capability_grant_and_finance_reservation_authority'));
+          assert.ok(gate.missing_owner_evidence.includes('accepted_provider_usage_to_rate_mapping_for_selected_model'));
+          NODE
+      - name: Verify CE-03-OR live gate fails before provider dispatch
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=openrouter-image-adapter MODE=live > build/openrouter-image-adapter-live-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending CE-03-OR live gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/openrouter-image-adapter-live-gate.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-03-OR');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.missing_owner_evidence.length, 6);
+          NODE
+      - name: Verify CE-03 acceptance remains pending
+        shell: bash
+        run: |
+          set +e
+          make acceptance TARGET=image-adapter > build/image-adapter-acceptance-gate.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected CE-03 owner acceptance to remain pending with exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/image-adapter-acceptance-gate.stdout.json', 'utf8'));
+          assert.equal(gate.schema_version, 'creative-image-adapter-acceptance-result/v1');
+          assert.equal(gate.target, 'CE-03');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          assert.equal(gate.missing_owner_evidence.length, 6);
+          NODE
+      - name: Aggregate offline checks
+        run: make check TARGET=all MODE=mock
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 verified 2026-10-10
+        if: always()
+        with:
+          name: creative-api-evidence-node-${{ matrix.node-version }}
+          path: |
+            build/api-check-evidence.json
+            build/brief-acceptance-gate.stdout.json
+            build/access-preflight-evidence.json
+            build/access-preflight-live-gate.json
+            build/access-preflight-live-gate.stdout.json
+            build/access-preflight-acceptance-gate.stdout.json
+            build/image-adapter-evidence.json
+            build/image-adapter-live-gate.json
+            build/image-adapter-live-gate.stdout.json
+            build/image-adapter-acceptance-gate.stdout.json
+            build/openrouter-image-adapter-evidence.json
+            build/openrouter-image-adapter-live-gate.json
+            build/openrouter-image-adapter-live-gate.stdout.json
+            build/concepts-CI-evidence.json
+            build/concepts-CI-test.tap
+            build/concepts-package-artifacts/
+            build/composition-authority-evidence/
+            build/concepts-failclosedlive-evidence.json
+            build/concepts-failclosedlive.stdout.json
+            build/inspection-evidence.json
+            build/inspection-test.tap
+            build/inspection-live-gate.json
+            build/inspection-live-gate.stdout.json
+            build/inspection-acceptance-gate.stdout.json
+          if-no-files-found: warn

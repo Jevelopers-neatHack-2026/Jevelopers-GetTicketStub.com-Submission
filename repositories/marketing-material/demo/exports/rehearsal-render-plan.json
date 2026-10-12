@@ -1,0 +1,739 @@
+{
+  "status": "DRAFT / SYNTHETIC REHEARSAL / NOT A PRODUCT DEMO",
+  "silent": true,
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "durationSeconds": 150,
+  "scenes": [
+    {
+      "sceneId": "scene-01-concept-title",
+      "startSeconds": 0,
+      "endSeconds": 13,
+      "start": "00:00",
+      "end": "00:13",
+      "durationSeconds": 13,
+      "assetId": "DEMO-SCREENSHOT-SET-001",
+      "assetPath": "demo/screenshots/synthetic-stub-mockup.svg",
+      "assetUse": "Synthetic concept mockup only; not a product capture. The source is a draft and requires separate rights, brand and visual review.",
+      "claimIDs": [
+        "CLAIM-PRODUCT-NAME-001",
+        "CLAIM-KEEPSAKE-CONCEPT-001",
+        "CLAIM-SIMULATION-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "brand-kit-guidance"
+      ],
+      "evidenceClass": "mock",
+      "providerMode": "none",
+      "captionText": "TicketStub. Project name only; product availability is unverified. A keepsake concept. Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "narration": "TicketStub. Project name only; product availability is unverified. A keepsake concept. Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "copySegments": [
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-PRODUCT-NAME-001",
+          "sourceWording": "TicketStub",
+          "text": "TicketStub."
+        },
+        {
+          "kind": "claim_qualifier",
+          "claimId": "CLAIM-PRODUCT-NAME-001",
+          "text": "Project name only; product availability is unverified."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+          "sourceWording": "A keepsake concept",
+          "text": "A keepsake concept."
+        },
+        {
+          "kind": "claim_qualifier",
+          "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+          "alsoClaimIds": [
+            "CLAIM-SIMULATION-001"
+          ],
+          "text": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated."
+        }
+      ],
+      "screenText": [
+        "SYNTHETIC CONCEPT ONLY",
+        "TicketStub \u2014 project name only; product availability is unverified",
+        "A keepsake concept",
+        "No product behavior, live sponsor integration, or measured savings are demonstrated."
+      ],
+      "fallback": "Use a plain text card with the same project-name qualifier and full synthetic-concept qualifier; do not substitute a live product screenshot.",
+      "reviewer": "User-assigned marketing-material supervisor for exact copy; product owner and brand/landing consumer review pending; independent review pending."
+    },
+    {
+      "sceneId": "scene-02-context-design-review",
+      "startSeconds": 13,
+      "endSeconds": 27,
+      "start": "00:13",
+      "end": "00:27",
+      "durationSeconds": 14,
+      "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "assetPath": "demo/diagrams/demo-workflow.svg",
+      "assetUse": "Concept diagram only; implementation and product-source review are pending.",
+      "claimIDs": [
+        "CLAIM-PROCESS-CONCEPT-001"
+      ],
+      "proposalIDs": [
+        "REHEARSAL-JOURNEY-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "product-ownership-docs",
+        "brand-kit-guidance"
+      ],
+      "evidenceClass": "mock",
+      "providerMode": "none",
+      "captionText": "Here, one ticket idea moves from context to design and a human review. Context \u2192 design \u2192 human review. Conceptual only; implementation is unverified.",
+      "narration": "Here, one ticket idea moves from context to design and a human review. Context \u2192 design \u2192 human review. Conceptual only; implementation is unverified.",
+      "copySegments": [
+        {
+          "kind": "proposed_wording",
+          "proposalId": "REHEARSAL-JOURNEY-001",
+          "text": "Here, one ticket idea moves from context to design and a human review."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-PROCESS-CONCEPT-001",
+          "sourceWording": "Context \u2192 design \u2192 human review",
+          "text": "Context \u2192 design \u2192 human review."
+        },
+        {
+          "kind": "claim_qualifier",
+          "claimId": "CLAIM-PROCESS-CONCEPT-001",
+          "text": "Conceptual only; implementation is unverified."
+        }
+      ],
+      "screenText": [
+        "CONCEPTUAL ONLY",
+        "Context \u2192 design \u2192 human review",
+        "Conceptual only; implementation is unverified."
+      ],
+      "fallback": "Show the three exact ledgered process words and the adjacent conceptual qualifier on a plain card; omit any product interface or implied automatic routing.",
+      "reviewer": "User-assigned marketing-material supervisor for exact copy; product owner for behavior source; brand/landing consumer and independent review pending."
+    },
+    {
+      "sceneId": "scene-03-hold-revise-handoff",
+      "startSeconds": 27,
+      "endSeconds": 43,
+      "start": "00:27",
+      "end": "00:43",
+      "durationSeconds": 16,
+      "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "assetPath": "demo/diagrams/demo-workflow.svg",
+      "assetUse": "Proposed review rule represented as a concept, not a verified feature.",
+      "claimIDs": [
+        "CLAIM-HUMAN-APPROVAL-CONCEPT-001"
+      ],
+      "proposalIDs": [
+        "REHEARSAL-HOLD-REVISE-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "product-ownership-docs"
+      ],
+      "evidenceClass": "planned",
+      "providerMode": "none",
+      "captionText": "A reviewer may hold or revise this draft; production handoff is planned. Approval before production. This is a proposed review rule, not a verified product feature.",
+      "narration": "A reviewer may hold or revise this draft; production handoff is planned. Approval before production. This is a proposed review rule, not a verified product feature.",
+      "copySegments": [
+        {
+          "kind": "proposed_wording",
+          "proposalId": "REHEARSAL-HOLD-REVISE-001",
+          "text": "A reviewer may hold or revise this draft; production handoff is planned."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+          "sourceWording": "Approval before production",
+          "text": "Approval before production."
+        },
+        {
+          "kind": "claim_qualifier",
+          "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+          "text": "This is a proposed review rule, not a verified product feature."
+        }
+      ],
+      "screenText": [
+        "PROPOSED REVIEW RULE",
+        "Hold or revise draft",
+        "Production handoff: planned",
+        "This is a proposed review rule, not a verified product feature."
+      ],
+      "fallback": "Retain the proposed-rule label with the hold/revise text. If the qualifier cannot remain legible, replace the scene with the plain text fallback or omit it.",
+      "reviewer": "User-assigned marketing-material supervisor for exact copy; product owner for behavior source; independent review pending."
+    },
+    {
+      "sceneId": "scene-04-product-evidence-status",
+      "startSeconds": 43,
+      "endSeconds": 59,
+      "start": "00:43",
+      "end": "00:59",
+      "durationSeconds": 16,
+      "assetId": "DEMO-EXPLAINER-001",
+      "assetPath": "demo/product-explanation.md",
+      "assetUse": "Local text card reporting the state of the pinned product evidence; the source is documentation-only.",
+      "claimIDs": [
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "product-ownership-docs",
+        "integration-evidence-index"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "none",
+      "captionText": "Product capability, automation, and transaction copy is pending pinned product-release evidence. No product or sponsor results verified.",
+      "narration": "Product capability, automation, and transaction copy is pending pinned product-release evidence. No product or sponsor results verified.",
+      "copySegments": [
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-PRODUCT-CAPABILITY-001",
+          "text": "Product capability, automation, and transaction copy is pending pinned product-release evidence."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-NO-RESULTS-VERIFIED-001",
+          "text": "No product or sponsor results verified."
+        }
+      ],
+      "screenText": [
+        "PINNED PRODUCT SOURCE: DOCUMENTATION ONLY",
+        "Product capability, automation, and transaction copy is pending pinned product-release evidence.",
+        "No product or sponsor results verified."
+      ],
+      "fallback": "Keep the source-state card and both exact status statements; do not replace with a guessed route, application screen or demo capture.",
+      "reviewer": "User-assigned marketing-material supervisor for exact copy; product owner for release evidence; privacy/evidence review pending."
+    },
+    {
+      "sceneId": "scene-05-neatlogs-evidence",
+      "startSeconds": 59,
+      "endSeconds": 74,
+      "start": "00:59",
+      "end": "01:14",
+      "durationSeconds": 15,
+      "assetId": "DEMO-SUBMISSION-NARRATIVE-001",
+      "assetPath": "demo/submission-narrative.md",
+      "assetUse": "Local text matrix only; no Neatlogs product screen, trace, run, or output is shown.",
+      "sponsor": "Neatlogs",
+      "sponsorEvidenceClass": "SPN-01",
+      "sponsorFacets": [
+        {
+          "aspect": "architecture",
+          "status": "pending"
+        },
+        {
+          "aspect": "implementation",
+          "status": "pending"
+        },
+        {
+          "aspect": "runtime",
+          "status": "pending"
+        },
+        {
+          "aspect": "reasoning",
+          "status": "pending"
+        },
+        {
+          "aspect": "result",
+          "status": "pending"
+        }
+      ],
+      "claimIDs": [
+        "CLAIM-SPN-01-NEATLOGS-001"
+      ],
+      "proposalIDs": [
+        "REHEARSAL-SPONSOR-FACETS-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "integration-evidence-index",
+        "official-neathack-page"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "not_run",
+      "captionText": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending. Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+      "narration": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending. Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+      "copySegments": [
+        {
+          "kind": "proposed_wording",
+          "proposalId": "REHEARSAL-SPONSOR-FACETS-001",
+          "text": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-SPN-01-NEATLOGS-001",
+          "text": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved."
+        }
+      ],
+      "screenText": [
+        "NEATLOGS \u2014 SPN-01 \u2014 PENDING",
+        "Architecture: PENDING",
+        "Implementation: PENDING",
+        "Runtime: PENDING",
+        "Reasoning: PENDING",
+        "Result: PENDING",
+        "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+        "providerMode: not_run"
+      ],
+      "fallback": "Show the five pending fields and exact SPN-01 statement on a plain local card. Do not show a fabricated trace, integration panel, or usage claim.",
+      "reviewer": "User-assigned marketing-material supervisor; Finance and reliability/source owner for Neatlogs evidence; independent review pending."
+    },
+    {
+      "sceneId": "scene-06-entire-evidence",
+      "startSeconds": 74,
+      "endSeconds": 89,
+      "start": "01:14",
+      "end": "01:29",
+      "durationSeconds": 15,
+      "assetId": "DEMO-SUBMISSION-NARRATIVE-001",
+      "assetPath": "demo/submission-narrative.md",
+      "assetUse": "Local text matrix only; no Entire checkpoint or graph output is shown.",
+      "sponsor": "Entire",
+      "sponsorEvidenceClass": "SPN-02",
+      "sponsorFacets": [
+        {
+          "aspect": "architecture",
+          "status": "pending"
+        },
+        {
+          "aspect": "implementation",
+          "status": "pending"
+        },
+        {
+          "aspect": "runtime",
+          "status": "pending"
+        },
+        {
+          "aspect": "reasoning",
+          "status": "pending"
+        },
+        {
+          "aspect": "result",
+          "status": "pending"
+        }
+      ],
+      "claimIDs": [
+        "CLAIM-SPN-02-ENTIRE-001"
+      ],
+      "proposalIDs": [
+        "REHEARSAL-SPONSOR-FACETS-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "entire-evidence-issue",
+        "official-neathack-page"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "not_run",
+      "captionText": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending. Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+      "narration": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending. Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+      "copySegments": [
+        {
+          "kind": "proposed_wording",
+          "proposalId": "REHEARSAL-SPONSOR-FACETS-001",
+          "text": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-SPN-02-ENTIRE-001",
+          "text": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved."
+        }
+      ],
+      "screenText": [
+        "ENTIRE \u2014 SPN-02 \u2014 PENDING",
+        "Architecture: PENDING",
+        "Implementation: PENDING",
+        "Runtime: PENDING",
+        "Reasoning: PENDING",
+        "Result: PENDING",
+        "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+        "providerMode: not_run"
+      ],
+      "fallback": "Show the five pending fields and exact SPN-02 statement on a plain local card. Do not synthesize checkpoints, graph output, or claims from another sponsor's evidence.",
+      "reviewer": "User-assigned marketing-material supervisor; Agent and research/source owner for Entire evidence; independent review pending."
+    },
+    {
+      "sceneId": "scene-07-cfo-ai-evidence",
+      "startSeconds": 89,
+      "endSeconds": 104,
+      "start": "01:29",
+      "end": "01:44",
+      "durationSeconds": 15,
+      "assetId": "DEMO-SUBMISSION-NARRATIVE-001",
+      "assetPath": "demo/submission-narrative.md",
+      "assetUse": "Local text matrix only; no CFO.ai plan, forecast, financial actual, or savings result is shown.",
+      "sponsor": "CFO.ai",
+      "sponsorEvidenceClass": "SPN-03",
+      "sponsorFacets": [
+        {
+          "aspect": "architecture",
+          "status": "pending"
+        },
+        {
+          "aspect": "implementation",
+          "status": "pending"
+        },
+        {
+          "aspect": "runtime",
+          "status": "pending"
+        },
+        {
+          "aspect": "reasoning",
+          "status": "pending"
+        },
+        {
+          "aspect": "result",
+          "status": "pending"
+        }
+      ],
+      "claimIDs": [
+        "CLAIM-SPN-03-CFO-001"
+      ],
+      "proposalIDs": [
+        "REHEARSAL-SPONSOR-FACETS-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "cfo-ai-evidence-issue",
+        "official-neathack-page"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "not_run",
+      "captionText": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending. CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+      "narration": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending. CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+      "copySegments": [
+        {
+          "kind": "proposed_wording",
+          "proposalId": "REHEARSAL-SPONSOR-FACETS-001",
+          "text": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-SPN-03-CFO-001",
+          "text": "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved."
+        }
+      ],
+      "screenText": [
+        "CFO.AI \u2014 SPN-03 \u2014 PENDING",
+        "Architecture: PENDING",
+        "Implementation: PENDING",
+        "Runtime: PENDING",
+        "Reasoning: PENDING",
+        "Result: PENDING",
+        "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+        "providerMode: not_run"
+      ],
+      "fallback": "Show the five pending fields and exact SPN-03 statement on a plain local card. Do not show hypothetical economics as an actual plan or imply finance review.",
+      "reviewer": "User-assigned marketing-material supervisor; Finance and reliability/source owner for CFO.ai plan and financial evidence; independent review pending."
+    },
+    {
+      "sceneId": "scene-08-comparison-and-results",
+      "startSeconds": 104,
+      "endSeconds": 120,
+      "start": "01:44",
+      "end": "02:00",
+      "durationSeconds": 16,
+      "assetId": "DEMO-EXPLAINER-001",
+      "assetPath": "demo/product-explanation.md",
+      "assetUse": "Text-only evidence status; no measurements or sponsor outcomes are depicted.",
+      "claimIDs": [
+        "CLAIM-EVAL02-COMPARISON-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger",
+        "integration-evidence-index"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "not_run",
+      "captionText": "No measured improvement or savings claim is approved; comparable baseline evidence is pending. No product or sponsor results verified.",
+      "narration": "No measured improvement or savings claim is approved; comparable baseline evidence is pending. No product or sponsor results verified.",
+      "copySegments": [
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-EVAL02-COMPARISON-001",
+          "text": "No measured improvement or savings claim is approved; comparable baseline evidence is pending."
+        },
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-NO-RESULTS-VERIFIED-001",
+          "text": "No product or sponsor results verified."
+        }
+      ],
+      "screenText": [
+        "EVAL-02 \u2014 PENDING",
+        "No measured improvement or savings claim is approved; comparable baseline evidence is pending.",
+        "No product or sponsor results verified."
+      ],
+      "fallback": "Keep the pending label and exact comparison statement. Remove any chart or number that lacks a pinned, reviewed, comparable source.",
+      "reviewer": "User-assigned marketing-material supervisor; Finance and reliability plus Agent and research for relevant evidence; independent review pending."
+    },
+    {
+      "sceneId": "scene-09-submission-gate",
+      "startSeconds": 120,
+      "endSeconds": 135,
+      "start": "02:00",
+      "end": "02:15",
+      "durationSeconds": 15,
+      "assetId": "DEMO-SUBMISSION-NARRATIVE-001",
+      "assetPath": "demo/submission-narrative.md",
+      "assetUse": "Organizer checklist only; all unresolved fields remain visibly pending.",
+      "claimIDs": [],
+      "proposalIDs": [
+        "EVENT-SUBMISSION-FIELDS-001",
+        "EVENT-POST-CUTOFF-STATUS-001"
+      ],
+      "sourcePinIds": [
+        "official-neathack-page"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "none",
+      "captionText": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord. Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission.",
+      "narration": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord. Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission.",
+      "copySegments": [
+        {
+          "kind": "proposed_wording",
+          "proposalId": "EVENT-SUBMISSION-FIELDS-001",
+          "text": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord."
+        },
+        {
+          "kind": "proposed_wording",
+          "proposalId": "EVENT-POST-CUTOFF-STATUS-001",
+          "text": "Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission."
+        }
+      ],
+      "screenText": [
+        "Team name: PENDING",
+        "Submitter name: PENDING",
+        "Project name: PENDING SUBMITTER CONFIRMATION",
+        "Public repository URL: PENDING",
+        "Public demo URL: PENDING",
+        "Official X quote-post: PENDING PUBLICATION/LINK",
+        "Confirmed cutoff: PENDING DISCORD ANNOUNCEMENT"
+      ],
+      "fallback": "Show the pending submission fields and official source URL. Do not insert a guessed team, project, repository, demo URL, official post or cutoff.",
+      "reviewer": "User-assigned marketing-material supervisor for copy; organizer source must be rechecked by the submitter before use; independent review pending."
+    },
+    {
+      "sceneId": "scene-10-status-and-docs-cta",
+      "startSeconds": 135,
+      "endSeconds": 150,
+      "start": "02:15",
+      "end": "02:30",
+      "durationSeconds": 15,
+      "assetId": "LAUNCH-X-CTA-001",
+      "assetPath": "launch/announcement-copy.md",
+      "assetUse": "Repository documentation CTA only; exact wording review remains pending and destination is limited to the pinned README.",
+      "claimIDs": [
+        "CLAIM-NO-RESULTS-VERIFIED-001"
+      ],
+      "ctaIDs": [
+        "CTA-REPOSITORY-DOCS-001"
+      ],
+      "sourcePinIds": [
+        "claims-ledger"
+      ],
+      "evidenceClass": "pending",
+      "providerMode": "none",
+      "captionText": "No product or sponsor results verified. Explore the repository docs.",
+      "narration": "No product or sponsor results verified. Explore the repository docs.",
+      "copySegments": [
+        {
+          "kind": "claim_wording",
+          "claimId": "CLAIM-NO-RESULTS-VERIFIED-001",
+          "text": "No product or sponsor results verified."
+        },
+        {
+          "kind": "cta_wording",
+          "ctaId": "CTA-REPOSITORY-DOCS-001",
+          "text": "Explore the repository docs."
+        }
+      ],
+      "screenText": [
+        "REHEARSAL ONLY \u2014 SUBMISSION READINESS BLOCKED",
+        "No product or sponsor results verified.",
+        "Explore the repository docs."
+      ],
+      "fallback": "End on the exact status and docs-only CTA. Do not add an application, purchase, or product-availability route.",
+      "reviewer": "User-assigned marketing-material supervisor for exact copy and repository-docs route; independent review pending."
+    }
+  ],
+  "cues": [
+    {
+      "index": 0,
+      "sceneIndex": 0,
+      "sceneId": "scene-01-concept-title",
+      "text": "TicketStub. Project name only; product availability is unverified. A keepsake concept. Synthetic concept only.",
+      "startFrame": 0,
+      "endFrame": 221,
+      "startSeconds": 0.0,
+      "endSeconds": 7.366666666666666
+    },
+    {
+      "index": 1,
+      "sceneIndex": 0,
+      "sceneId": "scene-01-concept-title",
+      "text": "No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "startFrame": 221,
+      "endFrame": 390,
+      "startSeconds": 7.366666666666666,
+      "endSeconds": 13.0
+    },
+    {
+      "index": 2,
+      "sceneIndex": 1,
+      "sceneId": "scene-02-context-design-review",
+      "text": "Here, one ticket idea moves from context to design and a human review. Context \u2192 design \u2192 human review.",
+      "startFrame": 390,
+      "endFrame": 680,
+      "startSeconds": 13.0,
+      "endSeconds": 22.666666666666668
+    },
+    {
+      "index": 3,
+      "sceneIndex": 1,
+      "sceneId": "scene-02-context-design-review",
+      "text": "Conceptual only; implementation is unverified.",
+      "startFrame": 680,
+      "endFrame": 810,
+      "startSeconds": 22.666666666666668,
+      "endSeconds": 27.0
+    },
+    {
+      "index": 4,
+      "sceneIndex": 2,
+      "sceneId": "scene-03-hold-revise-handoff",
+      "text": "A reviewer may hold or revise this draft; production handoff is planned. Approval before production.",
+      "startFrame": 810,
+      "endFrame": 1104,
+      "startSeconds": 27.0,
+      "endSeconds": 36.8
+    },
+    {
+      "index": 5,
+      "sceneIndex": 2,
+      "sceneId": "scene-03-hold-revise-handoff",
+      "text": "This is a proposed review rule, not a verified product feature.",
+      "startFrame": 1104,
+      "endFrame": 1290,
+      "startSeconds": 36.8,
+      "endSeconds": 43.0
+    },
+    {
+      "index": 6,
+      "sceneIndex": 3,
+      "sceneId": "scene-04-product-evidence-status",
+      "text": "Product capability, automation, and transaction copy is pending pinned product-release evidence. No product or sponsor results verified.",
+      "startFrame": 1290,
+      "endFrame": 1770,
+      "startSeconds": 43.0,
+      "endSeconds": 59.0
+    },
+    {
+      "index": 7,
+      "sceneIndex": 4,
+      "sceneId": "scene-05-neatlogs-evidence",
+      "text": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+      "startFrame": 1770,
+      "endFrame": 2037,
+      "startSeconds": 59.0,
+      "endSeconds": 67.9
+    },
+    {
+      "index": 8,
+      "sceneIndex": 4,
+      "sceneId": "scene-05-neatlogs-evidence",
+      "text": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+      "startFrame": 2037,
+      "endFrame": 2220,
+      "startSeconds": 67.9,
+      "endSeconds": 74.0
+    },
+    {
+      "index": 9,
+      "sceneIndex": 5,
+      "sceneId": "scene-06-entire-evidence",
+      "text": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+      "startFrame": 2220,
+      "endFrame": 2468,
+      "startSeconds": 74.0,
+      "endSeconds": 82.26666666666667
+    },
+    {
+      "index": 10,
+      "sceneIndex": 5,
+      "sceneId": "scene-06-entire-evidence",
+      "text": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+      "startFrame": 2468,
+      "endFrame": 2670,
+      "startSeconds": 82.26666666666667,
+      "endSeconds": 89.0
+    },
+    {
+      "index": 11,
+      "sceneIndex": 6,
+      "sceneId": "scene-07-cfo-ai-evidence",
+      "text": "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending.",
+      "startFrame": 2670,
+      "endFrame": 2913,
+      "startSeconds": 89.0,
+      "endSeconds": 97.1
+    },
+    {
+      "index": 12,
+      "sceneIndex": 6,
+      "sceneId": "scene-07-cfo-ai-evidence",
+      "text": "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+      "startFrame": 2913,
+      "endFrame": 3120,
+      "startSeconds": 97.1,
+      "endSeconds": 104.0
+    },
+    {
+      "index": 13,
+      "sceneIndex": 7,
+      "sceneId": "scene-08-comparison-and-results",
+      "text": "No measured improvement or savings claim is approved; comparable baseline evidence is pending. No product or sponsor results verified.",
+      "startFrame": 3120,
+      "endFrame": 3600,
+      "startSeconds": 104.0,
+      "endSeconds": 120.0
+    },
+    {
+      "index": 14,
+      "sceneIndex": 8,
+      "sceneId": "scene-09-submission-gate",
+      "text": "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord.",
+      "startFrame": 3600,
+      "endFrame": 3844,
+      "startSeconds": 120.0,
+      "endSeconds": 128.13333333333333
+    },
+    {
+      "index": 15,
+      "sceneIndex": 8,
+      "sceneId": "scene-09-submission-gate",
+      "text": "Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission.",
+      "startFrame": 3844,
+      "endFrame": 4050,
+      "startSeconds": 128.13333333333333,
+      "endSeconds": 135.0
+    },
+    {
+      "index": 16,
+      "sceneIndex": 9,
+      "sceneId": "scene-10-status-and-docs-cta",
+      "text": "No product or sponsor results verified. Explore the repository docs.",
+      "startFrame": 4050,
+      "endFrame": 4500,
+      "startSeconds": 135.0,
+      "endSeconds": 150.0
+    }
+  ]
+}

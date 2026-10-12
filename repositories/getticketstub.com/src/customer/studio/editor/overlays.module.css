@@ -1,0 +1,274 @@
+/* Studio overlays: the floating toolbar and its pickers, the material frame, small shared pieces.
+   Colour only from the desk tokens (desk.css). Sheets are PaperSheet; the tear is TearFlow. */
+
+.iconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--desk-ink);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--desk-release) ease;
+}
+.iconBtn:hover {
+  background: color-mix(in srgb, var(--desk-ink) 7%, transparent);
+}
+.iconBtn:active {
+  background: color-mix(in srgb, var(--desk-ink) 12%, transparent);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rowBetween {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.muted {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.textLink {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-underline-offset: 4px;
+  text-decoration-color: var(--desk-rule-strong);
+}
+.plainList {
+  margin: 0;
+  padding-left: 1.1em;
+  font: var(--type-body);
+}
+.num {
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field textarea {
+  font: var(--type-body);
+  font-style: italic;
+  color: var(--desk-ink);
+  background: var(--desk-paper-sunk);
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  resize: vertical;
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  user-select: text;
+}
+.field textarea::placeholder {
+  color: var(--desk-ink-soft);
+}
+.field textarea:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}
+.photoRow {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.photoThumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 6px 12px -8px rgb(23 20 15 / 0.5);
+  flex: none;
+}
+
+/* ---------- Floating toolbar: a paper strip docked to the selected element ---------- */
+.toolbar {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 1px 0 var(--desk-ledge),
+    0 16px 28px -12px rgb(23 20 15 / 0.5);
+  max-width: calc(100vw - var(--nav-w, 0px) - 16px);
+  animation: dockIn 260ms var(--desk-spring) both;
+}
+.toolbar [role="toolbar"] {
+  grid-auto-columns: minmax(58px, 1fr);
+}
+.toolbar::after {
+  /* the notch that points at the element */
+  content: "";
+  position: absolute;
+  left: var(--arrow, 50%);
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: var(--desk-paper-raised);
+  box-shadow: 1px 1px 0 var(--desk-rule-strong);
+  transform: rotate(45deg);
+}
+[data-dock="below"] > .toolbar::after {
+  bottom: auto;
+  top: -5px;
+  box-shadow: -1px -1px 0 var(--desk-rule-strong);
+}
+[data-dock="below"] > .toolbar {
+  animation-name: dockInBelow;
+}
+@keyframes dockIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+@keyframes dockInBelow {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+}
+
+.picker {
+  display: flex;
+  gap: 4px;
+  padding: 4px 4px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed var(--desk-rule-strong);
+  animation: fade 200ms ease both;
+}
+.pickItem {
+  flex: 1 1 0;
+  min-width: 58px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--desk-release) ease;
+}
+.pickItem:hover {
+  background: color-mix(in srgb, var(--desk-ink) 5%, transparent);
+}
+.pickItem[aria-checked="true"] {
+  background: var(--desk-paper);
+  box-shadow: inset 0 0 0 1.5px var(--desk-ink);
+}
+.pickSample {
+  font-size: 1.5rem;
+  line-height: 1;
+  height: 1.6rem;
+  display: grid;
+  align-items: center;
+}
+.pickDot {
+  width: 26px;
+  height: 26px;
+  margin: 2px 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+.pickName {
+  font: var(--type-label);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--desk-ink-soft);
+}
+.pickItem[aria-checked="true"] .pickName {
+  color: var(--desk-ink);
+}
+
+/* ---------- Material frame around the stub ----------
+   --mat is the total width the stock adds to the stub; --cap-w and --cap-h are the room the page
+   gives it, --ar its aspect. Pages that set none of them get the old behaviour (screen width). */
+.frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  --mat: 0px;
+  --stub-max: min(calc(var(--cap-w, 100vw - var(--nav-w, 0px) - 32px) - var(--mat)), calc((var(--cap-h, 9999px) - var(--mat)) * var(--ar, 1)));
+  transition: padding var(--ts-dur-settle) var(--ts-ease-standard), background var(--ts-dur-settle) var(--ts-ease-standard);
+}
+.frameInner {
+  position: relative;
+}
+.frame_digital {
+  padding: 0;
+}
+/* card: the stub printed on heavy card, a slightly darker stock showing at the edge */
+.frame_card {
+  --mat: 12px;
+  padding: 6px;
+  border-radius: 4px;
+  background: var(--desk-paper-sunk, #ebe1cf);
+  box-shadow: 0 1px 0 var(--desk-ledge, rgb(23 20 15 / 0.2)), 0 14px 26px -16px rgb(23 20 15 / 0.5);
+}
+/* print: the stub on a sheet of warm art paper, deckled by a soft inner edge */
+.frame_print {
+  --mat: 36px;
+  padding: 18px;
+  background: var(--desk-paper-raised, #fbf6ec);
+  box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.06), 0 1px 0 var(--desk-ledge, rgb(23 20 15 / 0.2)), 0 18px 32px -18px rgb(23 20 15 / 0.5);
+}
+.frame_framed {
+  --mat: 80px;
+  padding: 26px;
+  background: var(--desk-paper-raised, #fbf6ec);
+  border: 14px solid #2a221a;
+  border-image: linear-gradient(135deg, #3a2e22, #17140f 60%, #3a2e22) 1;
+  box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.15), inset 0 6px 14px -8px rgb(23 20 15 / 0.5), var(--ts-shadow-lifted);
+}
+
+/* A preview is a picture of the stock, so it says so: a small printer's-mark line hung under it. */
+.frameMark {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+/* the framed stock has a 14px border, and "top" is measured from inside it */
+.frame_framed .frameMark {
+  top: calc(100% + 20px);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .picker {
+    animation: none;
+  }
+}

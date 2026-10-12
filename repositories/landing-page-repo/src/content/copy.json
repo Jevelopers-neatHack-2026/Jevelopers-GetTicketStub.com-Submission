@@ -1,0 +1,1298 @@
+{
+  "schemaVersion": 1,
+  "scope": "Safe provisional copy draft; not approved public release",
+  "pageSha256": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
+  "visibleTextSha256": "ed3b6f30f775c6184b3fccc77c0ba12606bcf6e2ab5e029493a4a54da38c4f29",
+  "source": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+  },
+  "reviewMode": "draft",
+  "entries": [
+    {
+      "id": "LP-COPY-01",
+      "location": "site/index.html:3",
+      "exactCopy": "Explore illustrative digital ticket stub keepsakes for concerts, festivals, games and gifts. Physical printing, prices and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-02",
+      "location": "site/index.html:582",
+      "exactCopy": "Pin the nights that mattered.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-03",
+      "location": "site/index.html:589",
+      "exactCopy": "Make yours!",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-04",
+      "location": "site/index.html:590",
+      "exactCopy": "Try a fictional event or type details to edit this local digital preview. Nothing entered here is sent to the studio; physical ordering and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Author proposal removing external input handoff from the base behavior; product/marketing approval remains pending."
+    },
+    {
+      "id": "LP-COPY-05",
+      "location": "site/index.html:596",
+      "exactCopy": "Illustrative digital preview · pricing, printing and shipping pending",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-06",
+      "location": "site/index.html:623",
+      "exactCopy": "Keep the night.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-07",
+      "location": "site/index.html:629",
+      "exactCopy": "Explore digital ticket stub keepsake designs for concerts, festivals, games and gifts. This page shows illustrative previews; physical printing, prices and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-08",
+      "location": "site/index.html:640",
+      "exactCopy": "The event ends. The memory deserves something you can hold onto.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-09",
+      "location": "site/index.html:649",
+      "exactCopy": "The problem For people who want to remember a concert, festival, game or show, a ticket stub can be a keepsake for a shoebox, wall or gift.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-10",
+      "location": "site/index.html:650",
+      "exactCopy": "What we make An illustrative digital stub for a night that mattered. This page formats typed details or words from a public link; it does not research or verify the event.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-11",
+      "location": "site/index.html:651",
+      "exactCopy": "What you get A local digital preview, not an admission ticket or a fulfilled order. Physical materials, printing and shipping remain pending; the artwork does not prove a manufactured product.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-12",
+      "location": "site/index.html:657",
+      "exactCopy": "Every night gets its own stub.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-13",
+      "location": "site/index.html:658",
+      "exactCopy": "Illustrative scenes with fictional event details, not verified event records or generated product outputs. Existing image permissions and publication review remain unconfirmed.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-14",
+      "location": "site/index.html:663",
+      "exactCopy": "One stub is a memory. A wall of them is a life.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-15",
+      "location": "site/index.html:664",
+      "exactCopy": "Football in November, a tour in July, a buzzer-beater in March. Keep them together, the way people used to keep paper stubs in a shoebox.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-16",
+      "location": "site/index.html:668",
+      "exactCopy": "Three steps to preview it.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-17",
+      "location": "site/index.html:670",
+      "exactCopy": "Tell us the night",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-18",
+      "location": "site/index.html:670",
+      "exactCopy": "Try a fictional sample, or type an artist or team, venue and date. A public link supplies words from its address only; do not paste private ticket or booking links.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-19",
+      "location": "site/index.html:671",
+      "exactCopy": "Review the preview",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-20",
+      "location": "site/index.html:671",
+      "exactCopy": "This page automatically formats a digital specimen; it does not verify event facts. Review and correct your details before any separate design approval.",
+      "evidenceClass": "local-preview",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-21",
+      "location": "site/index.html:672",
+      "exactCopy": "Explore the demo",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-22",
+      "location": "site/index.html:672",
+      "exactCopy": "Preview edits stay on this page. An approved studio link, when available, opens without your text. Design approval and purchase authorization are separate steps; no purchase or physical fulfillment occurs on this page.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Author proposal removing external input handoff from the base behavior; product/marketing approval remains pending."
+    },
+    {
+      "id": "LP-COPY-23",
+      "location": "site/index.html:680",
+      "exactCopy": "Made from the details of your night.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-24",
+      "location": "site/index.html:681",
+      "exactCopy": "These three fictional digital specimens show how event details could appear on a keepsake. The flip and tear are local visual effects, not evidence of printing or fulfillment.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-25",
+      "location": "site/index.html:693",
+      "exactCopy": "Fictional digital samples · Gulls vs Miners, Nova Riot and Wolves vs Storm · tilt or tap to explore",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-26",
+      "location": "site/index.html:699",
+      "exactCopy": "From the preview wall",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-27",
+      "location": "site/index.html:699",
+      "exactCopy": "Illustrative digital designs with fictional names and details. These are local artwork specimens, not approved product outputs; publication permissions remain unconfirmed.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-28",
+      "location": "site/index.html:713",
+      "exactCopy": "Stub studio by",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-29",
+      "location": "site/index.html:713",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-30",
+      "location": "site/index.html:713",
+      "exactCopy": "Digital ticket stub keepsake previews for the concerts, festivals, games and shows you want to remember.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-31",
+      "location": "site/index.html:714",
+      "exactCopy": "Explore",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-32",
+      "location": "site/index.html:715",
+      "exactCopy": "Photography",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-33",
+      "location": "site/index.html:716",
+      "exactCopy": "3D",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-COPY-34",
+      "location": "site/index.html:716",
+      "exactCopy": "Illustrative 3D tickets, pins and corkboard with baked flight animation. The simulated motion does not verify materials, printing or a shipped product.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local page or illustrative intent only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-FOOTBALL-TITLE",
+      "location": "site/index.html SCENES[0].title → .scene .ttl h3",
+      "exactCopy": "Harbor City Gulls vs. Ironhill Miners",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-FOOTBALL-LINE",
+      "location": "site/index.html SCENES[0].line → .scene .ttl p",
+      "exactCopy": "The fourth-quarter comeback you still tell people about.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-BASEBALL-TITLE",
+      "location": "site/index.html SCENES[1].title → .scene .ttl h3",
+      "exactCopy": "Riverside Owls vs. Canyon Rattlers",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-BASEBALL-LINE",
+      "location": "site/index.html SCENES[1].line → .scene .ttl p",
+      "exactCopy": "Opening day, a cold hot dog and extra innings.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-CONCERT-TITLE",
+      "location": "site/index.html SCENES[2].title → .scene .ttl h3",
+      "exactCopy": "Nova Riot — Afterglow World Tour",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-CONCERT-LINE",
+      "location": "site/index.html SCENES[2].line → .scene .ttl p",
+      "exactCopy": "Two encores. No voice left by Sunday.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-BASKETBALL-TITLE",
+      "location": "site/index.html SCENES[3].title → .scene .ttl h3",
+      "exactCopy": "Bayside Comets vs. Desert Kings",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-BASKETBALL-LINE",
+      "location": "site/index.html SCENES[3].line → .scene .ttl p",
+      "exactCopy": "Courtside enough to hear the sneakers.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-SOCCER-TITLE",
+      "location": "site/index.html SCENES[4].title → .scene .ttl h3",
+      "exactCopy": "Northgate FC vs. Southport United",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-SOCCER-LINE",
+      "location": "site/index.html SCENES[4].line → .scene .ttl p",
+      "exactCopy": "A ninety-third-minute save, and the keeper threw it to the stands.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-FESTIVAL-TITLE",
+      "location": "site/index.html SCENES[5].title → .scene .ttl h3",
+      "exactCopy": "Sunflare Festival — Weekend One",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-FESTIVAL-LINE",
+      "location": "site/index.html SCENES[5].line → .scene .ttl p",
+      "exactCopy": "Lawn games between sets, and a stub tossed into the crowd.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-THEATER-TITLE",
+      "location": "site/index.html SCENES[6].title → .scene .ttl h3",
+      "exactCopy": "Swan Lake — Bluebird Ballet",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-THEATER-LINE",
+      "location": "site/index.html SCENES[6].line → .scene .ttl p",
+      "exactCopy": "Opening night. The whole room stood up.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-HOCKEY-TITLE",
+      "location": "site/index.html SCENES[7].title → .scene .ttl h3",
+      "exactCopy": "Ice Harbor Wolves vs. Summit Storm",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-SCENE-HOCKEY-LINE",
+      "location": "site/index.html SCENES[7].line → .scene .ttl p",
+      "exactCopy": "Sudden death. The stub came off the stick with the winner.",
+      "evidenceClass": "illustrative",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html"
+      },
+      "productEvidence": "NONE_LOCAL_ILLUSTRATION; fictional event/story, not verified result or testimonial",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-META-01",
+      "location": "site/index.html:head title",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-02",
+      "location": "site/index.html:head robots",
+      "exactCopy": "noindex,nofollow",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-03",
+      "location": "site/index.html:head og:type",
+      "exactCopy": "website",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-04",
+      "location": "site/index.html:head og:title",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-05",
+      "location": "site/index.html:head og:description",
+      "exactCopy": "Explore illustrative digital ticket stub keepsakes for concerts, festivals, games and gifts. Physical printing, prices and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-06",
+      "location": "site/index.html:head twitter:card",
+      "exactCopy": "summary",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-07",
+      "location": "site/index.html:head twitter:title",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-08",
+      "location": "site/index.html:head twitter:description",
+      "exactCopy": "Explore illustrative digital ticket stub keepsakes for concerts, festivals, games and gifts. Physical printing, prices and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-CTA-01",
+      "location": "site/index.html local maker/demo boundary",
+      "exactCopy": "Update preview",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+    },
+    {
+      "id": "LP-CTA-02",
+      "location": "site/index.html local maker/demo boundary",
+      "exactCopy": "Studio link unavailable. Keep editing the preview here; nothing is sent.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/01d9b08d59bf65ea44fc19ede06701dc67363c63/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base CTA behavior plus actual Product-thread navigation decision documented separately; product/marketing/full-release approval remains pending."
+    },
+    {
+      "id": "LP-CTA-03",
+      "location": "site/index.html local maker/demo boundary",
+      "exactCopy": "Open studio",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/01d9b08d59bf65ea44fc19ede06701dc67363c63/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base CTA behavior plus actual Product-thread navigation decision documented separately; product/marketing/full-release approval remains pending.",
+      "navigationOwnerApproval": {
+        "status": "APPROVED",
+        "scope": "public-navigation-label-only",
+        "decisionSource": "review/cta-navigation-decision.json",
+        "marketingApproval": "PENDING",
+        "publicationApproval": "PENDING"
+      }
+    },
+    {
+      "id": "LP-CTA-04",
+      "location": "site/index.html local maker/demo boundary",
+      "exactCopy": "Preview updated on this page. Nothing was sent to the studio.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+    },
+    {
+      "id": "LP-CTA-05",
+      "location": "site/index.html local maker/demo boundary",
+      "exactCopy": "The studio opens separately. Your preview text is not included; availability can change.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+    },
+    {
+      "id": "LP-CTA-06",
+      "location": "site/index.html local maker/demo boundary",
+      "exactCopy": "Add a fictional event name or public event link to edit the local preview.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
+      "upstreamOwner": "Product and frontend; marketing-material wording owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+    },
+    {
+      "id": "LP-NOJS-NOTICE",
+      "location": "site/index.html noscript .nojs-studio",
+      "exactCopy": "The interactive preview requires JavaScript. You can open the studio separately; this page sends no preview text.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/4cc7cea5f879545f3758b05eaab9bc9f1d0b1324/site/index.html"
+      },
+      "productEvidence": "Source-backed noninteractive fallback; current approved public-navigation-only URL, no input/query/form; root browser validation pending.",
+      "upstreamOwner": "Product and frontend; receiving application owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/frontend and accessibility/QA review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, approved destination, JS-disabled fallback, capture or approval change; before external publication"
+    }
+  ],
+  "auditedSource": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/36c0a841d5b5c5f6e7c3870e65c541825026d214/site/index.html"
+  },
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
+  "historicalSourceReferences": [
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html",
+      "relationship": "Previous verified immutable author audit before the CSS-only maker reading surface; preserved without upgrading owner or publication approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b5205f0c749ec81e1d75e3da75cc236dd79f692e/site/index.html",
+      "relationship": "Earlier CSS-only maker surface audit before the reduced-motion correction; preserved as historical, not approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3c510591150e3bb44eb1fa44e9993ae32677ad3d/site/index.html",
+      "relationship": "Earlier maker surface/motion audit before native overflow and no-JavaScript escape; historical only, not current approval."
+    }
+  ]
+}

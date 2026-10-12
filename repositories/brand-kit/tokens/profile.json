@@ -1,0 +1,66 @@
+{
+  "$comment": "Canonical machine-readable rules for tokens/tokens.json. Edited by hand; validated and consumed by tools/build_tokens.py. Documented in docs/token-profile.md.",
+  "profile": "ticketstub-token-profile",
+  "version": "1.0.0",
+  "dtcg_compatible": false,
+  "dtcg_note": "Shaped like the W3C Design Tokens format ($value/$type/$description/{alias}) but NOT validated against it and not claimed compatible: gradient and shadow are CSS strings, number carries a unit extension, dimensions are limited to px/rem/em.",
+  "extension_namespace": "com.ticketstub",
+  "top_level_groups": ["color", "semantic", "gradient", "font", "space", "radius", "shadow", "material", "motion"],
+  "allowed_node_keys": ["$description", "$type", "$value", "$extensions"],
+  "types": {
+    "color": {"kind": "string", "forms": ["hex", "rgb", "alias"]},
+    "dimension": {"kind": "string", "units": ["px", "rem", "em"]},
+    "duration": {"kind": "string", "units": ["ms"]},
+    "number": {"kind": "number", "units": ["ms", "deg", "hz"], "unit_optional": true},
+    "fontWeight": {"kind": "integer", "min": 1, "max": 1000},
+    "fontFamily": {"kind": "string"},
+    "cubicBezier": {"kind": "string"},
+    "gradient": {"kind": "string", "profile_extension": true},
+    "shadow": {"kind": "string", "profile_extension": true}
+  },
+  "themes": {
+    "base_group": "semantic.day",
+    "override_group": "semantic.night",
+    "base_selector": ":root",
+    "override_selectors": [".ts-night", ":root[data-theme=\"dark\"]"],
+    "override_media": {"query": "(prefers-color-scheme: dark)", "selector": ":root:not([data-theme=\"light\"])"},
+    "override_declarations": {"color-scheme": "dark"},
+    "scoping": "Day is declared on :root and is the default. Night redeclares only the semantic variables whose value differs from day. It applies to a subtree with class ts-night, to the whole document with data-theme=dark on :root, or to the whole document when the OS prefers dark unless data-theme=light is set. Selectors, cascade and color-scheme behaviour are kept from the pre-BK-03A tokens.css."
+  },
+  "reduced_motion": {
+    "media": "(prefers-reduced-motion: reduce)",
+    "selector": ":root",
+    "zero_durations": [
+      {"path": "motion.duration.track", "reason": "pointer/gyro follow; tilt is disabled under reduced motion"},
+      {"path": "motion.duration.quick", "reason": "chip/toolbar appear becomes instant"},
+      {"path": "motion.duration.base", "reason": "sheets, toasts and style swaps become instant"},
+      {"path": "motion.duration.settle", "reason": "tilt return and card flip become instant"},
+      {"path": "motion.duration.reveal", "reason": "stub landing becomes instant"},
+      {"path": "motion.duration.shutter", "reason": "print-complete flash is non-essential motion"},
+      {"path": "motion.duration.print-sweep", "reason": "non-essential decorative loop: a zero duration leaves the foil sweep static (a still sheen); consumers still own the animation itself"}
+    ],
+    "loop_policy": "Non-essential looping motion (print-sweep) is static under reduced motion. This file only sets duration variables; stopping runtime animation (tilt, spin, glitch, sound) is consumer-owned."
+  },
+  "external_fonts": {
+    "self_hosted": false,
+    "note": "Font files in fonts/ are not wired to any @font-face by this repository. tokens.css never loads a font. Loading Google Fonts is a legacy, explicit opt-in stylesheet; it is not a font provider decision.",
+    "legacy_google": {
+      "output": "tokens/external-fonts-google.css",
+      "import_url": "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..800,0..100,0..1&family=Inter+Tight:wght@400..600&display=swap",
+      "hosts": ["fonts.googleapis.com", "fonts.gstatic.com"]
+    }
+  },
+  "tailwind": {
+    "supported": "tailwindcss 3.4.x (tested with 3.4.19); Tailwind 4 is not supported or tested",
+    "sections": {
+      "colors": {"form": "var", "type": "color"},
+      "backgroundImage": {"form": "var", "type": "gradient"},
+      "fontFamily": {"form": "family-list", "type": "fontFamily"},
+      "fontSize": {"form": "var", "type": "dimension"},
+      "borderRadius": {"form": "var", "type": "dimension"},
+      "boxShadow": {"form": "var", "type": "shadow"},
+      "transitionTimingFunction": {"form": "var", "type": "cubicBezier"},
+      "transitionDuration": {"form": "var", "type": "duration"}
+    }
+  }
+}

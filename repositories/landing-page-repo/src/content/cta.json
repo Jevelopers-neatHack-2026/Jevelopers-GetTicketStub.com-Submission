@@ -1,0 +1,91 @@
+{
+  "schema": "ticketstub.cta/1",
+  "environment": "preview",
+  "capture": "deferred",
+  "destinations": {
+    "preview": {
+      "status": "APPROVED",
+      "url": "https://getticketstub.com/make",
+      "allowedOrigin": "https://getticketstub.com",
+      "allowedPath": "/make",
+      "queryKeys": [],
+      "availability": "verified",
+      "ownerRole": "Product owner orchestrator; receiving application owner",
+      "receipt": {
+        "kind": "owner-thread-navigation/1",
+        "decision": "APPROVE_NOW",
+        "scope": "public-navigation-only",
+        "destination": "https://getticketstub.com/make",
+        "label": "Open studio",
+        "environment": "preview",
+        "access": "public-guest",
+        "mode": "live",
+        "reviewerRole": "Product owner orchestrator",
+        "source": {
+          "kind": "owner-thread",
+          "threadId": "01a12764-1eaa"
+        },
+        "ownerDecisionAt": "UNKNOWN",
+        "relayedBy": "Landing orchestrator",
+        "relayedAt": "2026-10-12T10:17:35Z",
+        "observations": [
+          {
+            "reportedBy": "Product owner orchestrator via Landing relay",
+            "observedAt": "2026-10-12T10:14:00Z",
+            "makeHttpStatus": 200,
+            "health": "ok",
+            "healthMode": "live",
+            "storage": "configured",
+            "deployedRevision": "UNKNOWN"
+          },
+          {
+            "reportedBy": "Landing orchestrator read-only GET",
+            "observedAt": "2026-10-12T10:17:08Z",
+            "makeHttpStatus": 200,
+            "finalUrl": "https://getticketstub.com/make",
+            "redirects": 0,
+            "deployedRevision": "UNKNOWN"
+          }
+        ],
+        "doesNotApprove": [
+          "Try demo wording",
+          "sandbox or physical orders",
+          "deployed artifact identity",
+          "landing publication",
+          "LP-12 release acceptance",
+          "marketing copy or asset publication"
+        ]
+      }
+    },
+    "demo": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    },
+    "staging": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    },
+    "production": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    }
+  }
+}

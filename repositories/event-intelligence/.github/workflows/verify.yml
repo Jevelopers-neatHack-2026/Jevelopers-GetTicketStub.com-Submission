@@ -1,0 +1,63 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.17'
+      - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
+      - name: Test bounded EI handoff checker
+        run: |
+          python3 - <<'PY'
+          import unittest
+
+          expected = 31
+          suite = unittest.defaultTestLoader.discover(
+              start_dir="tests/handoffs",
+              pattern="test_verify_handoff.py",
+          )
+          discovered = suite.countTestCases()
+          if discovered != expected:
+              raise SystemExit(f"Expected {expected} handoff tests, discovered {discovered}")
+
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if (
+              result.testsRun != expected
+              or not result.wasSuccessful()
+              or result.skipped
+              or result.expectedFailures
+              or result.unexpectedSuccesses
+          ):
+              raise SystemExit(
+                  f"Handoff tests incomplete or failed: ran={result.testsRun}, "
+                  f"skipped={len(result.skipped)}, failures={len(result.failures)}, "
+                  f"errors={len(result.errors)}"
+              )
+          PY
+      - run: make verify CASE=eval-policy-unit MODE=unit
+      - run: make verify CASE=safe-retrieval MODE=mock
+      - run: make verify CASE=content-privacy MODE=mock
+      - name: Test EI research candidate compatibility bundle
+        run: make verify CASE=research-api MODE=mock
+      - run: make verify CASE=question-preparation MODE=mock
+      - run: npm run test:runner
+      - run: npm run typecheck

@@ -1,0 +1,75 @@
+name: foundation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - name: Verify pinned runtime
+        run: |
+          node --version | grep -Fx 'v22.23.3'
+          npm --version | grep -Fx '10.9.9'
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build package and schemas
+        run: npm run build
+      - name: Verify contract fixtures
+        run: npm run test:contracts
+      - name: Verify deterministic accounting projection
+        run: npm run test:accounting -- --offline
+      - name: Verify package exports
+        run: npm run test:exports
+      - name: Verify immutable pricing and exact estimates
+        run: npm run test:pricing -- --offline
+      - name: Verify durable usage intake boundaries
+        run: npm run test:metering
+      - name: Verify PostgreSQL financial ledger behavior
+        run: npm run test:ledger -- --offline
+      - name: Verify PostgreSQL usage recovery and idempotency
+        run: npm run test:recovery -- --offline
+      - name: Verify scoped reproducible financial reporting
+        run: npm run test:reporting -- --offline
+      - name: Verify PostgreSQL query-to-export financial composition
+        run: npm run build --silent && node scripts/with-postgres.mjs exports --suite=postgres
+      - name: Verify financial authorization and tenant isolation
+        run: npm run test:security -- --offline
+      - name: Verify atomic budget reservation authorization
+        run: npm run test:budgets -- --offline --suite=authorization
+      - name: Verify budget reservation concurrency under real contention
+        run: npm run test:budgets -- --offline --suite=contention
+      - name: Verify budget reservation lifecycle
+        run: npm run test:budgets -- --offline --suite=lifecycle
+      - name: Verify disposable PostgreSQL migration lifecycle
+        run: npm run test:migrations -- --offline
+      - name: Verify offline API boundary behavior
+        run: npm run test:smoke -- --offline
+      - name: Verify fail-closed release coverage policy
+        run: npm run test:traceability
+      - name: Preserve scoped financial reporting test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-reporting-evidence
+          if-no-files-found: warn
+          path: |
+            artifacts/test-manifests/*.json
+            artifacts/test-database/migrations-*.log
+            artifacts/reporting/producer-*-page.json
+            artifacts/reporting/ie-ci06-pg-page.json
+            artifacts/reporting/failures-*.json
+            artifacts/exports/postgres-composition.json
+            artifacts/exports/synthetic-sql-composition.json

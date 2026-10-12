@@ -1,0 +1,57 @@
+{
+  "$defs": {
+    "ContractInstallation": {
+      "additionalProperties": false,
+      "description": "Local private package paths, carried only in the runtime input.",
+      "properties": {
+        "root": {
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        },
+        "archive": {
+          "minLength": 1,
+          "title": "Archive",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "archive"
+      ],
+      "title": "ContractInstallation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Platform-specific reviewed executable path and exact binary bytes.",
+  "properties": {
+    "installation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContractInstallation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "path": {
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "sha256"
+  ],
+  "title": "ContractRuntime",
+  "type": "object"
+}

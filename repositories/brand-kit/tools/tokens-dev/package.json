@@ -1,0 +1,10 @@
+{
+  "name": "brand-kit-tokens-dev",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Dev-only fixture for make check-tokens-tailwind. Not published; not a brand-kit distribution package (BK-03B).",
+  "engines": { "node": ">=18" },
+  "devDependencies": {
+    "tailwindcss": "3.4.19"
+  }
+}

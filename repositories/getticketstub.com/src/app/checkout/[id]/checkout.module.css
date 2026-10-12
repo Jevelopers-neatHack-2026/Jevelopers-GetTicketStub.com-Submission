@@ -1,0 +1,146 @@
+/* Checkout: the stub on its stock on the left, the order slip on the right. One column on a phone. */
+
+.layout {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding-top: 12px;
+}
+.desk {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cap {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+}
+.capTitle {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+  letter-spacing: -0.02em;
+}
+.capMeta {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+
+.sheet {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.head {
+  display: grid;
+  gap: 6px;
+}
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.sizeLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  font: var(--type-ui);
+}
+.sizeSub {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+
+/* The receipt: lines with dotted leaders, a double rule above the total */
+.receipt {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+.line dt {
+  order: 0;
+  flex: none;
+}
+.line::after {
+  content: "";
+  order: 1;
+  flex: 1;
+  height: 2px;
+  align-self: center;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 6px 2px;
+  background-repeat: repeat-x;
+}
+.line dd {
+  order: 2;
+  margin: 0;
+}
+.total {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 4px double var(--desk-rule-strong);
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+}
+.total::after {
+  background: none;
+}
+.quote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.actions {
+  display: grid;
+  gap: 14px;
+}
+.done {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  min-height: 52px;
+  align-content: center;
+}
+
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+    gap: 80px;
+    align-items: start;
+    padding-top: 24px;
+  }
+  .desk {
+    position: sticky;
+    top: 96px;
+    padding-top: 12px;
+  }
+  .sheet {
+    margin: 0;
+  }
+}

@@ -1,0 +1,1 @@
+{"cost":null,"invoice_coverage":"unknown","currency":"USD","revenue_is_not_cash":true}

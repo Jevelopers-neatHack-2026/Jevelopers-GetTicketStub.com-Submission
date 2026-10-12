@@ -1,0 +1,366 @@
+/* The printing reveal. It paints no ground: the parent is the cream paper desk (desk-surface), and the printer
+   is an object sitting on it (contact shadow, no glow).
+   Phone: headline, printer, receipt. Desktop: printer left, receipt right. */
+.stage {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* clear the corner cart button on narrow screens */
+  padding: max(24px, env(safe-area-inset-top), calc(var(--corner-reserve, 0px) * 0.62)) 16px max(28px, env(safe-area-inset-bottom));
+  color: var(--desk-ink);
+}
+
+.track {
+  margin-bottom: 8px;
+}
+
+.headline {
+  max-width: 18ch;
+  margin: 8px 0 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+  text-align: center;
+  text-wrap: balance;
+  animation: headlineIn 520ms var(--ts-ease-enter) both;
+}
+
+.hint {
+  margin: 6px 0 0;
+  min-height: 1.5em;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+  text-align: center;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 880px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .stage {
+    justify-content: center;
+    padding-bottom: 72px;
+  }
+  .headline {
+    max-width: 22ch;
+    font: var(--type-h1);
+    font-variation-settings: "SOFT" 30, "opsz" 39;
+    letter-spacing: -0.02em;
+  }
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 56px;
+    margin-top: 32px;
+  }
+  .printer {
+    --stub-max: 260px;
+    justify-self: end;
+  }
+  .receipt {
+    justify-self: start;
+    margin-top: 48px;
+  }
+}
+
+/* ---------- Printer ---------- */
+.printer {
+  --stub-max: 212px; /* phone: leave room for the receipt below */
+  position: relative;
+  width: min(340px, 86vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The slot is the printer's mouth: the paper rises out of it, so it sits over the paper's foot. */
+.slot {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 22px;
+  margin-top: -10px;
+  border-radius: 11px 11px 4px 4px;
+  background: linear-gradient(#3a3328, #14110c 70%);
+  /* the lip throws a short shadow up the paper where it leaves the rollers */
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.08), 0 -1px 0 rgb(23 20 15 / 0.5), 0 -5px 7px -3px rgb(23 20 15 / 0.35);
+}
+.slot::after {
+  content: "";
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 7px;
+  height: 4px;
+  border-radius: 2px;
+  background: #000;
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.8), 0 1px 0 rgb(255 255 255 / 0.07);
+}
+/* the printer's body below the mouth, with a status light that breathes while it feeds */
+.body {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 46px;
+  border-radius: 4px 4px 14px 14px;
+  background: linear-gradient(#1d1912, #0d0b08);
+  /* a printer on a desk: a tight contact line, then a soft shadow thrown on the paper */
+  box-shadow:
+    0 1px 0 rgb(23 20 15 / 0.55),
+    0 6px 8px -4px rgb(23 20 15 / 0.4),
+    0 20px 26px -12px rgb(23 20 15 / 0.38),
+    inset 0 -2px 0 rgb(0 0 0 / 0.7);
+}
+.led {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: #e4572e;
+  animation: led 1.1s ease-in-out infinite;
+}
+.bodyDone .led {
+  animation: none;
+  background: #9bc28a;
+  transition: background 300ms ease;
+}
+@keyframes led {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* the window the paper rises into: it clips the paper still inside the printer */
+.feedWindow {
+  position: relative;
+  width: 86%;
+  overflow: hidden;
+  padding-top: 18px; /* room for the bow off the rollers */
+  perspective: 900px;
+  perspective-origin: 50% 100%;
+}
+
+.feed {
+  position: relative;
+  transform-origin: 50% 100%;
+  transform: translateY(100%); /* the feed itself is a Web Animation, timed with the printer's ticks */
+}
+.feed.reduced {
+  animation: none;
+  transform: none;
+}
+
+/* The ink arrives a touch heavy and settles into the paper. */
+.ink {
+  display: grid;
+  justify-items: center;
+  animation: inkIn 2800ms var(--ts-ease-standard) both;
+}
+.settling {
+  animation: inkSettle 700ms var(--ts-ease-standard) both;
+}
+@keyframes inkIn {
+  0% {
+    filter: contrast(1.22) saturate(1.25) blur(0.8px);
+  }
+  100% {
+    filter: none;
+  }
+}
+@keyframes inkSettle {
+  0% {
+    filter: brightness(1.12) contrast(1.1);
+    transform: translateY(0);
+  }
+  45% {
+    filter: brightness(1.02);
+    transform: translateY(2px);
+  }
+  100% {
+    filter: none;
+    transform: translateY(0);
+  }
+}
+
+.placeholder {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(135deg, rgb(23 20 15 / 0.07) 0 8px, transparent 8px 16px),
+    rgb(23 20 15 / 0.04);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+
+/* ---------- Receipt: facts arrive one line at a time ----------
+   A raised sheet of paper on the desk. */
+.receipt {
+  position: relative;
+  width: min(360px, 100%);
+  padding: 18px 16px 26px;
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule);
+  color: var(--desk-ink);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 480ms var(--ts-ease-enter),
+    transform 480ms var(--ts-ease-enter);
+  /* torn bottom edge */
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 12px 100% repeat-x;
+}
+.receiptOn {
+  opacity: 1;
+  transform: none;
+}
+
+.receiptHead {
+  margin: 0 0 8px;
+  padding-bottom: 10px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 7px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+}
+
+.lines {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+/* each line prints downward, like thermal paper */
+.lineItem {
+  animation: lineIn 460ms var(--ts-ease-enter) both;
+  border-bottom: 1px solid var(--desk-rule);
+}
+.lineItem:last-child {
+  border-bottom: 0;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.line:active {
+  transform: translateY(1px);
+  transition-duration: var(--desk-press);
+}
+
+.lineText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.lineLabel {
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+.lineSource {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+
+.lineAction {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 64px;
+  min-height: 32px;
+}
+.keep {
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink-soft);
+  padding: 4px 10px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+/* a line that arrived already kept: the same stamp, set down without the thunk */
+.keptStatic {
+  display: inline-flex;
+  padding: 6px 12px 5px;
+  border: 2px solid var(--desk-error);
+  border-radius: 4px;
+  color: var(--desk-error);
+  font: 700 0.8rem/1 var(--font-ui), var(--ts-font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-4deg);
+}
+
+.skip {
+  margin-top: 24px;
+  animation: headlineIn 520ms var(--ts-ease-enter) both;
+}
+
+@keyframes headlineIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes lineIn {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led,
+  .feed {
+    animation: none;
+    transform: none;
+  }
+  .ink,
+  .settling,
+  .lineItem,
+  .headline,
+  .skip {
+    animation: none;
+  }
+  .receipt {
+    transition: none;
+  }
+}
+
+.groupHead {
+  margin: 10px 0 2px;
+}
+.fixNote {
+  margin: 0 0 10px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}

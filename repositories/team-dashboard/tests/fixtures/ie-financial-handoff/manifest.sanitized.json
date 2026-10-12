@@ -1,0 +1,171 @@
+{
+  "packetFormatVersion": "1.0.0",
+  "packetId": "ie-05c-financial-handoff-a08760e-v1",
+  "requestedCorrelationId": "1a3971b3-a894-57bb-a0aa-4e9345c632d8",
+  "acceptanceState": "PENDING_OWNER_ACCEPTANCE",
+  "financeAcknowledgment": null,
+  "dashboardAcknowledgment": null,
+  "integrationEvalsReceipt": null,
+  "provenance": {
+    "classification": "SYNTHETIC",
+    "visibility": "private-fixtures",
+    "credentialFree": true,
+    "money": "USD fictional fixture amounts, not actual bills",
+    "externalCalls": 0,
+    "actualProviderBilling": null
+  },
+  "producer": {
+    "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+    "revision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+    "localCheckoutHeadNotUsed": "acfdfbd8345908c7446a60ec1f38add5a9449021",
+    "scope": "Existing pinned synthetic fixtures and test-source assertions only; lower-level reservation/intake/accounting evidence. Public accepted lifecycle/summary/export outputs absent.",
+    "contractLock": {
+      "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+      "revision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+      "path": "contracts.lock.json",
+      "sha256": "60338880a46b4fd2f4a929515fb47233bf0c2273705c5befac3a9ba8fa6df777"
+    },
+    "sourceSchemaVersion": "1.0.0"
+  },
+  "canonicalReferences": {
+    "status": "proposal_only",
+    "adoptionAccepted": false,
+    "producerRepository": "Jevelopers-neatHack-2026/shared-contracts",
+    "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+    "packageVersion": "0.3.0",
+    "schemaVersion": "1.0.0",
+    "archiveSha256": "29032c3caae8f5d45a9665ef2263e7014e429b94d4b4267d36826c0790de88f2",
+    "acceptedCanonicalSchemaVersion": null,
+    "acceptedCanonicalSchemaDigest": null,
+    "schemas": [
+      {
+        "contract": "UsageEvent",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/UsageEvent/1.0.0.json",
+        "sha256": "8556135f33fc81f85b51d11268c8b6e7d6fd464f73ef6f6b82df8a2207f6dbf6",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "BudgetReservation",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/BudgetReservation/1.0.0.json",
+        "sha256": "f06c6910d1a537a1d357e6555400e39d4cc590e6cfcb0aa26ee19a7b80361238",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "FinancialSummary",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/FinancialSummary/1.0.0.json",
+        "sha256": "8d73d97e86d0684ccbb84fc1838de9d7802438966be60bd1f2da3347833067d9",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "ReserveRequest",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/ReserveRequest/1.0.0.json",
+        "sha256": "ac8f553c537e01515fca14907220c35d19a69a8739a5869efeeaedf74058aa5b",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "SettleRequest",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/SettleRequest/1.0.0.json",
+        "sha256": "8ad86ebaed5e0d64807d1b4045ab0d95fea81d30ac96c706ec43bda3738191e0",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "ReleaseRequest",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/ReleaseRequest/1.0.0.json",
+        "sha256": "f07a2ba3dada865a96890effe4913c4dabe7b8f0c566b7e1e07d7ff6eb43d403",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "QueryRequest",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/QueryRequest/1.0.0.json",
+        "sha256": "29d8171847ea11fb101cfe0b63c64aba65e9f6370a754ec32bd09d6b5e6bc2d6",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      },
+      {
+        "contract": "QueryResult",
+        "schemaVersion": "1.0.0",
+        "path": "schemas/QueryResult/1.0.0.json",
+        "sha256": "2df0266c6bc581b3cdf41d4cdb6de34ab6f6e4a2334dc4fe7d8025209eb4d52e",
+        "package": "@jevelopers/shared-contracts@0.3.0",
+        "producerRevision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "status": "PROPOSAL_ONLY_NOT_ADOPTED"
+      }
+    ]
+  },
+  "consumerPins": {
+    "financeAcceptanceRevision": null,
+    "dashboardRevision": null,
+    "integrationEvalsRevision": "5382cdd877a92c6063d3c2bd5c78ae7ebd44b694"
+  },
+  "sourceFixtureFiles": [
+    {
+      "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+      "revision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+      "path": "fixtures/accounting/ci06-golden-events.json",
+      "sha256": "c29dd13a41442e113e0bcd75d8484a3275967640a8f4d1f6d60bbce95871feee"
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+      "revision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+      "path": "fixtures/ledger/ci02-synthetic-acceptance.json",
+      "sha256": "119df65be57efb53792f9bec04e8ba55cc289b394138cdf79f154ef180c72df7"
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+      "revision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+      "path": "fixtures/metering/usage-observation.request.json",
+      "sha256": "2f4ef3a9923e82dc199dd0788b755c292cc56e547eecba1687c833b86a74992a"
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+      "revision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+      "path": "fixtures/api/summary-query.request.json",
+      "sha256": "461bb1dfb5d951b282bd0e3c07da53319f4fdf4735f8ba1ca0fc04e5477d4d6f"
+    }
+  ],
+  "files": [
+    {
+      "path": "vectors.json",
+      "sha256": "fcfe6f53408f476b26080e250a656ad89779c6237af70021dbc76482dd84722c",
+      "bytes": 142653
+    },
+    {
+      "path": "coverage.json",
+      "sha256": "1b2d0a21107db49c6c0eaea72a80c5a6cf1240fce47cf6aa1e22bee95114302a",
+      "bytes": 34667
+    },
+    {
+      "path": "README.md",
+      "sha256": "a4a9d122202ebe50f93401a608f45c58bfb455721a9a621385c394b8e50a0482",
+      "bytes": 3328
+    }
+  ],
+  "selfHash": "External SHA256 supplied with delivery; no circular self-digest.",
+  "blockerState": "BLOCKED_PUBLIC_ACCEPTANCE",
+  "independentReview": {
+    "sha256": "77dfa5dc44ec2838c5d29397d4f2c6d1b6036246fc63bc397857defc81e93871",
+    "indexSha256": "3aef008570d008e31666e53c08c90d5389f148e5c68390eab3c3caddbdec2451",
+    "testsPassed": 117,
+    "receiptOwner": "Independent Finance integrity reviewer; this packet worker claims no test execution"
+  }
+}

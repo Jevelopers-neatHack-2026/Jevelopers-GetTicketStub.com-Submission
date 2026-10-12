@@ -1,0 +1,153 @@
+{
+  "$defs": {
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Raw repeated-trial receipt for one candidate on an unchanged held-out row.",
+  "properties": {
+    "row_id": {
+      "title": "Row Id",
+      "type": "string"
+    },
+    "candidate": {
+      "enum": [
+        "rules",
+        "generative",
+        "jev"
+      ],
+      "title": "Candidate",
+      "type": "string"
+    },
+    "prediction": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Prediction"
+    },
+    "latency_ms": {
+      "minimum": 0,
+      "title": "Latency Ms",
+      "type": "number"
+    },
+    "cost": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cost"
+    },
+    "downstream_cost": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Downstream Cost"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode"
+    },
+    "component_revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Component Revision",
+      "type": "string"
+    },
+    "config_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Config Digest",
+      "type": "string"
+    },
+    "receipt_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Receipt Ref"
+    },
+    "receipt_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Receipt Digest"
+    },
+    "trial": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Trial",
+      "type": "integer"
+    },
+    "critical": {
+      "default": false,
+      "title": "Critical",
+      "type": "boolean"
+    },
+    "executed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Executed At"
+    }
+  },
+  "required": [
+    "row_id",
+    "candidate",
+    "prediction",
+    "latency_ms",
+    "mode",
+    "component_revision",
+    "config_digest"
+  ],
+  "title": "Sample",
+  "type": "object"
+}

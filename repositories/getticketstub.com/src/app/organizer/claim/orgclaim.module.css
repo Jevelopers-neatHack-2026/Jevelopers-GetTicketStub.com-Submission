@@ -1,0 +1,103 @@
+.layout {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.desk {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.locked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.locked li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.locked svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.form {
+  display: grid;
+  gap: 24px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  min-width: 0;
+}
+.head {
+  display: grid;
+  gap: 6px;
+}
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lede {
+  font: var(--type-lede);
+  overflow-wrap: anywhere;
+}
+.group {
+  display: grid;
+  gap: 10px;
+}
+.note {
+  min-height: 96px;
+}
+.filePick {
+  position: relative;
+  cursor: pointer;
+}
+.filePick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.filePick:focus-within {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 3px;
+}
+.thumbFrame {
+  padding: 4px 4px 10px;
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge), 0 8px 12px -8px rgb(23 20 15 / 0.5);
+  transform: rotate(-2deg);
+}
+.thumb {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+}
+
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+    gap: 80px;
+    align-items: start;
+    padding-top: 16px;
+  }
+  .desk {
+    position: sticky;
+    top: 96px;
+  }
+  .form {
+    margin: 0;
+  }
+}

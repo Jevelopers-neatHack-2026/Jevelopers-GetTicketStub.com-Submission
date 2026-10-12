@@ -1,0 +1,144 @@
+name: Markdown relative-link check
+
+on:
+  pull_request:
+  push:
+    branches: [ $default-branch ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Check Markdown links
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check relative links
+        id: check
+        env:
+          CONTRACT_VERSION: docs-link-check/v1
+          DOCS_SCOPE: repository
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = fs.realpathSync(process.cwd());
+          const scope = process.env.DOCS_SCOPE;
+          function isWithin(basePath, candidatePath) {
+            const relative = path.relative(basePath, candidatePath);
+            return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+          }
+          function writeOutputs(checked, broken, result) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'contract_version=' + process.env.CONTRACT_VERSION + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'checked_files=' + checked + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'broken_links=' + broken + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'result=' + result + '\n');
+          }
+          if (scope !== 'docs' && scope !== 'repository') {
+            console.error('scope must be docs or repository');
+            writeOutputs(0, 1, 'failed');
+            process.exit(1);
+          }
+          const requestedBase = scope === 'docs' ? path.join(root, 'docs') : root;
+          if (scope === 'docs' && !fs.existsSync(requestedBase)) {
+            console.error('docs scope requested but docs/ is missing');
+            writeOutputs(0, 1, 'failed');
+            process.exit(1);
+          }
+          let base;
+          try {
+            base = fs.realpathSync(requestedBase);
+          } catch {
+            console.error('requested scope cannot be resolved');
+            writeOutputs(0, 1, 'failed');
+            process.exit(1);
+          }
+          if (!isWithin(root, base)) {
+            console.error('requested scope resolves outside checkout');
+            writeOutputs(0, 1, 'failed');
+            process.exit(1);
+          }
+          const ignored = new Set(['.git', 'node_modules', 'vendor']);
+          const files = [];
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+              if (entry.isDirectory() && ignored.has(entry.name)) continue;
+              const candidate = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(candidate);
+              else if (entry.isFile() && /\.(md|markdown)$/i.test(entry.name)) files.push(candidate);
+            }
+          }
+          walk(base);
+          let broken = 0;
+          if (files.length === 0) {
+            console.error('no Markdown files found in requested scope');
+            writeOutputs(0, 1, 'failed');
+            process.exit(1);
+          }
+          const linkPattern = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^)\s]+)(?:\s+[^)]*)?\)/g;
+          for (const file of files) {
+            const realFile = fs.realpathSync(file);
+            if (!isWithin(root, realFile)) {
+              console.error('Markdown source resolves outside checkout');
+              broken++;
+              continue;
+            }
+            const lines = fs.readFileSync(realFile, 'utf8').split(/\r?\n/);
+            let fence = 0;
+            for (let index = 0; index < lines.length; index++) {
+              const line = lines[index];
+              const trimmed = line.trimStart();
+              const first = trimmed.charCodeAt(0);
+              if (first === 96 || first === 126) {
+                let count = 0;
+                while (trimmed.charCodeAt(count) === first) count++;
+                if (count >= 3) {
+                  if (fence === 0) fence = first;
+                  else if (fence === first) fence = 0;
+                  continue;
+                }
+              }
+              if (fence !== 0) continue;
+              linkPattern.lastIndex = 0;
+              let match;
+              while ((match = linkPattern.exec(line)) !== null) {
+                let target = match[1].replace(/^<|>$/g, '');
+                if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue;
+                try {
+                  target = decodeURIComponent(target.split(/[?#]/, 1)[0]);
+                } catch {
+                  console.error('Markdown line ' + (index + 1) + ': malformed relative target');
+                  broken++;
+                  continue;
+                }
+                if (target === '') continue;
+                const resolved = path.resolve(path.dirname(file), target);
+                if (!isWithin(root, resolved)) {
+                  console.error('Markdown line ' + (index + 1) + ': link escapes checkout');
+                  broken++;
+                } else if (!fs.existsSync(resolved)) {
+                  console.error('Markdown line ' + (index + 1) + ': missing target');
+                  broken++;
+                } else {
+                  const realTarget = fs.realpathSync(resolved);
+                  if (!isWithin(root, realTarget)) {
+                    console.error('Markdown line ' + (index + 1) + ': link resolves outside checkout');
+                    broken++;
+                  }
+                }
+              }
+            }
+          }
+          const result = broken === 0 ? 'passed' : 'failed';
+          writeOutputs(files.length, broken, result);
+          console.log('checked_files=' + files.length + ' broken_links=' + broken + ' result=' + result);
+          if (broken !== 0) process.exit(1);
+          NODE

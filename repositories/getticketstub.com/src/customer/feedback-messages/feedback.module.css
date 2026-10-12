@@ -1,0 +1,49 @@
+/* Errors and progress on paper: a stamped rule, ink text, no colour on body copy. */
+.note {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding-left: 10px;
+  border-left: 3px solid var(--desk-error);
+  overflow-wrap: anywhere;
+}
+.text {
+  font: var(--type-label);
+  color: var(--desk-ink);
+  text-wrap: pretty;
+}
+.link {
+  font: var(--type-label);
+  color: var(--desk-ink);
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  min-height: 1.3em;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--desk-ink-soft);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+}

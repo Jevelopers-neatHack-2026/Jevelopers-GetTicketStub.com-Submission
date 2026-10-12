@@ -1,0 +1,1096 @@
+#!/usr/bin/env node
+import { lstat, mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { STATUS_SUITE_CASE_COUNT } from "./run-status-tests.mjs";
+import { PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT } from "./run-prodigi-product-details-tests.mjs";
+import {
+  PNG_INSPECTION_SUITE_CASE_COUNT,
+  runPngInspectionTests,
+  validPngInspectionRunnerReport
+} from "./run-png-inspection-tests.mjs";
+import {
+  ORDER_AUTHORIZATION_SUITE_CASE_COUNT,
+  runOrderAuthorizationTests,
+  validOrderAuthorizationRunnerReport
+} from "./run-order-authorization-tests.mjs";
+import { PACKAGE_SUITE_CASE_COUNT, runPackageTests, validPackageRunnerReport } from "./run-package-tests.mjs";
+import {
+  PACKAGE_BLOCKERS,
+  PACKAGE_EVIDENCE_DIR,
+  buildPackageAssessment,
+  buildPackageBundleReport,
+  packageEvidenceDirAllowed,
+  sourceRevision,
+  validPackageAssessment
+} from "./package-verification.mjs";
+
+let allSharedShapes = [];
+let contractOwnership = {};
+let catalogAvailable = false;
+let catalogApiAvailable = false;
+let runtimeMeteringAvailable = false;
+let quoteApiAvailable = false;
+let privateQuoteFormat = null;
+let comparisonApiAvailable = false;
+let privateComparisonFormat = null;
+let attemptStoreApiAvailable = false;
+let statusApiAvailable = false;
+let prodigiProductDetailsApiAvailable = false;
+let pngInspectionApiAvailable = false;
+let orderAuthorizationApiAvailable = false;
+let packageApiAvailable = false;
+let providerEnvironmentMatrix = null;
+try {
+  const catalog = await import("../dist/index.js");
+  allSharedShapes = catalog.ALL_SHARED_SHAPES;
+  contractOwnership = catalog.CONTRACT_OWNERSHIP;
+  providerEnvironmentMatrix = catalog.PROVIDER_ENVIRONMENT_MATRIX ?? null;
+  catalogAvailable = Array.isArray(allSharedShapes) && contractOwnership !== undefined;
+  catalogApiAvailable = typeof catalog.normalizeCatalogSnapshot === "function"
+    && typeof catalog.discoverCatalogSnapshot === "function"
+    && typeof catalog.evaluateCatalogSelection === "function"
+    && typeof catalog.validateCatalogSnapshotBoundary === "function";
+  runtimeMeteringAvailable = typeof catalog.createRuntimeMeteringResolver === "function";
+  quoteApiAvailable = typeof catalog.executePrivateQuote === "function" &&
+    typeof catalog.evaluatePrivateQuoteCurrent === "function" &&
+    typeof catalog.QuoteExecutionError === "function";
+  privateQuoteFormat = catalog.PRIVATE_QUOTE_FORMAT ?? null;
+  comparisonApiAvailable = typeof catalog.comparePrivateQuotes === "function" &&
+    catalog.PRIVATE_COMPARISON_FORMAT === "connector-development-comparison/1";
+  privateComparisonFormat = catalog.PRIVATE_COMPARISON_FORMAT ?? null;
+  attemptStoreApiAvailable = typeof catalog.createLocalAttemptPersistence === "function" &&
+    typeof catalog.LocalAttemptPersistence === "function" && typeof catalog.AttemptStoreError === "function";
+  statusApiAvailable = typeof catalog.LocalStatusStore === "function" &&
+    typeof catalog.StatusStoreError === "function" && typeof catalog.normalizeProviderObservation === "function" &&
+    typeof catalog.fixtureStatusMapping === "function" && typeof catalog.fixtureTrackingHostPolicy === "function";
+  prodigiProductDetailsApiAvailable = typeof catalog.decodeProdigiProductDetails === "function" &&
+    typeof catalog.prodigiProductDetailsPath === "function" &&
+    typeof catalog.ProdigiProductDetailsError === "function";
+  pngInspectionApiAvailable = typeof catalog.inspectPngBytes === "function" &&
+    typeof catalog.PNG_INSPECTION_LIMITS === "object";
+  orderAuthorizationApiAvailable = typeof catalog.createTicketStubOrderAuthorizationVerifier === "function" &&
+    typeof catalog.createConsumerRequestSigner === "function" && typeof catalog.deriveOrderClaimKey === "function" &&
+    typeof catalog.OrderAuthorizationError === "function";
+} catch {
+  // Keep argument and missing-build failures machine-readable even before a build.
+}
+
+try {
+  const productionBundle = await import("../dist/production-bundle.js");
+  packageApiAvailable = typeof productionBundle.createProductionBundleGate === "function" &&
+    typeof productionBundle.resolveTrustAnchor === "function" && typeof productionBundle.validateProductionBundleBytes === "function";
+} catch {
+  // A missing build stays machine-readable below.
+}
+
+let simulatorFixtureVersion = null;
+let simulatorProviderId = null;
+let simulatorApiAvailable = false;
+try {
+  const simulator = await import("../dist/simulator.js");
+  simulatorFixtureVersion = simulator.SIMULATOR_FIXTURE_VERSION ?? null;
+  simulatorProviderId = simulator.SIMULATOR_PROVIDER_ID ?? null;
+  simulatorApiAvailable = typeof simulator.createDeterministicSimulator === "function" &&
+    typeof simulator.simulatorFixtureDigest === "function";
+} catch {
+  // Keep a missing simulator build machine-readable without masking argument errors.
+}
+
+function parseArgs(argv) {
+  const parsed = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const key = argv[index];
+    if (!["--suite", "--mode", "--evidence-dir"].includes(key)) {
+      parsed.argumentError = "unknown_argument";
+      continue;
+    }
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      parsed.argumentError = "missing_argument_value";
+      continue;
+    }
+    parsed[key.slice(2)] = value;
+    index += 1;
+  }
+  return parsed;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "status", "prodigi-product-details", "png-inspection", "order-authorization", "package", "sandbox", "release"]);
+const allowedModes = new Set(["simulated", "sandbox"]);
+function validStatusRunnerReport(report) {
+  const reportKeys = ["schemaVersion", "suite", "mode", "status", "passed", "failed", "results", "processExitCode",
+    "processSignal", "processError", "stderrPresent", "externalProviderCalls", "orderCalls", "financeCalls", "skipped"];
+  if (report === null || typeof report !== "object" || Array.isArray(report) ||
+    Object.keys(report).sort().join("|") !== reportKeys.slice().sort().join("|") ||
+    report.schemaVersion !== "fulfillment-status-suite-result/1" || report.suite !== "status" || report.mode !== "simulated" ||
+    !["passed", "failed"].includes(report.status) || !Number.isSafeInteger(report.passed) || !Number.isSafeInteger(report.failed) ||
+    !Array.isArray(report.results) || report.passed < 0 || report.failed < 0 || report.passed + report.failed !== report.results.length ||
+    report.results.length < STATUS_SUITE_CASE_COUNT || !Number.isSafeInteger(report.processExitCode) && report.processExitCode !== null ||
+    report.processSignal !== null && typeof report.processSignal !== "string" ||
+    report.processError !== null && typeof report.processError !== "string" || typeof report.stderrPresent !== "boolean" ||
+    report.externalProviderCalls !== 0 || report.orderCalls !== 0 || report.financeCalls !== 0 || report.skipped !== 0) return false;
+  const names = new Set();
+  for (const result of report.results) {
+    if (result === null || typeof result !== "object" || Array.isArray(result) ||
+      !["passed", "failed"].includes(result.status) || typeof result.name !== "string" || result.name.length === 0 ||
+      names.has(result.name) || result.status === "failed" && typeof result.detail !== "string" ||
+      Object.keys(result).some((key) => !["name", "status", "detail"].includes(key))) return false;
+    names.add(result.name);
+  }
+  if (report.passed !== report.results.filter((result) => result.status === "passed").length ||
+    report.failed !== report.results.filter((result) => result.status === "failed").length ||
+    report.status !== (report.failed === 0 ? "passed" : "failed")) return false;
+  if (report.failed === 0) {
+    return report.results.length === STATUS_SUITE_CASE_COUNT && report.processExitCode === 0 &&
+      report.processSignal === null && report.processError === null && report.stderrPresent === false;
+  }
+  return report.status === "failed";
+}
+function validProdigiProductDetailsRunnerReport(report) {
+  const requiredKeys = ["schemaVersion", "suite", "mode", "status", "passed", "failed", "results", "processExitCode",
+    "processSignal", "processError", "stderrPresent", "externalProviderCalls", "orderCalls", "financeCalls",
+    "sandboxReady", "liveEnabled", "releaseReady", "skipped"];
+  if (report === null || typeof report !== "object" || Array.isArray(report) ||
+    requiredKeys.some((key) => !Object.prototype.hasOwnProperty.call(report, key)) ||
+    Object.keys(report).some((key) => !requiredKeys.includes(key) && key !== "processStdout") ||
+    report.schemaVersion !== "fulfillment-prodigi-product-details-suite-result/1" ||
+    report.suite !== "prodigi-product-details" || report.mode !== "simulated" ||
+    !["passed", "failed"].includes(report.status) || !Number.isSafeInteger(report.passed) || !Number.isSafeInteger(report.failed) ||
+    !Array.isArray(report.results) || report.passed < 0 || report.failed < 0 ||
+    report.passed + report.failed !== report.results.length || report.results.length < PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT ||
+    (!Number.isSafeInteger(report.processExitCode) && report.processExitCode !== null) ||
+    (report.processSignal !== null && typeof report.processSignal !== "string") ||
+    (report.processError !== null && typeof report.processError !== "string") || typeof report.stderrPresent !== "boolean" ||
+    report.externalProviderCalls !== 0 || report.orderCalls !== 0 || report.financeCalls !== 0 || report.skipped !== 0 ||
+    report.sandboxReady !== false || report.liveEnabled !== false || report.releaseReady !== false) return false;
+  const names = new Set();
+  for (const check of report.results) {
+    if (check === null || typeof check !== "object" || Array.isArray(check) ||
+      typeof check.name !== "string" || check.name.length === 0 || names.has(check.name) ||
+      !["passed", "failed"].includes(check.status) ||
+      (check.status === "failed" && typeof check.detail !== "string") ||
+      Object.keys(check).some((key) => !["name", "status", "detail"].includes(key))) return false;
+    names.add(check.name);
+  }
+  if (report.passed !== report.results.filter((check) => check.status === "passed").length ||
+    report.failed !== report.results.filter((check) => check.status === "failed").length ||
+    report.status !== (report.failed === 0 ? "passed" : "failed")) return false;
+  if (report.status === "passed") {
+    return report.results.length === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT && report.passed === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT &&
+      report.processExitCode === 0 && report.processSignal === null && report.processError === null && report.stderrPresent === false;
+  }
+  return report.status === "failed";
+}
+const startedAt = new Date().toISOString();
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const missingAcceptedPins = allSharedShapes.map((shape) => ({
+  shape,
+  ownerRepository: contractOwnership[shape]?.ownerRepository ?? null,
+  upstreamIssue: contractOwnership[shape]?.upstreamIssue ?? null,
+  state: "missing",
+  schemaVersion: null,
+  sourceRevision: null,
+  fixtureDigest: null
+}));
+const blockers = [
+  "accepted upstream schema versions, source revisions, and fixture digests are missing",
+  "producer and consumer conformance reports are missing"
+];
+const securityBlockers = [
+  "accepted shared-contracts SC8 artifact and pin are missing",
+  "encrypted scoped storage, retention execution, and deletion audit are not implemented; the tombstone fingerprint keyring has no provisioned server-side key source",
+  "a production server-side secret manager and credential-rotation evidence are unavailable",
+  "DNS-pinned asset transport, TLS peer enforcement, redirect cleanup, and production host policy are injected-port requirements only",
+  "durable callback replay storage and a selected provider's documented authenticity method are unavailable",
+  "sandbox account access, a selected adapter, and genuine private provider fixtures are unavailable",
+  "producer/consumer conformance and genuine release evidence remain missing"
+];
+const mockBlockers = [
+  "the deterministic simulator and its runtime/metering fixtures are private development fixtures only",
+  "no selected provider sandbox adapter, account-tested behavior, or live mode is established"
+];
+const catalogBlockers = [
+  "shared-contracts #4 has not accepted and published the canonical capability/print-spec shape, schema version, source revision, and fixture digest",
+  "print-production #6 has not reviewed or acknowledged the catalog snapshot mapping and expected results",
+  "the exact provider SKU/specification, destination, and shipping choice remain owner review inputs"
+];
+const quoteBlockers = [
+  "shared-contracts #25 canonical FulfillmentQuote mapping and accepted schema pin are pending",
+  "application consumer conformance and expected-result review are pending",
+  "scoped durable quote persistence is not implemented",
+  "no selected provider sandbox adapter, account-tested quote behavior, or live mode is established"
+];
+const attemptStoreBlockers = [
+  "this result covers only the private local AttemptPersistence implementation and offline simulated fixtures",
+  "canonical shared-contract acceptance, issuer-backed authorization, and authoritative finance holds or releases remain unavailable",
+  "provider outcome reconciliation, provider retry authority, production encryption, and production storage operations remain unavailable",
+  "the existing runtime port does not return a cached accepted result or express transport intent and compare-and-swap revisions"
+];
+const comparisonBlockers = [
+  "this result covers only the private local quote-comparison projection and offline simulated fixtures; issue 14 remains open",
+  "canonical shared-contracts #25 mapping and an accepted quote schema pin are pending",
+  "application consumer conformance and a trusted currentness recheck at use time are pending",
+  "no selected provider adapter, live quote behavior, sandbox readiness, or release evidence is established"
+];
+const statusBlockers = [
+  "issue 13 remains open; this result covers only private local status fixtures",
+  "shared-contracts #27 canonical status mapping and an accepted schema pin are pending",
+  "authenticated provider lookup and callback verification are not integrated",
+  "application consumer conformance for the local at-least-once outbox is pending",
+  "finance authority, sandbox account evidence, and release acceptance are unavailable"
+];
+const prodigiProductDetailsBlockers = [
+  "this result covers only a provider-private wire decoder and relative path helper with synthetic offline fixtures",
+  "it does not establish a selected product, orderability, destination eligibility, authenticated sandbox behavior, or application adoption",
+  "issue 15 full acceptance still includes the supported cancellation outcome; this component implements no order lifecycle operation",
+  "canonical schema acceptance and producer/consumer conformance remain pending"
+];
+const orderAuthorizationBlockers = [
+  "this result covers only a simulated, development-only consumer adapter and dispatch-time revalidation hook against a fake issuer, a fake HTTP port, and the producer's pinned fixture verifier",
+  "purchase terms come from an injected development-fixture terms source; canonical production bundle, quote, destination and OrderAuthorization bindings are not accepted and none is forged",
+  "the app provider prodigi and the connector sandbox mode are refused; the producer cannot issue prodigi authorizations today",
+  "no real endpoint, base URL, fetch, consumer key or issuer integration exists; issuer responses are not message-authenticated and rely on the transport",
+  "this is not consumer-conformance evidence and does not complete issue 15 or any release scope"
+];
+const pngInspectionBlockers = [
+  "this result covers only bounded byte observations for one static RGB8 noninterlaced PNG profile and private synthetic fixtures",
+  "the six pinned renderer PNGs are diagnostic bytes with handoffEligible=false, not an approved ProductionBundle",
+  "PDF, JPEG, WebP, ZIP, and other PNG profiles remain unsupported by this observer",
+  "FC-08 still requires accepted canonical package bindings, an approved production bundle, and producer/consumer conformance",
+  "observed pHYs values are file metadata and do not establish a provider DPI requirement or print eligibility"
+];
+
+let checks = [];
+let meteringReport = null;
+let mockReport = null;
+let quoteReport = null;
+let comparisonReport = null;
+let attemptStoreReport = null;
+let statusReport = null;
+let prodigiProductDetailsReport = null;
+let pngInspectionReport = null;
+let orderAuthorizationReport = null;
+let packageReport = null;
+let packageBundleReport = null;
+let packageRevision = null;
+let failureReasons = [];
+let status = "failed";
+
+if (args.argumentError !== undefined) failureReasons.push(args.argumentError);
+if (args.suite === undefined) failureReasons.push("suite_required");
+else if (!allowedSuites.has(args.suite)) failureReasons.push("unknown_suite");
+if (args.mode === undefined) failureReasons.push("mode_required");
+else if (!allowedModes.has(args.mode)) failureReasons.push("invalid_mode");
+if (args["evidence-dir"] === undefined) failureReasons.push("evidence_dir_required");
+if (process.version !== "v24.21.0") failureReasons.push("runtime_version_mismatch");
+if (args.suite === "provider-matrix" && args.mode !== "simulated") failureReasons.push("provider_matrix_requires_simulated_mode");
+if (args.suite === "security" && args.mode !== "simulated") failureReasons.push("security_suite_requires_simulated_mode");
+if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(args.mode)) failureReasons.push("catalog_suite_requires_simulated_mode");
+if (args.suite === "metering" && args.mode !== "simulated") failureReasons.push("metering_fixture_suite_requires_simulated_mode");
+if (args.suite === "mock" && args.mode !== "simulated") failureReasons.push("mock_suite_requires_simulated_mode");
+if (args.suite === "quote" && args.mode !== "simulated") failureReasons.push("quote_fixture_suite_requires_simulated_mode");
+if (args.suite === "attempt-store" && args.mode !== "simulated") failureReasons.push("attempt_store_fixture_suite_requires_simulated_mode");
+if (args.suite === "comparison" && args.mode !== "simulated") failureReasons.push("comparison_fixture_suite_requires_simulated_mode");
+if (args.suite === "status" && args.mode !== "simulated") failureReasons.push("status_fixture_suite_requires_simulated_mode");
+if (args.suite === "prodigi-product-details" && args.mode !== "simulated") failureReasons.push("prodigi_product_details_requires_simulated_mode");
+if (args.suite === "png-inspection" && args.mode !== "simulated") failureReasons.push("png_inspection_requires_simulated_mode");
+if (args.suite === "order-authorization" && args.mode !== "simulated") failureReasons.push("order_authorization_requires_simulated_mode");
+if (args.suite === "package" && args.mode !== "simulated") failureReasons.push("package_requires_simulated_mode");
+if (args.suite === "package" && args["evidence-dir"] !== undefined && !packageEvidenceDirAllowed(repositoryRoot, args["evidence-dir"])) failureReasons.push("unsafe_evidence_directory");
+
+if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
+  if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runContractSuite } = await import("../tests/contract-suite.mjs");
+      checks = await runContractSuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_local_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("contract_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "contract") {
+  failureReasons.push("contract_fixture_suite_requires_simulated_mode");
+} else if (failureReasons.length === 0 && args.suite === "provider-matrix" && args.mode === "simulated") {
+  if (!catalogAvailable || providerEnvironmentMatrix === null) failureReasons.push("provider_matrix_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runProviderMatrixSuite } = await import("../tests/provider-matrix-suite.mjs");
+      checks = await runProviderMatrixSuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_provider_matrix_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("provider_matrix_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "security" && args.mode === "simulated") {
+  if (!catalogAvailable) failureReasons.push("security_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runSecuritySuite } = await import("../tests/security-suite.mjs");
+      checks = await runSecuritySuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_local_security_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("security_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "catalog" && args.mode === "simulated") {
+  if (!catalogAvailable || !catalogApiAvailable) failureReasons.push("catalog_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runCatalogSuite } = await import("../tests/catalog-suite.mjs");
+      checks = await runCatalogSuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_local_catalog_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("catalog_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "mock" && args.mode === "simulated") {
+  if (!catalogAvailable || !runtimeMeteringAvailable || !simulatorApiAvailable) failureReasons.push("mock_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runMockTests } = await import("./run-mock-tests.mjs");
+      mockReport = runMockTests();
+      checks = mockReport.results ?? [];
+      if (mockReport.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_mock_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("mock_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "quote" && args.mode === "simulated") {
+  if (!catalogApiAvailable || !quoteApiAvailable || privateQuoteFormat !== "connector-development-quote/1") {
+    failureReasons.push("quote_build_prerequisite_missing");
+  }
+  try {
+    if (failureReasons.length === 0) {
+      const { runQuoteTests } = await import("./run-quote-tests.mjs");
+      quoteReport = runQuoteTests();
+      checks = quoteReport.results ?? [];
+      if (quoteReport.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_quote_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("quote_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "attempt-store" && args.mode === "simulated") {
+  if (!attemptStoreApiAvailable || !runtimeMeteringAvailable || !simulatorApiAvailable) {
+    failureReasons.push("attempt_store_runtime_build_prerequisite_missing");
+  }
+  try {
+    if (failureReasons.length === 0) {
+      const { runAttemptStoreTests } = await import("./run-attempt-store-tests.mjs");
+      attemptStoreReport = runAttemptStoreTests();
+      checks = attemptStoreReport.results ?? [];
+      if (attemptStoreReport.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_attempt_store_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("attempt_store_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "comparison" && args.mode === "simulated") {
+  if (!comparisonApiAvailable || privateComparisonFormat !== "connector-development-comparison/1") {
+    failureReasons.push("comparison_build_prerequisite_missing");
+  }
+  try {
+    if (failureReasons.length === 0) {
+      const { runComparisonTests } = await import("./run-comparison-tests.mjs");
+      comparisonReport = runComparisonTests();
+      checks = comparisonReport.results ?? [];
+      if (comparisonReport.status === "passed" && comparisonReport.failed === 0 &&
+        checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_comparison_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("comparison_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "status" && args.mode === "simulated") {
+  if (!statusApiAvailable) failureReasons.push("status_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runStatusTests } = await import("./run-status-tests.mjs");
+      statusReport = runStatusTests();
+      if (!validStatusRunnerReport(statusReport)) {
+        failureReasons.push("status_runner_report_invalid");
+        checks = Array.isArray(statusReport?.results) ? statusReport.results : [];
+      } else {
+        checks = statusReport.results;
+        if (statusReport.status === "passed" && statusReport.passed === STATUS_SUITE_CASE_COUNT &&
+          statusReport.failed === 0 && checks.length === STATUS_SUITE_CASE_COUNT &&
+          checks.every((check) => check.status === "passed")) {
+          status = "passed";
+        } else {
+          failureReasons.push("one_or_more_private_status_fixture_checks_failed");
+        }
+      }
+    }
+  } catch {
+    failureReasons.push("status_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "prodigi-product-details" && args.mode === "simulated") {
+  if (!prodigiProductDetailsApiAvailable) failureReasons.push("prodigi_product_details_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runProdigiProductDetailsTests } = await import("./run-prodigi-product-details-tests.mjs");
+      const report = runProdigiProductDetailsTests();
+      checks = report.results ?? [];
+      if (!validProdigiProductDetailsRunnerReport(report)) {
+        failureReasons.push("prodigi_product_details_runner_report_invalid");
+      } else if (report.status === "passed" && report.passed === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT &&
+        report.failed === 0 && checks.length === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT &&
+        checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_product_details_fixture_checks_failed");
+      }
+      prodigiProductDetailsReport = report;
+    }
+  } catch {
+    failureReasons.push("prodigi_product_details_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "png-inspection" && args.mode === "simulated") {
+  if (!pngInspectionApiAvailable) failureReasons.push("png_inspection_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      pngInspectionReport = runPngInspectionTests();
+      checks = pngInspectionReport.results ?? [];
+      if (!validPngInspectionRunnerReport(pngInspectionReport)) {
+        failureReasons.push("png_inspection_runner_report_invalid");
+      } else if (pngInspectionReport.status === "passed" &&
+        pngInspectionReport.passed === PNG_INSPECTION_SUITE_CASE_COUNT && pngInspectionReport.failed === 0 &&
+        checks.length === PNG_INSPECTION_SUITE_CASE_COUNT && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_png_inspection_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("png_inspection_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "order-authorization" && args.mode === "simulated") {
+  if (!orderAuthorizationApiAvailable) failureReasons.push("order_authorization_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      orderAuthorizationReport = runOrderAuthorizationTests();
+      checks = orderAuthorizationReport.results ?? [];
+      if (!validOrderAuthorizationRunnerReport(orderAuthorizationReport)) {
+        failureReasons.push("order_authorization_runner_report_invalid");
+      } else if (orderAuthorizationReport.status === "passed" &&
+        orderAuthorizationReport.passed === ORDER_AUTHORIZATION_SUITE_CASE_COUNT && orderAuthorizationReport.failed === 0 &&
+        checks.length === ORDER_AUTHORIZATION_SUITE_CASE_COUNT && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_order_authorization_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("order_authorization_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "package" && args.mode === "simulated") {
+  if (!packageApiAvailable) failureReasons.push("package_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      packageReport = runPackageTests();
+      checks = packageReport.results ?? [];
+      if (!validPackageRunnerReport(packageReport)) {
+        failureReasons.push("package_runner_report_invalid");
+      } else if (packageReport.status === "passed" && packageReport.passed === PACKAGE_SUITE_CASE_COUNT && packageReport.failed === 0 &&
+        checks.length === PACKAGE_SUITE_CASE_COUNT && checks.every((check) => check.status === "passed")) {
+        packageRevision = sourceRevision(repositoryRoot);
+        packageBundleReport = await buildPackageBundleReport({ repositoryRoot, revision: packageRevision.sha });
+        if (packageBundleReport.verdict === "integrity_passed_blocked") status = "passed";
+        else failureReasons.push("package_baseline_bundle_report_not_integrity_passed");
+      } else {
+        failureReasons.push("one_or_more_package_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("package_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
+  if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runMeteringTests } = await import("./run-metering-tests.mjs");
+      const report = runMeteringTests();
+      meteringReport = report;
+      checks = report.results ?? [];
+      if (report.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_metering_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("metering_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "sandbox") {
+  failureReasons.push("sandbox_adapter_and_accepted_contract_pins_unavailable");
+} else if (failureReasons.length === 0 && args.suite === "release") {
+  failureReasons.push("release_evidence_and_cross_repository_conformance_unavailable");
+}
+
+const result = {
+  schemaVersion: "fulfillment-verification-result/1",
+  suite: args.suite ?? null,
+  mode: args.mode ?? null,
+  billing_mode: args.mode ?? null,
+  status,
+  startedAt,
+  completedAt: new Date().toISOString(),
+  runtime: {
+    node: process.version,
+    expectedNode: "24.21.0",
+    package: "@jevelopers/fulfillment-connectors@0.1.0",
+    liveModeSupported: false
+  },
+  scope: status === "passed"
+    ? args.suite === "provider-matrix"
+      ? "local_private_provider_matrix_suite"
+      : args.suite === "security"
+        ? "local_private_security_policy_suite"
+        : args.suite === "catalog"
+          ? "local_private_catalog_fixture_suite"
+        : args.suite === "mock"
+          ? "local_private_mock_simulator_suite"
+        : args.suite === "quote"
+          ? "local_private_quote_normalization_suite"
+        : args.suite === "attempt-store"
+          ? "local_private_attempt_persistence_and_simulated_runtime_suite"
+        : args.suite === "comparison"
+          ? "local_private_quote_comparison_projection_suite"
+        : args.suite === "status"
+          ? "local_private_status_fixture_suite"
+          : args.suite === "prodigi-product-details"
+            ? "local_private_prodigi_product_details_wire_fixture_suite"
+          : args.suite === "png-inspection"
+            ? "local_private_bounded_png_byte_observation_suite"
+          : args.suite === "order-authorization"
+            ? "local_private_simulated_order_authorization_consumer_suite"
+          : args.suite === "package"
+            ? "local_private_production_bundle_owner_byte_verification_suite"
+          : args.suite === "metering"
+            ? "local_private_metering_fixture_suite"
+            : "local_private_fixture_contract_suite"
+    : "argument_or_prerequisite_check",
+  checks,
+  failureReasons,
+  blockers: [
+    ...blockers,
+    ...(args.suite === "catalog" ? catalogBlockers : []),
+    ...(args.suite === "mock" ? mockBlockers : []),
+    ...(args.suite === "quote" ? quoteBlockers : []),
+    ...(args.suite === "status" ? statusBlockers : []),
+    ...(args.suite === "prodigi-product-details" ? prodigiProductDetailsBlockers : []),
+    ...(args.suite === "png-inspection" ? pngInspectionBlockers : []),
+    ...(args.suite === "order-authorization" ? orderAuthorizationBlockers : []),
+    ...(args.suite === "package" ? PACKAGE_BLOCKERS : []),
+    ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
+    ...(args.suite === "comparison" ? comparisonBlockers : []),
+    ...(args.suite === "provider-matrix" ? [
+      "print-production has not selected and approved an actual Prodigi SKU and print specification",
+      "destination and shipping method have not been selected or approved",
+      "sandbox account access and sandbox credentials have not been verified",
+      "no Prodigi adapter or account-tested provider behavior is implemented",
+      "quote expiry and callback authenticity policy remain unverified",
+      "producer and consumer conformance and release evidence remain missing"
+    ] : []),
+    ...(args.suite === "security" ? securityBlockers : []),
+    ...(status === "passed" ? [] : failureReasons)
+  ],
+  contractPins: {
+    catalogAvailable,
+    releaseReady: false,
+    missingAcceptedPins
+  },
+  conformance: {
+    producerRepositoryRevision: null,
+    consumerRepositoryRevision: null,
+    expectedResultsMatch: false
+  },
+  providerMatrix: args.suite === "provider-matrix" ? providerEnvironmentMatrix : null,
+  ...(args.suite === "mock" ? {
+    mockAssessment: {
+      schemaVersion: "fulfillment-mock-assessment/1",
+      evidenceScope: "private_offline_simulated_runtime_and_outbox_fixtures_only",
+      completion: "partial",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      fixtureVersion: simulatorFixtureVersion,
+      providerId: simulatorProviderId,
+      billingMode: "simulated",
+      runtimeMeteringOutbox: "private_local_durable_json_store_with_synthetic_contract_and_usage_ports",
+      sandboxReady: false,
+      liveEnabled: false,
+      externalProviderCalls: mockReport?.externalProviderCalls ?? 0,
+      blockers: mockBlockers
+    }
+  } : {}),
+  ...(args.suite === "quote" ? {
+    quoteAssessment: {
+      schemaVersion: "fulfillment-quote-assessment/1",
+      evidenceScope: "private_offline_quote_normalization_fixtures_only",
+      completion: "partial_private_quote_normalization",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      privateFormat: privateQuoteFormat,
+      financialEffect: "quote_only",
+      sharedContract25: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#25",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerConformance: {
+        state: "pending",
+        consumerRevision: null,
+        expectedResultsMatch: false
+      },
+      scopedPersistence: "not_implemented",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: quoteReport?.externalProviderCalls ?? 0,
+      orderCalls: quoteReport?.orderCalls ?? 0,
+      blockers: quoteBlockers
+    }
+  } : {}),
+  ...(args.suite === "comparison" ? {
+    comparisonAssessment: {
+      schemaVersion: "fulfillment-comparison-assessment/1",
+      evidenceScope: "private_offline_quote_comparison_projection_fixtures_only",
+      completion: "partial_private_quote_comparison",
+      issue14: "open",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: comparisonReport?.results?.length ?? checks.length,
+        passed: comparisonReport?.passed ?? checks.filter((check) => check.status === "passed").length,
+        failed: comparisonReport?.failed ?? checks.filter((check) => check.status !== "passed").length
+      },
+      privateFormat: privateComparisonFormat,
+      financialEffect: "quote_only",
+      currentness: {
+        semantics: "one_captured_trusted_clock_value",
+        useTimeRecheck: "required_from_the_application_consumer",
+        atPromiseResolutionGuarantee: false
+      },
+      ranking: "not_implemented",
+      selection: "not_implemented",
+      sharedContract25: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#25",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerConformance: {
+        state: "pending",
+        consumerRevision: null,
+        expectedResultsMatch: false,
+        currentnessRecheckAtUseTime: "required"
+      },
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: comparisonReport?.externalProviderCalls ?? 0,
+      quoteCalls: comparisonReport?.quoteCalls ?? 0,
+      orderCalls: comparisonReport?.orderCalls ?? 0,
+      financeCalls: comparisonReport?.financeCalls ?? 0,
+      runner: comparisonReport,
+      blockers: comparisonBlockers
+    }
+  } : {}),
+  ...(args.suite === "catalog" ? {
+    catalogAssessment: {
+      schemaVersion: "fulfillment-catalog-assessment/1",
+      evidenceScope: "private_offline_normalization_and_synthetic_fixtures_only",
+      completion: "partial",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      fc03_1: "partial_private_capability_and_print_spec_normalization",
+      fc03_2: "partial_private_versioned_snapshots_freshness_and_revalidation",
+      fc03_3: "partial_incompatible_synthetic_fixtures; selected_provider_product_and_consumer_review_pending",
+      privateInputFormat: "connector-development-catalog/1",
+      privateSnapshotFormat: "connector-development-catalog-snapshot/1",
+      acceptedSharedContract: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#4",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerReview: {
+        repository: "print-production",
+        issue: "#6",
+        state: "pending",
+        sourceRevision: null,
+        expectedResultsMatch: false
+      },
+      sandbox: {
+        selectedProviderSku: null,
+        selectedDestination: null,
+        selectedShippingMethod: null,
+        accountAccess: "unknown",
+        adapter: "not_implemented",
+        sandboxReady: false
+      },
+      liveEnabled: false,
+      releaseReady: false,
+      artifactConstruction: "not_performed",
+      externalProviderCalls: 0,
+      blockers: catalogBlockers
+    }
+  } : {}),
+  ...(args.suite === "attempt-store" ? {
+    attemptStoreAssessment: {
+      schemaVersion: "fulfillment-attempt-store-assessment/1",
+      evidenceScope: "private_offline_local_attempt_persistence_and_simulated_runtime_fixtures_only",
+      completion: "partial_local_attempt_persistence",
+      issue11: "open",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      persistence: "local_private_crash_safe_json_implementation_of_existing_attempt_persistence_port",
+      runtimeIntegration: "simulated_runtime_with_real_reopened_local_attempt_store_and_synthetic_ports",
+      authorizationAuthority: "synthetic_fixture_only",
+      financeAuthority: "not_implemented",
+      providerReconciliation: "not_implemented",
+      transportIntentAndCompareAndSwap: "not_expressible_by_current_port",
+      encryptedProductionStorage: "not_implemented",
+      canonicalSchemaAcceptance: "pending",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: attemptStoreReport?.externalProviderCalls ?? 0,
+      blockers: attemptStoreBlockers
+    }
+  } : {}),
+  ...(args.suite === "status" ? {
+    statusAssessment: {
+      schemaVersion: "fulfillment-status-assessment/1",
+      evidenceScope: "private_local_status_inbox_and_synthetic_fixtures_only",
+      completion: "partial_private_status_inbox",
+      issue13: "open",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      privateStoreFormat: "fc-status-store/2",
+      priorFormat: "fc-status-store/1_rejected_without_migration",
+      commitMarker: "local_consistency_evidence_only_not_authentication_against_coordinated_rollback_or_directory_loss",
+      mappingAndPolicies: "development_fixture_only",
+      provenance: "observations_are_accepted_only_through_an_injected_lookup_port; no_provider_authentication_is_implemented",
+      callbacks: "unverified_hints_disabled_by_default; authenticated_provider_callback_integration_pending",
+      trustedLookupIntegration: "caller_port_only; authenticated_provider_read_integration_pending",
+      outbox: "local_durable_at_least_once; consumer_idempotency_and_conformance_pending",
+      sharedContract27: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#27",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerConformance: { state: "pending", consumerRevision: null, expectedResultsMatch: false },
+      financeAuthority: "not_implemented",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: 0,
+      orderCalls: 0,
+      financeCalls: 0,
+      runner: statusReport,
+      blockers: statusBlockers
+    }
+  } : {}),
+  ...(args.suite === "prodigi-product-details" ? {
+    prodigiProductDetailsAssessment: {
+      schemaVersion: "fulfillment-prodigi-product-details-assessment/1",
+      evidenceScope: "provider_private_wire_decoder_and_synthetic_offline_fixtures_only",
+      completion: "partial_private_wire_projection",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      capabilities: ["decode_documented_success_response", "build_fixed_relative_product_details_path"],
+      productSelection: "not_performed",
+      orderabilityOrAvailability: "not_established",
+      providerTransport: "not_implemented",
+      orderRetrieveAndCancel: "not_implemented; issue 15 acceptance still includes cancellation outcomes",
+      canonicalAcceptance: "pending",
+      consumerConformance: { state: "pending", expectedResultsMatch: false },
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: prodigiProductDetailsReport?.externalProviderCalls ?? 0,
+      orderCalls: prodigiProductDetailsReport?.orderCalls ?? 0,
+      financeCalls: prodigiProductDetailsReport?.financeCalls ?? 0,
+      runner: prodigiProductDetailsReport,
+      blockers: prodigiProductDetailsBlockers
+    }
+  } : {}),
+  ...(args.suite === "png-inspection" ? {
+    pngInspectionAssessment: {
+      schemaVersion: "fulfillment-png-inspection-assessment/1",
+      evidenceScope: "private_synthetic_png_bytes_and_bounded_format_observations_only",
+      completion: "partial_fc08_byte_inspection_leaf",
+      issue10: "open",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      observedProfile: "static_rgb8_noninterlaced_png_only",
+      inputExpectations: "optional_exact_content_type_byte_length_and_sha256_comparisons_only",
+      physicalResolution: "raw_pHYs_values; metres_convert_to_dpi; unknown_units_remain_unknown",
+      productionBundle: "not_provided; all_six_fixture_handoffs_are_ineligible",
+      approvalOrDispatch: "not_evaluated_or_claimed",
+      canonicalBindingAndConformance: "pending",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: pngInspectionReport?.externalProviderCalls ?? 0,
+      orderCalls: pngInspectionReport?.orderCalls ?? 0,
+      financeCalls: pngInspectionReport?.financeCalls ?? 0,
+      runner: pngInspectionReport,
+      blockers: pngInspectionBlockers,
+      evidenceWriteStatus: "not_attempted"
+    }
+  } : {}),
+  ...(args.suite === "order-authorization" ? {
+    orderAuthorizationAssessment: {
+      schemaVersion: "fulfillment-order-authorization-assessment/1",
+      evidenceScope: "simulated_development_consumer_adapter_and_dispatch_revalidation_against_fake_issuer_only",
+      completion: "partial_simulated_development_consumer_leaf",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      consumerMode: "simulated_only; connector_sandbox_and_live_refused",
+      appProvider: "sandbox_only; prodigi_refused",
+      termsSource: "injected_development_fixture_provenance_only; never_copied_from_the_envelope",
+      dispatchTimeRevalidation: "optional_verifier_hook_called_before_every_submit_transport_request",
+      producerFixturePin: "7d2dd17810425f0b06e07dadbba3e173800ea5fd",
+      canonicalBindingAndConformance: "pending",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: orderAuthorizationReport?.externalProviderCalls ?? 0,
+      orderCalls: orderAuthorizationReport?.orderCalls ?? 0,
+      financeCalls: orderAuthorizationReport?.financeCalls ?? 0,
+      runner: orderAuthorizationReport,
+      blockers: orderAuthorizationBlockers,
+      evidenceWriteStatus: "not_attempted"
+    }
+  } : {}),
+  ...(args.suite === "package" ? {
+    packageAssessment: buildPackageAssessment({ runnerReport: packageReport, bundleReport: packageBundleReport, revision: packageRevision, status, checks })
+  } : {}),
+  providerMatrixAssessment: args.suite === "provider-matrix" ? {
+    schemaVersion: "fulfillment-provider-matrix-assessment/1",
+    evidenceScope: "documented_metadata_and_private_policy_fixtures_only",
+    completion: "partial",
+    fc02_1: "partial_documented_matrix",
+    fc02_2: "blocked_pending_owner_product_and_account_evidence",
+    documentationRevision: providerEnvironmentMatrix?.documentationRevision ?? "unknown",
+    observedSnapshotDigest: providerEnvironmentMatrix?.observedSnapshotDigest ?? null,
+    selectedProdigiSku: null,
+    selectedDestinationCountryCode: null,
+    selectedShippingMethod: null,
+    sandboxAccountAccess: "unknown",
+    sandboxAdapter: "not_implemented",
+    sandboxReady: false,
+    liveEnabled: false,
+    otherProviders: "deferred",
+    blockers: [
+      "print-production has not selected and approved an actual Prodigi SKU and print specification",
+      "destination and shipping method have not been selected or approved",
+      "sandbox account access and sandbox credentials have not been verified",
+      "no Prodigi adapter or account-tested provider behavior is implemented",
+      "quote expiry and callback authenticity policy remain unverified",
+      "producer and consumer conformance and release evidence remain missing"
+    ]
+  } : null,
+  ...(args.suite === "security" ? {
+    securityAssessment: {
+      schemaVersion: "fulfillment-security-assessment/1",
+      evidenceScope: "private_policy_helpers_and_synthetic_injected_ports_only",
+      completion: "partial",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      fc11_1: "partial_local_helpers; accepted_SC8_encrypted_store_key_lifecycle_and_retention_execution_pending",
+      fc11_2: "partial_local_helpers; production_secret_manager_and_pinned_asset_transport_pending",
+      fc11_3: "partial_local_helpers; provider_callback_authenticity_and_durable_replay_pending",
+      acceptedSharedContractSC8: "missing",
+      encryptedStorage: "not_implemented",
+      secretManager: "not_implemented",
+      pinnedAssetTransport: "injected_port_only",
+      callbackReplayStore: "injected_port_only",
+      providerCallbackVerifier: "not_implemented",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: 0,
+      blockers: securityBlockers
+    }
+  } : {}),
+  meteringAssessment: args.suite === "metering" ? {
+    schemaVersion: "fulfillment-metering-assessment/1",
+    evidenceScope: "deterministic_private_fixtures_only",
+    completion: "partial",
+    fixtureDigest: meteringReport?.fixtureDigest ?? null,
+    externalProviderCalls: meteringReport?.externalProviderCalls ?? 0,
+    fc10_1: "local_attempt_and_observation_attribution_tested",
+    fc10_2: "exact_source_amounts_and_unknown_charge_tested",
+    fc10_3: "local_outbox_recovery_and_fail_closed_dispatch_tested",
+    fc10_4: "blocked_pending_accepted_upstream_gateway_conformance",
+    sandboxExecution: "blocked_pending_owner_product_destination_and_credential_reference",
+    blockers: [
+      "accepted shared-contracts usage and budget reservation schema pins are missing",
+      "cost-intelligence intake, gateway, reservation, and settlement interfaces and receipts are missing",
+      "the provider owner has not supplied approved SKU, destination, and secure credential reference"
+    ]
+  } : null,
+  externalProviderCalls: 0,
+  evidenceFile: null
+};
+
+if (args.suite === "package" && status === "passed" && !validPackageAssessment(result.packageAssessment)) {
+  status = "failed";
+  result.status = "failed";
+  failureReasons.push("package_assessment_invalid");
+}
+
+if (args["evidence-dir"] !== undefined) {
+  const evidenceDir = args.suite === "png-inspection" || args.suite === "order-authorization" || args.suite === "package"
+    ? path.resolve(repositoryRoot, args["evidence-dir"])
+    : path.resolve(args["evidence-dir"]);
+  const evidenceFile = path.join(evidenceDir, "result.json");
+  result.evidenceFile = evidenceFile;
+  result.completedAt = new Date().toISOString();
+  try {
+    if (args.suite === "png-inspection" || args.suite === "order-authorization" || args.suite === "package") {
+      const expectedEvidenceDir = path.resolve(repositoryRoot, args.suite === "png-inspection" ? "evidence/FC-08-10-PNG" : args.suite === "package" ? PACKAGE_EVIDENCE_DIR : "evidence/FC-ORDER-AUTH");
+      if (evidenceDir !== expectedEvidenceDir) throw new Error("unsafe_evidence_directory");
+      for (const candidate of [path.resolve(repositoryRoot, "evidence"), evidenceDir]) {
+        try {
+          const details = await lstat(candidate);
+          if (!details.isDirectory() || details.isSymbolicLink()) throw new Error("unsafe_evidence_directory");
+        } catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+      }
+      try {
+        const details = await lstat(evidenceFile);
+        if (!details.isFile() || details.isSymbolicLink()) throw new Error("unsafe_evidence_file");
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+    await mkdir(evidenceDir, { recursive: true });
+    if (result.pngInspectionAssessment !== undefined) result.pngInspectionAssessment.evidenceWriteStatus = "written";
+    if (result.orderAuthorizationAssessment !== undefined) result.orderAuthorizationAssessment.evidenceWriteStatus = "written";
+    if (result.packageAssessment !== undefined) result.packageAssessment.evidenceWriteStatus = "written";
+    await writeFile(evidenceFile, `${JSON.stringify(result, null, 2)}\n`, { encoding: "utf8", flag: "w" });
+  } catch {
+    status = "failed";
+    result.status = status;
+    result.scope = "argument_or_prerequisite_check";
+    failureReasons.push("evidence_write_failed");
+    result.failureReasons = failureReasons;
+    result.blockers = [
+      ...blockers,
+      ...(args.suite === "security" ? securityBlockers : []),
+      ...(args.suite === "catalog" ? catalogBlockers : []),
+      ...(args.suite === "mock" ? mockBlockers : []),
+      ...(args.suite === "quote" ? quoteBlockers : []),
+      ...(args.suite === "comparison" ? comparisonBlockers : []),
+      ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
+      ...(args.suite === "status" ? statusBlockers : []),
+      ...(args.suite === "prodigi-product-details" ? prodigiProductDetailsBlockers : []),
+      ...(args.suite === "png-inspection" ? pngInspectionBlockers : []),
+      ...(args.suite === "order-authorization" ? orderAuthorizationBlockers : []),
+      ...(args.suite === "package" ? PACKAGE_BLOCKERS : []),
+      ...failureReasons
+    ];
+    if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
+    if (result.quoteAssessment !== undefined) result.quoteAssessment.localFixtureResult = "failed";
+    if (result.comparisonAssessment !== undefined) {
+      result.comparisonAssessment.localFixtureResult = "failed";
+      result.comparisonAssessment.evidenceWriteStatus = "failed";
+    }
+    if (result.attemptStoreAssessment !== undefined) result.attemptStoreAssessment.localFixtureResult = "failed";
+    if (result.prodigiProductDetailsAssessment !== undefined) {
+      result.prodigiProductDetailsAssessment.localFixtureResult = "failed";
+      result.prodigiProductDetailsAssessment.evidenceWriteStatus = "failed";
+    }
+    if (result.pngInspectionAssessment !== undefined) {
+      result.pngInspectionAssessment.localFixtureResult = "failed";
+      result.pngInspectionAssessment.evidenceWriteStatus = "failed";
+    }
+    if (result.orderAuthorizationAssessment !== undefined) {
+      result.orderAuthorizationAssessment.localFixtureResult = "failed";
+      result.orderAuthorizationAssessment.evidenceWriteStatus = "failed";
+    }
+    if (result.packageAssessment !== undefined) {
+      result.packageAssessment.localFixtureResult = "failed";
+      result.packageAssessment.evidenceWriteStatus = "failed";
+    }
+  }
+}
+process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+if (status !== "passed") process.exitCode = 1;

@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <link rel="canonical" href="/calendar/fall">
+  <meta property="og:title" content="A &amp; B Fall Calendar">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@id": "https://remote.example/events/one",
+        "@type": "https://schema.org/MusicEvent",
+        "name": "Café Night 🎵",
+        "startDate": "2026-10-12T19:00:00-04:00",
+        "eventStatus": "https://schema.org/EventScheduled",
+        "organizer": { "@type": "Organization", "name": "Open Stage" }
+      },
+      {
+        "@id": "https://remote.example/events/two",
+        "@type": ["Event", "https://schema.org/SportsEvent"],
+        "name": "Fall Relay",
+        "startDate": "2026-10-13T09:00:00-04:00"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <h1>Events this week</h1>
+  <p>Details may change. Check the organizer's page.</p>
+  <div hidden>Cancelled secret event text.</div>
+  <p aria-hidden="true">Postponed secret display copy.</p>
+  <style>.invisible { display: none } /* postponed secret */</style>
+  <script>const privateText = "cancelled secret event text";</script>
+</body>
+</html>

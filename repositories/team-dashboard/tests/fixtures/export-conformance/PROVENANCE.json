@@ -1,0 +1,46 @@
+{
+  "label": "SYNTHETIC_EXPORT_CONFORMANCE_ONLY",
+  "meaning": "Consumer conformance against the Finance export producer's exact prepared JSON/CSV receipt bytes, produced by synthetic financial postings on a disposable PostgreSQL with a synthetic test-only coherent host authority. Not a mounted host, not a live Product issuer, not CFO delivery, not an actual business run, not a consumer acceptance, not an issue-3 closure.",
+  "ownerAcceptance": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3#issuecomment-6125399193",
+  "handoff": {
+    "name": "export-producer-handoff.json",
+    "sha256": "410a99fe766a6c0b3b36b696bf73b8f5a46590f9ce9170e9fbe02be3939f59c6",
+    "status": "EXACT_REVIEWED_EXPORT_PRODUCER_SYNTHETIC_CONFORMANCE_HANDOFF_CONSUMER_ACK_PENDING",
+    "readBy": "the author read the full handoff through the file reader on 2026-10-12; the handoff and the sibling packet directory are outside this sandbox's allowed directories, so no byte-level copy or hash of the handoff file was possible here (see limitations)"
+  },
+  "producer": {
+    "originalHead": "0c4c7024c68b5a52a12f3de3cec891f64aa65bd3",
+    "tree": "377cd19beeafad222b19cd8e1b057552196f64df",
+    "actualMerge": "ef6dee41fdce642bc1b90a2acb2640226ec699fe",
+    "candidateCheckout": "f8e06f3d9b8c4d98e67b616f869e1392c74b8996",
+    "candidateBase": "06dafe24183c0243b30e5b851b3a6ff218bd88d1",
+    "candidateRun": 38254570860,
+    "mainRun": 38255883018,
+    "candidateArtifact": { "id": 11749324572, "name": "financial-reporting-evidence", "zipByteLength": 92721, "zipSha256": "35db315aaf4dcce46617c8b661ffcd7de9db4458a9b6f46976c618ca0e25b09d" },
+    "querySource": "22a3237dd44f376017969ac881586ff396f19cf8",
+    "definitionRegistryRawSha256": "577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1",
+    "definitionRegistryCanonicalHash": "sha256:827ac8d4e37adc354dc8721d4f34c4c3bfb0039b318ae769ed8fec3e249055c2"
+  },
+  "candidateReceipts": {
+    "packetFile": "candidate-postgres-composition.json",
+    "packetSha256": "6d1995a0091d7d9f2a836ca77b43cbcd86749adf1bb06568dad36ec7a6090da1",
+    "receiptCount": 17,
+    "artifactFileCount": 34,
+    "pins": "candidate-pins.json",
+    "committedHere": { "candidate-receipts/receipt-00.json": "receipt 0 in the producer's receipt shape (artifacts then manifest). Authored by transcribing the packet's receipt text; its two artifact byte strings were re-hashed locally and equal the packet's pinned sha256 and byteLength." },
+    "pendingExactCopy": "candidate-receipts/receipt-01..16.json: written, with every one of the 34 artifact byte strings verified against the handoff pins, by `node scripts/prepare-export-conformance.mjs <packet directory>`, which the author's sandbox could not execute (the packet is outside its allowed directories). Until it is run and its output committed, the pinned-artifact suite checks receipt 0 only and reports the other 16 as pending; setting TD_REQUIRE_EXPORT_FIXTURES=1 turns that pending state into a failure."
+  },
+  "pinnedSourceReferences": {
+    "schemas/ReportingExportManifestSchema.json": { "sha256": "7b101a9f29a6945f7ee86406ed9da4045e50de938420d6f22f1cb1b657cc3fb8", "byteLength": 4788, "origin": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportManifestSchema.json at the producer pin; transcribed from the packet source copy and re-hashed locally to the handoff pin", "use": "DATA ONLY. A test compares its closed key set and const members with the consumer guard. It is never imported as, or executed as, runtime code." }
+  },
+  "notCopied": [
+    "fixtures/reporting/prepared-export-request.json (structural synthetic fixture; it is NOT the actual PostgreSQL request and is not relabelled)",
+    "producer runtime source (src/integrations/*.ts) and the synthetic disclosure host (tests/exports/synthetic-disclosure-host.mjs): pinned references in the handoff only, never imported or executed here",
+    "earlier source-22 / source-924 Finance v2 conformance inputs: untouched"
+  ],
+  "limitations": [
+    "Every producer receipt records requestedFormat json; no producer-captured CSV-requested receipt exists. CSV-format behaviour is exercised only with clearly labelled test-built receipts, which are not producer output.",
+    "Receipt 1 is the legacy ExportRequest@1.0.0 shape; the Finance v2 consumer refuses it (UNSUPPORTED_SHAPE) by design.",
+    "No mounted selected host, no live Product issuer, no coherent live disclosure fence, no CFO delivery or import, no consumer ACK."
+  ]
+}

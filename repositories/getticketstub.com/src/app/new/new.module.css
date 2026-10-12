@@ -1,0 +1,45 @@
+/* Printing happens on the paper desk, beside the sidebar. */
+.stage.stage {
+  /* doubled so it wins over .desk-surface { position: relative } whatever the bundle order */
+  position: fixed;
+  inset: 0 0 0 var(--nav-w, 0px);
+  z-index: 50;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.errorPage {
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.card {
+  display: grid;
+  gap: 16px;
+  width: min(480px, 100%);
+  padding: 28px 24px;
+  background: var(--desk-paper-raised);
+  border-radius: 6px;
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 18px 30px -20px rgb(23 20 15 / 0.5), inset 0 0 0 1px var(--desk-rule);
+}
+
+.errorTitle {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+}
+
+.muted {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}

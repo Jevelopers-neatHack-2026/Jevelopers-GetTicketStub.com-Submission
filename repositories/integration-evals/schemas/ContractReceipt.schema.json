@@ -1,0 +1,456 @@
+{
+  "$defs": {
+    "ContractIdentity": {
+      "additionalProperties": false,
+      "description": "Identify an exact advertised version without collapsing its contract name.",
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Contract",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contract",
+        "version"
+      ],
+      "title": "ContractIdentity",
+      "type": "object"
+    },
+    "ContractObservation": {
+      "additionalProperties": false,
+      "description": "Strict output boundary for the isolated Node consumer driver.",
+      "properties": {
+        "node_version": {
+          "title": "Node Version",
+          "type": "string"
+        },
+        "fixture_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Fixture Digest",
+          "type": "string"
+        },
+        "required_contracts": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Required Contracts",
+          "type": "array"
+        },
+        "required_versions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ContractIdentity"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Versions"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/ContractSlice"
+          },
+          "minItems": 1,
+          "title": "Results",
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_version",
+        "fixture_digest",
+        "required_contracts",
+        "results"
+      ],
+      "title": "ContractObservation",
+      "type": "object"
+    },
+    "ContractPin": {
+      "additionalProperties": false,
+      "description": "Reviewed source and manifest bytes required before loading producer code.",
+      "properties": {
+        "package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PackagePin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "tree": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Tree",
+          "type": "string"
+        },
+        "lockfile_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Lockfile Digest",
+          "type": "string"
+        },
+        "schema_manifest_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Schema Manifest Digest",
+          "type": "string"
+        },
+        "fixture_manifest_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Fixture Manifest Digest",
+          "type": "string"
+        },
+        "catalog_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Catalog Digest",
+          "type": "string"
+        },
+        "node_version": {
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "title": "Node Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "tree",
+        "lockfile_digest",
+        "schema_manifest_digest",
+        "fixture_manifest_digest",
+        "catalog_digest",
+        "node_version"
+      ],
+      "title": "ContractPin",
+      "type": "object"
+    },
+    "ContractSlice": {
+      "additionalProperties": false,
+      "description": "Executed frozen fixture IDs and original schema identity for one export.",
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Contract",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "schema_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Schema Digest",
+          "type": "string"
+        },
+        "cases": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Cases",
+          "type": "array"
+        },
+        "failures": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "type": "string"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "categories": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "type": "string"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "fixture_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixture Path"
+        },
+        "semantic_records": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FixtureSemantics"
+          },
+          "title": "Semantic Records",
+          "type": "array"
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "schema_digest",
+        "cases",
+        "failures",
+        "categories"
+      ],
+      "title": "ContractSlice",
+      "type": "object"
+    },
+    "FixtureSemantics": {
+      "additionalProperties": false,
+      "description": "Preserve semantic labels actually emitted by the pinned producer harness.",
+      "properties": {
+        "case": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Case",
+          "type": "string"
+        },
+        "profile": {
+          "const": "historical_finance_characterization",
+          "title": "Profile",
+          "type": "string"
+        },
+        "operational_authority": {
+          "const": false,
+          "title": "Operational Authority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "case",
+        "profile",
+        "operational_authority"
+      ],
+      "title": "FixtureSemantics",
+      "type": "object"
+    },
+    "PackagePin": {
+      "additionalProperties": false,
+      "description": "Exact privately authorized archive, independent of source conformance.",
+      "properties": {
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "archive_sri": {
+          "pattern": "^sha512-[A-Za-z0-9+/=]+$",
+          "title": "Archive Sri",
+          "type": "string"
+        },
+        "content_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Digest",
+          "type": "string"
+        },
+        "npm_version": {
+          "title": "Npm Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "archive_sha256",
+        "archive_sri",
+        "content_digest",
+        "npm_version"
+      ],
+      "title": "PackagePin",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A candidate fixture pass cannot authenticate a composed release or owner consent.",
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "integration_revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Integration Revision",
+      "type": "string"
+    },
+    "integration_source_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Integration Source Digest",
+      "type": "string"
+    },
+    "integration_dirty": {
+      "title": "Integration Dirty",
+      "type": "boolean"
+    },
+    "pin": {
+      "$ref": "#/$defs/ContractPin"
+    },
+    "pin_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Pin Digest",
+      "type": "string"
+    },
+    "node_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Node Digest",
+      "type": "string"
+    },
+    "driver_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Driver Digest",
+      "type": "string"
+    },
+    "mode": {
+      "const": "mock-only",
+      "default": "mock-only",
+      "title": "Mode",
+      "type": "string"
+    },
+    "origin": {
+      "const": "synthetic",
+      "default": "synthetic",
+      "title": "Origin",
+      "type": "string"
+    },
+    "execution_surface": {
+      "default": "source",
+      "enum": [
+        "source",
+        "installed-package"
+      ],
+      "title": "Execution Surface",
+      "type": "string"
+    },
+    "candidate_scope": {
+      "title": "Candidate Scope",
+      "type": "boolean"
+    },
+    "execution": {
+      "enum": [
+        "passed",
+        "failed",
+        "error"
+      ],
+      "title": "Execution",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reason"
+    },
+    "exit_code": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Exit Code"
+    },
+    "output_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "observation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContractObservation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "missing_contracts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Contracts",
+      "type": "array"
+    },
+    "product_acceptance": {
+      "const": "blocked",
+      "default": "blocked",
+      "title": "Product Acceptance",
+      "type": "string"
+    },
+    "owner_acknowledgement": {
+      "default": null,
+      "title": "Owner Acknowledgement",
+      "type": "null"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "started_at",
+    "integration_revision",
+    "integration_source_digest",
+    "integration_dirty",
+    "pin",
+    "pin_digest",
+    "node_digest",
+    "driver_digest",
+    "candidate_scope",
+    "execution",
+    "reason",
+    "exit_code",
+    "output_digest",
+    "observation",
+    "missing_contracts",
+    "limitations"
+  ],
+  "title": "ContractReceipt",
+  "type": "object"
+}

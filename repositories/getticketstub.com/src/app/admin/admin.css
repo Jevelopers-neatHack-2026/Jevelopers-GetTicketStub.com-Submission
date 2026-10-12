@@ -1,0 +1,52 @@
+/* The dashboard's styles are scoped under .ts-admin and read the desk tokens; the host owns the root, the
+   package owns everything inside it and must not style html, body or :root. Always cream paper. */
+.ts-admin {
+  --admin-paper: var(--desk-paper);
+  --admin-paper-raised: var(--desk-paper-raised);
+  --admin-ink: var(--desk-ink);
+  --admin-ink-soft: var(--desk-ink-soft);
+  --admin-rule: var(--desk-rule);
+  --admin-stamp: var(--desk-stamp);
+  --admin-radius: var(--ts-radius-control);
+  --admin-gap: var(--ts-space-4);
+  min-height: 100dvh;
+  padding: var(--ts-space-5) var(--ts-space-5) var(--ts-space-7);
+  padding-right: max(var(--ts-space-5), var(--corner-reserve, 0px));
+  color: var(--admin-ink);
+  font: var(--type-body);
+}
+.ts-admin :where(h1, h2, h3) {
+  font-family: var(--font-display), var(--ts-font-display);
+}
+.ts-admin :where(a) {
+  color: inherit;
+}
+.ts-admin [data-admin-card] {
+  background: var(--admin-paper-raised);
+  border: 1px solid var(--admin-rule);
+  border-radius: var(--admin-radius);
+  padding: var(--ts-space-4);
+  box-shadow: var(--ts-shadow-paper);
+}
+.ts-admin [data-admin-crumbs] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ts-space-2);
+  list-style: none;
+  margin: 0 0 var(--ts-space-4);
+  padding: 0;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  color: var(--admin-ink-soft);
+}
+.ts-admin [data-admin-fixture] dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ts-space-2) var(--ts-space-4);
+  margin: 0;
+}
+.ts-admin [data-admin-fixture] dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

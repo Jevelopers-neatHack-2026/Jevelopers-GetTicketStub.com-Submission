@@ -1,0 +1,28 @@
+{
+  "schema": "creative-engine-historical-concept-producer-custody/v1",
+  "source_method": "full tracked tree from immutable historical Git commit via git archive --format=tar; compressed with gzip mtime=0",
+  "sources": [
+    {
+      "schema_version": "0.1.0",
+      "commit": "d986040244b2d0ae350184cc44b8baad9f5871a0",
+      "tree": "4662fd1c0a09cf4a2cef5277a08148564db83448",
+      "archive": "schema-0.1.0-d986040.tar.gz",
+      "archive_bytes": 621228,
+      "archive_sha256": "1beeaa414177919a58085b121b4d8bcf59ae5a82ff8628e0f440d21dce825208",
+      "git_archive_tar_bytes": 3645440,
+      "git_archive_tar_sha256": "286682bcb8b29220f4159d51aaf7ee77aae27eaa566024a9f9a6332126610c6d",
+      "tracked_leaf_count": 256
+    },
+    {
+      "schema_version": "0.2.0",
+      "commit": "27a1e6239d7dbc139497befce65024cbfeafbc2c",
+      "tree": "6072ed0dab66331f517c5691c635b0b6fc111e89",
+      "archive": "schema-0.2.0-27a1e62.tar.gz",
+      "archive_bytes": 803219,
+      "archive_sha256": "f8ee555147b22d641b66c18373d0b947a60554b221831b811e99c3c277938e97",
+      "git_archive_tar_bytes": 4915200,
+      "git_archive_tar_sha256": "b106393ced0cb0883eb1221590056a2d1bc9b88e8e0d9bd060da5c50cb8f75d3",
+      "tracked_leaf_count": 285
+    }
+  ]
+}

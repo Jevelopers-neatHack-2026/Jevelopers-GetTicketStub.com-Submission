@@ -1,0 +1,472 @@
+/* /wall: the paper desk, a real corkboard, and a lamp for the stub you lift. Shared chrome is in chrome.module.css. */
+
+.track {
+  margin-bottom: 4px;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 1px 0 var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  font: var(--type-body);
+}
+.banner p {
+  margin: 0;
+}
+
+.headRow {
+  display: grid;
+  gap: 16px;
+}
+.publicBox {
+  position: relative;
+  z-index: 45; /* above the lamp's dimmer, so the switch stays in the light */
+  width: 100%;
+  max-width: 360px;
+  display: grid;
+  gap: 8px;
+}
+.publicLink {
+  display: grid;
+  gap: 4px;
+}
+.copyRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.copyInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  color: var(--desk-ink);
+  font: var(--type-label);
+  font-size: 0.85rem;
+}
+.small {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.hint {
+  margin: -8px 0 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+
+/* ---------- stubs on the board ---------- */
+.board {
+  scroll-margin-top: 12px;
+}
+/* a stub's spot on the canvas is --x/--y (canvas px); its tilt is --angle. The drag writes all three straight to the element. */
+.pinned {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: var(--x, 0px) var(--y, 0px);
+  transform: rotate(var(--angle));
+  animation: settle 520ms var(--ts-ease-enter) both;
+  animation-delay: calc(var(--i) * 40ms);
+  transition:
+    transform 260ms var(--desk-spring),
+    opacity 300ms var(--ts-ease-standard);
+  cursor: grab;
+}
+.pinned:hover {
+  transform: rotate(0deg) translateY(-4px);
+}
+/* in the hand: it lifts off the cork, straightens and throws a longer shadow */
+.pinned[data-drag="true"] {
+  z-index: 100000 !important;
+  cursor: grabbing;
+  transform: rotate(0deg) scale(1.05);
+  transition: transform 160ms var(--desk-spring);
+}
+.pinned[data-drag="true"] .stubBtn {
+  filter: drop-shadow(0 22px 16px rgb(40 24 8 / 0.5));
+}
+.pinned[data-dim="true"] {
+  opacity: 0.28;
+  pointer-events: none;
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(-14px) scale(1.04);
+  }
+}
+.stubBtn {
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: inherit;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-width: 44px;
+  min-height: 44px;
+  filter: drop-shadow(0 8px 8px rgb(40 24 8 / 0.4));
+  transition: opacity 400ms var(--ts-ease-standard);
+}
+.stubBtn:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 4px;
+}
+.lifted .stubBtn {
+  opacity: 0; /* it's in your hand: only the pin is left on the cork */
+}
+.none {
+  margin: 0;
+  padding: 48px 0;
+  text-align: center;
+  font: var(--type-lede);
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 32px 8px;
+  text-align: center;
+}
+.emptySlot {
+  width: 120px;
+  height: 180px;
+  border: 2px dashed rgb(23 20 15 / 0.5);
+  border-radius: 4px;
+  transform: rotate(-2deg);
+  background: rgb(23 20 15 / 0.06);
+}
+.emptyText {
+  margin: 0;
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 20;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- landing: the stub you just tore off arrives and gets pinned ---------- */
+.feature {
+  display: grid;
+  gap: 32px;
+  justify-items: center;
+  margin-bottom: 0;
+}
+.landing {
+  position: relative;
+  transform: rotate(var(--angle));
+  transform-origin: 80% 0;
+  filter: drop-shadow(0 12px 12px rgb(40 24 8 / 0.42));
+  animation: land 900ms var(--ts-ease-enter) both;
+}
+.landingBtn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 400ms var(--ts-ease-standard);
+}
+.landingBtn:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 4px;
+}
+.landingBtn[data-lifted="true"] {
+  opacity: 0; /* it's in your hand */
+}
+@keyframes land {
+  0% {
+    opacity: 0;
+    transform: translate(14%, -70vh) rotate(-14deg) scale(1.1);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--angle));
+  }
+}
+.note {
+  position: relative;
+  width: min(100%, 340px);
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: 28px 22px 20px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    0 1px 0 var(--desk-ledge),
+    0 14px 24px -12px rgb(40 24 8 / 0.6);
+  transform: rotate(1.2deg);
+  animation: deal 560ms var(--ts-ease-enter) 1000ms both;
+}
+@keyframes deal {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) rotate(-3deg);
+  }
+}
+.noteTitle {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+}
+.noteBody {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+}
+/* the save offer: a perforated slip inside the note, before the actions */
+.save {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-block: 1px dashed var(--desk-rule-strong);
+}
+.saveText {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink);
+}
+.saveRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.noteActions {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+.printBtn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.printLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.noteLinks {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.price {
+  font-variant-numeric: tabular-nums;
+}
+
+/* the paper desk of the tear fades off the wall as the stub lands */
+.lights.lights {
+  position: fixed;
+  inset: 0 0 0 var(--nav-w, 0px);
+  z-index: 80;
+  pointer-events: none;
+  animation: deskOff 600ms var(--ts-ease-standard) 120ms both;
+}
+@keyframes deskOff {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* ---------- the lamp ---------- */
+.lamp {
+  position: fixed;
+  inset: 0 0 0 var(--nav-w, 0px);
+  z-index: 40;
+  outline: none;
+}
+.scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  /* a warm pool of light under the lifted stub; the rest of the wall sits back behind cream paper */
+  background: radial-gradient(70% 55% at 50% 42%, rgb(251 246 236 / 0.72), rgb(226 211 182 / 0.9));
+  animation: lampOn 600ms var(--ts-ease-standard) both;
+}
+.lampOff .scrim {
+  animation: lampDown 600ms var(--ts-ease-standard) both;
+}
+@keyframes lampOn {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes lampDown {
+  to {
+    opacity: 0;
+  }
+}
+.lampBody {
+  position: absolute;
+  /* the heading starts below the cart button in the corner, so a long title is not cut by it */
+  --top: max(var(--lamp-top, 16px), calc(var(--corner-reserve, 0px) * 0.6));
+  inset: var(--top) 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 16px max(20px, env(safe-area-inset-bottom));
+  pointer-events: none;
+  --stub-max: min(calc(100vw - var(--nav-w, 0px) - 32px), calc((100dvh - var(--top) - 350px) * 0.66));
+}
+.lampBody > * {
+  pointer-events: auto;
+}
+.lampHead {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+  color: var(--desk-ink);
+  pointer-events: none;
+  animation: rise 520ms var(--ts-ease-enter) both;
+}
+.lampTitle {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+}
+.lampMeta {
+  margin: 0;
+  font: var(--type-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.lampStub {
+  touch-action: pan-y;
+  user-select: none;
+  animation: lift 560ms var(--desk-spring) both;
+  /* raised off the cork: a tight contact line, then a deep soft shadow */
+  filter: drop-shadow(0 2px 2px rgb(23 20 15 / 0.3)) drop-shadow(0 30px 28px rgb(60 38 12 / 0.38));
+}
+.lampOff .lampStub,
+.lampOff .lampHead,
+.lampOff .tray {
+  transition:
+    opacity 360ms var(--ts-ease-standard),
+    transform 360ms var(--ts-ease-standard);
+  opacity: 0;
+  transform: translateY(14px) scale(0.94);
+}
+@keyframes lift {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.86) rotate(var(--lift-from, -3deg));
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.tray {
+  width: min(100%, 520px);
+  animation: rise 520ms var(--ts-ease-enter) 120ms both;
+}
+.trayPaper {
+  display: grid;
+  gap: 8px;
+  padding: 8px 8px 10px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 8px 16px -10px rgb(40 24 8 / 0.7);
+}
+.toolPrice {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+.trayFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 0 6px;
+}
+
+@media (max-width: 959px) {
+  .scrim {
+    background: radial-gradient(90% 60% at 50% 42%, rgb(251 246 236 / 0.8), rgb(226 211 182 / 0.94));
+  }
+}
+
+@media (min-width: 960px) {
+  .headRow {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+  }
+  .publicBox {
+    width: 340px;
+  }
+  .feature {
+    grid-template-columns: auto minmax(0, 340px);
+    justify-content: center;
+    align-items: center;
+    gap: 64px;
+    margin-bottom: 0;
+  }
+  .lampBody {
+    --stub-max: min(560px, calc((100dvh - var(--top) - 350px) * 0.66));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinned,
+  .landing,
+  .note,
+  .lampHead,
+  .lampStub,
+  .tray {
+    animation: none;
+  }
+  .lights.lights,
+  .scrim {
+    animation-duration: 200ms;
+  }
+  .lampOff .scrim {
+    animation-duration: 200ms;
+  }
+  .lampOff .lampStub,
+  .lampOff .lampHead,
+  .lampOff .tray {
+    transform: none;
+  }
+}
+
+.toolGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.toolGo svg {
+  width: 12px;
+  height: 12px;
+}

@@ -1,0 +1,66 @@
+{
+	"name": "@jevelopers/print-production",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": "24.21.0",
+		"npm": "11.19.0"
+	},
+	"packageManager": "npm@11.19.0",
+	"exports": {
+		"./candidate": {
+			"types": "./dist/src/api/candidate.d.ts",
+			"import": "./dist/src/api/candidate.js"
+		},
+		".": {
+			"types": "./dist/src/index.d.ts",
+			"import": "./dist/src/index.js"
+		}
+	},
+	"bin": {
+		"pp-verify": "./dist/scripts/verify/cli.js"
+	},
+	"files": [
+		"dist/src",
+		"dist/scripts",
+		"src/assets/fonts",
+		"tests/fixtures",
+		"docs/runtime/pins.json",
+		"vendor/shared-contracts"
+	],
+	"scripts": {
+		"preinstall": "node scripts/environment.mjs",
+		"build": "node scripts/environment.mjs && tsc -p tsconfig.json",
+		"typecheck": "node scripts/environment.mjs && tsc --noEmit -p tsconfig.json",
+		"format": "biome format --write package.json tsconfig.json src scripts tests docs/runtime/pins.json",
+		"format:check": "biome format package.json tsconfig.json src scripts tests docs/runtime/pins.json",
+		"test": "node scripts/environment.mjs && node --test --test-concurrency=1 dist/tests/unit/*.test.js dist/tests/contract/*.test.js dist/tests/integration/*.test.js",
+		"verify": "node dist/scripts/verify/cli.js",
+		"browser:install": "node scripts/environment.mjs && playwright install chromium"
+	},
+	"dependencies": {
+		"@jevelopers/shared-contracts": "file:vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz",
+		"@fontsource/noto-sans": "5.3.0",
+		"@fontsource/noto-sans-arabic": "5.3.0",
+		"csv-parse": "6.1.0",
+		"fflate": "0.8.2",
+		"fontkit": "2.0.4",
+		"pdf-lib": "1.17.1",
+		"pdfjs-dist": "6.4.299",
+		"playwright": "1.64.0",
+		"pngjs": "7.0.0",
+		"sax": "1.6.1",
+		"yauzl": "3.2.0",
+		"zod": "4.6.5"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@types/fontkit": "2.0.9",
+		"@types/node": "24.19.2",
+		"@types/pngjs": "6.0.5",
+		"@types/sax": "1.2.7",
+		"@types/yauzl": "2.10.3",
+		"typescript": "6.0.2"
+	}
+}

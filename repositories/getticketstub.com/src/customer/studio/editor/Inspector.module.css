@@ -1,0 +1,153 @@
+/* Desktop inspector: panels of paper that fold. Colour only from the desk tokens. */
+
+.panel {
+  border-radius: 6px;
+  background: var(--desk-paper-raised);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule),
+    0 1px 0 var(--desk-ledge);
+}
+.panelHead {
+  margin: 0;
+}
+.panelButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--desk-ink);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--desk-release) ease;
+}
+.panelButton:hover {
+  background: color-mix(in srgb, var(--desk-ink) 4%, transparent);
+}
+.panelTitle {
+  flex: 1;
+  font: var(--type-h3);
+  font-size: 1.05rem;
+  font-variation-settings: "SOFT" 30, "opsz" 20;
+  letter-spacing: -0.02em;
+}
+.panelMeta {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  text-transform: capitalize;
+}
+.chevron {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.panel[data-open="false"] .chevron {
+  transform: rotate(-90deg);
+}
+
+.panelBody {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 320ms var(--ts-ease-standard);
+}
+.panel[data-open="false"] .panelBody {
+  grid-template-rows: 0fr;
+}
+.panelInner {
+  min-height: 0;
+  overflow: hidden;
+  /* paint containment too: a folded panel's 3D stub thumbnails otherwise still stretch the page's scroll height */
+  contain: paint;
+  padding: 0 14px;
+}
+.panel[data-open="true"] .panelInner {
+  padding-bottom: 14px;
+}
+.panelInner > * + * {
+  margin-top: 12px;
+}
+
+.stack {
+  display: grid;
+  gap: 10px;
+}
+.hint {
+  margin: 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.plain {
+  text-transform: none;
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+}
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.swatch[aria-checked="true"] {
+  box-shadow: inset 0 0 0 2px var(--desk-ink);
+}
+.dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.fact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--desk-rule);
+}
+.fact:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.factText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.factLabel {
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelBody,
+  .chevron {
+    transition: none;
+  }
+}

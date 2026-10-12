@@ -1,0 +1,295 @@
+{
+  "sourceCommit": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+  "sourcePageSHA": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
+  "url": "http://127.0.0.1:4181/",
+  "observedAt": "2026-10-12T14:52:58.133Z",
+  "status": "PARTIAL_LOCAL_BOUNDED_MAKER_RECOVERY_AND_REDUCED_MOTION_OBSERVATIONS",
+  "observations": [
+    {
+      "step": "1523x721 final short-desktop initial maker",
+      "observed": {
+        "align": "safe center",
+        "client": 721,
+        "h": 721,
+        "link": {
+          "bottom": 775.390625,
+          "height": 16.890625,
+          "left": 246.96875,
+          "right": 318.03125,
+          "top": 758.5,
+          "width": 71.0625,
+          "x": 246.96875,
+          "y": 758.5
+        },
+        "opacity": "1",
+        "overflow": "auto",
+        "rootClass": "no3d ready",
+        "scroll": 803,
+        "top": 0,
+        "w": 1523,
+        "y": 22584
+      }
+    },
+    {
+      "step": "1523x721 final short-desktop native wheel recovery",
+      "observed": {
+        "h": 721,
+        "link": {
+          "bottom": 693.390625,
+          "height": 16.890625,
+          "left": 246.96875,
+          "right": 318.03125,
+          "top": 676.5,
+          "width": 71.0625,
+          "x": 246.96875,
+          "y": 676.5
+        },
+        "opacity": "1",
+        "status": {
+          "bottom": 658.5,
+          "height": 60,
+          "left": 246.96875,
+          "right": 755.71875,
+          "top": 598.5,
+          "width": 508.75,
+          "x": 246.96875,
+          "y": 598.5
+        },
+        "top": 82,
+        "w": 1523,
+        "y": 22584
+      }
+    },
+    {
+      "step": "375x812 final readable maker native recovery",
+      "observed": {
+        "background": "rgb(23, 20, 15)",
+        "copy": {
+          "bottom": 779.828125,
+          "height": 793.09375,
+          "left": 16,
+          "right": 329,
+          "top": -13.265625,
+          "width": 313,
+          "x": 16,
+          "y": -13.265625
+        },
+        "h": 812,
+        "link": {
+          "bottom": 761.828125,
+          "height": 16.890625,
+          "left": 136.96875,
+          "right": 208.03125,
+          "top": 744.9375,
+          "width": 71.0625,
+          "x": 136.96875,
+          "y": 744.9375
+        },
+        "noJsLinkParsed": false,
+        "opacity": "1",
+        "status": {
+          "bottom": 732.9375,
+          "height": 45,
+          "left": 34,
+          "right": 311,
+          "top": 687.9375,
+          "width": 277,
+          "x": 34,
+          "y": 687.9375
+        },
+        "top": 303,
+        "w": 375
+      }
+    },
+    {
+      "step": "320x568 final readable local preview native recovery",
+      "observed": {
+        "background": "rgb(23, 20, 15)",
+        "forms": 0,
+        "h": 568,
+        "href": "https://getticketstub.com/make",
+        "link": {
+          "bottom": 517.671875,
+          "height": 16.890625,
+          "left": 109.46875,
+          "right": 180.53125,
+          "top": 500.78125,
+          "width": 71.0625,
+          "x": 109.46875,
+          "y": 500.78125
+        },
+        "opacity": "1",
+        "status": {
+          "bottom": 488.78125,
+          "height": 67.5,
+          "left": 34,
+          "right": 256,
+          "top": 421.28125,
+          "width": 222,
+          "x": 34,
+          "y": 421.28125
+        },
+        "top": 383,
+        "url": "http://127.0.0.1:4181/#make",
+        "w": 320
+      }
+    },
+    {
+      "step": "actual native Open studio navigation from fictional local preview",
+      "observed": {
+        "newTabs": [
+          {
+            "id": "1316824544",
+            "url": "https://getticketstub.com/make"
+          }
+        ],
+        "scope": "URL only; no downstream input, research, generation, order, charge or account action performed"
+      }
+    },
+    {
+      "step": "Requested768 override not retained; actual320x568 normal-motion control",
+      "observed": {
+        "h": 568,
+        "transitions": {
+          "card": "0.9s, 0.5s",
+          "finale": "0.3s",
+          "heading": "0.9s"
+        },
+        "w": 320
+      }
+    },
+    {
+      "step": "Requested768 override not retained; actual320x568 reduced-motion geometry, not tablet pass",
+      "observed": {
+        "copy": {
+          "bottom": 1142.84375,
+          "height": 853.109375,
+          "left": 16,
+          "right": 274,
+          "top": 289.734375,
+          "width": 258,
+          "x": 16,
+          "y": 289.734375
+        },
+        "h": 568,
+        "link": {
+          "bottom": 1124.84375,
+          "height": 16.890625,
+          "left": 109.46875,
+          "right": 180.53125,
+          "top": 1107.953125,
+          "width": 71.0625,
+          "x": 109.46875,
+          "y": 1107.953125
+        },
+        "opacity": "1",
+        "transitions": {
+          "card": "0s",
+          "finale": "0s",
+          "heading": "0s"
+        },
+        "w": 320
+      }
+    },
+    {
+      "step": "768x1024 per-tab viewport normal-motion control",
+      "observed": {
+        "h": 1024,
+        "transitions": {
+          "card": "0.9s, 0.5s",
+          "finale": "0.3s",
+          "heading": "0.9s"
+        },
+        "w": 768
+      }
+    },
+    {
+      "step": "768x1024 per-tab viewport reduced-motion maker",
+      "observed": {
+        "copy": {
+          "bottom": 907.640625,
+          "height": 791.28125,
+          "left": 24.5625,
+          "right": 460.046875,
+          "top": 116.359375,
+          "width": 435.484375,
+          "x": 24.5625,
+          "y": 116.359375
+        },
+        "h": 1024,
+        "link": {
+          "bottom": 889.640625,
+          "height": 16.890625,
+          "left": 42.5625,
+          "right": 113.625,
+          "top": 872.75,
+          "width": 71.0625,
+          "x": 42.5625,
+          "y": 872.75
+        },
+        "opacity": "1",
+        "transitions": {
+          "card": "0s",
+          "finale": "0s",
+          "heading": "0s"
+        },
+        "w": 768
+      }
+    },
+    {
+      "step": "1440x900 final visible readable desktop maker",
+      "observed": {
+        "background": "rgb(23, 20, 15)",
+        "copy": {
+          "bottom": 845.5625,
+          "height": 791.140625,
+          "left": 194.09375,
+          "right": 894.09375,
+          "top": 54.421875,
+          "width": 700,
+          "x": 194.09375,
+          "y": 54.421875
+        },
+        "h": 900,
+        "link": {
+          "bottom": 817.5625,
+          "height": 16.890625,
+          "left": 222.09375,
+          "right": 293.15625,
+          "top": 800.671875,
+          "width": 71.0625,
+          "x": 222.09375,
+          "y": 800.671875
+        },
+        "opacity": "1",
+        "w": 1440
+      }
+    }
+  ],
+  "noJsReceipts": [
+    "/tmp/landing-nojs-candidate.json",
+    "/tmp/landing-nojs-mobile-candidate.json"
+  ],
+  "limitations": [
+    "No native200percenttextzoom, physicaltouch/scrollbardrag, screenreader, measuredWCAGcontrast, labperformance or deployment acceptance",
+    "Target-specific Emulation viewport is responsive CSS testing, not200percenttextzoom",
+    "Browser-level requested768 resize was not retained; actual320 records preserved without tablet-pass claim; later target-specific768 records verify actualdimensions",
+    "WebGL unavailable; existing-profile Chrome static fallback",
+    "Studio navigation verifies exactnewtabURLonly; no downstream customerjourney or provider action"
+  ],
+  "restored": {
+    "scriptExecution": true,
+    "mediaDefault": true,
+    "perTabDeviceMetricsCleared": true,
+    "browserViewportReset": true
+  },
+  "screenshots": [
+    "/tmp/landing-maker-final-short-desktop.jpg",
+    "/tmp/landing-maker-final-375.jpg",
+    "/tmp/landing-maker-final-320.jpg",
+    "/tmp/landing-maker-final-768-verified.jpg",
+    "/tmp/landing-maker-final-1440.jpg",
+    "/tmp/landing-maker-final-nojs-desktop.jpg",
+    "/tmp/landing-maker-final-nojs-375.jpg"
+  ]
+}

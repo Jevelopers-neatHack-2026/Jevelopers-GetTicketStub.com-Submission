@@ -1,0 +1,15 @@
+{
+  "package": "@jevelopers/shared-contracts",
+  "version": "0.9.7",
+  "source_repository": "Jevelopers-neatHack-2026/shared-contracts",
+  "source_pr": 31,
+  "source_revision": "d432ad5c895a67155affeaa05cd8423c758d95c3",
+  "archive": "jevelopers-shared-contracts-0.9.7.tgz",
+  "archive_sha256": "771a9f565ea9df87a4c08e6e6d5ede422d2a5926182a95be082dc8ed7b8c4c43",
+  "integrity": "sha512-P462b8thg20g5RknBzdDL5mfxpXF+kpodLPCGrTe3kmKXrw9YZ21x3E/PuGEp0aEOGoiBZlq5JB4Pktq+2lBPg==",
+  "package_content_digest": "sha256:3b4267aceaf250d4d2506ad9fad8c2e83964810078f1c01ef5d6f55100b63fe1",
+  "fixture_digest": "sha256:8db06e6348ff798c066f429bb0b21d5b7fd56ce07705b0133584bfe4f8d829ab",
+  "accepted": false,
+  "status": "unaccepted-development-candidate",
+  "live_integration": false
+}

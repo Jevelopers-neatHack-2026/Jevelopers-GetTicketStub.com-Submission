@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "organization": "Jevelopers-neatHack-2026",
+  "strategy": "public-default-branch-snapshots",
+  "repositories": [
+    {
+      "name": ".github",
+      "path": "repositories/.github",
+      "url": "https://github.com/Jevelopers-neatHack-2026/.github",
+      "branch": "main",
+      "commit": "2f61f8551ecf38170f0c5b225305c950c7c3b222",
+      "tree": "5becbb25b7d3a1ab2107d8b9dd9f1fbe57772bde",
+      "committed_at": "2026-10-12T04:39:16-04:00",
+      "description": "Org profile plus shared contribution, governance and evidence standards for the Jevelopers neatHack 2026 program",
+      "tracked_files": 68
+    },
+    {
+      "name": "agent-harness",
+      "path": "repositories/agent-harness",
+      "url": "https://github.com/Jevelopers-neatHack-2026/agent-harness",
+      "branch": "main",
+      "commit": "0d5e5b1e379ecc0fb504d54c5d4f6ebf79ab09dd",
+      "tree": "c20b729800abfde3ba28a99934e2741d9764252e",
+      "committed_at": "2026-10-12T12:28:48-04:00",
+      "description": "Durable workflow execution, fencing and recovery runtime for the Agent & Creative v1 subsystem (Node 22, SQLite)",
+      "tracked_files": 217
+    },
+    {
+      "name": "brand-kit",
+      "path": "repositories/brand-kit",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit",
+      "branch": "main",
+      "commit": "3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4",
+      "tree": "4d122ed4e32f3d8967c359e47bdfeaacf5ec8efd",
+      "committed_at": "2026-10-12T06:10:44-04:00",
+      "description": "TicketStub master brand kit: logo system, DTCG design tokens, fonts, brand board and usage guidelines.",
+      "tracked_files": 77
+    },
+    {
+      "name": "cost-intelligence",
+      "path": "repositories/cost-intelligence",
+      "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence",
+      "branch": "main",
+      "commit": "243f3a8a7e27eb1bdaef8f1386d49f88d9d15f2e",
+      "tree": "9254088f8ea27493d47e333808a7e99036acb82c",
+      "committed_at": "2026-10-12T12:05:34-04:00",
+      "description": "TypeScript package for usage-cost metering, pricing, budget reservations, ledger, reconciliation and summaries.",
+      "tracked_files": 229
+    },
+    {
+      "name": "creative-engine",
+      "path": "repositories/creative-engine",
+      "url": "https://github.com/Jevelopers-neatHack-2026/creative-engine",
+      "branch": "main",
+      "commit": "46766f97172af679f533d75106d7665a873e8b96",
+      "tree": "03c515c37daae76f4b5e536842fd1cb34788c9fb",
+      "committed_at": "2026-10-12T07:18:23-04:00",
+      "description": "Typed creative API runtime for image generation, edits, versioned designs, inspection, metering and contract checks",
+      "tracked_files": 337
+    },
+    {
+      "name": "event-intelligence",
+      "path": "repositories/event-intelligence",
+      "url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence",
+      "branch": "main",
+      "commit": "29b5924f4faf38ea852e348d7b32a86dd8b54a83",
+      "tree": "8a82af81c4b5f2cc8b4394df2b4e3127600834e8",
+      "committed_at": "2026-10-12T12:33:39-04:00",
+      "description": "Sourced event facts and research cache: bounded retrieval, evidence provenance and privacy boundaries",
+      "tracked_files": 324
+    },
+    {
+      "name": "fulfillment-connectors",
+      "path": "repositories/fulfillment-connectors",
+      "url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors",
+      "branch": "main",
+      "commit": "a1c04e6424626475c7c6db3d397cc6e3392c1600",
+      "tree": "42a4b8bdacfa66b4784a82408db3ad8fecdfebf0",
+      "committed_at": "2026-10-12T09:13:06-04:00",
+      "description": "Provider-neutral fulfillment connector runtime: supplier quote normalization, order submission and shipment status.",
+      "tracked_files": 147
+    },
+    {
+      "name": "getticketstub.com",
+      "path": "repositories/getticketstub.com",
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
+      "branch": "main",
+      "commit": "6daafba1a3384b20ad181b957fd5d5715da29153",
+      "tree": "1209e4353b0f46cf43ebecd5f8f6f875246b9800",
+      "committed_at": "2026-10-12T12:05:42-04:00",
+      "description": "Customer ticket-stub studio app (Next.js): event intake, design, approval and print or digital handoff",
+      "tracked_files": 690
+    },
+    {
+      "name": "integration-evals",
+      "path": "repositories/integration-evals",
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals",
+      "branch": "main",
+      "commit": "89141b4e9237d7cc1548254b99dbd0f01589eaa4",
+      "tree": "11762c48b59c08b36a3a6037b7011c5a9953daad",
+      "committed_at": "2026-10-12T11:44:33-04:00",
+      "description": "Cross-component integration verification, synthetic fixtures, and sanitized evidence for the getticketstub v1 release",
+      "tracked_files": 519
+    },
+    {
+      "name": "landing-page-repo",
+      "path": "repositories/landing-page-repo",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo",
+      "branch": "main",
+      "commit": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+      "tree": "0e04f6a98317a2d094df419c276241234a56727b",
+      "committed_at": "2026-10-12T11:06:12-04:00",
+      "description": "Static TicketStub public landing page: product story, approved example, and demo CTA served at / by getticketstub.com.",
+      "tracked_files": 249
+    },
+    {
+      "name": "marketing-material",
+      "path": "repositories/marketing-material",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material",
+      "branch": "main",
+      "commit": "62742934652aad8872c388e4d3fa77dddf93cbc9",
+      "tree": "6623b580ec9e879c8134c173e3699a574b3f9981",
+      "committed_at": "2026-10-12T03:43:53-04:00",
+      "description": "Launch collateral, evidence-backed messaging, and demo narrative for the getticketstub commemorative-ticket product.",
+      "tracked_files": 373
+    },
+    {
+      "name": "print-production",
+      "path": "repositories/print-production",
+      "url": "https://github.com/Jevelopers-neatHack-2026/print-production",
+      "branch": "main",
+      "commit": "89b5dd63c0a23dc27e62cfc235daa40dfe6d2002",
+      "tree": "ab5c3a4437f63fea03c2d162be2e1efe6145b64e",
+      "committed_at": "2026-10-12T05:52:17-04:00",
+      "description": "Deterministic print composition, preflight, exports and production manifests for event ticket artifacts.",
+      "tracked_files": 319
+    },
+    {
+      "name": "shared-contracts",
+      "path": "repositories/shared-contracts",
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts",
+      "branch": "main",
+      "commit": "7251a09c4eaddbb1232d444fd931a01c266095ac",
+      "tree": "3c7a654ca54ed5c9c07d2594a9588cd942fc321b",
+      "committed_at": "2026-10-12T07:13:57-04:00",
+      "description": "Canonical JSON Schemas, generated types, offline validators and compatibility fixtures for neatHack 2026 services",
+      "tracked_files": 25
+    },
+    {
+      "name": "team-dashboard",
+      "path": "repositories/team-dashboard",
+      "url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard",
+      "branch": "main",
+      "commit": "e7e9aece87eac258369ed551cb9800282575cc45",
+      "tree": "c64c1bffa48458e300c9cb262cdeccf5eebbc301",
+      "committed_at": "2026-10-12T11:52:11-04:00",
+      "description": "Typed React module for getticketstub.com's admin finance area: costs, revenue, budgets, drilldowns and reports.",
+      "tracked_files": 191
+    }
+  ]
+}

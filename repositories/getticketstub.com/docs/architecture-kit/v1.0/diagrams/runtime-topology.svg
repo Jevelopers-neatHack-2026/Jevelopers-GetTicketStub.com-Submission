@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="660" viewBox="0 0 1400 660">
+<title>Runtime Topology</title>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="330,156 330,267" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="330.00,267.00 325.65,258.00 334.35,258.00" fill="#768394"/>
+<polyline points="935,156 935,211 590,211 590,267" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="590.00,267.00 585.65,258.00 594.35,258.00" fill="#768394"/>
+<polyline points="1070,156 1070,267" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="1070.00,267.00 1065.65,258.00 1074.35,258.00" fill="#768394"/>
+<polyline points="590,110 690,110 690,317 810,317" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="810.00,317.00 801.00,321.35 801.00,312.65" fill="#768394"/>
+<polyline points="810,85 730,85 730,461 250,461 250,514" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="250.00,514.00 245.65,505.00 254.35,505.00" fill="#768394"/>
+<polyline points="1330,84 1370,84 1370,471 1150,471 1150,514" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="1150.00,514.00 1145.65,505.00 1154.35,505.00" fill="#768394"/>
+<polyline points="810,128 770,128 770,484 700,484 700,514" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="700.00,514.00 695.65,505.00 704.35,505.00" fill="#768394"/>
+<rect x="70" y="40" width="520" height="116" rx="12" fill="#EDF2FA" stroke="#9BAABD" stroke-width="2"/>
+<text x="330.0" y="85.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Web application</text>
+<text x="330.0" y="113.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Landing page, customer UI, team dashboard</text>
+<rect x="810" y="40" width="520" height="116" rx="12" fill="#EDF2FA" stroke="#9BAABD" stroke-width="2"/>
+<text x="1070.0" y="85.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Background worker</text>
+<text x="1070.0" y="113.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Harness and specialist modules</text>
+<rect x="70" y="267" width="520" height="100" rx="12" fill="#EAF3F1" stroke="#9BAABD" stroke-width="2"/>
+<text x="330.0" y="304.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">PostgreSQL</text>
+<text x="330.0" y="332.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Owned records and durable job queue</text>
+<rect x="810" y="267" width="520" height="100" rx="12" fill="#EAF3F1" stroke="#9BAABD" stroke-width="2"/>
+<text x="1070.0" y="304.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Object storage</text>
+<text x="1070.0" y="332.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Versioned artwork and production files</text>
+<rect x="70" y="514" width="360" height="96" rx="12" fill="#F4F1F8" stroke="#9BAABD" stroke-width="2"/>
+<text x="250.0" y="549.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Neatlogs</text>
+<text x="250.0" y="577.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Execution traces</text>
+<rect x="520" y="514" width="360" height="96" rx="12" fill="#F4F1F8" stroke="#9BAABD" stroke-width="2"/>
+<text x="700.0" y="549.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">CFO.ai export</text>
+<text x="700.0" y="577.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Financial summaries</text>
+<rect x="970" y="514" width="360" height="96" rx="12" fill="#F4F1F8" stroke="#9BAABD" stroke-width="2"/>
+<text x="1150.0" y="549.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Provider services</text>
+<text x="1150.0" y="577.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Research, images, fulfillment</text>
+</svg>

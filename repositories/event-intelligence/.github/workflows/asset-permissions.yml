@@ -1,0 +1,28 @@
+name: private asset permission selection
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  asset-permissions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
+      - name: Test private permission selection and safe-asset inspection
+        run: node --test tests/assets/permissions/*.test.mjs tests/assets/safety/*.test.mjs
+      - name: Type-check project declarations
+        run: npm run typecheck
+      - name: Type-check strict permission-selection consumer
+        run: ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --lib ES2022,DOM --types node --typeRoots node_modules/@types --skipLibCheck false tests/assets/permissions/types-consumer.mts

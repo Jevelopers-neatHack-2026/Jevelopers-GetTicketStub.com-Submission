@@ -1,0 +1,11 @@
+# Reusable workflow examples
+
+These files are review sources only. They are nested here so they cannot run as repository workflows. GitHub only discovers reusable workflows from the host repository's root .github/workflows directory; an adopter must review and install the source at that path. The caller must separately be installed under its destination .github/workflows path.
+
+The reusable source declares interface contract docs-link-check/v1, takes the typed scope input docs or repository, and returns contract_version, checked_files, and result. It accepts and passes no secrets. The caller shows pull_request and workflow_dispatch triggers with contents: read. Its uses ref is a deliberate placeholder; replace it with an independently reviewed full source commit SHA before installation. The caller is not currently executable.
+
+Both examples use actions/checkout v7.0.1 pinned to 3d3c42e5aac5ba805825da76410c181273ba90b1. That is a reviewed example pin, not a guarantee of permanent suitability. Recheck the action and source before each adoption.
+
+The checker reads only Markdown files from the caller checkout, treats links as data, skips external URLs, and does not run scripts from the pull request. It verifies the requested scan root and each scanned file resolve inside the checkout, including a docs/ symlink case. The checkout action does not persist credentials. The source workflow grants contents: read only, sets a five-minute job timeout, declares no secrets, and reports only counts and pass/fail. The caller prints those non-sensitive outputs.
+
+The offline test copies the reusable source into automation-design/fixtures/reusable-workflow/.github/workflows and executes the exact Node here-document extracted from that workflow against synthetic checkouts. It runs the same implementation from the reusable source, fixture copy, and workflow starter. This tests input validation, output production, missing-link failures, path escape failures, docs-root symlink containment, and static unsafe-trigger/secret/permission rejection. It is not a GitHub Actions run or proof of fork isolation, repository access policy, token behavior, logs, runner configuration, or required checks.

@@ -1,0 +1,426 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/metering/IngestionReceiptSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "asOf",
+    "status",
+    "eventId",
+    "sourceObservationId",
+    "logicalOperationId",
+    "providerAttemptId",
+    "billableAttemptId",
+    "transportAttemptId",
+    "outboxStatus",
+    "completeness",
+    "valuation",
+    "durableCommit"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "requestId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "asOf": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "accepted",
+          "type": "string"
+        },
+        {
+          "const": "duplicate",
+          "type": "string"
+        },
+        {
+          "const": "quarantined",
+          "type": "string"
+        },
+        {
+          "const": "conflict",
+          "type": "string"
+        }
+      ]
+    },
+    "eventId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "sourceObservationId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "logicalOperationId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "providerAttemptId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "billableAttemptId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "transportAttemptId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "existingEventId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "existingAttemptId": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status",
+            "id"
+          ],
+          "properties": {
+            "status": {
+              "const": "known",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "outboxStatus": {
+      "anyOf": [
+        {
+          "const": "awaiting_evidence",
+          "type": "string"
+        },
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "retry",
+          "type": "string"
+        },
+        {
+          "const": "posted",
+          "type": "string"
+        },
+        {
+          "const": "duplicate",
+          "type": "string"
+        },
+        {
+          "const": "suppressed",
+          "type": "string"
+        },
+        {
+          "const": "dead_letter",
+          "type": "string"
+        }
+      ]
+    },
+    "completeness": {
+      "anyOf": [
+        {
+          "const": "unknown",
+          "type": "string"
+        },
+        {
+          "const": "incomplete",
+          "type": "string"
+        },
+        {
+          "const": "complete",
+          "type": "string"
+        }
+      ]
+    },
+    "valuation": {
+      "anyOf": [
+        {
+          "const": "unknown",
+          "type": "string"
+        },
+        {
+          "const": "estimated",
+          "type": "string"
+        },
+        {
+          "const": "provider_confirmed",
+          "type": "string"
+        }
+      ]
+    },
+    "durableCommit": {
+      "type": "boolean"
+    },
+    "quarantineCode": {
+      "minLength": 1,
+      "maxLength": 64,
+      "type": "string"
+    }
+  }
+}

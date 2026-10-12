@@ -1,0 +1,182 @@
+# Program issue form (GH-03-I). Source: Jevelopers-neatHack-2026/.github
+name: Research / decision
+description: A bounded question that ends in a recorded decision.
+title: '[<PREFIX>-NN][P#] Decide <question>'
+labels:
+- type:docs
+- question
+body:
+- type: markdown
+  attributes:
+    value: '**Do not paste secrets, tokens, credentials, signed URLs, customer data or exploit details.** Write `unknown` or `N/A - <reason>` instead of guessing. Triage adds the `priority:*`, `state:*`, `area:*` and `required-for-v1` labels and the milestone after review.'
+- type: input
+  id: key
+  attributes:
+    label: Issue key
+    description: Repository prefix and number, e.g. `GH-12`. Write `new` if not yet assigned.
+    placeholder: GH-12
+  validations:
+    required: true
+- type: input
+  id: owner_role
+  attributes:
+    label: Owner role
+    description: The accountable role (not a person unless confirmed), e.g. `Finance and reliability`.
+    placeholder: Product and frontend
+  validations:
+    required: true
+- type: dropdown
+  id: priority
+  attributes:
+    label: Priority
+    description: P0 blocks v1; P1 is needed for a complete v1; P2 is post-v1.
+    options:
+    - P0
+    - P1
+    - P2
+    - Production
+    - unknown
+  validations:
+    required: true
+- type: input
+  id: priority_rationale
+  attributes:
+    label: Priority rationale
+    description: 'One sentence: why this priority.'
+    placeholder: Blocks the checkout contract consumed by print-production.
+  validations:
+    required: true
+- type: dropdown
+  id: required_v1
+  attributes:
+    label: Required for v1?
+    description: In v1 scope?
+    options:
+    - 'yes'
+    - 'no'
+    - unknown
+  validations:
+    required: true
+- type: textarea
+  id: context
+  attributes:
+    label: Context / current evidence
+    description: What exists today, with links and the commit SHA you inspected.
+    placeholder: 'Inspected main at <sha>: ...'
+  validations:
+    required: true
+- type: textarea
+  id: gap
+  attributes:
+    label: Exact gap
+    description: What is missing or wrong.
+  validations:
+    required: true
+- type: textarea
+  id: scope
+  attributes:
+    label: Scope / Non-goals
+    description: What this issue covers and what it deliberately does not.
+    placeholder: 'In scope:
+
+      - ...
+
+      Non-goals:
+
+      - ...'
+  validations:
+    required: true
+- type: textarea
+  id: question
+  attributes:
+    label: Question
+    description: The decision to make.
+  validations:
+    required: true
+- type: textarea
+  id: alternatives
+  attributes:
+    label: Alternatives
+    description: Options considered, with trade-offs.
+  validations:
+    required: true
+- type: textarea
+  id: experiment
+  attributes:
+    label: Bounded experiment and budget
+    description: Time/cost limit and stop conditions. Paid calls need prior budget authority.
+    placeholder: Max 2 hours, no paid calls
+  validations:
+    required: true
+- type: input
+  id: decision_owner
+  attributes:
+    label: Decision owner and output
+    description: Role that decides, and where the decision is recorded (ADR path).
+    placeholder: Agent and research; docs/adr/0003-*.md
+  validations:
+    required: true
+- type: textarea
+  id: follow_on
+  attributes:
+    label: Follow-on work
+    description: Issues to open once decided.
+  validations:
+    required: false
+- type: textarea
+  id: acceptance
+  attributes:
+    label: Acceptance criteria
+    description: A testable checkbox list.
+    placeholder: '- [ ] ...
+
+      - [ ] ...'
+  validations:
+    required: true
+- type: input
+  id: acceptance_ids
+  attributes:
+    label: Master acceptance IDs
+    description: IDs from integration-evals planning/acceptance-checklist.md (e.g. `CON-01`), or `N/A - <reason>`.
+    placeholder: N/A - governance documentation
+  validations:
+    required: true
+- type: textarea
+  id: dependencies
+  attributes:
+    label: Dependencies
+    description: Full `owner/repo#N` links and the unblock condition for each.
+    placeholder: 'Blocked by: Jevelopers-neatHack-2026/<repo>#N (unblocks when ...)
+
+      Blocks: Jevelopers-neatHack-2026/<repo>#M'
+  validations:
+    required: true
+- type: textarea
+  id: validation
+  attributes:
+    label: Test / validation plan
+    description: How the result will be checked. Separate planned checks from ones already run.
+  validations:
+    required: true
+- type: dropdown
+  id: provider_mode
+  attributes:
+    label: Provider mode
+    description: Which provider mode the work and its evidence use.
+    options:
+    - N/A (documentation or no provider)
+    - mock
+    - sandbox
+    - live
+    - mixed (explain below)
+    - unknown
+  validations:
+    required: true
+- type: textarea
+  id: evidence
+  attributes:
+    label: Evidence required
+    description: What must be attached before this can close (merged PR/commit, command output, run link, reviewer/date).
+    placeholder: Merged PR link, test output for <sha>, reviewer role and date
+  validations:
+    required: true

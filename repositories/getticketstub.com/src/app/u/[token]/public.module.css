@@ -1,0 +1,103 @@
+/* /u/[token]: the same corkboard as /wall, read-only. Board, pins and header are in app/wall/chrome.module.css. */
+
+.ownLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-decoration: none;
+  background-image: radial-gradient(circle, currentColor 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 calc(50% + 12px);
+}
+.stampLink {
+  display: inline-block;
+  text-decoration: none;
+  justify-self: start;
+}
+.lost {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  max-width: 560px;
+  padding-top: 24px;
+}
+.lede {
+  margin: 0;
+  font: var(--type-lede);
+  color: var(--desk-ink-soft);
+}
+
+.board {
+  min-width: 0;
+}
+/* a stub sits at --x/--y on the endless canvas, at the tilt its owner left it */
+.pinned {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: var(--x, 0px) var(--y, 0px);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  transform: rotate(var(--angle));
+  animation: settle 520ms var(--ts-ease-enter) both;
+  animation-delay: calc(var(--i) * 40ms);
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(-14px) scale(1.04);
+  }
+}
+.stubLink {
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 8px 8px rgb(40 24 8 / 0.4));
+  transition: transform 260ms var(--desk-spring);
+}
+.stubLink:hover {
+  transform: translateY(-4px);
+}
+.stubLink:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 4px;
+}
+.label {
+  margin: 0;
+  max-width: 170px;
+  text-align: center;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink);
+}
+.note {
+  margin: -8px 0 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.cta {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  margin-top: 16px;
+}
+.ctaText {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+  max-width: 20ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinned {
+    animation: none;
+  }
+}

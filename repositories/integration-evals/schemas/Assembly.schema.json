@@ -1,0 +1,318 @@
+{
+  "$defs": {
+    "Component": {
+      "additionalProperties": false,
+      "description": "Immutable owner-provided checkout and adapter entrypoints.",
+      "properties": {
+        "repository": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Repository",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "tree": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Tree",
+          "type": "string"
+        },
+        "lockfile_path": {
+          "title": "Lockfile Path",
+          "type": "string"
+        },
+        "lockfile_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Lockfile Digest",
+          "type": "string"
+        },
+        "command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Command",
+          "type": "array"
+        },
+        "cleanup_command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Cleanup Command",
+          "type": "array"
+        },
+        "supported_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Mode"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supported Modes"
+        }
+      },
+      "required": [
+        "repository",
+        "revision",
+        "tree",
+        "lockfile_path",
+        "lockfile_digest"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Provider": {
+      "additionalProperties": false,
+      "description": "Preflight configuration; credential values never enter records.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "credential_env": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Env"
+        },
+        "eligible": {
+          "default": false,
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "authority_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Ref"
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "cleanup_supported": {
+          "default": false,
+          "title": "Cleanup Supported",
+          "type": "boolean"
+        },
+        "allowed_operations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Operations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "mode",
+        "model"
+      ],
+      "title": "Provider",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "App-owned composed release input; never inferred from moving branches.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "owner": {
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "kind": {
+      "default": "composed",
+      "enum": [
+        "composed",
+        "component"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "selected_cases": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Cases"
+    },
+    "integration_revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Integration Revision",
+      "type": "string"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/Component"
+      },
+      "minItems": 1,
+      "title": "Components",
+      "type": "array"
+    },
+    "contract_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Contract Digest",
+      "type": "string"
+    },
+    "contract_artifact_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Contract Artifact Path"
+    },
+    "fixture_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Fixture Digest",
+      "type": "string"
+    },
+    "runtime": {
+      "title": "Runtime",
+      "type": "string"
+    },
+    "configuration_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Configuration Digest",
+      "type": "string"
+    },
+    "configuration_component": {
+      "default": "integration-evals",
+      "title": "Configuration Component",
+      "type": "string"
+    },
+    "configuration_artifact_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Configuration Artifact Path"
+    },
+    "providers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Provider"
+      },
+      "title": "Providers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "owner",
+    "integration_revision",
+    "components",
+    "contract_digest",
+    "fixture_digest",
+    "runtime",
+    "configuration_digest"
+  ],
+  "title": "Assembly",
+  "type": "object"
+}

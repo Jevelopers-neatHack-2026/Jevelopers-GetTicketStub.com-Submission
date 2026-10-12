@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-labelledby="title description">
+<title id="title">Synthetic redaction test after removal</title><desc id="description">Synthetic redaction test after. The central region is blank. Fake sensitive markers removed; privacy approval still required.</desc>
+<style>text {font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-weight:500} .display {font-family:'Iowan Old Style','Palatino Linotype',Georgia,serif;font-weight:600}</style>
+<rect x="0" y="0" width="800" height="500" rx="2" fill="#F4ECDD" /><text x="40" y="62" font-size="32" fill="#17140F" data-bg="#F4ECDD">Synthetic redaction test • draft</text><text x="40" y="116" font-size="24" fill="#17140F" data-bg="#F4ECDD">All markers below are obvious fake test data.</text><text x="40" y="420" font-size="24" fill="#17140F" data-bg="#F4ECDD">Review checkpoint: inspect flattened export and text.</text>
+
+</svg>

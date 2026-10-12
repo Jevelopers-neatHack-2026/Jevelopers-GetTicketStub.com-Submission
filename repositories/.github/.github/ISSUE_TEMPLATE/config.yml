@@ -1,0 +1,7 @@
+# Issue chooser configuration (GH-03-I).
+# No security contact link is listed until a private destination and owner are confirmed.
+blank_issues_enabled: false
+contact_links:
+- name: Contribution guidance
+  url: https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md
+  about: How to scope issues, link dependencies and attach evidence.

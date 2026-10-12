@@ -1,0 +1,5 @@
+{
+  "name": "Markdown relative-link check",
+  "description": "Check supported relative Markdown file links with a read-only token.",
+  "filePatterns": [".*\\.md$"]
+}

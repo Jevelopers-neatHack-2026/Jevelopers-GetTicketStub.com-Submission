@@ -1,0 +1,660 @@
+{
+  "candidate_package_status": "research and creative docs call package 0.3.0 candidate; owner and consumer acceptance pending",
+  "schema_policy": {
+    "policy_version": "1.0.0",
+    "status": "foundation_candidate_pending_owner_review",
+    "schema_version_policy": "exact_semver",
+    "unknown_fields": "reject",
+    "unknown_enums": "reject",
+    "optional_field_addition": "new_exact_schema_version; old-version encoding retained; compatibility fixtures required",
+    "accepted_schema_versions": [],
+    "candidate_research_versions": {
+      "CommonEnvelope": [
+        "1.0.0"
+      ],
+      "ErrorEnvelope": [
+        "1.0.0"
+      ],
+      "ResearchRequest": [
+        "1.0.0"
+      ],
+      "EventIntelligencePackage": [
+        "1.0.0"
+      ],
+      "DecisionPortRequest": [
+        "1.0.0"
+      ],
+      "DecisionPortResult": [
+        "1.0.0"
+      ],
+      "ResearchRequestReceipt": [
+        "1.0.0"
+      ],
+      "ResearchAnswerReceipt": [
+        "1.0.0"
+      ],
+      "ResearchBatchReceipt": [
+        "1.0.0"
+      ],
+      "ResearchCorrectionRequest": [
+        "1.0.0"
+      ],
+      "ResearchCorrectionReceipt": [
+        "1.0.0"
+      ],
+      "ResearchInvalidation": [
+        "1.0.0"
+      ]
+    }
+  },
+  "fixtures": [
+    {
+      "contract": "CommonEnvelope",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_foundation_candidate",
+      "case_count": 23,
+      "selected_cases": [
+        {
+          "id": "forged-tenant",
+          "mode": "context",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ErrorEnvelope",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 20,
+      "selected_cases": [
+        {
+          "id": "unsupported-version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "forged-tenant",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchRequest",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 18,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "EventIntelligencePackage",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 33,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "altered-package-hash",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "REFERENCE_MISMATCH",
+            "path": "/package_hash"
+          }
+        },
+        {
+          "id": "revoked",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "STALE_APPROVAL",
+            "path": "/approved_assets/0/approval_ref"
+          }
+        },
+        {
+          "id": "forged-issuer",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "STALE_APPROVAL",
+            "path": "/approved_assets/0/approval_ref"
+          }
+        },
+        {
+          "id": "parent-linked-new-version",
+          "mode": "research_creative",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "DecisionPortRequest",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 26,
+      "selected_cases": [
+        {
+          "id": "unsupported-version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "forged-tenant",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "cyclic-batch",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "CYCLIC_DEPENDENCY",
+            "path": "/questions"
+          }
+        },
+        {
+          "id": "dependent-siblings",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "DEPENDENT_BATCH",
+            "path": "/questions/choice_1/depends_on"
+          }
+        },
+        {
+          "id": "legacy-version-not-silently-migrated",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "DecisionPortResult",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 33,
+      "selected_cases": [
+        {
+          "id": "unsupported-version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "forged-tenant",
+          "mode": "semantic",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "noul-confidence-forbidden",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/answers/noul_1/answer"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchRequestReceipt",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 15,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchAnswerReceipt",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 15,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchBatchReceipt",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 16,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchCorrectionRequest",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 19,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "stale-package-version",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "REFERENCE_MISMATCH",
+            "path": "/expected_package_ref"
+          }
+        },
+        {
+          "id": "forged-actor",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "REFERENCE_MISMATCH",
+            "path": "/actor_ref"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchCorrectionReceipt",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 19,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "externally-accepted-new-version",
+          "mode": "research_creative",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    },
+    {
+      "contract": "ResearchInvalidation",
+      "schema_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "fixture_status": "synthetic_candidate_owner_review_pending",
+      "case_count": 20,
+      "selected_cases": [
+        {
+          "id": "version",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "additive",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "forged-scope",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "altered-duplicate",
+          "mode": "research_creative",
+          "expected": {
+            "ok": false,
+            "code": "REVISION_CONFLICT",
+            "path": "/revision"
+          }
+        },
+        {
+          "id": "additive_field",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        }
+      ]
+    }
+  ],
+  "count_summary": {
+    "schema_documents": 12,
+    "fixture_manifests": 12,
+    "total_fixture_cases": 257
+  },
+  "trust_boundary": "Schemas and semantic fixture contexts are synthetic candidate data. Research docs require separately obtained authenticated/current server scope, references, current approvals, budget and policy context; no payload boolean, identifier, fixture, or schema authenticates an issuer or grants authority.",
+  "commerce_finding_exclusion": "SC-CHK-012 concerns intrinsic DesignVersion digest/reference-kind validation in ArtifactHandoffManifest and ArtifactConsumptionReceipt routes. It does not add a DesignVersion object to the ResearchRequest, EventIntelligencePackage, DecisionPort or research receipt/correction/invalidation schemas; CommonEnvelope design_version_id remains an opaque typed ID. Candidate EI tests must not claim SC-CHK-012 coverage.",
+  "reviewer_test_evidence": "Comment 6107785718 reports both Node 22/24 suites, 3543 pass with zero fail/cancel/skip and 1208 dispositioned preserved cases passing at reviewed head 795608e; this is whole-PR reviewer evidence on that exact candidate, not this auditor rerunning tests and not evidence for current b47 head.",
+  "auditor_test_execution": "none"
+}

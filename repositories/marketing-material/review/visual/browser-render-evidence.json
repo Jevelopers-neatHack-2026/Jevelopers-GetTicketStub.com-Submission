@@ -1,0 +1,670 @@
+{
+  "evidenceType": "Executed local browser render; author verification, not independent approval",
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/154.0.8037.98",
+    "revision": "@b859317bf11f6be47f9b7799ec690a0a42a1fb33",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "jsVersion": "15.4.80.20"
+  },
+  "node": "v24.15.0",
+  "python": "Python 3.9.6",
+  "pillow": "11.3.0",
+  "command": "node tools/render_collateral.mjs",
+  "results": [
+    {
+      "file": "demo/diagrams/demo-workflow.svg",
+      "output": "demo/diagrams/demo-workflow.png",
+      "width": 1440,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1440,
+        "innerWidth": 1440,
+        "images": []
+      }
+    },
+    {
+      "file": "demo/screenshots/synthetic-stub-mockup.svg",
+      "output": "demo/screenshots/synthetic-stub-mockup.png",
+      "width": 1200,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1200,
+        "innerWidth": 1200,
+        "images": []
+      }
+    },
+    {
+      "file": "launch/assets/x-submission-key-visual.svg",
+      "output": "launch/assets/x-submission-key-visual.png",
+      "width": 1200,
+      "height": 675,
+      "browserErrors": [],
+      "requests": [
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1200,
+        "innerWidth": 1200,
+        "images": []
+      }
+    },
+    {
+      "file": "examples/synthetic/redaction-before.svg",
+      "output": "examples/synthetic/redaction-before.png",
+      "width": 800,
+      "height": 500,
+      "browserErrors": [],
+      "requests": [
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 800,
+        "innerWidth": 800,
+        "images": []
+      }
+    },
+    {
+      "file": "examples/synthetic/redaction-after.svg",
+      "output": "examples/synthetic/redaction-after.png",
+      "width": 800,
+      "height": 500,
+      "browserErrors": [],
+      "requests": [
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 800,
+        "innerWidth": 800,
+        "images": []
+      }
+    },
+    {
+      "file": "launch/assets/x-submission-key-visual.svg",
+      "output": "review/visual/previews/x-feed-390.png",
+      "width": 390,
+      "height": 220,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "images": [
+          {
+            "complete": true,
+            "width": 1200
+          }
+        ]
+      }
+    },
+    {
+      "file": "demo/diagrams/demo-workflow.svg",
+      "output": "review/visual/previews/workflow-presentation-960.png",
+      "width": 960,
+      "height": 600,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 960,
+        "innerWidth": 960,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      }
+    },
+    {
+      "file": "demo/screenshots/synthetic-stub-mockup.svg",
+      "output": "review/visual/previews/mockup-presentation-720.png",
+      "width": 720,
+      "height": 540,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 720,
+        "innerWidth": 720,
+        "images": [
+          {
+            "complete": true,
+            "width": 1200
+          }
+        ]
+      }
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-presentation-1440.png",
+      "width": 1440,
+      "height": 1200,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1425,
+        "innerWidth": 1440,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 1361,
+        "graphicDisplayed": true,
+        "graphicWidth": 1361,
+        "graphicMinimumEffectiveTextPx": 20.793055555555554,
+        "textDisplayed": false,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-presentation-1440-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-600.png",
+      "width": 600,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 585,
+        "innerWidth": 600,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 521,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-600-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-601.png",
+      "width": 601,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 586,
+        "innerWidth": 601,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 522,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-601-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-768.png",
+      "width": 768,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 753,
+        "innerWidth": 768,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 689,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-768-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-1038.png",
+      "width": 1038,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1023,
+        "innerWidth": 1038,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 959,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-1038-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-1039.png",
+      "width": 1039,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1024,
+        "innerWidth": 1039,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 960,
+        "graphicDisplayed": true,
+        "graphicWidth": 960,
+        "graphicMinimumEffectiveTextPx": 14.666666666666666,
+        "textDisplayed": false,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-1039-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-1040.png",
+      "width": 1040,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1025,
+        "innerWidth": 1040,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 961,
+        "graphicDisplayed": true,
+        "graphicWidth": 961,
+        "graphicMinimumEffectiveTextPx": 14.681944444444444,
+        "textDisplayed": false,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-1040-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-mobile-390.png",
+      "width": 390,
+      "height": 740,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 375,
+        "innerWidth": 390,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 311,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-mobile-full.png"
+    }
+  ],
+  "keyboard": {
+    "tag": "A",
+    "name": "Read the workflow text equivalent",
+    "outline": "solid"
+  },
+  "hashes": [
+    {
+      "path": "demo/diagrams/demo-workflow.svg",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
+      "bytes": 4069
+    },
+    {
+      "path": "demo/diagrams/demo-workflow.png",
+      "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
+      "bytes": 132052
+    },
+    {
+      "path": "demo/screenshots/synthetic-stub-mockup.svg",
+      "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
+      "bytes": 2834
+    },
+    {
+      "path": "demo/screenshots/synthetic-stub-mockup.png",
+      "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
+      "bytes": 113668
+    },
+    {
+      "path": "launch/assets/x-submission-key-visual.svg",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
+      "bytes": 2036
+    },
+    {
+      "path": "launch/assets/x-submission-key-visual.png",
+      "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
+      "bytes": 79742
+    },
+    {
+      "path": "examples/synthetic/redaction-before.svg",
+      "sha256": "1fa090e3957d392ca114fa298e6904e7195444920961f4af25429555c0c36ac5",
+      "bytes": 1485
+    },
+    {
+      "path": "examples/synthetic/redaction-before.png",
+      "sha256": "93747429f5b72e63c426ac33f976293d4cb3486136e53a9c22d0ab3cf6764325",
+      "bytes": 40643
+    },
+    {
+      "path": "examples/synthetic/redaction-after.svg",
+      "sha256": "c2a8a07b4daa3cb63151c1a5051ba07fcec065b0780ca48c4f5b1c3c55ebec58",
+      "bytes": 976
+    },
+    {
+      "path": "examples/synthetic/redaction-after.png",
+      "sha256": "5fe36c9934933874a988c60b4837bdb0c2a8cab95bbc6064cc2267cb7afc42b6",
+      "bytes": 27599
+    },
+    {
+      "path": "demo/deck/concept-overview.html",
+      "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+      "bytes": 1964
+    },
+    {
+      "path": "launch/assets/x-submission-alt-text.md",
+      "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
+      "bytes": 795
+    },
+    {
+      "path": "review/visual/previews/deck-mobile-390.png",
+      "sha256": "266126d53623b4b9207f4a52ad3154d3f02b54bc54ecacc63f5d6b9c6af63882",
+      "bytes": 73950
+    },
+    {
+      "path": "review/visual/previews/deck-mobile-full.png",
+      "sha256": "52f0d462cd8cab6f42c45a715756432d5732a8789e1e6f3fe17f4686e3473b95",
+      "bytes": 105121
+    },
+    {
+      "path": "review/visual/previews/deck-presentation-1440-full.png",
+      "sha256": "aaca5455e7ab6493761a81efe74f9d663082337285e02e5fdb44aed64463c5cf",
+      "bytes": 169262
+    },
+    {
+      "path": "review/visual/previews/deck-presentation-1440.png",
+      "sha256": "a390204fd455ddfeea8c867672a2452d2d043d4111e9246c0b9f8faa1bcd045f",
+      "bytes": 169207
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1038-full.png",
+      "sha256": "ddcd908ee8e1bc4d5dbbab428edf4e5bf739b5dfa25a1c9c8afcda35f72a9aaa",
+      "bytes": 92915
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1038.png",
+      "sha256": "e2e1e04cae82958d117ae139b4d2f38b0f46294fa9214ea563af81b3941e653e",
+      "bytes": 92865
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1039-full.png",
+      "sha256": "cd7515ba1f8cdff02bc2c05c902510b453fbcc8a00294b2ea54f83daf19eb4d2",
+      "bytes": 123525
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1039.png",
+      "sha256": "b839cd9022d02b1c79b31e9d5a8eb463378a2e7c819c2c10f974fd813779503a",
+      "bytes": 124172
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1040-full.png",
+      "sha256": "987e04db04c0305857f33fc861b4b8f5d0d876439b194f093016e6102ccb86f6",
+      "bytes": 123196
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1040.png",
+      "sha256": "1599879a9d81c85e25315647cd4f789c2ef63b9f027db5a8d7406eb6a2a19639",
+      "bytes": 124008
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-600-full.png",
+      "sha256": "54ad8423920df32d03d6f1291631f7dd9b69391cd7f134d9ea0fcb32525cd3a6",
+      "bytes": 96455
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-600.png",
+      "sha256": "50e72ef3dc41be82b9f86d822c3e108153c12a618f62ed5629ed600fca1de409",
+      "bytes": 96404
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-601-full.png",
+      "sha256": "191dbf36db0d1b2d4e881baf80421f12ec942798e120bb1a5e7ea0f44df8ff87",
+      "bytes": 96469
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-601.png",
+      "sha256": "6f898f026e3c505d03ab095bda526f54f8982a741ee080297b897b6139a1df34",
+      "bytes": 96420
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-768-full.png",
+      "sha256": "14e7af082dfe616f8db854f2599d5872c0e7ea78f36b6f8d0274ee8215c7722e",
+      "bytes": 92222
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-768.png",
+      "sha256": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99",
+      "bytes": 92170
+    },
+    {
+      "path": "review/visual/previews/mockup-presentation-720.png",
+      "sha256": "444a73d443dfc9342c50cb8d3b753609bbbdda974c18adc872b1c35b48c40e7d",
+      "bytes": 64802
+    },
+    {
+      "path": "review/visual/previews/workflow-presentation-960.png",
+      "sha256": "660e36ab0e1960a151c2ca441e779ab009a4c48378931e4133501f0d7812f6c4",
+      "bytes": 87069
+    },
+    {
+      "path": "review/visual/previews/x-feed-390.png",
+      "sha256": "5ae620dc2927c968556231bc48de629df3d7f5fb1a21c711f4bdb89be65d5dcd",
+      "bytes": 22527
+    }
+  ],
+  "consoleScope": "Page CDP events only. Chrome process stderr retained only locally; background browser messages are not page-console errors.",
+  "releaseApproval": "pending"
+}

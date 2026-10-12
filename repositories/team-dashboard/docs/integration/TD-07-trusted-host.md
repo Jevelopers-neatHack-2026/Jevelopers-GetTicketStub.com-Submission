@@ -1,0 +1,150 @@
+# TD-07 trusted host authorization seam
+
+Status: local, provider-agnostic server seam with an offline test double. **Not** host-accepted. No identity provider, session store, signing key or endpoint is chosen or shipped here. Tracks the getticketstub.com #27 item "Integrate trusted host session, membership and team authorization into `team-dashboard`; browser `HostAccess` projections are not credentials", and parts of [TD-07 #11](https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/11) and [TD-01 #3](https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/3).
+
+## Trust boundary
+
+```text
+browser                      host server (getticketstub.com)                 this package (server entry)
+Dashboard ── route read ──▶  attaches its own server-held credential ──▶  createGuardedRouteReader
+  access = HostAccess          (e.g. signed context from httpOnly session)     └ DashboardAuthorizer
+  (display only)                                                                 └ HostSessionVerifier (host-injected)
+                                                                                 └ read({ verified scope }) ──▶ finance read port
+```
+
+- **Only the injected `HostSessionVerifier` turns a credential into identity, membership and grants.** The host implements it and must re-check the live session, project membership and membership revision on every call.
+- The credential is an opaque string that the **host server** holds. A `HostAccess` value, any object, a non-string, an empty or padded string, or a string with whitespace/control characters is rejected before the verifier is called.
+- `HostAccess` stays a display projection. `toHostAccessProjection` produces it from a server decision; nothing in the server entry accepts it as input. The guarded read input has no scope or access field, and extra fields are ignored.
+- Every read is re-authorized. Scope passed to the host read function always comes from the verified context.
+- **Forgery resistance for string credentials rests on the host verifier.** This package rejects every non-string and every non-opaque string before the verifier runs. A JSON, base64 or unsigned-token string that *looks* like a credential is passed to the verifier, and only the verifier's signature, session and membership checks reject it. The tests prove that rejection against the HMAC fixture, not against a production verifier.
+
+## Verifier answers are untrusted shape
+
+The authorizer snapshots the verifier's answer before it validates anything:
+
+- Each field (`ok`, `reason`, `context`, and each context field) is read **exactly once** into a local, from an **own data property** (`Object.getOwnPropertyDescriptor`). Accessors (getters) are rejected without being invoked. Inherited values, including a polluted `Object.prototype`, are never read. A throwing Proxy trap fails closed.
+- **Caveat:** awaiting the verifier's promise reads `then` on its answer before the dashboard sees it (standard promise resolution). So a polluted `Object.prototype.then` in the host process can substitute the answer, and no code here can prevent that. Prototype integrity of the host process is the host's responsibility.
+- `capabilities` must be a real array (`Array.isArray`) with an own integer `length` of at most 256. It is copied by index into a fresh array (`Array.from({ length }, …)`) **before** any element is validated, so an overridden `every`, `Symbol.iterator` or `length` getter cannot skip validation. Holes fail. Duplicates are removed.
+- Only the snapshot is validated and used. The decision, its `scope`, `trustedScope` and `capabilities` are fresh frozen objects. Unknown fields are dropped.
+
+## Expiry and context lifetime
+
+- `expiresAt` must be a strict ISO-8601 instant: `YYYY-MM-DDTHH:MM:SS[.mmm]` followed by `Z` or an explicit `±HH:MM` offset. An offset-less local time, a date-only value, RFC 2822 text and out-of-range fields are a malformed answer (`unavailable`). Parsing never consults the server's timezone (`parseInstant`). Tests run the same rows under `TZ=UTC` and `TZ=America/Los_Angeles`.
+- `maxContextTtlMs` caps how far in the future `expiresAt` may be: a context claiming `expiresAt > now + maxContextTtlMs` is denied (`lifetime_exceeded`). Default **15 minutes** (PR #42 issues 5-minute tokens). Configurable as an integer in [1 000, 86 400 000] ms (1 s to 24 h); anything else throws at construction.
+- `timeoutMs` (verifier) and `readTimeoutMs` (host read) must be integers in [1, 60 000] ms. Defaults: 5 000 and 9 000, so one verifier round-trip plus the read (≤ 14 s) stays below the dashboard's 15 s client timeout. `NaN`, `0`, negatives, fractions and `Infinity` throw.
+
+## Finance scope (`environment`, `billingMode`)
+
+The verified context must carry `environment` (`development` | `test` | `production`) and `billingMode` (`live` | `sandbox` | `simulated`), the vocabulary of cost-intelligence's `TrustedScope` (vendored in getticketstub.com PR #42 as `fixtures/context/finance-trusted-scope.schema.json`) and the shared-contracts common envelope (`environment`, `billing_mode`). A missing or unknown value is a malformed answer (`unavailable`).
+
+The verifier maps the host's `/2` modes onto this vocabulary with `ticketstub.finance-scope-adapter/1` (PR #42): `development`/`preview`/`live` → `development`/`test`/`production`; `none`/`sandbox`/`paid_test`/`live` → `simulated`/`sandbox`/`live`/`live` (a paid test is real spend). `evidenceMode` is not carried here.
+
+An allowed decision exposes `trustedScope`, exactly the five `TrustedScope` fields (`tenantId`, `projectId`, `environment`, `billingMode`, `actorId`), and the guarded reader passes it to `read`. **A host read must take the billing mode and environment from `trustedScope`, never from env or request state.**
+
+## Revision and the authorize-to-read window
+
+- `revision` is an opaque string of 1–256 visible ASCII characters (`U+0021`–`U+007E`) that changes whenever session, membership or grants change. PR #42's `/2` context has `membershipRevision: number` and no `revision` string. The verifier owns the mapping. The fixture and the recommended mapping are `` `${actorId}@${membershipRevision}` ``, which changes on every bump of the account's monotonic `membershipRevision`.
+- `TrustedReadRequest` carries the verified `revision` and `expiresAt`.
+- **Residual window.** Between the verifier's answer and the end of the host read, a revocation can land. The window is bounded by one verifier round-trip (≤ `timeoutMs`) plus the read (≤ `readTimeoutMs`), so ≤ 14 s by default. The guarded reader aborts the read's signal at the deadline and returns `unavailable`.
+- **Host obligation.** Where the store allows, the host read must re-check the revision in the same transaction or query as the read (for #42: the account's `membershipRevision` still equals the verified value, and the session is still live). It must return `restricted` when the check fails. A host that cannot do this accepts the window above and must say so in its integration evidence.
+
+## Object-level authorization on detail routes
+
+`transaction-detail` and `event-detail` hand the URL id (`route.params.id`) to `read` next to the verified scope. The id is caller-chosen and untrusted. The host read must:
+
+1. Scope the lookup by `scope.tenantId` and `scope.projectId` (or `trustedScope`), for example `WHERE id = $id AND tenant_id = $tenant AND project_id = $project`. It must never look the record up by id first and compare afterwards in a way that changes the answer.
+2. Return **one and the same state** for "the id exists but belongs to another tenant or project" and "the id does not exist". `empty` is recommended. The response must not differ in status, body, timing class or error. Otherwise the id becomes a cross-tenant existence oracle.
+
+`tests/access/trusted-host.test.ts` ("object-level authorization on detail routes") forges victim transaction ids, a same-tenant other-project id, encoded tenant and project refs, and a victim event id. It asserts each result deep-equals the nonexistent-id result. The mounted test does the same through `Dashboard`. These tests cover a compliant fixture reader. The rule binds the real host read, which this package cannot enforce.
+
+## Denial cause and audit
+
+Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`, `expired`, `forged`, `wrong_audience`, `malformed`, `unsupported_version`, `missing`, `invalid_credential`, `lifetime_exceeded`, `project_mismatch`, `missing_capability`, `unknown_route`; or `timeout`, `aborted`, `verifier_error`, `verifier_unavailable`, `malformed_answer`). `toHostAccessProjection` drops it. The guarded reader never returns it. Instead it reports a `GuardedReadOutcome` (cause, route, actor, revision, read result) to an optional server-only `onOutcome` hook. Synchronous throws and rejected promises or thenables from the hook are swallowed, including promises created in another JavaScript realm, so an audit backend outage cannot crash the server or change the result. `revision` values outside visible ASCII are rejected as malformed before an allowed audit outcome is produced. This excludes C0/C1 controls, Unicode line separators (U+2028/U+2029), bidi controls (including U+202E), whitespace and non-ASCII characters. **Never forward a cause to the browser.** Use it for logs, audit (TD-07.E), and choosing between re-authentication and refresh.
+
+## Guarded read result
+
+`createGuardedRouteReader` returns `{ state, access }`, the same envelope required by `RouteProvider` (`RouteReadResult` is exported from `@jevelopers/team-dashboard/integration`). Forward both fields unchanged from the host read handler. `access` is the projection of the decision that served this read and carries its verified scope and revision.
+
+`Dashboard` snapshots the envelope, state and access projection from own data properties. It rejects missing/inherited fields, accessors without invoking getters, throwing Proxy traps and terminal `loading` answers with a fixed non-retryable error. A ready response reaches the renderer only if its returned tenant, project and revision all match the currently mounted authorized projection. A mismatch or denied projection shows restricted, and the renderer receives the matching **returned scope snapshot**. An unavailable state with an unavailable projection stays unavailable. The mounted projection is also snapshotted before use. Promise resolution still reads `then` before these checks; process prototype integrity remains the host's responsibility.
+
+`access` describes the authorization decision, not the read outcome: a host read returning `restricted` after a failed revision re-check still carries authorized `access`, and `Dashboard` honours the restricted state. Comparing projections preserves display integrity; the server must still authorize and scope every read. Domain `data` remains the host's validated, redacted projection.
+
+## Fail-closed rules
+
+| Condition | Decision | Guarded read |
+| --- | --- | --- |
+| Missing, malformed or non-string credential (including a `HostAccess` projection) | `denied/unauthenticated`, verifier not called | `restricted`, reader not called |
+| Verifier says `missing`, `malformed`, `forged`, `unsupported_version`, `expired`, `wrong_audience`, `revoked` or `stale` | `denied/unauthenticated` | `restricted` |
+| Verifier says ok, but the audience differs or `expiresAt` has passed (re-checked here) | `denied/unauthenticated` | `restricted` |
+| Verifier says ok, but `expiresAt` is beyond `now + maxContextTtlMs` | `denied/unauthenticated` (`lifetime_exceeded`) | `restricted` |
+| Requested project differs from the verified project, or is not a safe identifier | `denied/not_found` (indistinguishable from nonexistent) | `restricted` |
+| Verified context lacks a route's required capability | `denied/forbidden` | `restricted` |
+| Unknown route id | `denied/not_found` | unknown path is `unavailable` |
+| Verifier throws, times out (default 5 s, aborts its signal), says `unavailable`, or returns a malformed answer (including a non-strict `expiresAt`, a getter, or a missing `environment`/`billingMode`) | `unavailable` | `unavailable` |
+| Reader throws / returns a malformed or `loading` state / exceeds `readTimeoutMs` (default 9 s, aborts its signal) / request aborted | — | `error` (retryable) / `error` (not retryable) / `unavailable` / `unavailable` |
+
+Identifiers must match `^[\w.:-]{1,128}$` (the host's kind-prefixed ids, e.g. `account:…`, `event:…`). Capabilities must be lowercase dotted strings.
+
+## Permission matrix (`team-dashboard.permissions/1`, proposed)
+
+Decisions consult explicit capability strings, never `role`. The strings follow the host's GT-FIN-001 proposal in [getticketstub.com PR #42](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/42) (unmerged).
+
+| Routes | Required capabilities |
+| --- | --- |
+| overview, ai-costs, sales, fulfillment, budgets, transactions, transaction-detail, events, event-detail, reports | `finance.read` |
+| exports | `finance.read`, `finance.export` |
+
+`finance.command.*` is not consumed: no command UI exists yet (TD-07.D).
+
+## Host usage
+
+```ts
+// Server-only code in the host. Never import '@jevelopers/team-dashboard/server' in a client component.
+import { createDashboardAuthorizer, createGuardedRouteReader, toHostAccessProjection } from '@jevelopers/team-dashboard/server';
+
+const authorizer = createDashboardAuthorizer({ verifier: hostSessionVerifier, audience: hostDashboardAudience });
+const readRoute = createGuardedRouteReader({ authorizer, basePath: agreedAdminPrefix, read: hostFinanceRead, onOutcome: hostAuditLog });
+// hostFinanceRead({ route, scope, trustedScope, revision, expiresAt, signal }): scope every lookup by `scope`,
+// take billing mode and environment from `trustedScope`, re-check `revision` in the read, honour `signal`.
+
+// Page render: send only the display projection to the client.
+const access = toHostAccessProjection(await authorizer.authorize({ credential: serverHeldCredential, route }));
+// Read handler: the browser sends a pathname; the host attaches the credential itself.
+// `access` is the projection of the decision that served this read; send it with `state`.
+const { state, access: readAccess } = await readRoute({ credential: serverHeldCredential, pathname, signal });
+```
+
+`hostSessionVerifier`, `hostDashboardAudience`, `serverHeldCredential`, `hostFinanceRead` and `hostAuditLog` are host-injected. This package reads no environment variables and defines none.
+
+## Tests
+
+`tests/access/trusted-host.test.ts` (node) and `tests/access/forged-projection.test.tsx` (jsdom, mounted `Dashboard`) use `tests/fixtures/host-verifier.ts`, an HMAC test double with a published non-secret key that models session, membership and revision re-checks. They cover:
+
+- allow and deny per route, and role-name independence
+- every fail-closed row above, with its server-only cause
+- strict expiry under `TZ=UTC` and `TZ=America/Los_Angeles` (offset-less, RFC 2822, date-only, explicit offset, far future), and the lifetime cap
+- untrusted-shape answers: a getter that changes value, a Proxy (read once, throwing trap, huge `length`), an array with an overridden `every` or iterator, an array-like, a sparse array, and a polluted `Object.prototype` (cleaned up in `finally`)
+- capability de-duplication and dropping of unknown fields
+- bounded timeouts, the read deadline, and an outer signal aborted while the verifier is in flight
+- project selection, revocation between reads, and forged detail ids (object-level rule)
+- forged `HostAccess` as an object, JSON, base64, an unsigned token and a smuggled field
+
+The mounted test runs on both the overview and a transaction-detail path. A forged projection naming another tenant renders restricted and invokes no renderer. Matching tenant/project/revision projections render verified fixture data with the returned scope; individual tenant, project and revision mismatches, malformed envelopes and accessors fail closed. Unicode line and bidi revisions never reach allowed audit output. The string-form cases prove the fixture verifier's checks only. See "Trust boundary".
+
+## Owner decisions (decided, owner-delegated 2026-10-12)
+
+The owner delegated these decisions on 2026-10-12. They are recorded with rationale in integration-evals decision 0003 ([PR #39](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/39); `planning/decisions/0003-owner-delegated-decisions-2026-10-12.md` once merged; delegation recorded on [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27#issuecomment-6116953222)), rows D1-D8. They bind the host composition. **They change no code in this package**, and the package defaults stay as documented above.
+
+1. **Verifier and credential (D1, D2).** The verifier is in-process GT-08: the host's `HostSessionVerifier` calls `verifyContextTokenLive` on a `ticketstub.context/2` token. It does not use `POST /api/context/verify` or a direct session-store lookup. The credential is a fresh `/2` token. The host server mints it for each request from the httpOnly session cookie, and it never goes to the browser. **This depends on unmerged [getticketstub.com PR #42](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/42).** getticketstub.com main issues `/1` only, and its `verifyContextTokenLive(token, now)` has no `/2` or audience support.
+2. **Audience (D3).** `ticketstub.finance`, matching `CONTEXT_AUDIENCE`'s default.
+3. **Permission matrix (D4).** `team-dashboard.permissions/1` is accepted as written above. **No separate private-detail grant**: detail routes require `finance.read`. No `finance-admin` or read-only roles are added; role stays informational. PR #42's `member` and `viewer` roles are modelled but not yet issued, so today only captains (read and export) and platform staff hold finance grants.
+4. **Field redaction (D5).** One policy for every grant, **default-deny**. Reads return only the include list: amounts, currency, kind-prefixed ids, statuses, categories and timestamps. Anything not on the include list is withheld until a reviewed revision adds it, for example display names, provider and model names, supplier and SKU names, evidence links and non-prefixed provider ids. Explicitly, they never return customer name, email, recipient or address, card metadata, raw provider payloads, free-text notes, credentials or tokens. `finance.export` widens no field.
+5. **Project selection (D6).** The dashboard URL carries `?project=<kind>:<id>`, which goes into PR #42's server-side derivation. A project the caller does not hold returns the same 404 as a nonexistent one. With no project, staff get the platform context and everyone else gets the no-project state.
+6. **Finance vocabulary and revision (D7).** `ticketstub.finance-scope-adapter/1` and `` `${actorId}@${membershipRevision}` `` are accepted. Finance (Neon) and membership (SQLite) live in different databases, so the host **accepts the documented residual window** instead of a transactional re-check, and records it in its integration evidence. Recommended: re-check the session and `membershipRevision` in SQLite after the Neon read returns, before answering. That narrows the window to the read itself.
+7. **Context lifetime cap (D8).** The getticketstub.com composition sets `maxContextTtlMs: 360000`: the issuer's 5-minute token plus 1 minute. The package default stays 15 minutes.
+
+Still open: Finance's review acknowledgement of the matrix and mapping (D4, D7), and the actual host wiring.
+
+## Not covered
+
+Actual host wiring and `npm run test:host` (still `BLOCKED`), audited commands and actor audit history (TD-07.D/E), field-level redaction, client cache clearing on logout beyond the existing revision-keyed aborts, and live identity evidence.

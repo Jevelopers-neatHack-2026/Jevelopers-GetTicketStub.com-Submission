@@ -1,0 +1,47 @@
+{
+  "repository": "Jevelopers-neatHack-2026/shared-contracts",
+  "source_commit": "b47defaaf630c9d64dcc315c6c4d49fadd194587",
+  "generator_source": {
+    "path": "scripts/generate.mjs",
+    "sha256": "679b20a770f750849509748a2e8e01b31e3335ecf9e27fa8586a0b2a40d146ae",
+    "git_blob": "ba63304f23b5363dc9f599625b247775058d1594",
+    "used_for": "exact Ajv compiler options and uuid/utc-time format definitions only; the broad generator was not executed"
+  },
+  "files": [
+    {
+      "path": "tooling/finance-v2.mjs",
+      "sha256": "59a32db2d6d4c3aef56afa1950c275b73150d58b6f7323339fd935be88cd132a",
+      "git_blob": "773db00c2f10b6bee1e3b9b054dd50aa79696e21",
+      "reason": "exact DecisionPort synthetic finance-context helper import"
+    },
+    {
+      "path": "generated/error-registry.mjs",
+      "sha256": "27a7e51cbd4c9b48a8529c74df3453ad9ad89e82e88afbd6b86e33b44111294a",
+      "git_blob": "ca884cfb11a9a59260aa368b45f67bc5debbef00",
+      "reason": "exact operations helper import"
+    },
+    {
+      "path": "schemas/BudgetReservation/1.0.0.json",
+      "sha256": "f06c6910d1a537a1d357e6555400e39d4cc590e6cfcb0aa26ee19a7b80361238",
+      "git_blob": "32521920883579cee7945bf1e6bcf00fea700854",
+      "reason": "exact schema reference closure for finance-v2 historical/version checks"
+    },
+    {
+      "path": "schemas/BudgetReservation/2.0.0.json",
+      "sha256": "e1099e84c7a94d1fbee6c73d1725265b1fd46b2ba4ae6a1a11ab0970ced89a07",
+      "git_blob": "eff4d715e14be7d9f11745e44aa59b98f9b94670",
+      "reason": "exact schema reference closure for synthetic DecisionPort finance contexts"
+    },
+    {
+      "path": "schemas/ReserveRequest/2.0.0.json",
+      "sha256": "78f949c337d94e979aec56954580bae903376e8614fd4e5ebd6caf55fea046bc",
+      "git_blob": "a0422b9b7c3a9c96861b46ca24a1360e48cbada5",
+      "reason": "exact schema reference closure for synthetic DecisionPort finance contexts"
+    }
+  ],
+  "adapter": {
+    "path": "generated/validators.mjs",
+    "classification": "EI test-only schema compilation adapter; not upstream source bytes",
+    "generated_bundle_omitted": "the broad generated validators file is not vendored; the selected exact raw schemas are compiled under the pinned generator configuration using Ajv 8.17.1"
+  }
+}
