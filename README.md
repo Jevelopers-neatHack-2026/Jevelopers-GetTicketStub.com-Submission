@@ -19,10 +19,17 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 
 ## Status
 
-This candidate includes a typed verification CLI, inert fixtures, scenario oracles,
-benchmark statistics, immutable reports, and offline CI. Integrated product acceptance
-remains incomplete until owner runners, exact composed release pins, ratified datasets
-and policy, and authorized real evidence satisfy the required boundaries.
+This is an incremental runner/SDK verification tool: a typed CLI, inert fixtures, scenario
+oracles (42 cases, 142 obligations), benchmark statistics, immutable reports and offline CI.
+It is proposed for merge as tooling only, pending final review and Linux CI. It is not a release, and it does not establish
+integrated product acceptance, which needs owner runners, exact composed release pins,
+ratified datasets and policy, and authorized real evidence. Producer release and adoption
+holds remain.
+
+Print-invalid component verification is **blocked** and out of this change. The experimental
+print slice (nested Docker plus Bubblewrap execution) did not run in CI and is kept as work
+in progress in draft [PR #40](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/40).
+Nothing here claims print containment or print execution evidence.
 
 - SPN-01 (Neatlogs), SPN-02 (Entire) and SPN-03 (CFO.ai) are owner-accepted as recorded in the
   [master checklist](planning/acceptance-checklist.md) and [evidence index](evidence/README.md).
@@ -45,12 +52,16 @@ and policy, and authorized real evidence satisfy the required boundaries.
   generic editable forecast export. Finance's latest `REQUEST_CHANGES` on
   [issue #20](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20) leaves CFO-R2-001
   (a blank cash issue in that export) unresolved, so treat the generic export as not approved until it is closed.
-- The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
+- The shared owner confirmed (shared-contracts SC31, comment 6115337714) that the same immutable
+  0.9.7 archive `d432ad5` (`771a9f5`) may be used for private offline development. That is not
+  a release or adoption approval. The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
   and 1,641 frozen fixture cases, with separate source and installed SDK receipts.
   [Private consumption instructions](docs/execution-protocol.md#canonical-candidate-conformance)
   describe exact package pins, readonly callers and the remaining owner boundaries.
 - Local tooling and canonical contract checks do not establish complete integrated
   product acceptance. Missing assembly is reported as blocked.
+- Accepting the owner decision memos does not grant any finance, payment or provider authority;
+  see the Decisions section.
 - The broader [draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23)
   remains on maintainer hold; merging accepted evidence into this candidate does not
   approve or release its verification tooling.
@@ -108,9 +119,6 @@ Sandbox/live modes require explicit current authority, credential presence, elig
 caps, permitted operations and cleanup. `--authorize-paid` is an execution confirmation
 within existing owner authority, not a budget grant. No paid calls occur by default.
 Provider modes and source origins are recorded separately.
-
-[Print-invalid component verification](docs/print-component.md) documents the pinned
-negative-only consumer and its required Linux runtime evidence.
 
 [Execution protocol and owner handoff](docs/execution-protocol.md) describes the manifest,
 runner observations, isolation, evidence, benchmarks, reruns, and remaining obligations.
