@@ -8,10 +8,10 @@
 
 | Role | Who | State |
 | --- | --- | --- |
-| Video contributors | **Crystal and Lars**, a team effort | Owner-relayed correction, [issue 22 comment 6118435312](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118435312): Crystal and Lars are each doing a video, and both contributions are preserved. It supersedes the earlier [comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750) reading of Crystal as sole recorder. No GitHub handle is recorded and none is needed to record. Lars is offline; no response is expected and this is not a new blocker. |
+| Video contributors | **Crystal and Lars**, a team effort | Owner-relayed correction, [issue 22 comment 6118435312](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118435312): Crystal and Lars are each doing a video, and both contributions are preserved. It supersedes the earlier [comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750) reading of Crystal as sole recorder. No GitHub handle is recorded and none is needed to record. |
 | Final assembly / editing | Not confirmed | Open. No assignment is invented. |
 | Selected submission video(s) | Not confirmed | Open until the owner chooses. Submitting both videos is not required; the owner selects the submission video(s); the final human receipt is chosen later. |
-| Submitter (human X account) | Not confirmed | The user's reply "likely lejefa/completedotech" is tentative. No role mapping is recorded and no handle is inferred. Whoever submits uses their own X account and name for the entry. |
+| Submitter (human X account) | Not confirmed | No account or role mapping is inferred. Confirm the authorized human submitter, who uses their own X account and name for the entry. |
 | Submission-form leader | Not confirmed | The authorized human team leader verifies their check-in email and submits for the team. Do not infer this role from a video contributor or X account. |
 | Product / deployment owner | Product owner | Confirms the deployed build (section 3). |
 | Source owners | Per sponsor, section 6 | Keep evidence, finance, brand, rights and destination authority. |
@@ -24,6 +24,12 @@ The user-assigned marketing-material supervisor stays accountable for this copy.
 Submission procedure rechecked on 2026-10-12 against the [organizer page](https://neatlogs.com/hackathon) and [submission page](https://neatlogs.com/submission): an authorized teammate attaches the demo video to a public quote-post of the official launch post and includes `@neatlogs`, `@EntireHQ` and `@arithecfo`. The authorized team leader also verifies their check-in email and completes the three-step submission form. **Both steps are required.** Record the posted-entry URL and a redacted final form acknowledgement separately; opening or saving a draft is not submission.
 
 The organizer FAQ confirms the **at most three minutes** limit and coverage of all three tools. Preserve architecture, implementation, runtime, reasoning and result for **each** of Neatlogs, Entire and CFO.ai as a repository acceptance requirement under [MM-03 #9](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9). That more detailed five-facet wording was not reverified on the currently served organizer pages. Do not weaken the local requirement or invent an aspect ratio or file-size limit. The team, project, repository and business-plan fields and their claim, Finance and permission limits below are unchanged. The latest organizer deadline on Discord remains authoritative and requires confirmation by the human submitter.
+
+**Website window (2026-10-12): 19:00–23:55 IST = 09:30–14:25 EDT = 13:30–18:25 UTC.** The organizer FAQ says the form opens automatically at the start and accepts drafts and final submissions until the end; it cannot be pre-filled before that opening. A later organizer announcement on Discord overrides this website window. The human submitter must confirm the actual Discord cutoff; none is certified here.
+
+**Post versus form.** The required public quote-post contains the attached demo video and the three sponsor tags. The form collects the quote-post link, project name, public GitHub repository, location, founder or work details, and a short description of each tool's use. The team name and roster come from check-in. Do not describe all form fields as mandatory post text. The organizer also requires the resulting business plan in the submission; the exact plan locator below is the team's #22 handoff choice, not a newly verified mandatory quote-post field. Keep its Finance limitations and obtain the applicable destination review.
+
+**Private form data.** Leave location, founder/work details, the check-in email and authentication information out of this repository. Do not commit those values or private form screenshots. The empty rows below identify inputs the leader supplies privately. Tool-description copy also needs exact evidence and wording review; no unreviewed draft from an issue comment becomes approved copy.
 
 These are internal planning instructions, not an entry, permission to publish, or a completed submission. No agent recording, upload, post or form submission is authorized by this update.
 
@@ -41,6 +47,11 @@ These are internal planning instructions, not an entry, permission to publish, o
 | Submission form | `https://neatlogs.com/submission` | Known organizer locator; form completion remains pending. |
 | Submission-form leader | | **Unknown.** Confirm the authorized human team leader separately from the X submitter. |
 | Final form acknowledgement | | **Unknown** until the human leader submits. Record a redacted confirmation reference and timestamp, not private form contents. |
+| Location | | **Unknown.** Leader supplies privately in the form; do not store here. |
+| Founder or work details | | **Unknown.** Leader supplies privately in the form; do not store here. |
+| Neatlogs description | | **Unknown.** Exact evidence-backed text and source-owner/wording review required. |
+| Entire description | | **Unknown.** Exact evidence-backed text and source-owner/wording review required. |
+| CFO.ai description | | **Unknown.** Exact evidence-backed text, hypothetical qualifiers and applicable review required. |
 
 ## 3. Known versus must-confirm before the take
 
@@ -50,7 +61,7 @@ These are internal planning instructions, not an entry, permission to publish, o
 | --- | --- | --- |
 | Product source reviewed by the ledger | `getticketstub.com` `eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073` | `CLAIM-PRODUCT-CAPABILITY-001` limitations; source availability only |
 | Newer product source reported | `6daa197` (merged #56 agent actions with the `ask_user` fix, and #61 exact download) | [issue 22 comment 6118271571](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118271571): **not published** at that time and `/api/health` had no commit field. The later public receipt [comment 6118956932](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118956932) records the live deployment is the old build versus the local production `6daa` build, with the deployment still missing the health commit (product #82), so the deployed build stays unproven. Product PR 89 checkout is not needed for the take and PR 90 additional styles is not needed before it; the guide sets no gate on either. Not in the claim ledger. |
-| Style set | Current 5 editions versus 8 new SVG templates, undecided | [issue 22 comment 6118297805](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118297805). The style count may be omitted until the owner confirms the deployed set. |
+| Style set / selected opening | Five editions; landing page plus StudioStart for the intended new-build take; no new SVG templates | [Producer scope decision 6127105138](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6127105138) supersedes the earlier undecided template discussion. This is a scope decision, not proof of deployment. Select the producer-confirmed new-build or legacy fallback in section 6; do not infer permission to speak a style-count claim. |
 | Neatlogs source | integration-evals [`31b4f53b46a584c4b5b4a6a7076f6800c37b00e5`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/31b4f53b46a584c4b5b4a6a7076f6800c37b00e5/evidence/neatlogs/2026-10-11) (PR [#35](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/35)) | `CLAIM-SPN-01-NEATLOGS-001` |
 | Entire source | integration-evals [`a9d68ef0116b1c20f7d70e0161016e21b4bb13b7`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11) (PR [#31](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/31)) | `CLAIM-SPN-02-ENTIRE-001` |
 | CFO.ai source | integration-evals r2 [`6420af494a5276f69c337f47dac3ad4c1854d524`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2), merged `f375fcf20584f5c98dbd4f3b69f884c52994224e` (PR [#24](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/24)) | `CLAIM-SPN-03-CFO-001` |
@@ -59,8 +70,8 @@ These are internal planning instructions, not an entry, permission to publish, o
 
 **Must be confirmed before recording (all open blockers):**
 
-1. The exact deployed product commit and URL, from the product owner (say whether it is `6daa197` or another).
-2. A human producer rehearsal of that exact build. Do not record the final take against an unrehearsed build.
+1. The product owner/producer selects the new-build or legacy fallback recording pack in section 6 and records the deployed URL, health observation and exact commit when reported. An absent health commit stays unidentified; never substitute a repository head for the deployed revision.
+2. A human producer rehearsal and go/no-go for the selected build and pack. The legacy fallback is an explicitly separate producer path, not proof of the new-build controls. An unidentified build cannot satisfy the exact-source acceptance requirement; keep that limitation and final claim/release review open.
 3. The deployed style set, if any style count will be shown or said.
 4. Who does final assembly and editing, which video or videos are selected for submission, and the human submitter, with the submitter's own account and name.
 5. The cleared example input (section 4).
@@ -70,7 +81,7 @@ These are internal planning instructions, not an entry, permission to publish, o
 
 ## 4. Safe example, privacy and redaction
 
-- Use only a public or synthetic example whose use is cleared. The ledger's fictional example is "The paper moon" (`FICTIONAL EVENT / SYNTHETIC EXAMPLE`). At the ledger pin, research uses fixture data for three demo events and refuses other event links as `demo_only`; confirm what the deployed build accepts.
+- Use only a public or synthetic example whose use is cleared. The ledger's fictional example is "The paper moon" (`FICTIONAL EVENT / SYNTHETIC EXAMPLE`). The three demo fixtures and `demo_only` restriction describe the historical ledger pin, not the current live take. The producer's recording pack selects the example, source provenance and actual build mode; confirm those for the selected take. Never relabel a fixture as a live result or a live result as a fixture merely because the old rehearsal used one.
 - Label each shot's mode as in section 6. Show the build's own mode label as the build reports it (for example `SYNTHETIC EXAMPLE`, `SANDBOX` or `DEMO`), `PREVIEW ONLY` for physical variants, and `HYPOTHETICAL FORECAST` for finance.
 - Hide or blur: real email addresses, QR codes, customer names, tokens, magic links, cookies, URLs with secrets, account menus, other tabs, notifications.
 - **Permitted sources.** Prefer the public, sanitized files in the pinned trees. A human may open the owner-authorised, owner-selected CFO.ai plan page in their own account, because the owner chose that segment. Show only the authorised hypothetical plan data. Redact the login screen, credentials, secrets, customer or private financial details, the workspace list, other pages and any workspace content the owner has not approved. If the page cannot be framed that way, show the public screenshot [`cfo-canvas-overview.jpg`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-overview.jpg) and the saved [narrative](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md) instead. Neatlogs dashboard links are workspace-only; use the public files in the pinned tree.
@@ -83,6 +94,12 @@ These are internal planning instructions, not an entry, permission to publish, o
 Show recovery **only if** the owner explicitly selects it. The producer's script ([comment 6118223199](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118223199)) lists an optional demo-planner failure and fallback. If selected, label it `DEMO` and show only what the deployed build does. Do not stage a failure and call it a real recovery, and state no improvement or rate. If not selected, drop the beat and use the time for sponsor shots.
 
 ## 6. Planned timed shot list (a plan, not an executed dry run)
+
+**Producer pack takes precedence over the legacy timing table below.** For the intended new-build take, use the [producer's landing/StudioStart decision](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6127105138): open the landing hero, return to StudioStart, and use the cleared example; keep five editions and exclude the new SVG templates. Obtain the producer's final deployed-build rehearsal and go/no-go on #22 rather than treating a merged PR as deployment evidence.
+
+The producer subsequently supplied a separate [legacy-build fallback](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6128507697), for an old live build whose `/api/health` has no `commit` field. Only use that fallback when the producer selects it for the observed build. Its old agent sheet, desktop tear-off, and Share/Story image replace the new-build proposed-actions/Apply-all/Download beats. Do not combine controls or trace claims from the two packs, invent a deployed commit, or turn the fallback proposal into approval of its spoken copy. The producer owns selection and execution; marketing/source owners still review the final exact claims and media. No agent capture or paid execution is authorized here.
+
+The table below is retained as a **legacy internal allocation and evidence map**, not the final shot order or current operating procedure. Its old title-card/input opening and timings are superseded for a selected producer pack. Sponsor cells remain source-scoped evidence references, not new narration or approval. Measure the actual edited final media against 180 seconds; the legacy 170-second estimate is not a timed dry-run receipt.
 
 Planned length: **170 seconds**, an estimate that is not measured performance and sits 10 seconds under the 180-second limit. The producer's 2:50 script in [comment 6118223199](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118223199) is the starting point; it is data, not an approved instruction. The plan is a phone for the product and a desktop for the sponsors. That is a planned sequence, not a guaranteed continuous multi-device take; if the take is two clips, the editor assembles them and the cut is confirmed then.
 
@@ -147,7 +164,6 @@ Entire: owner acceptance was relayed in chat at PR 31, not an Entire or independ
 CFO.ai: forecasts are hypothetical; owner acceptance was relayed, then an independent Finance `REQUEST_CHANGES` `CFO-R2-001` followed and is unresolved; no Finance, package or actual-expense approval; the cost-intelligence export (issue 3) is pending. The human does the final plan-link entry.
 
 A count of 14 repositories is not asserted; only the ten published snapshots are shown.
-
 ## 7. Beat text and spoken lines
 
 Nothing below is approved for public speaking, captioning or publication. "Approved CTA" means exact docs-CTA text and docs-only target already carry wording and route approval; that is not publication approval. No figures: no financial, latency, savings or performance numbers, no "every step/session" claims.
@@ -161,14 +177,14 @@ Nothing below is approved for public speaking, captioning or publication. "Appro
 | 7 | The published integration-evals evidence at the pinned commit includes Entire graph snapshots from manual GitHub Actions runs on ten repository commits, and one historical checkpoint record. | `CLAIM-RUNBOOK-SPN-02-AVAIL-001`. Manual runs, no agent session or live hook; checkpoint bound to `3358f0d` only; no agent-decision or transcript claim; no total repository count. |
 | 8 | This hypothetical business-plan workbook is the CFO.ai export with four blank-safe opening-cash guards added by the CFO.ai assistant. It is not actual sales, and the generic export has a documented limitation. | `CLAIM-RUNBOOK-SPN-03-AVAIL-001`. Shows no figures; `CFO-R2-001` unresolved; no Finance, package or generic-export waiver; Excel verification is agent-prepared. |
 
-**Existing rows for the close (shot 9).**
+**Historical rows for the legacy close (shot 9); not current submission instructions or an approved final close.**
 
 | Shot | Proposed line | Basis | State |
 | ---: | --- | --- | --- |
 | 9 | "Quote-post the official neatlogs post with team, name, project, public repository and demo link." | `EVENT-SUBMISSION-FIELDS-001` | planned |
 | 9 | "Explore the repository docs." | `CTA-REPOSITORY-DOCS-001` | approved CTA text; docs-only target |
 
-The existing planned `EVENT-SUBMISSION-FIELDS-001` line describes the quote-post only; it is not a complete submission procedure. Its exact ledger wording and pending state are preserved. Follow section 9 for the additional form step. Any replacement public line needs its own exact claim wording and review before use.
+The historical planned `EVENT-SUBMISSION-FIELDS-001` line is not a complete submission procedure and overstates the currently required quote-post fields. Its exact ledger wording and pending state are preserved for traceability, not offered for current speech, captions or submission. Follow section 9 for the current two-step procedure and section 2 for the post/form distinction. Any replacement public line needs its own exact claim wording and review before use.
 
 **Product beats (shots 2 to 5): instruction-only.** No product claim row was added, so these shots carry no spoken line and no caption. The human performs the step and the screen shows only what the producer-confirmed deployed build does:
 
@@ -183,8 +199,8 @@ Do not say or caption: the brand slogan, "Every …" claims about tracing or che
 
 ## 8. Pre-take checklist (human)
 
-- [ ] Product owner confirmed the exact deployed commit and URL; written on the pre-take card.
-- [ ] A human producer rehearsed that exact build.
+- [ ] Product owner/producer selected the build-specific recording pack; URL, health observation and reported commit are on the pre-take card. An absent commit remains unidentified and cannot satisfy exact-source acceptance.
+- [ ] A human producer rehearsed the selected build and supplied its go/no-go; legacy and new-build controls are not mixed.
 - [ ] Style set confirmed, or no style count shown or said.
 - [ ] Cleared example input; email, QR, customer and token data hidden.
 - [ ] Mode labels visible: build mode, sandbox, preview only, hypothetical forecast.
@@ -193,19 +209,19 @@ Do not say or caption: the brand slogan, "Every …" claims about tracing or che
 - [ ] Recovery decision made; if selected, labelled `DEMO`.
 - [ ] Every spoken line is an approved line or has its own claim row for that destination; the four runbook rows are not speech or caption approval. Product beats stay silent until a product row exists.
 - [ ] Final assembly owner, selected submission video(s) and submitter confirmed; submitter uses their own X account and name.
+
 Final runtime, captions, transcript, public links and the form receipt are checked after the take below, not asserted before recording.
 
 ## 9. After the take
 
 Whoever does final assembly reviews each selected export end to end and records its real runtime. A human does any posting, upload or submission. Nothing in this runbook shows that a recording, QA, a teammate dry run or a submission has happened.
 
-
 ### Final media and submission checklist (human, after the take)
 
 - [ ] Review the selected final video, captions and transcript against the exact claims and source revisions. Measure runtime (at most 180 seconds), check rendered-pixel redaction, and obtain applicable rights, brand, accessibility and destination decisions before public use. The internal rehearsal does not substitute for this media.
 - [ ] Recheck the official launch post via the organizer submission page and the authoritative Discord cutoff. Confirm the human X submitter and the submission-form leader separately; no tentative handle mapping becomes an assignment.
-- [ ] The authorized teammate creates a public quote-post of that official launch post, includes `@neatlogs`, `@EntireHQ` and `@arithecfo`, and must attach the demo video before posting. Include the required team, name, project, public repository, demo and business-plan information; retain the hypothetical-plan limitation. Verify the published links and record the posted-entry URL.
-- [ ] The authorized team leader verifies their check-in email at [the submission form](https://neatlogs.com/submission), enters the quote-post link and required project/team/tool details, reviews the entry and selects `Submit project`. The leader's submission covers the team. `Continue` saves a draft; it does not complete the entry.
+- [ ] The authorized teammate creates a public quote-post of that official launch post, includes `@neatlogs`, `@EntireHQ` and `@arithecfo`, and must attach the demo video before posting. These are the organizer's required post contents. Include additional reviewed team context only as appropriate for the destination, not as invented mandatory form fields in the post. Verify the published attachment and links and record the posted-entry URL.
+- [ ] The authorized team leader verifies their check-in email at [the submission form](https://neatlogs.com/submission), enters the quote-post link, project name, public GitHub repository, location, founder or work details, and short descriptions of Neatlogs, Entire and CFO.ai use. Supply private fields only in the form; the team name and roster come from check-in. Retain the required business-plan handoff and hypothetical-plan limitations. Review the entry and select `Submit project`. The leader's submission covers the team. `Continue` saves a draft; it does not complete the entry.
 - [ ] Record the posted-entry URL and a separate redacted final form acknowledgement reference and timestamp in [issue #22](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22). **Both receipts are required** for the submission-completion check; neither a post alone nor a form alone is a completed entry. Missing or unreviewed evidence keeps the submission gate blocked; these receipts alone do not clear other acceptance, media or permission requirements.
 
 Do not commit the verification email, authentication links, private form fields, workspace information or unredacted screenshots. Record only the minimum sanitized confirmation reference. This checklist performs no action and grants no publication or submission permission. Agent capture remains `CANCELLED_USER_REQUEST_NO_RESTART`.

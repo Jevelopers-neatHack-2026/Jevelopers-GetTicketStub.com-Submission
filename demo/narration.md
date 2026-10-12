@@ -4,6 +4,14 @@
 
 Use the `narration` field in [`rehearsal-scenes.json`](rehearsal-scenes.json) as the recording source. It matches each scene's `captionText` exactly. The current render is silent and local; no TTS or paid provider is used. Keep the captions, on-screen status, and accessible transcript synchronized after any copy change.
 
+## Current submission procedure (not narration)
+
+The script table below is the historical silent synthetic rehearsal, not the current submission procedure. In particular, `scene-09-submission-gate` retains its original exact caption for reproducibility; its post-only wording must not be reused as final instructions or as an approved public close. This note changes no scene narration, captions, transcript or rendered media. New final spoken copy needs its own exact claim and destination review.
+
+Rechecked 2026-10-12 against the [organizer FAQ](https://neatlogs.com/hackathon) and the human procedure in [the recording runbook](human-recording-runbook.md#9-after-the-take): **both steps are required**. An authorized human makes a public quote-post of the official launch post and must attach the demo video with `@neatlogs`, `@EntireHQ` and `@arithecfo`. The authorized team leader separately completes [the submission form](https://neatlogs.com/submission), reviews the entry and selects `Submit project`; `Continue` saves a draft, not a completed entry. Record the posted-entry URL and a separate redacted final form acknowledgement with a timestamp after the take. Those receipts do not replace media, rights or claim review; no agent recording, upload, post or submission is authorized.
+
+The website window on 2026-10-12 is 19:00–23:55 IST / 09:30–14:25 EDT / 13:30–18:25 UTC; the form cannot be pre-filled before opening. A later organizer Discord cutoff overrides the website window and must be confirmed by the human submitter. Leave private form values out of the repository; the runbook distinguishes public post contents, private leader fields and separately reviewed tool descriptions.
+
 ## Script
 
 | Scene | Time | Narration / exact caption |
