@@ -19,7 +19,7 @@ export const VENDORED_FILES = [
   "src/observability/private/neatlogs-config.js",
   "src/observability/private/neatlogs-live.js",
   "src/observability/private/neatlogs-otlp.js",
-  "src/observability/private/neatlogs-outbox.js",
+  "src/observability/private/neatlogs-delivery-queue.js",
   "src/observability/private/neatlogs-sdk-mapper.js",
 ];
 

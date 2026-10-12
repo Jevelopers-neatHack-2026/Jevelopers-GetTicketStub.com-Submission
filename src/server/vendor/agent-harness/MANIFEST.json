@@ -1,13 +1,13 @@
 {
   "repository": "https://github.com/Jevelopers-neatHack-2026/agent-harness",
-  "commit": "0e81df17cff8a5a0d917e9240e784f2f382be79c",
+  "commit": "4dc24f5ea66333c8e1ed4ff7822552f9af88b807",
   "files": {
-    "src/integrations/ticketstub/index.js": "ed50269137c9f4d7afc17e4bc02ab3de1e02067c97a0f763a01396c048ce0b07",
+    "src/integrations/ticketstub/index.js": "774f452ee856e96c88408f5d258dedcf79518e64717c636422642c174965db2f",
     "src/integrations/ticketstub/index.d.ts": "8bccd82c0af444c8f09cd9f338b523d3f1ba93c471f1d30bbc2cce19b7c4867e",
     "src/observability/private/neatlogs-config.js": "be4c04f58520549381a46e242f6137a3e384a0ce6cb9891e1cee08be46cfe370",
     "src/observability/private/neatlogs-live.js": "c816ebc500ed30274f7647bd753c792a010961a89f5c9ec27d7e8f1b375d3a2b",
     "src/observability/private/neatlogs-otlp.js": "a565f300990b3a99d475e4b27ce3ad98a350b9c3901c2b2191fec595cc243dab",
-    "src/observability/private/neatlogs-outbox.js": "89dce46538f36b2eb9389f64ef30620cd2d355548d11887075386e48b338e4f5",
-    "src/observability/private/neatlogs-sdk-mapper.js": "0c43f069cae1b7148afdff7297f37f6be149c9f333bb18391f4f31b901543964"
+    "src/observability/private/neatlogs-delivery-queue.js": "dd23ac81425c53e69f7dfba39fd69c8403fd2f744747499c6a953dada2b83f01",
+    "src/observability/private/neatlogs-sdk-mapper.js": "e0ea5b335f9c0f553c53b0cf67830af9b93f7ca653d03e9ee0b2b291f3a77710"
   }
 }
