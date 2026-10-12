@@ -38,7 +38,7 @@ export function createPrivateCacheRevalidation(options) {
           try { await port.beforeDispatch(scope, request, prepared.token, context); }
           catch (error) { dispatchFailure = error; throw error; }
         },
-      }, { totalMilliseconds: timeoutMs }, () => withConditionalFetch(
+      }, { totalMilliseconds: timeoutMs, deadlineAtMonotonic: context.deadlineAtMonotonic }, () => withConditionalFetch(
         config.safeFetcher, prepared.sourceUrl, prepared.validator,
         () => SafeFetcher.prototype.fetch.call(config.safeFetcher, prepared.sourceUrl, { signal: context.signal }),
         prepared.token,

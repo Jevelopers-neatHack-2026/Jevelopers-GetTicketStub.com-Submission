@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
+import { monotonicNow } from '../../security/internal/monotonic-clock.mjs';
 
 const contexts = new WeakSet();
 const errors = new WeakSet();
@@ -70,7 +71,7 @@ export function createRevalidationContext({ signal, timeoutMs, request, readReta
     try { if (types.isProxy(signal)) throw new Error(); aborted.call(signal); }
     catch { revalidationFail('REVALIDATION_INVALID'); }
   }
-  const started = process.hrtime.bigint();
+  const deadlineAtMonotonic = monotonicNow() + timeoutMs;
   const controller = new AbortController();
   let stopped = null;
   let closed = false;
@@ -81,10 +82,10 @@ export function createRevalidationContext({ signal, timeoutMs, request, readReta
   const externalAbort = () => stop('REVALIDATION_CANCELLED');
   signal?.addEventListener('abort', externalAbort, { once: true });
   if (signal !== undefined && aborted.call(signal)) externalAbort();
-  const timer = setTimeout(() => stop('REVALIDATION_DEADLINE'), timeoutMs);
+  const timer = setTimeout(() => stop('REVALIDATION_DEADLINE'), Math.max(1, Math.ceil(deadlineAtMonotonic - monotonicNow())));
   function check() {
     if (signal !== undefined && aborted.call(signal)) stop('REVALIDATION_CANCELLED');
-    if (process.hrtime.bigint() - started >= BigInt(timeoutMs) * 1_000_000n) stop('REVALIDATION_DEADLINE');
+    if (monotonicNow() >= deadlineAtMonotonic) stop('REVALIDATION_DEADLINE');
     if (stopped) revalidationFail(stopped);
     if (closed) revalidationFail('REVALIDATION_DENIED');
   }
@@ -103,6 +104,7 @@ export function createRevalidationContext({ signal, timeoutMs, request, readReta
   }
   const context = Object.freeze({
     signal: controller.signal,
+    deadlineAtMonotonic,
     check,
     wait,
     async retain(binding, phase) {

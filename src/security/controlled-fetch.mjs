@@ -6,12 +6,12 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { createHash } from "node:crypto";
-import { performance } from "node:perf_hooks";
 import { isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "./url-policy.mjs";
 import { resolveSystemHost } from "./dns-resolver.mjs";
 import { RetrievalError } from "./errors.mjs";
 import { getTestSeam } from "./internal/test-seams.mjs";
 import { recordSafeFetchProvenance, safeFetchLifecycleFor } from "./internal/fetch-lifecycle.mjs";
+import { monotonicNow } from "./internal/monotonic-clock.mjs";
 import {
   conditionalFetchFor, conditionalRequestHeaders, conditionalValidatorFromResponse, recordConditionalResponse,
 } from "./internal/conditional-fetch.mjs";
@@ -64,7 +64,7 @@ function removeSignalListener(signal, listener) {
 function throwIfStopped(context) {
   if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
   if (signalIsAborted(context.signal)) throw new RetrievalError("CANCELED");
-  if (performance.now() >= context.deadline) throw new RetrievalError("DEADLINE_EXCEEDED");
+  if (monotonicNow() >= context.deadline) throw new RetrievalError("DEADLINE_EXCEEDED");
 }
 
 function validateFetchOptions(options) {
@@ -121,7 +121,7 @@ class FetchSemaphore {
       entry.timer = setTimeout(() => {
         remove();
         reject(new RetrievalError("DEADLINE_EXCEEDED"));
-      }, Math.max(1, context.deadline - performance.now()));
+      }, Math.max(1, Math.ceil(context.deadline - monotonicNow())));
       addSignalListener(context.signal, entry.abort);
       this.#queue.push(entry);
       try {
@@ -151,23 +151,38 @@ class FetchSemaphore {
 }
 
 class PinnedAgentBase {
-  constructor({ address, port, hostname, secure, signal, onDial, isAllowedPeer, ca }) {
+  constructor({ address, port, hostname, secure, context, onDial, isAllowedPeer, ca }) {
     this.address = address;
     this.port = port;
     this.hostname = hostname;
     this.secure = secure;
-    this.signal = signal;
+    this.context = context;
+    this.signal = context.signal;
     this.onDial = onDial;
     this.isAllowedPeer = isAllowedPeer;
     this.ca = ca;
   }
 
   createConnection(_options, callback) {
-    const raw = net.connect({ host: this.address, port: this.port, family: net.isIP(this.address) });
+    let raw;
+    try {
+      const options = { host: this.address, port: this.port, family: net.isIP(this.address) };
+      // Node's request/agent path can run after an async guard, or after the
+      // clock expires while timer delivery is blocked. Check at native entry.
+      throwIfStopped(this.context);
+      raw = net.connect(options);
+    } catch (error) {
+      callback(error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE"));
+      return undefined;
+    }
     let finished = false;
     let timer;
     const finish = (error, socket) => {
       if (finished) return;
+      if (!error) {
+        try { throwIfStopped(this.context); }
+        catch (stopped) { error = stopped; }
+      }
       finished = true;
       clearTimeout(timer);
       removeSignalListener(this.signal, onAbort);
@@ -180,11 +195,14 @@ class PinnedAgentBase {
     };
     const onAbort = () => finish(new RetrievalError("CANCELED"));
     const checkPeer = (socket, record = false) => {
+      throwIfStopped(this.context);
       const peer = socket.remoteAddress;
       if (!peer || !this.isAllowedPeer(peer)) throw new RetrievalError("POLICY_DENIED");
       if (record) this.onDial?.(Object.freeze({ peer, address: this.address, port: this.port }));
+      throwIfStopped(this.context);
     };
-    timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), DEFAULT_RUN_LIMITS.connectMilliseconds);
+    timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")),
+      Math.min(DEFAULT_RUN_LIMITS.connectMilliseconds, Math.max(1, Math.ceil(this.context.deadline - monotonicNow()))));
     addSignalListener(this.signal, onAbort);
     if (signalIsAborted(this.signal)) return onAbort();
     raw.once("error", () => finish(new RetrievalError("TRANSPORT_FAILURE")));
@@ -192,7 +210,7 @@ class PinnedAgentBase {
       try {
         checkPeer(raw, true);
         if (!this.secure) return finish(null, raw);
-        const tlsSocket = tls.connect({
+        const tlsOptions = {
           socket: raw,
           servername: net.isIP(this.hostname) === 0 ? this.hostname : undefined,
           rejectUnauthorized: true,
@@ -200,7 +218,9 @@ class PinnedAgentBase {
           ALPNProtocols: ["http/1.1"],
           minVersion: "TLSv1.2",
           checkServerIdentity: (_serverName, certificate) => tls.checkServerIdentity(this.hostname, certificate),
-        });
+        };
+        throwIfStopped(this.context);
+        const tlsSocket = tls.connect(tlsOptions);
         tlsSocket.once("error", () => finish(new RetrievalError("TRANSPORT_FAILURE")));
         tlsSocket.once("secureConnect", () => {
           try {
@@ -235,11 +255,12 @@ class PinnedHttpsAgent extends https.Agent {
   createConnection(options, callback) { return this.connection.createConnection(options, callback); }
 }
 
-function createContext(signal, totalMilliseconds = DEFAULT_RUN_LIMITS.totalMilliseconds) {
+function createContext(signal, totalMilliseconds = DEFAULT_RUN_LIMITS.totalMilliseconds, deadlineAtMonotonic) {
   const controller = new AbortController();
   const context = {
     signal: controller.signal,
-    deadline: performance.now() + totalMilliseconds,
+    // A private original deadline can only shorten the ordinary fetch budget.
+    deadline: Math.min(monotonicNow() + totalMilliseconds, deadlineAtMonotonic ?? Infinity),
     deadlineReached: false,
   };
   const onAbort = () => controller.abort();
@@ -248,7 +269,7 @@ function createContext(signal, totalMilliseconds = DEFAULT_RUN_LIMITS.totalMilli
   const timer = setTimeout(() => {
     context.deadlineReached = true;
     controller.abort();
-  }, totalMilliseconds);
+  }, Math.max(1, Math.ceil(context.deadline - monotonicNow())));
   return {
     context,
     close() {
@@ -266,16 +287,17 @@ function makeHostHeader(hostname, port, protocol) {
 }
 
 function requestOnce(validated, address, context, seam, accept = ACCEPT, conditional = null) {
+  throwIfStopped(context);
   const { url, hostname, port } = validated;
   const secure = url.protocol === "https:";
   const agent = secure
     ? new PinnedHttpsAgent({
-      address, port, hostname, signal: context.signal, onDial: seam?.onDial,
+      address, port, hostname, context, onDial: seam?.onDial,
       isAllowedPeer: (peer) => sameAddress(peer, address),
       ca: seam?.testTlsCa,
     })
     : new PinnedHttpAgent({
-      address, port, hostname, signal: context.signal, onDial: seam?.onDial,
+      address, port, hostname, context, onDial: seam?.onDial,
       isAllowedPeer: (peer) => sameAddress(peer, address),
     });
   const requester = secure ? https.request : http.request;
@@ -302,16 +324,23 @@ function requestOnce(validated, address, context, seam, accept = ACCEPT, conditi
     let request;
     const onAbort = () => request.destroy(new RetrievalError(context.deadlineReached ? "DEADLINE_EXCEEDED" : "CANCELED"));
     const cleanup = () => removeSignalListener(context.signal, onAbort);
-    request = requester(options, (response) => resolve({ response, agent, request, cleanup }));
-    addSignalListener(context.signal, onAbort);
-    if (signalIsAborted(context.signal)) onAbort();
-    request.once("error", (error) => {
+    const fail = (error) => {
       cleanup();
       agent.destroy();
       if (error instanceof RetrievalError) reject(error);
       else reject(new RetrievalError("TRANSPORT_FAILURE"));
-    });
-    request.end();
+    };
+    try {
+      throwIfStopped(context);
+      request = requester(options, (response) => resolve({ response, agent, request, cleanup }));
+      request.once("error", fail);
+      addSignalListener(context.signal, onAbort);
+      throwIfStopped(context);
+      request.end();
+    } catch (error) {
+      request?.destroy();
+      fail(error);
+    }
   });
 }
 
@@ -616,7 +645,8 @@ export class SafeFetcher {
       const lifecycle = safeFetchLifecycleFor(this);
       const conditional = mode === "document" ? conditionalFetchFor(this) : null;
       const createdContext = createContext(externalSignal,
-        lifecycle?.options.totalMilliseconds ?? DEFAULT_RUN_LIMITS.totalMilliseconds);
+        lifecycle?.options.totalMilliseconds ?? DEFAULT_RUN_LIMITS.totalMilliseconds,
+        lifecycle?.options.deadlineAtMonotonic);
       context = createdContext.context;
       closeContext = createdContext.close;
       release = await this.#semaphore.acquire(context);
