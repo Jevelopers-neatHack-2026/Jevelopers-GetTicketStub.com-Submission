@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import {
 	mkdtemp,
 	realpath,
@@ -519,10 +520,16 @@ test("cleanup safely removes an actually interrupted subprocess namespace", asyn
 		env: fixture.environment,
 		stdio: ["pipe", "ignore", "ignore"],
 	});
+	// Subscribe before any await: the child may exit (for example on a dirty
+	// checkout) before the claim poll below finishes, and a late listener
+	// would then never observe "close".
+	const closed = once(child, "close");
 	child.stdin.end(JSON.stringify(fixture.request));
 	const deadline = Date.now() + 10000;
 	let claimed = false;
 	while (Date.now() < deadline) {
+		// Sampled before polling so an exited child still gets one final poll.
+		const exited = child.exitCode !== null || child.signalCode !== null;
 		const names = await readdir(fixture.owned).catch((error) => {
 			if (
 				error instanceof Error &&
@@ -549,10 +556,11 @@ test("cleanup safely removes an actually interrupted subprocess namespace", asyn
 				if (!(error instanceof SyntaxError)) throw error;
 			}
 		}
+		if (exited) break;
 		await new Promise<void>((resolve) => setImmediate(resolve));
 	}
 	child.kill("SIGKILL");
-	await new Promise<void>((resolve) => child.once("close", () => resolve()));
+	await closed;
 	assert.ok(claimed);
 	const cleanup = await fixture.invoke("cleanup");
 	assert.equal(cleanup.code, 0, cleanup.stderr);

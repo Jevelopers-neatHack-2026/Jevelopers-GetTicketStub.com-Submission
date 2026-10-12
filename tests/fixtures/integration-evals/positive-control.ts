@@ -5,6 +5,7 @@ import {
 	sourceReceipt,
 	claimRoot,
 	digest,
+	applyRendererEnvironment,
 } from "../../../scripts/integration-evals/protocol.js";
 import { safeLogo } from "../composition/corpus.js";
 import { z } from "zod";
@@ -14,10 +15,7 @@ await sourceReceipt(request);
 const config = configurationSchema.parse(
 	JSON.parse((await readBounded(request.configuration_artifact)).toString()),
 );
-process.env["PLAYWRIGHT_BROWSERS_PATH"] = config.browser_root;
-process.env["TZ"] = "UTC";
-process.env["LANG"] = "C.UTF-8";
-process.env["LC_ALL"] = "C.UTF-8";
+await applyRendererEnvironment(config);
 const { integrationHost } = await import("./host.js");
 const { root } = await claimRoot(request);
 await using host = await integrationHost({
