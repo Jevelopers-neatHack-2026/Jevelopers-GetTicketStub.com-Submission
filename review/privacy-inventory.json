@@ -5,7 +5,7 @@
     "Product and frontend",
     "Finance and reliability"
   ],
-  "auditedSourceRevision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+  "auditedSourceRevision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
   "executableScriptSha256": [
     "2b01e1d0f5ba18ee57a1420149ce8f8b94e776195f29bfc76db93c245ead4320",
     "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
@@ -26,7 +26,7 @@
   "reviewStatus": "PENDING",
   "styleSha256": [
     "a4a477526673b7cbb466775e39698516d7867f308f9c94fd1f243e5ffe190c75",
-    "ceb57f014bfdc35d79d131e501cae11e4bb78faeba29baf12125966e392efe3c"
+    "d54e4f8996037bb3a998695bc1e322b0be4580a97e925df73c698814fc784249"
   ],
   "markupTagsSha256": "90a084ab64d12fee88b5eeac7cb5dd00598fbac5d8964cd54cf8d76586339288",
   "scriptTagsSha256": [
@@ -39,12 +39,12 @@
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ],
-  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged. R1 current author audit resolves the complete page at auditedSourceRevision from local Git objects; historicalSourceReferences preserves both the valid PR #29 header audit revision and the earlier mismatched base reference without upgrading owner approval. CSS-only opaque maker copy surface audited against immutable source b5205f0c749ec81e1d75e3da75cc236dd79f692e; external resource and data boundaries unchanged.",
-  "pageSha256": "2f0bab2b5638c21c5bba27a7a85b0f3c536259ed7b3b366757fff2a5bbf17de6",
+  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged. R1 current author audit resolves the complete page at auditedSourceRevision from local Git objects; historicalSourceReferences preserves both the valid PR #29 header audit revision and the earlier mismatched base reference without upgrading owner approval. CSS-only opaque maker copy surface audited against immutable source b5205f0c749ec81e1d75e3da75cc236dd79f692e; external resource and data boundaries unchanged. Specific maker reduced-motion overrides audited against 3c510591150e3bb44eb1fa44e9993ae32677ad3d with source/data boundaries unchanged.",
+  "pageSha256": "8c8252a8740ff2e9285e82e25868a0cf3bd8a9efdaca554ba45cacb950d3a6c7",
   "historicalSourceReferences": [
     {
       "revision": "096fe76f8f559ac504693168e3cd6068337d0bb3",
-      "relationship": "PR #29 header author audit; this immutable revision has the same page bytes as the current audit, without granting owner privacy approval."
+      "relationship": "PR #29 header author audit valid for its historical page; maker CSS has since changed, and this reference grants no current privacy approval."
     },
     {
       "revision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
@@ -53,6 +53,10 @@
     {
       "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
       "relationship": "Previous immutable author audit before the CSS-only maker reading surface; page/CSS now differ, source history retained without granting privacy approval."
+    },
+    {
+      "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+      "relationship": "Earlier maker surface audit before specific reduced-motion overrides; page/CSS differ from current, privacy approval remains pending."
     }
   ]
 }
