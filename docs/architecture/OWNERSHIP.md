@@ -1,6 +1,6 @@
 # brand-kit responsibility and current source boundary
 
-**Repository role:** First-party identity sources, working assets, token tooling and usage guidance. **Accountable role:** Product and frontend. **Observed source:** main at `a664cc99884b2679f2c6ea15c6c3e8b98b768755`, audited 2026-10-12.
+**Repository role:** First-party identity sources, working assets, token tooling and usage guidance. **Accountable role:** Product and frontend. **Latest observed source:** current main at `e254df5444f0bfedd5526b0e148b0cdf36cbd31f` after PR #28’s one-paragraph source-index correction; initial documentation review used main `a664cc99884b2679f2c6ea15c6c3e8b98b768755` on 2026-10-12.
 **Delivery state:** Source, generated assets and local validation are implemented. Identity ratification and versioned distribution remain pending; the production export allowlist is empty.
 
 **Repository visibility record:** Public on GitHub. The [preserved 2026-10-12 record](https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/a664cc99884b2679f2c6ea15c6c3e8b98b768755/docs/architecture/OWNERSHIP.md) states that `gh repo view Jevelopers-neatHack-2026/brand-kit --json visibility,isPrivate` returned `visibility: PUBLIC`, `isPrivate: false` at about 04:13 UTC. The earlier verified private status from 2026-10-10 is superseded history. No repository settings were changed.
