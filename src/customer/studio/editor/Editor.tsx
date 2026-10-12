@@ -845,7 +845,7 @@ function EditorLoaded({ id }: { id: string }) {
           className={styles.stage}
           data-pressing={pressing || undefined}
           style={stageVars}
-          aria-label={`Your stub, ${editionLabel(edition)} style. Swipe or press the left and right arrow keys for another style, hold for all styles, press F to flip it.`}
+          aria-label={`Your stub, ${editionLabel(edition)} style. Swipe or press the left and right arrow keys for another style, hold or use the All styles button for all of them, press F to flip it.`}
           {...stageHandlers}
         >
           {deck("lg")}
@@ -862,6 +862,9 @@ function EditorLoaded({ id }: { id: string }) {
             {editionLabel(edition)}
             <span> · swipe for more</span>
           </p>
+          <button type="button" className={styles.allStyles} aria-haspopup="dialog" onClick={() => openSheet("styles")}>
+            All styles
+          </button>
         </div>
         {hiddenRow}
 

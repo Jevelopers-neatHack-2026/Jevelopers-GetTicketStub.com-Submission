@@ -1,0 +1,284 @@
+{
+  "suite": "degraded",
+  "mode": "fixture",
+  "command": "npm run verify:product -- --suite degraded --mode fixture --evidence-dir <scratch>",
+  "exitCode": 0,
+  "counts": {
+    "passed": 73,
+    "failed": 0,
+    "skipped": 0
+  },
+  "startedAt": "2026-10-12T00:47:35.578Z",
+  "finishedAt": "2026-10-12T00:47:36.705Z",
+  "gitSha": "5b5c8f29f186542cb4b8aceaa020761b30603f0a",
+  "gitDirty": false,
+  "node": "v22.23.3",
+  "blockedNetwork": [],
+  "steps": [
+    {
+      "name": "fixture mode refuses outbound network",
+      "ok": true
+    },
+    {
+      "name": "health is 200 and reports storage unavailable",
+      "ok": true
+    },
+    {
+      "name": "health reports persistence configured (both paths set)",
+      "ok": true
+    },
+    {
+      "name": "POST /api/auth/link -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/auth/confirm -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/auth/confirm?token=x -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/wall/sync -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/wall/public -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "PUT /api/wall/public -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/u/abcdefghijkl -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/share -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/share/abcdefghijkl -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/share/revoke -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/orders -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/orders -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/organizer/events -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/claim/abcdefghijkl -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/claim/abcdefghijkl -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/gift -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/gift/abcdefghijkl -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "DELETE /api/gift/abcdefghijkl -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "POST /api/account/email -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "DELETE /api/account -> 503 storage_unavailable",
+      "ok": true
+    },
+    {
+      "name": "/api/context still answers an anonymous caller",
+      "ok": true
+    },
+    {
+      "name": "/api/auth/me answers 200, signed out, storage unavailable",
+      "ok": true
+    },
+    {
+      "name": "a stale session cookie changes nothing",
+      "ok": true
+    },
+    {
+      "name": "/api/art fails open to procedural art with no quota",
+      "ok": true
+    },
+    {
+      "name": "/api/stub-image/brand needs no storage",
+      "ok": true
+    },
+    {
+      "name": "page / -> 200",
+      "ok": true
+    },
+    {
+      "name": "page /make -> 200",
+      "ok": true
+    },
+    {
+      "name": "page /wall -> 200",
+      "ok": true
+    },
+    {
+      "name": "page /studio/x -> 200",
+      "ok": true
+    },
+    {
+      "name": "page /checkout/x -> 200",
+      "ok": true
+    },
+    {
+      "name": "page /account -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page / -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /account -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /admin -> 404",
+      "ok": true
+    },
+    {
+      "name": "declared page /cart -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /cart/unclaimed/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /checkout/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /claim/g/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /claim/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /friends/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /gift/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /help -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /make -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /map -> 308",
+      "ok": true
+    },
+    {
+      "name": "declared page /new -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /organizer -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /organizer/claim -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /parts -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /privacy -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /s/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /search -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /signin/confirm -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /studio/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /terms -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /u/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /wall -> 200",
+      "ok": true
+    },
+    {
+      "name": "declared page /wallet/verify-sample -> 200",
+      "ok": true
+    },
+    {
+      "name": "/signin/confirm renders the expired-link page",
+      "ok": true
+    },
+    {
+      "name": "the server logged exactly one storage line, saying unavailable",
+      "ok": true
+    },
+    {
+      "name": "the log line leaks no path",
+      "ok": true
+    },
+    {
+      "name": "scripts/smoke-production.mjs",
+      "command": "node scripts/smoke-production.mjs",
+      "exitCode": 0,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "ok": true
+    },
+    {
+      "name": "no outbound network attempted",
+      "ok": true
+    }
+  ]
+}

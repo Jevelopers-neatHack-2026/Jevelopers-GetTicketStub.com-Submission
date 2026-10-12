@@ -1,17 +1,26 @@
 import { readFileSync, statSync } from 'node:fs';
 import { inspect } from 'node:util';
 
-// Only Neatlogs-documented names are recognized. NEATLOGS_API_KEY is the SDK
-// project ingest key (OTLP `x-api-key`), NEATLOGS_TOKEN is a service-account
-// Public API token, NEATLOGS_PROJECT_ID selects the bound project, and
-// NEATLOGS_ENDPOINT / NEATLOGS_HOST are the regional ingest and app origins.
+// Recognized names. NEATLOGS_INGEST_KEY is the project ingest key (OTLP
+// `x-api-key`; it can only write), NEATLOGS_READ_TOKEN is a read-only
+// service-account Public API token, NEATLOGS_PROJECT_ID selects the bound
+// project, and NEATLOGS_ENDPOINT / NEATLOGS_HOST are the regional ingest and
+// app origins. NEATLOGS_API_KEY and NEATLOGS_TOKEN (the names in the Neatlogs
+// docs) are still read as fallbacks while hosts rename their settings; the
+// new name wins when both are set.
 export const NEATLOGS_CONFIG_NAMES = Object.freeze([
-  'NEATLOGS_API_KEY',
-  'NEATLOGS_TOKEN',
+  'NEATLOGS_INGEST_KEY',
+  'NEATLOGS_READ_TOKEN',
   'NEATLOGS_PROJECT_ID',
   'NEATLOGS_ENDPOINT',
-  'NEATLOGS_HOST'
+  'NEATLOGS_HOST',
+  'NEATLOGS_API_KEY',
+  'NEATLOGS_TOKEN'
 ]);
+export const NEATLOGS_LEGACY_NAMES = Object.freeze({
+  NEATLOGS_INGEST_KEY: 'NEATLOGS_API_KEY',
+  NEATLOGS_READ_TOKEN: 'NEATLOGS_TOKEN'
+});
 const NAME_SET = new Set(NEATLOGS_CONFIG_NAMES);
 const REGIONS = Object.freeze({
   us: Object.freeze({ ingest: 'https://ingest.neatlogs.com', app: 'https://app.neatlogs.com' }),
@@ -75,6 +84,11 @@ function pick(name, env, file) {
   return fromFile === '' ? null : fromFile;
 }
 
+/** The new name's value, or the legacy name's when only that is set. */
+function pickRenamed(name, env, file) {
+  return pick(name, env, file) ?? pick(NEATLOGS_LEGACY_NAMES[name], env, file);
+}
+
 function origin(name, value) {
   let url;
   try {
@@ -118,8 +132,8 @@ function credential(name, value) {
  */
 export function loadNeatlogsConfig({ env = {}, envFile = null } = {}) {
   const file = envFile === null ? null : readNeatlogsEnvFile(envFile);
-  const apiKey = credential('NEATLOGS_API_KEY', pick('NEATLOGS_API_KEY', env, file));
-  const token = credential('NEATLOGS_TOKEN', pick('NEATLOGS_TOKEN', env, file));
+  const apiKey = credential('NEATLOGS_INGEST_KEY', pickRenamed('NEATLOGS_INGEST_KEY', env, file));
+  const token = credential('NEATLOGS_READ_TOKEN', pickRenamed('NEATLOGS_READ_TOKEN', env, file));
   const projectId = pick('NEATLOGS_PROJECT_ID', env, file);
   if (projectId !== null && !UUID.test(projectId)) {
     throw new NeatlogsConfigError('INVALID_PROJECT_ID', 'NEATLOGS_PROJECT_ID');
@@ -141,11 +155,11 @@ export function loadNeatlogsConfig({ env = {}, envFile = null } = {}) {
   const config = {
     summary,
     ingestKey() {
-      if (apiKey === null) throw new NeatlogsConfigError('MISSING_SETTING', 'NEATLOGS_API_KEY');
+      if (apiKey === null) throw new NeatlogsConfigError('MISSING_SETTING', 'NEATLOGS_INGEST_KEY');
       return apiKey;
     },
     readbackToken() {
-      if (token === null) throw new NeatlogsConfigError('MISSING_SETTING', 'NEATLOGS_TOKEN');
+      if (token === null) throw new NeatlogsConfigError('MISSING_SETTING', 'NEATLOGS_READ_TOKEN');
       if (projectId === null) throw new NeatlogsConfigError('MISSING_SETTING', 'NEATLOGS_PROJECT_ID');
       return token;
     },

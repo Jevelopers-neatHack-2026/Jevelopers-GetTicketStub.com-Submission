@@ -3,6 +3,7 @@
 // becomes an ApiError the caller can ignore, so the signed-out, local-only app keeps working.
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
+import type { ApprovalDrift, ApprovalSummary, Composition } from "@/customer/studio/approval/printed";
 import { SAVING_OFF_CODE, markSavingOff } from "./saving";
 
 export interface Account {
@@ -66,6 +67,15 @@ export interface GiftInfo {
   message: string;
   openedAt: number | null;
 }
+/** An artwork approval as the owner sees it (GT-06B). `approval.binding` holds hashes, never content. */
+export interface ApprovalInfo {
+  approval: { id: string; purpose: "print.compose" | "artifact.download"; issuedAt: string; expiresAt: string; binding: { versionId: string; composition: Composition } };
+  status: "active" | "revoked" | "expired" | "stale";
+  revokedAt: string | null;
+  /** Owner-only extras for the review sheet (GT-06B.1). */
+  summary: ApprovalSummary | null;
+  drift: ApprovalDrift | null;
+}
 export interface OrganizerEventReply {
   eventId: string;
   claims: { token: string; name: string; seat?: string }[];
@@ -100,6 +110,11 @@ export const api = {
   orders: async () => (await call<{ orders: Order[] }>("GET", "/api/orders")).orders,
   changeEmail: (email: string) => call<{ ok: true; sandbox?: true; devLink?: string }>("POST", "/api/account/email", { email }),
   deleteAccount: (confirm: string) => call<{ ok: true }>("DELETE", "/api/account", { confirm }),
+  /** The owner's approvals for one stub, newest first. 404 when the stub isn't on their wall. */
+  approvals: async (stubId: string) => (await call<{ approvals: ApprovalInfo[] }>("GET", `/api/approvals?project=stub:${encodeURIComponent(stubId)}`)).approvals,
+  /** Approves the selected version for printing. `expectedVersionId` is the one on screen; the server refuses (409) if it has moved on. */
+  approve: (stubId: string, expectedVersionId: string) => call<ApprovalInfo & { created: boolean }>("POST", "/api/approvals", { stubId, purpose: "print.compose", expectedVersionId }),
+  revokeApproval: (stubId: string, approvalId: string) => call<{ ok: true; already: boolean }>("POST", "/api/approvals/revoke", { stubId, approvalId }),
   claim: (token: string) => call<{ stub: Stub }>("POST", `/api/claim/${encodeURIComponent(token)}`, {}),
 };
 

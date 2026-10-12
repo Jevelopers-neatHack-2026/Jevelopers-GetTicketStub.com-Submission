@@ -26,13 +26,22 @@ This is a hackathon prototype. Implemented in this repository:
 - Demo mode by default: fixture research (neatHack, The Pale Hours, Harbour FC), simulated art and agent replies, sandbox checkout, and a visible demo banner. Provider keys alone never enable external calls.
 - An opt-in `TICKETSTUB_RUNTIME_MODE=live` development mode with direct Anthropic/OpenAI paths or per-capability OpenRouter routing ([`src/server/ai/providers.ts`](src/server/ai/providers.ts)).
 - Offline provider tests and a production smoke script, run by the [runtime workflow](.github/workflows/runtime.yml).
+- Magic-link sign-in, server-side SQLite storage and file-backed artwork ([PR #20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20)) are merged, and [PR #33](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/33) fixed the emailed sign-in confirmation (`bad_origin` when the browser sent no referrer).
+
+Verified on the published host (getticketstub.com, GoDaddy Plus Launch) on 2026-10-11 and 2026-10-12:
+
+- `/api/health` reports `mode=live`, `storage=ok` and `persistence=configured`, with `TICKETSTUB_DB=/private/ticketstub.sqlite` and `TICKETSTUB_FILES=/private/files`.
+- Resend delivered a real sign-in email. `TICKETSTUB_SANDBOX_MAIL` is unset there, so sign-in returns no on-screen link (the `mail-off` check in the [evidence](docs/operations/evidence/auth-storage-2026-10-12) covers this).
+- A synthetic stub and its artwork saved through `/api/wall/sync` survived a Live redeploy (saved 2026-10-11T20:05Z, read again 2026-10-12T03:27Z).
+- A fixture-mode backup and restore drill passes ([PR #63](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/63), [evidence](docs/operations/evidence/auth-storage-2026-10-12)). Restoring a real host backup has not been demonstrated; see the [owner runbook](docs/operations/deployed-auth-storage-runbook.md).
 
 Pending or outside this repository's current state:
 
-- Publishing to Live needs separate authorization; the preview deployment is not a production release.
-- Production identity, budget and URL access controls ([#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13)) and the WP02 customer application epic ([#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1)) are not done. Live mode is not a production deployment.
-- PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) adds magic-link sign-in, server-side SQLite storage and file-backed artwork. Real email delivery, target-host storage durability and integrated release acceptance remain unverified. Wallet passes, QR codes and checkout remain simulated.
-- All [acceptance criteria](docs/architecture/ACCEPTANCE.md) remain planned in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+- Real payment: Dodo ([#66](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/66)) and Stripe ([#71](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/71)) are open, so checkout is still sandbox.
+- The order authorization issuer and verifier ([#41](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/41)) and the artwork approval record and verifier ([#37](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/37)) are merged. An approval does not authorize a purchase. Still open: paid download ([#61](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/61)), versioned order-authorization signing keys ([#76](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/76)) and versioned approval signing keys ([#75](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/75)).
+- Wallet passes and QR codes remain simulated.
+- Publishing to Live needs separate authorization, and production identity, budget and URL access controls ([#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13)) and the WP02 customer application epic ([#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1)) are not done.
+- Integrated v1 acceptance ([#6](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/6)) is not met. All [acceptance criteria](docs/architecture/ACCEPTANCE.md) remain planned in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
 
 ## Quickstart
 
@@ -126,6 +135,8 @@ The server also takes the same backup on its own once a week. Each hour it check
 
 Nothing deletes backups. Prune `/private/backups` by hand, and only after the newest one has been restored and checked.
 
+The deployed checks only the owner can run (sandbox flag off, restart survival, backup download, restore drill, real-email sign-in) are in [docs/operations/deployed-auth-storage-runbook.md](docs/operations/deployed-auth-storage-runbook.md).
+
 ### Verifying it (`verify:product`)
 
 ```
@@ -142,6 +153,8 @@ npm run verify:product -- --suite foundation --mode fixture --evidence-dir out/e
 | `a11y` | GT-11: axe-core on eight pages at 390 and 1280 px, overflow at 320, 640 and 200% zoom, a keyboard walk of the critical path with dialog focus, reduced motion, and the desk colours against WCAG AA, in a real headless Chrome (needs Chrome or Edge, or `CHROME_PATH`). `accessibility` is an alias. See `docs/product/accessibility.md` |
 | `production` | `scripts/smoke-production.mjs` against a production server |
 | `degraded` | a production server whose `TICKETSTUB_DB` and `TICKETSTUB_FILES` sit under a file, so storage can't be written: the 503s, the health fields, every page rendering 200, and `smoke:production` still passing |
+| `mail-off` | #27: a production server with no `RESEND_API_KEY` and `TICKETSTUB_SANDBOX_MAIL` unset, `0`, `true`, empty or ` 1`: sign-in and email change answer 503 `mail_unavailable` with no `devLink`, the log holds no link and no full address, the stored link is a hash that lives 15 minutes, and the dev email preview is a 404. A control run with the flag at `1` must hand out a link, sets a `ts_session` cookie that is HttpOnly, SameSite=Lax, Secure, `Path=/` and 90 days, and the link works once |
+| `backup-drill` | #27: seeds a wall, art, a share, an order and an organizer event through the app, takes `POST /api/admin/backup` as staff (404 for others), restarts on the same disk, restores with `scripts/restore-backup.mjs` into a new folder, re-checks hashes, `integrity_check` and row counts, and serves the copy. The evidence file's `drill` field keeps counts and hashes only |
 
 `--mode fixture` is the only mode: the run starts its own production server on a free port with a throwaway database, no provider or mail keys, and `ADMIN_EMAILS` set to a test address, and it blocks every outbound host except loopback (`scripts/lib/fixture-network-guard.mjs`; a blocked attempt fails the run even if the code swallowed it). An unknown suite, a missing build or fixture, and any skipped check exit nonzero. Each run writes `<evidence-dir>/<suite>-<timestamp>.json` with the command, exit code, counts, timestamps, git SHA, mode and per-step results. `npm run build` must have run first. See `docs/architecture/routes.md` for the route and state map and `docs/adr/0001-runtime.md` for the runtime decision.
 

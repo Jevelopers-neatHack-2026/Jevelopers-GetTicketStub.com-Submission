@@ -9,7 +9,7 @@ type names (`EVENT_SPEC`) and drops everything else.
 
 Types: `intake_submitted`, `intake_rejected`, `research_started`, `fact_corrected`, `art_requested`, `art_ready`,
 `art_failed`, `art_limit`, `version_selected`, `share_created`, `share_revoked`, `gift_created`, `order_placed`,
-`order_blocked`, `checkout_started`, `order_paid`, `payment_needs_review`, `signin_link_sent`, `signed_in`, `claim_redeemed`, `storage_unavailable`.
+`order_blocked`, `checkout_started`, `order_paid`, `payment_needs_review`, `signin_link_sent`, `signed_in`, `claim_redeemed`, `storage_unavailable`, `approval_issued`, `approval_revoked`, `order_authorized`, `authorization_claimed`, `authorization_revoked`, `authorization_refused`.
 
 Every event carries `schema`, `type`, `at`, `requestId` (the correlation id), `actor` (`account | guest | anonymous`),
 `actorRef`, `projectRef`, `mode` (`sandbox | live`) and `fields`. Ids are stored as `refOf(id)`: a 16-hex hash.
@@ -48,7 +48,7 @@ pinned agent-harness commit (`src/server/vendor/agent-harness`, `MANIFEST.json`;
   result in its durable outbox (`agent-harness-outbox.sqlite` next to `TICKETSTUB_DB`, or `TICKETSTUB_HARNESS_DB`).
 - **Delivery.** A background drain sends each event as one trace (workflow `agent-harness.ticketstub-events`, session =
   project token, tags `ticketstub`, `ticketstub@<TICKETSTUB_COMMIT_SHA>`, `environment:<TICKETSTUB_OPS_ENVIRONMENT>`).
-  A receiver acceptance is recorded as "sent", never as delivered. With `NEATLOGS_TOKEN` and `NEATLOGS_PROJECT_ID`, the
+  A receiver acceptance is recorded as "sent", never as delivered. With `NEATLOGS_READ_TOKEN` and `NEATLOGS_PROJECT_ID`, the
   drain reads each trace back through the Neatlogs Public API, settles it as verified, and re-sends one that never
   appears under a new trace id (up to three times). Details: agent-harness `docs/runbooks/neatlogs.md`.
 - **Cost to a request.** One local SQLite write after the event is built; the network work never runs inline, and any
