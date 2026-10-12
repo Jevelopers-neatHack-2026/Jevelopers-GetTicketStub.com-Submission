@@ -20,6 +20,8 @@ jobs:
       - run: uv run basedpyright
       - run: uv run ruff check
       - run: uv run ruff format --check
+      - run: uv run basedpyright -p pyrightconfig.stdlib.json
+      - run: uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
       - run: uv run integration-evals validate
       - run: uv run pytest component_tests/test_print_setup.py --junitxml=reports/print-setup-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

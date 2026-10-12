@@ -1,0 +1,6 @@
+{
+  "include": ["tools", "tests/test_audit_evidence.py", "tests/test_rerun_report.py"],
+  "extraPaths": ["tools"],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.9"
+}

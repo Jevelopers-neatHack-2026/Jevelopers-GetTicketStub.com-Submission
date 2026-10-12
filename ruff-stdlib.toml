@@ -1,0 +1,13 @@
+# Lint scope for the standalone stdlib audit/rerun tools and their unittest files.
+# They target Python 3.9+ without the package, so they are excluded from the strict
+# Python 3.13 package scope in pyproject.toml and checked here instead.
+target-version = "py39"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "B", "S"]
+ignore = ["E501", "E741", "B904"]
+
+[lint.per-file-ignores]
+# B023: closures in subTest loops run immediately; S105: SECRET is a leak-detection sentinel.
+"tests/**" = ["S101", "S105", "S603", "S607", "B023"]

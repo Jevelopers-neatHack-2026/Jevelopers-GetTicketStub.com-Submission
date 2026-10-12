@@ -24,11 +24,16 @@ dev = [
 typeCheckingMode = "all"
 pythonVersion = "3.13"
 include = ["src", "tests", "integration_tests", "component_tests"]
+# Standalone stdlib tools/tests use pyrightconfig.stdlib.json instead.
+exclude = ["tools", "tests/test_audit_evidence.py", "tests/test_rerun_report.py"]
 
 [tool.ruff]
 target-version = "py313"
 line-length = 100
 extend-exclude = [
+    "tools",
+    "tests/test_audit_evidence.py",
+    "tests/test_rerun_report.py",
     "evidence/cfo-ai/2026-10-11/model.py",
     "evidence/cfo-ai/2026-10-11/verify-native-export.py",
     "evidence/cfo-ai/2026-10-11-r2/excel-recalc-check.py",

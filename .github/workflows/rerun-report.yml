@@ -1,0 +1,35 @@
+name: rerun-report
+
+on:
+  pull_request:
+    paths:
+      - "tools/rerun_report.py"
+      - "tests/**"
+      - "docs/safe-reruns.md"
+      - ".github/workflows/rerun-report.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/rerun_report.py"
+      - "tests/**"
+      - "docs/safe-reruns.md"
+      - ".github/workflows/rerun-report.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rerun-report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Unit tests
+        run: python -m unittest -v tests.test_rerun_report
+      - name: Compile rerun report tool
+        run: python -m py_compile tools/rerun_report.py
