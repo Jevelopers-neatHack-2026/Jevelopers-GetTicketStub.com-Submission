@@ -1,12 +1,11 @@
 import type { OrderPayment } from "@/customer/pages/commerce";
 import { HttpError, appOrigin, isObject, json, route } from "@/server/http";
-import { getStorage, requireStorage } from "@/server/index";
+import { requireStorage } from "@/server/index";
 import { DodoError, dodoConfig, getPayment, verifyWebhook, type DodoPayment } from "@/server/payments/dodo";
-import { sendReceipt } from "@/server/receipt";
+import { settlePayment } from "@/server/payments/settle";
 
 // Dodo Payments webhook. Only a signed delivery is read, and only the payment fetched back from Dodo's API is trusted:
-// the body says which payment changed, never what it is. Deliveries repeat and arrive out of order, so the order's
-// payment only moves forward, a paid order is never downgraded, and the receipt goes out on the one transition to paid.
+// the body says which payment changed, never what it is. settlePayment applies it forward-only.
 
 const MAX_BODY = 256 * 1024;
 
@@ -22,9 +21,6 @@ function nextStatus(p: DodoPayment): OrderPayment["status"] {
       return "pending";
   }
 }
-
-/** The charge must be exactly the amount the server asked for, in USD (any tax Dodo adds is on top). */
-const amountMatches = (p: DodoPayment, want: OrderPayment) => p.currency === want.currency && (p.total_amount === want.amountMinor || p.total_amount - (p.tax ?? 0) === want.amountMinor);
 
 export const POST = route(async (req: Request) => {
   const dodo = dodoConfig();
@@ -56,27 +52,17 @@ export const POST = route(async (req: Request) => {
   const orderId = typeof payment.metadata?.order_id === "string" ? payment.metadata.order_id : "";
   if (!orderId) return json({ ok: true, handled: false });
 
-  const status = nextStatus(payment);
-  let mismatch = false;
-  const result = await getStorage().updateOrderPayment(orderId, (order) => {
-    const cur = order.payment;
-    if (!cur || cur.provider !== "dodo" || cur.status === "paid") return null;
-    if (payment.checkout_session_id && payment.checkout_session_id !== cur.checkoutSessionId) return null;
-    if (status === "paid" && !amountMatches(payment, cur)) {
-      mismatch = true;
-      return null;
-    }
-    if (status === cur.status && cur.paymentId === payment.payment_id) return null;
-    return { ...cur, status, paymentId: payment.payment_id, updatedAt: new Date().toISOString() };
-  });
-  if (mismatch) console.error(`[payments] dodo amount or currency mismatch for an order; left unpaid`);
-  // Unknown order, or nothing to change (a repeat, an older event, a refused charge).
-  if (!result || result.after === result.before) return json({ ok: true, handled: false });
-
-  if (result.before.payment?.status !== "paid" && result.after.payment?.status === "paid") {
-    const row = await getStorage().getOrder(orderId);
-    const email = row?.email ?? result.after.email;
-    if (email) await sendReceipt(result.after, row?.accountId ?? null, email, appOrigin(req));
-  }
-  return json({ ok: true, handled: true, status: result.after.payment?.status });
+  const settled = await settlePayment(
+    {
+      provider: "dodo",
+      orderId,
+      sessionId: payment.checkout_session_id ?? null,
+      paymentId: payment.payment_id,
+      status: nextStatus(payment),
+      // any tax Dodo adds as merchant of record is on top of the asked amount
+      charged: { currency: payment.currency, amountsMinor: [payment.total_amount, payment.total_amount - (payment.tax ?? 0)] },
+    },
+    appOrigin(req),
+  );
+  return json({ ok: true, ...settled });
 });

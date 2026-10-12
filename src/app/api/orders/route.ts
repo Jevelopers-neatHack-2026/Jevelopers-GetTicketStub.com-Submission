@@ -8,7 +8,8 @@ import { getStorage, requireStorage } from "@/server/index";
 import { refOf } from "@/server/events";
 import { sendReceipt } from "@/server/receipt";
 import { parseEmail, parseText } from "@/server/validate";
-import { DodoError, createCheckout, dodoConfig } from "@/server/payments/dodo";
+import { DodoError, createCheckout as createDodoCheckout, dodoConfig } from "@/server/payments/dodo";
+import { StripeError, createCheckout as createStripeCheckout, stripeConfig } from "@/server/payments/stripe";
 import { allOrderable, isDigitalOnly, verifiedTotalMinor } from "@/server/payments/pricing";
 
 const MATERIALS = ["digital", "card", "print", "framed"];
@@ -87,25 +88,31 @@ export const POST = route(async (req: Request) => {
     mode: "sandbox",
     createdAt: new Date().toISOString(),
   };
-  // An all-digital card or wallet order of orderable variants is paid through Dodo when it is configured. Anything else
-  // (a physical line, or a preview such as digital holo) stays a sandbox order
-  // until it can be charged (#64). Nothing is stored when the checkout can't be started.
-  const dodo = dodoConfig();
+  // A card or wallet order whose variants are all orderable is charged: all-digital through Dodo (which only takes
+  // digital goods), anything with a physical line through Stripe (#64). Each provider is on only when configured.
+  // Anything else (a preview variant such as an unconfirmed print SKU or digital holo, a gift or organizer print)
+  // stays a sandbox order. Nothing is stored when a checkout can't be started.
+  const chargeable = allOrderable(order) && PAID_METHODS.has(order.method);
+  const dodo = chargeable && isDigitalOnly(order) ? dodoConfig() : null;
+  const stripe = chargeable && !isDigitalOnly(order) ? stripeConfig() : null;
   let checkoutUrl: string | undefined;
-  if (dodo && isDigitalOnly(order) && allOrderable(order) && PAID_METHODS.has(order.method)) {
+  if (dodo || stripe) {
     const amountMinor = verifiedTotalMinor(order);
+    const returnUrl = `${appOrigin(req)}/payment/return?order=${encodeURIComponent(order.id)}`;
     try {
-      const c = await createCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl: `${appOrigin(req)}/payment/return?order=${encodeURIComponent(order.id)}` });
-      order.payment = { provider: "dodo", environment: dodo.environment, status: "pending", amountMinor, currency: "USD", checkoutSessionId: c.sessionId, updatedAt: new Date().toISOString() };
+      const c = dodo
+        ? await createDodoCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl })
+        : await createStripeCheckout(stripe!, { orderId: order.id, amountMinor, email, returnUrl, description: `TicketStub order · ${order.lines.length} ${order.lines.length === 1 ? "item" : "items"}` });
+      order.payment = { provider: dodo ? "dodo" : "stripe", environment: (dodo ?? stripe)!.environment, status: "pending", amountMinor, currency: "USD", checkoutSessionId: c.sessionId, updatedAt: new Date().toISOString() };
       checkoutUrl = c.checkoutUrl;
     } catch (e) {
-      if (!(e instanceof DodoError)) throw e;
-      console.error(`[payments] dodo checkout failed: ${e.status}`);
+      if (!(e instanceof DodoError || e instanceof StripeError)) throw e;
+      console.error(`[payments] ${dodo ? "dodo" : "stripe"} checkout failed: ${e.status}`);
       throw new HttpError(502, "payment_unavailable", "We couldn't start the payment. Nothing was charged. Try again in a moment.");
     }
   }
   await getStorage().createOrder(order, account?.id ?? null, email);
-  // A paid order's receipt is sent once its payment is confirmed (see the Dodo webhook), not now.
+  // A paid order's receipt is sent once its payment is confirmed (see the provider webhooks), not now.
   if (!checkoutUrl) await sendReceipt(order, account?.id ?? null, email, appOrigin(req));
   await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
   return json(checkoutUrl ? { order, checkoutUrl } : { order });

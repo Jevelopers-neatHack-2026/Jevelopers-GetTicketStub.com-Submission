@@ -142,7 +142,8 @@ export interface Order {
 
 /** A provider payment for an order. Only a verified provider webhook moves it to paid; the browser never does. */
 export interface OrderPayment {
-  provider: "dodo";
+  /** Dodo for all-digital orders (it only takes digital goods); Stripe for orders with a physical line. */
+  provider: "dodo" | "stripe";
   /** test_mode charges nothing real. */
   environment: "test_mode" | "live_mode";
   status: "pending" | "paid" | "failed" | "cancelled";
