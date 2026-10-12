@@ -33,7 +33,9 @@ function errorClass(code: string | undefined, status: number): NonNullable<ApiCa
     case "bad_request":
     case "bad_json":
     case "too_large":
+    case "unsupported_input":
       return "invalid_input";
+    case "unsupported_url":
     case "unreadable_link":
     case "demo_only":
       return "unsupported_url";
