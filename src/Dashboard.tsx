@@ -3,7 +3,7 @@ import { normalizeBasePath, resolveRoute, routeHref, routes, type ResolvedRoute 
 import { isAuthorized, type HostAccess } from './access/host';
 import { isRouteState, type RouteProvider, type RouteState } from './data/boundary';
 import { RouteView, type RouteRenderer } from './views/RouteView';
-import { BoundaryState } from './components/BoundaryState';
+import { BoundaryState, type BoundaryExit } from './components/BoundaryState';
 
 export interface DashboardProps<T = unknown> {
   basePath: string;
@@ -17,8 +17,8 @@ type ReadResult<T> = { key: string; provider: RouteProvider<T>; attempt: number;
 function routeKey(route: ResolvedRoute, access: Extract<HostAccess, { status: 'authorized' }>): string {
   return JSON.stringify([route.id, route.params, access.scope.tenantId, access.scope.projectId, access.revision]);
 }
-function DataRoute<T>({ route, access, provider, renderRoute }: {
-  route: ResolvedRoute; access: Extract<HostAccess, { status: 'authorized' }>; provider: RouteProvider<T> | undefined; renderRoute: RouteRenderer<T> | undefined;
+function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
+  route: ResolvedRoute; access: Extract<HostAccess, { status: 'authorized' }>; provider: RouteProvider<T> | undefined; renderRoute: RouteRenderer<T> | undefined; exit: BoundaryExit | undefined;
 }) {
   const key = routeKey(route, access);
   const [result, setResult] = useState<ReadResult<T>>();
@@ -41,7 +41,7 @@ function DataRoute<T>({ route, access, provider, renderRoute }: {
     return () => { current = false; clearTimeout(timeout); controller.abort(); };
   }, [key, provider, tenantId, projectId, route, attempt]);
   const state: RouteState<T> = !provider ? { status: 'unavailable' } : result?.key === key && result.provider === provider && result.attempt === attempt ? result.state : { status: 'loading' };
-  return <RouteView state={state} route={route} scope={access.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} />;
+  return <RouteView state={state} route={route} scope={access.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} />;
 }
 export function Dashboard<T>({ basePath, pathname, navigate, access, provider, renderRoute }: DashboardProps<T>) {
   const base = normalizeBasePath(basePath);
@@ -57,10 +57,12 @@ export function Dashboard<T>({ basePath, pathname, navigate, access, provider, r
     event.preventDefault();
     navigate(event.currentTarget.getAttribute('href')!);
   }
+  // Every non-ready boundary offers a safe way out except on the overview itself.
+  const exit: BoundaryExit | undefined = resolved.status === 'found' && resolved.route.id === 'overview' ? undefined : { href: routeHref(base, 'overview'), label: 'Return to overview', onNavigate };
   let content;
   if (resolved.status === 'not-found') content = <section className="td-boundary"><h2>Route not found</h2><p>This path is outside the declared dashboard routes.</p><a href={routeHref(base, 'overview')} onClick={onNavigate}>Return to overview</a></section>;
-  else if (!isAuthorized(access)) content = <BoundaryState state={{ status: access?.status === 'loading' ? 'loading' : access?.status === 'unavailable' ? 'unavailable' : 'restricted' }} />;
-  else content = <DataRoute key={routeKey(resolved.route, access)} route={resolved.route} access={access} provider={provider} renderRoute={renderRoute} />;
+  else if (!isAuthorized(access)) content = <BoundaryState state={{ status: access?.status === 'loading' ? 'loading' : access?.status === 'unavailable' ? 'unavailable' : 'restricted' }} exit={exit} />;
+  else content = <DataRoute key={routeKey(resolved.route, access)} route={resolved.route} access={access} provider={provider} renderRoute={renderRoute} exit={exit} />;
   return <div className="team-dashboard">
     <a className="td-skip" href="#td-route-content">Skip dashboard navigation</a>
     <header className="td-header"><p className="td-eyebrow">Finance</p>

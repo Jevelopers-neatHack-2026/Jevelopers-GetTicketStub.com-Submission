@@ -47,6 +47,10 @@ Open `/admin/finance?examples=components` in the local fixture. Navigation uses 
 
 The original architecture/global acceptance IDs and procedures are unchanged. Issue #15 and actual-host TD-01.E remain open. Producer contract/API work and host WP02 agreement are not inferred from an open PR. Independent review and named closure confirmation are supervisor-owned.
 
+## Boundary recovery actions (TD-09.D slice, issue #14)
+
+Non-ready route boundaries (empty, error, restricted, unavailable, including host-access states) offer a "Return to overview" link through the host `navigate` callback, except on the overview itself and while loading. Retry is shown only for retryable errors; pressing it keeps keyboard focus on the boundary region instead of dropping it to `<body>` when the button unmounts. The live region is re-created per state so errors announce assertively (`alert`) and other states politely (`status`). No amount is rendered in any of these states. This is only the recovery/announcement slice of TD-09.D: filter no-results, partial/stale/delayed-total states and estimate-to-confirmed explanations (TD-09.A/B/C/E) remain blocked on the adapter and FinancialSummary semantics, and issue #14 stays open. `tests/e2e/td09-states.spec.ts` was written but not executed in this environment (Chromium cannot launch in the sandbox); run `npm run test:e2e -- --grep TD-09` before relying on it.
+
 ## Validation and rollback
 
 Run clean `npm ci`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build`, `npm pack --dry-run`, `npm run check:contrast`, `npm run test:e2e`, `npm run test:integration`, and focused `npm run test:e2e -- --grep TD-10`. Use separate loopback `TD_TEST_PORT` values for concurrent worktrees. `TD_ARTIFACT_DIR` controls sanitized screenshots, full axe JSON and Playwright results; keep these outside tracked product files. `npm run test:host` intentionally exits nonzero until genuine host revisions/mount/auth/producer evidence exist; passing fixture checks do not bypass it.
