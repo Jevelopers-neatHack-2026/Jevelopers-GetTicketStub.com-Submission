@@ -49,4 +49,4 @@ Markdown criteria are `### ID title` headings; the whole block up to the next he
 
 ## CI
 
-`.github/workflows/evidence-audit.yml` runs the unit tests and the real audit on pull requests and pushes to `main` that touch the tool, tests, docs, checklists or evidence. It uses read-only `contents` permission, no secrets, no network calls beyond fetching the pinned actions, and writes nothing back. Actions are pinned to full commit SHAs (checkout v7.0.1, setup-python v7.0.0).
+`.github/workflows/evidence-audit.yml` runs the unit tests and the real audit on pull requests and pushes to `main` that touch the tool, tests, docs, checklists or evidence. It uses read-only `contents` permission and no secrets, and writes nothing back. The audit and tests make no provider calls; CI fetches the pinned actions and repository and may download Python. Actions are pinned to full commit SHAs (checkout v7.0.1, setup-python v7.0.0).
