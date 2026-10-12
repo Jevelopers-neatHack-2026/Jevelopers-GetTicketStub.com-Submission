@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import tls from 'node:tls';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -16,7 +16,7 @@ import {
   runtimeNeatlogsTags
 } from '../../../src/observability/private/neatlogs-outbox.js';
 import { NEATLOGS_SDK_EVENT_TYPES } from '../../../src/observability/private/neatlogs-sdk-mapper.js';
-import { runRuntimeWorkflow } from '../../../tools/neatlogs-runtime-trace.mjs';
+import { isCompleteDeliveryEvidence, runRuntimeWorkflow } from '../../../tools/neatlogs-runtime-trace.mjs';
 
 const INGEST_KEY = 'synthetic-ingest-key-0123456789abcdef';
 const READ_TOKEN = 'synthetic-readback-token-0123456789abcdef';
@@ -54,6 +54,15 @@ function copyOutbox(name) {
 
 function recordsIn(directory) {
   return listNeatlogsOutbox(directory).flatMap(path => JSON.parse(readFileSync(path, 'utf8')).records);
+}
+
+function sourceRecord(sequence) {
+  return {
+    schema: 'agent-harness.telemetry.v1', sequence,
+    eventId: `tok1_${sequence.toString(16).padStart(64, '0')}`,
+    workflowId: `tok1_${'f'.repeat(64)}`, revision: 0, eventType: 'workflow_created',
+    fromState: null, toState: null, fence: 0, occurredAtMs: 1_760_000_000_000
+  };
 }
 
 // Fake ingest + Public API. Readback serves exactly what a record set derives to.
@@ -175,6 +184,16 @@ describe('real worker run through the durable exporter', () => {
 });
 
 describe('outbox sink', () => {
+  test('delivery evidence requires the complete outbox, not just its drained prefix', () => {
+    const verified = count => Array.from({ length: count }, () => ({ readback: { status: 'verified' } }));
+    assert.equal(isCompleteDeliveryEvidence({ network: true, batches: verified(32), batchCount: 33 }), false);
+    assert.equal(isCompleteDeliveryEvidence({ network: true, batches: verified(33), batchCount: 33 }), true);
+    assert.equal(isCompleteDeliveryEvidence({ network: true, batches: verified(1), batchCount: 1 }), true);
+    assert.equal(isCompleteDeliveryEvidence({ network: false, batches: verified(1), batchCount: 1 }), false);
+    assert.equal(isCompleteDeliveryEvidence({ network: true, batches: [], batchCount: 0 }), false);
+    assert.equal(isCompleteDeliveryEvidence({ network: true, batches: [{ readback: { status: 'pending' } }], batchCount: 1 }), false);
+  });
+
   test('re-delivery of a grown page stores only the new suffix', () => {
     const directory = join(scratch, 'sink-grow');
     const sink = createNeatlogsOutboxSink({ directory });
@@ -200,6 +219,48 @@ describe('outbox sink', () => {
     controller.abort();
     assert.deepEqual(sink(recordsIn(runOutbox), { signal: controller.signal }), { accepted: false, acceptedCount: 0 });
     assert.throws(() => sink([{ schema: 'agent-harness.telemetry.v1', sequence: 1, eventId: 'raw-id' }]));
+  });
+
+  test('preserves legacy names at every accepted width and the full safe-integer range', () => {
+    const directory = join(scratch, 'sink-wide-sequence');
+    const sink = createNeatlogsOutboxSink({ directory });
+    sink([sourceRecord(1)]);
+    renameSync(listNeatlogsOutbox(directory)[0], join(directory, 'batch-000000000001-000000000001.json'));
+    const legacySequences = [1_000_000_000_000, 10_000_000_000_000, 100_000_000_000_000];
+    for (const sequence of legacySequences) {
+      sink([sourceRecord(sequence)]);
+      const path = listNeatlogsOutbox(directory).at(-1);
+      renameSync(path, join(directory, `batch-${sequence}-${sequence}.json`));
+    }
+    sink([sourceRecord(Number.MAX_SAFE_INTEGER)]);
+    const paths = listNeatlogsOutbox(directory);
+    assert.equal(paths.length, 2 + legacySequences.length);
+    assert.deepEqual(paths.map(path => JSON.parse(readFileSync(path, 'utf8')).firstSequence), [
+      1, ...legacySequences, Number.MAX_SAFE_INTEGER
+    ]);
+    assert.match(paths.at(-1), /batch-9007199254740991-9007199254740991\.json$/u);
+  });
+
+  test('rejects batch metadata that disagrees with its filename and records', () => {
+    const directory = join(scratch, 'sink-metadata-mismatch');
+    const sink = createNeatlogsOutboxSink({ directory });
+    sink([sourceRecord(1)]);
+    const path = listNeatlogsOutbox(directory)[0];
+    const batch = JSON.parse(readFileSync(path, 'utf8'));
+    batch.firstSequence = 2;
+    writeFileSync(path, `${JSON.stringify(batch)}\n`, { mode: 0o600 });
+    assert.throws(() => sink([sourceRecord(1)]), { code: 'BATCH_INVALID' });
+  });
+
+  test('rejects outbox states outside the persisted state machine', () => {
+    const directory = join(scratch, 'sink-unknown-state');
+    const sink = createNeatlogsOutboxSink({ directory });
+    sink([sourceRecord(1)]);
+    const path = listNeatlogsOutbox(directory)[0];
+    const batch = JSON.parse(readFileSync(path, 'utf8'));
+    batch.state = 'future_unreviewed_state';
+    writeFileSync(path, `${JSON.stringify(batch)}\n`, { mode: 0o600 });
+    assert.throws(() => sink([sourceRecord(1)]), { code: 'BATCH_INVALID' });
   });
 });
 

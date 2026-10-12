@@ -35,6 +35,15 @@ export const RUNTIME_PLAN_JSON = JSON.stringify({
   ]
 });
 
+export function isCompleteDeliveryEvidence({ network, batches, batchCount }) {
+  return network === true
+    && Array.isArray(batches)
+    && Number.isSafeInteger(batchCount)
+    && batches.length > 0
+    && batches.length === batchCount
+    && batches.every(batch => batch?.readback?.status === 'verified');
+}
+
 function usage(message) {
   if (message) process.stderr.write(`${message}\n`);
   process.stderr.write([
@@ -266,8 +275,11 @@ async function main() {
   } else {
     evidence.batches = listNeatlogsOutbox(outbox).map(path => ({ path: path.slice(outbox.length + 1) }));
   }
-  evidence.deliveryConfirmed = evidence.batches.length > 0
-    && evidence.batches.every(batch => batch.readback?.status === 'verified');
+  evidence.deliveryConfirmed = isCompleteDeliveryEvidence({
+    network,
+    batches: evidence.batches,
+    batchCount: listNeatlogsOutbox(outbox).length
+  });
 
   const serialized = JSON.stringify(evidence);
   const secrets = [];
