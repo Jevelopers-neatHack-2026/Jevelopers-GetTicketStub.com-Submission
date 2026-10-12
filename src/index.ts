@@ -210,7 +210,9 @@ export type {
 } from "./prodigi-sandbox.js";
 export {
   createInMemoryProdigiReconciliationStore,
+  createProdigiReadLimiter,
   decideProdigiOrdering,
+  PRODIGI_CALLBACK_EVENT_TYPES,
   parseProdigiCallbackEvent,
   ProdigiCallbackError,
   ProdigiCallbackReconciler
@@ -221,12 +223,18 @@ export type {
   ProdigiCallbackOutcome,
   ProdigiCallbackReconcilerOptions,
   ProdigiCallbackResult,
-  ProdigiEventClaim,
+  InMemoryProdigiReconciliationStore,
   ProdigiOrderingDecision,
   ProdigiOrderReader,
   ProdigiPollPolicy,
+  ProdigiReadLimiter,
+  ProdigiReconcileErrorCode,
+  ProdigiReconcileJob,
   ProdigiReconcileResult,
   ProdigiReconcileStatus,
+  ProdigiReconciliationScheduler,
+  ProdigiScheduledRunResult,
+  ProdigiScheduledRunStatus,
   ProdigiReconciledOrderState,
   ProdigiReconciliationStore
 } from "./prodigi-callbacks.js";
