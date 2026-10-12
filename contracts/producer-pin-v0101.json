@@ -1,0 +1,16 @@
+{
+  "package": {
+    "version": "0.10.1",
+    "archive_sha256": "7ba851fb9498ee0bf92c41307a5bc9651c70a4d2917556ff4648676350d60a15",
+    "archive_sri": "sha512-chxrB+WU9qXtjEixwYothSIIzCU0iHFJb7YXfzGhqnwwGHSAkSpzpFtHMftXGfYVbKR8r8KRL7+EjpANbQucrw==",
+    "content_digest": "4af7c17083e2cc170090f50bfd5db4fa801d69f64d308e06dca8a7b99ad047f7",
+    "npm_version": "10.9.8"
+  },
+  "revision": "becd640a801fe7829fe643bd96711d7a69bf58d0",
+  "tree": "6ea11ab07dfb1aaf9a4fefd532e630f008a1a5d1",
+  "lockfile_digest": "adf3ff2b62d3d1c87da1c64e43646e10c640f9faa8151babae9f89b94f3abd45",
+  "schema_manifest_digest": "c378b98f22288c9d5e9ff0e3bee4458df7cc4f83bfe31c121efaa22a0e7fd598",
+  "fixture_manifest_digest": "caa4c6b4b5ea01346a5d1a7603acc472caecc2a51263f70ece3cf6a0caddb5bb",
+  "catalog_digest": "64c061faaa83b4b2add737a5b6eeb0d72c8c6bd4cbc321ce93298a3e0f6eaa82",
+  "node_version": "22.23.3"
+}

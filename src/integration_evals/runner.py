@@ -6,8 +6,16 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from integration_evals.artifacts import digest, read_bytes
+from integration_evals.comparison_archive import bundle_bytes
 from integration_evals.errors import fail
-from integration_evals.execution import OwnerContext, OwnerExecution, Settings, blocked, unselected
+from integration_evals.execution import (
+    ComparisonCapture,
+    OwnerContext,
+    OwnerExecution,
+    Settings,
+    blocked,
+    unselected,
+)
 from integration_evals.models import Assembly, Case, CaseId, Catalog, Run, Suite
 from integration_evals.owner import execute_owner
 from integration_evals.preflight import PreflightContext, case_blocker
@@ -17,6 +25,14 @@ from integration_evals.validation import git_value, source_fingerprint, validate
 
 def execute(suite: Suite, catalog: Catalog, settings: Settings) -> Run:
     """Execute every selected case while preserving exact pins and missing prerequisites."""
+    run, _ = execute_captured(suite, catalog, settings)
+    return run
+
+
+def execute_captured(
+    suite: Suite, catalog: Catalog, settings: Settings
+) -> tuple[Run, tuple[ComparisonCapture, ...]]:
+    """Retain process-held comparison inputs without deriving authority from archived receipts."""
     path = settings.assembly_path
     assembly = Assembly.model_validate_json(read_bytes(path)) if path else None
     catalog_digest = digest(catalog.model_dump_json().encode())
@@ -45,9 +61,11 @@ def execute(suite: Suite, catalog: Catalog, settings: Settings) -> Run:
         receipt = execute_case(case, context, preflight, selected)
         executions.append(receipt)
         evidence_ids |= frozenset(item.id for item in receipt.evidence)
+    captures = tuple(item.comparison for item in executions if item.comparison is not None)
     run = Run(
         id=run_id,
         started_at=datetime.now(UTC),
+        comparison_digest=digest(bundle_bytes(captures)) if captures else None,
         context=settings.context,
         scope=assembly.kind if assembly else "composed",
         selected_case_ids=tuple(case.id for case in suite.cases if case.id in selected),
@@ -68,7 +86,7 @@ def execute(suite: Suite, catalog: Catalog, settings: Settings) -> Run:
         limitations=("Product acceptance requires reviewed evidence for every composed boundary.",),
     )
     validate_evidence(run.evidence, settings.artifacts, run)
-    return run
+    return run, captures
 
 
 def execute_case(

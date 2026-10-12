@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import ValidationError
 
 from integration_evals.artifacts import digest, read_bytes
+from integration_evals.comparison_archive import capture_response
 from integration_evals.errors import InvalidArtifactError, fail
 from integration_evals.execution import OwnerContext, OwnerExecution, blocked
 from integration_evals.models import Case, CaseResult, Mode, Origin, Outcome, Status
@@ -175,5 +176,19 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         exit_code=exit_code,
         cleanup_status=cleanup_status,
         output_digest=output_digest,
+        case_category=case.category,
+        quarantined=case.quarantined,
+        evaluation_failure="oracle-mismatch" if outcome is Outcome.FAILED else None,
+        evaluation_category="recorded-comparison"
+        if outcome in {Outcome.PASSED, Outcome.FAILED}
+        else None,
     )
-    return OwnerExecution(result, response.evidence if response else ())
+    return OwnerExecution(
+        result,
+        response.evidence if response else (),
+        capture_response(case, context, response)
+        if response is not None
+        and outcome in {Outcome.PASSED, Outcome.FAILED}
+        and cleanup_status == "passed"
+        else None,
+    )

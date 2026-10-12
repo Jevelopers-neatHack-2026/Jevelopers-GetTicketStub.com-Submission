@@ -1,0 +1,360 @@
+{
+  "$defs": {
+    "BenchmarkHistory": {
+      "additionalProperties": false,
+      "description": "Every declared trial is retained; statistics do not imply infrastructure flakiness.",
+      "properties": {
+        "classification": {
+          "const": "benchmark-variation",
+          "default": "benchmark-variation",
+          "title": "Classification",
+          "type": "string"
+        },
+        "corpus_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Corpus Digest",
+          "type": "string"
+        },
+        "declared_repeats": {
+          "minimum": 1,
+          "title": "Declared Repeats",
+          "type": "integer"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/Sample"
+          },
+          "minItems": 1,
+          "title": "Samples",
+          "type": "array"
+        }
+      },
+      "required": [
+        "corpus_digest",
+        "declared_repeats",
+        "samples"
+      ],
+      "title": "BenchmarkHistory",
+      "type": "object"
+    },
+    "Confusion": {
+      "additionalProperties": false,
+      "description": "Per-label errors preserve false-positive/negative counts and denominators.",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "true_positive": {
+          "title": "True Positive",
+          "type": "integer"
+        },
+        "false_positive": {
+          "title": "False Positive",
+          "type": "integer"
+        },
+        "false_negative": {
+          "title": "False Negative",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "true_positive",
+        "false_positive",
+        "false_negative"
+      ],
+      "title": "Confusion",
+      "type": "object"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "description": "Confusion statistics retain abstentions, costs and sample denominators.",
+      "properties": {
+        "candidate": {
+          "title": "Candidate",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "samples": {
+          "title": "Samples",
+          "type": "integer"
+        },
+        "macro_f1": {
+          "title": "Macro F1",
+          "type": "number"
+        },
+        "precision": {
+          "title": "Precision",
+          "type": "number"
+        },
+        "recall": {
+          "title": "Recall",
+          "type": "number"
+        },
+        "abstention_rate": {
+          "title": "Abstention Rate",
+          "type": "number"
+        },
+        "coverage": {
+          "title": "Coverage",
+          "type": "number"
+        },
+        "critical_false_negatives": {
+          "title": "Critical False Negatives",
+          "type": "integer"
+        },
+        "p50_latency_ms": {
+          "title": "P50 Latency Ms",
+          "type": "number"
+        },
+        "p95_latency_ms": {
+          "title": "P95 Latency Ms",
+          "type": "number"
+        },
+        "total_known_cost": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Total Known Cost"
+        },
+        "unknown_cost_rate": {
+          "title": "Unknown Cost Rate",
+          "type": "number"
+        },
+        "cost_per_success": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cost Per Success"
+        },
+        "confusion": {
+          "items": {
+            "$ref": "#/$defs/Confusion"
+          },
+          "title": "Confusion",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate",
+        "question",
+        "stratum",
+        "samples",
+        "macro_f1",
+        "precision",
+        "recall",
+        "abstention_rate",
+        "coverage",
+        "critical_false_negatives",
+        "p50_latency_ms",
+        "p95_latency_ms",
+        "total_known_cost",
+        "unknown_cost_rate",
+        "cost_per_success",
+        "confusion"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Sample": {
+      "additionalProperties": false,
+      "description": "Raw repeated-trial receipt for one candidate on an unchanged held-out row.",
+      "properties": {
+        "row_id": {
+          "title": "Row Id",
+          "type": "string"
+        },
+        "candidate": {
+          "enum": [
+            "rules",
+            "generative",
+            "jev"
+          ],
+          "title": "Candidate",
+          "type": "string"
+        },
+        "prediction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Prediction"
+        },
+        "latency_ms": {
+          "minimum": 0,
+          "title": "Latency Ms",
+          "type": "number"
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost"
+        },
+        "downstream_cost": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Downstream Cost"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "component_revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Component Revision",
+          "type": "string"
+        },
+        "config_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Config Digest",
+          "type": "string"
+        },
+        "receipt_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipt Ref"
+        },
+        "receipt_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipt Digest"
+        },
+        "trial": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Trial",
+          "type": "integer"
+        },
+        "critical": {
+          "default": false,
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "executed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Executed At"
+        }
+      },
+      "required": [
+        "row_id",
+        "candidate",
+        "prediction",
+        "latency_ms",
+        "mode",
+        "component_revision",
+        "config_digest"
+      ],
+      "title": "Sample",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Raw samples and existing evaluator statistics share one immutable export.",
+  "properties": {
+    "history": {
+      "$ref": "#/$defs/BenchmarkHistory"
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/Metrics"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "promotion_blockers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Promotion Blockers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "history",
+    "metrics",
+    "promotion_blockers"
+  ],
+  "title": "BenchmarkArchive",
+  "type": "object"
+}

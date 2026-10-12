@@ -1,6 +1,5 @@
 """Public command surface for offline validation and explicitly gated owner execution."""
 
-import json
 import os
 import subprocess
 from collections.abc import Callable
@@ -11,8 +10,8 @@ from typing import Annotated
 import typer
 from pydantic import TypeAdapter, ValidationError
 
+from integration_evals import history_cli, schema_exports
 from integration_evals.artifacts import load_record, read_bytes
-from integration_evals.benchmark_receipts import BenchmarkReceipt
 from integration_evals.benchmarks import (
     Corpus,
     Sample,
@@ -20,36 +19,35 @@ from integration_evals.benchmarks import (
     summarize,
     validate_corpus,
 )
+from integration_evals.comparison_archive import save_comparisons
 from integration_evals.contract_package import InstalledPackage
-from integration_evals.contract_records import ContractPin, ContractReceipt, ContractRuntime
+from integration_evals.contract_records import ContractPin, ContractRuntime
 from integration_evals.contracts import (
     ContractSettings,
     execute_contracts,
     runtime_digest,
     save_contract_receipt,
 )
+from integration_evals.diagnostics import replay_comparisons
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.execution import Settings
+from integration_evals.history import History
+from integration_evals.history_archive import save_history
 from integration_evals.models import (
-    Assembly,
     Catalog,
-    Evidence,
     Mode,
     RequirementId,
     Run,
     Selection,
     Suite,
 )
-from integration_evals.numeric_rules import NumericRules
-from integration_evals.policy import Policy, Promotion, policy_blockers, promotion
+from integration_evals.policy import Policy, policy_blockers, promotion
 from integration_evals.release import audit, export_audit
 from integration_evals.report_validation import validate_evidence, validate_run
 from integration_evals.reporting import (
-    OwnerResponse,
     Tracker,
-    save_run,
 )
-from integration_evals.runner import execute
+from integration_evals.runner import execute_captured
 from integration_evals.specifications import (
     Requirements,
     generate_corpus,
@@ -130,13 +128,14 @@ def validate(repository: Path | None = None) -> None:
 
 @app.command()
 @safe_command
-def run(
+def run(  # noqa: PLR0913 - Typer maps each explicit option to a CLI parameter.
     *,
     workspace: Path | None = None,
     manifest: Annotated[Path | None, typer.Option()] = None,
     mode: Mode = Mode.MOCK,
     output: str = "reports/runs",
     authorize_paid: Annotated[bool, typer.Option()] = False,
+    evaluation_diagnostics: Annotated[int, typer.Option(min=0, max=2)] = 0,
 ) -> None:
     """Execute selected pinned boundaries; exit 2 for incomplete product acceptance."""
     repository = Path.cwd()
@@ -152,10 +151,18 @@ def run(
         context="ci" if os.environ.get("CI") == "true" else "local",
         authorize_paid=authorize_paid,
     )
-    receipt = execute(suite, catalog, settings)
-    directory = save_run(receipt, Path(output), tracker, suite, settings.artifacts)
+    receipt, captures = execute_captured(suite, catalog, settings)
+    history = History(runs=(receipt,))
+    directory = save_history(history, Path(output), tracker, suite, settings.artifacts)
+    if captures:
+        save_comparisons(captures, receipt, directory)
     requirements = load_record(repository / "planning/requirements.json", Requirements)
-    export_audit(audit(receipt, tracker, requirements, suite), directory / "release-audit.json")
+    export_audit(audit(history, tracker, requirements, suite), directory / "release-audit.json")
+    for _ in range(evaluation_diagnostics):
+        diagnostic = replay_comparisons(history, captures, suite)
+        history = History(runs=(*history.runs, diagnostic))
+        directory = save_history(history, Path(output), tracker, suite, settings.artifacts)
+        export_audit(audit(history, tracker, requirements, suite), directory / "release-audit.json")
     typer.echo(str(directory))
     if not receipt.selected_case_ids or any(
         result.outcome.value != "passed"
@@ -246,31 +253,7 @@ def contract_runtime(
         _ = destination.write(record.model_dump_json(indent=2))
 
 
-@app.command()
-@safe_command
-def schemas(destination: Path) -> None:
-    """Export evaluator schemas; canonical product schemas are supplied by shared-contracts."""
-    destination.mkdir(parents=True, exist_ok=True)
-    models = (
-        Assembly,
-        Catalog,
-        Suite,
-        Run,
-        Tracker,
-        Requirements,
-        Corpus,
-        Sample,
-        Evidence,
-        OwnerResponse,
-        Policy,
-        Promotion,
-        Selection,
-        BenchmarkReceipt,
-        NumericRules,
-        ContractPin,
-        ContractReceipt,
-        ContractRuntime,
-    )
-    for model in models:
-        with (destination / f"{model.__name__}.schema.json").open("w", encoding="utf-8") as output:
-            _ = output.write(json.dumps(model.model_json_schema(), indent=2))
+_ = app.command()(safe_command(history_cli.replay_evaluation))
+_ = app.command()(safe_command(history_cli.history_report))
+_ = app.command()(safe_command(history_cli.benchmark_history))
+_ = app.command()(safe_command(schema_exports.schemas))

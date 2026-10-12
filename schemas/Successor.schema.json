@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "description": "An immutable reservation binds one parent to exactly one successor snapshot.",
+  "properties": {
+    "run_id": {
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "history_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "History Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "history_digest"
+  ],
+  "title": "Successor",
+  "type": "object"
+}

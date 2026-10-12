@@ -48,17 +48,34 @@ class OwnerContext:
 
 
 @dataclass(frozen=True, slots=True)
+class ComparisonCapture:
+    """Process-held oracle input captured after comparison, retention and successful cleanup.
+
+    Archived copies authorize only pure comparison and carry no source authentication.
+    This object authorizes no owner dispatch.
+    Serialized response bytes prevent mutation of the owner's observations dictionary.
+    """
+
+    case: Case
+    context: OwnerContext
+    response_json: bytes
+
+
+@dataclass(frozen=True, slots=True)
 class OwnerExecution:
     """Case receipt and the owner's immutable evidence references."""
 
     result: CaseResult
     evidence: tuple[Evidence, ...] = ()
+    comparison: ComparisonCapture | None = None
 
 
 def blocked(case: Case, mode: Mode, owner: str, reason: str) -> CaseResult:
     """Keep absent boundaries skipped and acceptance blocked."""
     return CaseResult(
         case_id=case.id,
+        case_category=case.category,
+        quarantined=case.quarantined,
         requirements=case.requirements,
         outcome=Outcome.SKIPPED,
         criterion_status=Status.BLOCKED,
@@ -74,6 +91,8 @@ def unselected(case: Case, mode: Mode) -> CaseResult:
     """Keep intentionally omitted scope planned without treating it as a passing case."""
     return CaseResult(
         case_id=case.id,
+        case_category=case.category,
+        quarantined=case.quarantined,
         requirements=case.requirements,
         outcome=Outcome.SKIPPED,
         criterion_status=Status.PLANNED,
