@@ -1,4 +1,4 @@
-import type { ContractMap, ContractName, TrustedContext, TenantId, ProjectId, UtcTime, Sha256, ProductionReference, ProductionError, ComposeArtifactRequest, PersonalizeBatchRequest, InspectArtifactRequest, ExportBundleRequest, CompareTemplateRequest, ArtifactStatusRequest, ArtifactRef, JobRef, BatchResult, RowResult, PreflightReport, CompatibilityReport, ProductionBundleRef, ArtifactManifestStatus, TemplateSpec, Composition, PersonalizationSchema, ProductionExecutionPins, ProductionRuntime, ProductionPolicy, ProductionResource, CsvDialect, CsvMapping, CsvCheckpoint, ApprovalReceipt, ApprovalVerificationOutcome, EventIntelligencePackage, PrintSpec_1_0_0, ProductionBundle_2_0_0, ProductionBundleDetached, ArtifactFile, PartialFailure, JobStatus, OperationContext, BatchContext, JobContext } from './index.js';
+import type { ContractMap, ContractName, TrustedContext, TenantId, ProjectId, UtcTime, Sha256, ProductionReference, ProductionError, ComposeArtifactRequest, PersonalizeBatchRequest, InspectArtifactRequest, ExportBundleRequest, CompareTemplateRequest, ArtifactStatusRequest, ArtifactRef, JobRef, BatchResult, RowResult, PreflightReport, CompatibilityReport, ProductionBundleRef, ArtifactManifestStatus, TemplateSpec, Composition, PersonalizationSchema, ProductionExecutionPins, ProductionRuntime, ProductionPolicy, ProductionResource, CsvDialect, CsvMapping, CsvCheckpoint, ApprovalReceipt, ApprovalVerificationOutcome, EventIntelligencePackage, PrintSpec_1_0_0, ProductionBundle_2_0_0, ProductionBundleDetached, ArtifactFile, PartialFailure, JobStatus, OperationContext, BatchContext, JobContext, UsageEvent_1_0_0 } from './index.js';
 export type { ComposeArtifactRequest, PersonalizeBatchRequest, InspectArtifactRequest, ExportBundleRequest, CompareTemplateRequest, ArtifactStatusRequest, ArtifactRef, JobRef, BatchResult, RowResult, PreflightReport, CompatibilityReport, ProductionBundleRef, ArtifactManifestStatus, TemplateSpec, Composition, PersonalizationSchema, ProductionError, ProductionExecutionPins } from './index.js';
 export type ProductionResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: ProductionError };
 export type ProductionReferenceValue = ProductionReference['reference'];
@@ -27,7 +27,7 @@ export interface ProductionStoragePort {
   readonly publish: (bundle: ProductionBundleRef, scope: ProductionScope) => Promise<ProductionResult<ProductionBundleRef>>;
 }
 export interface ProductionMeteringPort {
-  readonly observe: (observation: ContractMap['UsageEvent']) => Promise<ProductionResult<ProductionReferenceValue>>;
+  readonly observe: (observation: UsageEvent_1_0_0) => Promise<ProductionResult<ProductionReferenceValue>>;
 }
 /** Host implementation supplies and authenticates ports. Shared-contracts never calls them. */
 export interface ProductionContext {

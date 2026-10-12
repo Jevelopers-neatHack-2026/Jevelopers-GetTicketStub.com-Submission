@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.10.1 (unreleased private candidate)
+
+Addresses the fresh independent review of the unaccepted UsageEvent/2.0.0 candidate: pairwise comparison refuses directly mutually superseding observations in either direction, including when either event is checked against the other as prior; ordinary one-way correction and late-observation handling remain. The existing ProductionMeteringPort.observe callback is pinned to UsageEvent/1.0.0 while the generic root version union and the opt-in v2 helper remain available. The earlier 0.10.0 candidate archive is rejected and its approval does not transfer; this private 0.10.1 candidate still requires fresh review and owner/consumer acceptance.
+
 ## 0.10.0 (unreleased development candidate)
 
 Adds an unaccepted UsageEvent/2.0.0 direct provider-reported-unsettled USD branch and ProviderReportedCostEvidence/1.0.0 with separate source-byte and domain-separated record commitments. An opt-in helper checks an owner-supplied evidence lookup and pairwise identity without authenticating a provider or implementing Finance state. UsageEvent/1.0.0 bytes, fixtures, helper behavior and Finance dispatch remain pinned; synthetic fixtures do not establish real provider receipts, owner acceptance or consumer adoption.

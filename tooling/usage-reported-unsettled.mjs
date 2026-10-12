@@ -106,6 +106,10 @@ export function compareReportedUnsettledUsageIdentity(left, right) {
   for (const key of ['tenant_id', 'project_id']) {
     if (first[key] !== next[key]) return fail('SCOPE_MISMATCH', '/' + key);
   }
+  if (first.supersedes_observation_id === next.source_observation_id &&
+      next.supersedes_observation_id === first.source_observation_id) {
+    return fail('IDENTITY_COLLISION', '/supersedes_observation_id');
+  }
   const sameObservation = first.source_observation_id === next.source_observation_id;
   const executionKeys = [
     'logical_operation_id', 'provider_attempt_id', 'billable_attempt_id',

@@ -46,6 +46,19 @@
     "archive_acceptance": null,
     "namespace_adoption": null
   },
+  "implementation_review_dispositions": [
+    {
+      "finding": "SC-URV-ASTRA-001",
+      "status": "fixed_locally_pending_fresh_review",
+      "change": "Directly mutually superseding observation pairs return IDENTITY_COLLISION before either comparison direction can succeed; helper prior checks share that refusal.",
+      "limits": "The pure pairwise helper does not prove or persist longer ancestry, ordering, or settlement idempotency."
+    },
+    {
+      "finding": "SC-URV-ASTRA-002",
+      "status": "fixed_locally_pending_fresh_review",
+      "change": "ProductionMeteringPort.observe is declared with UsageEvent_1_0_0; the generic ContractMap UsageEvent union and explicit v2 opt-in remain available."
+    }
+  ],
   "criteria": [
     {
       "id": "URC-001",

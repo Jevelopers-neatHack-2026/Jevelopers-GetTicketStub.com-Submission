@@ -2,7 +2,7 @@
   "policy_version": "1.0.0",
   "self_exclusion": "generated/package-content-manifest.json",
   "files": {
-    "CHANGELOG.md": "sha256:b93e82cf7116a9cb4f2825c7af6b80fa4a6105b1e68be51f62f200bf7557bbd9",
+    "CHANGELOG.md": "sha256:b648d3d89b0a9f43186cf9e0c59a179947d53da380defcbc607cf039e9f89c74",
     "README.md": "sha256:1a83b1ba611e8e83828cd8f6cd275ee3aa9deac0427486b0c01df10e06c7a190",
     "compatibility/baselines.json": "sha256:7d8f28028164b091bc04627666b22db92ca2e91b5f65bdbd4616d823d126ab82",
     "compatibility/capability-source-fixtures.json": "sha256:50925c411d47ff4530837a9aaf072d26e0ce684058cd02b6ce4940819460cf44",
@@ -29,7 +29,7 @@
     "compatibility/proposal-intake.json": "sha256:90cf33964d5c7b91024039070391a0fb2176022367a64aa3dbf55747718ec100",
     "compatibility/research-reference-findings.json": "sha256:bd5cbf4dda95d44d9b4479f723da62dd25cb69119cbba6e93f3addba6512baf6",
     "compatibility/semantic-links-findings.json": "sha256:033141d2b4737b8ea0c93dc0787314d74239f50e2e646a7c08ea1c2c57296899",
-    "compatibility/usage-reported-unsettled-proposal.json": "sha256:1bc98a2b7c391ec04d421ec5ab458f34e4ba87ba0232f1f9b9726c7af2603ab3",
+    "compatibility/usage-reported-unsettled-proposal.json": "sha256:c80fcd05a147248153f1ee23781d454e2e52d84bc2aefffdcbd68c301c3c94d4",
     "compatibility/version-policy.json": "sha256:e8c3193c282d0755d5e224d63a20ff7b918a275c01f22a210c50c1993deb2bf1",
     "docs/acceptance-criteria.json": "sha256:cb539b090217fb2c077ee8af7abb9bdce025d854c3ee3304c46d396c8422fe16",
     "docs/adr/0001-canonical-schemas.md": "sha256:97be5ff166a51e5de5192cc8614a1837ed46e48a2598c766611e91bb4ce8db93",
@@ -49,7 +49,7 @@
     "docs/operations-contracts.md": "sha256:511575b694f86c2b2cd1c91113c67f41aa8e846fd3c4a211255f7f329fa8115c",
     "docs/privacy-policy.md": "sha256:4a3558cf94c21a176f1ef6cd735562064af5a05b9d8df86ec6116b93f97e42c6",
     "docs/production-contracts.md": "sha256:24fe801fbd338f2cfe1d90de42347e1cbaaecff35afe704f141f2e89655f18fd",
-    "docs/provider-reported-cost-evidence.md": "sha256:11b718a978802b26e1e88e83e0f32dfd88f638197ae2706ddba7823f20da6270",
+    "docs/provider-reported-cost-evidence.md": "sha256:8ce2f4a5bad72c909e4f29d9987e92716f5e82f7681804d526afbd4209dbe97f",
     "docs/release-guide.md": "sha256:65e48d37aff7ef3ea090b59f6bc072ef14f9f62f5b76010ea95eae2ab09dc0a5",
     "docs/requirements.json": "sha256:ee6d1eaa0417eaf27084c9efa0f4da7929fe073345075fa0ab25c4a9e734c9e2",
     "docs/research-creative-contracts.md": "sha256:50458be984e6e6414cc5f0b81d6e1f1d5d3f4be2d693dca27a4a983759e684c8",
@@ -255,14 +255,14 @@
     "generated/index.mjs": "sha256:e954cdfd28e40764f88219626d3184d9b920310d3f6eeff6e9f6ad1caa125b01",
     "generated/operations.d.ts": "sha256:443642715d9d1028a502e77be4faa230c46ddb8e6a672c082234c4b8938a395f",
     "generated/primitives.d.ts": "sha256:fa051a2f8d5bdbcb675f89016374fc78aa2d9208092faa4995fd43679bec64f1",
-    "generated/production-operations.d.ts": "sha256:e75aeee60d58cafcc6f05f59702c010f12fb59cecf9255f79067d9ab81c42adc",
+    "generated/production-operations.d.ts": "sha256:6bba51cf715ad8228ce82fd278295129d2191c43cee16a090789e7f6748952f2",
     "generated/production-validators.mjs": "sha256:c5a7e8c9306019fb4b9402032cde904b4615c588073897027bdf104bdf92cd21",
     "generated/registry.mjs": "sha256:16cbf422932dcb3c309b9208217eb6da79d0d0dfd58f27bf1e5f97ffbf7f2f4a",
     "generated/research-creative.d.ts": "sha256:2363ecff355c5772e5e42a343cf7e7f797cb6a2a4409ca742553764a70fe3b37",
-    "generated/schema-manifest.json": "sha256:ea8f1df590689422fabf498f89bd1935a67f693d0cb54fad2f2efb1ca0832eea",
+    "generated/schema-manifest.json": "sha256:c378b98f22288c9d5e9ff0e3bee4458df7cc4f83bfe31c121efaa22a0e7fd598",
     "generated/usage-reported-unsettled.d.ts": "sha256:d357b7ac840488c5b56bccd7f9b173bdab340bfd020fe059b82b2d9f0b75a1f9",
     "generated/validators.mjs": "sha256:c6743abdbf4fe6ff4575c62b48c07675f638463f20a3c5969a839ab45b863cc3",
-    "package.json": "sha256:454c182f7da4470791bab1b9c1cbf6e65af8d56006dc63a7abee14590bb82ae8",
+    "package.json": "sha256:ea0f0737de794e5bbee4842120434287d90322a07a407d1f02c526a6d1c5e21b",
     "schemas/ApprovalReceipt/1.0.0.json": "sha256:e931682224c8239bf65f5aa74d3e8e66564870cf84b95695de0557af36d6a63b",
     "schemas/ApprovalReference/1.0.0.json": "sha256:6d84c310e0a866c9fff4e8990a6e1c0bf508cb069e92769c54861769c8b5ef30",
     "schemas/ApprovalVerificationOutcome/1.0.0.json": "sha256:2ec93908f85321d836f926ecefb968276673f1f779b7237abbba4a6307bbee19",
@@ -373,7 +373,7 @@
     "tooling/production-zip.mjs": "sha256:27b74332b1bf6f9812af63cf862300b8d61fa6b029889434355303cc2e320c96",
     "tooling/research-creative.mjs": "sha256:e508ab30d23fb841c9f7d9c85b0978af627e854ad32cfb7c9c89763fd3d25657",
     "tooling/runtime.mjs": "sha256:33f32454e7ce8a8200dfa7ed7f2afc2c2a9c4c3d3c2d49d2179c8f650b04d892",
-    "tooling/usage-reported-unsettled.mjs": "sha256:2cbc85e61c211cc1f64311a79228363a00e615615a510435f86bd38a1433c9b2"
+    "tooling/usage-reported-unsettled.mjs": "sha256:51278762dfbe24cd901a036e7c8075f8c005418b542dabe62fa149114d538ad0"
   },
-  "digest": "sha256:50b990ecf6c17ade2801a3bd58af6dbaeec1bda5cab047a8f877468898083685"
+  "digest": "sha256:4af7c17083e2cc170090f50bfd5db4fa801d69f64d308e06dca8a7b99ad047f7"
 }

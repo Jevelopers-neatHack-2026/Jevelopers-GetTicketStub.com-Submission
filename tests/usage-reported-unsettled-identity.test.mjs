@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { checkOperation, checkUsageEvent, compareUsageIdentity } from '../generated/index.mjs';
 import { checkFinanceOperation } from '../tooling/finance-v2.mjs';
 import {
@@ -7,6 +8,8 @@ import {
   compareReportedUnsettledUsageIdentity
 } from '../tooling/usage-reported-unsettled.mjs';
 import { clone, valid, updateEvidence, expectFailure, v1Fixture } from './usage-reported-unsettled-fixtures.mjs';
+
+const reviewerCycle = JSON.parse(readFileSync(new URL('./usage-reported-unsettled-cycle-inputs.json', import.meta.url), 'utf8'));
 
 test('redelivery remains duplicate across changed transport and envelope fields', () => {
   const seed = valid();
@@ -62,6 +65,29 @@ test('corrections require a new observation ID and exact supersession; late old 
   const late = valid();
   late.context.prior = corrected.value;
   expectFailure(checkReportedUnsettledUsageEvent(late.value, late.context), 'STALE_REVISION', '/source_observation_id');
+});
+
+test('sealed mutual supersession rejects both comparison and helper prior directions', () => {
+  const { first, second } = clone(reviewerCycle);
+  const originalBytes = JSON.stringify({ first, second });
+
+  expectFailure(compareReportedUnsettledUsageIdentity(first.value, second.value), 'IDENTITY_COLLISION', '/supersedes_observation_id');
+  expectFailure(compareReportedUnsettledUsageIdentity(second.value, first.value), 'IDENTITY_COLLISION', '/supersedes_observation_id');
+  expectFailure(checkReportedUnsettledUsageEvent(first.value, first.context), 'IDENTITY_COLLISION', '/supersedes_observation_id');
+  expectFailure(checkReportedUnsettledUsageEvent(second.value, second.context), 'IDENTITY_COLLISION', '/supersedes_observation_id');
+  assert.equal(JSON.stringify({ first, second }), originalBytes);
+
+  const earlier = clone(first.value);
+  earlier.supersedes_observation_id = null;
+  const later = clone(second.value);
+  assert.deepEqual(compareReportedUnsettledUsageIdentity(earlier, later), { ok: true, value: 'superseding_observation' });
+  assert.deepEqual(compareReportedUnsettledUsageIdentity(later, earlier), { ok: true, value: 'superseded_observation' });
+  assert.equal(checkReportedUnsettledUsageEvent(later, { ...second.context, prior: earlier }).ok, true);
+  expectFailure(
+    checkReportedUnsettledUsageEvent(earlier, { ...first.context, prior: later }),
+    'STALE_REVISION',
+    '/source_observation_id'
+  );
 });
 
 test('v1 public helpers and Finance surfaces reject UsageEvent/2.0.0', () => {
