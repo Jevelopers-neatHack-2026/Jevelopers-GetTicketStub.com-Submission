@@ -1,0 +1,506 @@
+{
+  "corpus": "pp16-bundle-handoff-diagnostic",
+  "corpus_version": 1,
+  "synthetic": true,
+  "accepted": false,
+  "handoffEligible": false,
+  "canonical_usage_intake": "unavailable",
+  "finance_receipt": null,
+  "usage_refs": [],
+  "production_revision": "300f997c87e36077a93dd1c4951420878a5c847c",
+  "shared_contracts_pin": {
+    "package": "@jevelopers/shared-contracts",
+    "version": "0.9.7",
+    "source_repository": "Jevelopers-neatHack-2026/shared-contracts",
+    "source_pr": 31,
+    "source_revision": "d432ad5c895a67155affeaa05cd8423c758d95c3",
+    "archive": "jevelopers-shared-contracts-0.9.7.tgz",
+    "archive_sha256": "771a9f565ea9df87a4c08e6e6d5ede422d2a5926182a95be082dc8ed7b8c4c43",
+    "integrity": "sha512-P462b8thg20g5RknBzdDL5mfxpXF+kpodLPCGrTe3kmKXrw9YZ21x3E/PuGEp0aEOGoiBZlq5JB4Pktq+2lBPg==",
+    "package_content_digest": "sha256:3b4267aceaf250d4d2506ad9fad8c2e83964810078f1c01ef5d6f55100b63fe1",
+    "fixture_digest": "sha256:8db06e6348ff798c066f429bb0b21d5b7fd56ce07705b0133584bfe4f8d829ab",
+    "accepted": false,
+    "status": "unaccepted-development-candidate",
+    "live_integration": false
+  },
+  "manifest": {
+    "schema_version": "2.0.0",
+    "bundle_id": "ce50cacc-9ad3-41ec-a207-59e3740322ad",
+    "bundle_hash": "sha256:df2e9274ea5157ac500a6d9e62d313b30d1a499b9a3a97c40b2c3d7bae980257"
+  },
+  "runtime": {
+    "node": "v24.21.0",
+    "platform": "linux"
+  },
+  "provenance": "Bytes are authoritative only when produced by the Linux CI runtime workflow in the digest-pinned renderer image.",
+  "baseline_inventory": [
+    {
+      "name": "archive.zip",
+      "length": 846407,
+      "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+    },
+    {
+      "name": "detached.json",
+      "length": 1286,
+      "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+    },
+    {
+      "name": "lineage.json",
+      "length": 13886,
+      "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+    },
+    {
+      "name": "manifest.json",
+      "length": 7357,
+      "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+    },
+    {
+      "name": "output.pdf",
+      "length": 22610,
+      "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+    },
+    {
+      "name": "output.png",
+      "length": 27833,
+      "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+    },
+    {
+      "name": "output.svg",
+      "length": 766686,
+      "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+    },
+    {
+      "name": "preflight.json",
+      "length": 7419,
+      "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+    }
+  ],
+  "variants": [
+    {
+      "id": "valid",
+      "description": "Unmodified pipeline bytes.",
+      "expected": "accepted",
+      "expectedProblems": [],
+      "referenceProblems": [],
+      "ownerVerifier": {
+        "ok": true,
+        "detail": "integrity=passed;eligibility=blocked"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+        },
+        {
+          "name": "lineage.json",
+          "length": 13886,
+          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+        },
+        {
+          "name": "manifest.json",
+          "length": 7357,
+          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    },
+    {
+      "id": "tampered-payload",
+      "description": "Last byte of lineage.json flipped.",
+      "expected": "rejected",
+      "expectedProblems": [
+        "hash-mismatch:lineage.json"
+      ],
+      "referenceProblems": [
+        "hash-mismatch:lineage.json"
+      ],
+      "ownerVerifier": {
+        "ok": false,
+        "detail": "INTEGRITY_FAILURE"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+        },
+        {
+          "name": "lineage.json",
+          "length": 13886,
+          "sha256": "f18017aaab52d39679c002b76d1faa86179c33ca971b3fa00b5c583b20be49c6"
+        },
+        {
+          "name": "manifest.json",
+          "length": 7357,
+          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    },
+    {
+      "id": "tampered-manifest",
+      "description": "Last byte of manifest.json flipped.",
+      "expected": "rejected",
+      "expectedProblems": [
+        "hash-mismatch:manifest.json"
+      ],
+      "referenceProblems": [
+        "hash-mismatch:manifest.json"
+      ],
+      "ownerVerifier": {
+        "ok": false,
+        "detail": "INTEGRITY_FAILURE"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+        },
+        {
+          "name": "lineage.json",
+          "length": 13886,
+          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+        },
+        {
+          "name": "manifest.json",
+          "length": 7357,
+          "sha256": "987f29c64f9ae103c51512c5e5df7aac39bf266373bd70d3f69da12e3b3818ad"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    },
+    {
+      "id": "tampered-detached",
+      "description": "Last byte of detached.json flipped.",
+      "expected": "rejected",
+      "expectedProblems": [
+        "hash-mismatch:detached.json"
+      ],
+      "referenceProblems": [
+        "hash-mismatch:detached.json"
+      ],
+      "ownerVerifier": {
+        "ok": false,
+        "detail": "INTEGRITY_FAILURE"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "59382c72b4b588b272232590906bae4d9dcbe5d1f7fd989cd54477004e040798"
+        },
+        {
+          "name": "lineage.json",
+          "length": 13886,
+          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+        },
+        {
+          "name": "manifest.json",
+          "length": 7357,
+          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    },
+    {
+      "id": "missing-payload",
+      "description": "lineage.json removed.",
+      "expected": "rejected",
+      "expectedProblems": [
+        "missing:lineage.json"
+      ],
+      "referenceProblems": [
+        "missing:lineage.json"
+      ],
+      "ownerVerifier": {
+        "ok": false,
+        "detail": "INTEGRITY_FAILURE"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+        },
+        {
+          "name": "manifest.json",
+          "length": 7357,
+          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    },
+    {
+      "id": "missing-manifest",
+      "description": "manifest.json removed.",
+      "expected": "rejected",
+      "expectedProblems": [
+        "missing:manifest.json"
+      ],
+      "referenceProblems": [
+        "missing:manifest.json"
+      ],
+      "ownerVerifier": {
+        "ok": false,
+        "detail": "INTEGRITY_FAILURE"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+        },
+        {
+          "name": "lineage.json",
+          "length": 13886,
+          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    },
+    {
+      "id": "extra-file",
+      "description": "Unlisted extra.bin added with fixed synthetic bytes.",
+      "expected": "rejected",
+      "expectedProblems": [
+        "extra:extra.bin"
+      ],
+      "referenceProblems": [
+        "extra:extra.bin"
+      ],
+      "ownerVerifier": {
+        "ok": false,
+        "detail": "INTEGRITY_FAILURE"
+      },
+      "inventory": [
+        {
+          "name": "archive.zip",
+          "length": 846407,
+          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+        },
+        {
+          "name": "detached.json",
+          "length": 1286,
+          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+        },
+        {
+          "name": "extra.bin",
+          "length": 10,
+          "sha256": "810e1fc23da943f52eecb417df9d17c810744242879f20f95f318f4ac754100f"
+        },
+        {
+          "name": "lineage.json",
+          "length": 13886,
+          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+        },
+        {
+          "name": "manifest.json",
+          "length": 7357,
+          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+        },
+        {
+          "name": "output.pdf",
+          "length": 22610,
+          "sha256": "e6a211c18afbe826a5228214ada746d7b394b540cf942150b77fcfa1e7ae7ca9"
+        },
+        {
+          "name": "output.png",
+          "length": 27833,
+          "sha256": "defcb346e95d7efaed4b73b8c35ab8feeabf109f901aa6f96b6845774e8f97eb"
+        },
+        {
+          "name": "output.svg",
+          "length": 766686,
+          "sha256": "5c3d8fae4fdf853fd2305fd85f6cf32c3bec9b013885548b607a308120b0860b"
+        },
+        {
+          "name": "preflight.json",
+          "length": 7419,
+          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+        }
+      ],
+      "conforms": true
+    }
+  ],
+  "blocked_variants": [
+    {
+      "id": "stale-spec",
+      "blocked": "Needs a second genuine supplier specification revision; none exists. Not fabricated."
+    },
+    {
+      "id": "approved-valid",
+      "blocked": "Needs application-issued approval binding, accepted shared-contracts mapping and supplier spec; see fulfillment-connectors#10."
+    }
+  ],
+  "limitations": [
+    "Synthetic fixture: no customer, supplier or real event data.",
+    "Unapproved: accepted:false shared-contracts candidate; no approval, rights, supplier, product or order authority is established.",
+    "Ineligible: handoffEligible is false; supplier eligibility is LEGACY_UNREPRESENTABLE/blocked in the candidate.",
+    "canonical_usage_intake is unavailable, finance_receipt is null and usage_refs is empty; no usage or finance evidence exists.",
+    "Diagnostic evidence for bounded offline byte inspection only. Not an approved-package conformance fixture."
+  ],
+  "conforms": true,
+  "eligibility_recorded": {
+    "handoff_eligible": false
+  },
+  "control_inventory": [
+    {
+      "name": "trusted-commitment.json",
+      "length": 6258,
+      "sha256": "3450bfc30e854bb6d78db0573750e32d17ec91cb61e567f85c7ceef776b43a21",
+      "role": "owner-verifier-trusted-commitment"
+    }
+  ]
+}

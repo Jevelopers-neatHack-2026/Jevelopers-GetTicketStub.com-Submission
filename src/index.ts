@@ -269,3 +269,29 @@ export type {
   ProdigiReconciledOrderState,
   ProdigiReconciliationStore
 } from "./prodigi-callbacks.js";
+
+// FC-08: owner-free ProductionBundle contract (ports, report, frozen criteria table, evidence). The implementation,
+// which imports the owner package, is available only from "@jevelopers/fulfillment-connectors/production-bundle".
+export {
+  OWNER_PACKAGE_PIN,
+  PRODUCTION_BUNDLE_CRITERIA,
+  PRODUCTION_BUNDLE_REPORT_VERSION,
+  PRODUCTION_BUNDLE_VALIDATOR_VERSION
+} from "./production-bundle-contract.js";
+export type {
+  ByteReadRequest,
+  ByteReadResult,
+  CriterionId,
+  CriterionResult,
+  CriterionState,
+  ProductionBundleAnchorProvenance,
+  ProductionBundleByteSource,
+  ProductionBundleEvidence,
+  ProductionBundleGate,
+  ProductionBundleGateRequest,
+  ProductionBundlePublicationSource,
+  ProductionBundleReport,
+  ProductionBundleVerdict,
+  PublicationRequest,
+  PublicationResult
+} from "./production-bundle-contract.js";

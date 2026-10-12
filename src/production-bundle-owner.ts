@@ -14,6 +14,7 @@
  */
 import {
   productionArchiveLimits,
+  safeProductionFilename,
   validateProductionResult,
   verifyProductionBundleFiles,
   type ProductionBundleRef,
@@ -29,18 +30,6 @@ export type OwnerVerified = Extract<ReturnType<typeof verifyProductionBundleFile
 export type OwnerOutcome<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly codes: readonly string[] };
-
-/** Exact owner package pin. Tests re-derive every field from the vendored archive bytes. */
-export const OWNER_PACKAGE_PIN = Object.freeze({
-  name: "@jevelopers/shared-contracts",
-  version: "0.9.7",
-  archiveFile: "vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz",
-  archiveSha256: "771a9f565ea9df87a4c08e6e6d5ede422d2a5926182a95be082dc8ed7b8c4c43",
-  integrity: "sha512-P462b8thg20g5RknBzdDL5mfxpXF+kpodLPCGrTe3kmKXrw9YZ21x3E/PuGEp0aEOGoiBZlq5JB4Pktq+2lBPg==",
-  sourceRepository: "Jevelopers-neatHack-2026/shared-contracts",
-  sourceRevision: "d432ad5c895a67155affeaa05cd8423c758d95c3",
-  accepted: false
-} as const);
 
 export interface OwnerLimits {
   readonly outerDescriptors: number;
@@ -70,6 +59,15 @@ export function ownerLimits(): OwnerLimits {
  */
 export function toOwnerScope(scope: { readonly tenantId: string; readonly projectId: string }): OwnerScope {
   return { tenant_id: scope.tenantId, project_id: scope.projectId } as unknown as OwnerScope;
+}
+
+/** The owner's own filename rule, used before a name is handed to a host port. */
+export function ownerSafeFilename(name: string): boolean {
+  try {
+    return safeProductionFilename(name);
+  } catch {
+    return false;
+  }
 }
 
 function codesOf(errors: readonly { readonly code: string }[]): readonly string[] {
