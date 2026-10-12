@@ -1,9 +1,47 @@
-# creative-engine integration (adapter only, no runtime calls)
+# Creative-engine application integration
+
+`POST /api/creative` now invokes the canonical owned `creative-engine/api/v1` API. It accepts
+`{projectId, operation, actionId, payload, sourceRefs?, environment?}`; an optional development-driver environment
+must equal the server's configured environment. Project references are checked against the current
+application session and existing stub ownership. The server supplies actor, scope, modes and the canonical
+envelope. Supported operations are `brief.create`, `generate`, `edit`, `list`, `compare`, `restore`, `cancel`
+and `job.status`. A populated key alone does not enable execution.
+
+`src/server/creative/{host,config,finance}.mjs` composes the real engine API, version store/jobs, telemetry
+outbox and OpenRouter adapter with the real cost-intelligence PostgreSQL budgets/usage/pricing APIs. It uses
+the harness public DecisionPort and existing JEV transport. The application credential port supplies only
+`CREATIVE_ENGINE_OPENROUTER_API_KEY`; studio credentials remain separate. No second image adapter or Finance
+capacity ledger is created. SQLite stores mapping/recovery evidence; PostgreSQL owns economic capacity.
+
+Commissioning requires a current staff session, existing project ownership, explicit platform Finance
+reservation capability and separate owner-issued delegation/eligibility/Research records on a private volume.
+Requests cannot install these records. Guests and customer art capability alone receive no Finance authority.
+Cancellation, deadline, rights/current brief/selection, active lease, target and immutable publication fences
+remain inside the engine. Errors never become simulated creative success.
+
+Complete OpenRouter usage requires an exact-model reviewed profile and exact target/transport/reservation
+binding. Reported unsettled cost remains **estimated budget consumption**, never a confirmed provider invoice.
+Missing essential usage retains the hold and withholds publication, with raw usage/private attribution retained.
+JEV valuation uses actual SQL `estimateV2` tariffs. The explicit version1 `PricingEstimateReceipt` compatibility
+projection records the genuine schema2 quote identity/hash and true tariff refs; it never renames a RateCard.
+
+Source pins/file hashes are in the existing `src/server/vendor/*/MANIFEST.json` files and assembly snapshot
+tooling. `TICKETSTUB_OFFLINE_POSTGRES=1 node --test tests/creative-host.test.mjs` exercises real application
+sessions, engine SQLite/jobs/artifacts, restricted PostgreSQL with the pinned migrations and intercepted
+provider transport. External owner records/response bytes are seeded offline data, not account/live acceptance.
+See [deployed settings](../operations/deployed-settings.md) for the single inventory, deployment order and rollback.
+
+## Historical studio mapper boundary
+
+The existing studio `/api/art` is still a separate provider consumer. Its client mapper and the material below
+document the earlier proposal; they do not establish a migrated studio creative journey or new server authority.
 
 Code: `src/customer/studio/creative/` (`contracts.ts`, `controls.ts`, `adapter.ts`, `fixtures/`).
-Check: `node scripts/check-creative-adapter.mjs` (Node 22.15+). It builds a brief, edit plans, a control schema and API envelopes from the demo stub and compares keys and enums with creative-engine's fixture JSON.
+Check: `node scripts/check-creative-adapter.mjs` (Node22.23.3). It builds a brief, edit plans, a control schema and API envelopes from the demo stub and compares keys and enums with creative-engine's fixture JSON.
 
-Source of truth: `Jevelopers-neatHack-2026/creative-engine`, branch `impl/creative-brief-integrated` (commit `96d56f3`; the most complete branch, and it contains the contracts, controls, API, brief and version-store work). `main` only has architecture docs. Everything upstream is a **local consumer proposal**: `MODE=live` is not implemented, `make acceptance` exits 2 until the owner agreements are signed, and the shared-contracts catalog (`docs/contract-catalog.md`) describes `CreativeBrief`, `DesignControlSchema` and `DesignVersion` as proposed interfaces.
+The mapper originally tracked `impl/creative-brief-integrated` at `96d56f3`. Current runtime source instead
+comes from the exact vendored creative-engine revision. Historical `PENDING_` refs below are not accepted
+host authority; actual deployment still requires current owner agreements and live evidence.
 
 ## Mapping table
 
@@ -96,7 +134,7 @@ Checked at the type level (`Pending<K>` = `` `PENDING_${K}` ``); a real hash alw
 - `inspect`, `list`, `compare`, `restore`, `handoff` are supported by `toApiRequest` types but unused by the studio.
 - Upstream is on Node 22.23.3 / 24.15.0 and the `.d.mts` types aren't published as a package; `contracts.ts` mirrors them by hand. Re-check against upstream when they pin a release.
 
-## One-file swap plan for `/api/art`
+## Historical swap proposal for `/api/art` (not implemented by this host)
 
 Today `src/app/api/art/route.ts` takes `{event, vibe, seed, edition, first}` and returns an `ArtLayer`. The client (`research/client.ts` `remixArt`) and `addArtVersion` stay unchanged, because the route keeps that request and response.
 
