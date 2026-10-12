@@ -8,6 +8,7 @@ import {
 import {
 	canonicalJson,
 	evidencePayloadDigest,
+	type EvidencePage,
 	evidencePageSchemaId,
 	readEvidencePage,
 	verifyEvidencePage,
@@ -92,7 +93,6 @@ test("repeated reads are byte-stable and carry recorded references and provenanc
 		assert.equal(o.operationId, s.operation);
 		assert.equal(o.executionAttemptId, s.attempt);
 		assert.equal(o.jobId, s.job);
-		assert.equal(o.rowKeyDigest, s.row);
 		assert.equal(o.publicationId, s.publication);
 		assert.equal(o.environment, "local");
 		assert.equal(o.billingMode, "unclassified");
@@ -230,8 +230,6 @@ test("exports no raw input, names, scope strings, URLs or secrets", () => {
 			"producerBuildDigest",
 			"publicationId",
 			"recordedAtMs",
-			"requestDigest",
-			"rowKeyDigest",
 			"sequence",
 			"stagingVersion",
 		],
@@ -404,4 +402,119 @@ test("verification preserves own __proto__ keys instead of dropping them", () =>
 	}
 	assert.equal(verifyEvidencePage(JSON.parse(JSON.stringify(page))), true);
 	assert.equal(verifyEvidencePage(page), true);
+});
+
+test("exports no plain request or row-key digests and keeps generated IDs", () => {
+	using f = fixture();
+	seedJob(f);
+	const page = readEvidencePage(f.outbox, scope);
+	const source = f.outbox.list(scope);
+	assert.ok(source.some((e) => e.row !== null));
+	const text = JSON.stringify(page);
+	for (const o of page.observations) {
+		assert.equal("requestDigest" in o, false);
+		assert.equal("rowKeyDigest" in o, false);
+	}
+	const plans = plan("batch", 2);
+	const leaks = [
+		plans.requestDigest,
+		plans.pinsDigest,
+		...plans.rows.map((r) => r.digest),
+		...plans.rows.map((r) => hash(r.id)),
+		...source.flatMap((e) => [e.request, ...(e.row ? [e.row] : [])]),
+	];
+	for (const leak of leaks) assert.equal(text.includes(leak), false, leak);
+	page.observations.forEach((o, i) => {
+		const e = source[i];
+		assert.ok(e);
+		assert.equal(o.observationId, e.id);
+		assert.equal(o.operationId, e.operation);
+		assert.equal(o.executionAttemptId, e.attempt);
+		assert.equal(o.jobId, e.job);
+		assert.equal(o.publicationId, e.publication);
+	});
+});
+
+test("verification rejects forged fixed fields and key sets even with a recomputed digest", () => {
+	using f = fixture();
+	seedJob(f);
+	const page = readEvidencePage(f.outbox, scope);
+	const { integrity: _integrity, ...payload } = page;
+	const reseal = (forged: Record<string, unknown>): EvidencePage => ({
+		...(forged as Omit<EvidencePage, "integrity">),
+		integrity: {
+			...page.integrity,
+			payloadDigest: evidencePayloadDigest(forged as never),
+		},
+	});
+	const first = page.observations[0];
+	assert.ok(first);
+	assert.equal(verifyEvidencePage(reseal({ ...payload })), true);
+	const forgeries: Record<string, unknown>[] = [
+		{ ...payload, extra: 1 },
+		{ ...payload, schema: "other" },
+		{ ...payload, version: 2 },
+		{ ...payload, provenance: { ...payload.provenance, authoritative: true } },
+		{ ...payload, provenance: { ...payload.provenance, mapped: true } },
+		{
+			...payload,
+			provenance: { ...payload.provenance, deliveryStatus: "delivered" },
+		},
+		{
+			...payload,
+			provenance: { ...payload.provenance, note: "approved receipt" },
+		},
+		{ ...payload, provenance: { ...payload.provenance, extra: true } },
+		{ ...payload, scopeDigest: "abc" },
+		{ ...payload, after: -1 },
+		{ ...payload, limit: 0 },
+		{ ...payload, nextCursor: "v1:nothex:1" },
+		{ ...payload, nextCursor: `v1:${"0".repeat(64)}:1` },
+		{ ...payload, observations: [{ ...first, environment: "production" }] },
+		{ ...payload, observations: [{ ...first, billingMode: "billable" }] },
+		{
+			...payload,
+			observations: [{ ...first, producerBuildDigest: "a".repeat(64) }],
+		},
+		{ ...payload, observations: [{ ...first, requestDigest: "a".repeat(64) }] },
+		{ ...payload, observations: [{ ...first, providerRequestId: "x" }] },
+		{ ...payload, observations: [{ ...first, observationId: "not-a-uuid" }] },
+		{
+			...payload,
+			observations: [
+				{
+					...first,
+					metrics: {
+						...first.metrics,
+						duration: {
+							unit: "millisecond",
+							value: 0,
+							completeness: "unknown",
+						},
+					},
+				},
+			],
+		},
+	];
+	for (const forged of forgeries)
+		assert.equal(verifyEvidencePage(reseal(forged)), false);
+	const { payloadDigest: _d, ...rest } = page.integrity;
+	assert.equal(
+		verifyEvidencePage({ ...payload, integrity: rest } as never),
+		false,
+	);
+	assert.equal(
+		verifyEvidencePage({
+			...page,
+			integrity: { ...page.integrity, extra: 1 },
+		} as never),
+		false,
+	);
+	assert.equal(
+		verifyEvidencePage({
+			...page,
+			integrity: { ...page.integrity, algorithm: "md5" },
+		} as never),
+		false,
+	);
 });

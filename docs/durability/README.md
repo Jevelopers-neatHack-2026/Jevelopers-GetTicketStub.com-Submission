@@ -182,7 +182,9 @@ mapping, real finance intake, Neatlogs and EvaluationEvidence remain blocked.
 staged observations as digest-committed pages (see the telemetry README). It
 adds no provider/billable IDs or valuation, states delivery status as
 `not_included` (no delivery claim), and does not mutate
-outbox state. Its projection is field-by-field and its canonicalization rejects non-JSON or
+outbox state. Its projection is field-by-field (no request or row-key digests; scope is an
+ordinary guessable hash, not anonymization or authentication), the verifier
+enforces a strict envelope shape, and its canonicalization rejects non-JSON or
 malformed data. Its SHA-256 commitment is local tamper evidence only.
 
 ## Acceptance and handoffs

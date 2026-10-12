@@ -1,11 +1,19 @@
+import { z } from "zod";
 import {
 	check,
+	codes,
+	digestSchema,
 	hash,
+	idSchema,
 	scopeKey,
 	type Digest,
 	type Scope,
 } from "../internal/durability.js";
-import type { Observation, ObservationOutbox } from "./observations.js";
+import {
+	observationKinds,
+	type Observation,
+	type ObservationOutbox,
+} from "./observations.js";
 
 export const evidencePageSchemaId = "pp.telemetry.staged-observation-page";
 export const evidencePageVersion = 1;
@@ -21,9 +29,7 @@ export type EvidenceObservation = {
 	readonly operationId: string;
 	readonly executionAttemptId: string | null;
 	readonly jobId: string | null;
-	readonly rowKeyDigest: string | null;
 	readonly publicationId: string | null;
-	readonly requestDigest: string;
 	readonly kind: Observation["kind"];
 	readonly code: Observation["code"];
 	readonly recordedAtMs: number;
@@ -48,7 +54,11 @@ export type EvidencePagePayload = {
 		readonly deliveryStatus: "not_included";
 		readonly note: string;
 	};
-	/** Opaque caller-scope digest; tenant/project are not derivable from it. */
+	/**
+	 * Opaque routing hash of the caller scope. No raw tenant/project is exported,
+	 * but it is an ordinary unkeyed SHA-256 that can be guessed: it provides
+	 * neither anonymization nor authentication.
+	 */
 	readonly scopeDigest: string;
 	readonly after: number;
 	/** Caller-requested page size; null when the outbox default was used. */
@@ -67,6 +77,69 @@ export type EvidencePage = EvidencePagePayload & {
 const note =
 	"Local staged, unmapped, non-authoritative observations. Delivery status is not included and no delivery claim is made. Not a UsageEvent, ledger, approved receipt or consumer acknowledgement.";
 const cursorPattern = /^v1:([a-f0-9]{64}):(0|[1-9][0-9]{0,15})$/;
+
+const measurementSchema = <U extends string>(unit: U) =>
+	z
+		.object({
+			unit: z.literal(unit),
+			value: z.number().nullable(),
+			completeness: z.enum(["measured", "unknown"]),
+		})
+		.strict()
+		.refine((m) => (m.value === null) === (m.completeness === "unknown"));
+const nullableId = idSchema.nullable();
+const observationShape = z
+	.object({
+		sequence: z.number().int().nonnegative(),
+		observationId: idSchema,
+		operationId: idSchema,
+		executionAttemptId: nullableId,
+		jobId: nullableId,
+		publicationId: nullableId,
+		kind: z.enum(observationKinds),
+		code: z.enum(codes).nullable(),
+		recordedAtMs: z.number().int().nonnegative(),
+		stagingVersion: z.literal(1),
+		environment: z.literal("local"),
+		billingMode: z.literal("unclassified"),
+		producerBuildDigest: z.null(),
+		metrics: z
+			.object({
+				outputBytes: measurementSchema("byte"),
+				duration: measurementSchema("millisecond"),
+				rows: measurementSchema("row"),
+			})
+			.strict(),
+	})
+	.strict();
+const pageShape = z
+	.object({
+		schema: z.literal(evidencePageSchemaId),
+		version: z.literal(evidencePageVersion),
+		provenance: z
+			.object({
+				staged: z.literal(true),
+				local: z.literal(true),
+				mapped: z.literal(false),
+				authoritative: z.literal(false),
+				deliveryStatus: z.literal("not_included"),
+				note: z.literal(note),
+			})
+			.strict(),
+		scopeDigest: digestSchema,
+		after: z.number().int().nonnegative(),
+		limit: z.number().int().positive().nullable(),
+		nextCursor: z.string().regex(cursorPattern).nullable(),
+		observations: z.array(observationShape),
+	})
+	.strict();
+const integrityShape = z
+	.object({
+		algorithm: z.literal("sha256"),
+		canonicalization: z.literal("json-sorted-keys-v1"),
+		payloadDigest: digestSchema,
+	})
+	.strict();
 
 /**
  * Deterministic JSON: object keys sorted, arrays ordered. Fails closed
@@ -123,7 +196,11 @@ function encode(value: unknown, ancestors: Set<object>): string {
 export function evidencePayloadDigest(payload: EvidencePagePayload): Digest {
 	return hash(canonicalJson(payload));
 }
-/** True when the commitment matches the exact payload fields of the page. */
+/**
+ * True when the page has the exact strict envelope shape and its commitment
+ * matches the payload. A local integrity check only: it is not authentication
+ * or authority, since anyone can recompute an unkeyed digest.
+ */
 export function verifyEvidencePage(page: EvidencePage): boolean {
 	try {
 		// Untrusted input: validate the whole graph as plain JSON first (this
@@ -143,12 +220,17 @@ export function verifyEvidencePage(page: EvidencePage): boolean {
 			if (key === "integrity") integrity = descriptor.value;
 			else payload[key] = descriptor.value;
 		}
-		const commitment = integrity as EvidencePage["integrity"];
+		// Strict private envelope: exact key set and fixed metadata, even when a
+		// forger recomputes the digest.
+		const shaped = pageShape.safeParse(payload);
+		const commitment = integrityShape.safeParse(integrity);
+		if (!shaped.success || !commitment.success) return false;
+		const cursor = shaped.data.nextCursor;
+		if (cursor !== null && !cursor.startsWith(`v1:${shaped.data.scopeDigest}:`))
+			return false;
 		return (
-			commitment.algorithm === "sha256" &&
-			commitment.canonicalization === "json-sorted-keys-v1" &&
-			commitment.payloadDigest ===
-				evidencePayloadDigest(payload as EvidencePagePayload)
+			commitment.data.payloadDigest ===
+			evidencePayloadDigest(payload as EvidencePagePayload)
 		);
 	} catch {
 		return false;
@@ -165,9 +247,7 @@ function project(event: Observation): EvidenceObservation {
 		operationId: event.operation,
 		executionAttemptId: event.attempt,
 		jobId: event.job,
-		rowKeyDigest: event.row,
 		publicationId: event.publication,
-		requestDigest: event.request,
 		kind: event.kind,
 		code: event.code,
 		recordedAtMs: event.recorded,
@@ -193,7 +273,9 @@ function after(scopeDigest: Digest, cursor: string | null): number {
 
 /**
  * Read-only export adapter over ObservationOutbox.list. It never claims,
- * settles or requeues events and cannot infer tenant/project from the digest.
+ * settles or requeues events and exports no raw tenant/project. Request and
+ * row-key digests stay in the private DB: unkeyed hashes would allow
+ * dictionary and cross-scope equality disclosure.
  * Callers must authenticate and authorize scope first.
  */
 export function readEvidencePage(
