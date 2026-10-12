@@ -4,7 +4,7 @@
 
 ## Private adapter boundary
 
-`src/adapters/jev/` contains private TypeSafe request/response validation, one fixed-target HTTP send, retry recommendation data, and a pure in-memory observation helper. The Phase B extension in `src/internal/durable-store.js` records the private observation in the existing SQLite store. Nothing in the JEV directory is exported by the package entrypoint or installed in an engine/default execution path. The runtime continues to reject `mode: "live"`.
+`src/adapters/jev/` contains private TypeSafe request/response validation, one fixed-target HTTP send, retry recommendation data, and a pure in-memory observation helper. The Phase B extension in `src/internal/durable-store.js` records the private observation in the existing SQLite store. These private modules remain unexported. The separately composed [public DecisionPort](typesafe-host-integration.md) reuses this transport under the application's existing canonical validators, authorization and Finance controls. It does not enable the private local runtime, which continues to reject `mode: "live"`.
 
 Every fixture and controlled HTTP/DNS response under `tests/fixtures/jev/` is synthetic. Tests replace DNS resolution and `https.request`; they do not contact TypeSafe or another external service. The API key supplied to the private send helper is an explicit internal argument. There is no `.env` reader or credential loader in this phase, and no real credential or spend authority was used.
 

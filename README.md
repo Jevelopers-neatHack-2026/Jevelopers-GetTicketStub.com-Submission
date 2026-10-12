@@ -80,6 +80,8 @@ The owner accepts only these fixed routes. It caps cleanup authority at 16 uniqu
 | Bounded local controller | [Bounded private runtime](docs/decisions/bounded-internal-runtime.md) |
 | Telemetry | [AH-10 telemetry evidence](docs/evidence-and-provenance.md) · [Neatlogs SDK conformance](docs/decisions/neatlogs-sdk-conformance.md) |
 | JEV adapter | [Provider wire conformance](docs/decisions/provider-conformance.md) |
+| TypeSafe application composition | [Public DecisionPort and owned execution](docs/decisions/typesafe-host-integration.md) |
+| Development host | [Shared development driver boundary](docs/driver.md) |
 | Provider access profile | [Provider access readiness](docs/runbooks/provider-access.md) |
 | Ownership and acceptance | [Responsibilities and interfaces](docs/architecture/OWNERSHIP.md) · [Acceptance criteria](docs/architecture/ACCEPTANCE.md) |
 | Architecture and plan | [Architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md) |

@@ -99,7 +99,8 @@ test('example environment keeps the image access preference distinct from an ada
   const contents = readFileSync(new URL('../../.env.example', import.meta.url), 'utf8');
   assert.match(contents, /^TYPESAFE_API_KEY=$/m);
   assert.match(contents, /^GPT_IMAGE_ACCESS_MODE=codex_subscription$/m);
-  assert.match(contents, /^GPT_IMAGE_MODEL=gpt-image-2$/m);
+  assert.doesNotMatch(contents, /^GPT_IMAGE_MODEL=.+$/m);
   assert.doesNotMatch(contents, /API_KEY=.+/);
-  assert.match(contents, /do not configure a GPT Image adapter/i);
+  assert.match(contents, /development tooling preference/i);
+  assert.match(contents, /Never a production access grant/i);
 });
