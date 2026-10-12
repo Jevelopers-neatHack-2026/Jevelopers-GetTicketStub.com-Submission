@@ -4,11 +4,36 @@ import { mkdtemp,cp,writeFile,rm,readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { loadExportFixtures,evaluateExportCandidate,validateCapturedExport,validateStructuralExportRequest,validateOwnerFenceEvidence,validateStructuralExportError,exportFixtureRoot } from './export-candidate.mjs';
 import { recordHash } from './candidate924.mjs';
 
 const loaded=await loadExportFixtures();
 const captures=loaded.files['candidate-postgres-composition.json'].receipts;
+test('actual CLI emits portable packet provenance without changing source pins or financial observations',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'export-portable-provenance-'));
+  const pinPath=new URL('../contracts/finance-export0c4-fixture-pin.json',import.meta.url);
+  const pinBytes=await readFile(pinPath),pin=JSON.parse(pinBytes);
+  try {
+    const output=join(directory,'output');
+    const result=spawnSync(process.execPath,[new URL('./run.mjs',import.meta.url).pathname,'--candidate-export0c4-fixtures',output],{env:{PATH:process.env.PATH,TMPDIR:tmpdir()},encoding:'utf8',timeout:30000});
+    assert.equal(result.status,0,result.stderr||result.stdout);
+    const text=await readFile(join(output,'receipt.json'),'utf8'),receipt=JSON.parse(text);
+    assert.equal(receipt.status,'passed');
+    assert.equal(Object.hasOwn(receipt.provenance,'originalPacketRoot'),false,'Producer absolute root must not be emitted');
+    assert.equal(text.includes(pin.originalPacketRoot),false,'Producer absolute root must not appear in receipt bytes');
+    const {originalPacketRoot,...portablePin}=pin;
+    assert.deepEqual(receipt.provenance,{...portablePin,originalPacketOrigin:{label:'captured-export0c4',rootSha256:byteHash(originalPacketRoot)}});
+    assert.deepEqual(await readFile(pinPath),pinBytes);
+    assert.deepEqual((await loadExportFixtures()).pin,loaded.pin);
+    assert.deepEqual(receipt.observation,evaluateExportCandidate(loaded));
+    assert.equal(receipt.denialSupplement.observation.capturedCases,92);
+    assert.equal(receipt.denialSupplement.observation.lateDenials,60);
+    assert.equal(receipt.denialSupplement.observation.entryMissingCapabilityDenials,4);
+    for(const flag of ['producerExecuted','postgresExecuted','currentAuthorityExecuted','hmacVerified','cfoDeliveryExecuted','adoptionAccepted'])assert.equal(receipt[flag],false);
+    assert.equal(receipt.providerCalls,0);assert.equal(receipt.ownerAcknowledgement,null);assert.equal(receipt.productAcceptance,'blocked');
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
 function responseMutation(name,index,change,expected) {
   test(name,()=>{const record=structuredClone(captures[index]);change(record);assert.throws(()=>validateCapturedExport(record.receipt,record.query,loaded),expected);});
 }
