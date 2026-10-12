@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
+import { copyConditionalValidator } from './conditional-fetch.mjs';
 
 const contexts = new AsyncLocalStorage();
 const provenDocuments = new WeakMap();
@@ -64,6 +65,7 @@ export function recordSafeFetchProvenance(document, provenance) {
     mode: provenance.mode === 'svg-asset' ? 'svg-asset' : 'document',
     lifecycleBound: provenance.lifecycleBound === true,
     bodyHash: provenance.bodyHash,
+    conditionalValidator: copyConditionalValidator(provenance.conditionalValidator),
     redirectChain: Object.freeze([...provenance.redirectChain]),
     hops: Object.freeze(provenance.hops.map((hop) => Object.freeze({
       url: hop.url,

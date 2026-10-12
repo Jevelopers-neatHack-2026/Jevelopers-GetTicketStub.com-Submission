@@ -12,6 +12,9 @@ import { resolveSystemHost } from "./dns-resolver.mjs";
 import { RetrievalError } from "./errors.mjs";
 import { getTestSeam } from "./internal/test-seams.mjs";
 import { recordSafeFetchProvenance, safeFetchLifecycleFor } from "./internal/fetch-lifecycle.mjs";
+import {
+  conditionalFetchFor, conditionalRequestHeaders, conditionalValidatorFromResponse, recordConditionalResponse,
+} from "./internal/conditional-fetch.mjs";
 
 export { RetrievalError };
 
@@ -262,7 +265,7 @@ function makeHostHeader(hostname, port, protocol) {
   return port === defaultPort ? host : `${host}:${port}`;
 }
 
-function requestOnce(validated, address, context, seam, accept = ACCEPT) {
+function requestOnce(validated, address, context, seam, accept = ACCEPT, conditional = null) {
   const { url, hostname, port } = validated;
   const secure = url.protocol === "https:";
   const agent = secure
@@ -290,6 +293,7 @@ function requestOnce(validated, address, context, seam, accept = ACCEPT) {
       "accept-encoding": "gzip",
       "user-agent": "event-intelligence-controlled-retrieval/0.1",
       connection: "close",
+      ...(conditional ? conditionalRequestHeaders(conditional) : {}),
     },
     setHost: false,
     maxHeaderSize: 16 * 1024,
@@ -610,6 +614,7 @@ export class SafeFetcher {
     try {
       externalSignal = validateFetchOptions(options);
       const lifecycle = safeFetchLifecycleFor(this);
+      const conditional = mode === "document" ? conditionalFetchFor(this) : null;
       const createdContext = createContext(externalSignal,
         lifecycle?.options.totalMilliseconds ?? DEFAULT_RUN_LIMITS.totalMilliseconds);
       context = createdContext.context;
@@ -628,6 +633,7 @@ export class SafeFetcher {
         const validated = this.#seam?.validateUrl
           ? this.#seam.validateUrl(current)
           : parseAndValidateUrl(current);
+        if (conditional && validated.url.href !== conditional.sourceUrl) throw new RetrievalError("POLICY_DENIED");
         if (firstHopUrl === undefined) firstHopUrl = validated.url.href;
         const hopIndex = hops.length;
         let hopAdmissionReturned = false;
@@ -671,7 +677,7 @@ export class SafeFetcher {
         hop.dispatchIntent = true;
         try {
           result = await requestOnce(validated, chosenAddress, context, this.#seam,
-            mode === "svg-asset" ? SVG_ASSET_ACCEPT : ACCEPT);
+            mode === "svg-asset" ? SVG_ASSET_ACCEPT : ACCEPT, conditional);
         } catch (error) {
           await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "no_response" }));
           if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
@@ -703,7 +709,7 @@ export class SafeFetcher {
           throwIfStopped(context);
           // Asset acquisition has one request and cannot follow a redirect. In
           // particular, no destination DNS lookup or socket may be started.
-          if (mode === "svg-asset") throw new RetrievalError("REDIRECT_LIMIT");
+          if (mode === "svg-asset" || conditional) throw new RetrievalError("REDIRECT_LIMIT");
           const location = response.headers.location;
           if (redirects >= DEFAULT_RUN_LIMITS.redirectsPerFetch) throw new RetrievalError("REDIRECT_LIMIT");
           if (typeof location !== "string" || location.length > 8_192) throw new RetrievalError("POLICY_DENIED");
@@ -720,6 +726,29 @@ export class SafeFetcher {
           continue;
         }
         try {
+          if (conditional && (response.statusCode === 304 || response.statusCode === 404
+            || response.statusCode === 410 || (response.statusCode >= 500 && response.statusCode <= 599))) {
+            const validator = conditionalValidatorFromResponse(response);
+            // A supported 304 must affirm the exact one validator actually sent.
+            // Missing, duplicate or changed validators are not freshness proof.
+            if (response.statusCode === 304 && (!validator
+              || validator.name !== conditional.validator.name || validator.value !== conditional.validator.value)) {
+              throw new RetrievalError("TRANSPORT_FAILURE");
+            }
+            response.destroy();
+            await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "conditional_no_body" }));
+            throwIfStopped(context);
+            const observedAt = new Date().toISOString();
+            const kind = response.statusCode === 304 ? "not_modified"
+              : response.statusCode === 404 || response.statusCode === 410 ? "removed" : "outage";
+            const observed = Object.freeze({ kind, statusCode: response.statusCode, observedAt });
+            recordConditionalResponse(observed, {
+              intent: conditional.intent,
+              sourceUrl: validated.url.href, statusCode: response.statusCode, kind, observedAt,
+              sentValidator: conditional.validator, receivedValidator: validator,
+            });
+            return observed;
+          }
           if (response.statusCode !== 200) {
             await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "status_rejected" }));
             throwIfStopped(context);
@@ -769,6 +798,13 @@ export class SafeFetcher {
             mode,
             lifecycleBound: lifecycle !== null,
             bodyHash: createHash("sha256").update(body).digest("hex"),
+            conditionalValidator: conditionalValidatorFromResponse(response),
+          });
+          if (conditional) recordConditionalResponse(fetched, {
+            intent: conditional.intent,
+            sourceUrl: validated.url.href, statusCode: 200, kind: "body", observedAt: fetched.fetchedAt,
+            retrievedAt: fetched.fetchedAt, bodyHash: createHash("sha256").update(body).digest("hex"),
+            sentValidator: conditional.validator, receivedValidator: conditionalValidatorFromResponse(response),
           });
           returnedBody = true;
           return fetched;
