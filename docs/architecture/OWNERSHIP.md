@@ -1,32 +1,28 @@
-# `creative-engine`
+# creative-engine ownership and implementation boundary
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
+**Repository status:** Public on GitHub; verified October 12, 2026.
 **Proposed owner:** Creative and fulfillment.
-**Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
+**Implementation state:** The private, unpublished Node.js 22 package contains a typed creative API, local controls, provider adapters, inspection, immutable version storage and telemetry. External contract acceptance, application identity and approval, finance authority, production provider access and rendering remain separate boundaries.
 
 ## Responsibility
 
-Transform approved research and customer direction into artwork and traceable revisions. Own creative briefs, image-provider integration, generation and editing strategies, reference selection, and immutable design versions. GPT Image is the proposed initial provider family; select the exact model and configuration at kickoff.
+Transform approved research and customer direction into artwork and traceable revisions. Own creative briefs, image-provider integration, generation and editing strategies, reference selection, and immutable design versions. Exact provider, model and configuration remain subject to owner selection and access approval.
 
-Exact event text, personalized typography, print dimensions, and production validation belong to `print-production`. The customer application owns approval. A preview requires customer approval and production checks before printing.
+Exact event text, personalized typography, print dimensions, and production validation belong to print-production. The customer application owns approval. A preview requires customer approval and production checks before printing.
 
-## Planned internal modules
+## Current implementation surface
 
-- `src/planning/`: Creative briefs and design strategies.
-- `src/models/`: Image-provider adapters and routing.
-- `src/generation/`: Initial concepts and artwork generation.
-- `src/editing/`: References, masks, and scoped revision requests.
-- `src/controls/`: Validated schemas describing supported customer controls.
-- `src/versions/`: Parent links, asset metadata, and version comparisons.
-- `src/storage/`: Immutable artwork objects and access references.
+The ESM package exports versioned API, contracts, planning, versions, controls, inspection, models, telemetry and preflight subpaths. The API wraps injected job, storage, provider, research/rights, DecisionPort, metering, approval, inspection, handoff and telemetry ports; it is not a service or customer-facing application.
 
-## Dependencies and handoff
+Local source implements brief planning; generate, edit, inspect, list, compare, restore, cancel and handoff operations; content-addressed artwork; an immutable SQLite version store; a durable local controls Apply outbox; deterministic inspection and bounded repair; and sanitized attempt-usage evidence. OpenAI Images and OpenRouter adapter modules have local checks. An offline check does not prove paid access, external-contract agreement, production rendering or deployment. Public API, controls and C01-C04 schemas remain local proposals. Application authentication and approval issuance, finance authority and production renderer are not implemented here.
 
-Consume research from `event-intelligence` and interfaces from `shared-contracts`. Perform billable calls through `cost-intelligence` metering and budget authority. Emit separate attempt identifiers for actual retries; duplicate observations of one attempt must remain reconcilable. Return versioned results through `agent-harness` for customer review.
+## Integration targets and handoff
 
-## P0 demo slice
+Research and asset permissions are intended from event-intelligence. Billable calls require cost-intelligence authority and metering. Immutable versions are intended for print-production and app review through accepted contracts. Current app main does not import this package at runtime. Provider-access and execution-target guides describe gates, not authorization to make a live call.
 
-Generate one artwork concept, apply one customer-requested revision, and retain both versions with their lineage, inputs, provider metadata, and available usage evidence. Hand the selected immutable version to production.
+## P0 target slice
+
+Design intent: generate one artwork concept, apply one customer-requested revision, retain both versions with lineage, inputs, provider metadata and available usage evidence, then hand the selected immutable version to production.
 
 ## Acceptance boundary
 
@@ -37,8 +33,8 @@ Generate one artwork concept, apply one customer-requested revision, and retain 
 - [ ] Approved versions cannot be silently overwritten.
 - [ ] Production receives the exact version selected by the customer.
 
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+The canonical current-state architecture describes implementation across repositories. The historical v1.0 architecture kit remains design intent: [current organization architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture/CURRENT-STATE.md) · [v1.0 design intent](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md).
 
-## Acceptance and contributor handoff
+Use the [repository acceptance view](ACCEPTANCE.md) for criterion allocation only. Current criteria and evidence live in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) and [JSON tracker](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.json). See the [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md), [contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md) and [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
 
-Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
+For a guide-by-topic list, see the [documentation index](../INDEX.md).
