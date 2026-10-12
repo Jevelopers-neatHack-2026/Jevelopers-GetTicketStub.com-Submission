@@ -5,6 +5,8 @@ import { canonicalHash } from 'creative-engine/contracts';
 import { projectPublicTelemetry } from 'creative-engine/telemetry';
 import { ApplyStore, hash } from './actions.mjs';
 import { createControlSchema, SCHEMA_VERSIONS, snapshotControlJson, canonical } from './schema.mjs';
+import { ARTWORK_RECOVERY_VERSION, assertArtworkRecovery } from './artwork-recovery.mjs';
+import { projectApplyResult } from './public-result.mjs';
 
 const fields = ['name_size', 'layout', 'logo_position', 'style', 'layout_emphasis'];
 const baseline = { name_size: 'medium', layout: 'centered', logo_position: 'top', style: 'calm', layout_emphasis: 'balanced' };
@@ -129,21 +131,102 @@ export class CreativeControlsAdapter {
       operation: 'edit', action_id: `controls:${operation.logical_operation_id}`,
       payload: { brief_id: brief.brief_id, design_version_id: design.design_version_id, plan, selection_mode: 'advance' } };
   }
-  async apply(principal, body) {
+  async apply(principal, body) { return this.applyInternal(principal, body, false); }
+  async applyInternal(principal, body, reviewedArtwork) {
     // Keep one own-data principal across awaits; caller mutation cannot alter
     // the scope of persisted work or subsequent public-port reads.
     try { principal = snapshotControlJson(principal); } catch { return { ok: false, code: 'permission' }; }
-    const accepted = this.store.apply(principal, body);
+    const accepted = reviewedArtwork ? this.store.applyReviewedArtwork(principal, body) : this.store.apply(principal, body);
     if (!accepted.ok) return accepted;
     const operationId = accepted.operation_id;
-    if (this.inflight.has(operationId)) return this.inflight.get(operationId);
+    const key = canonical([principal.tenant_id, principal.project_id, operationId]);
+    if (this.inflight.has(key)) return this.inflight.get(key);
     const running = this.consume(principal, operationId, accepted.replayed === true);
-    this.inflight.set(operationId, running);
-    try { return await running; } finally { this.inflight.delete(operationId); }
+    this.inflight.set(key, running);
+    try { return await running; } finally { this.inflight.delete(key); }
   }
-  async consume(principal, operationId, replayed) {
+  async applyReviewedArtwork(principal, input) {
+    try {
+      principal = snapshotControlJson(principal); const body = snapshotControlJson(input);
+      await this.applyInternal(principal, body, true);
+      return this.artworkRecovery(principal, body.action_id, true);
+    } catch { return null; }
+  }
+  readArtworkAction(principal, actionId) { return this.artworkRecovery(principal, actionId, false); }
+  async retryArtworkAction(principal, actionId) {
+    try {
+      principal = snapshotControlJson(principal);
+      const outcome = await this.artworkRecovery(principal, actionId, true);
+      if (!outcome || outcome.recovery !== 'unknown') return outcome;
+      const row = this.artworkRow(principal, actionId);
+      if (!row) return outcome;
+      await this.applyInternal(principal, JSON.parse(row.payload), true);
+      return this.artworkRecovery(principal, actionId, true);
+    } catch { return null; }
+  }
+  artworkRow(principal, actionId) {
+    if (this.db.isTransaction || !this.projection(principal).can_read) throw new TypeError('Artwork recovery unavailable');
+    const row = this.db.prepare('SELECT * FROM control_jobs WHERE tenant_id=? AND project_id=? AND actor_id=? AND action_id=?')
+      .get(principal.tenant_id, principal.project_id, principal.actor_id, actionId);
+    if (!row) return null;
+    const payload = snapshotControlJson(JSON.parse(row.payload)), operation = snapshotControlJson(JSON.parse(row.operation));
+    const tasks = [{ kind: 'artwork.edit', changes: [{ field: 'style', value: payload.draft.selections.c04 }] }];
+    if (hash(payload) !== row.action_hash || payload.action_id !== actionId || payload.tenant_id !== principal.tenant_id || payload.project_id !== principal.project_id ||
+        operation.action_id !== actionId || operation.actor_id !== principal.actor_id || operation.tenant_id !== principal.tenant_id || operation.project_id !== principal.project_id ||
+        operation.brief_id !== payload.brief_id || operation.draft_hash !== payload.draft_hash || operation.control_schema_hash !== payload.control_schema_hash ||
+        canonical(operation.expected_versions) !== canonical(payload.expected_versions) || canonical(operation.tasks) !== canonical(tasks) ||
+        projectApplyResult({ ok: true, code: 'ready', status: 'ready', operation_id: row.operation_id, operation }).status !== 'ready') throw new TypeError('Corrupt artwork action');
+    return row;
+  }
+  async artworkRecovery(principal, actionId, reconcile) {
+    try {
+      principal = snapshotControlJson(principal);
+      if (this.db.isTransaction || !this.projection(principal).can_read) return null;
+      const identity = { tenant_id: principal.tenant_id, project_id: principal.project_id, action_id: actionId };
+      const response = fields => assertArtworkRecovery({ contract: 'CreativeArtworkActionRecovery', schema_version: ARTWORK_RECOVERY_VERSION,
+        ...identity, approval: false, purchase: false, ...fields }, identity);
+      const negative = this.store.nonAdmission(principal, actionId);
+      if (negative) return response({ ok: false, code: negative.code, status: 'rejected', recovery: 'not_admitted' });
+      const row = this.artworkRow(principal, actionId);
+      const unknown = references => response({ ok: false, code: 'unavailable', status: 'unknown', recovery: 'unknown', ...references });
+      if (!row) return unknown({});
+      const binding = this.db.prepare('SELECT * FROM control_api_bindings_v1 WHERE operation_id=?').get(row.operation_id);
+      if (!binding) return unknown({ operation_id: row.operation_id });
+      const request = snapshotControlJson(JSON.parse(binding.request_json));
+      if (canonicalHash(request) !== binding.request_hash || request.action_id !== binding.action_id || request.action_id !== `controls:${row.operation_id}` ||
+          request.operation !== 'edit' || request.tenant_id !== principal.tenant_id || request.project_id !== principal.project_id || request.payload.brief_id !== JSON.parse(row.payload).brief_id) throw new TypeError('Corrupt artwork binding');
+      if (!binding.job_id) return unknown({ operation_id: row.operation_id });
+      const job = await this.ports.jobs.get({ scope: principal, job_id: binding.job_id });
+      const latest = this.artworkRow(principal, actionId);
+      const currentBinding = this.db.prepare('SELECT * FROM control_api_bindings_v1 WHERE operation_id=?').get(row.operation_id);
+      if (!latest || latest.action_hash !== row.action_hash || !currentBinding ||
+          ['request_json', 'request_hash', 'action_id', 'job_id', 'backend_request_hash'].some(k => currentBinding[k] !== binding[k])) throw new TypeError('Changed artwork binding');
+      if (!job) return unknown({ operation_id: row.operation_id });
+      if (job.tenant_id !== principal.tenant_id || job.project_id !== principal.project_id || job.actor_id !== principal.actor_id || job.job_id !== binding.job_id ||
+          job.operation !== 'edit' || job.action_id !== binding.action_id || job.request_hash !== binding.backend_request_hash) throw new TypeError('Wrong artwork job');
+      const references = { operation_id: row.operation_id, backend_job_id: job.job_id };
+      if (job.status === 'completed' && latest.status === 'completed' && currentBinding.result_json) {
+        const result = projectApplyResult(await this.consume(principal, row.operation_id, true, true));
+        if (!this.projection(principal).can_read || result.status !== 'completed' || !result.result) return null;
+        return response({ ok: true, code: 'completed', status: 'completed', recovery: 'terminal', ...references, result: result.result });
+      }
+      if (['failed', 'cancelled'].includes(job.status)) {
+        // Only an explicit Apply/retry reconciles the local outbox. A read never
+        // writes an acknowledgement or changes an admitted operation's status.
+        if (reconcile && ['queued', 'ready'].includes(latest.status)) {
+          this.db.prepare("UPDATE control_jobs SET status=? WHERE operation_id=? AND tenant_id=? AND project_id=? AND actor_id=? AND action_hash=? AND status IN ('queued','ready')")
+            .run(job.status, row.operation_id, principal.tenant_id, principal.project_id, principal.actor_id, row.action_hash);
+        }
+        const status = this.artworkRow(principal, actionId)?.status;
+        if (status === job.status) return response({ ok: false, code: job.status, status: job.status, recovery: 'terminal', ...references });
+      }
+      return unknown(references);
+    } catch { return null; }
+  }
+  async consume(principal, operationId, replayed, readOnly = false) {
     try {
       let binding = this.db.prepare('SELECT * FROM control_api_bindings_v1 WHERE operation_id=?').get(operationId);
+      if (readOnly && !binding) throw new TypeError('Original control binding unavailable');
       if (!binding) {
         const ready = this.store.dispatch(principal, operationId);
         if (!ready.ok) {
@@ -172,6 +255,7 @@ export class CreativeControlsAdapter {
       // Keep the original publication receipt even after a later edit/restore.
       const historical = completion && binding.result_json;
       if (completion && !historical) throw new TypeError('Missing original backend completion');
+      if (readOnly && !historical) throw new TypeError('Original control completion unavailable');
       if (historical && !this.projection(principal).can_read) return { ok: false, code: 'permission', operation_id: operationId };
       const response = historical ? safe(JSON.parse(binding.result_json)) : await this.api.invoke(current.actor, persistedRequest);
       if (this.db.isTransaction) throw new TypeError('Controls database transaction unavailable');
@@ -201,7 +285,7 @@ export class CreativeControlsAdapter {
         completion_id: `completion:${jobId}`, result_ref: design.design_version_id,
         applied_versions: this.projection(principal).schema.expected_versions };
       if (historical && (hash(receipt) !== completion.completion_hash || receipt.completion_id !== `completion:${jobId}` || receipt.result_ref !== design.design_version_id)) throw new TypeError('Corrupt original control completion');
-      const acknowledged = this.store.acknowledge(principal, operationId, receipt);
+      const acknowledged = readOnly ? { ok: true, code: 'replayed', operation_id: operationId, status: 'completed', replayed: true } : this.store.acknowledge(principal, operationId, receipt);
       if (!acknowledged.ok) return acknowledged;
       return { ...acknowledged, replayed: replayed || response.replayed === true,
         backend_job_id: jobId, backend_operation_id: response.operation_id, result: safe(response.result),
@@ -229,6 +313,31 @@ export class CreativeControlsAdapter {
     if (!job || job.status === 'completed' || job.status === 'cancelled') return;
     await this.ports.jobs.cancel({ scope, actor_id: actorId, job_id: binding.job_id, target_action_id: binding.action_id,
       action_id: `cancel:${operationId}`, request_hash: canonicalHash({ operation_id: operationId, intent: 'cancel' }) });
+  }
+  async retryExisting(principal, actionId) {
+    try {
+      principal = snapshotControlJson(principal);
+      if (!this.projection(principal).can_read) return { ok: false, code: 'permission' };
+      const row = this.db.prepare('SELECT * FROM control_jobs WHERE tenant_id=? AND project_id=? AND actor_id=? AND action_id=?')
+        .get(principal.tenant_id, principal.project_id, principal.actor_id, actionId);
+      if (!row) return { ok: false, code: 'unavailable', status: 'unknown' };
+      const payload = snapshotControlJson(JSON.parse(row.payload));
+      if (hash(payload) !== row.action_hash || payload.action_id !== actionId) throw new TypeError('Corrupt original action');
+      return this.apply(principal, payload);
+    } catch { return { ok: false, code: 'unavailable', status: 'unknown' }; }
+  }
+  async readExisting(principal, actionId) {
+    try {
+      principal = snapshotControlJson(principal);
+      if (!this.projection(principal).can_read) return { ok: false, code: 'permission' };
+      const row = this.db.prepare('SELECT j.operation_id,j.status,b.result_json FROM control_jobs j LEFT JOIN control_api_bindings_v1 b ON b.operation_id=j.operation_id WHERE j.tenant_id=? AND j.project_id=? AND j.actor_id=? AND j.action_id=?')
+        .get(principal.tenant_id, principal.project_id, principal.actor_id, actionId);
+      if (!row) return { ok: false, code: 'unavailable', status: 'unknown' };
+      // Pending status never invokes the producer. A completed cached binding is
+      // verified through the original historical read path before presentation.
+      if (row.status === 'completed' && row.result_json) return this.consume(principal, row.operation_id, true, true);
+      return { ok: true, code: 'replayed', status: row.status, operation_id: row.operation_id, acknowledgment_only: true, approval: false, purchase: false };
+    } catch { return { ok: false, code: 'unavailable', status: 'unknown' }; }
   }
   lookup(principal, actionId) {
     const ctx = snapshotControlJson(principal);

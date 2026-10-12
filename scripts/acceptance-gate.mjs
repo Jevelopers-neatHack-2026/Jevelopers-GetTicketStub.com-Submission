@@ -21,6 +21,15 @@ const requirements = {
     "trusted_project_membership",
     "creative_controls_consumer",
   ],
+  controls: [
+    "shared_contracts_creative_schemas",
+    "event_intelligence_producer",
+    "trusted_project_membership",
+    "creative_controls_consumer",
+    "event_intelligence_asset_permission_protocol",
+    "event_intelligence_invalidation_delivery",
+    "application_approval_staleness_consumer",
+  ],
   brief: [
     "shared_contracts_creative_schemas",
     "event_intelligence_producer",
@@ -71,6 +80,13 @@ const requirements = {
 
 const creativeMeteringExternalGate =
   "No authoritative Neatlogs evidence-sink agreement reference is available; actual ingestion and readback remain unverified.";
+const controlsLocalAcceptanceGates = [
+  "H: complete exact full-state handoff and accepted consumer contract",
+  "R1: complete CE-06 routing, including research package/brief handoff and invalidation ACK flows",
+  "E1: complete scoped editing and ART-01 rights/approval consumers",
+  "R2: complete new-parent compound flow with fresh Apply and correction routing",
+  "Q: complete shared release qualification across all required owners, versions, hosts, and provenance",
+];
 
 function rawSha256(bytes) {
   return "sha256:" + createHash("sha256").update(bytes).digest("hex");
@@ -257,6 +273,21 @@ function writeInspectionAcceptanceResult({ unmet, proposalState, creativePolicy,
   process.exitCode = 2;
 }
 
+function writeControlsAcceptanceResult({ unmet, proposalState }) {
+  process.stdout.write(JSON.stringify({
+    schema_version: "creative-controls-acceptance-result/v1",
+    target: ["CE-05", "CE-06", "CE-12"],
+    proposal_state: proposalState,
+    local_status: "offline-foundation-only",
+    acceptance_allowed: false,
+    provider_dispatches: 0,
+    paid_provider_calls: 0,
+    missing_owner_evidence: unmet,
+    pending_local_gates: controlsLocalAcceptanceGates,
+  }) + "\n");
+  process.exitCode = 2;
+}
+
 async function main() {
   const target = process.argv[2] ?? "all";
   if (target === "access-preflight") {
@@ -284,6 +315,10 @@ async function main() {
   const { unmet, unresolved, proposalState } = await evaluateAcceptanceRecord(record, target, repoRoot);
   if (target === "brief") {
     writeBriefAcceptanceResult({ unmet, proposalState });
+    return;
+  }
+  if (target === "controls") {
+    writeControlsAcceptanceResult({ unmet, proposalState });
     return;
   }
   if (target === "inspection") {

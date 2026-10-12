@@ -11,6 +11,7 @@ function clearInspection(design, source) {
  $('inspect').disabled=!source;for(const id of ['inspect-retry','inspect-lookup','inspect-cancel','inspection-repair']) $(id).disabled=true;
 }
 let schema, draft, lastAction, operationId, operationStatus, historySelection, pending = false;
+let controlGeneration = 0, controlSequence = 0, controlTerminalSequence = 0;
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error('Request unavailable');
@@ -18,9 +19,12 @@ async function api(path, body) {
 }
 function counter(data) { const counts = projectCounters(data); if (counts) $('counters').textContent = `Jobs: ${counts.jobs} · JEV calls: ${counts.jev_calls} · Image calls: ${counts.image_calls}`; }
 function error(message) { $('error').textContent = message; $('error').hidden = false; $('error').focus(); }
-function result(data) {
+function result(data, generation = controlGeneration, sequence = ++controlSequence) {
+  if (generation !== controlGeneration) return;
   counter(data);
   data = projectApplyResult(data);
+  if (data.operation_id === operationId && ['completed','cancelled'].includes(operationStatus) && (['queued','ready'].includes(data.status) || data.status === 'unknown' && sequence <= controlTerminalSequence)) return;
+  if (['completed','cancelled'].includes(data.status)) controlTerminalSequence = Math.max(controlTerminalSequence, controlSequence);
   $('error').hidden = true;
   if (data.operation_id && data.operation_id !== operationId) {
     operationId = data.operation_id; operationStatus = 'unknown';
@@ -65,8 +69,10 @@ function questions() {
   }
 }
 async function refresh() {
+  const generation = ++controlGeneration;
+  pending = false; $('fields').disabled = false; $('refresh').disabled = false;
   try {
-    const data = await api('/api/schema'); $('inspection-section').hidden=!data.backend; if(!data.backend)$('evidence-description').textContent='Foundation fixture only: typed controls bookkeeping and handoff compatibility. Native image, saved-version inspection and production integrations are unavailable on this server.'; schema = assertRenderableSchema(data.schema); draft = defaultDraft(schema);
+    const data = await api('/api/schema'); if (generation !== controlGeneration) return; $('inspection-section').hidden=!data.backend; if(!data.backend)$('evidence-description').textContent='Foundation fixture only: typed controls bookkeeping and handoff compatibility. Native image, saved-version inspection and production integrations are unavailable on this server.'; schema = assertRenderableSchema(data.schema); draft = defaultDraft(schema);
     // Keep an already accepted operation available for cancellation after refresh.
     lastAction = undefined;
     $('fields').replaceChildren(Object.assign(document.createElement('legend'), { textContent: 'Draft selections' }));
@@ -76,53 +82,60 @@ async function refresh() {
     $('error').hidden = true; $('status').textContent = operationId ? `Controls refreshed. Existing operation: ${operationId}.` : 'No operation submitted.'; counter(data);
     refreshHistory();
     $('versions').textContent = `${schema.schema_version} · brief ${schema.expected_versions.brief} · design ${schema.expected_versions.design} · composition ${schema.expected_versions.composition}`;
-  } catch { error('Controls unavailable. Try Refresh controls.'); }
+  } catch { if (generation === controlGeneration) error('Controls unavailable. Try Refresh controls.'); }
 }
 async function apply(retry = false) {
   if (pending) return;
+  const generation = controlGeneration, sequence = ++controlSequence;
   const restoreRetryFocus = retry && document.activeElement === $('retry');
   pending = true; $('apply').disabled = true; $('retry').disabled = true;
   $('fields').disabled = true; $('refresh').disabled = true;
   try {
     if (!retry && !lastAction) {
       const digestHex = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical(value)))), b => b.toString(16).padStart(2, '0')).join('');
-      lastAction = { action_version: `creative-apply/${schema.schema_version.split('/')[1]}`, schema_version: schema.schema_version,
+      const proposedAction = { action_version: `creative-apply/${schema.schema_version.split('/')[1]}`, schema_version: schema.schema_version,
         action_id: `action_${crypto.randomUUID()}`, tenant_id: schema.tenant_id, project_id: schema.project_id, brief_id: schema.brief_id,
         expected_versions: schema.expected_versions, intent: 'apply', draft: structuredClone(draft),
         control_schema_hash: `sha256:${await digestHex(schema)}`, draft_hash: await digestHex(draft) };
+      if (generation !== controlGeneration) return;
+      lastAction = proposedAction;
     }
+    if (generation !== controlGeneration) return;
     $('cancel').disabled = false;
-    result(await api('/api/apply', lastAction));
-  } catch { error('Response unavailable. Retry last Apply to recover the same operation identity.'); }
-  finally { pending = false; $('retry').disabled = !lastAction; $('fields').disabled = false; $('refresh').disabled = false;
+    result(await api('/api/apply', lastAction), generation, sequence);
+  } catch { if (generation === controlGeneration && sequence > controlTerminalSequence) error('Response unavailable. Retry last Apply to recover the same operation identity.'); }
+  finally { if (generation === controlGeneration) { pending = false; $('retry').disabled = !lastAction; $('fields').disabled = false; $('refresh').disabled = false;
     if (restoreRetryFocus && $('error').hidden && !$('retry').disabled) $('retry').focus();
-  }
+  } }
 }
 $('controls').addEventListener('submit', event => { event.preventDefault(); apply(); });
 $('retry').addEventListener('click', () => apply(true));
 $('refresh').addEventListener('click', refresh);
 for (const [id, path] of [['handoff', '/api/dispatch'], ['cancel', '/api/cancel']]) $(id).addEventListener('click', async () => {
-  try { result(await api(path, id === 'cancel' && lastAction ? { action_id: lastAction.action_id } : { operation_id: operationId })); } catch { error('Response unavailable. Operation status remains unknown.'); }
+  const generation=controlGeneration,sequence=++controlSequence;
+  try { result(await api(path, id === 'cancel' && lastAction ? { action_id: lastAction.action_id } : { operation_id: operationId }), generation, sequence); } catch { if(generation===controlGeneration && sequence>controlTerminalSequence) error('Response unavailable. Operation status remains unknown.'); }
 });
 async function refreshHistory() {
+  const generation=controlGeneration;
   try {
-    const data = projectHistoryList(await api('/api/history'));
+    const data = projectHistoryList(await api('/api/history')); if(generation!==controlGeneration)return;
     if (!data) { $('history-section').hidden = true; return; }
     historySelection = data.selection; $('history-version').replaceChildren();
     for (const item of data.items) { const option = document.createElement('option'); option.value = item.design_version_id; option.textContent = `${item.design_version_id} · ${item.artifact.content_hash}`; $('history-version').append(option); }
     $('history-section').hidden = false;
-  } catch { $('history-section').hidden = true; }
+  } catch { if(generation===controlGeneration)$('history-section').hidden = true; }
 }
 for (const id of ['compare-history', 'restore-history']) $(id).addEventListener('click', async () => {
+  const generation=id==='restore-history'?++controlGeneration:controlGeneration;
   try {
     const body = { design_version_id: $('history-version').value };
     if (id === 'restore-history') { body.expected_selection_revision = historySelection.revision; body.action_id = `restore_${crypto.randomUUID()}`; }
-    const response = await api(id === 'restore-history' ? '/api/restore' : '/api/compare', body); counter(response);
+    const response = await api(id === 'restore-history' ? '/api/restore' : '/api/compare', body); if(generation!==controlGeneration)return; counter(response);
     const data = projectHistoryResult(response, id === 'restore-history');
     if (!data.ok) return error(historyErrorMessage(data));
     $('history-result').textContent = id === 'restore-history' ? `Selected saved artwork ${data.result.design_version_id}. No image call or approval created.` : `Compared exact hashes ${data.result.left} and ${data.result.right}.`;
     if (id === 'restore-history') { clearInspection(undefined,undefined); $('artifact').hidden=true; $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(data.result.design_version_id)}`; $('artwork-preview').hidden = false; await refresh(); }
-  } catch { error('Version operation unavailable.'); }
+  } catch { if(generation===controlGeneration)error('Version operation unavailable.'); }
 });
 refresh();
 

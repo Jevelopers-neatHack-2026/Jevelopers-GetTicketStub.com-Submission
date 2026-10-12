@@ -1,32 +1,83 @@
 /** Loopback only, explicit MOCK trusted host. No actual authentication or calls. */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, cpSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
 const port = Number(process.env.CONTROLS_FIXTURE_PORT ?? 4317);
-let dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')), host = await createIntegratedHost(dir);
+let dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')), host = await createIntegratedHost(dir, { enableComposition: true });
 const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/javascript'], '/messages.mjs': ['messages.mjs', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript'],
   '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
   '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
   '/inspection-consumer.mjs': ['../../src/controls/inspection-consumer.mjs', 'text/javascript'],
   '/inspection-view.mjs': ['../../src/controls/inspection-view.mjs', 'text/javascript'],
   '/public-result.mjs': ['../../src/controls/public-result.mjs', 'text/javascript'],
+  '/artwork-recovery.mjs': ['../../src/controls/artwork-recovery.mjs', 'text/javascript'],
   '/inspection-inputs.json': ['../../fixtures/controls/inspection-presentation-inputs.json', 'application/json'] };
+Object.assign(files, { '/composition.html': ['composition.html', 'text/html'], '/composition-app.mjs': ['composition-app.mjs', 'text/javascript'], '/composition-view.mjs': ['../../src/controls/composition-view.mjs', 'text/javascript'] });
+// This explicit MOCK switch tests trusted principal isolation, not application authentication.
+const compositionPrincipal = req => req.headers['x-mock-controls-principal'] === 'other-tenant' ? { ...fixturePrincipal, tenant_id: 'other_fixture_tenant' } : req.headers['x-mock-controls-principal'] === 'other-actor' ? { ...fixturePrincipal, actor_id: 'other_fixture_actor' } : fixturePrincipal;
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
+let captureSequence = 0, hostFinalized = false;
+function closeAndCaptureHost(reason) {
+  if (hostFinalized) return;
+  const counters = host.counts(); host.close(); hostFinalized = true;
+  const evidence = process.env.CONTROLS_BROWSER_EVIDENCE_DIR;
+  if (!evidence) return;
+  const target = join(evidence, `session-${String(++captureSequence).padStart(4,'0')}`);
+  mkdirSync(target, { recursive: true }); cpSync(dir, join(target, 'store-root'), { recursive: true });
+  const files = [];
+  function walk(directory, prefix = '') {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a,b)=>a.name.localeCompare(b.name))) {
+      const path = join(directory, entry.name), relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) throw new TypeError('Browser fixture store must not contain links');
+      if (entry.isDirectory()) walk(path, relative);
+      else { const bytes = readFileSync(path); files.push({ path: relative, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }); }
+    }
+  }
+  walk(join(target, 'store-root'));
+  writeFileSync(join(target, 'manifest.json'), JSON.stringify(files, null, 2) + '\n');
+  writeFileSync(join(target, 'receipt.json'), JSON.stringify({ reason, captured_at: new Date().toISOString(), node: process.version, node_executable: process.execPath,
+    cwd: process.cwd(), mode: 'mock', live_calls: 0, counters, membership: 'explicit MOCK fixture', files: files.length }, null, 2) + '\n');
+}
 const server = createServer(async (req, res) => {
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
     if (req.method === 'GET' && files[path]) {
       const [file, type] = files[path]; res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
+        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
       return res.end(await readFile(new URL(file, import.meta.url)));
     }
     if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
+    if (req.method === 'GET' && path === '/__fixture/composition-wait') {
+      // MOCK test synchronization only. UI button availability is not proof
+      // that a public action/job has reached the held preview callback.
+      const action_id=new URL(req.url,'http://localhost').searchParams.get('action_id'),principal=compositionPrincipal(req);
+      const row=host.composition.row(principal,action_id),binding=host.waitingBinding;
+      const job=row?.job_id?await host.ports.jobs.get({scope:principal,job_id:row.job_id}):null;
+      const held=host.waiting==='composition-preview'&&binding?.action_id===action_id&&binding.actor_id===principal.actor_id&&
+        binding.scope.tenant_id===principal.tenant_id&&binding.scope.project_id===principal.project_id&&binding.request_hash===row?.backend_request_hash&&
+        job?.job_id===row.job_id&&job.action_id===action_id&&job.request_hash===binding.request_hash&&job.status==='running';
+      return json(res,{mode:'mock',live_calls:0,held,action_id,backend_job_id:row?.job_id??null});
+    }
+    if (req.method === 'GET' && path === '/api/composition/history') {
+      const query = new URL(req.url, 'http://localhost').searchParams, options = {};
+      if (query.has('limit')) options.limit = Number(query.get('limit'));
+      if (query.has('after_revision_id')) options.after_revision_id = query.get('after_revision_id');
+      return json(res, { view: await host.composition.history(compositionPrincipal(req), options), counters: host.counts() });
+    }
+    if (req.method === 'GET' && path === '/api/composition/current') return json(res, { view: await host.composition.current(compositionPrincipal(req)), counters: host.counts() });
+    if (req.method === 'GET' && path === '/api/composition/preview') {
+      const query = new URL(req.url, 'http://localhost').searchParams;
+      const value = await host.composition.preview(compositionPrincipal(req), Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k => [k, query.get(k)])));
+      if (!value) return json(res, { code: 'permission' }, 403);
+      res.writeHead(200, { 'Content-Type': value.metadata.mime_type, 'Content-Length': value.bytes.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(value.bytes);
+    }
     if (req.method === 'GET' && path === '/__fixture/native-evidence') {
       const value = host.nativeEvidence(new URL(req.url, 'http://localhost').searchParams.get('action_id'));
       return json(res, value ?? { code: 'permission' }, value ? 200 : 403);
@@ -38,11 +89,20 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': value.artifact.media_type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(Buffer.from(value.bytes));
     }
-    if (req.method !== 'POST' || !['/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset'].includes(path)) return json(res, { code: 'not_found' }, 404);
+    if (req.method !== 'POST' || !['/api/artwork/apply','/api/artwork/retry','/api/artwork/status','/api/composition/review','/api/composition/apply','/api/composition/retry','/api/composition/lookup','/api/composition/cancel','/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset', '/__fixture/capture'].includes(path)) return json(res, { code: 'not_found' }, 404);
     if (!req.headers['content-type']?.startsWith('application/json')) return json(res, { code: 'validation' }, 415);
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
+    if (path === '/__fixture/capture') { closeAndCaptureHost('browser-case-complete'); return json(res, { ok: true, mode: 'mock', live_calls: 0 }); }
+    if (path === '/api/composition/review') return json(res, { review: await host.composition.review(compositionPrincipal(req), payload), counters: host.counts() });
+    if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(compositionPrincipal(req), payload), counters: host.counts() });
+    if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(compositionPrincipal(req), payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/retry') return json(res, { result: await host.composition.retry(compositionPrincipal(req), payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/cancel') return json(res, { result: await host.composition.cancel(compositionPrincipal(req), payload.action_id), counters: host.counts() });
+    if (path === '/api/artwork/apply') return json(res, { ...mode, recovery: await host.adapter.applyReviewedArtwork(compositionPrincipal(req), payload), counters: host.counts() });
+    if (path === '/api/artwork/retry') return json(res, { ...mode, recovery: await host.adapter.retryArtworkAction(compositionPrincipal(req), payload.action_id), counters: host.counts() });
+    if (path === '/api/artwork/status') return json(res, { ...mode, recovery: await host.adapter.readArtworkAction(compositionPrincipal(req), payload.action_id), counters: host.counts() });
     if (path === '/api/inspection') return json(res, { view: await host.inspection.start(fixturePrincipal, payload), counters: host.counts() });
     if (path === '/api/inspection/lookup') return json(res, { view: await host.inspection.lookup(fixturePrincipal, payload.inspection_action_id), counters: host.counts() });
     if (path === '/api/inspection/cancel') return json(res, { view: await host.inspection.cancel(fixturePrincipal, payload.inspection_action_id), counters: host.counts() });
@@ -55,8 +115,8 @@ const server = createServer(async (req, res) => {
     if (path === '/__fixture/reset') {
       const nativeFormat = payload.native_format ?? 'png';
       if (!['png', 'jpeg', 'webp'].includes(nativeFormat)) return json(res, { code: 'validation' }, 400);
-      host.close(); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
-      host = await createIntegratedHost(dir, { nativeFormat });
+      closeAndCaptureHost('fixture-reset'); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
+      host = await createIntegratedHost(dir, { nativeFormat, enableComposition: true, lockLogo: payload.lock_logo !== false }); hostFinalized = false;
     }
     else {
       if (payload.inspection_fault) host.policy.inspection_fault = payload.inspection_fault;
@@ -82,5 +142,5 @@ const server = createServer(async (req, res) => {
   } catch { json(res, { ...mode, ok: false, code: 'validation' }, 400); }
 });
 server.listen(port, '127.0.0.1', () => console.log(`MOCK integrated controls fixture http://127.0.0.1:${port}; actual local API/store, intercepted transport`));
-const stop = () => server.close(() => { host.close(); rmSync(dir, { recursive: true, force: true }); process.exit(0); });
+const stop = () => server.close(() => { closeAndCaptureHost('orderly-server-stop'); rmSync(dir, { recursive: true, force: true }); process.exit(0); });
 process.on('SIGTERM', stop); process.on('SIGINT', stop);
