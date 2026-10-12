@@ -1,0 +1,157 @@
+[
+  {
+    "id": "all-tests",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "--test",
+      "tests/content-proof.test.mjs",
+      "tests/cta.test.mjs",
+      "tests/foundation.test.mjs",
+      "tests/metadata.test.mjs",
+      "tests/privacy.test.mjs",
+      "tests/scroll.test.mjs",
+      "tests/ux.test.mjs"
+    ],
+    "startedAt": "2026-10-12T12:01:17.103Z",
+    "endedAt": "2026-10-12T12:01:18.162Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/all-tests.stdout.log",
+    "stderr": "review/ux/header-fit/reports/all-tests.stderr.log"
+  },
+  {
+    "id": "foundation-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "foundation",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:18.167Z",
+    "endedAt": "2026-10-12T12:01:19.363Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/foundation-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/foundation-draft.stderr.log"
+  },
+  {
+    "id": "content-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "content",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:19.364Z",
+    "endedAt": "2026-10-12T12:01:19.454Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/content-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/content-draft.stderr.log"
+  },
+  {
+    "id": "proof-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "proof",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:19.454Z",
+    "endedAt": "2026-10-12T12:01:19.542Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/proof-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/proof-draft.stderr.log"
+  },
+  {
+    "id": "cta-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "cta",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:19.542Z",
+    "endedAt": "2026-10-12T12:01:19.862Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/cta-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/cta-draft.stderr.log"
+  },
+  {
+    "id": "privacy-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "privacy",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:19.865Z",
+    "endedAt": "2026-10-12T12:01:19.996Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/privacy-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/privacy-draft.stderr.log"
+  },
+  {
+    "id": "metadata-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "metadata",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:19.996Z",
+    "endedAt": "2026-10-12T12:01:20.348Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/metadata-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/metadata-draft.stderr.log"
+  },
+  {
+    "id": "ux-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T12:01:20.350Z",
+    "endedAt": "2026-10-12T12:01:20.604Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/ux-draft.stdout.log",
+    "stderr": "review/ux/header-fit/reports/ux-draft.stderr.log"
+  },
+  {
+    "id": "ux-release",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux"
+    ],
+    "startedAt": "2026-10-12T12:01:20.607Z",
+    "endedAt": "2026-10-12T12:01:20.852Z",
+    "exitCode": 1,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/header-fit/reports/ux-release.stdout.log",
+    "stderr": "review/ux/header-fit/reports/ux-release.stderr.log"
+  }
+]

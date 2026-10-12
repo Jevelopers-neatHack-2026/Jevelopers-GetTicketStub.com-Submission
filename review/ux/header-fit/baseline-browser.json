@@ -1,0 +1,80 @@
+{
+  "sourceCommit": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+  "sourcePageSHA": "9c3b80588cfa0e4c226e04102f0b14e6bb820fb0d88c61b2965bdd8f01038159",
+  "url": "http://127.0.0.1:4179/",
+  "observedAt": "2026-10-12T11:57:56.379Z",
+  "observations": [
+    {
+      "client": 360,
+      "cta": {
+        "bottom": 47.375,
+        "height": 33.375,
+        "left": 212.03125,
+        "right": 390.28125,
+        "top": 14,
+        "width": 178.25,
+        "x": 212.03125,
+        "y": 14
+      },
+      "fontStatus": "loaded",
+      "logo": {
+        "bottom": 45.6875,
+        "height": 30,
+        "left": 16,
+        "right": 212.03125,
+        "top": 15.6875,
+        "width": 196.03125,
+        "x": 16,
+        "y": 15.6875
+      },
+      "nav": {
+        "bottom": 61.375,
+        "height": 61.375,
+        "left": 0,
+        "right": 360,
+        "top": 0,
+        "width": 360,
+        "x": 0,
+        "y": 0
+      },
+      "ready": false,
+      "width": 375
+    },
+    {
+      "client": 305,
+      "cta": {
+        "bottom": 47.375,
+        "height": 33.375,
+        "left": 212.03125,
+        "right": 390.28125,
+        "top": 14,
+        "width": 178.25,
+        "x": 212.03125,
+        "y": 14
+      },
+      "fontStatus": "loaded",
+      "logo": {
+        "bottom": 45.6875,
+        "height": 30,
+        "left": 16,
+        "right": 212.03125,
+        "top": 15.6875,
+        "width": 196.03125,
+        "x": 16,
+        "y": 15.6875
+      },
+      "nav": {
+        "bottom": 61.375,
+        "height": 61.375,
+        "left": 0,
+        "right": 305,
+        "top": 0,
+        "width": 305,
+        "x": 0,
+        "y": 0
+      },
+      "width": 320
+    }
+  ],
+  "status": "LOCAL_HEADER_NEGATIVE_CONTROL_NOT_RELEASE_ACCEPTANCE"
+}
