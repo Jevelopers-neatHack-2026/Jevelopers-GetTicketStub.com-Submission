@@ -58,25 +58,43 @@ function searchFixtures(query: string): EventData[] {
 // ---------- Page fetch + parse ----------
 
 async function fetchPage(url: string): Promise<string> {
-  const done = sourceTimer("event_page");
-  try {
-    const res = await fetch(url, {
-      headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
+  // Event sites sometimes reset a connection or return a transient 5xx. Retry once so a brief
+  // upstream wobble does not turn into an unreadable-link response; timeouts and 4xx stay final.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const done = sourceTimer("event_page");
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store",
+      });
+    } catch (error) {
+      const outcome = fetchFailure(error);
+      done(outcome);
+      if (attempt === 0 && outcome === "network_error") continue;
+      throw error;
+    }
     if (!res.ok) {
       done("http_error", res.status);
+      // Release the unused body so the discarded connection is not left open.
+      await res.body?.cancel().catch(() => {});
+      if (attempt === 0 && res.status >= 500) continue;
       throw new Error(`HTTP ${res.status}`);
     }
-    const text = await res.text();
-    done("ok", res.status);
-    return text.slice(0, 2_000_000);
-  } catch (error) {
-    done(fetchFailure(error));
-    throw error;
+    try {
+      const text = await res.text();
+      done("ok", res.status);
+      return text.slice(0, 2_000_000);
+    } catch (error) {
+      const outcome = fetchFailure(error);
+      done(outcome);
+      if (attempt === 0 && outcome === "network_error") continue;
+      throw error;
+    }
   }
+  throw new Error("Event page request did not complete.");
 }
 
 /** Fetches a source API response as JSON, measuring how the fetch ended. Undefined when it was not usable. */
