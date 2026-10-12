@@ -88,7 +88,7 @@
       "sponsor": "Neatlogs",
       "status": "pending",
       "evidenceRef": "SPN-NEATLOGS-001",
-      "requiredEvidence": "Neatlogs-specific integration/run evidence, sanitized output, mode, and owner review.",
+      "requiredEvidence": "Neatlogs-specific integration/run evidence, sanitized output, mode, and owner review. Producer source is now available at immutable integration-evals commit 31b4f53b46a584c4b5b4a6a7076f6800c37b00e5 (evidence/neatlogs/2026-10-11; merge of PR #35, correcting PR #33): production-run traces recorded in Neatlogs with screenshots and SHA256SUMS, an owner acceptance relayed in chat, and an unresolved independent REQUEST_CHANGES history. Availability and recorded owner acceptance are not marketing claim approval, and nothing here shows that every step or export is traced, receiver-side loss, billing, an EVAL-02 comparison or a durable harness workflow.",
       "requiredIssue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20"
     },
     {
@@ -258,7 +258,14 @@
       "allowedWording": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
       "prohibitedVariants": [
         "Neatlogs integration is live.",
-        "Powered by Neatlogs in production."
+        "Powered by Neatlogs in production.",
+        "Every step is traced in Neatlogs.",
+        "Every export was accepted by Neatlogs.",
+        "Neatlogs lost accepted traces.",
+        "The Neatlogs receiver dropped accepted traces.",
+        "Neatlogs cost is the billed amount.",
+        "Production AI art always falls back to procedural art.",
+        "Neatlogs approved or endorsed this integration."
       ],
       "audience": "Internal planning only.",
       "destination": "Internal collateral planning.",
@@ -277,10 +284,15 @@
       "reviewStatus": "blocked",
       "limitations": [
         "Must be supported by a separate Neatlogs-specific integration/run record and sanitized evidence.",
-        "No sponsor use or live provider call was performed for this task."
+        "No sponsor use or live provider call was performed for this task.",
+        "Source availability, supplemental: public Neatlogs source exists at integration-evals commit 31b4f53b46a584c4b5b4a6a7076f6800c37b00e5 (merge of PR #35, which corrects PR #33 merge 7eff030213699ce0e8185365500d53bf961969a3), immutable locator https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/31b4f53b46a584c4b5b4a6a7076f6800c37b00e5/evidence/neatlogs/2026-10-11. It holds a README, traces.json, SHA256SUMS and four dashboard screenshots for production getticketstub.com runs recorded in Neatlogs: a successful research trace, a research trace that ended in a fetch timeout, an agent reply trace and a generated-image art trace, plus a fifth traces.json entry for a malformed-request recovery that has no screenshot. Raw SHA-256 values, recomputed by marketing with Python hashlib from the pinned bytes and matched to the pinned SHA256SUMS: README.md 67670ca920a375bed8e901296f201c896a4ba502f92ed8b2cd287d4df45dd7ca; traces.json da219208fc543196146f786ae9902119162b29e26865f0936fd2286347c62254; trace-art-image.jpg df77d37063d5e416e446d60d4b427fb82774b30d05ed59a49e69efb294378ed2; SHA256SUMS file 699f42c3bbb56d0ba65979484aaba73d8f788958051c422479a40f583bf3fe25. The other three screenshots are listed as trace-agent-reply.jpg 10dd1384e82bb0d51c6ee0c11756f9d20c79791449cad7b57685db90954ae07d, trace-research-failure.jpg f869f199facaf132ed1c63715bc8ab373bafb8e986f26f2c8e21affa38a77689 and trace-research-success.jpg 9b222d20156092e1b43bc696bf51dd2b62085415e0ac6b254bb01d3fe84ee30c; the parent verified those against the earlier pin 7eff0302 and their git blob IDs are identical at the corrected pin, but marketing did not recompute them at the corrected pin. This is byte verification only.",
+        "Recorded owner acceptance: the Finance and reliability owner's acceptance was relayed in chat and recorded at integration-evals PR #33 comment 6114638937; it is not an independent GitHub review. A separate independent review returned REQUEST_CHANGES NL-R1, NL-R2 and NL-R3 (receipts 6114721543 and 6114779607) against the earlier revision d9be4d1832a7d0f713cf8494eb5df0e59d94ec89; that history is preserved, and the later PR #35 correction is not itself an independent approval. The declared verified summary at getticketstub.com issue 27 comment 6114684677 is a declaration, not consumer or master approval.",
+        "Limits: the once-per-process accepted diagnostic does not show that all seven exports were accepted. Three of seven production sessions were not found 30 seconds or more later in the queried window; that absence is not shown to be loss at the receiver, because per-session acknowledgements or readback receipts are not recorded. Neatlogs cost shown is provider-reported and partial, and is not billing. The earlier finding that production art always falls back to procedural art came from malformed test payloads that lacked facts and was corrected at PR #35 with a well-formed production art trace; no always-falls-back claim is made. No EVAL-02 paired comparison and no durable harness workflow acceptance is shown. Source availability and recorded owner acceptance are distinct from authenticity or eligibility review and are not marketing claim approval; SPN-01 stays pending with no sponsor approval, and the claim state, allowed wording, evidence classification and approvals are unchanged.",
+        "The existing concept labels (for example NEATLOGS — SPN-01 — PENDING) belong to the historical synthetic rehearsal source and its unchanged copy; they do not describe the current live state of the source above, and no media was re-rendered."
       ],
       "reReviewTrigger": [
-        "Neatlogs run, mode, evidence, sponsor permission, or source revision changes."
+        "Neatlogs run, mode, evidence, sponsor permission, or source revision changes.",
+        "Any change to the integration-evals Neatlogs evidence at or after 31b4f53b46a584c4b5b4a6a7076f6800c37b00e5, to PR #33 owner acceptance or the independent REQUEST_CHANGES history, a producer correction after PR #35, or a sponsor or independent review of the Neatlogs evidence."
       ]
     },
     {
@@ -290,7 +302,8 @@
       "allowedWording": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
       "prohibitedVariants": [
         "Entire checkpoint is verified.",
-        "Entire confirms this production workflow."
+        "Entire confirms this production workflow.",
+        "Entire checkpoints every agent session."
       ],
       "audience": "Internal planning only.",
       "destination": "Internal collateral planning.",
@@ -2691,7 +2704,7 @@
       "reviewer": "User-assigned marketing-material supervisor; independent wording review pending.",
       "reviewStatus": "pending",
       "limitations": [
-        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; body updated_at 2026-10-11T20:21:44Z); the issue is a mutable record, not an immutable revision, and was read from a local copy of it.",
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; source snapshot issue updated_at 2026-10-11T20:21:44Z, which is GitHub activity metadata and does not prove when the body was last edited, with observed body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; later comments do not change the four known fields); the issue is a mutable record, not an immutable revision, and was read from a local copy of it.",
         "This records team-name text only. The submitter name and authorization, the official neatlogs post URL and the Discord-governed cutoff are not supplied and stay pending; agents do not post.",
         "A draft field is not submission readiness, eligibility, sponsor completion or publication permission."
       ],
@@ -2726,7 +2739,7 @@
       "reviewer": "User-assigned marketing-material supervisor; independent wording review pending.",
       "reviewStatus": "pending",
       "limitations": [
-        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; body updated_at 2026-10-11T20:21:44Z); the issue is a mutable record, not an immutable revision.",
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; source snapshot issue updated_at 2026-10-11T20:21:44Z, which is GitHub activity metadata and does not prove when the body was last edited, with observed body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; later comments do not change the four known fields); the issue is a mutable record, not an immutable revision.",
         "The name does not imply an available or released application, a deployed route, a transaction, or any capability.",
         "Product capability and availability remain governed by CLAIM-PRODUCT-CAPABILITY-001 (blocked). This row does not change that state."
       ],
@@ -2761,7 +2774,7 @@
       "reviewer": "getticketstub.com route owner; locator and availability confirmation pending. Marketing wording review pending.",
       "reviewStatus": "pending",
       "limitations": [
-        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; body updated_at 2026-10-11T20:21:44Z), which states the repository must stay public. Marketing did not verify repository visibility, contents or hackathon-dated commits for this row.",
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; source snapshot issue updated_at 2026-10-11T20:21:44Z, which is GitHub activity metadata and does not prove when the body was last edited, with observed body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; later comments do not change the four known fields), which states the repository must stay public. Marketing did not verify repository visibility, contents or hackathon-dated commits for this row.",
         "A plain repository link is not a transaction CTA and does not show deployment, a customer route, payment, fulfillment or sponsor evidence.",
         "The route owner (getticketstub.com) has not confirmed the locator for this use; the 280-character composer check and all posting stay human steps."
       ],
@@ -2796,13 +2809,163 @@
       "reviewer": "User-assigned marketing-material supervisor; independent wording review pending. Finance review of the plan itself is not part of this row.",
       "reviewStatus": "pending",
       "limitations": [
-        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; body updated_at 2026-10-11T20:21:44Z), which lists the business plan as required to be included; the issue is a mutable record, not an immutable revision. The exact public tree locator was supplied by the owner.",
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account; source snapshot issue updated_at 2026-10-11T20:21:44Z, which is GitHub activity metadata and does not prove when the body was last edited, with observed body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; later comments do not change the four known fields), which lists the business plan as required to be included; the issue is a mutable record, not an immutable revision. The exact public tree locator was supplied by the owner.",
         "This records a locator only. It is not Finance approval, and CFO-R2-001 stays unresolved; owner acceptance is preserved and is not a waiver. No figures, math or approved sponsor state are carried by this row, and the existing CFO ledger rows are unchanged.",
         "No rights or route-owner approval is asserted. The 280-character composer check and all posting stay human steps."
       ],
       "reReviewTrigger": [
         "Issue 22 entry contents change, or the plan locator or pinned tree revision changes.",
         "CFO-R2-001 is resolved or Finance review state changes, or the organizer changes the required plan field."
+      ]
+    },
+    {
+      "audience": "Internal reviewers of DEMO-HUMAN-RECORDING-RUNBOOK-001 only; not approved as external copy.",
+      "state": "planned",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "id": "CLAIM-RUNBOOK-SPN-01-AVAIL-001",
+      "kind": "sponsor_use",
+      "sponsorEvidenceClass": "SPN-01",
+      "allowedWording": "The published integration-evals evidence at the pinned commit includes Neatlogs trace screenshots and a trace export from selected TicketStub runs.",
+      "prohibitedVariants": [
+        "Every step is traced in Neatlogs.",
+        "Every export was accepted by Neatlogs.",
+        "Neatlogs lost accepted traces.",
+        "Neatlogs approved or endorsed this integration.",
+        "The Neatlogs integration is verified."
+      ],
+      "destination": "Planned internal human recording runbook (demo/human-recording-runbook.md) only: describes the visible public trace artifacts in the SOURCE AVAILABLE beat. Not a caption, narration, X post or external copy.",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/integration-evals",
+        "path": "evidence/neatlogs/2026-10-11",
+        "revision": "31b4f53b46a584c4b5b4a6a7076f6800c37b00e5",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/31b4f53b46a584c4b5b4a6a7076f6800c37b00e5/evidence/neatlogs/2026-10-11"
+      },
+      "evidenceReference": "SPN-NEATLOGS-001",
+      "evidenceClassification": "SPN-01: source-available producer evidence (README, traces.json, trace screenshots with SHA256SUMS) at the pin; not EVAL-02, EVAL-03 or SPN-02/SPN-03 evidence",
+      "providerMode": "Production-run traces recorded in Neatlogs for the listed runs, as stated by the producer README at the pin; no other provider mode is claimed.",
+      "reviewer": "Independent marketing wording review pending; no reviewer credit recorded. Sponsor and source-owner review pending.",
+      "limitations": [
+        "Describes visible public artifacts in the published integration-evals evidence at the pinned commit. Screenshots and the trace export are not copied into this repository. It is not a claim that the whole Neatlogs integration or any agent is verified.",
+        "Listed runs only; not all work is traced. The accepted diagnostic fires once per process; absence of 3 of 7 sessions in the queried window is not shown to be receiver loss. Cost is provider-reported and partial, not billing. No EVAL-02 comparison.",
+        "Owner acceptance relayed in chat (integration-evals PR #33 comment 6114638937) is not independent review, sponsor approval or package approval. Independent REQUEST_CHANGES NL-R1/2/3 (comments 6114721543, 6114779607, against d9be4d18) and their source limits remain.",
+        "The existing blocked CLAIM-SPN-01-NEATLOGS-001 and the SPN-01 evidence class are unchanged; this row does not upgrade them. Source availability is not an authenticity or eligibility review."
+      ],
+      "reReviewTrigger": [
+        "The pinned commit, tree, trace export or screenshots change, or the producer README or its limits change.",
+        "Any NL-R1/2/3 resolution, independent review, sponsor statement, or change to the runbook beat or destination."
+      ]
+    },
+    {
+      "audience": "Internal reviewers of DEMO-HUMAN-RECORDING-RUNBOOK-001 only; not approved as external copy.",
+      "state": "planned",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "id": "CLAIM-RUNBOOK-SPN-02-AVAIL-001",
+      "kind": "sponsor_use",
+      "sponsorEvidenceClass": "SPN-02",
+      "allowedWording": "The published integration-evals evidence at the pinned commit includes Entire graph snapshots from manual GitHub Actions runs on ten repository commits, and one historical checkpoint record.",
+      "prohibitedVariants": [
+        "Entire checkpoints every agent session.",
+        "Entire records every agent decision.",
+        "Entire is running live in this demo.",
+        "Entire approved or endorsed this integration."
+      ],
+      "destination": "Planned internal human recording runbook (demo/human-recording-runbook.md) only: describes the visible public Entire artifacts in the SOURCE AVAILABLE beat. Not a caption, narration, X post or external copy.",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/integration-evals",
+        "path": "evidence/entire/2026-10-11",
+        "revision": "a9d68ef0116b1c20f7d70e0161016e21b4bb13b7",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11"
+      },
+      "evidenceReference": "SPN-ENTIRE-001",
+      "evidenceClassification": "SPN-02: source-available producer evidence (README, ten Actions run URLs and snapshot folders with SHA256SUMS, checkpoint page) at the pin; not SPN-01 or SPN-03 evidence",
+      "providerMode": "Ten entire-graph outputs from manual GitHub Actions runs (no agent session) and one historical manual checkpoint, as stated by the producer README at the pin; no live hook mode is claimed.",
+      "reviewer": "Independent marketing wording review pending; no reviewer credit recorded. Sponsor and source-owner review pending.",
+      "limitations": [
+        "Describes visible public artifacts in the published integration-evals evidence at the pinned commit; none are copied into this repository. It is not a claim that the whole Entire integration or any agent is verified, and no agent-decision, transcript or reasoning claim is made.",
+        "Per the README the runs used Entire CLI v0.11.4 and entire-graph v0.4.0; the plugin version is not pinned and each run records its version in graph-version.json. The checkpoint is bound to one commit (3358f0d) only. No live Entire hook is required or claimed. Do not assert a total repository count beyond the ten listed.",
+        "Owner acceptance relayed in chat is not independent review, sponsor approval or package approval. The existing CLAIM-SPN-02-ENTIRE-001 and the SPN-02 evidence class are unchanged; this row does not upgrade them."
+      ],
+      "reReviewTrigger": [
+        "The pinned commit, tree, snapshots, run URLs or checkpoint page change, or the producer README changes.",
+        "Any independent review, sponsor statement, live capture, or change to the runbook beat or destination."
+      ]
+    },
+    {
+      "audience": "Internal reviewers of DEMO-HUMAN-RECORDING-RUNBOOK-001 only; not approved as external copy.",
+      "state": "planned",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "id": "CLAIM-RUNBOOK-SPN-03-AVAIL-001",
+      "kind": "sponsor_use",
+      "sponsorEvidenceClass": "SPN-03",
+      "allowedWording": "This hypothetical business-plan workbook is the CFO.ai export with four blank-safe opening-cash guards added by the CFO.ai assistant. It is not actual sales, and the generic export has a documented limitation.",
+      "prohibitedVariants": [
+        "Finance-approved business plan.",
+        "CFO.ai verified our savings.",
+        "This workbook shows actual sales or revenue.",
+        "The generic export is accepted."
+      ],
+      "destination": "Planned internal human recording runbook (demo/human-recording-runbook.md) only: describes the owner-selected reviewer workbook shown in the SOURCE AVAILABLE beat. Not a caption, narration, X post or external copy. Shows no figures.",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/integration-evals",
+        "path": "evidence/cfo-ai/2026-10-11-r2",
+        "revision": "6420af494a5276f69c337f47dac3ad4c1854d524",
+        "revisionKind": "git_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2"
+      },
+      "evidenceReference": "SPN-CFOAI-001",
+      "evidenceClassification": "SPN-03: source-available producer evidence (revision 2 README, public native CFO.ai canvas/export/input-change proof, reviewer workbook cfo-native-export.xlsx SHA-256 43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14, export-postprocessing-diff.json); hypothetical forecast; not SPN-01 or SPN-02 evidence",
+      "providerMode": "CFO.ai native export with an assistant-made four-formula guard, as stated by the producer README; agent-prepared desktop Excel verification only. The pin is the PR #24 revision 2 commit (merged as f375fcf20584f5c98dbd4f3b69f884c52994224e).",
+      "reviewer": "Independent marketing wording review pending; no reviewer credit recorded. Finance review pending.",
+      "limitations": [
+        "Hypothetical forecast; no actual sales, revenue, cash or demand is established. This row carries no dollar figures, numerical performance or financial assertions and no new financial math.",
+        "CFO-R2-001 is unresolved: the generic export (SHA-256 969941bac6f07d9678bb04238f0d5167baab9956f5e320bb33b77841be809416) still converts blank opening cash to zero for Conservative and Growth; it is not accepted. There is no Finance, package or generic-export waiver approval.",
+        "Owner acceptance relayed in chat (integration-evals PR #24 comment 6112757808) is not independent review or a waiver. The producer verification is agent-prepared Excel verification, not Finance acceptance.",
+        "The existing blocked CLAIM-SPN-03-CFO-001 and the SPN-03 evidence class are unchanged; this row does not upgrade them."
+      ],
+      "reReviewTrigger": [
+        "The pinned commit, workbook hash, export-postprocessing diff or producer README changes.",
+        "CFO-R2-001 is resolved, Finance review state changes, or the runbook beat or destination changes."
+      ]
+    },
+    {
+      "audience": "Internal reviewers of DEMO-HUMAN-RECORDING-RUNBOOK-001 only; not approved as external copy.",
+      "state": "planned",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "id": "CLAIM-RUNBOOK-ENTRY-FIELDS-001",
+      "kind": "submission_field",
+      "allowedWording": "Team Jevelopers. Project TicketStub.",
+      "requiredQualifier": "Project name only; product availability is unverified.",
+      "prohibitedVariants": [
+        "TicketStub is available now.",
+        "Team Jevelopers, a sponsor-verified entry.",
+        "Treat this as a submitter identity, authorization, or approval to post."
+      ],
+      "destination": "Planned internal human recording runbook (demo/human-recording-runbook.md) title-card line only. Names the team and project; implies no product availability. Does not reuse the X-only CLAIM-X-DEST-* review or any concept-art approval.",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "issues/22",
+        "revision": null,
+        "revisionKind": "upstream_issue_not_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22"
+      },
+      "evidenceReference": "MM-SUB-ISSUE-22-ENTRY-CONTENTS",
+      "evidenceClassification": "repository_owner_issue_text",
+      "providerMode": "none",
+      "reviewer": "Independent wording review pending for this runbook destination; no reviewer credit recorded.",
+      "limitations": [
+        "Source is the entry-contents list in the body of marketing-material issue 22, a mutable record rather than an immutable revision (observed body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; issue updated_at is GitHub activity metadata and does not prove when the body was last edited).",
+        "Names the team and project only; product availability is unverified. Field review is pending for this destination.",
+        "A draft field is not submission readiness, eligibility, sponsor completion or publication permission. Submitter identity and posting stay human steps."
+      ],
+      "reReviewTrigger": [
+        "Issue 22 entry contents change or the team or project name is corrected.",
+        "The runbook title-card line or destination changes."
       ]
     }
   ],

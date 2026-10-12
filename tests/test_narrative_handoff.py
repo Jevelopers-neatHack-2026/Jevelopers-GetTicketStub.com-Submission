@@ -15,8 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 # and U+2032-U+2037. The middle dot U+00B7 is in the first range.
 # Scope: known `https://` URLs and those Latin/punctuation ranges only. It is not the
 # full X parser (no mentions, emoji, cashtags, schemeless links or other Unicode) and
-# never replaces the human X composer check. Input outside that scope raises
-# XEstimateOutOfScope and is left to the human composer.
+# never replaces the human X composer check. The code raises XEstimateOutOfScope only
+# for a literal `http://` and for characters outside the ranges above; schemeless or
+# ftp-style ASCII text is counted as plain text, not rejected. The human composer
+# check stays mandatory.
 X_MAX_WEIGHTED = 280
 X_URL_WEIGHT = 23
 X_WEIGHT_ONE_RANGES = ((0, 4351), (8192, 8205), (8208, 8223), (8242, 8247))

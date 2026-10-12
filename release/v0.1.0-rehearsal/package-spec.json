@@ -8,7 +8,7 @@
     "official hackathon submission",
     "public X post"
   ],
-  "assetRevision": "r05",
+  "assetRevision": "r07",
   "assets": [
     {
       "recordId": "DEMO-EXPLAINER-001-text",
@@ -57,6 +57,19 @@
       "requiredForV1": true,
       "sceneRefs": [],
       "limitations": ["A plan is not a finished product demo or submission video."]
+    },
+    {
+      "recordId": "DEMO-HUMAN-RECORDING-RUNBOOK-001-text",
+      "assetId": "DEMO-HUMAN-RECORDING-RUNBOOK-001",
+      "familyIds": ["FAM-DEMO-001"],
+      "path": "demo/human-recording-runbook.md",
+      "role": "human-recording-guide",
+      "variant": "planned-internal-human-guide",
+      "package": true,
+      "requiredForV1": false,
+      "sceneRefs": [],
+      "claimIds": ["CLAIM-RUNBOOK-SPN-01-AVAIL-001", "CLAIM-RUNBOOK-SPN-02-AVAIL-001", "CLAIM-RUNBOOK-SPN-03-AVAIL-001", "CLAIM-RUNBOOK-ENTRY-FIELDS-001"],
+      "limitations": ["Planned internal human guide for the repository-internal-review destination only; not cleared for publication or recording, and no dry run or recording has been performed from it.", "Source-availability and entry-field rows are planned and pending; they do not upgrade the blocked SPN, EVAL or Finance claims, asset claims, CTA approvals or collateral and submission gates; rights, brand and wording review are pending.", "Product beats are producer-confirmed conditional instruction only, not evidence; no media, caption, narration, post or submission is created or approved by this guide."]
     },
     {
       "recordId": "DEMO-SUBMISSION-NARRATIVE-001-text",

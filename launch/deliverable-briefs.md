@@ -31,6 +31,6 @@ Submitter name and authorization (the submitter posts from their own account); p
 
 ## CTA and evidence boundary
 
-The only ledgered reusable copy CTA in this set is `CTA-REPOSITORY-DOCS-001`, **“Explore the repository docs.”**, pointing to the pinned README at <https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md>. Its scope is repository documentation only, and its exact wording review remains pending. It does not imply a live product, demo route, purchase route, or landing-page action.
+The only ledgered reusable copy CTA in this set is `CTA-REPOSITORY-DOCS-001`, **“Explore the repository docs.”**, pointing to the pinned README at <https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md>. Its scope is repository documentation only; the ledger records its exact wording as approved and its route as confirmed for repository docs only (2026-10-11) for this same pinned target. It does not imply a live product, demo route, purchase route, or landing-page action.
 
 The event quote-post destination is not that docs CTA: it requires the actual official organizer post to be attached in X, with the confirmed fields and cutoff. Until those details and submitter authority exist, the announcement remains a blocked draft. The sponsor and product rows in `messaging/claims.json` remain pending/blocked and cannot be upgraded by this brief.
