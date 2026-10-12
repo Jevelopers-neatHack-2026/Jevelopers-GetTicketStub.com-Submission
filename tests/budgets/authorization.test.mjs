@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   authorizeReservation, changeBudgetPolicy, readCapacity, markReservationDispatched, normalizedBudgetRequest,
@@ -10,6 +11,19 @@ import {
 } from './reservation-harness.mjs';
 
 const fixturePromise = loadReserveFixture();
+
+async function intakeObservation(scope, { binding, money } = {}) {
+  const request=JSON.parse(await readFile(new URL('../../fixtures/metering/usage-observation.request.json',import.meta.url),'utf8'));
+  Object.assign(request,{scope,requestId:randomUUID(),idempotencyKey:randomUUID(),evidenceProvenanceRef:`fixture:synthetic:${randomUUID()}`});
+  Object.assign(request.usageEvent,{tenant_id:scope.tenantId,project_id:scope.projectId,environment:scope.environment,billing_mode:scope.billingMode,
+    event_id:randomUUID(),usage_event_id:randomUUID(),source_observation_id:randomUUID(),correlation_id:randomUUID(),
+    logical_operation_id:binding?.logicalOperationId??randomUUID(),provider_attempt_id:binding?.providerAttemptId??randomUUID(),
+    billable_attempt_id:binding?.billableAttemptId??randomUUID(),transport_attempt_id:binding?.transportAttemptId??randomUUID(),provider_request_id:null,
+    occurred_at:'2026-10-12T04:00:00Z',observed_at:'2026-10-12T04:00:00Z',ingested_at:'2026-10-12T04:00:00Z'});
+  if(money)request.usageEvent.valuation.money=money;
+  else Object.assign(request.usageEvent,{completeness:'incomplete',usage_units:null,missing_fields:['usage','amount'],valuation:{basis:'unknown',money:null,rate_card_ref:null},outcome:'partial'});
+  return request;
+}
 
 async function countEvents(pool, scope) {
   const result = await pool.query(
@@ -872,4 +886,42 @@ test('R1 mutation proof chain refuses expired source authority in budget policy,
     else result=await api.markDispatched((await import('./reservation-harness.mjs')).markDispatchedCommand(scope,prepared.grant.value.reservationId,2,{attemptBinding:prepared.req.attemptBinding}),ports);
     assertNoCurrentAuthority(result,operation);const capacity=await readCapacity(scope,'USD','mutation-retained',makePorts(pool,scope,{clock}));assert.equal(capacity.value.limitAmount,operation==='policy'?'2':'0.6');assert.equal(capacity.value.usedCapacity,operation==='policy'?'0':'0.6');assert.equal(await countEvents(pool,scope),operation==='policy'?0:1);
   }}finally{await pool.end();}
+});
+
+test('accepted unpriced public intake blocks uncovered capacity without inventing currency and isolates trusted scopes',async()=>{
+  const pool=reservationPool();const scope=makeScope('unpriced-intake');const fixture=await fixturePromise;
+  try{
+    await setBudgetLimit(pool,scope,'1');await setBudgetLimit(pool,scope,'1','EUR');const ports=publicPorts(pool,scope);
+    const observation=await intakeObservation(scope);const receipt=await api.ingestUsage(observation,ports);assert.equal(receipt.ok,true);assert.equal(receipt.value.status,'accepted');assert.equal(receipt.value.outboxStatus,'awaiting_evidence');
+    assert.equal((await api.ingestUsage(observation,ports)).value.status,'duplicate');
+    for(const currency of ['USD','EUR']){const result=await api.authorize(reservationRequest(scope,fixture,{currency,amount:'0.75'}),ports);assert.equal(result.value.status,'unavailable');assert.equal(result.value.finance,undefined);}
+    assert.equal(await countEvents(pool,scope),0,'uncovered unknown exposure grants no hold');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM cost_intelligence.financial_ledger_events WHERE tenant_id=$1',[scope.tenantId])).rows[0].n,0,'unknown intake manufactures no monetary row');
+    for(const foreign of [{...scope,tenantId:randomUUID()},{...scope,projectId:randomUUID()},{...scope,environment:'development'},{...scope,billingMode:'sandbox'}]){
+      const foreignPorts=publicPorts(pool,foreign);const {limitAmount,...setup}=policyChange(foreign,{limitAmount:'1',expectedPolicyRevision:0});
+      const policy=await api.changeBudget({...setup,newLimit:limitAmount,expectedLedgerRevision:0},foreignPorts);assert.equal(policy.ok,true,policy.ok?'':policy.error.code);assert.equal(policy.value.status,'applied');
+      const foreignRequest=reservationRequest(foreign,fixture,{policyRef:policy.value.decisionReference,logicalOperationId:observation.usageEvent.logical_operation_id,billableAttemptId:observation.usageEvent.billable_attempt_id});
+      foreignRequest.attemptBinding.providerAttemptId=observation.usageEvent.provider_attempt_id;foreignRequest.attemptBinding.transportAttemptId=observation.usageEvent.transport_attempt_id;
+      const foreignGrant=await api.authorize(foreignRequest,foreignPorts);assert.equal(foreignGrant.ok,true,foreignGrant.ok?'':foreignGrant.error.code);assert.equal(foreignGrant.value.status,'authorized');
+      assert.equal((await api.authorize(reservationRequest(scope,fixture),ports)).value.status,'unavailable','a foreign scoped hold cannot cover this accepted attempt');
+    }
+  }finally{await pool.end();}
+});
+
+test('unpriced intake matches an existing economic hold once; priced intake charges only its known currency',async()=>{
+  const pool=reservationPool();const scope=makeScope('covered-intake');const fixture=await fixturePromise;
+  try{
+    await setBudgetLimit(pool,scope,'1');await setBudgetLimit(pool,scope,'1','EUR');const ports=publicPorts(pool,scope);
+    const req=reservationRequest(scope,fixture,{amount:'0.75'});req.attemptBinding.providerAttemptId=randomUUID();req.attemptBinding.transportAttemptId=randomUUID();
+    const grant=await api.authorize(req,ports);assert.equal(grant.value.status,'authorized');
+    const observation=await intakeObservation(scope,{binding:req.attemptBinding});assert.equal((await api.ingestUsage(observation,ports)).value.outboxStatus,'awaiting_evidence');
+    assert.equal((await api.ingestUsage(observation,ports)).value.status,'duplicate');
+    const replay=await api.authorize(req,ports);assert.equal(replay.value.reservationId,grant.value.reservationId);assert.equal(replay.value.historicalReplay,true);
+    const next=await api.authorize(reservationRequest(scope,fixture,{amount:'0.25'}),ports);assert.equal(next.value.status,'authorized');assert.equal(next.value.availableAmount,'0');assert.equal(await countEvents(pool,scope),2,'the covered attempt adds no second hold or exposure');
+    const eur=await api.authorize(reservationRequest(scope,fixture,{currency:'EUR',amount:'0.75'}),ports);assert.equal(eur.value.status,'authorized','a USD hold covering the exact unpriced attempt does not invent an EUR expense');
+    const known=makeScope('priced-intake');await setBudgetLimit(pool,known,'1');await setBudgetLimit(pool,known,'1','EUR');const knownPorts=publicPorts(pool,known);
+    const knownObservation=await intakeObservation(known,{money:{amount:'0.75',currency:'EUR',scale:2}});const receipt=await api.ingestUsage(knownObservation,knownPorts);assert.equal(receipt.ok,true);assert.equal(receipt.value.outboxStatus,'posted');
+    assert.equal((await api.authorize(reservationRequest(known,fixture,{amount:'0.75'}),knownPorts)).value.status,'authorized');
+    assert.equal((await api.authorize(reservationRequest(known,fixture,{currency:'EUR',amount:'0.5'}),knownPorts)).value.status,'denied');
+  }finally{await pool.end();}
 });

@@ -156,15 +156,18 @@ provider dispatch.
 
 ## Readiness and migration limits
 
-Additive `0009_budget_authority_bindings` preserves old history and fails upgrade
+Additive `0010_budget_authority_bindings` preserves old history and fails upgrade
 on existing duplicate economic attempts rather than deleting or rewriting them.
 Legacy rows lacking immutable target/source/lifetime mapping cannot become new
 host-ready dispatch grants by guessed backfill.
 
-A separately queued CI04A migration also uses sequence 0009. This candidate is
-currently based on `acfdfbd`; the supervisor must serialize the reviewed intake
-handoff, renumber this migration to 0010, refresh health/upgrade tests and obtain
-new exact-head review before integrating both. No unreviewed branch is adopted.
+Reviewed CI04A intake is preserved from main merge
+`d8e419d70bfb92b563badf84e3d6defa787f6a64`. Its additive migration remains
+`0009_usage_intake`; the Finance authority migration is now `0010`. Ledger
+projection accepts exact pre-authority intake health nine and exact integrated
+health ten only when the matching tables, columns, indexes and revision guards
+exist. Partial authority artifacts or future health counts fail closed; no
+numeric `>=9` acceptance substitutes for schema verification.
 
 Existing migration 0007/0008 installer prerequisite F03 remains unresolved here:
 upgrading the restricted owner from 0006 may require the installer-authorized
@@ -204,3 +207,5 @@ proof/fresh permission rules. No expiry or permission loss releases exposure.
 These bounded sequential checks preserve distinct authorities. They do not
 claim a shared atomic revocation instant across remote issuers; the genuine host
 still owns its final synchronous transport/dispatch fence.
+
+Current capacity also reads accepted usage-intake heads under the same scoped ledger lock used by intake and reservations. An unposted accepted billable attempt without a matching outstanding reservation makes admission unavailable. Unpriced intake has no inferred amount or currency: it blocks new admission within its tenant, project, environment and billing mode until current evidence or an exact logical/provider/billable-attempt hold covers it. A known unposted price applies only to its stated currency, and a matching hold must cover that price. Posted usage is counted through the effective ledger head, including replacement semantics; matching intake does not create a second hold or a second expense. Financial expiry does not release uncertain exposure.

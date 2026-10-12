@@ -459,6 +459,41 @@ async function projectCapacity(
     [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, currency],
   );
   const row = aggregate.rows[0] ?? {};
+  // Intake and reservation writers hold the same scoped ledger lock. Read the
+  // current accepted head, not a historical projection or a guessed zero cost.
+  // Unpriced currency is unknown and therefore cannot be assigned to a pool.
+  const intake = await client.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM cost_intelligence.usage_intake_attempts a
+       JOIN cost_intelligence.usage_intake_inbox i
+         ON i.tenant_id=a.tenant_id AND i.project_id=a.project_id AND i.environment=a.environment
+         AND i.billing_mode=a.billing_mode AND i.source_observation_id=a.current_observation_id
+       WHERE a.tenant_id=$1 AND a.project_id=$2 AND a.environment=$3 AND a.billing_mode=$4
+         AND i.attempt_revision_accepted
+         AND NOT EXISTS (SELECT 1 FROM cost_intelligence.financial_ledger_events e WHERE e.event_id=i.event_id)
+         AND (i.event_facts #>> '{valuation,money,currency}' IS NULL
+           OR i.event_facts #>> '{valuation,money,currency}'=$5)
+         AND NOT EXISTS (
+           SELECT 1 FROM cost_intelligence.budget_reservation_events r
+           WHERE r.tenant_id=a.tenant_id AND r.project_id=a.project_id AND r.environment=a.environment
+             AND r.billing_mode=a.billing_mode AND r.billable_attempt_id=a.billable_attempt_id
+             AND r.logical_operation_id=a.logical_operation_id
+             AND r.attempt_binding->>'providerAttemptId'=a.provider_attempt_id
+             AND (i.event_facts #>> '{valuation,money,currency}' IS NULL
+               OR i.event_facts #>> '{valuation,money,currency}'=r.currency)
+           GROUP BY r.reservation_id,r.currency
+           HAVING sum(r.held_amount)-sum(r.released_amount) > greatest(max(r.consumed_amount),
+             coalesce((SELECT greatest(sum(e.amount),0) FROM cost_intelligence.financial_ledger_events e
+               WHERE e.tenant_id=$1 AND e.project_id=$2 AND e.environment=$3 AND e.billing_mode=$4
+                 AND e.billable_attempt_id=a.billable_attempt_id AND e.currency=r.currency
+                 AND e.financial_effect AND e.classification IN ('direct_cost','supplier_expense','operating_expense','payable_labor')
+                 AND NOT EXISTS (SELECT 1 FROM cost_intelligence.financial_ledger_events n WHERE n.supersedes_event_id=e.event_id)),0))
+             AND sum(r.held_amount)-sum(r.released_amount) >=
+               coalesce((i.event_facts #>> '{valuation,money,amount}')::numeric,0)
+         )
+     ) AS unresolved_intake`,
+    [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, currency],
+  );
   const consumed = parseScaledDecimal(fromRow(row, 'consumed') ?? '0');
   const outstandingHolds = parseScaledDecimal(fromRow(row, 'outstanding_holds') ?? '0');
   const used = parseScaledDecimal(fromRow(row, 'used') ?? '0');
@@ -467,7 +502,7 @@ async function projectCapacity(
   return {
     limit, consumed, outstandingHolds, used, available,
     reservationCount: Number(row.reservation_count ?? 0),
-    unresolvedExposure: row.unresolved_exposure === true, ledgerRevision: Number(row.ledger_revision ?? 0),
+    unresolvedExposure: row.unresolved_exposure === true || intake.rows[0]?.unresolved_intake === true, ledgerRevision: Number(row.ledger_revision ?? 0),
     policy: policy ? { id: policy.id, revision: policy.revision, contentHash: policy.contentHash } : null,
   };
 }
