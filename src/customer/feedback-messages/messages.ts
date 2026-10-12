@@ -54,6 +54,9 @@ export const MESSAGES = {
   unsupported_input: { message: "Uploads and extra sources aren't supported yet. Paste one event page link instead.", action: RETRY, retryable: true },
   demo_only: { message: "This preview only knows its demo events. Try neatHack, The Pale Hours or Harbour FC.", action: RETRY, retryable: true },
   context_unavailable: { message: "Signed context isn't set up on this server yet, so nothing can use it. Your stubs are unaffected.", action: RETRY, retryable: true },
+  approval_conflict: { message: "This stub changed while you were approving it. Look it over once more, then approve it again.", action: RELOAD },
+  approval_unavailable: { message: "We can't read this stub's art right now, so it can't be approved yet. Try again in a moment.", action: RETRY, retryable: true },
+  approval_invalid: { message: "That approval doesn't cover this use. Approve the stub again from your wall.", action: WALL },
 
   // Mail
   mail_unavailable: { message: "Email isn't switched on for this preview, so we can't send a link. Come back soon.", action: RETRY, retryable: true },
