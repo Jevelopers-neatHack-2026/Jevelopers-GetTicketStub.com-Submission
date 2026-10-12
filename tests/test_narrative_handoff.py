@@ -8,6 +8,50 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Bounded local estimator for X post length. Source: twitter-text config v3.json at
+# commit 30e2430d90cff3b46393ea54caf511441983c260 (file sha256 2aca8d4a...c124a):
+# maxWeightedTweetLength 280, transformedURLLength 23, scale 100, defaultWeight 200,
+# and weight 100 (1 per character) for U+0000-U+10FF, U+2000-U+200D, U+2010-U+201F
+# and U+2032-U+2037. The middle dot U+00B7 is in the first range.
+# Scope: known `https://` URLs and those Latin/punctuation ranges only. It is not the
+# full X parser (no mentions, emoji, cashtags, schemeless links or other Unicode) and
+# never replaces the human X composer check. Input outside that scope raises
+# XEstimateOutOfScope and is left to the human composer.
+X_MAX_WEIGHTED = 280
+X_URL_WEIGHT = 23
+X_WEIGHT_ONE_RANGES = ((0, 4351), (8192, 8205), (8208, 8223), (8242, 8247))
+X_HTTPS_URL = r"https://[A-Za-z0-9._~:/?#@!$&'()*+,;=%-]+"
+
+PLAN_URL = (
+    "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/"
+    "f375fcf20584f5c98dbd4f3b69f884c52994224e/evidence/cfo-ai/2026-10-11-r2"
+)
+X_DEST_CLAIM_IDS = (
+    "CLAIM-X-DEST-TEAM-001",
+    "CLAIM-X-DEST-PROJECT-001",
+    "CLAIM-X-DEST-REPO-001",
+    "CLAIM-X-DEST-PLAN-001",
+)
+
+
+class XEstimateOutOfScope(ValueError):
+    pass
+
+
+def x_weighted_length(text):
+    if "http://" in text:
+        raise XEstimateOutOfScope("non-HTTPS URL")
+    total = 0
+    for part in re.split(f"({X_HTTPS_URL})", text):
+        if re.fullmatch(X_HTTPS_URL, part):
+            total += X_URL_WEIGHT
+            continue
+        for char in part:
+            if not any(lo <= ord(char) <= hi for lo, hi in X_WEIGHT_ONE_RANGES):
+                raise XEstimateOutOfScope(f"unsupported character {char!r}")
+            total += 1
+    return total
+
 
 class NarrativeHandoffTests(unittest.TestCase):
     @classmethod
@@ -153,11 +197,26 @@ class NarrativeHandoffTests(unittest.TestCase):
 
     def test_x_copy_shells_fit_the_recorded_standard_post_limit(self):
         copy = (ROOT / "launch/announcement-copy.md").read_text()
+        briefs = (ROOT / "launch/deliverable-briefs.md").read_text()
         text_blocks = re.findall(r"```text\n(.*?)\n```", copy, re.S)
         self.assertEqual(len(text_blocks), 2)
         quote_template, build_update_template = text_blocks
-        self.assertLessEqual(len(quote_template), 280)
+        # The full plan URL makes the raw text longer than 280 characters, so the guard
+        # is the weighted estimate (HTTPS URL = 23). A human composer check stays pending.
+        self.assertGreater(len(quote_template), 280)
+        self.assertLessEqual(x_weighted_length(quote_template), X_MAX_WEIGHTED)
         self.assertLessEqual(len(build_update_template), 280)
+        self.assertLessEqual(x_weighted_length(build_update_template), X_MAX_WEIGHTED)
+        self.assertIn(f"Business plan: {PLAN_URL}", quote_template)
+        self.assertEqual(
+            self.claims["CLAIM-X-DEST-PLAN-001"]["allowedWording"],
+            f"Business plan: {PLAN_URL}",
+        )
+        for claim_id in X_DEST_CLAIM_IDS:
+            self.assertIn(claim_id, copy)
+            self.assertIn(claim_id, briefs)
+        self.assertIn("CFO-R2-001", copy)
+        self.assertIn("CFO-R2-001", briefs)
         self.assertIn("Team: Jevelopers", quote_template)
         self.assertIn("[SUBMITTER_NAME_PENDING]", quote_template)
         self.assertIn("Project: TicketStub", quote_template)
@@ -172,6 +231,37 @@ class NarrativeHandoffTests(unittest.TestCase):
         self.assertIn("OFFICIAL NEATLOGS SUBMISSION POST", copy)
         self.assertIn("CTA-REPOSITORY-DOCS-001", copy)
         self.assertIn(self.ctas["CTA-REPOSITORY-DOCS-001"]["exactText"], copy)
+
+    def test_x_estimator_rejects_over_limit_and_counts_urls_as_23(self):
+        self.assertEqual(x_weighted_length("a" * 280), 280)
+        self.assertGreater(x_weighted_length("a" * 281), X_MAX_WEIGHTED)
+        long_url = "https://example.org/" + "a" * 400
+        self.assertEqual(x_weighted_length(long_url), X_URL_WEIGHT)
+        self.assertEqual(x_weighted_length("x " * 128 + long_url), 256 + 23)
+        self.assertGreater(x_weighted_length("x " * 129 + long_url), X_MAX_WEIGHTED)
+        self.assertEqual(x_weighted_length("a · b"), 5)
+        self.assertEqual(x_weighted_length("café"), 4)
+        for out_of_scope in ("http://example.org", "中", "\U0001F600"):
+            with self.assertRaises(XEstimateOutOfScope):
+                x_weighted_length(out_of_scope)
+
+    def test_x_quote_template_name_budget_includes_plan_locator(self):
+        copy = (ROOT / "launch/announcement-copy.md").read_text()
+        template = re.findall(r"```text\n(.*?)\n```", copy, re.S)[0]
+        self.assertIn(PLAN_URL, template)
+        stand_in = template.replace(
+            "[PUBLIC_DEMO_URL_PENDING]", "https://demo.example.org/ticketstub"
+        )
+        for name in ("", "Sam Lee", "Alexandria Montgomery-Featherstonehaugh"):
+            filled = stand_in.replace("[SUBMITTER_NAME_PENDING]", name)
+            self.assertLessEqual(x_weighted_length(filled), X_MAX_WEIGHTED, name)
+        base = x_weighted_length(stand_in.replace("[SUBMITTER_NAME_PENDING]", ""))
+        budget = X_MAX_WEIGHTED - base
+        self.assertGreater(budget, 0)
+        within = stand_in.replace("[SUBMITTER_NAME_PENDING]", "n" * budget)
+        over = stand_in.replace("[SUBMITTER_NAME_PENDING]", "n" * (budget + 1))
+        self.assertEqual(x_weighted_length(within), X_MAX_WEIGHTED)
+        self.assertGreater(x_weighted_length(over), X_MAX_WEIGHTED)
 
     def test_official_formats_keep_video_unknowns_and_submission_blockers_explicit(self):
         sources = {row["sourceId"]: row for row in self.official_formats["sources"]}
