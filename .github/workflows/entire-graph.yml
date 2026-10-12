@@ -64,5 +64,15 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: entire-graph-${{ github.sha }}
-          path: ${{ runner.temp }}/out
+          # Keep the generated .entire instruction within this exact staged file set.
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/out/graph-snapshot.ndjson
+            ${{ runner.temp }}/out/graph-version.json
+            ${{ runner.temp }}/out/graph-capabilities.json
+            ${{ runner.temp }}/out/commit.txt
+            ${{ runner.temp }}/out/SHA256SUMS
+            ${{ runner.temp }}/out/init-agents/AGENTS.md
+            ${{ runner.temp }}/out/init-agents/CLAUDE.md
+            ${{ runner.temp }}/out/init-agents/.entire/graph-agent.md
           retention-days: 90
