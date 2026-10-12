@@ -1,0 +1,105 @@
+name: Offline Linux containment verification
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unprivileged-linux:
+    name: Mandatory unprivileged Linux verification
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: becd640a801fe7829fe643bd96711d7a69bf58d0
+          path: .contract-producer/new
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .contract-producer/old
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/event-intelligence
+          ref: d91e08d666abc243ae456a7f9f1bc9c745ca4f8d
+          path: .event-producer
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Install existing pinned verification tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contract-packager" --ignore-scripts --no-audit --no-fund npm@10.9.8
+          npm install --prefix "$RUNNER_TEMP/contract-types" --ignore-scripts --no-audit --no-fund typescript@5.9.3
+          sudo apt-get update && sudo apt-get install --yes bubblewrap libseccomp2
+      - name: Record identity and require unprivileged namespace startup
+        id: namespace_startup
+        shell: bash
+        run: |
+          evidence="$PWD/reports/runs/offline-read-linux22"
+          mkdir -p "$evidence"
+          {
+            id
+            test "$(id -u)" -ne 0
+            uname -sr
+            cat /etc/os-release
+            bwrap --version
+            .venv/bin/python -VV
+            node --version
+            readlink -f .venv/bin/python
+            sha256sum "$(readlink -f .venv/bin/python)" "$(command -v node)" "$(command -v bwrap)"
+            git rev-parse HEAD 'HEAD^{tree}'
+            git status --porcelain
+            test -z "$(git status --porcelain)"
+          } > "$evidence/runtime-source-identity.log" 2>&1
+          set +e
+          timeout 15s bwrap --unshare-pid --die-with-parent --unshare-net --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc -- /bin/sh -eu -c '
+            test "$(id -u)" -ne 0
+            id
+            for namespace in user pid net mnt; do
+              printf "child_namespace[%s]=" "$namespace"
+              readlink "/proc/self/ns/$namespace"
+            done
+            cat /proc/self/uid_map /proc/self/gid_map
+            printf "payload_started=1\n"
+          ' > "$evidence/namespace-startup.log" 2>&1
+          probe_status=$?
+          printf 'namespace_probe_exit=%s\n' "$probe_status" >> "$evidence/namespace-startup.log"
+          set -e
+          test "$probe_status" -eq 0
+      - name: Run actual containment owner lifetime and diagnostic scenarios as runner
+        run: |
+          env -i PATH="$PATH" HOME="$HOME" CI=true IE_PROCESS_EVIDENCE="$PWD/reports/runs/offline-read-linux22/write-probes" .venv/bin/python -m pytest tests/test_private_network.py tests/test_retrieval_inputs.py tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py tests/test_processes.py tests/test_owner_output.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py tests/test_evidence_index_execution.py tests/test_history_archive.py --junitxml=reports/runs/offline-read-linux22/native-junit.xml
+      - name: Run complete source and installed canonical checks as runner
+        id: canonical
+        if: ${{ !cancelled() && steps.namespace_startup.outcome == 'success' }}
+        shell: bash
+        run: |
+          export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"
+          env -i PATH="$PATH" HOME="$HOME" CI=true bash candidate_tests/v0101/run.sh \
+            "$PWD/.contract-producer/new" "$PWD/.contract-producer/old" \
+            "$RUNNER_TEMP/offline-contract-opt-in" "$PWD/reports/runs/offline-read-linux22/canonical" \
+            "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc"
+      - name: Verify all original retrieval cases as runner
+        if: ${{ !cancelled() && steps.canonical.outcome == 'success' }}
+        run: |
+          env -i PATH="$PATH" HOME="$HOME" CI=true IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer/old" IE_CONTRACT_RUNTIME="$RUNNER_TEMP/offline-contract-opt-in/old-runtime/source-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/runs/offline-read-linux22/retrieval-component" .venv/bin/python -m pytest component_tests --junitxml=reports/runs/offline-read-linux22/component-junit.xml
+      - name: Preserve exact capability outcomes and receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: offline-read-linux22-${{ github.sha }}
+          path: reports/runs/offline-read-linux22/
+          retention-days: 30

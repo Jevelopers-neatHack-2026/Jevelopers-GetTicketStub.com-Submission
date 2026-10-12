@@ -18,6 +18,7 @@ from integration_evals.models import Assertion, Case, Catalog, Outcome, Run, Sui
 from integration_evals.replay import authorize_rerun
 from integration_evals.reporting import Tracker
 from integration_evals.runner import execute_captured
+from tests.fixtures.owned_process import pin_process_fixture
 from tests.test_assembly import synthetic_workspace
 from tests.test_evidence_claims import controlled_case
 
@@ -28,10 +29,15 @@ def controlled_execution(
     root: Path, case: Case | None = None, cleanup_exit: int = 0
 ) -> tuple[Run, tuple[ComparisonCapture, ...], Suite, Settings]:
     assembly = synthetic_workspace(root)
-    fixture = REPOSITORY / "tests/fixtures/diagnostic_owner.py"
+    pinned = pin_process_fixture(
+        root / "agent-harness", REPOSITORY / "tests/fixtures/diagnostic_owner.py"
+    )
+    fixture = pinned.path
     components = tuple(
         component.model_copy(
             update={
+                "revision": pinned.revision,
+                "tree": pinned.tree,
                 "command": (sys.executable, str(fixture)),
                 "cleanup_command": (sys.executable, "-c", f"import sys; sys.exit({cleanup_exit})"),
             }

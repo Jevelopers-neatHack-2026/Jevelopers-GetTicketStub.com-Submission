@@ -12,6 +12,7 @@ from component_tests.retrieval_concurrency_checks import assert_concurrency
 from component_tests.retrieval_dns_checks import assert_dns
 from component_tests.retrieval_dns_mutations import mutate_protocol, mutation_source
 from component_tests.retrieval_handshake_checks import assert_handshake
+from component_tests.retrieval_input_checks import assert_input_origin, capture_input_record
 from component_tests.retrieval_resolver_checks import (
     Mutation,
     assert_resolver_inputs,
@@ -186,6 +187,7 @@ def test_real_retrieval_component_archives_observed_boundary(
     settings = Settings(evaluator, retrieval_workspace, retrieval_workspace / "assembly.json")
     # When actual orchestration invokes SafeFetcher under the unchanged offline Bubblewrap boundary.
     run = execute(suite, catalog, settings)
+    input_path = capture_input_record(run, settings, mutation)
     archive = save_run(run, retrieval_workspace / "reports", tracker, suite, settings.artifacts)
     # Then the positive fixture proves transport and injected regressions cannot earn a pass.
     saved = load_record(archive / "run.json", Run)
@@ -195,6 +197,7 @@ def test_real_retrieval_component_archives_observed_boundary(
         assert selected.reason == "required target platform unavailable"
         pytest.fail("Mandatory Linux boundary evidence unavailable; retained actual blocked run")
     assert selected.exit_code == 0, selected.reason
+    assert_input_origin(input_path, run, retrieval_workspace)
     assert selected.cleanup_status == "passed"
     assert selected.output_digest not in (None, digest(b""))
     assert len(saved.results) == 42

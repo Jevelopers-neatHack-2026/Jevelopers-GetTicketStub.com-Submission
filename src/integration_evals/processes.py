@@ -11,6 +11,14 @@ from pathlib import Path
 from typing import IO
 
 from integration_evals.errors import fail
+from integration_evals.process_network import OfflineNetwork, require_network_boundary
+from integration_evals.process_reads import (
+    linux_reads,
+    owned_directory,
+    read_paths,
+    sandbox_reads,
+)
+from integration_evals.process_seccomp import network_filter
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +32,7 @@ class ProcessSettings:
     timeout: float
     offline: bool = False
     writable_directory: Path | None = None
+    network: OfflineNetwork = OfflineNetwork.DENY
 
 
 def terminate_group(process: subprocess.Popen[bytes]) -> None:
@@ -34,19 +43,27 @@ def terminate_group(process: subprocess.Popen[bytes]) -> None:
         return
 
 
-def contained_command(command: tuple[str, ...], settings: ProcessSettings) -> tuple[str, ...]:
+def contained_command(
+    command: tuple[str, ...], settings: ProcessSettings, filter_descriptor: int | None = None
+) -> tuple[str, ...]:
     """Contain detached children in Linux PID namespaces; prohibit forks on macOS."""
+    require_network_boundary(settings.network, offline=settings.offline)
     directory = settings.writable_directory
     if settings.offline and directory is None:
         return fail("offline_writable_directory_missing", "owner-command")
+    reads: tuple[Path, ...] = ()
+    if settings.offline and directory is not None:
+        directory = owned_directory(directory)
+        reads = read_paths(command, owned_directory(settings.checkout), directory)
     if sys.platform == "darwin":
         sandbox = shutil.which("sandbox-exec")
         if sandbox is not None:
             profile = "(version 1) (allow default) (deny process-fork)"
             if settings.offline and directory is not None:
+                profile += sandbox_reads(reads)
+                escaped = str(directory).replace("\\", "\\\\").replace('"', '\\"')
                 profile += (
-                    " (deny network*) (deny file-write*)"
-                    f' (allow file-write* (subpath "{directory.resolve()}"))'
+                    f' (deny network*) (deny file-write*) (allow file-write* (subpath "{escaped}"))'
                 )
             return (sandbox, "-p", profile, *command)
     if sys.platform == "linux":
@@ -54,15 +71,9 @@ def contained_command(command: tuple[str, ...], settings: ProcessSettings) -> tu
         if bubblewrap is not None:
             bindings = ("--bind", "/", "/")
             if settings.offline and directory is not None:
-                bindings = (
-                    "--unshare-net",
-                    "--ro-bind",
-                    "/",
-                    "/",
-                    "--bind",
-                    str(directory.resolve()),
-                    str(directory),
-                )
+                if filter_descriptor is None:
+                    fail("offline_seccomp_missing", "owner-command")
+                bindings = (*linux_reads(reads, directory), "--seccomp", str(filter_descriptor))
             return (
                 bubblewrap,
                 "--unshare-pid",
@@ -72,6 +83,7 @@ def contained_command(command: tuple[str, ...], settings: ProcessSettings) -> tu
                 "/dev",
                 "--proc",
                 "/proc",
+                *(("--remount-ro", "/") if settings.offline else ()),
                 "--",
                 *command,
             )
@@ -80,15 +92,19 @@ def contained_command(command: tuple[str, ...], settings: ProcessSettings) -> tu
 
 def invoke(command: tuple[str, ...], settings: ProcessSettings) -> int:
     """Own a session and reap its leader on success, timeout and cancellation."""
-    with subprocess.Popen(  # noqa: S603 - reviewed command in a new task-owned session
-        contained_command(command, settings),
-        cwd=settings.checkout,
-        env=settings.environment,
-        stdin=subprocess.PIPE,
-        stdout=settings.stdout,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    ) as process:
+    with (
+        network_filter(offline=settings.offline, policy=settings.network) as descriptor,
+        subprocess.Popen(  # noqa: S603 - reviewed command in a new task-owned session
+            contained_command(command, settings, descriptor),
+            cwd=settings.checkout,
+            env=settings.environment,
+            stdin=subprocess.PIPE,
+            stdout=settings.stdout,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            pass_fds=() if descriptor is None else (descriptor,),
+        ) as process,
+    ):
         try:
             _ = process.communicate(input=settings.payload, timeout=settings.timeout)
         finally:

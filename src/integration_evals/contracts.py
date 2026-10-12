@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ from integration_evals.contract_sources import (
     required_exports,
 )
 from integration_evals.errors import InvalidArtifactError, fail
+from integration_evals.process_reads import canonical_path
 from integration_evals.processes import ProcessSettings, invoke
 from integration_evals.validation import git_value, source_fingerprint, unique_ids
 
@@ -114,6 +116,37 @@ def validate_contract_observation(observation: ContractObservation, pin: Contrac
             fail("incomplete_contract_fixture_categories", result.contract)
 
 
+def stage_contract_inputs(settings: ContractSettings, root: Path, driver: Path) -> Path | None:
+    """Snapshot verified inputs into a private read-only checkout, excluding host parents."""
+    _ = shutil.copyfile(settings.node.resolve(), root / "node")
+    _ = shutil.copymode(settings.node.resolve(), root / "node")
+    if runtime_digest(root / "node") != settings.node_digest:
+        fail("contract_runtime_digest_mismatch", "staged-node")
+    _ = shutil.copyfile(driver, root / driver.name)
+    if runtime_digest(root / driver.name) != runtime_digest(driver):
+        fail("contract_driver_copy_mismatch", "driver")
+    for name in git_value(settings.producer, "ls-files", "-z").split("\0"):
+        if not name:
+            continue
+        source = canonical_path(settings.producer.resolve() / name)
+        if source != confined_path(settings.producer, name):
+            fail("contract_source_symlink", "staged-producer")
+        target = root / "producer" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _ = shutil.copyfile(source, target)
+        if runtime_digest(target) != runtime_digest(source):
+            fail("contract_source_copy_mismatch", "staged-producer")
+    package: Path | None = None
+    if settings.installed is not None and settings.pin.package is not None:
+        package = root / "node_modules/@jevelopers/shared-contracts"
+        _ = shutil.copytree(settings.installed.root, package, symlinks=True)
+        verify_installed_package(
+            InstalledPackage(package, settings.installed.archive), settings.pin.package
+        )
+    validate_contract_pin(settings)
+    return package
+
+
 def execute_contracts(settings: ContractSettings) -> ContractReceipt:
     """Preserve failures and source pins without granting owner or product acceptance."""
     validate_contract_pin(settings)
@@ -125,32 +158,33 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
     exit_code: int | None = None
     output = b""
     started_at = datetime.now(UTC)
-    with TemporaryDirectory(prefix="integration-contracts-") as directory:
+    with (
+        TemporaryDirectory(prefix="integration-contracts-") as directory,
+        TemporaryDirectory(prefix="integration-contract-inputs-") as input_directory,
+    ):
         staging = Path(directory)
         environment = {"HOME": directory, "TMPDIR": directory}
         if "PATH" in os.environ:
             environment["PATH"] = os.environ["PATH"]
         try:
             required = required_exports(settings.producer)
+            inputs = Path(input_directory)
+            package = stage_contract_inputs(settings, inputs, driver)
             with (staging / "stdout").open("w+b") as stdout:
                 exit_code = invoke(
                     (
-                        str(settings.node.resolve()),
+                        str(inputs / "node"),
                         "--experimental-import-meta-resolve",
-                        str(driver.resolve()),
+                        str(inputs / driver.name),
                     ),
                     ProcessSettings(
-                        checkout=settings.producer,
+                        checkout=inputs,
                         environment=environment,
                         payload=json.dumps(
                             {
-                                "producer": str(settings.producer.resolve()),
+                                "producer": str(inputs / "producer"),
                                 "node_version": settings.pin.node_version,
-                                "package_root": (
-                                    str(settings.installed.root.resolve())
-                                    if settings.installed is not None
-                                    else None
-                                ),
+                                "package_root": (str(package) if package is not None else None),
                             }
                         ).encode(),
                         stdout=stdout,
