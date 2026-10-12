@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { generateImage, providerFailure } from "../src/server/ai/providers.ts";
+import { generateImage, imageProviderConfigured, providerFailure } from "../src/server/ai/providers.ts";
 
 // Run the existing executor with dummy credentials and intercept fetch before any socket opens.
 const originalFetch = globalThis.fetch;
@@ -39,6 +39,8 @@ for (const name of ["TICKETSTUB_ART_MODEL", "GPT_IMAGE_MODEL"]) {
       });
       return reply();
     };
+    assert.equal(imageProviderConfigured(), true);
+    assert.equal(posts, 0, "configuration validation performs no provider request");
     const result = await generateImage("Offline artwork", undefined, attempt => attempts.push(attempt));
     assert.equal(posts, 1);
     assert.equal(result.value, `data:image/jpeg;base64,${jpeg}`);
@@ -76,8 +78,14 @@ for (const [label, values, code] of [
   configure(values);
   const attempts = [];
   globalThis.fetch = () => { assert.fail("invalid image configuration attempted network"); };
+  const expectedFailure = { status: code === "unsupported_image_model" ? 422 : 503,
+    body: { code, error: "The selected AI service could not complete this request." } };
+  assert.throws(() => imageProviderConfigured(), error => {
+    assert.deepEqual(providerFailure(error), expectedFailure);
+    return true;
+  });
   await assert.rejects(generateImage("test", undefined, attempt => attempts.push(attempt)), error => {
-    assert.deepEqual(providerFailure(error), { status: code === "unsupported_image_model" ? 422 : 503, body: { code, error: "The selected AI service could not complete this request." } });
+    assert.deepEqual(providerFailure(error), expectedFailure);
     return true;
   });
   assert.equal(attempts.length, 0);
@@ -87,6 +95,7 @@ for (const mode of ["codex_subscription", "api", "", "unrecognized"]) test(`acce
   configure({ GPT_IMAGE_ACCESS_MODE: mode, GPT_IMAGE_MODEL: "gpt-image-2" });
   delete process.env.OPENAI_API_KEY;
   globalThis.fetch = () => { assert.fail("development preference dispatched without a server key"); };
+  assert.throws(() => imageProviderConfigured(), error => error.code === "missing_provider_key");
   await assert.rejects(generateImage("test"), error => error.code === "missing_provider_key");
 });
 
@@ -126,6 +135,8 @@ test("OpenRouter retains its own model, discovery and credential and ignores the
     assert.equal(JSON.parse(init.body).model, model);
     return Response.json({ data: [{ b64_json: jpeg, media_type: "image/jpeg" }] });
   };
+  assert.equal(imageProviderConfigured(), true);
+  assert.deepEqual(calls, []);
   assert.equal((await generateImage("test")).metadata.requestedModel, model);
   assert.deepEqual(calls, ["https://openrouter.ai/api/v1/images/models", "https://openrouter.ai/api/v1/images"]);
 });
@@ -133,6 +144,7 @@ test("OpenRouter retains its own model, discovery and credential and ignores the
 test("OpenRouter cannot borrow GPT_IMAGE_MODEL when its model is missing", async () => {
   configure({ TICKETSTUB_ART_PROVIDER: "openrouter", GPT_IMAGE_MODEL: "gpt-image-2", TICKETSTUB_ART_OPENROUTER_API_KEY: "offline-router-placeholder" });
   globalThis.fetch = () => { assert.fail("missing OpenRouter model attempted network"); };
+  assert.throws(() => imageProviderConfigured(), error => error.code === "invalid_model_configuration");
   await assert.rejects(generateImage("test"), error => error.code === "invalid_model_configuration");
 });
 
@@ -140,7 +152,79 @@ test("demo execution ignores present credentials and invalid or conflicting mode
   configure({ TICKETSTUB_ART_MODEL: "invalid", GPT_IMAGE_MODEL: "gpt-image-2", GPT_IMAGE_ACCESS_MODE: "api" });
   process.env.TICKETSTUB_RUNTIME_MODE = "demo";
   globalThis.fetch = () => { assert.fail("demo attempted upstream transport"); };
+  assert.equal(imageProviderConfigured(), false);
   assert.equal(await generateImage("test"), undefined);
+});
+
+test("configuration check exposes only a boolean for locally valid direct and router configurations", () => {
+  globalThis.fetch = () => { assert.fail("local configuration check attempted network"); };
+  configure({ GPT_IMAGE_MODEL: "gpt-image-2" });
+  assert.equal(imageProviderConfigured(), true);
+  configure({ TICKETSTUB_ART_PROVIDER: "openrouter", TICKETSTUB_ART_MODEL: "openai/gpt-image-2",
+    GPT_IMAGE_MODEL: "conflicting-unused-direct-alias", TICKETSTUB_ART_OPENROUTER_API_KEY: "offline-router-placeholder" });
+  assert.equal(imageProviderConfigured(), true);
+});
+
+for (const [label, values, code] of [
+  ["blank direct key", { OPENAI_API_KEY: " " }, "missing_provider_key"],
+  ["missing router key", { TICKETSTUB_ART_PROVIDER: "openrouter", TICKETSTUB_ART_MODEL: "openai/gpt-image-2" }, "missing_provider_key"],
+  ["invalid provider", { TICKETSTUB_ART_PROVIDER: "anthropic" }, "invalid_provider_configuration"],
+  ["invalid router model", { TICKETSTUB_ART_PROVIDER: "openrouter", TICKETSTUB_ART_MODEL: "https://example.invalid/model",
+    TICKETSTUB_ART_OPENROUTER_API_KEY: "offline-router-placeholder" }, "invalid_model_configuration"],
+  ["unsupported router model", { TICKETSTUB_ART_PROVIDER: "openrouter", TICKETSTUB_ART_MODEL: "anthropic/claude-sonnet-5-5",
+    TICKETSTUB_ART_OPENROUTER_API_KEY: "offline-router-placeholder" }, "unsupported_image_model"],
+]) test(`pre-quota configuration check rejects ${label} without transport or configuration disclosure`, () => {
+  configure({ GPT_IMAGE_MODEL: "gpt-image-2", ...values });
+  globalThis.fetch = () => { assert.fail("invalid local configuration check attempted network"); };
+  assert.throws(() => imageProviderConfigured(), error => {
+    assert.deepEqual(providerFailure(error), { status: code === "unsupported_image_model" ? 422 : 503,
+      body: { code, error: "The selected AI service could not complete this request." } });
+    return true;
+  });
+});
+
+test("configuration check is server-only even when the runtime is demo", () => {
+  configure({ GPT_IMAGE_MODEL: "gpt-image-2" });
+  globalThis.fetch = () => { assert.fail("client configuration check attempted network"); };
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
+  try {
+    for (const mode of ["live", "demo"]) {
+      process.env.TICKETSTUB_RUNTIME_MODE = mode;
+      assert.throws(() => imageProviderConfigured(), error => {
+        assert.deepEqual(providerFailure(error), { status: 500,
+          body: { code: "server_only", error: "The selected AI service could not complete this request." } });
+        return true;
+      });
+    }
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else delete globalThis.window;
+  }
+});
+
+test("an image invocation retains its captured provider model and key across the discovery await", async () => {
+  const model = "openai/gpt-image-2";
+  configure({ TICKETSTUB_ART_PROVIDER: "openrouter", TICKETSTUB_ART_MODEL: model,
+    TICKETSTUB_ART_OPENROUTER_API_KEY: "offline-initial-router-placeholder" });
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, authorization: init.headers.authorization });
+    if (url.endsWith("/models")) {
+      configure({ TICKETSTUB_ART_PROVIDER: "openai", GPT_IMAGE_MODEL: "gpt-image-1", OPENAI_API_KEY: "offline-changed-direct-placeholder" });
+      return Response.json({ data: [{ id: model, architecture: { output_modalities: ["image"] } }] });
+    }
+    assert.equal(JSON.parse(init.body).model, model);
+    return Response.json({ data: [{ b64_json: jpeg, media_type: "image/jpeg" }] });
+  };
+  const result = await generateImage("test");
+  assert.deepEqual(calls, [
+    { url: "https://openrouter.ai/api/v1/images/models", authorization: "Bearer offline-initial-router-placeholder" },
+    { url: "https://openrouter.ai/api/v1/images", authorization: "Bearer offline-initial-router-placeholder" },
+  ]);
+  assert.equal(result.metadata.provider, "openrouter");
+  assert.equal(result.metadata.requestedModel, model);
+  assert.equal(imageProviderConfigured(), true); // The next invocation validates the new environment separately.
 });
 
 for (const [status, code] of [[401, "provider_authentication_failed"], [403, "provider_authentication_failed"], [429, "provider_rate_limited"], [400, "unsupported_provider_request"], [503, "provider_unavailable"]]) test(`direct image HTTP ${status} fails once with no model or provider fallback`, async () => {

@@ -94,6 +94,11 @@ function config(capability: Capability): Config | undefined {
   return { capability, provider, model, key };
 }
 
+/** Validate local server image configuration before quota admission; account access remains a provider check. */
+export function imageProviderConfigured(): boolean {
+  return config("art") !== undefined;
+}
+
 function metadata(c: Config, data: Json): ProviderMetadata {
   const usage = object(data.usage);
   const count = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
