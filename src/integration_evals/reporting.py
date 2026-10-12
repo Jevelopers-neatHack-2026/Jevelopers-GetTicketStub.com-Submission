@@ -11,6 +11,7 @@ from pydantic import Field
 
 from integration_evals.artifacts import confined_path
 from integration_evals.errors import fail
+from integration_evals.evidence_index import IndexChecks, Reviews, build_index
 from integration_evals.history import History, runs_of, summarize_history, validate_record
 from integration_evals.models import (
     CaseResult,
@@ -25,37 +26,20 @@ from integration_evals.models import (
     Suite,
 )
 from integration_evals.packaging import copy_artifacts
+from integration_evals.report_models import Criterion, Tracker
 from integration_evals.report_validation import validate_evidence, validate_run
+from integration_evals.specifications import Requirements
 
-
-class Criterion(Record):
-    """Authoritative master acceptance row retained without altered ownership."""
-
-    id: RequirementId
-    category: str
-    classification: str
-    priority: str
-    owner_role: str
-    title: str
-    verification: str
-    evidence_required: str
-    status: Status
-    evidence_refs: tuple[str, ...]
-    tested_revision_refs: tuple[str, ...]
-    notes: str
-    dependencies: tuple[str, ...]
-    implementation_issue_refs: tuple[str, ...]
-
-
-class Tracker(Record):
-    """Original plan remains the authority; run output is an independent view."""
-
-    format_version: str
-    document_date: str
-    kind: str
-    allowed_statuses: tuple[Status, ...]
-    notes: tuple[str, ...]
-    criteria: tuple[Criterion, ...]
+__all__ = [
+    "CoverageRow",
+    "Criterion",
+    "OwnerResponse",
+    "Tracker",
+    "coverage",
+    "junit",
+    "save_run",
+    "save_snapshot",
+]
 
 
 class CoverageRow(Record):
@@ -153,8 +137,14 @@ def save_run(
     return save_snapshot(History(runs=(run,)), root, tracker, suite, artifact_root)
 
 
-def save_snapshot(
-    history: History, root: Path, tracker: Tracker, suite: Suite, artifact_root: Path | None
+def save_snapshot(  # noqa: PLR0913 - Preserve positional archive API; inventory is optional.
+    history: History,
+    root: Path,
+    tracker: Tracker,
+    suite: Suite,
+    artifact_root: Path | None,
+    *,
+    requirements: Requirements | None = None,
 ) -> Path:
     """Write one immutable full-history snapshot after archive sequencing checks."""
     validate_record(history, suite)
@@ -176,6 +166,25 @@ def save_snapshot(
     _ = (directory / "history.json").write_text(history.model_dump_json(indent=2), encoding="utf-8")
     register = [row.model_dump(mode="json") for row in summarize_history(history, suite)]
     _ = (directory / "register.json").write_text(json.dumps(register, indent=2), encoding="utf-8")
+    index = build_index(
+        history,
+        suite,
+        tracker,
+        requirements,
+        checks=IndexChecks(
+            roots={
+                sample.evaluation_source_run or sample.id: root
+                / (sample.evaluation_source_run or sample.id)
+                for sample in history.runs
+            },
+            reviews=Reviews(),
+            review_root=directory,
+            checked_at=run.started_at,
+        ),
+    )
+    _ = (directory / "evidence-index.json").write_text(
+        index.model_dump_json(indent=2), encoding="utf-8"
+    )
     _ = (directory / "junit.xml").write_bytes(
         junit(tuple(result for sample in history.runs for result in sample.results))
     )
@@ -207,6 +216,7 @@ def save_snapshot(
         [
             "",
             "Mock/replay output verifies only that mode; skipped boundaries block acceptance.",
+            "Evidence index: evidence-index.json joins samples, artifacts and review blockers.",
             "",
         ]
     )

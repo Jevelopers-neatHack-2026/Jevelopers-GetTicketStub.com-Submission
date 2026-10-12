@@ -10,6 +10,7 @@ from integration_evals.history import History, validate_record
 from integration_evals.models import Digest, Identifier, Record, Run, Suite
 from integration_evals.report_validation import validate_evidence
 from integration_evals.reporting import Tracker, save_snapshot
+from integration_evals.specifications import Requirements
 
 
 class Successor(Record):
@@ -101,8 +102,14 @@ def _sync_snapshot(directory: Path) -> None:
             os.close(descriptor)
 
 
-def save_history(
-    history: History, root: Path, tracker: Tracker, suite: Suite, artifact_root: Path | None = None
+def save_history(  # noqa: PLR0913 - Preserve positional archive API; inventory is optional.
+    history: History,
+    root: Path,
+    tracker: Tracker,
+    suite: Suite,
+    artifact_root: Path | None = None,
+    *,
+    requirements: Requirements | None = None,
 ) -> Path:
     """Append under a local lock; interrupted writes retain a blocking reservation."""
     validate_record(history, suite)
@@ -135,6 +142,8 @@ def save_history(
                     _ = output.write(link.model_dump_json())
                     output.flush()
                     os.fsync(output.fileno())
-            _ = save_snapshot(prefix, root, tracker, suite, artifact_root)
+            _ = save_snapshot(
+                prefix, root, tracker, suite, artifact_root, requirements=requirements
+            )
             _sync_snapshot(directory)
         return _directory(root, history.runs[-1].id)

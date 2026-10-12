@@ -1,5 +1,8 @@
 # Verification execution protocol
 
+See [evaluator evidence index and local review packaging](evidence-index.md) for
+requirement/case/run/artifact joins, review sidecars and GPT Image qualification.
+
 ## Decision and ownership
 
 The evaluator is a thin verifier over the integration workspace owned by
