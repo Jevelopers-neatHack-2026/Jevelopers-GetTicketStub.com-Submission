@@ -1924,3 +1924,41 @@ test('a host dispatch accessor that consumes the deadline cannot start dispatch'
   await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (e) => e.code === 'preflight_deadline_passed');
   assert.deepEqual(host, []);
 });
+
+test('owned dispatch cancellation follows shadowed native callers despite synthetic events and listener shadows', async () => {
+  const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+  for (const shadow of ['value', 'getter']) {
+    for (const interference of ['stop-propagation', 'synthetic-source', 'synthetic-composite']) {
+      const controller = new AbortController();
+      Object.defineProperty(controller.signal, 'aborted', shadow === 'value'
+        ? { value: false } : { get() { return false; } });
+      if (interference === 'stop-propagation') {
+        EventTarget.prototype.addEventListener.call(controller.signal, 'abort', (event) => event.stopImmediatePropagation());
+      }
+      let callerListenerReads = 0;
+      for (const method of ['addEventListener', 'removeEventListener']) {
+        Object.defineProperty(controller.signal, method, { get() {
+          callerListenerReads += 1;
+          throw new Error('caller listener methods must not control owned cancellation');
+        } });
+      }
+      let hostSignal;
+      const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(),
+        fetchImpl: interceptedFetch().fetchImpl,
+        dispatchPort: { async dispatch(input) { hostSignal = input.signal; return { host: 'result' }; } } });
+      const input = billable();
+      const prepared = await adapter.prepare(input);
+      await adapter.dispatch(dispatchInput(input, prepared, controller.signal));
+      assert.equal(nativeAborted.call(hostSignal), false, `${shadow}/${interference} starts active`);
+      if (interference === 'synthetic-source') {
+        EventTarget.prototype.dispatchEvent.call(controller.signal, new Event('abort'));
+      } else if (interference === 'synthetic-composite') {
+        EventTarget.prototype.dispatchEvent.call(hostSignal, new Event('abort'));
+      }
+      assert.equal(nativeAborted.call(hostSignal), false, 'an event cannot forge native cancellation');
+      controller.abort();
+      assert.equal(nativeAborted.call(hostSignal), true, `${shadow}/${interference} preserves later native cancellation`);
+      assert.equal(callerListenerReads, 0, 'only the adapter-owned composite is observed');
+    }
+  }
+});

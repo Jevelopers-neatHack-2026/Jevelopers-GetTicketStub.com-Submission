@@ -1,5 +1,6 @@
 import { types as utilTypes } from 'node:util';
 import { randomUUID } from 'node:crypto';
+import { addAbortListener } from 'node:events';
 import {
   executeMeteredAttempt,
   validateMeteredAttempt,
@@ -1184,6 +1185,10 @@ export async function executeAuthorizedAccessCell(args) {
       }
       try {
         operationSignal = runnerSignal === undefined ? deadlineSignal : AbortSignal.any([runnerSignal, deadlineSignal]);
+        // Activate native following on this owned composite before reservation. Lazy
+        // composition must not make cancellation depend on a caller's public shadow
+        // or on whether a downstream host installs a listener. The deadline bounds it.
+        if (runnerSignal !== undefined) addAbortListener(operationSignal, () => {});
       } catch {
         return resultRow(cell, mode, 'blocked', 'invalid_abort_signal', 'Provide a genuine native AbortSignal for this operation.', {
           ...preDispatchFields,

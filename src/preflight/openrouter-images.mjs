@@ -1,5 +1,6 @@
 import { types as utilTypes } from 'node:util';
 import { createHash } from 'node:crypto';
+import { addAbortListener } from 'node:events';
 import { AccessPreflightError } from './access.mjs';
 import { canonicalHash } from '../contracts/validation.mjs';
 
@@ -141,7 +142,14 @@ function boundedTransportSignal(deadlineAt, callerSignal, now) {
   const remaining = remainingUntil(deadlineAt, now);
   const deadlineSignal = AbortSignal.timeout(Math.min(Math.max(1, Math.ceil(remaining)), BILLABLE_TIMEOUT_MAX_MS));
   let signal;
-  try { signal = AbortSignal.any([callerSignal, deadlineSignal]); }
+  try {
+    signal = AbortSignal.any([callerSignal, deadlineSignal]);
+    // Some supported Node runtimes follow composite sources lazily. Observe our own
+    // signal now so native cancellation remains visible despite public caller shadows,
+    // including after the host returns without installing its own abort listener.
+    // The one-shot observation ends at caller cancellation or the bounded deadline.
+    addAbortListener(signal, () => {});
+  }
   catch { throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.'); }
   assertTransportSignalCurrent(deadlineAt, callerSignal, signal, now);
   return signal;
