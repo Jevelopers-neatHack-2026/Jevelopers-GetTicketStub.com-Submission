@@ -1,0 +1,63 @@
+name: App recovery component DEVELOPMENT
+on:
+  pull_request:
+    paths:
+      - app_recovery_component_tests/**
+      - contracts/app-recovery-producer-pin.json
+      - docs/app-recovery-component-development.md
+      - .github/workflows/app-recovery-component.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-owner-command:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/getticketstub.com
+          ref: b46ab0487e15a928d524e6ce14b684941cfd2076
+          path: reports/runs/app-recovery-source
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Bootstrap pinned npm and image separately from owner execution
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-recovery-bootstrap"
+          env -i PATH="$PATH" HOME="$RUNNER_TEMP/app-recovery-bootstrap" npm_config_cache="$RUNNER_TEMP/app-recovery-bootstrap/cache" \
+            npm install --prefix "$RUNNER_TEMP/app-recovery-npm" --ignore-scripts --no-audit --no-fund npm@11.16.0
+          docker pull postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+      - name: Verify failure controls and exact source custody
+        env:
+          APP_RECOVERY_PIN_SOURCE: reports/runs/app-recovery-source
+          APP_RECOVERY_TEST_EVIDENCE: reports/runs/app-recovery-controls
+        shell: bash
+        run: |
+          mkdir -p reports/runs/app-recovery-controls
+          export APP_RECOVERY_PIN_SOURCE="$PWD/$APP_RECOVERY_PIN_SOURCE"
+          node --test app_recovery_component_tests/receipt.test.mjs > reports/runs/app-recovery-controls/unit.tap 2>&1
+      - name: Run untouched full owner command on disposable hosted runner
+        shell: bash
+        run: |
+          env -i PATH="$RUNNER_TEMP/app-recovery-npm/node_modules/.bin:$PATH" \
+            GITHUB_ACTIONS="$GITHUB_ACTIONS" GITHUB_RUN_ID="$GITHUB_RUN_ID" RUNNER_OS="$RUNNER_OS" \
+            RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" APP_RECOVERY_DISPOSABLE_RUNNER=1 \
+            node app_recovery_component_tests/run.mjs "$PWD/reports/runs/app-recovery-source" "$PWD/reports/runs/app-recovery-component"
+      - name: Preserve sanitized successes and failures only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: app-recovery-component-development-${{ github.sha }}
+          path: |
+            reports/runs/app-recovery-component/*.json
+            reports/runs/app-recovery-component/*.tap
+            reports/runs/app-recovery-controls/*.json
+            reports/runs/app-recovery-controls/*.tap
+          if-no-files-found: error
+          retention-days: 30

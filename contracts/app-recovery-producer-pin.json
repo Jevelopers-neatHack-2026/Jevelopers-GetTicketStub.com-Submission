@@ -1,0 +1,28 @@
+{
+  "kind": "app-recovery-component-development-pin",
+  "repository": "Jevelopers-neatHack-2026/getticketstub.com",
+  "revision": "b46ab0487e15a928d524e6ce14b684941cfd2076",
+  "tree": "5be798711f0e069025f4a7c41730c02c071b6c44",
+  "archive_sha256": "b843b5be48a5a48230f86ea505c3e2cbd1cc509da14a2708ffd2f9a0d3a98407",
+  "tracked_files_sha256": "3ce4c58ca852a5c9a1a33f4b5326480c223c57b9525e191313140c2184b86472",
+  "node": "22.23.3",
+  "npm": "11.16.0",
+  "postgres": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+  "script": "TICKETSTUB_OFFLINE_POSTGRES=1 node --test tests/creative-host.test.mjs",
+  "files": {
+    "package-lock.json": "81b24422e93f9c4600a5a47df15bef6d2707df88d2defac8493ab7d90be0956a",
+    "package.json": "291eee5f844d9facf1ae1b45ba7f5cc6afcea0051399daa1d1a4e61fdf6c0cee",
+    "src/server/vendor/agent-harness/MANIFEST.json": "c8a2aefe38e61106e7623aaf1d43cf1f27e1c1a8929a4ec5239d3892079698d7",
+    "src/server/vendor/cost-intelligence/MANIFEST.json": "30b15dd5c5e57fd316a223ddd9de88a61de192d84c6af42ea673847ee5714aae",
+    "src/server/vendor/cost-intelligence/SOURCE_LOCK.json": "f9f551c0c60f841074389251ba06f773e404c26223a4077697358d1564ec613e",
+    "src/server/vendor/cost-intelligence/runtime.tgz": "4c3a878bfa76a0c260dcf5fb9ce3053b13ecfaeaf56b29969c01d0ece75eaacd",
+    "src/server/vendor/creative-engine/MANIFEST.json": "d9699b50cca9644dca182760f71019260948e23ba3d6491a2e511dee846fe109",
+    "src/server/vendor/creative-engine/runtime.tgz": "e5add14959d7c682a0e9ee27e5f5830ffa512b980cd0fba59181d1fe6df63593",
+    "tests/creative-host.test.mjs": "3d17752356043bbd544e673a8ab0b51bd449d60bfc0a45c6371d3ea18eb83678"
+  },
+  "vendors": {
+    "creative_engine": "e4fa66488f31577f516b27238e945a1fb3c2143f",
+    "agent_harness": "fd4eaf2a54cb68740c960d5e061d4c4b11e79251",
+    "finance": "a08760e9ea65bda1e116867ac00b3e03d737bb7e"
+  }
+}
