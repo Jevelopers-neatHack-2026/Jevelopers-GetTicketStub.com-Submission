@@ -60,8 +60,7 @@ export type {
 } from './pricing/index.js';
 export * from './budgets/index.js';
 export * from './ledger/index.js';
-export { querySummary, validateFinancialSummaryPageBoundary, FinancialSummaryFiltersSchema, FinancialSummaryQuerySchema, SummarySourceWatermarkSchema, FinancialSummaryPageSchema } from './reporting/index.js';
-export type { FinancialSummaryFilters, FinancialSummaryQuery, FinancialSummaryPage } from './reporting/index.js';
+export * from './reporting/index.js';
 export { startReconciliation, getReconciliation, ReconciliationRequestSchema, ReconciliationRunSchema, ReconciliationResultSchema } from './reconciliation/index.js';
 export type { ReconciliationRequest, ReconciliationRun, ReconciliationResult } from './reconciliation/index.js';
 export { exportSummary, validateExportRequestBoundary, projectSafeFinancialSummary, safeCsvCell, serializeSafeFinancialSummaryCsv, ExportRequestSchema, ExportManifestSchema } from './integrations/index.js';
