@@ -215,13 +215,13 @@ export function sameDeliveredValue(a: unknown, b: unknown): boolean {
 
 /**
  * What this identity generation has independently observed: the immutable public envelope of the first accepted page, and for every request cursor the
- * page it was answered with (detail ids in order, `hasMore`, `nextCursor`). Held only for one scope/snapshot/authorization/filter generation and
+ * page it was answered with (an immutable deep copy of the accepted details in order,`hasMore`, `nextCursor`). Held only for one scope/snapshot/authorization/filter generation and
  * never persisted. It survives Previous, retry and revisits, so it is not erased by trail truncation. Deep-linked pages can be compared only against
  * pages observed from the first one onward; an unseen preceding page cannot be checked.
  */
 export type FinanceV2Evidence = Readonly<{
   envelope: Readonly<Record<string, unknown>> | null;
-  pages: ReadonlyMap<string, Readonly<{ detailIds: readonly string[]; hasMore: boolean; nextCursor: string | null }>>;
+  pages: ReadonlyMap<string, Readonly<{ details: readonly FinanceV2Page['details'][number][]; hasMore: boolean; nextCursor: string | null }>>;
 }>;
 export const NO_EVIDENCE: FinanceV2Evidence = { envelope: null, pages: new Map() };
 
@@ -235,12 +235,15 @@ export function checkFinanceV2Evidence(page: FinanceV2Page, requestCursor: strin
   const ids = page.details.map((detail) => detail.detailId);
   for (const [other, seen] of evidence.pages) {
     if (other === at) continue;
-    const clash = ids.findIndex((id) => seen.detailIds.includes(id));
+    const clash = ids.findIndex((id) => seen.details.some((detail) => detail.detailId === id));
     if (clash >= 0) return refuse('PAGE_REPLAY', `/details/${clash}/detailId`);
   }
   const known = evidence.pages.get(at);
   if (known !== undefined) {
-    if (known.detailIds.length !== ids.length || known.detailIds.some((id, index) => id !== ids[index])) return refuse('PAGE_REPLAY', '/details');
+    if (known.details.length !== ids.length || known.details.some((detail, index) => detail.detailId !== ids[index])) return refuse('PAGE_REPLAY', '/details');
+    // Same ids are not enough: every delivered value of a previously accepted detail must be unchanged (key order ignored). Values are only compared.
+    const changed = known.details.findIndex((detail, index) => !sameDeliveredValue(detail, page.details[index]));
+    if (changed >= 0) return refuse('PAGE_REPLAY', `/details/${changed}`);
     if (known.hasMore !== page.hasMore || known.nextCursor !== page.nextCursor) return refuse('PAGE_REPLAY', '/nextCursor');
   }
   return { ok: true, page };
@@ -249,7 +252,7 @@ export function checkFinanceV2Evidence(page: FinanceV2Page, requestCursor: strin
 /** Records an accepted page. The envelope is taken from the first accepted page of the generation and never replaced. */
 export function recordFinanceV2Evidence(page: FinanceV2Page, requestCursor: string | undefined, evidence: FinanceV2Evidence): FinanceV2Evidence {
   const pages = new Map(evidence.pages);
-  pages.set(requestCursor ?? FIRST_PAGE, { detailIds: page.details.map((detail) => detail.detailId), hasMore: page.hasMore, nextCursor: page.nextCursor });
+  pages.set(requestCursor ?? FIRST_PAGE, { details: structuredClone(page.details), hasMore: page.hasMore, nextCursor: page.nextCursor });
   const envelope = evidence.envelope ?? structuredClone(Object.fromEntries(Object.entries(page).filter(([key]) => !PER_READ_KEYS.has(key))));
   return { envelope, pages };
 }

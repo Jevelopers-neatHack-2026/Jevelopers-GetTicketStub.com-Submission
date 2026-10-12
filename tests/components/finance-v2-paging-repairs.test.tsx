@@ -107,6 +107,61 @@ describe('TD03-R2: the page behind every request cursor is remembered across Pre
     await cont.answerWith(3, (page) => { page.hasMore = false; page.nextCursor = null; });
     expect(cont.result.current.state).toMatchObject({ phase: 'refused', code: 'PAGE_REPLAY', path: '/nextCursor' });
   });
+  type Detail = { -readonly [K in keyof Page['details'][number]]: Page['details'][number][K] };
+  const mutable = (page: Page, index: number): Detail => page.details[index] as Detail;
+  const detailChanges: ReadonlyArray<readonly [string, (detail: Detail) => void]> = [
+    ['amount', (d) => { d.amount = '999.000000000000000000'; }],
+    ['status', (d) => { d.status = d.status === 'recognized' ? 'unsupported' : 'recognized'; }],
+    ['valuation', (d) => { d.valuation = d.valuation === 'estimated' ? 'unknown' : 'estimated'; }],
+    ['reconciliation', (d) => { d.reconciliation = d.reconciliation === 'exception' ? 'matched' : 'exception'; }],
+    ['settlement', (d) => { d.settlement = d.settlement === 'paid' ? 'unpaid' : 'paid'; }],
+    ['occurredAt', (d) => { d.occurredAt = '2030-01-01T00:00:00Z'; }],
+    ['nested metric', (d) => { d.metrics = { ...d.metrics, expense: '999.000000000000000000' }; }],
+    ['nested dimension', (d) => { d.dimensions = { ...d.dimensions, orderId: 'order-changed' }; }],
+  ];
+  const reordered = (value: unknown): unknown => Array.isArray(value) ? value.map(reordered)
+    : value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value).reverse().map(([key, inner]) => [key, reordered(inner)])) : value;
+  it.each(detailChanges)('refuses the same detail ids and continuation when only %s of a previously accepted detail changed (Previous)', async (_name, change) => {
+    const h = setup(); await throughPage3(h); await h.previous();
+    await h.answerWith(3, (page) => { change(mutable(page, 0)); });
+    expect(h.result.current.state).toMatchObject({ phase: 'refused', code: 'PAGE_REPLAY', path: '/details/0' });
+    expect(h.result.current.paging.pageNumber).toBe(2);
+  });
+  it('refuses a changed amount on the second detail, on a retried revisit, and on the cursorless first page', async () => {
+    const retry = setup(); await throughPage3(retry); await retry.previous();
+    await act(async () => retry.requests[3]!.reject({ status: 503 })); await retry.settle();
+    act(() => retry.result.current.retry()); await retry.settle();
+    await retry.answerWith(4, (page) => { mutable(page, 1).amount = '999.000000000000000000'; });
+    expect(retry.result.current.state).toMatchObject({ phase: 'refused', code: 'PAGE_REPLAY', path: '/details/1' });
+    const first = setup(); await first.settle(); await first.answer(0, 0); await first.next(); await first.answer(1, 1); await first.previous();
+    await first.answerWith(2, (page) => { mutable(page, 0).amount = '999.000000000000000000'; }, 0);
+    expect(first.result.current.state).toMatchObject({ phase: 'refused', code: 'PAGE_REPLAY', path: '/details/0' });
+  });
+  it('control: the identical content in a different object key order is accepted on a revisit, with a fresh token and read', async () => {
+    const h = setup(); await throughPage3(h);
+    const before = h.tokens.length;
+    await h.previous();
+    expect(h.tokens.length).toBe(before + 1);
+    await h.answerWith(3, (page) => { page.details = reordered(page.details) as Page['details']; });
+    expect(h.result.current.state).toMatchObject({ phase: 'ready', page: { hasMore: true, nextCursor: syntheticPagedCursors[1] } });
+    expect(h.result.current.paging.pageNumber).toBe(2);
+  });
+  it('mutating the port-owned page object after it was accepted neither changes nor poisons the recorded evidence', async () => {
+    const h = setup(); await h.settle(); await h.answer(0, 0); await h.next();
+    const delivered = syntheticPagedPage(1, h.requests[1]!.request);
+    const original = delivered.details[0]!.amount;
+    await act(async () => h.requests[1]!.resolve({ status: 'ready', page: delivered }));
+    expect(phase(h)).toBe('ready');
+    mutable(delivered, 0).amount = '999.000000000000000000';
+    mutable(delivered, 0).dimensions = { ...delivered.details[0]!.dimensions, orderId: 'order-changed' };
+    await h.next(); await h.answer(2, 2); await h.previous();
+    await h.answerWith(3, () => undefined);
+    expect(h.result.current.state).toMatchObject({ phase: 'ready' });
+    expect(h.result.current.state.phase === 'ready' && h.result.current.state.page.details[0]!.amount).toBe(original);
+    await h.previous();
+    await h.answerWith(4, (page) => { mutable(page, 0).amount = '999.000000000000000000'; }, 0);
+    expect(h.result.current.state).toMatchObject({ phase: 'refused', code: 'PAGE_REPLAY' });
+  });
   it('refuses the page-2 payload for the first-page request after Previous from page 2', async () => {
     const h = setup(); await h.settle(); await h.answer(0, 0); await h.next(); await h.answer(1, 1); await h.previous();
     expect(h.requests[2]!.request.cursor).toBeUndefined();
