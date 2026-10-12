@@ -63,6 +63,12 @@ class Fixture(unittest.TestCase):
     def codes(self):
         return sorted({e["code"] for e in self.audit()["errors"]})
 
+    def assert_ids_omitted(self, report, *identifiers):
+        serialized = json.dumps(report, sort_keys=True)
+        for identifier in identifiers:
+            self.assertNotIn(identifier, serialized)
+        self.assertTrue(all("id" not in error for error in report["errors"]))
+
 
 class Positive(Fixture):
     def test_valid_fixture(self):
@@ -181,14 +187,22 @@ class Checklist(Fixture):
         self.write("planning/acceptance-checklist.md", text.replace("AAA-02", "AAA-09"))
         r = self.audit()
         self.assertEqual(len([e for e in r["errors"] if e["code"] == "checklist-disagreement"]), 2)
+        self.assert_ids_omitted(r, "AAA-01", "AAA-02", "AAA-09")
+        self.assertIn("heading line 7 has no matching JSON criterion",
+                      [e["detail"] for e in r["errors"]])
+        self.assertIn("criterion[1] has no matching Markdown heading",
+                      [e["detail"] for e in r["errors"]])
 
     def test_verified_requires_evidence_and_revisions(self):
         self.checklist([crit("AAA-01", "verified"), crit("AAA-02", "verified", [" "], ["r"])])
         r = self.audit()
-        codes = [(e["id"], e["code"]) for e in r["errors"]]
-        self.assertIn(("AAA-01", "verified-missing-evidence"), codes)
-        self.assertIn(("AAA-01", "verified-missing-revisions"), codes)
-        self.assertIn(("AAA-02", "verified-missing-evidence"), codes)
+        self.assertEqual(r["error_counts"]["verified-missing-evidence"], 2)
+        self.assertEqual(r["error_counts"]["verified-missing-revisions"], 1)
+        details = [e["detail"] for e in r["errors"]]
+        self.assertIn("criterion[0] verified entry needs nonempty evidence_refs", details)
+        self.assertIn("criterion[0] verified entry needs nonempty tested_revision_refs", details)
+        self.assertIn("criterion[1] verified entry needs nonempty evidence_refs", details)
+        self.assert_ids_omitted(r, "AAA-01", "AAA-02")
 
     def test_checkbox_mismatch(self):
         self.checklist([crit("AAA-01", "verified", ["e"], ["r"])])
@@ -223,7 +237,10 @@ class Hardening(Fixture):
             "- [ ] **Planned** | P0 | Role", "- [ ] **Planned** | P0 | Role\n- Verify: x\n\nnote\n"
             "- [x] **Verified** | P0 | Role", 1))
         r = self.audit()
-        self.assertIn(("AAA-01", "duplicate-status"), [(e.get("id"), e["code"]) for e in r["errors"]])
+        duplicate_status = [e for e in r["errors"] if e["code"] == "duplicate-status"]
+        self.assertEqual(len(duplicate_status), 1)
+        self.assertEqual(duplicate_status[0]["detail"],
+                         "heading line 3 has more than one status line")
 
     def test_identical_duplicate_markdown_status(self):
         line = "- [ ] **Planned** | P0 | Role"
@@ -327,7 +344,62 @@ class Hardening(Fixture):
         self.checklist([crit(long_id), crit("AAA-01")])
         report = self.audit()
         self.assertIn("invalid-id", report["error_counts"])
-        self.assertNotIn(long_id, json.dumps(report))
+        self.assert_ids_omitted(report, long_id, "AAA-01")
+
+    def test_valid_format_duplicate_ids_use_only_positional_diagnostics(self):
+        sentinel = "SENSITIVE-731"
+        self.checklist([crit(sentinel), crit(sentinel)])
+        report = self.audit()
+        self.assertEqual(report["error_counts"]["duplicate-id"], 2)
+        details = [e["detail"] for e in report["errors"] if e["code"] == "duplicate-id"]
+        self.assertIn("criterion[1] duplicates criterion[0]", details)
+        self.assertIn("heading line 7 duplicates heading line 3", details)
+        self.assert_ids_omitted(report, sentinel)
+
+    def test_valid_format_ids_are_omitted_from_status_and_reference_errors(self):
+        sentinel = "SENSITIVE-731"
+        self.checklist([crit(sentinel, "done")])
+        report = self.audit()
+        self.assertEqual(report["error_counts"]["unknown-state"], 2)
+        unknown_details = [e["detail"] for e in report["errors"]
+                           if e["code"] == "unknown-state"]
+        self.assertIn("criterion[0] has a status that is not allowed", unknown_details)
+        self.assertIn("heading line 3 has a status that is not allowed", unknown_details)
+        self.assert_ids_omitted(report, sentinel)
+
+        self.checklist([crit(sentinel, "verified")])
+        report = self.audit()
+        self.assertEqual(report["error_counts"]["verified-missing-evidence"], 1)
+        self.assertEqual(report["error_counts"]["verified-missing-revisions"], 1)
+        self.assert_ids_omitted(report, sentinel)
+
+    def test_valid_format_id_is_omitted_from_markdown_errors(self):
+        sentinel = "SENSITIVE-731"
+        self.checklist([crit(sentinel)])
+        line = "- [ ] **Planned** | P0 | Role"
+        self.write(self.MD, self.md_text().replace(line, line + "\n" + line, 1))
+        report = self.audit()
+        self.assertEqual(report["error_counts"]["duplicate-status"], 1)
+        self.assertEqual(report["errors"][0]["detail"],
+                         "heading line 3 has more than one status line")
+        self.assert_ids_omitted(report, sentinel)
+
+    def test_valid_format_ids_are_omitted_from_checklist_disagreements(self):
+        sentinel = "SENSITIVE-731"
+        self.checklist([crit(sentinel, "blocked")], md_status={sentinel: "planned"})
+        report = self.audit()
+        self.assertEqual(report["error_counts"]["checklist-disagreement"], 1)
+        disagreement = [e["detail"] for e in report["errors"]
+                        if e["code"] == "checklist-disagreement"]
+        self.assertEqual(disagreement,
+                         ["criterion[0] and heading line 3 have different statuses"])
+        self.assert_ids_omitted(report, sentinel)
+
+        self.checklist([crit("AAA-01")])
+        self.write(self.MD, self.md_text().replace("AAA-01", sentinel))
+        report = self.audit()
+        self.assertEqual(report["error_counts"]["checklist-disagreement"], 2)
+        self.assert_ids_omitted(report, sentinel, "AAA-01")
 
     def test_empty_json_criteria(self):
         self.write(self.JSON, json.dumps({"allowed_statuses": list(ae.STATUSES), "criteria": []}))

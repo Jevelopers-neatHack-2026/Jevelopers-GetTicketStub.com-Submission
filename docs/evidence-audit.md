@@ -39,7 +39,7 @@ Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. 
 | `checkbox-mismatch` | Markdown `[x]` is not exactly the `verified` state |
 | `verified-missing-evidence`, `verified-missing-revisions` | A verified entry lacks nonempty `evidence_refs` or `tested_revision_refs` |
 
-Markdown criteria are `### ID title` headings; the whole block up to the next heading is scanned and must hold exactly one `- [ ] **Status** ...` line. Criterion IDs are limited to 64 characters. Errors never echo file contents, status values, input paths, manifest paths or arbitrary IDs. The `file` field uses fixed checklist labels, `evidence`, or a 1-based evidence-manifest index in sorted discovery order. The report retains at most 100 detailed errors, sets `errors_truncated` when more exist, and keeps complete per-code totals in `error_counts`.
+Markdown criteria are `### ID title` headings; the whole block up to the next heading is scanned and must hold exactly one `- [ ] **Status** ...` line. Criterion IDs are limited to 64 characters. Error objects omit criterion IDs and never echo file contents, status values, input paths or manifest paths. Their details use zero-based JSON criterion indexes and 1-based Markdown heading line numbers so maintainers can locate entries without exposing caller-supplied IDs. The `file` field uses fixed checklist labels, `evidence`, or a 1-based evidence-manifest index in sorted discovery order. The report retains at most 100 detailed errors, sets `errors_truncated` when more exist, and keeps complete per-code totals in `error_counts`.
 
 ## Limits
 

@@ -45,18 +45,15 @@ class Report:
                        "criteria_markdown": 0}
         self.status_counts = {s: 0 for s in STATUSES}
 
-    def err(self, code, file, detail, ident=None):
+    def err(self, code, file, detail):
         self.total_errors += 1
         self.error_counts[code] = self.error_counts.get(code, 0) + 1
         if len(self.errors) >= MAX_ERRORS:
             return
-        item = {"code": code, "file": file, "detail": detail}
-        if ident is not None:
-            item["id"] = ident
-        self.errors.append(item)
+        self.errors.append({"code": code, "file": file, "detail": detail})
 
     def as_dict(self):
-        errors = sorted(self.errors, key=lambda e: (e["code"], e["file"], e.get("id", ""), e["detail"]))
+        errors = sorted(self.errors, key=lambda e: (e["code"], e["file"], e["detail"]))
         return {
             "provider_mode": PROVIDER_MODE,
             "scope": SCOPE,
@@ -233,20 +230,21 @@ def _no_duplicates(pairs):
 
 
 def audit_json(report, path, diagnostic_file):
+    positions = {}
     raw = _read_regular(report, path, diagnostic_file, "json-unreadable")
     if raw is None:
-        return {}
+        return {}, positions
     try:
         data = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates)
     except _DuplicateKey:
         report.err("duplicate-key", diagnostic_file, "JSON object repeats a key")
-        return {}
+        return {}, positions
     except (OSError, ValueError, RecursionError):
         report.err("json-unreadable", diagnostic_file, "cannot parse checklist JSON")
-        return {}
+        return {}, positions
     if not isinstance(data, dict) or not isinstance(data.get("criteria"), list):
         report.err("json-shape", diagnostic_file, "expected object with a criteria list")
-        return {}
+        return {}, positions
     if data.get("allowed_statuses") != list(STATUSES):
         report.err("allowed-states", diagnostic_file,
                    "allowed_statuses must equal %s" % ", ".join(STATUSES))
@@ -265,11 +263,14 @@ def audit_json(report, path, diagnostic_file):
             report.err("invalid-id", diagnostic_file, spot + " has a missing or malformed id")
             continue
         if cid in result:
-            report.err("duplicate-id", diagnostic_file, "duplicate criterion id", cid)
+            report.err("duplicate-id", diagnostic_file,
+                       "%s duplicates %s" % (spot, positions[cid]))
             continue
+        positions[cid] = spot
         status = crit.get("status")
         if not isinstance(status, str) or status not in STATUSES:
-            report.err("unknown-state", diagnostic_file, "status is not an allowed value", cid)
+            report.err("unknown-state", diagnostic_file,
+                       "%s has a status that is not allowed" % spot)
             result[cid] = None
             continue
         result[cid] = status
@@ -277,22 +278,23 @@ def audit_json(report, path, diagnostic_file):
         if status == "verified":
             if not _nonempty_strings(crit.get("evidence_refs")):
                 report.err("verified-missing-evidence", diagnostic_file,
-                           "verified entry needs nonempty evidence_refs", cid)
+                           "%s verified entry needs nonempty evidence_refs" % spot)
             if not _nonempty_strings(crit.get("tested_revision_refs")):
                 report.err("verified-missing-revisions", diagnostic_file,
-                           "verified entry needs nonempty tested_revision_refs", cid)
-    return result
+                           "%s verified entry needs nonempty tested_revision_refs" % spot)
+    return result, positions
 
 
 def audit_markdown(report, path, diagnostic_file):
+    positions = {}
     raw = _read_regular(report, path, diagnostic_file, "markdown-unreadable")
     if raw is None:
-        return {}
+        return {}, positions
     try:
         lines = raw.decode("utf-8").splitlines()
     except UnicodeDecodeError:
         report.err("markdown-unreadable", diagnostic_file, "cannot read checklist Markdown")
-        return {}
+        return {}, positions
     result = {}
     heads = [i for i, line in enumerate(lines) if MD_ANY_HEADING.match(line)]
     heads.append(len(lines))
@@ -301,47 +303,59 @@ def audit_markdown(report, path, diagnostic_file):
         if not head:
             continue
         cid = head.group(1)
+        spot = "heading line %d" % (i + 1)
         if len(cid) > MAX_CRITERION_ID_LENGTH:
-            report.err("invalid-id", diagnostic_file, "criterion heading has a malformed id")
+            report.err("invalid-id", diagnostic_file,
+                       "%s has a malformed criterion id" % spot)
             continue
         report.counts["criteria_markdown"] += 1
         if cid in result:
-            report.err("duplicate-id", diagnostic_file, "duplicate criterion heading", cid)
+            report.err("duplicate-id", diagnostic_file,
+                       "%s duplicates %s" % (spot, positions[cid]))
             continue
+        positions[cid] = spot
         states = [m for m in (MD_STATE.match(l) for l in lines[i + 1:heads[pos + 1]]) if m]
         if not states:
-            report.err("unknown-state", diagnostic_file, "no status line under heading", cid)
+            report.err("unknown-state", diagnostic_file,
+                       "%s has no status line" % spot)
             result[cid] = None
             continue
         if len(states) > 1:
             report.err("duplicate-status", diagnostic_file,
-                       "criterion has more than one status line", cid)
+                       "%s has more than one status line" % spot)
             result[cid] = None
             continue
         state = states[0]
         status = MD_STATUS.get(state.group(2).strip().lower())
         if status is None:
-            report.err("unknown-state", diagnostic_file, "status is not an allowed value", cid)
+            report.err("unknown-state", diagnostic_file,
+                       "%s has a status that is not allowed" % spot)
             result[cid] = None
             continue
         if (state.group(1) != " ") != (status == "verified"):
             report.err("checkbox-mismatch", diagnostic_file,
-                       "checkbox disagrees with the status", cid)
+                       "%s checkbox disagrees with its status" % spot)
         result[cid] = status
     if not result:
         report.err("empty-checklist", diagnostic_file, "no criterion headings found")
-    return result
+    return result, positions
 
 
-def compare(report, rel_md, md, rel_json, js):
+def compare(report, rel_md, md, rel_json, js, md_positions, json_positions):
     for cid in sorted(set(md) - set(js)):
-        report.err("checklist-disagreement", rel_md, "id missing from JSON", cid)
+        spot = md_positions.get(cid, "Markdown criterion")
+        report.err("checklist-disagreement", rel_md,
+                   "%s has no matching JSON criterion" % spot)
     for cid in sorted(set(js) - set(md)):
-        report.err("checklist-disagreement", rel_json, "id missing from Markdown", cid)
+        spot = json_positions.get(cid, "JSON criterion")
+        report.err("checklist-disagreement", rel_json,
+                   "%s has no matching Markdown heading" % spot)
     for cid in sorted(set(md) & set(js)):
         if md[cid] and js[cid] and md[cid] != js[cid]:
+            md_spot = md_positions.get(cid, "Markdown criterion")
+            json_spot = json_positions.get(cid, "JSON criterion")
             report.err("checklist-disagreement", rel_json,
-                       "Markdown says %s, JSON says %s" % (md[cid], js[cid]), cid)
+                       "%s and %s have different statuses" % (json_spot, md_spot))
 
 
 def run(root, evidence="evidence", checklist_json="planning/acceptance-checklist.json",
@@ -358,10 +372,12 @@ def run(root, evidence="evidence", checklist_json="planning/acceptance-checklist
         report.err("evidence-not-dir", "evidence", "evidence root is not a directory")
     else:
         report.err("no-manifests", "evidence", "evidence directory not found")
-    js = audit_json(report, os.path.join(root, checklist_json), "acceptance checklist JSON")
-    md = audit_markdown(report, os.path.join(root, checklist_md), "acceptance checklist Markdown")
+    js, json_positions = audit_json(
+        report, os.path.join(root, checklist_json), "acceptance checklist JSON")
+    md, md_positions = audit_markdown(
+        report, os.path.join(root, checklist_md), "acceptance checklist Markdown")
     compare(report, "acceptance checklist Markdown", md,
-            "acceptance checklist JSON", js)
+            "acceptance checklist JSON", js, md_positions, json_positions)
     return report.as_dict()
 
 
