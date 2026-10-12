@@ -47,10 +47,6 @@ export const TICKETSTUB_EVENT_SPEC = Object.freeze({
 
 const EVENT_KEYS = new Set(['schema', 'type', 'at', 'requestId', 'actor', 'actorRef', 'projectRef', 'mode', 'fields']);
 const REF = /^[a-f0-9]{16}$/;
-const REFERENCE_FIELD_WORDS = new Set([
-  'ref', 'refs', 'reference', 'references', 'id', 'ids', 'identifier', 'identifiers',
-  'uuid', 'guid', 'uid', 'key', 'keys', 'token', 'tokens'
-]);
 const CODE = /^[a-z][a-z0-9_]{0,47}$/;
 const REQUEST_ID = /^[A-Za-z0-9_.-]{8,64}$/;
 const MAX_COUNT = 1_000_000_000;
@@ -68,24 +64,9 @@ export class TicketstubIntakeError extends Error {
   }
 }
 
-function snapshotDataRecord(value) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
-  try {
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return null;
-    const snapshot = Object.create(null);
-    for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== 'string') return null;
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
-      snapshot[key] = descriptor.value;
-    }
-    return snapshot;
-  } catch {
-    // Proxy traps are untrusted input too. Refuse the record without exposing
-    // an exception or invoking accessor-backed properties.
-    return null;
-  }
+function plainRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 }
 
 function clean(value) {
@@ -111,18 +92,16 @@ function fits(kind, value) {
  * field's kind are refused.
  */
 export function validateTicketstubEvent(event) {
-  event = snapshotDataRecord(event);
-  if (!event) throw new TicketstubIntakeError('INVALID_EVENT');
+  if (!plainRecord(event)) throw new TicketstubIntakeError('INVALID_EVENT');
   if (event.schema !== TICKETSTUB_EVENT_SCHEMA) throw new TicketstubIntakeError('UNSUPPORTED_SCHEMA');
   for (const key of Object.keys(event)) {
     if (!EVENT_KEYS.has(key)) throw new TicketstubIntakeError('INVALID_EVENT');
   }
   const spec = Object.hasOwn(TICKETSTUB_EVENT_SPEC, event.type) ? TICKETSTUB_EVENT_SPEC[event.type] : null;
   const actorOk = ['account', 'guest', 'anonymous'].includes(event.actor);
-  const inputFields = snapshotDataRecord(event.fields);
   if (!spec || !Number.isSafeInteger(event.at) || event.at <= 0 || event.at >= 8.64e15
       || typeof event.requestId !== 'string' || !REQUEST_ID.test(event.requestId)
-      || !actorOk || !['sandbox', 'live'].includes(event.mode) || !inputFields) {
+      || !actorOk || !['sandbox', 'live'].includes(event.mode) || !plainRecord(event.fields)) {
     throw new TicketstubIntakeError('INVALID_EVENT');
   }
   if (event.actorRef !== undefined
@@ -133,11 +112,11 @@ export function validateTicketstubEvent(event) {
     throw new TicketstubIntakeError('INVALID_EVENT');
   }
   const fields = {};
-  for (const key of Object.keys(inputFields).sort()) {
-    if (!Object.hasOwn(spec, key) || !fits(spec[key], inputFields[key])) {
+  for (const key of Object.keys(event.fields).sort()) {
+    if (!Object.hasOwn(spec, key) || !fits(spec[key], event.fields[key])) {
       throw new TicketstubIntakeError('INVALID_EVENT');
     }
-    fields[key] = inputFields[key];
+    fields[key] = event.fields[key];
   }
   return Object.freeze({
     schema: TICKETSTUB_EVENT_SCHEMA,
@@ -160,8 +139,7 @@ export function parseHarnessTelemetryKey(value) {
 }
 
 const TOKEN_KINDS = new Set([
-  'ticketstub.event', 'ticketstub.request', 'ticketstub.actor', 'ticketstub.project',
-  'ticketstub.ref'
+  'ticketstub.event', 'ticketstub.request', 'ticketstub.actor', 'ticketstub.project'
 ]);
 
 export function createTicketstubTokenizer(keyBytes) {
@@ -187,23 +165,6 @@ export function ticketstubOutboxEntry(event, tokenize) {
   const request = tokenize('ticketstub.request', valid.requestId);
   const actor = valid.actorRef === undefined ? null : tokenize('ticketstub.actor', valid.actorRef);
   const project = valid.projectRef === undefined ? null : tokenize('ticketstub.project', valid.projectRef);
-  const fields = {};
-  const spec = TICKETSTUB_EVENT_SPEC[valid.type];
-  for (const [field, value] of Object.entries(valid.fields)) {
-    // The contract is closed to unknown keys. Tokenize by declared semantic
-    // kind, with a defensive name/value check so future reference aliases do
-    // not become exportable in clear text if their kind is widened by mistake.
-    const words = field
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
-      .toLowerCase()
-      .split(/[^a-z0-9]+/);
-    const referenceLikeName = words.some(word => REFERENCE_FIELD_WORDS.has(word));
-    const referenceLikeValue = typeof value === 'string' && REF.test(value);
-    fields[field] = spec[field] === 'ref' || referenceLikeName || referenceLikeValue
-      ? tokenize('ticketstub.ref', `${valid.type}\0${field}\0${value}`)
-      : value;
-  }
   const input = JSON.stringify({
     schema: TICKETSTUB_INTAKE_SCHEMA,
     source: TICKETSTUB_EVENT_SCHEMA,
@@ -214,7 +175,7 @@ export function ticketstubOutboxEntry(event, tokenize) {
     actorToken: actor,
     projectToken: project,
     requestToken: request,
-    fields
+    fields: valid.fields
   });
   return validateNeatlogsQueueEntry({
     eventToken: tokenize('ticketstub.event', JSON.stringify(valid)),
