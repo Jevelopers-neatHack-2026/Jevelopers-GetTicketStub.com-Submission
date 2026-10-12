@@ -3,7 +3,9 @@ import { lookup } from "node:dns/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
-import { Readable } from "node:stream";
+import type { IncomingMessage } from "node:http";
+import { pipeline, Readable, Transform } from "node:stream";
+import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 
 // URL-first intake boundary. Numbers here are defensive app-side ceilings, not an agreed product
 // contract: the research service (event-intelligence #9) still owns safe retrieval, and the support
@@ -20,6 +22,8 @@ export const INTAKE_LIMITS = {
   redirects: 3,
   /** Bytes read from one fetched page. */
   pageBytes: 2_000_000,
+  /** Bytes a response may inflate to after Content-Encoding is decoded; a compression bomb is aborted here. */
+  decodedBytes: 4_000_000,
 } as const;
 
 /** Request fields that mean an upload, extra sources or other input we do not support in v1. */
@@ -65,14 +69,15 @@ export function isBlockedIp(address: string): boolean {
   // IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d), NAT64 (64:ff9b::/96): judge the embedded IPv4.
   const embedded = [g6 >> 8, g6 & 255, g7 >> 8, g7 & 255] as const;
   if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && (g5 === 0xffff || g5 === 0)) return ipv4Blocked(embedded[0], embedded[1], embedded[2]);
-  if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return ipv4Blocked(embedded[0], embedded[1], embedded[2]);
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return ipv4Blocked(embedded[0], embedded[1], embedded[2]); // well-known NAT64
   if (g0 === 0x2002) return ipv4Blocked(g1 >> 8, g1 & 255, g2 >> 8); // 6to4 embeds an IPv4 too
-  if ((g0 & 0xfe00) === 0xfc00) return true; // unique local
-  if ((g0 & 0xffc0) === 0xfe80) return true; // link-local
-  if ((g0 & 0xffc0) === 0xfec0) return true; // deprecated site-local
-  if ((g0 & 0xff00) === 0xff00) return true; // multicast
-  if (g0 === 0x2001 && (g1 === 0x0db8 || g1 === 0)) return true; // documentation, Teredo
-  if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return true; // discard-only
+  // Everything else must be global unicast, 2000::/3. That alone rejects fc00::/7, fe80::/10, ff00::/8, 64:ff9b:1::/48
+  // (local-use NAT64), 4000::/3 and the rest of the unallocated space.
+  if ((g0 & 0xe000) !== 0x2000) return true;
+  // Reserved inside 2000::/3. No IANA "globally reachable" exceptions (AS112, AMT, ORCHID) are allowed: a user's event page is never there.
+  if (g0 === 0x2001 && g1 < 0x0200) return true; // 2001::/23 IETF protocol assignments: Teredo, benchmarking 2001:2::/48, ORCHID, documentation-adjacent
+  if (g0 === 0x2001 && g1 === 0x0db8) return true; // documentation
+  if (g0 === 0x3fff && g1 < 0x1000) return true; // 3fff::/20 documentation
   return false;
 }
 
@@ -176,6 +181,41 @@ export function createPinnedLookup(resolve: () => HostResolver, allowed: (addres
   };
 }
 
+/** Builds a web Response from node's IncomingMessage: validates the status, decodes Content-Encoding under a decoded-byte cap. */
+function toResponse(res: IncomingMessage, maxDecoded: number): Response {
+  const status = res.statusCode ?? 0;
+  if (!Number.isInteger(status) || status < 200 || status > 599) throw new Error(`unsupported upstream status ${status}`);
+  const out = new Headers();
+  for (const [k, v] of Object.entries(res.headers)) for (const x of Array.isArray(v) ? v : v === undefined ? [] : [v]) out.append(k, x);
+  if (status === 204 || status === 205 || status === 304) {
+    res.resume();
+    return new Response(null, { status, headers: out });
+  }
+  const codings = (out.get("content-encoding") ?? "").toLowerCase().split(",").map((c) => c.trim()).filter((c) => c && c !== "identity");
+  const decoders = codings.reverse().map((c) => {
+    if (c === "gzip" || c === "x-gzip") return createGunzip();
+    if (c === "deflate") return createInflate();
+    if (c === "br") return createBrotliDecompress();
+    throw new Error(`unsupported content-encoding ${c}`);
+  });
+  let source: Readable = res;
+  if (decoders.length) {
+    out.delete("content-encoding");
+    out.delete("content-length");
+    let total = 0;
+    const counter = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        total += chunk.length;
+        if (total > maxDecoded) cb(new Error("decoded body exceeds the size cap"));
+        else cb(null, chunk);
+      },
+    });
+    // pipeline destroys every stage, including the socket, when any stage fails or the reader cancels.
+    source = pipeline([res, ...decoders, counter] as never, () => undefined) as unknown as Readable;
+  }
+  return new Response(Readable.toWeb(source) as ReadableStream<Uint8Array>, { status, headers: out });
+}
+
 /** One request, no redirects. */
 export type Transport = (url: URL, init: RequestInit) => Promise<Response>;
 
@@ -184,12 +224,14 @@ export type Transport = (url: URL, init: RequestInit) => Promise<Response>;
  * servername and Host header, so certificate validation is against the name the person gave, while
  * the TCP connection can only go to an address that passed the check. Redirects are not followed.
  */
-export function createPinnedTransport(opts: { resolver?: () => HostResolver; allowed?: (address: string) => boolean; ca?: string } = {}): Transport {
+export function createPinnedTransport(opts: { resolver?: () => HostResolver; allowed?: (address: string) => boolean; ca?: string; maxDecodedBytes?: number } = {}): Transport {
+  const maxDecodedBytes = opts.maxDecodedBytes ?? INTAKE_LIMITS.decodedBytes;
   const lookupFn = createPinnedLookup(opts.resolver ?? (() => resolver), opts.allowed);
   return (url, init) =>
     new Promise<Response>((resolveResponse, reject) => {
       const secure = url.protocol === "https:";
       const headers: Record<string, string> = {};
+      headers["accept-encoding"] = "gzip, deflate, br";
       new Headers(init.headers).forEach((v, k) => (headers[k] = v));
       const req = (secure ? httpsRequest : httpRequest)(
         {
@@ -205,15 +247,18 @@ export function createPinnedTransport(opts: { resolver?: () => HostResolver; all
           ...(secure ? { rejectUnauthorized: true, ...(opts.ca ? { ca: opts.ca } : {}), servername: isIP(url.hostname.replace(/^\[|\]$/g, "")) ? undefined : url.hostname } : {}),
         },
         (res) => {
-          const out = new Headers();
-          for (const [k, v] of Object.entries(res.headers)) for (const x of Array.isArray(v) ? v : v === undefined ? [] : [v]) out.append(k, x);
-          const status = res.statusCode ?? 502;
-          const nullBody = status === 204 || status === 205 || status === 304;
-          if (nullBody) res.resume();
-          resolveResponse(new Response(nullBody ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>), { status, headers: out }));
+          // Nothing thrown here may escape: this runs in an event callback, where a throw would crash the process.
+          try {
+            resolveResponse(toResponse(res, maxDecodedBytes));
+          } catch (error) {
+            res.destroy();
+            req.destroy();
+            reject(error instanceof Error ? error : new Error("bad upstream response"));
+          }
         },
       );
       req.on("error", reject);
+      init.signal?.addEventListener("abort", () => reject(init.signal?.reason ?? new DOMException("aborted", "AbortError")), { once: true });
       req.end();
     });
 }

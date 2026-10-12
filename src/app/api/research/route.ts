@@ -492,8 +492,10 @@ export const POST = route(observeRoute("research", async (req: Request) => {
   if (body.url !== undefined && typeof body.url !== "string") return intakeRefusal(req, 400, "bad_request", "Send a link or a search.");
   if (body.query !== undefined && typeof body.query !== "string") return intakeRefusal(req, 400, "bad_request", "Send a link or a search.");
 
+  // Every provided field is validated before any branch is chosen, so a second field can't hide behind the first.
+  if (typeof body.query === "string" && body.query.length > INTAKE_LIMITS.queryChars) return intakeRefusal(req, 422, "too_large", "That search is too long. Try the event name.");
+
   if (typeof body.query === "string" && !body.url) {
-    if (body.query.length > INTAKE_LIMITS.queryChars) return intakeRefusal(req, 422, "too_large", "That search is too long. Try the event name.");
     await recordEvent(req, "intake_submitted", { source: "search" });
     const results = searchFixtures(body.query);
     annotate({ operation: "research_search", dependency: "fixture", fallback: "simulated", results: results.length });

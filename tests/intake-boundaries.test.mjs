@@ -8,6 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer as httpServer } from "node:http";
 import { createServer as httpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
+import { createServer as netServer } from "node:net";
+import { gzipSync, brotliCompressSync } from "node:zlib";
 import ts from "typescript";
 
 // Offline negative tests for the URL-first intake boundary: nothing here may reach the network.
@@ -281,4 +283,113 @@ test("HTTPS keeps hostname TLS semantics under pinning", { skip: (() => { try { 
     const untrusted = intake.createPinnedTransport({ resolver, allowed: LOOPBACK });
     await assert.rejects(untrusted(new URL(`https://tls.example.com:${port}/`), {}), (e) => /self.signed|unable to verify|CERT/i.test(`${e.code} ${e.message}`));
   } finally { await close(server); }
+});
+
+// ---- Astra round 3 regressions ----
+
+test("every provided field is validated before a branch: a long query is refused even beside a url", async () => {
+  offline();
+  for (const body of [{ url: "neathack", query: "q".repeat(201) }, { url: "https://example.com/e", query: "q".repeat(201) }, { url: "", query: "q".repeat(201) }]) {
+    const res = await post(body);
+    assert.equal(res.status, 422, JSON.stringify(body).slice(0, 40));
+    assert.equal(await codeOf(res), "too_large");
+  }
+  assert.equal((await post({ url: "neathack", query: "q".repeat(200) })).status, 200);
+  assert.deepEqual(fetched, []);
+});
+
+test("reserved and unallocated IPv6 fail closed; global unicast stays reachable", () => {
+  for (const ip of ["2001:2::1", "2001:2:0:ffff::1", "64:ff9b:1::a00:1", "4000::1", "8000::1", "2001::1", "2001:1::1", "2001:20::1", "2001:1ff:ffff::1", "2001:db8::1", "3fff::1", "3fff:fff::1", "5f00::1", "fec0::1", "ff02::1", "::2", "100::1", "2002:a00:1::1", "2002:7f00:1::"]) assert.equal(intake.isBlockedIp(ip), true, ip);
+  for (const ip of ["2001:200::1", "2001:4860:4860::8888", "2606:2800:220:1:248:1893:25c8:1946", "2a00:1450:4009::200e", "3fff:1000::1", "2000::1", "3ffe::1", "64:ff9b::5db8:d822", "::ffff:93.184.216.34"]) {
+    // 3ffe::/16 and 2000::/16 are still inside 2000::/3 and not reserved above, so they classify as public.
+    assert.equal(intake.isBlockedIp(ip), false, ip);
+  }
+  // The hostname path agrees, through brackets and through URL normalization.
+  for (const h of ["[2001:2::1]", "[64:ff9b:1::a00:1]", "[4000::1]"]) assert.equal(intake.parseIntakeUrl(`http://${h}/`).reason, "blocked_destination", h);
+});
+
+async function rawServer(respond) {
+  const server = netServer((sock) => { sock.once("data", () => respond(sock)); sock.on("error", () => {}); });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return { server, port: server.address().port, stop: () => new Promise((r) => { server.close(() => r()); server.closeAllConnections?.(); }) };
+}
+const loopbackTransport = (extra = {}) => intake.createPinnedTransport({ resolver: () => async () => ["127.0.0.1"], allowed: LOOPBACK, ...extra });
+
+test("an upstream status outside the Response range is rejected safely, without an uncaught exception", async () => {
+  const uncaught = [];
+  const onUncaught = (e) => uncaught.push(e);
+  process.on("uncaughtException", onUncaught);
+  const sent = [];
+  try {
+    for (const status of ["600", "999", "100", "199"]) {
+      const { port, stop } = await rawServer((sock) => { sent.push(status); sock.end(`HTTP/1.1 ${status} Odd\r\ncontent-length: 2\r\nconnection: close\r\n\r\nhi`); });
+      try {
+        await assert.rejects(loopbackTransport()(new URL(`http://odd.example.com:${port}/`), {}), (e) => e instanceof Error, status);
+      } finally { await stop(); }
+    }
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepEqual(uncaught, []);
+    assert.ok(sent.length >= 2);
+    // The route reports it as an unreadable link, not a 500.
+    process.env.TICKETSTUB_RUNTIME_MODE = "live";
+    const { port, stop } = await rawServer((sock) => sock.end("HTTP/1.1 600 Odd\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"));
+    try {
+      const t = loopbackTransport();
+      intake.setTransport((url, init) => t(new URL(`http://odd.example.com:${port}${url.pathname}`), init));
+      const res = await post({ url: "https://example.com/e" });
+      assert.equal(res.status, 422);
+      assert.equal(await codeOf(res), "unreadable_link");
+    } finally { await stop(); }
+  } finally { process.off("uncaughtException", onUncaught); }
+});
+
+test("Content-Encoding gzip, deflate and br are decoded like native fetch, with decoded headers", async () => {
+  const html = "<title>Compressed event</title>";
+  const { deflateSync } = await import("node:zlib");
+  for (const [enc, pack] of [["gzip", gzipSync], ["deflate", deflateSync], ["br", brotliCompressSync], ["identity", (x) => Buffer.from(x)], ["gzip, identity", gzipSync]]) {
+    const server = httpServer((_req, res) => { res.writeHead(200, { "content-type": "text/html", "content-encoding": enc }); res.end(pack(html)); });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const res = await loopbackTransport()(new URL(`http://enc.example.com:${server.address().port}/`), {});
+      assert.equal(await intake.readCapped(res), html, enc);
+      if (enc !== "identity") assert.equal(res.headers.get("content-encoding"), null, "decoded responses do not claim to still be encoded");
+    } finally { server.closeAllConnections(); await close(server); }
+  }
+});
+
+test("an unsupported Content-Encoding is refused rather than passed through as bytes", async () => {
+  const server = httpServer((_req, res) => { res.writeHead(200, { "content-encoding": "zstd" }); res.end("x"); });
+  const port = await listen(server);
+  try {
+    await assert.rejects(loopbackTransport()(new URL(`http://enc.example.com:${port}/`), {}), /unsupported content-encoding/);
+  } finally { server.closeAllConnections(); await close(server); }
+});
+
+test("a compression bomb is aborted at the decoded-byte cap and the upstream is torn down", async () => {
+  const bomb = gzipSync(Buffer.alloc(64 * 1024 * 1024, 0x61)); // 64 MiB of "a" in ~64 KB
+  assert.ok(bomb.length < 200 * 1024);
+  let closed = false;
+  const server = httpServer((req, res) => { res.on("close", () => { closed = true; }); res.writeHead(200, { "content-type": "text/html", "content-encoding": "gzip" }); res.end(bomb); });
+  const port = await listen(server);
+  try {
+    // 1) The transport's own decoded cap errors the stream.
+    const res = await loopbackTransport({ maxDecodedBytes: 100_000 })(new URL(`http://bomb.example.com:${port}/`), {});
+    await assert.rejects(res.text());
+    // 2) The page reader stops at its cap well before the cap, and cancels the pipeline.
+    const res2 = await loopbackTransport()(new URL(`http://bomb.example.com:${port}/`), {});
+    const text = await intake.readCapped(res2, 50_000);
+    assert.equal(text.length, 50_000);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(closed, true, "the upstream connection was closed");
+  } finally { server.closeAllConnections(); await close(server); }
+});
+
+test("aborting the caller's signal stops a pending DNS lookup", async () => {
+  let finish;
+  const t = intake.createPinnedTransport({ resolver: () => () => new Promise((r) => { finish = r; }) });
+  const controller = new AbortController();
+  const pending = t(new URL("http://dns.example.com/"), { signal: controller.signal }).then(() => "resolved", (e) => e.name);
+  controller.abort();
+  assert.equal(await Promise.race([pending, new Promise((r) => setTimeout(() => r("still-pending"), 200))]), "AbortError");
+  finish?.(["93.184.216.34"]);
 });
