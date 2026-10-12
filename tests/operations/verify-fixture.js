@@ -1,3 +1,4 @@
+import { parseClosedDiagnosticChannel } from './closed-diagnostics.js';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -309,6 +310,7 @@ const ops12RecoveryDiagnostics = parseOps12RecoveryDiagnostics(hasCompleteOps12R
   bytes: metrics.ops12RecoveryDiagnosticBytes,
   diagnosticsComplete: metrics.ops12RecoveryDiagnosticsComplete
 } : null);
+const closedFixtureDiagnostics = parseClosedDiagnosticChannel(metrics?.closedFixtureDiagnostics);
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
   phase: 'operation-suite',
@@ -322,6 +324,7 @@ const suiteDiagnostics = buildSafeFailureDiagnostics({
   c02ControlReadDiagnostics, ops02RaceDiagnostics, ops06ClosePhaseDiagnostics, ops12RecoveryDiagnostics
 });
 const publicMetrics = { ...(metrics ?? {}) };
+delete publicMetrics.closedFixtureDiagnostics;
 delete publicMetrics.c02ControlReadFailureLines;
 delete publicMetrics.c02ControlReadFailureCount;
 delete publicMetrics.c02ControlReadFailureBytes;
@@ -439,6 +442,7 @@ const diagnosticsValue = {
   fixture,
   source: 'bounded-allowlist-parser',
   publishedRawOutput: false,
+  closedFixtureDiagnostics,
   suite: suiteDiagnostics,
   runbook: runbookDiagnostics,
   recovery: recoveryDiagnostics,

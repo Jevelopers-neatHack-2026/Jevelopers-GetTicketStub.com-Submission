@@ -43,6 +43,7 @@ const LOCAL_COMPLETION_CLOCK_STALE_ERRORS = new WeakSet();
 const CONFIRMED_LOCAL_COMPLETION_CLOCK_STALE_ERRORS = new WeakSet();
 const CONFIRMED_LOCAL_ADMISSION_BUSY_ERRORS = new WeakSet();
 const OPERATIONS_ADMISSION_BUSY_DIAGNOSTICS = new WeakMap();
+const LOCAL_CONTROLLER_CLOCK_DIAGNOSTICS = new WeakMap();
 const OPS_EVENT_RESERVATION = 96;
 const OPS_MAX_WORKER_GENERATIONS = 16;
 const OPS_GENERATION_WRITE_RESERVE_BYTES = 16_384;
@@ -359,17 +360,31 @@ function equalCheckpointData(left, right, operation) {
   return serializeCheckpoint(left, operation) === serializeCheckpoint(right, operation);
 }
 
+/** @internal Boolean classification only; never tags an exception or grants transaction/retry authority. */
+export function classifyLocalControllerClockDiagnostic(deadlineReached, snapshotAgeExceeded) {
+  if (typeof deadlineReached !== 'boolean' || typeof snapshotAgeExceeded !== 'boolean') return 'other';
+  return deadlineReached && snapshotAgeExceeded ? 'deadline_and_age'
+    : deadlineReached ? 'deadline_reached' : snapshotAgeExceeded ? 'snapshot_age_exceeded' : 'other';
+}
+
+
 function assertLocalControllerTransactionClock(now, next, row, previous, operation, transactionElapsedMs = null) {
   const persistedLastWallMs = Math.max(
     Number(row.updated_at_ms),
     previous?.budget.lastWallMs ?? next.budget.startedWallMs
   );
   const lowerBound = Math.max(next.budget.lastWallMs, persistedLastWallMs);
+  const rejectClock = (code, safe_message, clockGuard) => {
+    const error = runtimeError({ module: 'state', operation, code, safe_message, retryable: false });
+    LOCAL_CONTROLLER_CLOCK_DIAGNOSTICS.set(error, clockGuard);
+    throw error;
+  };
   if (now < lowerBound) {
-    fail(operation, 'CLOCK_ROLLBACK', 'The local controller clock moved backwards during a transaction.');
+    rejectClock('CLOCK_ROLLBACK', 'The local controller clock moved backwards during a transaction.', 'clock_rollback');
   }
   if (now >= next.budget.deadlineWallMs) {
-    fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
+    rejectClock('INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.',
+      classifyLocalControllerClockDiagnostic(true, now - next.budget.lastWallMs > 250));
   }
   const forwardMs = now - next.budget.lastWallMs;
   if (forwardMs > 250) {
@@ -384,10 +399,11 @@ function assertLocalControllerTransactionClock(now, next, row, previous, operati
         retryable: true,
         safe_message: 'The local completion clock sample expired while waiting to enter its transaction.'
       });
+      LOCAL_CONTROLLER_CLOCK_DIAGNOSTICS.set(error, 'snapshot_age_exceeded');
       LOCAL_COMPLETION_CLOCK_STALE_ERRORS.add(error);
       throw error;
     }
-    fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
+    rejectClock('INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.', 'snapshot_age_exceeded');
   }
 }
 
@@ -685,7 +701,9 @@ function digest(bytes) {
 }
 
 function mapStorageError(operation, error) {
-  recordOperationsDiagnosticError('storage_origin', error, { operation });
+  recordOperationsDiagnosticError('storage_origin', error, {
+    operation, localClockGuard: readLocalControllerClockDiagnostic(error) ?? 'other'
+  });
   if (error instanceof RuntimeError) return error;
   const code = typeof error?.code === 'string' ? error.code : '';
   const sqlitePrimaryCode = Number.isInteger(error?.errcode) ? error.errcode & 0xff : 0;
@@ -740,6 +758,12 @@ function sqliteBusyPrimaryCode(error) {
       || errcode < 0 || errcode > 0x7fffffff) return null;
   const primary = errcode & 0xff;
   return primary === 5 || primary === 6 ? primary : null;
+}
+
+/** @internal Passive origin tag only; never grants retry, rollback or transaction authority. */
+export function readLocalControllerClockDiagnostic(error) {
+  if (error === null || typeof error !== 'object' || utilTypes.isProxy(error)) return null;
+  return LOCAL_CONTROLLER_CLOCK_DIAGNOSTICS.get(error) ?? null;
 }
 
 /** @internal Read the fixed native BUSY boundary captured by private operations admission. */

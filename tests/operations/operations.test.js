@@ -1,3 +1,6 @@
+import { appendClosedDiagnostic, closedErrorProjection, closedExitDisposition, createClosedDiagnosticChannel,
+  parseClosedChildDiagnostic, parseClosedDiagnosticChannel, observeClosedChild, closedChildObservation,
+  requiresClosedFixtureRetention, waitForClosedChild } from './closed-diagnostics.js';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -60,6 +63,7 @@ const PLAN_TWO = JSON.stringify({
   steps: [{ id: 'sum', operation: 'number.add', dependsOn: [], args: { left: 21, right: 22 } }]
 });
 const METRICS = {
+  closedFixtureDiagnostics: createClosedDiagnosticChannel(),
   processRuns: 0,
   processSigtermSignalsSent: 0,
   processSigintSignalsSent: 0,
@@ -1123,6 +1127,19 @@ async function cleanupCi1OwnedTemporaryDirectory(temporary, overrides = {}) {
   return !incomplete;
 }
 
+function recordClosedFixture(input) {
+  try { return appendClosedDiagnostic(METRICS.closedFixtureDiagnostics, input); }
+  catch { METRICS.closedFixtureDiagnostics.diagnosticsComplete = false; return false; }
+}
+
+function recordClosedChild(stderr, caseId, slot, phase, exit, resultPresent) {
+  const child = parseClosedChildDiagnostic(stderr, caseId);
+  recordClosedFixture({ ...(child ?? { caseId, phase, nativeClose: 'unobserved', reason: 'phase_failure' }),
+    caseId, slot, phase, childPhase: child?.phase ?? 'unobserved', sequence: null,
+    ...closedChildObservation(exit, exit?.outputPresent === true, resultPresent) });
+  return child;
+}
+
 function registerCi1OwnedTemporaryDirectoryFinalizer(testContext, cleanup, temporary, state) {
   testContext.after(async () => {
     let cleanupConfirmed = false;
@@ -1687,23 +1704,21 @@ function startOwnedChild(script, args, { timeoutMs = 8_000, env = {} } = {}) {
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
+  const observation = observeClosedChild(child);
   let stdout = '';
   let stderr = '';
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });
-  const closed = new Promise(resolvePromise => {
-    child.once('error', error => resolvePromise({ child, error, code: null, signal: null, stdout, stderr }));
-    child.once('close', (code, signal) => resolvePromise({ child, code, signal, stdout, stderr }));
-  });
+  const closed = observation.closed.then(exit => ({ ...exit, child, stdout, stderr }));
   const timeout = setTimeout(() => {
     try {
       if (child.kill('SIGKILL')) METRICS.processSigkillSignalsSent += 1;
     } catch {}
   }, timeoutMs);
   void closed.then(() => clearTimeout(timeout));
-  return { child, closed };
+  return { child, closed, snapshot: () => ({ ...observation.snapshot(), child, stdout, stderr }) };
 }
 
 async function waitForPath(path, child, timeoutMs = 6_000) {
@@ -1718,13 +1733,7 @@ async function waitForPath(path, child, timeoutMs = 6_000) {
 }
 
 async function waitForCloseBounded(closed, timeoutMs) {
-  let timer;
-  const timeout = new Promise(resolvePromise => {
-    timer = setTimeout(() => resolvePromise(null), timeoutMs);
-  });
-  const closeResult = await Promise.race([closed, timeout]);
-  clearTimeout(timer);
-  return closeResult;
+  return waitForClosedChild(closed, timeoutMs);
 }
 
 function ownedProcessGroupMembers(groupId) {
@@ -5601,16 +5610,68 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
   });
 
   await t.test('OPS05.C12 two actual SQLite connections race exact expired recoveries under all three caps', async t => {
-    const recoveryDir = tempDirectory('ah11-concurrent-recovery-');
-    t.after(() => recoveryDir.cleanup());
+    let c12Phase = 'open';
+    let c12PrimaryFailed = false;
+    let c12PrimaryError;
+    let c12Retain = false;
+    const c12Handles = new Set();
+    const c12CleanupErrors = [];
+    const openRecoveryStore = (...args) => { const handle = openStore(...args); c12Handles.add(handle); return handle; };
+    const openRecoveryDb = (...args) => { const handle = new DatabaseSync(...args); c12Handles.add(handle); return handle; };
+    const closeRecoveryHandle = handle => {
+      try { handle.close(); c12Handles.delete(handle); }
+      catch (error) { c12CleanupErrors.push(error); c12Retain = true; throw error; }
+    };
+    const finalizeRecoveryChildren = async (gate, processInfos, primaryFailed) => {
+      const priorCleanupCount = c12CleanupErrors.length;
+      try { if (!existsSync(gate)) writeFileSync(gate, 'released'); }
+      catch (error) { c12CleanupErrors.push(error); c12Retain = true; }
+      for (const info of processInfos) {
+        try {
+          if (info.child.exitCode === null && info.child.signalCode === null) info.child.kill('SIGKILL');
+          const exit = await waitForCloseBounded(info.closed, 1_000);
+          const observed = closedChildObservation(exit);
+          if (!observed.processClosed || observed.errorEvent || observed.pipeEOF !== 'complete') c12Retain = true;
+        } catch (error) { c12CleanupErrors.push(error); c12Retain = true; }
+      }
+      if (!primaryFailed && c12CleanupErrors.length > priorCleanupCount) {
+        throw new AggregateError(c12CleanupErrors.slice(priorCleanupCount), 'C12 child cleanup failed.');
+      }
+    };
+    let terminalRaceDir = null;
+    let recoveryDir = null;
+    const c12Children = new Map();
+    t.after(async () => {
+      for (const [child, closed] of c12Children) {
+        if (child.exitCode === null && child.signalCode === null) { try { child.kill('SIGKILL'); } catch {} }
+        const exit = await waitForCloseBounded(closed, 1_000);
+        const observed = closedChildObservation(exit);
+        if (!observed.processClosed || observed.errorEvent || observed.pipeEOF !== 'complete') c12Retain = true;
+      }
+      const cleanupErrors = c12CleanupErrors;
+      for (const handle of c12Handles) {
+        try { closeRecoveryHandle(handle); } catch { c12Retain = true; }
+      }
+      const cleanup = cleanupErrors.length ? closedErrorProjection(cleanupErrors[0])
+        : { errorKind: 'none', code: 'none', sqlitePrimaryCode: null };
+      recordClosedFixture({ caseId: 'OPS05.C12', phase: 'cleanup', primaryFailed: c12PrimaryFailed,
+        ...(c12PrimaryFailed ? closedErrorProjection(c12PrimaryError) : {}),
+        cleanupFailed: cleanupErrors.length > 0, cleanupKind: cleanup.errorKind, cleanupCode: cleanup.code,
+        cleanupPrimaryCode: cleanup.sqlitePrimaryCode, nativeClose: c12Handles.size === 0 ? 'confirmed' : 'unknown', processClosed: c12Children.size === 0 });
+      if (!c12Retain) { recoveryDir?.cleanup(); terminalRaceDir?.cleanup(); }
+      if (cleanupErrors.length) throw new AggregateError(
+        c12PrimaryFailed ? [c12PrimaryError, ...cleanupErrors] : cleanupErrors,
+        'C12 native cleanup was not confirmed.', c12PrimaryFailed ? { cause: c12PrimaryError } : undefined);
+    });
+    try {
+    recoveryDir = tempDirectory('ah11-concurrent-recovery-');
     const configInput = {
       workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1, maxInFlightProject: 1
     };
     const config = readOperationsConfig(configInput);
     const policy = operationsStoragePolicy(config);
     let now = 80_000;
-    const store = openStore(recoveryDir.databasePath, { clock: () => now });
-    t.after(() => store.close());
+    const store = openRecoveryStore(recoveryDir.databasePath, { clock: () => now });
     const first = admit(store, 'tenant-a', 'project-a', 'race-expired-a', PLAN, configInput);
     const second = admit(store, 'tenant-b', 'project-b', 'race-expired-b', PLAN, configInput);
     const third = admit(store, 'tenant-c', 'project-c', 'race-queued-c', PLAN, configInput);
@@ -5619,7 +5680,7 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.equal(firstClaim.jobId, first.jobId);
     assert.equal(secondClaim.jobId, second.jobId);
     now = Math.max(firstClaim.leaseExpiresAtMs, secondClaim.leaseExpiresAtMs) + 1;
-    store.close();
+    closeRecoveryHandle(store);
 
     const gatePath = join(recoveryDir.directory, 'release-recovery-race');
     const processes = [
@@ -5631,43 +5692,54 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         join(ROOT, 'tests/operations/fixtures/recovery-claim-child.mjs'),
         recoveryDir.databasePath, String(now), ownerId, jobId, readyPath, gatePath, JSON.stringify(configInput)
       ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+      const observation = observeClosedChild(child);
+      const closed = observation.closed.then(exit => {
+        c12Children.delete(child); return exit;
+      });
+      c12Children.set(child, closed);
       let stdout = '';
       let stderr = '';
       child.stdout.setEncoding('utf8');
       child.stderr.setEncoding('utf8');
       child.stdout.on('data', chunk => { stdout += chunk; });
       child.stderr.on('data', chunk => { stderr += chunk; });
-      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
       return { ownerId, jobId, readyPath, child, closed, get stdout() { return stdout; }, get stderr() { return stderr; } };
     });
     METRICS.processRuns += processes.length;
+    let expiredRaceFailed = false;
     try {
       for (const processInfo of processes) await waitForPath(processInfo.readyPath, processInfo.child, 5_000);
       writeFileSync(gatePath, 'released');
       const exits = await Promise.all(processes.map(async processInfo =>
         waitForCloseBounded(processInfo.closed, 5_000)));
-      assert.ok(exits.every(Boolean), 'Both independent claim processes must close within their bound.');
+      c12Phase = 'expired_child';
+      const validated = processes.map(() => false);
       for (const [index, processInfo] of processes.entries()) {
-        assert.equal(exits[index].code, 0, processInfo.stderr);
-        assert.deepEqual(JSON.parse(processInfo.stdout.trim()), {
-          ownerId: processInfo.ownerId,
-          claim: { jobId: processInfo.jobId, generation: 2, fence: 2 },
-          incomplete: false,
-          ownedRunnerCount: 0
-        });
+        const detail = parseClosedChildDiagnostic(processInfo.stderr, 'OPS05.C12');
+        if (requiresClosedFixtureRetention(exits[index], detail?.nativeClose, detail?.cleanupFailed)) c12Retain = true;
       }
-    } finally {
-      if (!existsSync(gatePath)) writeFileSync(gatePath, 'released');
-      for (const processInfo of processes) {
-        if (processInfo.child.exitCode === null && processInfo.child.signalCode === null) {
-          try { processInfo.child.kill('SIGKILL'); } catch {}
-          await waitForCloseBounded(processInfo.closed, 1_000);
+      try {
+        assert.ok(exits.every(Boolean), 'Both independent claim processes must close within their bound.');
+        for (const [index, processInfo] of processes.entries()) {
+          assert.equal(exits[index].code, 0, processInfo.stderr);
+          assert.deepEqual(JSON.parse(processInfo.stdout.trim()), {
+            ownerId: processInfo.ownerId,
+            claim: { jobId: processInfo.jobId, generation: 2, fence: 2 },
+            incomplete: false,
+            ownedRunnerCount: 0
+          });
+          validated[index] = true;
+        }
+      } finally {
+        for (const [index, processInfo] of processes.entries()) {
+          recordClosedChild(processInfo.stderr, 'OPS05.C12', index, c12Phase, exits[index], validated[index]);
         }
       }
-    }
+    } catch (error) { expiredRaceFailed = true; c12Retain = true; throw error; }
+    finally { await finalizeRecoveryChildren(gatePath, processes, expiredRaceFailed); }
 
-    const check = openStore(recoveryDir.databasePath, { clock: () => now });
-    const after = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    const check = openRecoveryStore(recoveryDir.databasePath, { clock: () => now });
+    const after = openRecoveryDb(recoveryDir.databasePath, { readOnly: true });
     assert.deepEqual({ ...after.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get() }, {
       pending_records: 3, in_flight: 2
     });
@@ -5677,31 +5749,33 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     for (const job of [first, second]) {
       const row = after.prepare('SELECT state, generation, fence_token FROM operations_work WHERE job_id=?').get(job.jobId);
       assert.deepEqual({ ...row }, { state: 'running', generation: 2, fence_token: 2 });
-      assert.equal(Number(after.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_claimed'").get(job.workflowId).count), 2);
+      c12Phase = 'recovered_count';
+      const recoveredCount = Number(after.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_claimed'").get(job.workflowId).count);
+      recordClosedFixture({ caseId: 'OPS05.C12', phase: c12Phase, slot: job === first ? 0 : 1, actual: recoveredCount, expected: 2 });
+      assert.equal(recoveredCount, 2);
     }
     assert.equal(after.prepare('SELECT state FROM operations_work WHERE job_id=?').get(third.jobId).state, 'queued');
-    after.close();
+    closeRecoveryHandle(after);
     assert.equal(check._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
       ownerId: 'race-repeat-no-extra-slot', policy, recoverableJobIds: [first.jobId, second.jobId]
     }), null);
-    check.close();
-    const reopened = openStore(recoveryDir.databasePath, { clock: () => now });
+    closeRecoveryHandle(check);
+    const reopened = openRecoveryStore(recoveryDir.databasePath, { clock: () => now });
     assert.equal(reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
       tenantId: 'tenant-c', projectId: 'project-c', jobId: third.jobId
     }).state, 'queued');
-    reopened.close();
+    closeRecoveryHandle(reopened);
 
     // Two independent supervisors must serialize the terminal-public-API
     // cleanup and let exactly one claim the next tenant at a cap of one.
-    const terminalRaceDir = tempDirectory('ah11-terminal-recovery-race-');
-    t.after(() => terminalRaceDir.cleanup());
+    terminalRaceDir = tempDirectory('ah11-terminal-recovery-race-');
     const terminalConfigInput = {
       workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1
     };
     const terminalConfig = readOperationsConfig(terminalConfigInput);
     const terminalPolicy = operationsStoragePolicy(terminalConfig);
     let terminalNow = 90_000;
-    const terminalStore = openStore(terminalRaceDir.databasePath, { clock: () => terminalNow });
+    const terminalStore = openRecoveryStore(terminalRaceDir.databasePath, { clock: () => terminalNow });
     const terminal = admit(terminalStore, 'public-expired-tenant', 'public-expired-project',
       'terminal-race-expired', PLAN, terminalConfigInput);
     const terminalPrior = terminalStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
@@ -5709,7 +5783,7 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     }).claim;
     const nextTenantJob = admit(terminalStore, 'public-next-tenant', 'public-next-project',
       'terminal-race-next', PLAN, terminalConfigInput);
-    terminalStore.close();
+    closeRecoveryHandle(terminalStore);
     const terminalCrash = crashAfterPublicWorkflowMutation(terminalRaceDir.databasePath, {
       mutation: 'succeeded', now: terminalNow, workflowId: terminalPrior.workflowId,
       ownerId: terminalPrior.ownerId, fence: terminalPrior.fence, revision: terminalPrior.revision,
@@ -5725,45 +5799,64 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         terminalRaceDir.databasePath, String(terminalNow), ownerId, terminal.jobId,
         readyPath, terminalGate, JSON.stringify(terminalConfigInput)
       ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+      const observation = observeClosedChild(child);
+      const closed = observation.closed.then(exit => {
+        c12Children.delete(child); return exit;
+      });
+      c12Children.set(child, closed);
       let stdout = '';
       let stderr = '';
       child.stdout.setEncoding('utf8');
       child.stderr.setEncoding('utf8');
       child.stdout.on('data', chunk => { stdout += chunk; });
       child.stderr.on('data', chunk => { stderr += chunk; });
-      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
       return { ownerId, readyPath, child, closed, get stdout() { return stdout; }, get stderr() { return stderr; } };
     });
     METRICS.processRuns += terminalSupervisors.length;
+    let terminalRaceFailed = false;
     try {
       for (const supervisor of terminalSupervisors) await waitForPath(supervisor.readyPath, supervisor.child, 5_000);
       writeFileSync(terminalGate, 'released');
       const outcomes = await Promise.all(terminalSupervisors.map(async supervisor => ({
         supervisor, exit: await waitForCloseBounded(supervisor.closed, 5_000)
       })));
-      assert.ok(outcomes.every(item => item.exit), 'Both terminal recovery supervisors must finish within the bound.');
-      const results = outcomes.map(({ supervisor, exit }) => {
-        assert.equal(exit.code, 0, supervisor.stderr);
-        const result = JSON.parse(supervisor.stdout.trim());
-        assert.equal(result.ownerId, supervisor.ownerId);
-        assert.equal(result.incomplete, false);
-        assert.equal(result.ownedRunnerCount, 0);
-        return result;
+      c12Phase = 'terminal_child';
+      const validated = outcomes.map(() => false);
+      outcomes.forEach(({ supervisor, exit }) => {
+        const detail = parseClosedChildDiagnostic(supervisor.stderr, 'OPS05.C12');
+        if (requiresClosedFixtureRetention(exit, detail?.nativeClose, detail?.cleanupFailed)) c12Retain = true;
       });
-      assert.equal(results.filter(result => result.claim?.jobId === nextTenantJob.jobId).length, 1,
-        'exactly one supervisor can claim the queued next tenant');
-      assert.equal(results.filter(result => result.claim === null).length, 1,
-        'the losing supervisor observes the committed terminal reconciliation and occupied cap');
-    } finally {
-      if (!existsSync(terminalGate)) writeFileSync(terminalGate, 'released');
-      for (const supervisor of terminalSupervisors) {
-        if (supervisor.child.exitCode === null && supervisor.child.signalCode === null) {
-          try { supervisor.child.kill('SIGKILL'); } catch {}
-          await waitForCloseBounded(supervisor.closed, 1_000);
-        }
+      let results;
+      try {
+        assert.ok(outcomes.every(item => item.exit), 'Both terminal recovery supervisors must finish within the bound.');
+        results = outcomes.map(({ supervisor, exit }, slot) => {
+          assert.equal(exit.code, 0, supervisor.stderr);
+          const result = JSON.parse(supervisor.stdout.trim());
+          assert.equal(result.ownerId, supervisor.ownerId);
+          assert.equal(result.incomplete, false);
+          assert.equal(result.ownedRunnerCount, 0);
+          return result;
+        });
+        c12Phase = 'accepted_count';
+        const acceptedCount = results.filter(result => result.claim?.jobId === nextTenantJob.jobId).length;
+        recordClosedFixture({ caseId: 'OPS05.C12', phase: c12Phase, actual: acceptedCount, expected: 1 });
+        assert.equal(acceptedCount, 1,
+          'exactly one supervisor can claim the queued next tenant');
+        c12Phase = 'null_count';
+        const nullCount = results.filter(result => result.claim === null).length;
+        recordClosedFixture({ caseId: 'OPS05.C12', phase: c12Phase, actual: nullCount, expected: 1 });
+        assert.equal(nullCount, 1,
+          'the losing supervisor observes the committed terminal reconciliation and occupied cap');
+        validated.fill(true);
+      } finally {
+        outcomes.forEach(({ supervisor, exit }, slot) => {
+          recordClosedChild(supervisor.stderr, 'OPS05.C12', slot, 'terminal_child', exit, validated[slot]);
+        });
       }
-    }
-    const terminalRaw = new DatabaseSync(terminalRaceDir.databasePath, { readOnly: true });
+    } catch (error) { terminalRaceFailed = true; c12Retain = true; throw error; }
+    finally { await finalizeRecoveryChildren(terminalGate, terminalSupervisors, terminalRaceFailed); }
+    const terminalRaw = openRecoveryDb(terminalRaceDir.databasePath, { readOnly: true });
+    let terminalReadFailed = false;
     try {
       assert.equal(terminalRaw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(terminal.jobId).state,
         'completed');
@@ -5775,19 +5868,30 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         reserved_disk_bytes: Number(terminalRaw.prepare('SELECT reserved_disk_bytes FROM operations_work WHERE job_id=?')
           .get(nextTenantJob.jobId).reserved_disk_bytes)
       });
-      assert.equal(Number(terminalRaw.prepare(`SELECT COUNT(*) AS count FROM workflow_events
-        WHERE workflow_id=? AND event_type='operations_work_completed'`).get(terminal.workflowId).count), 1);
+      c12Phase = 'terminal_count';
+      const terminalCount = Number(terminalRaw.prepare(`SELECT COUNT(*) AS count FROM workflow_events
+        WHERE workflow_id=? AND event_type='operations_work_completed'`).get(terminal.workflowId).count);
+      recordClosedFixture({ caseId: 'OPS05.C12', phase: c12Phase, actual: terminalCount, expected: 1 });
+      assert.equal(terminalCount, 1);
       assert.equal(terminalRaw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(nextTenantJob.jobId).state,
         'running');
-    } finally {
-      terminalRaw.close();
+    } catch (error) { terminalReadFailed = true; throw error; }
+    finally {
+      try { closeRecoveryHandle(terminalRaw); }
+      catch (error) { if (!terminalReadFailed) throw error; }
     }
-    const terminalReopen = openStore(terminalRaceDir.databasePath, { clock: () => terminalNow });
+    const terminalReopen = openRecoveryStore(terminalRaceDir.databasePath, { clock: () => terminalNow });
     assert.equal(terminalReopen.getWorkflow(terminal.workflowId).leaseOwner, null);
     assert.equal(terminalReopen._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
       tenantId: 'public-expired-tenant', projectId: 'public-expired-project', jobId: terminal.jobId
     }).state, 'completed');
-    terminalReopen.close();
+    closeRecoveryHandle(terminalReopen);
+    } catch (error) {
+      c12PrimaryFailed = true; c12PrimaryError = error; c12Retain = true;
+      recordClosedFixture({ caseId: 'OPS05.C12', slot: 2, phase: c12Phase,
+        primaryFailed: true, ...closedErrorProjection(error) });
+      throw error;
+    }
   });
 
   await t.test('OPS05.C13 expired cancellation reconciliation releases capacity before later queued work', () => {
@@ -6081,17 +6185,30 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
 
   await t.test('OPS05.C08 actual supervisor crash preserves a committed step and two restarted workers claim it once', async t => {
     const crashDir = tempDirectory('ah11-worker-crash-race-');
-    t.after(() => crashDir.cleanup());
+    let c08Phase = 'ready';
+    let c08Retain = false;
+    let c08PrimaryFailed = false;
+    let c08PrimaryError;
+    const c08Handles = new Set();
+    const openCrashDb = (...args) => { const handle = new DatabaseSync(...args); c08Handles.add(handle); return handle; };
+    const openCrashStore = (...args) => { const handle = openStore(...args); c08Handles.add(handle); return handle; };
+    const closeCrashHandle = handle => { handle.close(); c08Handles.delete(handle); };
+
     const fixture = join(ROOT, 'tests/operations/fixtures/worker-supervisor-child.mjs');
     const children = new Set();
     const runnerPids = new Set();
-    const openFixture = (ownerId, idempotencyKey = 'worker-crash-recovery') => {
+    const fixtureObservations = [];
+    const openFixture = (ownerId, idempotencyKey = 'worker-crash-recovery', slot = 0) => {
       const child = spawn(process.execPath, [fixture, crashDir.databasePath, ownerId, idempotencyKey], {
         cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe']
       });
       METRICS.processRuns += 1;
       children.add(child);
+      const observation = observeClosedChild(child);
+      let resultValidated = false;
+      let observedExit = null;
       let output = '';
+      let diagnosticStderr = '';
       const records = [];
       child.stdout.setEncoding('utf8');
       child.stderr.setEncoding('utf8');
@@ -6103,11 +6220,23 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
           try { records.push(JSON.parse(line)); } catch {}
         }
       });
-      child.stderr.on('data', chunk => { output += chunk; });
-      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => {
-        children.delete(child);
-        resolvePromise({ code, signal });
-      }));
+      child.stderr.on('data', chunk => {
+        output += chunk;
+        if (Buffer.byteLength(diagnosticStderr + chunk, 'utf8') <= 8_192) diagnosticStderr += chunk;
+        else METRICS.closedFixtureDiagnostics.diagnosticsComplete = false;
+      });
+      const closed = observation.closed.then(exit => {
+        children.delete(child); observedExit = exit;
+        const detail = parseClosedChildDiagnostic(diagnosticStderr, 'OPS05.C08');
+        if (requiresClosedFixtureRetention(exit, detail?.nativeClose, detail?.cleanupFailed)) c08Retain = true;
+        return exit;
+      });
+      fixtureObservations.push(() => {
+        const exit = observedExit ?? observation.snapshot();
+        const detail = recordClosedChild(diagnosticStderr, 'OPS05.C08', slot,
+          'worker_stop', exit, resultValidated);
+        if (requiresClosedFixtureRetention(exit, detail?.nativeClose, detail?.cleanupFailed)) c08Retain = true;
+      });
       const ready = (async () => {
         const deadline = Date.now() + 8_000;
         while (Date.now() < deadline) {
@@ -6118,25 +6247,39 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         }
         throw new Error(`The owned supervisor did not publish its admission: ${output}`);
       })();
-      return { child, closed, ready, records };
+      return { child, closed, ready, records, markResultValidated: () => { resultValidated = true; } };
     };
     const waitUntil = async (predicate, timeoutMs, message) => {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
-        const result = predicate();
+        const result = await predicate(Math.max(1, deadline - Date.now()));
         if (result) return result;
         await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
       }
       throw new Error(message);
     };
-    const pidIsGone = pid => {
-      try {
-        process.kill(pid, 0);
-        const ps = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
-        return ps.status !== 0 || /^Z/u.test(ps.stdout.trim());
-      } catch (error) {
-        return error?.code === 'ESRCH';
+    const pidIsGone = async (pid, remainingMs) => {
+      try { process.kill(pid, 0); } catch (error) { return error?.code === 'ESRCH'; }
+      const probe = spawn('ps', ['-o', 'stat=', '-p', String(pid)], { stdio: ['ignore', 'pipe', 'pipe'] });
+      children.add(probe); // Own before any fallible capture or deadline wait.
+      let stdout = ''; let stderr = ''; let stdoutEof = false; let stderrEof = false; let overflow = false;
+      const closed = new Promise(resolveClose => probe.once('close', (code, signal) => {
+        children.delete(probe); resolveClose({ code, signal });
+      }));
+      for (const [stream, which] of [[probe.stdout, 'stdout'], [probe.stderr, 'stderr']]) {
+        stream.setEncoding('utf8');
+        stream.on('end', () => { if (which === 'stdout') stdoutEof = true; else stderrEof = true; });
+        stream.on('data', chunk => {
+          const value = (which === 'stdout' ? stdout : stderr) + chunk;
+          if (Buffer.byteLength(value, 'utf8') > 1_024) { overflow = true; try { probe.kill('SIGKILL'); } catch {} }
+          else if (which === 'stdout') stdout = value; else stderr = value;
+        });
       }
+      probe.on('error', () => { c08Retain = true; });
+      const exit = await waitForCloseBounded(closed, remainingMs);
+      if (!exit) { try { probe.kill('SIGKILL'); } catch {} c08Retain = true; return false; }
+      if (overflow || !stdoutEof || !stderrEof || exit.signal !== null) { c08Retain = true; return false; }
+      return exit.code === 0 && /^Z/u.test(stdout.trim());
     };
     t.after(async () => {
       for (const pid of runnerPids) {
@@ -6151,13 +6294,33 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         child.once('close', resolvePromise);
         setTimeout(resolvePromise, 1_500).unref();
       })));
+      for (const recordObservation of fixtureObservations) recordObservation();
+      const cleanupErrors = [];
+      for (const handle of c08Handles) {
+        try { closeCrashHandle(handle); } catch (error) { cleanupErrors.push(error); c08Retain = true; }
+      }
+      if (children.size > 0 || runnerPids.size > 0) c08Retain = true;
+      const cleanup = cleanupErrors.length ? closedErrorProjection(cleanupErrors[0])
+        : { errorKind: 'none', code: 'none', sqlitePrimaryCode: null };
+      recordClosedFixture({ caseId: 'OPS05.C08', phase: 'cleanup', primaryFailed: c08PrimaryFailed,
+        ...(c08PrimaryFailed ? closedErrorProjection(c08PrimaryError) : {}),
+        cleanupFailed: cleanupErrors.length > 0, cleanupKind: cleanup.errorKind, cleanupCode: cleanup.code,
+        cleanupPrimaryCode: cleanup.sqlitePrimaryCode, nativeClose: c08Handles.size === 0 ? 'confirmed' : 'unknown',
+        processClosed: children.size === 0 && runnerPids.size === 0 });
+      if (!c08Retain) crashDir.cleanup();
+      if (cleanupErrors.length) throw new AggregateError(
+        c08PrimaryFailed ? [c08PrimaryError, ...cleanupErrors] : cleanupErrors,
+        'C08 native cleanup was not confirmed.', c08PrimaryFailed ? { cause: c08PrimaryError } : undefined);
     });
+    try {
 
     const oldOwner = 'ops-worker:crashed-supervisor';
     const crashed = openFixture(oldOwner);
     const admitted = await crashed.ready;
     assert.equal(admitted.accepted, true);
-    const inspect = new DatabaseSync(crashDir.databasePath, { readOnly: true });
+    crashed.markResultValidated();
+    c08Phase = 'progress';
+    const inspect = openCrashDb(crashDir.databasePath, { readOnly: true });
     const committed = await waitUntil(() => {
       const row = inspect.prepare(`
         SELECT w.state, w.runner_pid, w.generation, w.fence_token,
@@ -6178,6 +6341,7 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     }, 8_000, 'The actual runner did not durably commit a local step before the crash barrier.');
     const oldRunnerPid = Number(committed.row.runner_pid);
     runnerPids.add(oldRunnerPid);
+    c08Phase = 'stop';
     assert.equal(process.kill(oldRunnerPid, 'SIGSTOP'), true);
     const priorGeneration = Number(committed.row.generation);
     const priorFence = Number(committed.row.fence_token);
@@ -6196,6 +6360,7 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.equal(beforeCrash.inFlight, 1);
     assert.equal(beforeCrash.attempts, 0);
 
+    c08Phase = 'crash';
     const crashStartedAt = performance.now();
     assert.equal(crashed.child.kill('SIGKILL'), true);
     METRICS.processSigkillSignalsSent += 1;
@@ -6207,21 +6372,23 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     METRICS.processCloseSamples += 1;
     assert.equal(process.kill(oldRunnerPid, 'SIGKILL'), true);
     METRICS.processSigkillSignalsSent += 1;
+    c08Phase = 'runner_close';
     const runnerCloseStartedAt = performance.now();
-    const runnerGone = await waitUntil(() => pidIsGone(oldRunnerPid), 3_000,
+    const runnerGone = await waitUntil(remainingMs => pidIsGone(oldRunnerPid, remainingMs), 3_000,
       'The exact orphaned runner PID did not exit after its explicit SIGKILL.');
     assert.equal(runnerGone, true);
     const runnerCloseElapsedMs = performance.now() - runnerCloseStartedAt;
     METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, runnerCloseElapsedMs);
     METRICS.processCloseSamples += 1;
     runnerPids.delete(oldRunnerPid);
-    inspect.close();
+    closeCrashHandle(inspect);
 
-    const recoveryClock = new DatabaseSync(crashDir.databasePath);
+    c08Phase = 'lease_expiry';
+    const recoveryClock = openCrashDb(crashDir.databasePath);
     recoveryClock.prepare('UPDATE workflows SET lease_expires_ms=0 WHERE workflow_id=?').run(admitted.workflowId);
     recoveryClock.prepare('UPDATE operations_work SET lease_expires_ms=0 WHERE job_id=?').run(admitted.jobId);
-    recoveryClock.close();
-    const afterCrashDb = new DatabaseSync(crashDir.databasePath, { readOnly: true });
+    closeCrashHandle(recoveryClock);
+    const afterCrashDb = openCrashDb(crashDir.databasePath, { readOnly: true });
     const crashedRows = afterCrashDb.prepare(`
       SELECT w.state, w.runner_pid, w.generation, f.state AS workflow_state, f.checkpoint_sequence
       FROM operations_work w JOIN workflows f ON f.workflow_id=w.workflow_id WHERE w.job_id=?
@@ -6231,16 +6398,20 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.equal(Number(crashedRows.generation), priorGeneration);
     assert.equal(Number(afterCrashDb.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
     assert.equal(Number(afterCrashDb.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(admitted.workflowId).count), 0);
-    afterCrashDb.close();
+    closeCrashHandle(afterCrashDb);
 
-    const raceA = openFixture('ops-worker:recovery-race-a');
-    const raceB = openFixture('ops-worker:recovery-race-b');
+    c08Phase = 'restart_ready';
+    const raceA = openFixture('ops-worker:recovery-race-a', 'worker-crash-recovery', 1);
+    const raceB = openFixture('ops-worker:recovery-race-b', 'worker-crash-recovery', 2);
     const [readyA, readyB] = await Promise.all([raceA.ready, raceB.ready]);
     assert.equal(readyA.jobId, admitted.jobId);
     assert.equal(readyB.jobId, admitted.jobId);
     assert.equal(readyA.duplicate, true);
     assert.equal(readyB.duplicate, true);
-    const completeDb = new DatabaseSync(crashDir.databasePath, { readOnly: true });
+    raceA.markResultValidated();
+    raceB.markResultValidated();
+    c08Phase = 'completion';
+    const completeDb = openCrashDb(crashDir.databasePath, { readOnly: true });
     let finalRow;
     try {
       finalRow = await waitUntil(() => {
@@ -6252,21 +6423,7 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
       return row?.state === 'completed' ? row : null;
       }, 12_000, 'The restarted worker race did not finish the admitted local plan.');
     } catch (error) {
-      const row = completeDb.prepare(`
-        SELECT w.state, w.worker_id, w.runner_pid, w.generation, w.fence_token, w.lease_expires_ms, w.reason_code,
-          f.state AS workflow_state, f.fence_token AS workflow_fence, f.lease_owner, f.lease_expires_ms AS workflow_lease,
-          f.checkpoint_sequence
-        FROM operations_work w JOIN workflows f ON f.workflow_id=w.workflow_id WHERE w.job_id=?
-      `).get(admitted.jobId);
-      const events = completeDb.prepare('SELECT event_type, revision, fence_token FROM workflow_events WHERE workflow_id=? ORDER BY sequence').all(admitted.workflowId);
-      const meta = completeDb.prepare('SELECT pending_records, in_flight, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get();
-      const latestPayload = JSON.parse(completeDb.prepare('SELECT payload_json FROM workflow_checkpoints WHERE workflow_id=? ORDER BY sequence DESC LIMIT 1').get(admitted.workflowId).payload_json);
-      const latestState = latestPayload.data ?? latestPayload;
-      throw new Error(`${error.message} ${JSON.stringify({ row, meta, events, checkpoint: {
-        pendingStepId: latestState.pendingStepId, budget: latestState.budget,
-        resultCount: Object.keys(JSON.parse(latestState.completedResultsJson ?? '{}')).length,
-        resultBytes: Buffer.byteLength(latestState.completedResultsJson ?? '', 'utf8')
-      }, readyA, readyB, raceAExit: raceA.child.exitCode, raceBExit: raceB.child.exitCode })}`);
+      throw error; // Keep the wait failure itself; closed phase capture needs no additional query.
     }
     const claimCount = Number(completeDb.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_claimed'").get(admitted.workflowId).count);
     const attemptCount = Number(completeDb.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(admitted.workflowId).count);
@@ -6284,18 +6441,22 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.deepEqual({ ...counters }, {
       pending_records: 0, pending_bytes: 0, in_flight: 0, reserved_event_slots: 0, reserved_disk_bytes: 0
     });
-    completeDb.close();
+    closeCrashHandle(completeDb);
     const racersSignalAt = performance.now();
     for (const supervisor of [raceA, raceB]) {
       assert.equal(supervisor.child.kill('SIGTERM'), true);
       METRICS.processSigtermSignalsSent += 1;
     }
-    const closedRacers = await Promise.all([raceA.closed, raceB.closed]);
+    c08Phase = 'close';
+    const closedRacers = await Promise.all([raceA, raceB].map(supervisor => waitForCloseBounded(
+      supervisor.closed, Math.max(1, 2_000 - (performance.now() - racersSignalAt)))));
+    assert.ok(closedRacers.every(Boolean), 'Both restarted supervisors must close inside the original 2000ms budget.');
     assert.deepEqual(closedRacers.map(item => item.code), [0, 0]);
     const racersCloseElapsedMs = performance.now() - racersSignalAt;
     METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, racersCloseElapsedMs);
     METRICS.processCloseSamples += 2;
-    const reopened = openStore(crashDir.databasePath);
+    c08Phase = 'fencing';
+    const reopened = openCrashStore(crashDir.databasePath);
     const finalWorkflow = reopened.getWorkflow(admitted.workflowId);
     const finalCheckpoint = reopened.getCheckpoint(admitted.workflowId);
     const finalEventCount = reopened.listEvents({ workflowId: admitted.workflowId }).length;
@@ -6306,10 +6467,16 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.equal(reopened.listEvents({ workflowId: admitted.workflowId }).length, finalEventCount);
     assert.equal(finalWorkflow.state, 'succeeded');
     assert.equal(Object.keys(JSON.parse(finalCheckpoint.data.completedResultsJson)).length, 32);
-    reopened.close();
+    closeCrashHandle(reopened);
     assert.ok(supervisorCloseElapsedMs < 2_000);
     assert.ok(runnerCloseElapsedMs < 3_000);
     assert.ok(racersCloseElapsedMs < 2_000);
+    } catch (error) {
+      c08PrimaryFailed = true; c08PrimaryError = error; c08Retain = true;
+      recordClosedFixture({ caseId: 'OPS05.C08', phase: c08Phase, primaryFailed: true,
+        ...closedErrorProjection(error), nativeClose: c08Handles.size === 0 ? 'confirmed' : 'unknown' });
+      throw error;
+    }
   });
 
   let logicalNow = 10_000;
@@ -6412,16 +6579,26 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
 
 test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and escalates with bounded reaping', async t => {
   const temporary = tempDirectory('ah11-worker-signal-');
-  t.after(() => temporary.cleanup());
+  let retainOps06Evidence = false;
+
   const worker = createOperationsWorker({
     databasePath: temporary.databasePath,
     ownerId: 'ops-worker:signal',
     config: { childKillGraceMs: 40, childReapReserveMs: 250, shutdownTimeoutMs: 1_000 }
   });
+  t.after(async () => {
+    let cleanupFailed = false;
+    let cleanupError;
+    try {
+      const result = await worker.stop('test');
+      if (result?.stopped !== true || result?.storeClosed !== true || result?.childrenReaped !== true) retainOps06Evidence = true;
+    } catch (error) { cleanupFailed = true; cleanupError = error; retainOps06Evidence = true; }
+    if (!retainOps06Evidence) temporary.cleanup();
+    if (cleanupFailed) throw cleanupError;
+  });
   assert.throws(() => createOperationsWorker({
     databasePath: join(temporary.directory, 'callback-rejected.sqlite'), executor: () => true
   }));
-  t.after(async () => { await worker.stop('test'); });
   void worker.start();
   const submitted = worker.submitSyntheticWork({
     trustedSyntheticScope: { tenantId: 'signal-tenant', projectId: 'signal-project' },
@@ -6469,6 +6646,7 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   });
   assert.equal(rejectedDuringStop.code, 'OPS_UNAVAILABLE');
   const stopped = await stopping;
+  if (stopped?.storeClosed !== true || stopped?.childrenReaped !== true) retainOps06Evidence = true;
   METRICS.ownedRunnerTermSignals += 1;
   METRICS.ownedRunnerKillSignals += stopped.escalatedChildren;
   METRICS.ownedRunnerShutdownElapsedMsMax = Math.max(METRICS.ownedRunnerShutdownElapsedMsMax, stopped.elapsedMs);
@@ -6528,7 +6706,10 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
     join(ROOT, 'tests/operations/fixtures/repeated-signal-child.mjs'), databasePath, flushMarker
   ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
   METRICS.processRuns += 1;
+  const signalObservation = observeClosedChild(signalChild);
+  signalChild.once('error', () => { retainOps06Evidence = true; });
   let signalChildClosed = false;
+  let signalResultValidated = false;
   let signalOutput = '';
   let readyRecord = null;
   signalChild.stdout.setEncoding('utf8');
@@ -6543,9 +6724,12 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   });
   signalChild.stderr.setEncoding('utf8');
   signalChild.stderr.on('data', chunk => { signalOutput += chunk; });
-  const closed = new Promise(resolvePromise => signalChild.once('close', (code, signal) => resolvePromise({ code, signal })));
+  const closed = signalObservation.closed;
   t.after(async () => {
-    if (!signalChildClosed) await killOwnedChildAndReap(signalChild, closed);
+    const exit = signalChildClosed ? signalObservation.snapshot() : await killOwnedChildAndReap(signalChild, closed);
+    signalChildClosed = exit?.processClosed === true;
+    // Reap is consumed; a late exit cannot establish missing native/result evidence.
+    if (requiresClosedFixtureRetention(exit, signalResultValidated ? 'confirmed' : 'unknown', !signalResultValidated)) retainOps06Evidence = true;
   });
 
   const readyDeadline = Date.now() + 5_000;
@@ -6603,41 +6787,61 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
     diagnostic.exitSignal = null;
     recordDiagnostic();
   }
+  const signalObserved = closedChildObservation(signalExit);
+  if (!signalObserved.processClosed || signalObserved.errorEvent || signalObserved.pipeEOF !== 'complete') retainOps06Evidence = true;
   assert.ok(signalExit, signalOutput);
+  if (signalExit.code !== 0) retainOps06Evidence = true;
   assert.equal(signalExit.code, 0, signalOutput);
   diagnostic.failureClass = 'assertion';
   diagnostic.stage = 'stopped_record';
   const stoppedLine = signalOutput.split(/\r?\n/u).find(line => line.includes('"event":"stopped"'));
+  if (!stoppedLine) retainOps06Evidence = true;
   assert.ok(stoppedLine, signalOutput);
-  const stoppedRecord = JSON.parse(stoppedLine);
+  let stoppedRecord;
+  try { stoppedRecord = JSON.parse(stoppedLine); }
+  catch (error) { retainOps06Evidence = true; throw error; }
+  if (stoppedRecord?.stopped?.storeClosed !== true || stoppedRecord?.stopped?.childrenReaped !== true) retainOps06Evidence = true;
   diagnostic.phaseElapsedMs.signalToFirstStopElapsedMs = stoppedRecord.phaseElapsedMs?.signalToFirstStopElapsedMs ?? null;
   diagnostic.phaseElapsedMs.readyToFinalRecordElapsedMs = stoppedRecord.phaseElapsedMs?.readyToFinalRecordElapsedMs ?? null;
   diagnostic.stage = 'stopped_record';
   diagnostic.failureClass = 'assertion';
 
-  assert.equal(stoppedRecord.stopped.stopped, true);
-  assert.equal(stoppedRecord.stopped.childrenReaped, true);
-  assert.equal(stoppedRecord.stopped.storeClosed, true);
-  assert.equal(stoppedRecord.sinkCalls, 1);
-  assert.equal(stoppedRecord.providerCalls, 0);
-  assert.equal(stoppedRecord.workAfterStop.state, 'queued');
-  assert.equal(stoppedRecord.attemptCount, 0);
-  assert.equal(stoppedRecord.telemetry.cursor, 0);
-  assert.ok(stoppedRecord.telemetry.pendingRecords > 0);
-  assert.ok(processCloseElapsedMs < 1_500, `Actual process close took ${processCloseElapsedMs} ms.`);
+  try {
+    assert.equal(stoppedRecord.stopped.stopped, true);
+    assert.equal(stoppedRecord.stopped.childrenReaped, true);
+    assert.equal(stoppedRecord.stopped.storeClosed, true);
+    assert.equal(stoppedRecord.sinkCalls, 1);
+    assert.equal(stoppedRecord.providerCalls, 0);
+    assert.equal(stoppedRecord.workAfterStop.state, 'queued');
+    assert.equal(stoppedRecord.attemptCount, 0);
+    assert.equal(stoppedRecord.telemetry.cursor, 0);
+    assert.ok(stoppedRecord.telemetry.pendingRecords > 0);
+    assert.ok(processCloseElapsedMs < 1_500, `Actual process close took ${processCloseElapsedMs} ms.`);
+
+    signalResultValidated = true;
+  } catch (error) { retainOps06Evidence = true; throw error; }
 
   diagnostic.stage = 'restart_spawn';
   const restartStartedAt = performance.now();
   const restart = startOwnedChild(join(ROOT, 'tests/operations/fixtures/repeated-signal-restart-child.mjs'),
     [databasePath, stoppedRecord.jobId], { timeoutMs: 9_000 });
+  restart.child.once('error', () => { retainOps06Evidence = true; });
   let restartClosed = false;
+  let restartResultValidated = false;
+  let restartExitObservation = null;
   t.after(async () => {
-    if (!restartClosed) await killOwnedChildAndReap(restart.child, restart.closed);
+    const exit = restartClosed ? restartExitObservation : await killOwnedChildAndReap(restart.child, restart.closed);
+    restartClosed = exit?.processClosed === true;
+    const captured = exit ?? restart.snapshot();
+    const detail = recordClosedChild(captured.stderr, 'OPS06.C01', 0,
+      'restart_wait', captured, restartResultValidated);
+    if (!restartResultValidated || requiresClosedFixtureRetention(exit, detail?.nativeClose, detail?.cleanupFailed)) retainOps06Evidence = true;
   });
   diagnostic.stage = 'restart_close';
   const restartExit = await waitForCloseBounded(restart.closed, 10_000);
+  restartExitObservation = restartExit;
   if (restartExit) {
-    restartClosed = true;
+    restartClosed = restartExit.processClosed === true;
     restartProcessCloseElapsedMs = performance.now() - restartStartedAt;
     diagnostic.stage = 'restart_exit';
     diagnostic.failureClass = restartExit.code === 0 ? 'none' : 'child_exit';
@@ -6657,7 +6861,12 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
     diagnostic.exitSignal = null;
     recordDiagnostic();
   }
+  const capturedRestart = restartExit ?? restart.snapshot();
+  const restartDetail = parseClosedChildDiagnostic(capturedRestart.stderr, 'OPS06.C01');
+  if (requiresClosedFixtureRetention(restartExit, restartDetail?.nativeClose, restartDetail?.cleanupFailed)) retainOps06Evidence = true;
+  // Retain unknown ownership before this assertion can abort the nested case.
   assert.ok(restartExit, 'The fresh restart process must close under its separate bounded owner wait.');
+  if (restartExit.code !== 0 || restartDetail?.primaryFailed) retainOps06Evidence = true;
   assert.equal(restartExit.code, 0, restartExit.stderr);
   let restartRecord = null;
   try { restartRecord = JSON.parse(restartExit.stdout.trim()); } catch {}
@@ -6677,6 +6886,7 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   assert.equal(restartRecord.attemptCount, 0);
   assert.ok(processCloseElapsedMs >= stoppedRecord.stopped.elapsedMs,
     'The parent-observed first process close must include the bounded worker stop interval.');
+  restartResultValidated = true;
   diagnostic.exitDisposition = 'zero';
   diagnostic.exitCode = 0;
   diagnostic.exitSignal = null;
@@ -8220,7 +8430,7 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   assert.match(evidenceVerifier, /executedHead:\s*startHead/u);
   assert.doesNotMatch(evidenceVerifier, /baseHead:\s*['"]f02f38a6/u);
   assert.deepEqual(Object.keys(METRICS).sort(), [
-      'blockedExternalNetworkAttempts', 'controlledDnsResolve4', 'controlledDnsResolve6',
+      'closedFixtureDiagnostics', 'blockedExternalNetworkAttempts', 'controlledDnsResolve4', 'controlledDnsResolve6',
     'controlledHttpsRequests', 'controlledHttpsWrites', 'processRuns', 'processSigkillSignalsSent',
     'processSigtermSignalsSent', 'providerCalls', 'ownedRunnerStarts', 'ownedRunnerTermSignals',
     'ownedRunnerKillSignals', 'ownedRunnerShutdownElapsedMsMax', 'ownedRunnerShutdownSamples',
@@ -8241,6 +8451,22 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'ops12RecoveryDiagnosticLines', 'ops12RecoveryDiagnosticCount',
       'ops12RecoveryDiagnosticBytes', 'ops12RecoveryDiagnosticsComplete'
   ].sort());
+  const closedChannel = METRICS.closedFixtureDiagnostics;
+  assert.deepEqual(Object.keys(closedChannel).sort(), ['lines', 'count', 'bytes', 'diagnosticsComplete'].sort());
+  assert.equal(typeof closedChannel.lines, 'string');
+  assert.equal(Number.isSafeInteger(closedChannel.count), true);
+  assert.ok(closedChannel.count >= 0 && closedChannel.count <= 32);
+  assert.equal(Number.isSafeInteger(closedChannel.bytes), true);
+  assert.ok(closedChannel.bytes >= 0 && closedChannel.bytes <= 16_384);
+  assert.equal(Buffer.byteLength(closedChannel.lines, 'utf8'), closedChannel.bytes);
+  assert.equal(closedChannel.diagnosticsComplete, true);
+  const closedFrames = closedChannel.lines === '' ? [] : closedChannel.lines.split('\n');
+  if (closedFrames.length) assert.equal(closedFrames.pop(), '');
+  assert.equal(closedFrames.length, closedChannel.count);
+  assert.ok(closedFrames.every(line => Buffer.byteLength(`${line}\n`, 'utf8') <= 768));
+  const parsedClosedChannel = parseClosedDiagnosticChannel(closedChannel);
+  assert.equal(parsedClosedChannel.complete, true);
+  assert.equal(parsedClosedChannel.recordCount, closedChannel.count);
   for (const key of [
     'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed',
     'ci1PhaseCaptureOwnedGroupCloseUnconfirmed'
@@ -8307,6 +8533,11 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
   await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async t => {
     assert.match(evidenceVerifier, /REQUIRED_LOCAL_CASES/u);
+    assert.equal(Object.hasOwn(METRICS, 'closedFixtureDiagnostics'), true);
+    const omittedClosedChannel = { ...METRICS };
+    delete omittedClosedChannel.closedFixtureDiagnostics;
+    assert.notDeepEqual(Object.keys(omittedClosedChannel).sort(), Object.keys(METRICS).sort());
+    assert.equal(parseClosedDiagnosticChannel(undefined).complete, false);
     const exitDispositionControls = [
       { result: { code: 0, signal: null }, exit: 'zero', passed: false },
       { result: { code: 1, signal: null }, exit: 'nonzero', passed: false },

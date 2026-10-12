@@ -1,3 +1,4 @@
+import { readLocalControllerClockDiagnostic } from '../../src/internal/durable-store.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
@@ -5214,6 +5215,14 @@ test('admission transaction rejects 1ms, 100ms, and 250ms backward wall-clock sa
       start - rollbackMs
     );
 
+    const invokeTransaction = store['_localControllerAdmit'].bind(store);
+    let observedClockGuard = null;
+    store['_localControllerAdmit'] = (...args) => {
+      try { return invokeTransaction(...args); } catch (error) {
+        observedClockGuard = readLocalControllerClockDiagnostic(error);
+        throw error;
+      }
+    };
     const result = await runBoundedLocalPlan({
       store,
       workflowId,
@@ -5223,6 +5232,7 @@ test('admission transaction rejects 1ms, 100ms, and 250ms backward wall-clock sa
     });
     assert.equal(result.status, 'stopped', 'rollback ' + rollbackMs + 'ms');
     assert.equal(result.reason, 'CLOCK_ROLLBACK', 'rollback ' + rollbackMs + 'ms');
+    assert.equal(observedClockGuard, 'clock_rollback');
     assert.equal(getBoundary(), before, 'admission reached transaction before rollback check');
     assert.equal(snapshotDatabase(temporary.databasePath), before, 'all rows roll back at admission');
     store.close();
@@ -5257,6 +5267,14 @@ test('completion transaction rejects 1ms, 100ms, and 250ms backward wall-clock s
       start - rollbackMs
     );
 
+    const invokeTransaction = store['_localControllerComplete'].bind(store);
+    let observedClockGuard = null;
+    store['_localControllerComplete'] = (...args) => {
+      try { return invokeTransaction(...args); } catch (error) {
+        observedClockGuard = readLocalControllerClockDiagnostic(error);
+        throw error;
+      }
+    };
     const result = await runBoundedLocalPlan({
       store,
       workflowId,
@@ -5265,6 +5283,7 @@ test('completion transaction rejects 1ms, 100ms, and 250ms backward wall-clock s
     });
     assert.equal(result.status, 'stopped', 'rollback ' + rollbackMs + 'ms');
     assert.equal(result.reason, 'CLOCK_ROLLBACK', 'rollback ' + rollbackMs + 'ms');
+    assert.equal(observedClockGuard, 'clock_rollback');
     const beforeCompletion = getBoundary();
     assert.equal(typeof beforeCompletion, 'string', 'completion reached transaction after controller check');
     assert.equal(snapshotDatabase(temporary.databasePath), beforeCompletion, 'completion transaction rolls back');
@@ -5305,6 +5324,14 @@ test('transaction clock keeps unchanged and forward-expired admission and comple
       clock,
       target
     );
+    const invokeTransaction = store[boundary].bind(store);
+    let observedClockGuard = null;
+    store[boundary] = (...args) => {
+      try { return invokeTransaction(...args); } catch (error) {
+        observedClockGuard = readLocalControllerClockDiagnostic(error);
+        throw error; // Passive read does not consume BUSY eligibility.
+      }
+    };
     const result = await runBoundedLocalPlan({
       store,
       workflowId,
@@ -5316,6 +5343,7 @@ test('transaction clock keeps unchanged and forward-expired admission and comple
 
     if (adjustment === 'deadline') {
       assert.equal(result.status, 'stopped');
+      assert.equal(observedClockGuard, 'deadline_and_age');
       assert.equal(snapshotDatabase(temporary.databasePath), getBoundary(), 'expired transaction writes nothing');
       store.close();
       const reopened = openStore(temporary.databasePath, () => start);
@@ -5336,6 +5364,7 @@ test('transaction clock keeps unchanged and forward-expired admission and comple
     if (adjustment === 251) {
       assert.equal(result.status, 'stopped');
       assert.equal(result.reason, 'CONTROLLER_INPUT_INVALID');
+      assert.equal(observedClockGuard, 'snapshot_age_exceeded');
       assert.equal(snapshotDatabase(temporary.databasePath), getBoundary(), 'excess forward drift writes nothing');
       store.close();
       const reopened = openStore(temporary.databasePath, () => start);
@@ -5344,6 +5373,7 @@ test('transaction clock keeps unchanged and forward-expired admission and comple
       return;
     }
 
+    assert.equal(observedClockGuard, null);
     assert.equal(result.status, 'completed', 'transaction adjustment ' + adjustment);
     assert.equal(result.results[0].output, 9);
     store.close();
@@ -5440,6 +5470,7 @@ test('a fresh controller completion survives a waited SQLite writer lock without
   assert.equal(result.status, 'completed', `The controller stopped with ${result.reason}.`);
   assert.equal(attempted.length, 2, 'one exact completion refresh follows the waited writer lock');
   assert.equal(firstError?.code, 'CONCURRENT_MODIFICATION');
+  assert.equal(readLocalControllerClockDiagnostic(firstError), 'snapshot_age_exceeded');
   assert.equal(firstError?.operation, '_localControllerComplete');
   assert.equal(firstError?.retryable, true);
   assert.equal(stateAfterRejectedAttempt, stateBeforeFirstAttempt,
@@ -5553,6 +5584,7 @@ test('a stale completion refresh does not start a second transaction after the p
   assert.equal(attempted.length, 1, 'no second completion transaction starts after parent deadline expiry');
   assert.equal(callTimesMsAfterDeadline.length, 1);
   assert.equal(firstError?.code, 'CONCURRENT_MODIFICATION');
+  assert.equal(readLocalControllerClockDiagnostic(firstError), 'snapshot_age_exceeded');
   assert.equal(stateAfterRejectedAttempt, stateBeforeFirstAttempt,
     'the stale completion transaction rolls back without changing durable state');
   assert.equal(snapshotDatabase(temporary.databasePath), stateAfterRejectedAttempt,
