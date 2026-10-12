@@ -6,6 +6,7 @@ import { safeEqual } from "./crypto";
 import { DatabaseSync } from "node:sqlite";
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
+import { artUnavailable, retainArt } from "@/customer/studio/versions/retention";
 import { EVENT_RETENTION_MS, EVENT_SCHEMA, type StoredEvent, type TicketstubEvent } from "./events";
 import { migrate } from "./migrations";
 import type { Account, AccountState, ApprovalRow, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, GiftView, LoginLinkRecord, NewApproval, NewClaim, Storage, WallState } from "./storage";
@@ -228,8 +229,10 @@ export class SqliteStorage implements Storage {
     return this.tx(() => {
       const tombstoning = new Set(deleted);
       const existing = new Map<string, { updatedAt: number; deleted: boolean }>();
-      for (const r of this.all("SELECT stub_id, updated_at, deleted FROM wall_stubs WHERE account_id = ?", accountId)) {
+      const stored = new Map<string, string>();
+      for (const r of this.all("SELECT stub_id, updated_at, deleted, data FROM wall_stubs WHERE account_id = ?", accountId)) {
         existing.set(r.stub_id as string, { updatedAt: Number(r.updated_at), deleted: Number(r.deleted) === 1 });
+        if (Number(r.deleted) !== 1) stored.set(r.stub_id as string, r.data as string);
       }
       const upsert = this.db.prepare(
         "INSERT INTO wall_stubs (account_id, stub_id, updated_at, deleted, data) VALUES (?, ?, ?, 0, ?) " +
@@ -240,7 +243,19 @@ export class SqliteStorage implements Storage {
         const at = stub.updatedAt ?? 0;
         const cur = existing.get(stub.id);
         if (cur && at <= cur.updatedAt) continue; // server copy (or tombstone) is as new or newer
-        upsert.run(accountId, stub.id, at, JSON.stringify(stub));
+        // a device that had to let go of an older picture must not take it from the account's copy
+        const prev = stored.get(stub.id);
+        let keep = stub;
+        if (prev && stub.versions.some((v) => artUnavailable(v.art))) {
+          try {
+            keep = retainArt(stub, JSON.parse(prev) as Stub);
+          } catch {
+            keep = stub; // an unreadable stored copy has nothing to give back
+          }
+        }
+        const json = JSON.stringify(keep);
+        upsert.run(accountId, stub.id, at, json);
+        stored.set(stub.id, json); // a later entry for the same stub in this request sees what was just written
         existing.set(stub.id, { updatedAt: at, deleted: false });
       }
       const tomb = this.db.prepare(
