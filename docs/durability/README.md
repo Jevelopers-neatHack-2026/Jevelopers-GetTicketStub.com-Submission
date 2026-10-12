@@ -178,6 +178,15 @@ export. Export only allowlisted observations/inventories; never copy the DB as
 public evidence. Production stage traces beyond jobs/persistence, canonical
 mapping, real finance intake, Neatlogs and EvaluationEvidence remain blocked.
 
+`src/telemetry/evidence-page.ts` provides the allowlisted, read-only export of
+staged observations as digest-committed pages (see the telemetry README). It
+adds no provider/billable IDs or valuation, states delivery status as
+`not_included` (no delivery claim), and does not mutate
+outbox state. Its projection is field-by-field (no request or row-key digests; scope is an
+ordinary guessable hash, not anonymization or authentication), the verifier
+enforces a strict envelope shape, and its canonicalization rejects non-JSON or
+malformed data. Its SHA-256 commitment is local tamper evidence only.
+
 ## Acceptance and handoffs
 
 | ID | Independently executable local proof | Unmet closure/integration requirement |
@@ -193,7 +202,7 @@ mapping, real finance intake, Neatlogs and EvaluationEvidence remain blocked.
 | PP-10B.4 | Retry/permanent classification, bounded backoff, cancellation fencing, retained completed evidence | Canonical errors/cancellation policy and harness scheduler agreement |
 | PP-10B.5 | No missing structured rows; atomic failure and allow_partial receipt/inventory tests | #13 accepted partial semantics; CSV #14 intentionally excluded |
 | PP-10B.6 | No new execution on read; new attempts on retries; stable transport source IDs | Accepted common attempt and UsageEvent semantics |
-| PP-11.1 | Local operation/job/row/attempt/observation/transport/output joins | UsageEvent/common errors/jobs, producer provenance and canonical mapper; provider IDs remain absent |
+| PP-11.1 | Local operation/job/row/attempt/observation/transport/output joins; read-only digest-committed staged evidence pages (`tests/unit/telemetry-evidence-page.test.ts`) | UsageEvent/common errors/jobs, producer provenance and canonical mapper; provider IDs remain absent |
 | PP-11.2 | Units, completeness, observed durations, explicit failed/retryable/cancelled/partial outcomes | Actual compose/preflight/repair/export metrics and canonical measurement definitions |
 | PP-11.3 | Execution vs transport retries; cache/read never executes | Canonical environment/billing mode and real finance dedup semantics |
 | PP-11.4 | Transactional immutable outbox, outage/retry/exhaustion, crash redelivery and bounded queues | Real #10 finance intake at accepted revisions; synthetic sink does not establish conformance |
