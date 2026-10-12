@@ -418,7 +418,13 @@ test("keeps a pinned composition requiring text repair blocked at export without
 	assert.equal(report.value.body.model_ready, false);
 	assert.ok(
 		report.value.body.findings.some(
-			(finding) => finding.observed === "TEXT_OVERFLOW",
+			(finding) =>
+				finding.severity === "repairable" &&
+				finding.state === "failed" &&
+				finding.unit === "nm" &&
+				typeof finding.observed === "number" &&
+				typeof finding.expected === "number" &&
+				finding.observed > finding.expected,
 		),
 	);
 	const when = await candidate.operations.exportArtifactBundle(
