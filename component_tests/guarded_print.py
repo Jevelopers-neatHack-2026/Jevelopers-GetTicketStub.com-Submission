@@ -111,11 +111,16 @@ class PrintDocker(Docker):
 
     @override
     def mounts(self) -> tuple[tuple[Path, str, bool], ...]:
-        base = Docker.mounts(self)
+        base = tuple(mount for mount in Docker.mounts(self) if mount[1] != "/producer")
+        producer = self.configuration.producer
+        runtime = producer / "out/toolchain/node-v24.21.0-linux-x64"
         return (
             *base,
             (self.configuration.directory / "launch", "/run/ie-launch", False),
-            (self.configuration.producer, str(self.configuration.producer), False),
+            (producer / "dist", "/producer/dist", False),
+            (producer / "node_modules", "/producer/node_modules", False),
+            (producer / "docs", "/producer/docs", False),
+            (runtime, str(runtime), False),
             (self.checkout, str(self.checkout), False),
             (self.repository, str(self.repository), False),
             (self.home, str(self.home), True),
