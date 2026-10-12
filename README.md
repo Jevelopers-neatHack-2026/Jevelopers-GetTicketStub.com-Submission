@@ -95,6 +95,10 @@ Every post below is public on [@CompleteTechLLC](https://x.com/CompleteTechLLC).
 
 Each post names the hosts or the three required tools. A [text-only Day 2 copy](https://x.com/CompleteTechLLC/status/2109407386289189284) and a [second kickoff copy](https://x.com/CompleteTechLLC/status/2108920181380805025) are also public. Usage and cost figures in the posts are owner reports, not audited metrics. A search of X on October 12 found no event posts from the other team members' accounts. [Building-in-public evidence →](docs/judges/EVIDENCE.md#building-in-public)
 
+**Streamed live.** Timothy streamed the build on Twitch at [twitch.tv/completedottech](https://www.twitch.tv/completedottech). Seven public VODs titled *neatHack 2026 · Team Jevelopers Builds AI-Powered Ticket Keepsakes* run almost back to back, from October 9 at 11:05 PM to October 12 at 5:20 PM Eastern, about 65 hours in all. The first starts before the official October 10 start. The longest are [32 hours](https://www.twitch.tv/videos/2897690589), [13.5 hours](https://www.twitch.tv/videos/2896851391), [7.5 hours](https://www.twitch.tv/videos/2896644167), [7 hours](https://www.twitch.tv/videos/2898815773) and [5.4 hours](https://www.twitch.tv/videos/2897466664). Twitch may expire VODs. The team also reports streaming in the [TypeSafe Discord](https://discord.gg/typesafe), which the kickoff post invites people to join; Discord keeps no public recording, so that stream is team-reported only.
+
+**Built with Jev.** The team built with TypeSafe's Jev. In code, [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness/tree/main/src/adapters/jev) implements a Jev decision adapter and a public DecisionPort, both covered by offline contract tests. The studio and creative engine do not call it yet, and no live Jev call is recorded.
+
 ## Built by Jevelopers
 
 [Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary Wright](https://github.com/zwright8) · [@lajefahemp-collab](https://github.com/lajefahemp-collab). Brand and studio design: Lars.
