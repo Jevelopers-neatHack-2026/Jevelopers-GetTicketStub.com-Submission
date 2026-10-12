@@ -1,7 +1,7 @@
 import "server-only";
 // The storage interface. Routes and auth only talk to this, so Postgres can replace SQLite later by
 // implementing it. Every method is async for that reason, even though node:sqlite is synchronous.
-import type { Order } from "@/customer/pages/commerce";
+import type { Order, OrderPayment } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
 import type { StoredEvent, TicketstubEvent } from "./events";
 
@@ -219,6 +219,13 @@ export interface Storage {
   // orders
   createOrder(order: Order, accountId: string | null, email: string | null): Promise<void>;
   listOrders(accountId: string, email: string): Promise<Order[]>;
+  /** The order and who placed it, or null. */
+  getOrder(id: string): Promise<{ order: Order; accountId: string | null; email: string | null } | null>;
+  /**
+   * Replaces the order's payment in one transaction when `apply` returns a new one; null leaves it unchanged.
+   * Returns the order before and after, so a caller acts only on a transition it caused (a receipt sends once).
+   */
+  updateOrderPayment(id: string, apply: (order: Order) => OrderPayment | null): Promise<{ before: Order; after: Order } | null>;
 
   // shares
   /** The same owner and stub id always get the same token; the snapshot is replaced each time. */
