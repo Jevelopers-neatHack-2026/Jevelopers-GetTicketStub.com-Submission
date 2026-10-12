@@ -5,6 +5,7 @@ make no network, media, provider, form, or approval calls. Failure injections
 prove detection of missing instructions, not actual organizer acceptance.
 """
 from pathlib import Path
+import hashlib
 import re
 import unittest
 
@@ -13,7 +14,6 @@ TAGS = ('@neatlogs', '@EntireHQ', '@arithecfo')
 DOCUMENT_SECTIONS = {
     'demo/human-recording-runbook.md': '9. After the take',
     'demo/recording-checklist.md': 'Human submission handoff (after the take)',
-    'demo/narration.md': 'Current submission procedure (not narration)',
     'docs/collateral-handoff.md': 'Format and external-use boundary',
 }
 FORM_FIELDS = ('Location', 'Founder or work details', 'Neatlogs description',
@@ -141,8 +141,14 @@ class RecordingHandoffReviewTests(unittest.TestCase):
         self.assertNotIn('5 editions versus 8 new SVG templates, undecided', self.runbook)
 
     def test_rehearsal_close_is_archival_not_current_instructions(self):
-        narration = self.docs['demo/narration.md']
-        operative = section(narration, 'Current submission procedure (not narration)')
+        raw = (ROOT / 'demo/narration.md').read_bytes()
+        self.assertEqual(
+            '818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6',
+            hashlib.sha256(raw).hexdigest(),
+            'Frozen render input must remain exact; put current instructions in its companion.')
+        narration = raw.decode('utf-8')
+        operative = section(self.docs['demo/recording-checklist.md'],
+                            'Human submission handoff (after the take)')
         self.assertIn('historical', operative.lower())
         self.assertIn('scene-09-submission-gate', operative)
         # Original caption text remains exact; its synchronized media is NOT regenerated.
