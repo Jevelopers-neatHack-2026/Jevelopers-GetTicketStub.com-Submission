@@ -1,4 +1,4 @@
-# Context fixtures (`ticketstub.context/1`)
+# Context fixtures (`ticketstub.context/1` and `/2`)
 
 Sanitized, deterministic examples of the signed request context that `getticketstub.com` issues to downstream consumers (team-dashboard, cost-intelligence). No real account, email or session appears in them: every id is `*_FIXTURE_*` or `fx...`.
 
@@ -17,7 +17,7 @@ signature HMAC-SHA256(key, base64url(header) + "." + base64url(payload))
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `ticketstub.context/1`. Anything else is `unsupported_version`. |
+| `schema` | `ticketstub.context/1` for this section. `/2` is supported below; any other schema is `unsupported_version`. |
 | `actor` | `{kind:"account",id}`, `{kind:"guest",id}` or `{kind:"anonymous"}` |
 | `tenant.id` | account id, or `guest:<id>` |
 | `project` | `{kind:"stub"\|"event", id}`, when the context is for one project |
@@ -60,11 +60,11 @@ Each file is `{fixture, description, verifyAt, token, state?, expect}`. Verify a
 | `stale.json` | `stale` (state revision 4, token says 3) |
 | `revoked.json` | `revoked` (state `sessionLive: false`) |
 | `expired.json` | `expired` (issued ten minutes before `verifyAt`) |
-| `unsupported-version.json` | `unsupported_version` (schema `ticketstub.context/2`, validly signed) |
+| `unsupported-version.json` | `unsupported_version` (schema `ticketstub.context/3`, validly signed; `/1` and `/2` are known) |
 | `cross-project-a.json`, `cross-project-b.json` | ok. The same user on `stub_fx_1` and on `stub_fx_2`. A token for one must not authorize the other. |
 | `tenant-a-owner.json`, `tenant-b-owner.json` | ok. Two tenants, each owning a stub called `stub_fx_shared`. Key every lookup by tenant **and** project. |
 
-Regenerate with `node fixtures/context/generate.mjs` (deterministic). Check with `node fixtures/context/verify.mjs`.
+Run from the repository root with the [application toolchain](../../README.md#quickstart). Regenerate with `node fixtures/context/generate.mjs` (deterministic). Check with `node fixtures/context/verify.mjs`, which needs no installed dependencies.
 
 ## How a consumer verifies
 
@@ -117,6 +117,13 @@ Finance grants: `finance.read`, `finance.export`, `finance.command.budget_change
 
 `finance-trusted-scope.schema.json` is a vendored copy of Finance's `TrustedScopeSchema` (the source commit is in its `$comment`). `tests/finance-context.test.mjs` checks every fixture row's adapter scope against it, always. With `FINANCE_CONSUMER_DIR=<a cost-intelligence checkout with node_modules>` it also runs the consumer's own TypeBox `Value.Check` on every scope, checks that the naive prefixed scope is rejected, and fails if the vendored file has drifted. If the variable is set and the checkout cannot be loaded, the test fails: skipping is failure.
 
-`verify.mjs` and the server run the same shape rules. `tests/finance-context.test.mjs` requires identical answers on every malformed input, and `npm run verify:product -- --suite finance-context` posts the same corpus to `POST /api/context/verify` on a running server and compares. To select a project: `GET /api/context?v=2&project=event:<id>` with the user's session. The server proves the selection from its own records, and a project the caller does not hold is a `404`. `POST /api/context/verify` accepts `{token, audience?}` and re-checks session, project membership, revision, audience and modes at that moment.
+`verify.mjs` and the server run the same shape rules. `tests/finance-context.test.mjs` requires identical answers on every malformed input. The product suite posts the same corpus to `POST /api/context/verify` on its isolated production-build fixture server and compares. After installing the application dependencies, run from the repository root:
+
+```sh
+npm run build
+npm run verify:product -- --suite finance-context --mode fixture --evidence-dir out/evidence
+```
+
+To select a project: `GET /api/context?v=2&project=event:<id>` with the user's session. The server proves the selection from its own records, and a project the caller does not hold is a `404`. `POST /api/context/verify` accepts `{token, audience?}` and re-checks session, project membership, revision, audience and modes at that moment.
 
 `corpus.mjs` holds the malformed corpus as data, so each caller signs it with its own key. Regenerate with `node fixtures/context/generate.mjs`; check with `node fixtures/context/verify.mjs`.
