@@ -24,6 +24,54 @@ test('public canonical port traverses actual JEV wire transport and owner valida
   contracts.validateDecisionResult(input.request, result, { trustedScope: input.scope });
 });
 
+test('actual owner admission helper binds an unreserved request to its later canonical reservation', async t => {
+  const { port, input } = setup(); const network = intercept(t);
+  const unreserved = structuredClone(input.request);
+  delete unreserved.budget_ref.reservation_ref;
+  assert.throws(() => contracts.validateDecisionRequest(unreserved, { trustedScope: input.scope }));
+  const admitted = contracts.decisionExecutionTargetHash(unreserved, { trustedScope: input.scope });
+  assert.equal(network.writes, 0);
+  assert.equal(admitted, contracts.decisionExecutionTargetHash(input.request));
+  input.target_binding_sha256 = admitted;
+  const result = await port.execute(input);
+  assert.equal(result.status, 'complete'); assert.equal(network.writes, 1);
+});
+
+test('owner target rejects post-admission mutations in every material execution field', async t => {
+  const network = intercept(t);
+  for (const mutate of [
+    input => { input.request.state.text = 'A different synthetic state.'; },
+    input => { input.request.questions.layout.instructions = 'A different bounded question.'; },
+    input => { input.request.questions.layout.policy.minimum_confidence = 0.8; },
+    input => { input.request.source_refs = ['changed-source-fixture']; },
+    input => { input.request.event_id = 'changed-event-fixture'; },
+    input => { input.request.request_id = 'changed-request-fixture'; },
+    input => { input.request.deadline_at = input.deadline_at = '2026-10-12T15:00:04.000Z'; },
+    input => { input.request.budget_ref.policy_version = input.attempt.budget.policy_version = 'budget-policy/2'; },
+  ]) {
+    const { port, input } = setup(); mutate(input);
+    await assert.rejects(port.execute(input), error => error.code === 'DISPATCH_BINDING_INVALID');
+  }
+  assert.equal(network.dns, 0); assert.equal(network.writes, 0);
+});
+
+test('reservation exclusion from admission hash does not bypass the final actual reservation binding', async t => {
+  const { port, input } = setup(); const network = intercept(t);
+  const admitted = input.target_binding_sha256;
+  input.request.budget_ref.reservation_ref = 'different-reservation-fixture';
+  assert.equal(contracts.decisionExecutionTargetHash(input.request), admitted);
+  await assert.rejects(port.execute(input), error => error.code === 'DISPATCH_BINDING_INVALID');
+  assert.equal(network.dns, 0); assert.equal(network.writes, 0);
+});
+
+test('unsupported chained decisions reject at route selection before owner reservation or transport', async t => {
+  const { port, input } = setup(); const network = intercept(t);
+  assert.throws(() => port.resolveRoute({ scope: input.scope, actor_id: input.actor_id,
+    decision: { execution_mode: 'sequential', state: input.request.state, questions: input.request.questions } }),
+  error => error.code === 'INVALID_REQUEST');
+  assert.equal(network.dns, 0); assert.equal(network.writes, 0);
+});
+
 test('missing, placeholder, subscription-only and stale eligibility configurations reject safely', () => {
   const base = { apiKey: API_KEY, environment: 'test', eligibility: eligibility(), contracts, clock: () => NOW };
   for (const apiKey of [undefined, '', 'changeme', 'your-api-key', '<secret>']) {

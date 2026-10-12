@@ -56,6 +56,8 @@ policy cannot consume the admitted grant. No placeholder reservation is used.
 
 `execute` accepts the exact consumer attempt/reservation/dispatch context, one
 independent question batch, and `attempt_number: 1` / `attempt_limit: 1`.
+Route selection rejects unsupported sequential decisions before the consumer can
+reserve for a request this single-batch port cannot execute.
 Dependencies require a later owner-managed operation; this executor cannot
 silently send additional billable batches. The request, attempt, scope, model,
 environment, billing mode, reservation, and target must agree. The transport
@@ -109,6 +111,22 @@ package. Tests intercept native DNS/HTTPS while invoking the real transport and
 actual owner validators. They make no provider request and establish no live
 account eligibility. Application tests must also traverse the actual CE API,
 durable storage, Finance adapter, and recovery path with its tested component pins.
+
+The focused harness assembly pins creative-engine
+`6831f02fa86a670b592cb7fbaa391d1b8d542cee` through its exact source archive and
+lockfile SHA-512 integrity. A fresh npm cache installation verified that archive
+and matched the owner helper, declarations, API/runtime and C03 source hashes.
+The actual `decisionExecutionTargetHash` is used in every public-port test;
+there is no substitute target-hash callback. The complete returned port is
+structurally assigned to `CreativeRuntimePorts["decisionPort"]` in strict
+TypeScript, including the admitted target and synchronous owner fence.
+
+At this component pin, the focused suite passes 27 tests and the full owned
+runtime regression passes 443 tests, both with zero skips. `make check` passes.
+The admission tests cover an unreserved owned target, the later complete
+reservation envelope, material post-admission mutation rejection and the final
+reservation binding. These are intercepted component checks, not administrator
+eligibility, actual Finance SQL integration, live inference, or deployed evidence.
 
 Deploy compatible CE target preparation, this harness port, and application
 composition together before enabling the TypeSafe route. The deployment manifest

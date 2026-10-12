@@ -164,7 +164,8 @@ export function createJevDecisionPort(options) {
       const binding = fields(input, ['scope', 'actor_id', 'decision'], [], 'DISPATCH_BINDING_INVALID');
       const scope = data(binding.scope, 'DISPATCH_BINDING_INVALID');
       if (!ref(scope.tenant_id) || !ref(scope.project_id) || !ref(binding.actor_id)) fail('DISPATCH_BINDING_INVALID');
-      data(binding.decision);
+      const decision = fields(data(binding.decision), ['execution_mode', 'state', 'questions'], [], 'INVALID_REQUEST');
+      if (decision.execution_mode !== 'independent_batch') fail('INVALID_REQUEST');
       checkEligibility();
       return route;
     },

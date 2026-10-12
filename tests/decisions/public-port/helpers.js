@@ -2,18 +2,15 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import https from 'node:https';
 import { Resolver } from 'node:dns/promises';
-import { canonicalHash } from 'creative-engine/contracts';
-import { validateDecisionRequest, validateDecisionResult } from 'creative-engine/contracts/decision-port/v1';
+import { validateDecisionRequest, validateDecisionResult, decisionExecutionTargetHash } from 'creative-engine/contracts/decision-port/v1';
 import { validateMeteredAttempt } from 'creative-engine/contracts/metering';
 import { createJevDecisionPort } from '@jevelopers/agent-harness-runtime/decisions';
 import '../jev-adapter.contract/network-guard.js';
 
 export const NOW = Date.parse('2026-10-12T15:00:00.000Z');
 export const API_KEY = 'synthetic-intercepted-key';
-// Until the owning CE target helper lands, this callback is only an injected
-// canonical-owner hash in unit tests. Host admission tests use the actual helper.
 export const contracts = { validateDecisionRequest, validateDecisionResult, validateMeteredAttempt,
-  decisionExecutionTargetHash: canonicalHash };
+  decisionExecutionTargetHash };
 
 export function eligibility() {
   return { provider: 'typesafe', model: 'jev-1.13.0', environment: 'test', accountRef: 'account-fixture',
