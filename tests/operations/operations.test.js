@@ -5198,6 +5198,27 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
     const deadlineObservedAt = performance.now();
     assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+    let runnerStopped = false;
+    const runnerStopDeadline = Date.now() + 1_000;
+    while (Date.now() < runnerStopDeadline) {
+      const runnerState = spawnSync('ps', ['-o', 'stat=', '-p', String(runnerPid)], { encoding: 'utf8' });
+      if (runnerState.status === 0 && /^T/u.test(runnerState.stdout.trim())) {
+        runnerStopped = true;
+        break;
+      }
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+    }
+    assert.equal(runnerStopped, true, 'The owned runner must be stopped before its durable checkpoint is sampled.');
+    const pausedDb = new DatabaseSync(deadlineDir.databasePath, { readOnly: true });
+    const checkpointAtPause = pausedDb.prepare(`
+      SELECT f.checkpoint_sequence, c.sequence, c.payload_json, c.sha256
+      FROM workflows f JOIN workflow_checkpoints c
+        ON c.workflow_id = f.workflow_id AND c.sequence = f.checkpoint_sequence
+      WHERE f.workflow_id = ?
+    `).get(accepted.workflowId);
+    pausedDb.close();
+    assert.ok(checkpointAtPause);
+    assert.equal(Number(checkpointAtPause.checkpoint_sequence), Number(checkpointAtPause.sequence));
     const leaseDb = new DatabaseSync(deadlineDir.databasePath);
     leaseDb.prepare('UPDATE workflows SET lease_expires_ms = 0 WHERE workflow_id = ?').run(accepted.workflowId);
     leaseDb.close();
@@ -5225,7 +5246,14 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 1);
     assert.equal(Number(raw.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes) > 0, true);
     assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(accepted.workflowId).count), 0);
-    assert.equal(checkpoint.sequence, 1);
+    assert.equal(checkpoint.sequence, workflow.checkpointSequence);
+    const checkpointAfterPark = raw.prepare(`
+      SELECT f.checkpoint_sequence, c.sequence, c.payload_json, c.sha256
+      FROM workflows f JOIN workflow_checkpoints c
+        ON c.workflow_id = f.workflow_id AND c.sequence = f.checkpoint_sequence
+      WHERE f.workflow_id = ?
+    `).get(accepted.workflowId);
+    assert.deepEqual({ ...checkpointAfterPark }, { ...checkpointAtPause });
     raw.close();
     reopened.close();
   });
