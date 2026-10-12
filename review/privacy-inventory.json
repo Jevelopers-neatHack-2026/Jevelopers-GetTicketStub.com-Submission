@@ -1,0 +1,42 @@
+{
+  "schema": "ticketstub.privacy-inventory/1",
+  "analytics": "deferred",
+  "ownerRoles": [
+    "Product and frontend",
+    "Finance and reliability"
+  ],
+  "auditedSourceRevision": "960d6684e1c251796c5d6115446e5968c2570a5f",
+  "executableScriptSha256": [
+    "ac092b43f3579eafe734c19867999511a73d0226010823783b3b9f44068341ec",
+    "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
+  ],
+  "resourceLinks": [
+    "https://fonts.googleapis.com",
+    "https://fonts.gstatic.com",
+    "https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Abril+Fatface&family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter+Tight:wght@400..700&display=swap"
+  ],
+  "scriptSources": [
+    "https://cdn.jsdelivr.net/npm/motion@11.11.17/dist/motion.js"
+  ],
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  },
+  "studioUrl": "https://gvk66o79l1.c38.airoapp.ai/",
+  "reviewStatus": "PENDING",
+  "styleSha256": [
+    "a4a477526673b7cbb466775e39698516d7867f308f9c94fd1f243e5ffe190c75",
+    "8e182d4de3bbdd7b6277089321c8a804c346f6cd8363d17e461b1b1e491acb3d"
+  ],
+  "markupTagsSha256": "2bbcfc3c39f8671bfdd8ce906ca863f46698cf69340f0459062e548f561e3ecc",
+  "scriptTagsSha256": [
+    "9dd69297ac344fd1e671b9a35840de9829937c6a9b43e06b6b4cf615b2bf26ce",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "a3b20d7b7c52893a734f14955a3cbc9a9c96698d45228b784f23e067e8e61b75",
+    "12d6f65341d777d577c0364181f255c546131ea2f7d34b676b625ceb46441f69"
+  ],
+  "styleTagsSha256": [
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  ]
+}
