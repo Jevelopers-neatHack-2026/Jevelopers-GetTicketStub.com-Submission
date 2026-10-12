@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { sanitizedJson } from './receipt.mjs';
 import { randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
@@ -52,7 +53,7 @@ export async function createScenario(id) {
     },
     async close() {
       try {
-        await writeFile(join(evidence, `${id}.json`), sanitizeOutput(`${JSON.stringify({ id, authority: 'synthetic-owner-fixtures', trace }, null, 2)}\n`, secrets));
+        await writeFile(join(evidence, `${id}.json`), `${sanitizedJson({ id, authority: 'synthetic-owner-fixtures', trace }, text => sanitizeOutput(text, secrets))}\n`);
       } finally { await pool.end(); }
     },
   };

@@ -33,6 +33,9 @@ The output directory must not already exist. Use a disposable source checkout;
 an isolated HOME and npm cache and passes only explicit environment variables
 to children. The workflow uploads sanitized receipts for 30 days, including
 failures. HOME/cache contents and generated credentials are excluded.
+Diagnostic string values are sanitized before JSON serialization; the owner's
+text sanitizer is not applied to serialized JSON delimiters. Evaluator custody
+records actual file hashes and requires a clean working tree before execution.
 
 The producer's unchanged `scripts/with-postgres.mjs` accepts fixed named suites
 only, with no external-test callback. The evaluation-owned `container.mjs` and

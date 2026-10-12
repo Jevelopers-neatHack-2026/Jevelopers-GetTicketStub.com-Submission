@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createContainer } from './container.mjs';
 import { prepareDatabase } from './database.mjs';
 import { verifySource, buildSource, fileManifest, recordEvaluator } from './custody.mjs';
-import { expectedFiles, expectedCases, validateReceipt } from './receipt.mjs';
+import { expectedFiles, expectedCases, validateReceipt, sanitizedJson } from './receipt.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const [sourceArg, outputArg] = process.argv.slice(2);
@@ -28,9 +28,9 @@ try {
   for (const key of Object.keys(process.env)) assert.ok(!/^(CI_TEST_DB|CI_TEST_DATABASE_URL|PGHOST|PGPORT|PGUSER|PGPASSWORD|PGDATABASE|DATABASE_URL)/.test(key), `External database environment rejected: ${key}`);
   await recordEvaluator(here, output);
   await verifySource(source, pin, output);
-  await buildSource(source, { pin, output, environment });
   const ownerSanitizer = await import(pathToFileURL(join(source, 'scripts/sanitize.mjs')));
   sanitize = text => ownerSanitizer.sanitizeOutput(text, [...container.secrets, ...(database?.secrets ?? [])]);
+  await buildSource(source, { pin, output, environment, sanitize });
   const connection = container.start();
   database = await prepareDatabase(source, pin, connection);
   receipt.database = database.receipt;
@@ -40,7 +40,7 @@ try {
   for (const file of expectedFiles) {
     const result = runTestFile(join(here, file), { cwd: here, env: testEnvironment, timeoutMs: 120000 });
     receipt.tests.push({ file, result });
-    await writeFile(join(output, `${file}.result.json`), sanitize(JSON.stringify(result, null, 2)));
+    await writeFile(join(output, `${file}.result.json`), sanitizedJson(result, sanitize));
     assert.equal(result.passed, true, `Actual public scenario failed: ${file}`);
   }
   for (const id of expectedCases) {
@@ -49,7 +49,7 @@ try {
     assert.equal(parsed.id, id);
     assert.equal(parsed.authority, 'synthetic-owner-fixtures');
     assert.ok(parsed.trace.length > 0);
-    await writeFile(join(output, `${id}.json`), sanitize(body));
+    await writeFile(join(output, `${id}.json`), sanitizedJson(parsed, sanitize));
   }
   receipt.cases = expectedCases;
   await verifySource(source, pin, output);
@@ -66,7 +66,7 @@ try {
     try { validateReceipt(receipt, pin); }
     catch (error) { receipt.status = 'failed'; receipt.validationError = String(error); process.exitCode = 1; }
   }
-  await writeFile(join(output, 'receipt.json'), sanitize(JSON.stringify(receipt, null, 2)));
+  await writeFile(join(output, 'receipt.json'), sanitizedJson(receipt, sanitize));
   const artifacts = (await fileManifest(output)).filter(row => !row.path.startsWith('home/'));
   await writeFile(join(output, 'artifacts.json'), JSON.stringify(artifacts, null, 2));
   console.log(`Finance component ${receipt.status}; receipt: ${join(output, 'receipt.json')}`);

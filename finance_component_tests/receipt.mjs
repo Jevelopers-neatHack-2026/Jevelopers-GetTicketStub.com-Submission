@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 export const expectedFiles = ['admission.test.mjs', 'intake.test.mjs', 'recovery.test.mjs'];
 export const expectedCases = ['admission', 'lifecycle-unavailable', 'unknown-intake', 'scope-isolation', 'covered-intake', 'recovery'];
 
+export function sanitizedJson(value, sanitize) {
+  return JSON.stringify(value, (_key, item) => typeof item === 'string' ? sanitize(item) : item, 2);
+}
+
 export function validateReceipt(receipt, pin) {
   assert.equal(receipt.kind, 'synthetic-issuer-component-development');
   assert.equal(receipt.source, pin.revision);
