@@ -101,6 +101,10 @@ uv run basedpyright -p pyrightconfig.stdlib.json
 uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
 ```
 
+The workflow security regressions in `tests/test_entire_graph_workflow_security.py`
+use Python 3.10+ annotations and receive the strict package checks above. They also
+run as standalone stdlib unittests on Python 3.11 in the evidence-audit workflow.
+
 Ruff checks project Python source and tests. Its five exact exclusions in `pyproject.toml`
 are the dated CFO.ai capture scripts under `evidence/cfo-ai/2026-10-11/` and
 `evidence/cfo-ai/2026-10-11-r2/`. These accepted evidence inputs remain byte-for-byte
@@ -145,9 +149,10 @@ runner observations, isolation, evidence, benchmarks, reruns, and remaining obli
 python3 tools/audit_evidence.py
 python3 -m unittest -v tests.test_audit_evidence
 python3 -m unittest -v tests.test_rerun_report
+python3 -m unittest -v tests.test_entire_graph_workflow_security
 ```
 
-These stdlib-only checks (Python 3.11+, no package install) run separately from the Python 3.13 package suite above (`uv run pytest`). They cover evidence **integrity only** (for example, files and checksums). They do not promote any criterion to accepted or verified and are not acceptance evidence.
+These stdlib-only checks (Python 3.11+, no package install) run separately from the Python 3.13 package suite above (`uv run pytest`). They check evidence integrity (for example, files and checksums) and workflow trust configuration. They do not promote any criterion to accepted or verified and are not acceptance evidence.
 
 ## What's here
 
@@ -167,6 +172,8 @@ Other repositories link their `docs/architecture/ACCEPTANCE.md` views to this ch
 
 - [Acceptance checklist](planning/acceptance-checklist.md) and [JSON tracker](planning/acceptance-checklist.json)
 - [Evidence index](evidence/README.md) · [Evidence audit](docs/evidence-audit.md)
+- [Evaluator evidence index and local reviews](docs/evidence-index.md)
+- [Preserved runner history and safe evaluation diagnostics](docs/safe-reruns-runner.md)
 - [Ownership](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md)
 - [Architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
 - [Acceptance evidence standard](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/standards/acceptance-evidence.md)

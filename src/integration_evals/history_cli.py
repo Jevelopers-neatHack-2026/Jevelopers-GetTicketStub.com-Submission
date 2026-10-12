@@ -12,6 +12,7 @@ from integration_evals.benchmark_history import BenchmarkHistory, save_benchmark
 from integration_evals.benchmarks import Corpus, Sample
 from integration_evals.comparison_archive import load_comparisons
 from integration_evals.diagnostics import replay_comparisons
+from integration_evals.evidence_index import EvidenceIndex
 from integration_evals.history import History, summarize_history
 from integration_evals.history_archive import load_history, save_history
 from integration_evals.models import Suite
@@ -37,9 +38,20 @@ def replay_evaluation(archive: Path, suite: Path | None = None) -> None:
     )
     updated = History(runs=(*history.runs, diagnostic), quarantines=history.quarantines)
     tracker = load_record(Path("planning/acceptance-checklist.json"), Tracker)
-    destination = save_history(updated, archive.parent, tracker, trusted, original)
     requirements = load_record(Path("planning/requirements.json"), Requirements)
-    export_audit(audit(updated, tracker, requirements, trusted), destination / "release-audit.json")
+    destination = save_history(
+        updated, archive.parent, tracker, trusted, original, requirements=requirements
+    )
+    export_audit(
+        audit(
+            updated,
+            tracker,
+            requirements,
+            trusted,
+            evidence_index=load_record(destination / "evidence-index.json", EvidenceIndex),
+        ),
+        destination / "release-audit.json",
+    )
     typer.echo(str(destination))
     raise typer.Exit(2)
 

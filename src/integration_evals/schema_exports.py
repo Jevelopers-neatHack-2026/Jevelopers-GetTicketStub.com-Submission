@@ -8,6 +8,7 @@ from integration_evals.benchmark_receipts import BenchmarkReceipt
 from integration_evals.benchmarks import Corpus, Sample
 from integration_evals.comparison_archive import ComparisonBundle
 from integration_evals.contract_records import ContractPin, ContractReceipt, ContractRuntime
+from integration_evals.evidence_index import EvidenceIndex, Reviews
 from integration_evals.history import CaseHistory, History, Quarantine
 from integration_evals.history_archive import Successor
 from integration_evals.models import Assembly, Catalog, Evidence, Run, Selection, Suite
@@ -46,6 +47,8 @@ def schemas(destination: Path) -> None:
         CaseHistory,
         Successor,
         ComparisonBundle,
+        EvidenceIndex,
+        Reviews,
     )
     for model in models:
         with (destination / f"{model.__name__}.schema.json").open("w", encoding="utf-8") as output:
