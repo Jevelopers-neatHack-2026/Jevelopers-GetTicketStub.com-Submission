@@ -566,7 +566,7 @@ test("CE09 acceptance case 4 persists cumulative root limits across restart and 
   assert.equal(repaired1.result.inspection_repair.source_report_hash, canonicalHash(inspected.result.report));
   assert.equal(counters.provider, 2, "repair uses the existing normal edit provider path once");
   assert.equal(counters.reserved, 5);
-  const state = activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const state = await activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: original.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(state.repairs_used, 1);
   assert.equal(state.simulated_units_used, 1);
@@ -597,7 +597,7 @@ test("CE09 acceptance case 4 persists cumulative root limits across restart and 
   assert.equal(repaired2.result.design_version.parent_version_id, design1.design_version_id);
   assert.equal(counters.provider, 3);
   assert.equal(counters.reserved, 9, "second inspect adds three attempts and second repair adds one");
-  const finalState = activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const finalState = await activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: original.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(finalState.repairs_used, 2);
   assert.equal(finalState.remaining_repairs, 0);
@@ -1074,7 +1074,7 @@ test("a repair claim's root deadline prevents a reservation after an awaited rou
   assert.deepEqual({ reserved: counters.reserved, provider: counters.provider }, before,
     "a route lookup that reaches the cumulative root deadline cannot reserve or dispatch the edit");
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1);
-  const state = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const state = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(state.repairs_used, 1, "the serialized root claim remains counted after the stopped attempt");
 });
@@ -1157,11 +1157,83 @@ test("a repair claim's root deadline blocks the final send permit after the awai
   const job = store.db.prepare("SELECT status,result_json FROM creative_jobs WHERE action_id=?").get(body.action_id);
   assert.notEqual(job.status, "completed");
   assert.equal(job.result_json, null);
-  const claim = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const claim = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(claim.repairs_used, 1, "the failed attempt remains included in cumulative root accounting");
   assert.equal(store.db.prepare(`SELECT status,result_hash FROM creative_inspection_action_v2 WHERE action_id=?`)
     .get(body.action_id).status, "claimed");
+});
+
+test("principal expiry during the queued repair read blocks the final send permit", async (t) => {
+  let currentNow = NOW;
+  const system = await setupInspectionSystem(t, { now: () => currentNow, recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("repair-queued-read-expiry-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("repair-queued-read-expiry-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+
+  const claimReadEntered = deferred();
+  const releaseClaimRead = deferred();
+  t.after(() => releaseClaimRead.resolve());
+  const durableRepairPort = ports.storage.inspectionRepair;
+  let acknowledged = false;
+  let heldClaimRead = false;
+  ports.storage.inspectionRepair = Object.freeze({
+    ...durableRepairPort,
+    async isClaimCurrent(input) {
+      const result = await durableRepairPort.isClaimCurrent(input);
+      if (acknowledged && !heldClaimRead) {
+        heldClaimRead = true;
+        claimReadEntered.resolve();
+        await releaseClaimRead.promise;
+      }
+      return result;
+    },
+  });
+  const recordTransportAttempt = ports.metering.recordTransportAttempt.bind(ports.metering);
+  ports.metering.recordTransportAttempt = async (input) => {
+    const result = await recordTransportAttempt(input);
+    acknowledged = true;
+    return result;
+  };
+  let providerSendPermits = 0;
+  const edit = ports.provider.edit;
+  ports.provider.edit = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    providerSendPermits += 1;
+    return edit({ ...input, recordTransportAttempt: async () => {} });
+  };
+
+  currentNow = NOW + 29_000;
+  const expiresAt = new Date(NOW + 30_000).toISOString();
+  const body = await repairEditRequest("repair-queued-read-expiry-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const before = { provider: counters.provider, reserved: counters.reserved,
+    acknowledgments: counters.financeTransportIds.length };
+  let pending;
+  try {
+    pending = api.invoke({ ...actor(), expires_at: expiresAt }, body);
+    await claimReadEntered.promise;
+    currentNow = NOW + 31_000;
+    releaseClaimRead.resolve();
+    const result = await pending;
+    assert.equal(heldClaimRead, true, "the test holds the actual same-database repair proof read after C03 ACK");
+    assert.equal(acknowledged, true, "the transport acknowledgment remains attributable before expiry is checked");
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.equal(result.error.code, "cancelled");
+    assert.equal(providerSendPermits, 0, "expired principal authority never reaches the provider send permit");
+    assert.equal(counters.provider, before.provider);
+    assert.equal(counters.reserved, before.reserved + 1);
+    assert.equal(counters.financeTransportIds.length, before.acknowledgments + 1);
+    assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1);
+    assert.equal(store.getCurrentDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id }).design_version_id,
+      design.design_version_id);
+  } finally {
+    releaseClaimRead.resolve();
+  }
 });
 
 test("repair outcome, immutable child, selection, and job result roll back when publication crosses the root deadline", async (t) => {
@@ -1612,7 +1684,7 @@ test("cancelled repair dispatch keeps its root claim and usage evidence but cann
     .get(repairBody.action_id);
   assert.deepEqual({ ...repairAction }, { status: "claimed", result_hash: null },
     "cancellation leaves the cumulative root claim consumed without recording a publishable outcome");
-  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const rootState = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(rootState.repairs_used, 1);
   assert.equal(counters.reserved, 5, "cancellation does not retry or add a repair reservation");
@@ -1648,7 +1720,7 @@ test("repair output is held when its job lease expires after transport ACK but b
   assert.equal(job.result_json, null);
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions WHERE creation_job_id=(SELECT job_id FROM creative_jobs WHERE action_id=?)")
     .get(body.action_id).count, 0, "expired lease blocks immutable child publication");
-  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const rootState = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(rootState.repairs_used, 1, "the claim stays counted while the lease-lost result is not published");
   const usage = store.db.prepare(`SELECT status,payload_json FROM creative_telemetry_observations_v1
@@ -1674,7 +1746,7 @@ test("concurrent actual API repair requests serialize against the shared two-rep
   const responses = await Promise.all(requests.map((body) => api.invoke(actor(), body)));
   assert.ok(responses.every((response) => response.ok || ["stale_version", "review_required", "unavailable"]
     .includes(response.error?.code)), JSON.stringify(responses));
-  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+  const rootState = await ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.ok(rootState.repairs_used <= 2);
   assert.ok(rootState.simulated_units_used <= 3);
@@ -3463,6 +3535,191 @@ test("SQLite outbox writes wait behind held branch publication and preserve prov
     const identity = separateConnection ? "two-connections" : "one-connection";
     await exercisePair({ separateConnection, overlap: true, label: `f1-overlap-${identity}` });
     await exercisePair({ separateConnection, overlap: false, label: `f1-control-${identity}` });
+  }
+});
+
+for (const separateConnection of [false, true]) for (const overlap of [false, true]) {
+  test(`public inspection waits through explicit-parent publication (separateConnection=${separateConnection}, overlap=${overlap})`, async (t) => {
+    // This is a fixture-only API composition using generated valid PNG bytes and injected offline adapters.
+    const root = await mkdtemp(join(tmpdir(), "creative-inspection-publication-admission-"));
+    t.after(async () => rm(root, { recursive: true, force: true }));
+    const databasePath = join(root, "versions.sqlite");
+    const objectRoot = join(root, "objects");
+    const storeA = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+    t.after(() => storeA.close());
+    const storeB = separateConnection
+      ? new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW }) : storeA;
+    if (storeB !== storeA) t.after(() => storeB.close());
+    storeA.putBrief({ scope: SCOPE, brief: await fixture("brief") });
+
+    let id = 0;
+    const countersA = { provider: 0, reserved: 0 };
+    const countersB = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+    const portsA = portsFor(storeA, countersA, () => `inspection-admission-a-port-${++id}`,
+      { artifactBytes: Buffer.from(makePng(16, 16)) });
+    const apiA = createCreativeApi({ ports: portsA, now: () => NOW,
+      idFactory: () => `inspection-admission-a-api-${++id}` });
+    const seeded = await apiA.invoke(actor(), request("inspection-admission-seed", await fixture("generate-plan")));
+    assert.equal(seeded.ok, true, JSON.stringify(seeded));
+    const parent = seeded.result.design_version;
+
+    const portsB = attachInspectionPorts(portsFor(storeB, countersB,
+      () => `inspection-admission-b-port-${++id}`), countersB);
+    const artifactEntered = deferred();
+    const artifactRelease = deferred();
+    const publicationEntered = deferred();
+    const publicationRelease = deferred();
+    const repairReadEntered = deferred();
+    t.after(() => {
+      artifactRelease.resolve();
+      publicationRelease.resolve();
+    });
+
+    // Hold inspection after its SQLite artifact read has released the queue.
+    // This lets the unrelated branch publication become the active writer.
+    const readArtifactBytes = portsB.storage.getArtifactBytes;
+    portsB.storage.getArtifactBytes = async (...args) => {
+      const result = await readArtifactBytes(...args);
+      artifactEntered.resolve();
+      await artifactRelease.promise;
+      return result;
+    };
+    const durableRepairPort = portsB.storage.inspectionRepair;
+    portsB.storage.inspectionRepair = Object.freeze({
+      ...durableRepairPort,
+      async startInspection(input) {
+        repairReadEntered.resolve();
+        return durableRepairPort.startInspection(input);
+      },
+    });
+
+    const commitPrepared = portsA.storage.commitPreparedDesignVersion;
+    portsA.storage.commitPreparedDesignVersion = async (...args) => {
+      publicationEntered.resolve();
+      await publicationRelease.promise;
+      return commitPrepared(...args);
+    };
+    const apiB = createCreativeApi({ ports: portsB, now: () => NOW,
+      idFactory: () => `inspection-admission-b-api-${++id}` });
+    const inspectBody = inspectionRequest("inspection-admission-public-inspect", parent.design_version_id);
+    let pendingB;
+    let inspectionSettled = false;
+    let pendingA;
+    try {
+      pendingB = apiB.invoke({ ...actor(), permissions: [...actor().permissions, "creative.inspect"] }, inspectBody);
+      pendingB.then(() => { inspectionSettled = true; }, () => { inspectionSettled = true; });
+      await artifactEntered.promise;
+
+      const plan = await fixture("edit-plan");
+      plan.base = { brief_hash: parent.brief_hash, design_hash: parent.design_hash,
+        design_version_id: parent.design_version_id };
+      for (const step of plan.steps) {
+        if (step.parameters.design_version_id !== undefined) step.parameters.design_version_id = parent.design_version_id;
+        if (step.parameters.artifact_id !== undefined) step.parameters.artifact_id = parent.artifact.artifact_id;
+      }
+      plan.expected_result.parent_version_id = parent.design_version_id;
+      const editBody = { ...request("inspection-admission-explicit-parent-edit", plan), operation: "edit",
+        payload: { brief_id: SCOPE.brief_id, design_version_id: parent.design_version_id,
+          selection_mode: "branch", plan } };
+      pendingA = apiA.invoke(actor(), editBody);
+      await publicationEntered.promise;
+      assert.equal(storeA.db.isTransaction, true, "A holds its real publication transaction at the barrier");
+
+      if (overlap) {
+        artifactRelease.resolve();
+        await repairReadEntered.promise;
+        await Promise.resolve();
+        assert.equal(inspectionSettled, false,
+          "B waits behind the held publication instead of failing on a borrowed transaction or SQLite busy timeout");
+        publicationRelease.resolve();
+      } else {
+        // Positive control: finish A before B reaches inspection admission.
+        publicationRelease.resolve();
+        const completedA = await pendingA;
+        assert.equal(completedA.ok, true, JSON.stringify(completedA));
+        artifactRelease.resolve();
+      }
+
+      const [resultA, resultB] = await Promise.all([pendingA, pendingB]);
+      assert.equal(resultA.ok, true, JSON.stringify(resultA));
+      assert.equal(resultB.ok, true, JSON.stringify(resultB));
+      assert.equal(countersA.provider, 2, "seed and explicit-parent edit each dispatch exactly once");
+      assert.equal(countersB.inspection, 1, "inspection runs exactly once after admission");
+      assert.equal(countersB.reserved, 3, "the fixture observer and two decision stages each reserve once");
+      assert.equal(countersB.decision, 2, "the fixture inspection performs both decision stages");
+      assert.equal(resultA.result.design_version.parent_version_id, parent.design_version_id);
+      const selection = storeA.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+      assert.equal(selection.design_version_id, parent.design_version_id,
+        "an explicit-parent branch publication leaves the current selection on the root");
+      assert.equal(resultB.result.report.contract, "CreativeInspectionReport");
+      assert.equal(resultB.result.report.design_version_id, parent.design_version_id);
+      assert.equal(resultB.result.report.artifact_id, parent.artifact.artifact_id);
+      assert.equal(resultB.result.report.artifact_hash, parent.artifact.content_hash);
+      assert.equal(resultB.result.report.limits.usage_completeness, "complete");
+      assert.equal(resultB.result.attempt_ids.length, 3);
+      assert.equal(resultB.result.telemetry_evidence.length, 3);
+      const storedSession = storeA.db.prepare(`SELECT status,result_json,result_hash
+        FROM creative_inspection_sessions_v1 WHERE action_id=?`).get(inspectBody.action_id);
+      assert.equal(storedSession.status, "completed");
+      assert.equal(storedSession.result_hash, canonicalHash(JSON.parse(storedSession.result_json)));
+      const usageRows = storeA.db.prepare(`SELECT status,logical_operation_id,billable_attempt_id,payload_json
+        FROM creative_telemetry_observations_v1 WHERE logical_operation_id=?`).all(inspectBody.action_id);
+      assert.equal(usageRows.length, 3);
+      assert.ok(usageRows.every((row) => row.status === "delivered" && row.logical_operation_id === inspectBody.action_id &&
+        resultB.result.attempt_ids.includes(row.billable_attempt_id) &&
+        JSON.parse(row.payload_json).attempt.billable_attempt_id === row.billable_attempt_id &&
+        JSON.parse(row.payload_json).observation.completeness === "complete"),
+      "the inspection report is supported by three complete, durably acknowledged fixture usage records");
+      assert.equal(new Set(usageRows.map((row) => row.billable_attempt_id)).size, 3,
+        "each fixture inspection stage has distinct durable attempt evidence");
+      assert.deepEqual(Buffer.from(await storeA.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+        design_version_id: resultA.result.design_version.design_version_id })), Buffer.from(makePng(16, 16)));
+      assert.equal(storeA.db.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+      assert.deepEqual(storeA.db.prepare("PRAGMA foreign_key_check").all(), []);
+    } finally {
+      artifactRelease.resolve();
+      publicationRelease.resolve();
+    }
+  });
+}
+
+test("public inspection repair admission rejects caller BEGIN and SAVEPOINT without changing either transaction", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-inspection-caller-transaction-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  const adapter = createCreativeVersionApiPorts({ store }).ports;
+  store.db.exec("CREATE TABLE caller_transaction_sentinel (value TEXT PRIMARY KEY) STRICT;");
+  store.db.prepare("INSERT INTO caller_transaction_sentinel(value) VALUES (?)").run("committed-before-test");
+  const beforeRows = store.db.prepare("SELECT count(*) AS count FROM creative_inspection_state_v1").get().count;
+  const beforeActions = store.db.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count;
+
+  for (const scenario of [
+    { name: "BEGIN", open: () => store.db.exec("BEGIN IMMEDIATE;"), close: () => store.db.exec("ROLLBACK;") },
+    { name: "SAVEPOINT", open: () => store.db.exec("SAVEPOINT caller_inspection_admission;"),
+      close: () => { store.db.exec("ROLLBACK TO caller_inspection_admission;"); store.db.exec("RELEASE caller_inspection_admission;"); } },
+  ]) {
+    scenario.open();
+    store.db.prepare("INSERT INTO caller_transaction_sentinel(value) VALUES (?)").run(`uncommitted-${scenario.name}`);
+    try {
+      assert.equal(store.db.isTransaction, true, `${scenario.name} is open before the public adapter call`);
+      await assert.rejects(adapter.storage.inspectionRepair.startInspection({ scope: { ...SCOPE,
+        design_version_id: `design-caller-${scenario.name.toLowerCase()}` }, inspection_id: `inspection-${scenario.name.toLowerCase()}`,
+        brief_hash: canonicalHash("caller transaction brief"), design_hash: canonicalHash("caller transaction design") }),
+      (error) => error instanceof VersionStoreError && error.code === "unavailable" &&
+        error.field === "inspection.transaction");
+      assert.equal(store.db.isTransaction, true, `${scenario.name} remains open after rejection`);
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM caller_transaction_sentinel").get().count, 2,
+        `${scenario.name} retains its uncommitted caller sentinel`);
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_inspection_state_v1").get().count, beforeRows);
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count, beforeActions);
+    } finally {
+      scenario.close();
+    }
+    assert.equal(store.db.isTransaction, false, `${scenario.name} cleanup closes only its caller transaction`);
+    assert.equal(store.db.prepare("SELECT count(*) AS count FROM caller_transaction_sentinel").get().count, 1,
+      `${scenario.name} rollback leaves only the previously committed sentinel`);
   }
 });
 

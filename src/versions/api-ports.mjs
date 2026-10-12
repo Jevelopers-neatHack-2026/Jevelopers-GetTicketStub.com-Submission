@@ -3,7 +3,8 @@ import { canonicalHash, canonicalSerialize } from "../contracts/index.mjs";
 import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent, creativeCompositionFenceCurrent } from "./store.mjs";
 import { applyResearchInvalidation } from "../planning/index.mjs";
 import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
-import { runSqliteDatabaseOperation, sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
+import { runSqliteDatabaseOperation, runSqliteDatabaseOperationSync,
+  sqliteDatabaseOperationIsActive, sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
 
 const OPERATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.revalidate", "composition.get", "composition.history",
   "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
@@ -196,12 +197,67 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     faultInjector !== undefined && typeof faultInjector !== "function") {
     throw new VersionStoreError("invalid_request", "adapter_options");
   }
-  const inspectionRepair = createSqliteInspectionRepairController({ database: store.db, now: store.now });
   const serial = (work) => {
     return runSqliteDatabaseOperation({ database: store.db, owner: store, work,
       identityError: () => new VersionStoreError("unavailable", "database.identity", true),
       conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true) });
   };
+  const inspectionRepairController = createSqliteInspectionRepairController({ database: store.db, now: store.now,
+    owner: store });
+  const snapshotRepairScope = (scope) => {
+    if (!record(scope) || Array.isArray(scope)) return scope;
+    return Object.freeze({ tenant_id: scope.tenant_id, project_id: scope.project_id,
+      brief_id: scope.brief_id, design_version_id: scope.design_version_id });
+  };
+  const snapshotRepairProof = (proof) => {
+    if (!record(proof) || Array.isArray(proof)) return proof;
+    return Object.freeze({ inspection_id: proof.inspection_id, action_id: proof.action_id,
+      request_hash: proof.request_hash, claim_ref: proof.claim_ref, root_brief_hash: proof.root_brief_hash,
+      root_design_hash: proof.root_design_hash, root_design_version_id: proof.root_design_version_id,
+      started_at_ms: proof.started_at_ms, deadline_at_ms: proof.deadline_at_ms,
+      simulated_units_milli: proof.simulated_units_milli, ...(proof.result_hash !== undefined ? { result_hash: proof.result_hash } : {}) });
+  };
+  const snapshotRepairInput = (input, fields) => {
+    if (!record(input) || Array.isArray(input)) return input;
+    const snapshot = {};
+    for (const field of fields) {
+      if (field === "scope") snapshot.scope = snapshotRepairScope(input.scope);
+      else if (field === "proof") snapshot.proof = snapshotRepairProof(input.proof);
+      else snapshot[field] = input[field];
+    }
+    return Object.freeze(snapshot);
+  };
+  const queueInspectionRepair = (method, fields) => (input) => {
+    let snapshot;
+    try { snapshot = snapshotRepairInput(input, fields); }
+    catch (error) { return Promise.reject(error); }
+    const identityError = () => new VersionStoreError("unavailable", "database.identity", true);
+    const transactionError = () => new VersionStoreError("unavailable", "inspection.transaction", true);
+    try {
+      // A caller-owned BEGIN/SAVEPOINT has no queue owner and must remain
+      // untouched. A publication already holding this scheduler is allowed
+      // to finish before this request enters the queue.
+      if (store.db.isTransaction === true && !sqliteDatabaseOperationIsActive(store.db, identityError)) {
+        return Promise.reject(transactionError());
+      }
+    } catch (error) { return Promise.reject(error); }
+    return serial(() => {
+      // Reentrant awaits under our own active publication would otherwise
+      // hold the SQLite writer while waiting on work queued behind itself.
+      if (store.db.isTransaction === true) throw transactionError();
+      return inspectionRepairController[method](snapshot);
+    });
+  };
+  const inspectionRepair = Object.freeze({
+    limits: inspectionRepairController.limits,
+    startInspection: queueInspectionRepair("startInspection", ["scope", "inspection_id", "brief_hash", "design_hash"]),
+    recordRepairClaim: queueInspectionRepair("recordRepairClaim", ["scope", "inspection_id", "action_id", "request_hash", "repair_action", "simulated_units"]),
+    recordRepairOutcome: queueInspectionRepair("recordRepairOutcome", ["scope", "inspection_id", "action_id", "result_hash"]),
+    recordRepairOutcomeInPublication: inspectionRepairController.recordRepairOutcomeInPublication,
+    isClaimCurrent: queueInspectionRepair("isClaimCurrent", ["scope", "proof"]),
+    cancelInspection: queueInspectionRepair("cancelInspection", ["scope", "inspection_id"]),
+    getState: queueInspectionRepair("getState", ["scope", "inspection_id"]),
+  });
 
   const storage = {
     getBrief(input) { return serial(() => store.getBrief(input)); },
@@ -778,6 +834,11 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       // callback boundary; awaiting the serialized authorizer here would
       // recreate the cancellation/lease race this check closes.
       try {
+        return runSqliteDatabaseOperationSync({ database: store.db, owner: store,
+          identityError: () => new VersionStoreError("unavailable", "database.identity", true),
+          conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true),
+          work: () => {
+        try {
         // This check must not borrow a transaction opened by another caller
         // on the shared connection. In that case the reads could observe
         // uncommitted owner state, so fail closed without touching the caller's
@@ -850,6 +911,10 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           return Object.freeze({ status: "stale_context" });
         }
         return Object.freeze({ status: "authorized", dispatch_intent_ref });
+        } catch {
+        return Object.freeze({ status: "lease_lost" });
+      }
+          } });
       } catch {
         return Object.freeze({ status: "lease_lost" });
       }

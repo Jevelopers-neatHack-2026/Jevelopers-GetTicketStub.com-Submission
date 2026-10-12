@@ -17,15 +17,10 @@ declare const plan: EditPlan;
 const client = createCreativeApi({ ports, now: () => Date.now(), idFactory: () => "consumer-id" });
 const response: Promise<CreativeApiResponse> = client.invoke(principal, request);
 const rawInspection: InspectionPortOutput = {
-  tenant_id: "tenant-typecheck",
-  project_id: "project-typecheck",
-  brief_id: "brief-typecheck",
-  design_version_id: "design-typecheck",
-  artifact_id: "artifact-typecheck",
-  artifact_hash: `sha256:${"0".repeat(64)}`,
-  design_hash: `sha256:${"1".repeat(64)}`,
-  inspection_id: "inspection-typecheck",
-  observations: [],
+  status: "complete",
+  observer: { type: "model", id: "typecheck-inspector", model_id: "fixture-vision/1.0" },
+  uncertainty: { status: "unknown", note: "not_independently_measured" },
+  findings: [],
   usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 },
 };
 const rawInspect: NonNullable<CreativeRuntimePorts["inspection"]>["inspect"] = async () => rawInspection;

@@ -123,3 +123,8 @@ export function sqliteDatabaseOperationOwnedBy(database, owner, identityError) {
   const current = scheduler.context.getStore();
   return current?.active === true && current.scheduler === scheduler && current.owner === owner;
 }
+
+/** Report whether another admitted SQLite callback currently owns this database. */
+export function sqliteDatabaseOperationIsActive(database, identityError) {
+  return schedulerFor(database, identityError).active;
+}

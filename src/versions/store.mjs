@@ -23,7 +23,8 @@ import { compositionPreviewHash, snapshotCompositionBytesRecord, snapshotComposi
   createCompositionProductionEnvelope, validateCompositionProductionEnvelope,
   validateCompositionRevision } from "../contracts/composition-authority.mjs";
 import { imageProviderRoute } from "../models/image-routes.mjs";
-import { registerSqliteDatabaseConnection, runSqliteDatabaseOperationSync } from "../sqlite/admission.mjs";
+import { registerSqliteDatabaseConnection, runSqliteDatabaseOperation, runSqliteDatabaseOperationSync,
+  sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
 
 const STORAGE_VERSION = 13;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
@@ -3844,6 +3845,13 @@ export class CreativeVersionStore {
 
   async recover() {
     this.assertOpen();
+    const identityError = () => new VersionStoreError("unavailable", "database.identity", true);
+    if (!sqliteDatabaseOperationOwnedBy(this.db, this, identityError)) {
+      return runSqliteDatabaseOperation({ database: this.db, owner: this,
+        identityError,
+        conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true),
+        work: () => this.recover() });
+    }
     if (this.db.isTransaction) reject("unavailable", "database", true);
     const pending = this.db.prepare(`SELECT tenant_id,project_id,brief_id,action_id,job_id FROM creation_actions WHERE state='commit_intent'
       ORDER BY created_at,action_id`).all();
@@ -3929,7 +3937,8 @@ export class CreativeVersionStore {
               let outcome;
               try {
                 const { result_hash: resultHash, ...unrecordedProof } = repairProof;
-                outcome = createSqliteInspectionRepairController({ database: this.db, now: this.now })
+                outcome = createSqliteInspectionRepairController({ database: this.db, now: this.now,
+                  owner: this, initializeTables: false })
                   .recordRepairOutcomeInPublication({
                     scope: { ...scope, design_version_id: repairProof.root_design_version_id },
                     inspection_id: repairProof.inspection_id, action_id: repairProof.action_id,

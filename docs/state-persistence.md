@@ -1,0 +1,9 @@
+# SQLite state persistence
+
+The paired version adapter admits inspection repairs through the same per-database write queue used by version publication, telemetry outbox writes, and recovery. Adapter calls to `startInspection`, `recordRepairClaim`, `recordRepairOutcome`, `cancelInspection`, `getState`, and `isClaimCurrent` return promises and must be awaited. The runtime awaits these operations. Injected inspection-repair ports may still implement the same operations synchronously; the public port type accepts either form so existing integrations remain valid.
+
+`recordRepairOutcomeInPublication` is synchronous by design. It records the repair result inside the active publication transaction, using the paired adapter's live owner fence. Call it only from that publication path; a direct call without the active owner is rejected. The standalone `createSqliteInspectionRepairController` also keeps its synchronous API. When another operation owns that database, standalone controller calls fail closed instead of waiting on the event loop.
+
+The adapter rejects a caller-owned `BEGIN` or `SAVEPOINT` transaction. It does not commit, roll back, or create a nested savepoint inside a transaction it does not own; rejection leaves the caller's transaction intact. Recovery joins database admission before changing repair state. Provider, Finance, and other external work must complete outside the SQLite write transaction.
+
+The admission queue coordinates writers in this process that resolve to the same SQLite database. SQLite still supplies file locking across processes; this queue alone does not qualify full public API publication and recovery across independent processes. The overlap fixtures use injected offline provider, Finance, vision, and JEV ports, plus generated valid 16x16 PNG bytes that exercise the local native decoder. They do not call live providers, use actual GPT image output, or establish target-host behavior or full-format qualification.

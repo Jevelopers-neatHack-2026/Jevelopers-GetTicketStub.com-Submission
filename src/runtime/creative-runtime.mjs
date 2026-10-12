@@ -2398,11 +2398,16 @@ export function createCreativeApi(options = {}) {
     })));
   }
 
-  function assertRepairAuthorizationCurrent(repairAuthorization, operation = "edit") {
+  async function assertRepairAuthorizationCurrent(repairAuthorization, operation = "edit") {
     if (!repairAuthorization) return true;
     const repairPort = ports.storage?.inspectionRepair;
-    if (!isRecord(repairPort) || typeof repairPort.isClaimCurrent !== "function" ||
-      !repairPort.isClaimCurrent({ scope: repairAuthorization.repairScope, proof: repairAuthorization.proof })) {
+    if (!isRecord(repairPort) || typeof repairPort.isClaimCurrent !== "function") {
+      throw new CreativeApiError("unavailable", operation, "inspection_repair.state");
+    }
+    let current;
+    try { current = await repairPort.isClaimCurrent({ scope: repairAuthorization.repairScope, proof: repairAuthorization.proof }); }
+    catch { throw new CreativeApiError("unavailable", operation, "inspection_repair.state"); }
+    if (!current) {
       throw new CreativeApiError("review_required", operation, "inspection_repair.limit");
     }
     return true;
@@ -2811,23 +2816,34 @@ export function createCreativeApi(options = {}) {
       if (currentPermissionProofs.some((proof) => proof.expires_at <= currentTime)) {
         throw new CreativeApiError("permission_denied", request.operation, "asset_permission_evidence");
       }
-      // A C03 ACK and the awaited same-database job authorization are not
-      // enough to extend an inspection repair's cumulative root lease. Re-read
-      // the durable claim synchronously after that final await, immediately
-      // before returning a permit to the adapter. An ACK already issued stays
-      // attributable and is held for reconciliation when this fence expires.
+      // The queued caller reads the durable repair claim separately, then its
+      // final synchronous job-owner fence rereads that proof before returning
+      // a permit. This local check keeps the cumulative root lease boundary
+      // explicit even when this function runs on either side of that await.
+      // An ACK already issued stays attributable if this fence expires.
       const repairProof = currentContextFence()?.inspection_repair;
       if (repairProof !== undefined) {
-        const repairScope = { ...started.scope, brief_id: request.payload.brief_id,
-          design_version_id: repairProof.root_design_version_id };
         if (!Number.isSafeInteger(repairProof.deadline_at_ms) || currentTime < repairProof.started_at_ms ||
             currentTime >= repairProof.deadline_at_ms ||
             !isRecord(ports.storage?.inspectionRepair) ||
-            typeof ports.storage.inspectionRepair.isClaimCurrent !== "function" ||
-            !ports.storage.inspectionRepair.isClaimCurrent({ scope: repairScope, proof: repairProof })) {
+            typeof ports.storage.inspectionRepair.isClaimCurrent !== "function") {
           throw new CreativeApiError("review_required", request.operation, "inspection_repair.limit");
         }
       }
+    };
+    const assertFinalDispatchEligibilityAfterOwnerAwait = async (signal) => {
+      assertFinalDispatchEligibility(signal);
+      const repairProof = currentContextFence()?.inspection_repair;
+      if (repairProof !== undefined) {
+        await assertRepairAuthorizationCurrent({
+          repairScope: { ...started.scope, brief_id: request.payload.brief_id,
+            design_version_id: repairProof.root_design_version_id },
+          proof: repairProof,
+        }, request.operation);
+      }
+      // Recheck volatile caller state after the queued read itself. The async
+      // wait may cross the deadline, abort signal, or permission-proof expiry.
+      assertFinalDispatchEligibility(signal);
     };
     const revalidateMappedDispatch = async (dispatchContext) => {
       const transportAttemptId = dispatchContext.transport_attempt_id;
@@ -2864,7 +2880,7 @@ export function createCreativeApi(options = {}) {
         throw error;
       }
       try {
-        assertFinalDispatchEligibility(dispatchContext.signal);
+        await assertFinalDispatchEligibilityAfterOwnerAwait(dispatchContext.signal);
         assertJobDispatchCurrent(principal, request, started, transportAttemptId,
           dispatchContext.attempt.billable_attempt_id, dispatchContext.reservation_ref,
           currentContextFence(), checkedRoute, expectedIntentRef);
@@ -2919,7 +2935,7 @@ export function createCreativeApi(options = {}) {
       }
       dispatchIntentRefs.set(transport_attempt_id, freshIntentRef);
       try {
-        assertFinalDispatchEligibility(signal);
+        await assertFinalDispatchEligibilityAfterOwnerAwait(signal);
         assertJobDispatchCurrent(principal, request, started, transport_attempt_id,
           billable_attempt_id, reservation_ref, currentContextFence(), checkedRoute, freshIntentRef);
       }
@@ -2993,7 +3009,7 @@ export function createCreativeApi(options = {}) {
               throw error;
             }
             try {
-              assertFinalDispatchEligibility(dispatchContext.signal);
+              await assertFinalDispatchEligibilityAfterOwnerAwait(dispatchContext.signal);
               assertJobDispatchCurrent(principal, request, started, transportId,
                 dispatchContext.attempt.billable_attempt_id, dispatchContext.reservation_ref,
                 currentContextFence(), checkedRoute, intentRef);
@@ -3119,18 +3135,18 @@ export function createCreativeApi(options = {}) {
       : (selectedDesignHash === undefined ? (baseDesign?.design_hash ?? null) : selectedDesignHash);
     await assertCurrentCreativeContext(started.scope, brief, baseDesign, request.operation,
       expectedCurrentDesignVersionId, expectedCurrentDesignHash);
-    assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
+    await assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
     const input = decisionInput(decisionRequest, principal, request, brief, started);
     const resolveRoute = requiredPort(ports, "decisionPort.resolveRoute", request.operation);
     const route = routeFor(await resolveRoute(Object.freeze({ scope: started.scope, actor_id: principal.actor_id, decision: input })), request.operation);
     await assertCurrentCreativeContext(started.scope, brief, baseDesign, request.operation,
       expectedCurrentDesignVersionId, expectedCurrentDesignHash);
-    assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
+    await assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
     if (route.provider.model !== PINNED_JEV_MODEL_ID) throw new CreativeApiError("unsupported_version", request.operation, "decision_route.model");
     const assertDecisionContext = async () => {
       await assertCurrentCreativeContext(started.scope, brief, baseDesign, request.operation,
         expectedCurrentDesignVersionId, expectedCurrentDesignHash);
-      assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
+      await assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
       return Object.freeze([]);
     };
     const result = await runMetered(principal, request, started, "jev_decision", route, "decisionPort.execute",
@@ -3268,7 +3284,7 @@ export function createCreativeApi(options = {}) {
       if (proofs.some((proof) => proof.expires_at <= checkedAt)) {
         throw new CreativeApiError("permission_denied", operation, "asset_permission_evidence");
       }
-      assertRepairAuthorizationCurrent(repairAuthorization, operation);
+      await assertRepairAuthorizationCurrent(repairAuthorization, operation);
       return proofs;
     };
     const branchMode = operation === "edit" && request.payload.selection_mode === "branch";
@@ -3692,7 +3708,7 @@ export function createCreativeApi(options = {}) {
     const repairScope = Object.freeze({ ...started.scope, brief_id: brief.brief_id,
       design_version_id: session.root_design_version_id });
     let claim;
-    try { claim = repairPort.recordRepairClaim({ scope: repairScope, inspection_id: session.result.inspection_id,
+    try { claim = await repairPort.recordRepairClaim({ scope: repairScope, inspection_id: session.result.inspection_id,
       action_id: request.action_id, request_hash: started.request_hash, repair_action: "image.edit",
       simulated_units: estimate.simulated_units }); }
     catch { throw new CreativeApiError("unavailable", "edit", "inspection_repair.claim"); }
@@ -3709,7 +3725,7 @@ export function createCreativeApi(options = {}) {
       started_at_ms: claim.started_at_ms, deadline_at_ms: claim.started_at_ms + REPAIR_LIMITS.maxElapsedMs,
       simulated_units_milli: Math.round(estimate.simulated_units * 1000) });
     const authorization = Object.freeze({ repairScope, proof });
-    assertRepairAuthorizationCurrent(authorization, "edit");
+    await assertRepairAuthorizationCurrent(authorization, "edit");
     return Object.freeze({ repairScope, inspection_id: session.result.inspection_id,
       inspection_action_id: source.inspection_action_id, source_report_hash: source.report_hash,
       root_design_version_id: session.root_design_version_id, root_design_hash: session.root_design_hash,
@@ -4456,9 +4472,9 @@ export function createCreativeApi(options = {}) {
       if (!isRecord(repairPort) || typeof repairPort.startInspection !== "function" || typeof repairPort.getState !== "function") {
         throw new CreativeApiError("unavailable", operation, "inspection.repair_state");
       }
-      repairPort.startInspection({ scope: repairScope, inspection_id: inspectionId,
+      await repairPort.startInspection({ scope: repairScope, inspection_id: inspectionId,
         brief_hash: canonicalHash(brief), design_hash: root.design_hash });
-      const repairState = repairPort.getState({ scope: repairScope, inspection_id: inspectionId });
+      const repairState = await repairPort.getState({ scope: repairScope, inspection_id: inspectionId });
       const identity = Object.freeze({ scope: Object.freeze({ ...scope, brief_id: brief.brief_id }), actor_id: principal.actor_id,
         job_id: started.job_id, action_id: request.action_id, request_hash: started.request_hash, lease_token: started.lease_token,
         brief_id: brief.brief_id, brief_hash: canonicalHash(brief), design_version_id: design.design_version_id,
@@ -4835,7 +4851,7 @@ export function createCreativeApi(options = {}) {
       }
       await assertCurrentCreativeContext(scope, brief, design, operation);
       const finalRightsProofs = await verifyInspectionAssetRights(scope, brief, assetUse, operation);
-      const state = repairPort.getState({ scope: repairScope, inspection_id: inspectionId }) ?? repairState;
+      const state = await repairPort.getState({ scope: repairScope, inspection_id: inspectionId }) ?? repairState;
       const usageCompleteness = aggregateUsageCompleteness(ownerUsageStages);
       const report = createInspectionReport({ deterministic, provider_status: providerStatus, decision,
         observations: observation ? [observation] : [], policy_version: INSPECTION_POLICY_VERSION,
@@ -4894,7 +4910,7 @@ export function createCreativeApi(options = {}) {
       if (operation === "edit" && payload.inspection_repair !== undefined) {
         repairAuthorization = await validateInspectionRepairSource(principal, request, started, brief, baseDesign);
       }
-      if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
+      if (repairAuthorization) await assertRepairAuthorizationCurrent(repairAuthorization, operation);
       const output = await runImageOperation(principal, request, started, brief, baseDesign, expectedSelection,
         repairAuthorization);
       let publicationPermissionProofs = output.permission_fence;
@@ -4961,7 +4977,7 @@ export function createCreativeApi(options = {}) {
           throw new CreativeApiError("unavailable", operation, "attempt_evidence");
         }
         publicationPermissionProofs = await refreshPermissionFence();
-        if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
+        if (repairAuthorization) await assertRepairAuthorizationCurrent(repairAuthorization, operation);
       }
       const makePublicationFence = (proofs) => creativeContextFence(brief, baseDesign, branchMode ? undefined
         : (operation === "generate" ? expectedSelection.design_version_id : (baseDesign?.design_version_id ?? null)),
@@ -4981,7 +4997,7 @@ export function createCreativeApi(options = {}) {
       }
       if (typeof prepare === "function") {
         publicationPermissionProofs = await refreshPermissionFence();
-        if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
+        if (repairAuthorization) await assertRepairAuthorizationCurrent(repairAuthorization, operation);
       }
       const publicationFence = makePublicationFence(publicationPermissionProofs);
       const job = await publish(principal, request, started, publishedOutput, async (transaction) => {
