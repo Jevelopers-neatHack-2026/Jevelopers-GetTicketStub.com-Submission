@@ -1,8 +1,8 @@
 import type { DiscoveryFrontierStore } from '../../src/discovery/planner/frontier.mjs';
 import type {
   ControlledAssetEvidenceIngestInput,
+  ControlledAssetEvidenceStore,
   EvidenceHandle,
-  EvidenceStore,
   EvidenceTenantScope,
 } from '../../src/evidence/store.mjs';
 import type {
@@ -19,7 +19,7 @@ interface AuthenticatedRequest {
 }
 
 declare const frontier: DiscoveryFrontierStore<AuthenticatedRequest>;
-declare const evidenceStore: EvidenceStore<AuthenticatedRequest>;
+declare const evidenceStore: ControlledAssetEvidenceStore<AuthenticatedRequest>;
 declare const safeFetcher: SafeFetcher;
 declare const request: AuthenticatedRequest;
 const acquisitionPolicy: PrivateRetrievalAssetAcquisitionPolicy = {

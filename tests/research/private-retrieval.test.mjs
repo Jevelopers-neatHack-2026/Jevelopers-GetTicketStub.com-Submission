@@ -61,6 +61,16 @@ function frontierWithMethodOverrides(frontier, overrides) {
   return wrapped;
 }
 
+function legacyEvidenceAdapter(evidenceStore) {
+  const adapter = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence',
+    'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+  ]) adapter[name] = evidenceStore[name].bind(evidenceStore);
+  return adapter;
+}
+
 async function waitUntilPerfAtOrAfter(targetPerfMs) {
   while (performance.now() < targetPerfMs) {
     const remainingMs = targetPerfMs - performance.now();
@@ -634,6 +644,7 @@ test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindin
   const sourceRetentionExpiresAt = evidenceNow + 120_000;
   const retentionHandleFor = () => h.createRetention(sourceRetentionExpiresAt);
   const receiptFailures = [];
+  const controlledAssetDuplicates = [];
   const observedStore = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
@@ -643,6 +654,18 @@ test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindin
   observedStore.finalizePrivateRunReceipt = async (...args) => {
     try { return await h.evidenceStore.finalizePrivateRunReceipt(...args); }
     catch (error) { receiptFailures.push(error?.code ?? error?.name ?? 'unknown'); throw error; }
+  };
+  observedStore.ingestControlledAssetEvidence = async (...args) => {
+    const first = await h.evidenceStore.ingestControlledAssetEvidence(...args);
+    const duplicate = await h.evidenceStore.ingestControlledAssetEvidence(...args);
+    controlledAssetDuplicates.push({
+      role: args[1].provenance.role,
+      firstId: first.metadata.evidenceId,
+      duplicateId: duplicate.metadata.evidenceId,
+      firstCreated: first.created,
+      duplicateCreated: duplicate.created,
+    });
+    return first;
   };
   const assetAcquisitionPolicy = Object.freeze({
     schemaVersion: 1,
@@ -659,6 +682,10 @@ test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindin
   assert.equal(result.progress.transportAttemptAdmissions, 3, JSON.stringify({ paths, sources: result.sources, limitations: result.limitations }));
   assert.deepEqual(paths, ['/event', '/logo.svg', '/secondary.svg']);
   assert.equal(result.assetAcquisitions.length, 2);
+  assert.equal(controlledAssetDuplicates.length, 4);
+  assert.ok(controlledAssetDuplicates.every((entry) => entry.firstCreated
+    && !entry.duplicateCreated && entry.firstId === entry.duplicateId),
+  'an exact same-context and same-role duplicate is idempotent and keeps its immutable evidence identity');
   for (const acquisition of result.assetAcquisitions) {
     assert.equal(acquisition.status, 'blocked_local_inspection_only');
     assert.equal(acquisition.acceptedExternalAssetVersion, null);
@@ -811,13 +838,24 @@ test('default-off and zero-depth runs never issue separate asset requests; an or
     policyId: 'offline-controlled-svg-test-v1',
     allowedOrigins: ['http://fixture.example.org'],
   });
+  const legacyStore = legacyEvidenceAdapter(h.evidenceStore);
 
   const defaultOff = await runPrivateRetrieval(h.makeInput({
     runId: 'private-controlled-svg-default-off', server, seeds: [{ url: sourceUrl('/event-off') }],
+    store: legacyStore,
   }));
   assert.equal(defaultOff.status, 'draft', JSON.stringify(defaultOff));
   assert.deepEqual(paths, ['/event-off']);
   assert.deepEqual(defaultOff.assetAcquisitions, []);
+
+  const missingOptInMethods = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-missing-opt-in-methods', server,
+    seeds: [{ url: sourceUrl('/event-missing-methods') }],
+    store: legacyStore, assetAcquisitionPolicyFor: policy,
+  }));
+  assert.equal(missingOptInMethods.status, 'incomplete', JSON.stringify(missingOptInMethods));
+  assert.ok(missingOptInMethods.limitations.includes('asset_acquisition_store_unavailable'));
+  assert.deepEqual(paths, ['/event-off'], 'an opt-in run with a legacy store fails closed before transport');
 
   const widenedDefaultOff = await runPrivateRetrieval(h.makeInput({
     runId: 'private-controlled-svg-default-off', server, seeds: [{ url: sourceUrl('/event-off') }],

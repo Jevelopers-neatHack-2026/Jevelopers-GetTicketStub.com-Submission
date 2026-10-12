@@ -932,6 +932,7 @@ export async function runPrivateRetrieval(value) {
   const verifiedCompletionProofs = new Map();
   const omittedLinkCandidates = [];
   const assetAcquisitionResults = [];
+  const assetAcquisitionReceipts = new Map();
   const assetCandidateIds = new Set();
   let truncatedSuggestionCount = 0;
   let sourceLinkCandidateOmittedCountLowerBound = 0;
@@ -1003,6 +1004,11 @@ export async function runPrivateRetrieval(value) {
     } catch {
       return false;
     }
+  };
+  const forgetAcquiredAssetPlan = (candidateId) => {
+    assetAcquisitionReceipts.delete(candidateId);
+    const index = assetAcquisitionResults.findIndex((entry) => entry.candidate.frontierCandidateId === candidateId);
+    if (index >= 0) assetAcquisitionResults.splice(index, 1);
   };
   const openCurrentAssetSource = async (binding) => {
     if (!assetPolicy || !await currentAssetPolicyMatches()) return null;
@@ -1081,6 +1087,13 @@ export async function runPrivateRetrieval(value) {
         limitations.add('asset_acquisition_policy_changed');
         return false;
       }
+      // The policy callback may be asynchronous. Recheck the synchronous
+      // stage capability after it resolves so a revocation during that await
+      // cannot mint or refresh a released local plan.
+      if (!authorized(input, 'asset-acquisition')) {
+        limitations.add('authorization_revoked');
+        return false;
+      }
       const bindingHash = digestJson({
         runId: input.runId,
         configHash: runConfigHash,
@@ -1143,6 +1156,7 @@ export async function runPrivateRetrieval(value) {
         === receipt.candidate.candidateId);
       if (existing < 0) assetAcquisitionResults.push(result);
       else assetAcquisitionResults[existing] = result;
+      assetAcquisitionReceipts.set(receipt.candidate.candidateId, receipt);
       return true;
     } catch {
       limitations.add('asset_acquisition_reopen_unavailable');
@@ -2396,8 +2410,54 @@ export async function runPrivateRetrieval(value) {
       limitations.add('final_selected_snapshot_mismatch');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
+    // Plans are cached while processing durable receipts. Reopen each source
+    // candidate and both role-separated encrypted asset records after final
+    // materialization, then bind the result to the selected source snapshot.
+    // This adds no transport work and shares the run's completed frontier.
+    for (const [candidateId, receipt] of [...assetAcquisitionReceipts]) {
+      let current = false;
+      try { current = await rememberAcquiredAssetPlan(receipt); }
+      catch { current = false; }
+      const plan = assetAcquisitionResults.find((entry) => entry.candidate.frontierCandidateId === candidateId);
+      const source = plan && materialized.evidence.find((item) => item.metadata.evidenceId === plan.sourceEvidence.evidenceId);
+      const sourceCandidateMatches = source
+        && source.metadata.version === plan.sourceEvidence.version
+        && source.metadata.contentHash === plan.sourceEvidence.contentHash
+        && source.metadata.derivationDigest === plan.sourceEvidence.derivationDigest
+        && source.source.assetSource?.candidates?.filter((candidate) =>
+          candidate.candidateId === plan.candidate.assetSourceCandidateId
+          && candidate.field === plan.candidate.field
+          && candidate.excerptHash === plan.candidate.excerptHash
+          && candidate.fetchSuggestion === plan.candidate.assetUrl).length === 1;
+      if (!current || !plan || !sourceCandidateMatches) {
+        forgetAcquiredAssetPlan(candidateId);
+        limitations.add('asset_acquisition_final_revalidation_failed');
+      }
+    }
+    if (assetAcquisitionResults.length > 0) {
+      // This callback may await. The last asset and release authorization
+      // checks below are intentionally synchronous and immediately precede
+      // projection, leaving no later await boundary for a stale plan.
+      if (!await currentAssetPolicyMatches()) {
+        for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+        limitations.add('asset_acquisition_policy_changed');
+      }
+      if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
+        for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+        limitations.add('authorization_revoked');
+      }
+    }
     const sourceLinkCandidateOmittedCount = sourceLinkCandidateOmittedCountComplete
       ? sourceLinkCandidateOmittedCountLowerBound : null;
+    checkDeadline();
+    if (controller.signal.aborted || !authorized(input, 'release')) {
+      limitations.add(controller.signal.aborted ? 'cancelled' : 'authorization_revoked');
+      return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
+    }
+    if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
+      for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+      limitations.add('authorization_revoked');
+    }
     const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations,
       omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
       sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete,

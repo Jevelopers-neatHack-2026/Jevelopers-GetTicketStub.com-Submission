@@ -10,6 +10,7 @@ import type {
 import type {
   ControlledAssetAcquisitionBinding,
   ControlledAssetAcquisitionCompletion,
+  ControlledAssetEvidenceStore,
   EvidenceSelectedEvidence,
   EvidenceStore,
   StoredEvidenceFactRecord,
@@ -43,9 +44,9 @@ export interface PrivateRetrievalAssetAcquisitionPolicy {
   readonly allowedOrigins: readonly string[];
 }
 
-export interface PrivateRetrievalInput<Request = unknown> {
+export interface PrivateRetrievalInputBase<Request = unknown, Store extends EvidenceStore<Request> = EvidenceStore<Request>> {
   readonly frontier: DiscoveryFrontierStore<Request>;
-  readonly evidenceStore: EvidenceStore<Request>;
+  readonly evidenceStore: Store;
   readonly safeFetcher: SafeFetcher;
   readonly request: Request;
   readonly runId: string;
@@ -67,6 +68,19 @@ export interface PrivateRetrievalInput<Request = unknown> {
   ) => PrivateRetrievalAssetAcquisitionPolicy | null | Promise<PrivateRetrievalAssetAcquisitionPolicy | null>;
   readonly signal?: AbortSignal;
 }
+
+/**
+ * Legacy adapters remain valid while acquisition is default-off. Supplying an
+ * explicit acquisition policy requires the store's additive controlled-SVG
+ * capability so enabled callers cannot accidentally type an incomplete port.
+ */
+export type PrivateRetrievalInput<Request = unknown> =
+  | (PrivateRetrievalInputBase<Request, EvidenceStore<Request>> & {
+      readonly assetAcquisitionPolicyFor?: undefined;
+    })
+  | (PrivateRetrievalInputBase<Request, ControlledAssetEvidenceStore<Request>> & {
+      readonly assetAcquisitionPolicyFor: NonNullable<PrivateRetrievalInputBase<Request>['assetAcquisitionPolicyFor']>;
+    });
 
 export interface PrivateRetrievalProgress {
   readonly state: 'active' | 'halted' | 'exhausted';

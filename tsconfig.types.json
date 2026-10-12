@@ -10,5 +10,5 @@
     "skipLibCheck": false,
     "noErrorTruncation": true
   },
-  "files": ["types/consumer-fixture.mts", "tests/privacy/types-consumer.mts", "tests/evidence/types-consumer.mts", "tests/extraction/types-consumer.mts", "tests/brand-research/assets-consumer.mts", "tests/research/types-consumer.mts", "tests/decisions/questions/from-source-identity-types-consumer.mts"]
+  "files": ["types/consumer-fixture.mts", "tests/privacy/types-consumer.mts", "tests/evidence/types-consumer.mts", "tests/extraction/types-consumer.mts", "tests/brand-research/assets-consumer.mts", "tests/research/types-consumer.mts", "tests/research/reviewer-legacy-types.mts", "tests/decisions/questions/from-source-identity-types-consumer.mts"]
 }

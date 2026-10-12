@@ -671,13 +671,6 @@ export type PrivateRetrievalReceiptRead =
 export interface EvidenceStore<Request = unknown> {
   scopeForAuthenticatedRequest(request: Request): Promise<EvidenceTenantScope>;
   ingestEvidence(scope: EvidenceTenantScope, input: EvidenceIngestInput, signal?: AbortSignal): Promise<EvidenceIngestResult>;
-  /** Internal same-run SVG path; supported callers must provide the trusted composition's original document and witness. */
-  ingestControlledAssetEvidence(
-    scope: EvidenceTenantScope,
-    input: ControlledAssetEvidenceIngestInput,
-    request: Request,
-    signal?: AbortSignal,
-  ): Promise<ControlledAssetEvidenceIngestResult>;
   /** Runs the existing bounded HTML/XHTML/JSON-LD parser and stores only exact private source excerpts. */
   ingestAssetSourceEvidence(
     scope: EvidenceTenantScope,
@@ -707,26 +700,6 @@ export interface EvidenceStore<Request = unknown> {
     signal?: AbortSignal,
   ): Promise<EvidenceSelectedMaterialization>;
   withPrivatePayload(scope: EvidenceTenantScope, evidence: EvidenceHandle, request: Request): Promise<EvidencePrivatePayloadResult>;
-  /** Reopens one exact encrypted asset-source position, with current tenant/retention checks. */
-  readAssetSourceCandidateBinding(
-    scope: EvidenceTenantScope,
-    evidence: EvidenceHandle,
-    candidateId: string,
-    request: Request,
-    signal?: AbortSignal,
-  ): Promise<AssetSourceCandidateBindingRead>;
-  /** Reopens exact encrypted controlled asset bytes and reauthorizes their current source candidate. */
-  readControlledAssetBytes(
-    scope: EvidenceTenantScope,
-    evidence: EvidenceHandle,
-    request: Request,
-    signal?: AbortSignal,
-  ): Promise<Readonly<{
-    evidenceId: string;
-    metadata: AvailableEvidenceMetadata;
-    source: EvidenceSelectedEvidence['source'];
-    bytes: Uint8Array;
-  }>>;
   appendFact(scope: EvidenceTenantScope, fact: EvidenceFactInput, request: Request, signal?: AbortSignal): Promise<EvidenceFactHandle>;
   lookupFact(scope: EvidenceTenantScope, factId: string, signal?: AbortSignal): Promise<EvidenceFactHandle>;
   readFact(scope: EvidenceTenantScope, fact: EvidenceFactHandle, request: Request): Promise<StoredEvidenceFactRecord>;
@@ -760,4 +733,35 @@ export interface EvidenceStore<Request = unknown> {
   ): Promise<PrivateRetrievalReceiptRead>;
 }
 
-export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): EvidenceStore<Request>;
+/** Optional capability required only when private retrieval is explicitly opted into controlled SVG acquisition. */
+export interface ControlledAssetEvidenceStore<Request = unknown> extends EvidenceStore<Request> {
+  /** Internal same-run SVG path; supported callers must provide the trusted composition's original document and witness. */
+  ingestControlledAssetEvidence(
+    scope: EvidenceTenantScope,
+    input: ControlledAssetEvidenceIngestInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<ControlledAssetEvidenceIngestResult>;
+  /** Reopens one exact encrypted asset-source position, with current tenant/retention checks. */
+  readAssetSourceCandidateBinding(
+    scope: EvidenceTenantScope,
+    evidence: EvidenceHandle,
+    candidateId: string,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<AssetSourceCandidateBindingRead>;
+  /** Reopens exact encrypted controlled asset bytes and reauthorizes their current source candidate. */
+  readControlledAssetBytes(
+    scope: EvidenceTenantScope,
+    evidence: EvidenceHandle,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<Readonly<{
+    evidenceId: string;
+    metadata: AvailableEvidenceMetadata;
+    source: EvidenceSelectedEvidence['source'];
+    bytes: Uint8Array;
+  }>>;
+}
+
+export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): ControlledAssetEvidenceStore<Request>;

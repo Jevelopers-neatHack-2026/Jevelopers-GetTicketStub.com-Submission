@@ -3221,7 +3221,27 @@ export function createEvidenceStore(options) {
       activeIndexKey = await resolveKey(info, 'source-index', undefined, signal);
       checkCancellation(signal);
       const sourceIdentity = controlledAsset
-        ? `controlled-svg:${controlledAsset.policyVersion}:${controlledAsset.policyId}:${controlledAsset.role}\u0000${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`
+        ? `controlled-svg:v2:${controlledAsset.policyVersion}:${controlledAsset.policyId}:${controlledAsset.role}`
+          + `\u0000${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}\u0000${JSON.stringify({
+            inspectionPolicyVersion: controlledAsset.inspectionPolicyVersion,
+            sourceEvidenceId: controlledAsset.sourceEvidenceId,
+            sourceEvidenceVersion: controlledAsset.sourceEvidenceVersion,
+            sourceContentHash: controlledAsset.sourceContentHash,
+            sourceDerivationDigest: controlledAsset.sourceDerivationDigest,
+            sourceUrl: controlledAsset.sourceUrl,
+            candidateId: controlledAsset.candidateId,
+            positionIndex: controlledAsset.positionIndex,
+            sourceForm: controlledAsset.sourceForm,
+            sourceLocator: controlledAsset.sourceLocator,
+            excerptHash: controlledAsset.excerptHash,
+            field: controlledAsset.field,
+            value: controlledAsset.value,
+            assetUrl: controlledAsset.assetUrl,
+            // The transformed role depends on these exact fetched bytes even
+            // when safe normalization produces a hash already stored elsewhere.
+            ...(controlledAsset.role === 'transformed'
+              ? { sourceBytesHash: controlledAsset.sourceBytesHash } : {}),
+          })}`
         : `${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
       directory = await tenantDirectory(info);
       const snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
