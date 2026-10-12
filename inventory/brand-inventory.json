@@ -456,6 +456,19 @@
       "canonical_authority": "docs/motion-sound-haptics.md"
     },
     {
+      "id": "docs/provenance.md",
+      "path": "docs/provenance.md",
+      "type": "markdown",
+      "category": "docs",
+      "classification": "guideline",
+      "description": "BK-06 provenance register, export boundary and validator guide.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/provenance.md"
+    },
+    {
       "id": "docs/source-of-truth.md",
       "path": "docs/source-of-truth.md",
       "type": "markdown",
@@ -923,6 +936,32 @@
       ]
     },
     {
+      "id": "provenance/allowlist.json",
+      "path": "provenance/allowlist.json",
+      "type": "json",
+      "category": "provenance",
+      "classification": "canonical-source",
+      "description": "Production export allowlist; intentionally empty (no reviewed approvals).",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "provenance/allowlist.json"
+    },
+    {
+      "id": "provenance/register.json",
+      "path": "provenance/register.json",
+      "type": "json",
+      "category": "provenance",
+      "classification": "canonical-source",
+      "description": "Per-file provenance register for logo/, fonts/, references/, tokens/ and README banners; UNKNOWN where not evidenced.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "provenance/register.json"
+    },
+    {
       "id": "references/mockup-art-glasgow.webp",
       "path": "references/mockup-art-glasgow.webp",
       "type": "webp",
@@ -1246,6 +1285,19 @@
       "canonical_authority": "tools/check_links.py"
     },
     {
+      "id": "tools/check_provenance.py",
+      "path": "tools/check_provenance.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Validates the provenance register (structural) and fail-closed production export eligibility.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_provenance.py"
+    },
+    {
       "id": "tools/check_tokens_tailwind.py",
       "path": "tools/check_tokens_tailwind.py",
       "type": "python",
@@ -1338,6 +1390,19 @@
       "provenance_status": "unknown",
       "release_class": "internal",
       "canonical_authority": "tools/tests/test_checks.py"
+    },
+    {
+      "id": "tools/tests/test_provenance.py",
+      "path": "tools/tests/test_provenance.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Tests for check_provenance.py using synthetic fixtures only; none is a real approval.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/tests/test_provenance.py"
     },
     {
       "id": "tools/tests/test_tokens.py",

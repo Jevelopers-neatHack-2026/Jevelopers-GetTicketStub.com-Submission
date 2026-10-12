@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "synthetic": false,
+  "status": "empty",
+  "source_revision": "91157ac",
+  "statement": "Production release allowlist. Intentionally empty: no asset has a recorded approval, rights clearance or reviewer, so none is eligible. Entries may be added only with reviewed evidence (see docs/provenance.md).",
+  "review": {"reviewer": "UNKNOWN", "evidence": "UNKNOWN", "date": "UNKNOWN"},
+  "entries": []
+}
