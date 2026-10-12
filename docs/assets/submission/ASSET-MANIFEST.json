@@ -38,8 +38,8 @@
     },
     {
       "file": "journey.svg",
-      "bytes": 558657,
-      "sha256": "b3dfb83a0d4815a4536081c325b387c0340ad00c2ebc7595da48a03d805f673f"
+      "bytes": 558644,
+      "sha256": "2996e27de50bc100eaa845b3d058323e35c989118f8d02a045988c5dcce355e3"
     },
     {
       "file": "sample-stub-download.png",
@@ -63,13 +63,13 @@
     },
     {
       "file": "system-dark.svg",
-      "bytes": 2370,
-      "sha256": "bafd137ec0b9e007e614891c4e63c737f023a9265edcd204238a1739f673d6a1"
+      "bytes": 2344,
+      "sha256": "5c69b08652df502119c5bc514ce7dee978656e88a087bd69e234f8ca7297efff"
     },
     {
       "file": "system.svg",
-      "bytes": 2370,
-      "sha256": "b1fafab2f010e264fbbf6133d7b2530c04bc4e234d3b9289204a3251624afdf1"
+      "bytes": 2344,
+      "sha256": "e16b46d081fcd527619302281942c9cc8751432113ca006034eb69e084309b84"
     },
     {
       "file": "ticketstub_judges_cut_animatic.mp4",
@@ -84,12 +84,12 @@
     {
       "file": "tools-dark.svg",
       "bytes": 8888,
-      "sha256": "bf293feb40b82b8fbe76f84f8b1641cb37af1d4235137da8ddd93304298b91a1"
+      "sha256": "606aab2a4b5bfa89ad5c349682945a9af91f27dcef1a8c13a0444cd874fa2e64"
     },
     {
       "file": "tools.svg",
       "bytes": 8888,
-      "sha256": "530bb8e7746608d3ad8dbba17a1c21c9eb5f3d61bb93758b475f4d4d3b101c08"
+      "sha256": "2d4b27e75becd7f06c978da7a781ca8a60b716697b59c0251b8fe015455e2cf4"
     }
   ]
 }

@@ -31,6 +31,7 @@ Weights come from the [official rules](https://neatlogs.com/hackathon). This is 
   <source media="(prefers-color-scheme: dark)" srcset="../assets/submission/system-dark.svg">
   <img src="../assets/submission/system.svg" alt="Customer app flow: input, studio, server routes, pages and providers, digital keepsake." width="680">
 </picture>
+
 *This is the customer app’s implemented route structure, not a claim that every component repo is wired into one live release.*
 
 In words: the studio sends work to the app’s server routes. Live research may read a public event page; configured model providers can supply facts, art, or replies. The studio displays the result and supports a download or saved wall. The local demo substitutes sample facts, sample art, and rule-based replies. The separate agent-harness, event-intelligence, and creative-engine packages have their own work and tests; full cross-repo integration remains unproven here.
@@ -41,6 +42,7 @@ In words: the studio sends work to the app’s server routes. Live research may 
   <source media="(prefers-color-scheme: dark)" srcset="../assets/submission/tools-dark.svg">
   <img src="../assets/submission/tools.svg" alt="neatlogs records runs; Entire maps code; cfo.ai plans the business." width="680">
 </picture>
+
 *These are documented tool roles; the diagram does not certify complete live integration.*
 
 ### neatlogs

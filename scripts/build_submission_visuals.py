@@ -14,7 +14,7 @@ def svg(title, width, height, body, dark=False):
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title">
 <title id="title">{escape(title)}</title>
 <rect width="{width}" height="{height}" rx="20" fill="{bg}"/>
-<style>text{{font-family:'Inter Tight',Arial,sans-serif;fill:{fg}}}.title{{font-family:Fraunces,Georgia,serif;font-size:34px;font-weight:600}}.label{{font-size:28px;font-weight:600}}.note{{font-size:20px}}</style>
+<style>text{{font-family:'Inter Tight',Arial,sans-serif;fill:{fg}}}.title{{font-family:Fraunces,Georgia,serif;font-size:34px;font-weight:600}}.label{{font-size:28px;font-weight:600}}.note{{font-size:26px}}</style>
 <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7" fill="{fg}"/></marker></defs>
 {body}</svg>\n'''
 
@@ -34,18 +34,18 @@ def main():
         body+=f'<svg x="24" y="{y}" width="170" height="170" viewBox="{cx} {cy} 627 627"><use xlink:href="#art"/></svg>'
         body+=text(216,y+53,f'0{i+1}','note')+text(216,y+96,label,'label')+text(216,y+131,note)
         if i<3:body+=f'<path d="M224 {y+150}v30" stroke="{INK}" stroke-width="2" marker-end="url(#arrow)"/>'
-    body+=text(30,888,'Illustrated flow · Demo facts and art are samples.')
+    body+=text(30,888,'Illustrated flow · Demo uses samples.')
     (ASSETS/'journey.svg').write_text(svg('Add an event, check its story, style the artwork, keep your stub. Demo uses samples.',640,925,body))
     for dark in (False,True):
         fg=CREAM if dark else INK; card=MOSS if dark else '#FFF9EF'
         body=text(30,52,'Inside the customer app','title')
-        items=[('Event input','A public link or a sample.'),('Studio','Check facts and choose a style.'),('Server routes','Handle research, art, and replies.'),('Pages + model providers','Live mode only; samples in the demo.'),('Digital keepsake','Return to the studio to save or download.')]
+        items=[('Event input','A public link or a sample.'),('Studio','Check facts and choose a style.'),('Server routes','Handle research, art, and replies.'),('Pages + model providers','Live mode only; samples in the demo.'),('Digital keepsake','Back to studio: save or download.')]
         for i,(label,note) in enumerate(items):
             y=85+i*140
             body+=f'<rect x="30" y="{y}" width="620" height="100" rx="14" fill="{card}" stroke="{fg}" stroke-opacity=".2"/>'
             body+=text(52,y+39,label,'label')+text(52,y+73,note)
             if i<4:body+=f'<path d="M340 {y+105}v27" stroke="{fg}" stroke-width="2" marker-end="url(#arrow)"/>'
-        body+=text(30,804,'Source structure; a full live run is not verified.')
+        body+=text(30,804,'Full live run still needs proof.')
         suffix='-dark' if dark else ''
         (ASSETS/f'system{suffix}.svg').write_text(svg('Customer app flow: event input, studio, server routes, pages and model providers, digital keepsake.',680,840,body,dark))
         body=text(30,52,'Three tools. Three clear jobs.','title')
