@@ -44,6 +44,7 @@ Checks run in this order and the first failure wins:
 
 | Reason | Meaning |
 | --- | --- |
+| `invalid_clock` | checked first of all: `now` (the consumer's trusted clock, ms since the epoch) is not a finite number above zero (`NaN`, `Infinity`, `-1`, `0`, a string). A verifier that cannot read the time cannot say the authorization has not expired, so it refuses before judging anything |
 | `unknown` | not a token, malformed, wrong header (including a missing or malformed `kid`) or audience, or (with `state.known === false`) the issuer has no such record. Includes an approval token |
 | `forged` | no key for the token's `kid`, or the HMAC does not match: wrong key, a token keyed with the context or approval key, edited payload, the fixture key against a production verifier |
 | `unsupported_version` | correctly signed, but a `schema` this verifier does not know |
@@ -85,6 +86,7 @@ Token fixtures (`<name>.json`: `token`, `intent`, `verifyAt`, `expect`, `state`,
 | `wrong-scope-tenant`, `-project`, `-provider`, `-action` | `wrong_scope` |
 | `changed-terms-amount`, `-currency`, `-quote-id`, `-quantity`, `-sku`, `-finish`, `-destination`, `-destination-digest`, `-art`, `-design-version`, `-approval`, `-order`, `-capability-version` | `changed_terms` |
 | `expired` | `expired` |
+| `clock-nan`, `clock-infinity`, `clock-negative`, `clock-string` | `invalid_clock` (the trusted clock is `NaN`, `Infinity`, `-1`, a string; named by `consumer.clock`) |
 | `revoked` | `revoked` |
 | `stale-approval-revoked`, `-expired`, `-changed`, `-missing` | `stale_approval` |
 | `stale-superseded`, `stale-membership`, `stale-capability-version` | `stale` |

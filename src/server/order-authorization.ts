@@ -332,7 +332,7 @@ async function preflight(token: string, expect: OrderAuthExpectation, now: numbe
   if (!keyring) return { fail: { ok: false, reason: "forged" } }; // no usable key set, nothing can be valid
   const key: OrderAuthKeys = (kid, issuedAt) => keyring.lookup(kid, now, issuedAt);
   const first = verifyOrderAuthorization(token, key, expect, now, undefined, intent);
-  if (!first.ok && (first.reason === "unknown" || first.reason === "forged" || first.reason === "unsupported_version")) return { fail: first };
+  if (!first.ok && (first.reason === "invalid_clock" || first.reason === "unknown" || first.reason === "forged" || first.reason === "unsupported_version")) return { fail: first };
   const id = orderAuthIdOf(token);
   return id ? { key, id } : { fail: { ok: false, reason: "unknown" } };
 }

@@ -42,7 +42,7 @@ One SQLite write lock (`BEGIN IMMEDIATE`) reads the authorization, its approval,
 - `actionId` (tenant, project, action, `orderRef`) is stable across renewals. A renewal for the same `orderRef` supersedes the older authorization (it reads `stale`); once an order is claimed no renewal can be issued. A claim is never released.
 - Dispatch time: `revalidate` re-checks scope and terms, revoked, expired, the approval current now, membership, capability version, the order gate, and that the claim reference is the committed one.
 
-Reasons: `unknown forged unsupported_version wrong_scope changed_terms revoked expired stale_approval stale not_orderable already_claimed not_claimed idempotency_conflict`. Rejections are `{ ok:false, status:"rejected", reason, fields? }` with the one error envelope `authorization_invalid` (403, or 409 for the two claim conflicts); `fields` names changed terms by path, never values.
+Reasons: `invalid_clock unknown forged unsupported_version wrong_scope changed_terms revoked expired stale_approval stale not_orderable already_claimed not_claimed idempotency_conflict`. Rejections are `{ ok:false, status:"rejected", reason, fields? }` with the one error envelope `authorization_invalid` (403, or 409 for the two claim conflicts); `fields` names changed terms by path, never values.
 
 ## Token signing keys (decision 0003 K4)
 

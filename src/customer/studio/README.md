@@ -4,7 +4,7 @@ The customer-facing studio. Give it an event link, watch the agent research the 
 
 The studio is always cream paper. There is no dark stage: printing, the finish picker, the tear and a lifted stub all stay on the desk.
 
-Design docs, wireframes and the coverage matrix are not on `main`; they are in `docs/studio/` on the [`docs/studio-design`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/tree/docs/studio-design/docs/studio) branch. Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
+Design docs, wireframes and the coverage matrix are in [`docs/studio/`](../../../docs/studio/README.md). Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
 
 ## Run it
 
@@ -29,6 +29,7 @@ providers, in live mode:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | One research call per event to pull extra facts from the page; free-text agent replies (`claude-sonnet-5-5`) | Facts come from the page's schema.org data and Open-Meteo only; the agent uses rule-based replies |
 | `OPENAI_API_KEY` | Generated, text-free art (`gpt-image-1`) | Procedural art, labelled "Sample art" |
+| `OPEN_METEO_API_KEY` | Weather and place lookups on the Open-Meteo customer endpoints (API Standard; no historical weather) | The free Open-Meteo endpoints, for evaluation only, not commercial use |
 
 When a capability's provider is set to `openrouter`, it needs its own model and
 key instead, with no shared `OPENROUTER_API_KEY` and no fallback to another key

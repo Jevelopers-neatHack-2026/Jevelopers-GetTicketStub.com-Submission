@@ -82,13 +82,14 @@ function shaped(v) {
 
 /**
  * Checks in this order, first failure wins:
- *   unknown -> forged -> unsupported_version -> wrong_scope (tenant, project, audience, action, provider) -> changed_terms (any term differs)
+ *   invalid_clock (`now` is not a finite number > 0) -> unknown -> forged -> unsupported_version -> wrong_scope (tenant, project, audience, action, provider) -> changed_terms (any term differs)
  *   -> revoked -> expired -> stale_approval -> stale (renewed, membership or capability version moved) -> not_orderable
  *   -> claim rules by intent: verify refuses any claim (already_claimed); claim allows only a replay under the same key; revalidate needs the claim it was given (not_claimed).
  */
 const KID = /^[A-Za-z0-9._-]{1,64}$/;
 export function verifyOrderAuthorization(token, keys, expect, { now = Date.now(), state, intent = "verify" } = {}) {
   const no = (reason, fields) => ({ ok: false, reason, ...(fields ? { fields } : {}) });
+  if (typeof now !== "number" || !Number.isFinite(now) || now <= 0) return no("invalid_clock");
   if (typeof token !== "string" || token.length > 8192) return no("unknown");
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => !/^[A-Za-z0-9_-]+$/.test(p))) return no("unknown");
@@ -133,9 +134,15 @@ export function verifyOrderAuthorization(token, keys, expect, { now = Date.now()
 /** HMAC-SHA256 (hex) over `<timestamp ms>\n<METHOD>\n<path>\n<sha256 of the exact body text>`. Sent as x-ticketstub-consumer-timestamp and x-ticketstub-consumer-signature. */
 export const consumerSignature = (key, timestamp, method, path, bodyText) => createHmac("sha256", key).update(`${timestamp}\n${method.toUpperCase()}\n${path}\n${sha256Hex(bodyText)}`).digest("hex");
 
+/** The clocks a fixture may name by tag (`consumer.clock`), because JSON cannot hold NaN or Infinity. */
+export const CLOCKS = { nan: Number.NaN, infinity: Number.POSITIVE_INFINITY, negative: -1, string: "1791633600000" };
+
+/** The consumer's trusted clock for a fixture: a named bad clock, or `verifyAt`. */
+export const fixtureNow = (fx) => (fx.consumer?.clock !== undefined ? CLOCKS[fx.consumer.clock] : Date.parse(fx.verifyAt));
+
 /** Runs one token fixture the way a consumer would: its own terms, the issuer's state, the intent. */
 export function runFixture(fx, keys) {
-  return verifyOrderAuthorization(fx.token, keys, fx.expect, { now: Date.parse(fx.verifyAt), state: fx.state, intent: fx.intent });
+  return verifyOrderAuthorization(fx.token, keys, fx.expect, { now: fixtureNow(fx), state: fx.state, intent: fx.intent });
 }
 
 /** Does a result match the fixture's outcome (ok, or the reason, and the fields when it names them)? */

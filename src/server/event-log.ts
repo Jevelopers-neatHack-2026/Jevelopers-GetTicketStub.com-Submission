@@ -1,6 +1,6 @@
 import "server-only";
 import { getRequestContext, type RequestContext } from "./context";
-import { EVENT_SPEC, pushRing, refOf, requestIdOf, sanitizeEvent, type EventType, type EventValue } from "./events";
+import { EVENT_SPEC, exportToHarness, pushRing, refOf, requestIdOf, sanitizeEvent, type EventType, type EventValue } from "./events";
 import { getStorage, storageAvailable } from "./index";
 
 // Recording is a side effect of a request, never a reason for it to fail: any trouble is swallowed after one
@@ -32,6 +32,8 @@ export async function recordEvent(req: Request, type: EventType, fields: Record<
     });
     if (!ev) return;
     const tenantRef = tenant && kind !== "anonymous" ? refOf(tenant) : undefined;
+    // The harness copy is a side channel next to the store below: never awaited, and it cannot fail this.
+    void exportToHarness([ev]);
     if (storageAvailable()) {
       try {
         await getStorage().appendEvent(ev, tenantRef);

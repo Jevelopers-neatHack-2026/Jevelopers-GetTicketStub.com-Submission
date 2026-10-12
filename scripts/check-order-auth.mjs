@@ -12,7 +12,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { CAPABILITY_VERSION, quoteIdFor } from "../src/customer/pages/capabilities.ts";
 import { ORDER_AUTH_FAILURES, ORDER_AUTH_NOT_AUTHORIZED, actionIdOf, canonicalJson, commandHash, consumerSignature, signOrderAuthorization, verifyOrderAuthorization } from "../src/server/order-auth-token.ts";
-import { ReferenceIssuer, matchesOutcome, runFixture, runScenario } from "../fixtures/order-authorization/verify.mjs";
+import { ReferenceIssuer, fixtureNow, matchesOutcome, runFixture, runScenario } from "../fixtures/order-authorization/verify.mjs";
 
 const BASE = (process.argv[2] ?? process.env.SMOKE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const DB = process.env.TICKETSTUB_DB ?? "./data/ticketstub.sqlite";
@@ -151,7 +151,7 @@ async function main() {
   for (const f of onDisk) {
     const x = JSON.parse(readFileSync(join(FIXTURES, f), "utf8"));
     fx[x.fixture] = x;
-    const a = verifyOrderAuthorization(x.token, fixtureKeys, x.expect, Date.parse(x.verifyAt), x.state, x.intent); // the code the server runs
+    const a = verifyOrderAuthorization(x.token, fixtureKeys, x.expect, fixtureNow(x), x.state, x.intent); // the code the server runs
     const b = runFixture(x, fixtureKeys); // the reference verifier a consumer copies
     if (!matchesOutcome(a, x.outcome) || !matchesOutcome(b, x.outcome)) bad.push(x.fixture);
   }

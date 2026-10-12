@@ -176,9 +176,20 @@ test("every failure reason is reachable and listed", () => {
   add(reason(token, expect({ terms: { ...terms(), sku: "S" } }))); add(reason(token, expect(), { ...live, revoked: true })); add(reason(token, expect(), live, "verify", NOW + 99 * 60_000));
   add(reason(token, expect(), { ...live, approval: "revoked" })); add(reason(token, expect(), { ...live, superseded: true })); add(reason(token, expect(), { ...live, orderable: false }));
   add(reason(token, expect(), { ...live, claim: { reference: "c", keyMatches: true } })); add(reason(token, expect({ claimReference: "c" }), live, "revalidate"));
+  add(reason(token, expect(), live, "verify", Number.NaN));
   // idempotency_conflict is the issuer's: one key bound to two authorizations. It is not a property of one token.
   const issuerOnly = new Set(["idempotency_conflict"]);
   assert.deepEqual(ORDER_AUTH_FAILURES.filter((r) => !reached.has(r) && !issuerOnly.has(r)), []);
+});
+
+test("a clock that is not a finite number above zero is invalid_clock, before anything else is judged", () => {
+  for (const now of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 0, String(NOW), null, {}, [NOW]]) {
+    assert.equal(reason(token, expect(), live, "verify", now), "invalid_clock");
+    assert.equal(referenceVerify(token, KEY, expect(), { now, state: live }).reason, "invalid_clock");
+  }
+  assert.equal(reason("junk", expect(), undefined, "verify", Number.NaN), "invalid_clock");
+  // The defect this closes: an expired authorization must not verify when the clock is bad.
+  assert.equal(reason(token, expect(), live, "verify", NOW + 99 * 60_000), "expired");
 });
 
 test("consumer request signing: method, path, body and time are all covered", () => {
