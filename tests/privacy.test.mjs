@@ -53,7 +53,8 @@ test('metadata URL declarations do not count as browser requests', () => {
 for (const reduced of [true, false]) for (const failure of ['blocked', 'failed']) test(`real maker/navigation handlers with ${failure} collection surfaces, reduced motion ${reduced}`, () => {
   const result = exerciseJourney(html, { reduced, failure });
   assert.ok(result.anchors >= 10); assert.ok(result.previews >= 4); assert.deepEqual(result.attempts, []);
-  assert.equal(result.externalHandoff, 'disabled');
+  assert.equal(result.externalHandoff, 'link-only-local-check');
+  assert.equal(result.destination, 'https://getticketstub.com/make');
 });
 for (const surface of ['navigator.sendBeacon("/collect", ev.value)', 'localStorage.setItem("preview", ev.value)', 'console.log(ev.value)', 'fetch("/collect")']) {
   test(`journey traps a swallowed forbidden attempt: ${surface.split('(')[0]}`, () => {

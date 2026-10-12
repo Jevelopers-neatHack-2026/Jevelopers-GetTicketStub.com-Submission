@@ -103,6 +103,16 @@ function section(html, from, to) {
 export function exerciseJourney(html, { failure = 'blocked', reduced = true } = {}) {
   const elements = Object.fromEntries(['maker', 'ev', 'finCard', 'finNote', 'finale', 'demoLink', 'demoUnavailable', 'finStatus', 'previewButton'].map(id => [id, node()]));
   elements.maker.querySelector = () => elements.previewButton;
+  // Match the native source anchor so invalid config must withdraw an already-active href.
+  const studioMarkup = html.match(/<a\b[^>]*id="demoLink"[^>]*>/)?.[0];
+  assert.ok(studioMarkup, 'Real studio link source missing');
+  const studioAttributes = attributes(studioMarkup);
+  if (studioAttributes.href) elements.demoLink.setAttribute('href', studioAttributes.href);
+  elements.demoLink.hidden = /\bhidden\b/.test(studioMarkup);
+  Object.defineProperty(elements.demoLink, 'href', {
+    get: () => elements.demoLink.getAttribute('href'),
+    set: value => elements.demoLink.setAttribute('href', value),
+  });
   const timers = [], frames = [], attempts = [], previews = [], moves = [];
   const fail = surface => { attempts.push(surface); throw new Error(`${surface} ${failure}`); };
   const anchors = [...html.matchAll(/<a\b[^>]*href=["'](#[^"']+)["'][^>]*>/gi)].map(match => { const a = node(); a.getAttribute = () => match[1]; return a; });
@@ -155,7 +165,7 @@ export function exerciseJourney(html, { failure = 'blocked', reduced = true } = 
     assert.ok(!external.includes('LP_PRIVACY_SYNTHETIC_ONLY'));
   } else assert.equal(elements.demoLink.hidden, true, 'Pending demo has no active link');
   same(attempts, [], 'Journey attempted tracking, storage, network or input logging');
-  return { anchors: anchors.length, previews: previews.length, externalHandoff: external ? 'link-only-fixture' : 'disabled', destination: external, localNote: elements.finNote.textContent, inputValue: input.value, demoStatus: elements.demoUnavailable.textContent, attempts };
+  return { anchors: anchors.length, previews: previews.length, externalHandoff: external ? 'link-only-local-check' : 'disabled', destination: external, localNote: elements.finNote.textContent, inputValue: input.value, demoStatus: elements.demoUnavailable.textContent, attempts };
 }
 
 export function validateReleaseReceipt(receipt, manifest, pageSha256) {

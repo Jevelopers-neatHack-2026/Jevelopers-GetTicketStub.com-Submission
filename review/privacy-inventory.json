@@ -5,9 +5,9 @@
     "Product and frontend",
     "Finance and reliability"
   ],
-  "auditedSourceRevision": "b6ae55cd48971c9ef292293252f1931744a91095",
+  "auditedSourceRevision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
   "executableScriptSha256": [
-    "09401ca9859680069e420e87dc9f9742773863d524677451dd7ca28c3332b815",
+    "2b01e1d0f5ba18ee57a1420149ce8f8b94e776195f29bfc76db93c245ead4320",
     "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
   ],
   "resourceLinks": [
@@ -22,13 +22,13 @@
     "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
   },
-  "studioUrl": null,
+  "studioUrl": "https://getticketstub.com/make",
   "reviewStatus": "PENDING",
   "styleSha256": [
     "a4a477526673b7cbb466775e39698516d7867f308f9c94fd1f243e5ffe190c75",
     "21e13959a2fd33f73c8d541512669391bd6a92a33f8880cfd99bcdc683305df4"
   ],
-  "markupTagsSha256": "0830af9df2676b5c86730b47ffc45f31d18dc64b1d9b725efb0dddb0bc4c4b67",
+  "markupTagsSha256": "90a084ab64d12fee88b5eeac7cb5dd00598fbac5d8964cd54cf8d76586339288",
   "scriptTagsSha256": [
     "9dd69297ac344fd1e671b9a35840de9829937c6a9b43e06b6b4cf615b2bf26ce",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -39,5 +39,5 @@
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ],
-  "auditNote": "Author re-audit of CTA patch against named immutable base; no owner or clean-browser approval. External form/query handoff withdrawn; local nameless editor and pending link-only config."
+  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff."
 }
