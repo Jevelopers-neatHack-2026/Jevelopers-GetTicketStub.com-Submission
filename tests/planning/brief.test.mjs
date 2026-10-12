@@ -38,6 +38,47 @@ function expectCode(code, callback) {
   assert.throws(callback, (error) => error?.code === code);
 }
 
+test("planning timestamps reject impossible calendar values while preserving accepted offsets and precision", () => {
+  for (const createdAt of [
+    "2026-02-30T12:00:00Z",
+    "2026-04-31T12:00:00Z",
+    "2023-02-29T12:00:00Z",
+    "1900-02-29T12:00:00Z",
+    "2026-01-01T24:00:00Z",
+    "2026-01-01T12:00:00+24:00",
+    "2026-01-01T12:00:00+05:60",
+    "2026-10-10T12:00:00",
+  ]) {
+    expectCode("invalid_input", () => plan(completeResearchPackage(), createdAt));
+  }
+
+  for (const createdAt of [
+    "0099-02-28T12:00:00Z",
+    "2000-02-29T12:00:00.123456789+05:30",
+  ]) {
+    const built = plan(completeResearchPackage(), createdAt);
+    assert.equal(built.brief.occurred_at, createdAt);
+    assert.equal(built.brief.ingested_at, createdAt);
+  }
+});
+
+test("an invalid invalidation timestamp is rejected before trusted ports run", async () => {
+  const currentPlan = plan();
+  const callbacks = [];
+  const result = applyResearchInvalidation({
+    trusted_scope: trustedScope,
+    event: invalidationEvent(currentPlan, { occurredAt: "2026-02-30T12:00:00Z" }),
+    ports: {
+      clock: { now() { callbacks.push("clock"); return baseTime; } },
+      verifier: { async verifyInvalidation() { callbacks.push("verifier"); } },
+      approvalStaleness: { async markBriefStale() { callbacks.push("approval"); } },
+      producerAcknowledgment: { async acknowledgeInvalidation() { callbacks.push("acknowledgment"); } },
+    },
+  });
+  await assert.rejects(result, (error) => error?.code === "invalid_input");
+  assert.deepEqual(callbacks, []);
+});
+
 async function temporaryStore(t) {
   const dir = await mkdtemp(join(tmpdir(), "creative-brief-store-"));
   const path = join(dir, "briefs.sqlite");

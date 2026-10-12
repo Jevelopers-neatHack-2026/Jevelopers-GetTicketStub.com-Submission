@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isValidIsoDateTime } from './validation.mjs';
 
 export const APPROVAL_HANDOFF_PROPOSAL_VERSION = 'creative.approval-handoff.proposal/v1';
 export const COMPOSITION_EDIT_PROPOSAL_VERSION = 'creative.composition-edit.proposal/v1';
@@ -191,7 +192,7 @@ function validateApprovalProof(value, { expectedAudience, binding, now }) {
 }
 
 function validTimestamp(value, field) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !isValidIsoDateTime(value)) {
     fail('invalid_timestamp', `${field} must be an ISO UTC timestamp`, field);
   }
   return value;
