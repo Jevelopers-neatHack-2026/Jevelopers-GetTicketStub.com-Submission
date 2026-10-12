@@ -54,15 +54,20 @@ export type FinanceV2Fault =
 
 /** Maps a thrown port failure to a typed fault from its numeric `status` or `code` only. Messages and bodies are never read, so nothing secret can be echoed. */
 export function classifyFinanceV2Fault(error: unknown): FinanceV2Fault {
-  const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined;
-  const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
-  if (code === 'TIMEOUT' || (typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'TimeoutError')) return { outcome: 'error', kind: 'timeout', retryable: true };
-  if (status === 401) return { outcome: 'unauthorized' };
-  if (status === 403) return { outcome: 'restricted' };
-  if (status === 404) return { outcome: 'missing' };
-  if (status === 429) return { outcome: 'error', kind: 'rate_limited', retryable: true };
-  if (typeof status === 'number' && Number.isInteger(status) && status >= 500 && status <= 599) return { outcome: 'error', kind: 'server', retryable: true };
-  return { outcome: 'error', kind: 'failed', retryable: false };
+  try {
+    const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined;
+    const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+    if (code === 'TIMEOUT' || (typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'TimeoutError')) return { outcome: 'error', kind: 'timeout', retryable: true };
+    if (status === 401) return { outcome: 'unauthorized' };
+    if (status === 403) return { outcome: 'restricted' };
+    if (status === 404) return { outcome: 'missing' };
+    if (status === 429) return { outcome: 'error', kind: 'rate_limited', retryable: true };
+    if (typeof status === 'number' && Number.isInteger(status) && status >= 500 && status <= 599) return { outcome: 'error', kind: 'server', retryable: true };
+    return { outcome: 'error', kind: 'failed', retryable: false };
+  } catch {
+    // Error metadata can itself throw (for example an accessor or revoked proxy). Never echo that failure.
+    return { outcome: 'error', kind: 'failed', retryable: false };
+  }
 }
 
 /** Fixed, secret-free copy per fault kind. */
@@ -241,6 +246,8 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
         if (!live) return;
         finish(interpret(answer, o, trailNow, cursorNow, evidence));
       } catch (error) {
+        // A cancelled or settled generation must not inspect a late rejection.
+        if (!live) return;
         finish(fromFault(classifyFinanceV2Fault(error)));
       }
     })();
