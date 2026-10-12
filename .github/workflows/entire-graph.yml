@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned Entire CLI
@@ -62,8 +62,39 @@ jobs:
           retention-days: 90
       - name: Write agent instructions
         run: entire graph init-agents --repo .
-      - name: Push init-agents output for review
+      - name: Upload generated instructions for the publish job
         if: github.event_name == 'workflow_dispatch' && inputs.push_branch
+        uses: actions/upload-artifact@v4
+        with:
+          name: entire-graph-instructions-${{ github.sha }}
+          path: |
+            .entire/graph-agent.md
+            AGENTS.md
+            CLAUDE.md
+          if-no-files-found: error
+          include-hidden-files: true
+
+  publish-instructions:
+    if: github.event_name == 'workflow_dispatch' && inputs.push_branch
+    needs: graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: entire-graph-instructions-${{ github.sha }}
+          path: ${{ runner.temp }}/instructions
+      - name: Install generated instructions
+        run: |
+          install -D -m 0644 "$RUNNER_TEMP/instructions/AGENTS.md" AGENTS.md
+          install -D -m 0644 "$RUNNER_TEMP/instructions/CLAUDE.md" CLAUDE.md
+          install -D -m 0644 "$RUNNER_TEMP/instructions/.entire/graph-agent.md" .entire/graph-agent.md
+      - name: Push init-agents output for review
         run: |
           branch="entire-graph/${GITHUB_SHA::7}"
           git add .entire/graph-agent.md AGENTS.md CLAUDE.md
