@@ -2,6 +2,7 @@
 """Publish reproducible source snapshots; never execute source-repository code."""
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -128,6 +129,7 @@ def fetch_source(repo, temporary, stage):
     count = export_tree(source, sha, stage / 'repositories' / name)
     return {'name': name, 'path': f'repositories/{name}', 'url': current['html_url'],
             'branch': branch, 'commit': sha,
+            'tree': run('git', '-C', str(source), 'rev-parse', f'{sha}^{{tree}}').strip(),
             'committed_at': run('git', '-C', str(source), 'show', '-s', '--format=%cI', sha).strip(),
             'description': current.get('description') or '', 'tracked_files': count}
 
@@ -148,6 +150,26 @@ def write_index(stage, entries):
     (stage / 'REPOSITORIES.md').write_text('\n'.join(lines))
 
 
+def finding_identity(finding, stage):
+    relative = Path(finding['File']).relative_to(stage).as_posix()
+    # Archive members use archive.tar.gz!member paths in Gitleaks reports.
+    outer = relative.split('!', 1)[0]
+    digest = hashlib.sha256((stage / outer).read_bytes()).hexdigest()
+    location = ':'.join(str(finding.get(key, '')) for key in
+                        ('RuleID', 'StartLine', 'StartColumn', 'EndLine', 'EndColumn'))
+    return relative, digest, location
+
+
+def unreviewed_findings(findings, stage):
+    baseline = ROOT / 'scripts' / 'reviewed-scan-findings.json'
+    approved = set()
+    if baseline.exists():
+        for entry in json.loads(baseline.read_text())['files']:
+            for location in entry['findings']:
+                approved.add((entry['path'], entry['sha256'], location))
+    return [finding for finding in findings if finding_identity(finding, stage) not in approved]
+
+
 def scan(stage, scratch):
     # Explicit default rules prevent source .gitleaks.toml / ignore comments suppressing findings.
     config = scratch / 'gitleaks.toml'
@@ -157,11 +179,20 @@ def scan(stage, scratch):
     result = subprocess.run(['gitleaks', 'dir', str(stage), '--config', str(config),
                              '--gitleaks-ignore-path', str(scratch / 'no-ignore-file'),
                              '--ignore-gitleaks-allow', '--redact', '--no-banner',
-                             '--max-archive-depth', '2', '--report-format', 'json',
+                             '--max-archive-depth', '2', '--exit-code', '42', '--report-format', 'json',
                              '--report-path', report_name], capture_output=True, text=True)
-    if result.returncode:
-        # Gitleaks --redact ensures diagnostics never expose matched secret values.
-        raise RuntimeError(f'Secret scan failed; nothing was published. Redacted report: {report_name}\n' + result.stderr)
+    # Use a dedicated leak exit code to distinguish findings from scanner failures.
+    if result.returncode not in (0, 42):
+        raise RuntimeError(f'Secret scanner failed; nothing was published. Report: {report_name}\n' + result.stderr)
+    findings = json.loads(Path(report_name).read_text() or '[]')
+    if result.returncode == 42 and not findings:
+        raise RuntimeError('Scanner reported findings without a usable report; nothing was published')
+    unexpected = unreviewed_findings(findings, stage)
+    if unexpected:
+        raise RuntimeError(f'{len(unexpected)} unreviewed secret-scan findings; nothing was published. '
+                           f'Redacted report: {report_name}')
+    if findings:
+        print(f'{len(findings)} previously reviewed fixture/identifier matches; exact file hashes verified.', flush=True)
     Path(report_name).unlink(missing_ok=True)
     print('Secret scan passed.', flush=True)
 
@@ -180,7 +211,7 @@ def check_checkout(publish):
         target = api(f'repos/{ORG}/{TARGET}')
         if target['private'] or target.get('visibility', 'public') != 'public':
             raise RuntimeError('Submission repository must be public')
-        if target['size'] > 0:
+        if run('git', 'ls-remote', '--heads', 'origin', 'refs/heads/main', cwd=ROOT).strip():
             run('git', 'fetch', 'origin', 'main', cwd=ROOT)
             if run('git', 'rev-parse', 'HEAD', cwd=ROOT) != run('git', 'rev-parse', 'FETCH_HEAD', cwd=ROOT):
                 raise RuntimeError('Local main differs from origin/main. Resolve it before syncing.')
@@ -237,6 +268,10 @@ def main():
                 print('Dry run complete; checkout and remote unchanged.')
                 return
             changed = apply_snapshot(stage)
+            for entry in entries:
+                actual = run('git', 'write-tree', f"--prefix={entry['path']}/", cwd=ROOT).strip()
+                if actual != entry['tree']:
+                    raise RuntimeError(f"Staged files differ from source tree for {entry['name']}; nothing was published")
         if not changed:
             print('Already up to date; no new commit.')
             return

@@ -38,7 +38,7 @@ git pull --ff-only
 python3 scripts/sync_submission.py --publish
 ```
 
-The script discovers all public repositories in `Jevelopers-neatHack-2026` except this submission repository, fetches each default branch, scans the complete staged snapshot for secrets, refreshes the index and manifest, and commits and pushes only when something changed. New public repositories are picked up automatically. Files removed upstream are removed from the next snapshot. Refresh after merging the work you want judges to see.
+The script discovers all public repositories in `Jevelopers-neatHack-2026` except this submission repository, fetches each default branch, scans the complete staged snapshot for secrets, verifies each copied Git tree against its source, refreshes the index and manifest, and commits and pushes only when something changed. New public repositories are picked up automatically. Files removed upstream are removed from the next snapshot. Refresh after merging the work you want judges to see.
 
 To inspect an update before publishing:
 
@@ -55,3 +55,13 @@ Only committed code on GitHub's default branches is collected. Open pull request
 The script fails before replacing the snapshot if a fetch, secret scan, or file validation fails. It rejects submodule pointers, Git LFS pointers, escaping symlinks, and oversized files instead of silently submitting incomplete code. Previously included repositories disappearing or becoming private require explicit manifest review. Updates use normal Git pushes without force; if another maintainer publishes first, reconcile your checkout and rerun. If a push fails after the local commit, that commit remains available for inspection and a normal retry with `git push origin main`.
 
 Upstream workflows are kept inside their component folders and do not become active workflows in this repository. Existing per-project licenses and notices remain attached to their files; this collection grants no additional license.
+
+### Secret scan review
+
+The initial source scan found intentionally public test credentials and fixture JWTs, source-file checksums, browser storage keys, and graph identifiers. `scripts/reviewed-scan-findings.json` records the reviewed matches with exact file SHA-256 hashes and finding locations. There are no blanket directory or rule exclusions. Changing any matched file invalidates its exceptions; new matches block publication and produce a redacted report in the system temporary directory. Review such reports and update only confirmed false positives in the baseline. Never automatically regenerate the baseline or use it to accept real credentials.
+
+### Verify the sync tooling
+
+```sh
+python3 -m unittest discover -s tests -v
+```

@@ -112,6 +112,25 @@ class SnapshotTests(unittest.TestCase):
                 sync.scan(stage, self.base)
         self.assertFalse((self.source / 'repositories').exists())
 
+    def test_reviewed_findings_reject_changed_files_and_new_matches(self):
+        stage = self.base / 'stage'
+        stage.mkdir()
+        file = stage / 'fixture.txt'
+        file.write_text('synthetic fixture')
+        finding = {'File': str(file), 'RuleID': 'example-rule', 'StartLine': 1,
+                   'StartColumn': 1, 'EndLine': 1, 'EndColumn': 10}
+        path, digest, location = sync.finding_identity(finding, stage)
+        scripts = self.source / 'scripts'
+        scripts.mkdir()
+        (scripts / 'reviewed-scan-findings.json').write_text(json.dumps({'files': [
+            {'path': path, 'sha256': digest, 'findings': [location]}]}))
+        with patch.object(sync, 'ROOT', self.source):
+            self.assertEqual(sync.unreviewed_findings([finding], stage), [])
+            extra = dict(finding, StartColumn=2)
+            self.assertEqual(sync.unreviewed_findings([extra], stage), [extra])
+            file.write_text('changed credential-shaped value')
+            self.assertEqual(sync.unreviewed_findings([finding], stage), [finding])
+
     def test_invalid_paths_rejected(self):
         for path in ('../escape', '/absolute', 'nested/.git/config', 'a/../../b'):
             with self.subTest(path=path), self.assertRaises(RuntimeError):
