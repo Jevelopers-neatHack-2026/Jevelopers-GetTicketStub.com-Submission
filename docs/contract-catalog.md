@@ -1,6 +1,8 @@
 # Contract Catalog
 
-This catalog defines proposed interfaces for `shared-contracts`. It is design documentation, not a claim that schemas or generated clients have been implemented. Use [architecture section 5](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md#5-shared-contracts-and-data-ownership) for the producer and consumer map.
+This is the maintained, descriptive design catalog for the shared interfaces. It is **not** a schema manifest or evidence that the listed designs have an accepted version, generated client, or released package. At the checked main revision, there is no canonical schema package or generated SDK in this repository. The JSON Schemas and synthetic fixtures in [`proposals/reporting-v1/`](../proposals/reporting-v1/README.md) are a separate Finance-review proposal; they do not add `ReportingQuery` or `ReportingExportManifest` to this catalog as accepted interfaces.
+
+Keep this file as the home for catalog-level interface design. For package and candidate status, see [MVP readiness](mvp-readiness.md) and the [consumer acceptance receipt](consumer-acceptance-receipt.md). For the producer/consumer architecture, the [architecture-kit v1.0 snapshot](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md#5-shared-contracts-and-data-ownership) records historical intent; use the maintained [current-state companion](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture/CURRENT-STATE.md) for the implemented system. Master acceptance IDs and states remain in [integration-evals' acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
 
 ## Common envelope
 

@@ -1,8 +1,8 @@
 # `shared-contracts`
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
-**Proposed owner:** Agent and research.
-**Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
+**Repository status:** Public GitHub repository, checked 2026-10-12 against [main at `91736a026c02a3206cb7666ebfbe6134692e5a24`](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/91736a026c02a3206cb7666ebfbe6134692e5a24). This visibility check documents repository metadata; it does not change visibility or imply publication.
+**Proposed owner:** Agent and research (repository role; named contract owners and reviewers remain unassigned).
+**Delivery state:** Main contains maintained interface-design documentation, an offline consumer-receipt metadata checker, and isolated Finance reporting proposal schemas and fixtures. It does not contain a canonical shared-contracts package, generated consumer SDK, or release artifact. Current implementation, consumer receipts, and release blockers are summarized in [MVP readiness](../mvp-readiness.md); individual issue and PR records remain authoritative.
 
 ## Responsibility
 
@@ -10,21 +10,23 @@ Own versioned interfaces connecting independently developed repositories. Define
 
 The shared package should remain dependency-light. It may distribute generated types and contract validators derived from canonical definitions. It should not become a general utility repository or hold competing versions of financial and commercial policy.
 
-## Planned internal modules
+## Not implemented on `main`
 
-- `schemas/`: Projects, event intelligence, creative briefs, and design versions.
-- `schemas/production-and-orders/`: Artifacts, quotes, authorization, and external status.
-- `schemas/usage-and-finance/`: Metering, reservations, and reporting interfaces.
-- `openapi/`: Agreed public and internal endpoint specifications.
-- `generated/`: Reproducible consumer bindings and validators.
-- `fixtures/`: Valid, invalid, and compatibility examples.
-- `compatibility/`: Version policy and consumer impact records.
+The following are planned release capabilities, not existing canonical directories or exports:
+
+- versioned schemas for projects, event intelligence, creative briefs, design versions, production, orders, usage, reservations, and finance;
+- agreed public and internal API specifications;
+- reproducible generated consumer bindings and validators;
+- canonical positive, negative, and compatibility fixtures; and
+- accepted consumer pins, migration records, and a release manifest.
+
+The JSON Schemas and synthetic fixtures under [`proposals/reporting-v1/`](../../proposals/reporting-v1/README.md) are an isolated Finance-review proposal. They are not promoted into the canonical contract set. The receipt checker and its tests are governance tooling for recording and shape-checking evidence, not a contract SDK.
 
 ## Dependencies and handoff
 
 Collect requirements from every producer and consumer. Each contract names its authoritative owner, schema version, required identifiers, and compatibility behavior. Distinguish a customer operation, execution attempt, provider request, and repeated observation so retries can be reconciled correctly.
 
-## P0 demo slice
+## P0 demo slice (planned)
 
 Agree the minimum contracts for one customer journey: request, research package, design version, production bundle, quote, authorization, usage observation, and financial summary. Pin a compatible contract version across the integration workspace.
 
@@ -37,7 +39,9 @@ Agree the minimum contracts for one customer journey: request, research package,
 - [ ] Validation rejects malformed input at agreed trust boundaries.
 - [ ] Generated outputs are reproducible from the canonical definitions.
 
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+The unchecked items above are local planning prompts, not the status of the global checklist. See the [acceptance view](ACCEPTANCE.md) for the selected global criteria and [integration-evals' master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) for authoritative IDs, owners, states, and evidence.
+
+[Historical architecture intent](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
 
 ## Acceptance and contributor handoff
 
