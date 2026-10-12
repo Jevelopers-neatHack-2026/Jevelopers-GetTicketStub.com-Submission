@@ -43,7 +43,9 @@ await test('CI-07 real PostgreSQL coverage persistence, recovery and protected r
     await t.test('concurrent identical starts commit exactly one run and one immutable import', async () => {
       const s = uniqueScope(); const fixture = record({ scope: partition(s) }); const { ports } = host([fixture], s); const q = request([fixture], { scope: s });
       const results = await Promise.all(Array.from({ length: 8 }, (_, i) => checked(api.startCoverageDryRun({ ...q, requestId: 'transport-' + i }, ports))));
-      assert.equal(new Set(results.map(result => JSON.stringify(result))).size, 1); assert.equal(await count(table, s), 1); assert.equal(await count(imports, s), 1);
+      // PostgreSQL JSONB reorders object keys on replay; every summary value must still agree.
+      for (const result of results.slice(1)) assert.deepEqual(result, results[0]);
+      assert.equal(await count(table, s), 1); assert.equal(await count(imports, s), 1);
       retained = { s, fixture, q, summary: results[0] };
     });
 
