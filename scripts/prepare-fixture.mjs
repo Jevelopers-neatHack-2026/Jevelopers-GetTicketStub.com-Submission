@@ -13,7 +13,7 @@ console.log(`Fixture consumes packed ${pkg.name}@${pkg.version}; ${files.length}
 
 await mkdir(`${destination}/node_modules/@jevelopers`, { recursive: true });
 await symlink(resolve(destination, 'package'), `${destination}/node_modules/@jevelopers/team-dashboard`, 'dir');
-await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, FinancialSummaryView, evaluateFinancePacket, readFinancePage, type FinancialSummaryViewProps, type FinancePacketReferences, type TrustedPacketExpectation, type PacketOutcome, type FinanceWrapperMetadata, type FinancePageRequest, type FinancePageRead, type ProjectionResult, type SummaryProjection, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
+await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, FinancialSummaryView, FinanceV2View, checkFinanceV2Page, type FinanceV2ViewProps, type FinanceV2Input, type FinanceV2Check, type OpaqueProductScope, evaluateFinancePacket, readFinancePage, type FinancialSummaryViewProps, type FinancePacketReferences, type TrustedPacketExpectation, type PacketOutcome, type FinanceWrapperMetadata, type FinancePageRequest, type FinancePageRead, type ProjectionResult, type SummaryProjection, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
 import { createElement } from 'react';
 import { routeHref } from '@jevelopers/team-dashboard/integration';
 import { createDashboardAuthorizer, createGuardedRouteReader, toHostAccessProjection, type HostSessionVerifier } from '@jevelopers/team-dashboard/server';
@@ -35,11 +35,16 @@ const trusted: TrustedPacketExpectation = { schemaSha256: '0'.repeat(64), summar
 const outcome: PacketOutcome = evaluateFinancePacket({ canonicalReferences: { schemaVersion: '1.0.0' } satisfies FinancePacketReferences }, trusted, 'synthetic_development');
 const wrapper: FinanceWrapperMetadata = { asOf: 'synthetic' };
 const summaryProps: FinancialSummaryViewProps = { result: outcome.outcome === 'refused' ? outcome.result : { status: 'missing', authority: 'read_only_projection' }, projectLabel: 'Synthetic', packet: outcome, wrapper };
+const v2Scope: OpaqueProductScope = { tenantId: 'account:synthetic', projectId: 'event:synthetic', environment: 'test', billingMode: 'simulated', actorId: 'account:synthetic' };
+const v2Input: FinanceV2Input = { status: 'restricted' };
+const v2Props: FinanceV2ViewProps = { mode: 'SYNTHETIC_PROPOSAL', view: 'budget', input: v2Input, expectedScope: v2Scope };
+const v2Check: FinanceV2Check = checkFinanceV2Page({}, v2Scope);
+void v2Check;
 const pageReader: (request: FinancePageRequest) => FinancePageRead = readFinancePage;
 const projected: ProjectionResult<SummaryProjection> = summaryProps.result;
 void pageReader; void projected;
 const elements = [
-  createElement(FinancialSummaryView, summaryProps),
+  createElement(FinancialSummaryView, summaryProps), createElement(FinanceV2View, v2Props),
   createElement(AmountText, { amount }), createElement(MetricCard, { title: 'Synthetic', amount }),
   createElement(StateBadge, { state: 'fixture' }), createElement(FilterSelect, { label: 'Synthetic filter', value: 'one', options: [{ value: 'one', label: 'One' }], onChange() {} }),
   createElement(Pagination, { pageLabel: 'Supplied label', hasPrevious: false, hasNext: false, onNavigate() {} }),
