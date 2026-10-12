@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "environment": "preview",
+  "routes": [
+    "/"
+  ],
+  "language": "en",
+  "title": "getticketstub.com",
+  "description": "Explore illustrative digital ticket stub keepsakes for concerts, festivals, games and gifts. Physical printing, prices and delivery are pending.",
+  "copyIds": {
+    "title": "LP-META-01",
+    "description": "LP-COPY-01",
+    "robots": "LP-META-02",
+    "og:type": "LP-META-03",
+    "og:title": "LP-META-04",
+    "og:description": "LP-META-05",
+    "twitter:card": "LP-META-06",
+    "twitter:title": "LP-META-07",
+    "twitter:description": "LP-META-08"
+  },
+  "production": {
+    "origin": null,
+    "indexing": null
+  },
+  "approvals": {
+    "origin": {
+      "status": "PENDING",
+      "ownerRole": "Application/hosting owner (GT-01 #7)",
+      "receipt": null
+    },
+    "indexing": {
+      "status": "PENDING",
+      "ownerRole": "Application/hosting owner and Product",
+      "receipt": null
+    },
+    "copy": {
+      "status": "PENDING",
+      "ownerRole": "Product and marketing",
+      "receipt": null
+    },
+    "social": {
+      "status": "PENDING",
+      "ownerRole": "Marketing/brand reviewer; LP-06 publishable assets",
+      "receipt": null
+    },
+    "structuredData": {
+      "status": "PENDING",
+      "ownerRole": "Product and marketing",
+      "receipt": null
+    }
+  },
+  "socialImage": {
+    "state": "omitted-pending-rights",
+    "reason": "No approved social image, dimensions, alt text or production asset origin. Existing scene art remains illustrative and publication permission pending; text-only summary is the draft fallback."
+  },
+  "structuredData": {
+    "state": "omitted",
+    "reason": "No supported production offer, product, review or organization facts add value beyond provisional visible content. No JSON-LD, ratings, prices or endorsements emitted."
+  }
+}

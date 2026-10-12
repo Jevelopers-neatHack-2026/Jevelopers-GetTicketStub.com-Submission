@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Safe provisional copy draft; not approved public release",
-  "pageSha256": "b04502104311f485a42f8b8fe865abfd085db08abd645fdaf674941e30b4e0a6",
+  "pageSha256": "51ae897ff786d2ae5bd7ab9a7e76c47196f698ef8d895f6b26e7b23a19d9a2fd",
   "visibleTextSha256": "d52183162af379628e8ecc0501e6d6826a5be554a85a24e90bb644f76bee0765",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
@@ -959,6 +959,166 @@
       "reviewDate": "2026-10-12",
       "recheckBy": "2026-11-12",
       "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication"
+    },
+    {
+      "id": "LP-META-01",
+      "location": "site/index.html:head title",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-02",
+      "location": "site/index.html:head robots",
+      "exactCopy": "noindex,nofollow",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-03",
+      "location": "site/index.html:head og:type",
+      "exactCopy": "website",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-04",
+      "location": "site/index.html:head og:title",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-05",
+      "location": "site/index.html:head og:description",
+      "exactCopy": "Explore illustrative digital ticket stub keepsakes for concerts, festivals, games and gifts. Physical printing, prices and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-06",
+      "location": "site/index.html:head twitter:card",
+      "exactCopy": "summary",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-07",
+      "location": "site/index.html:head twitter:title",
+      "exactCopy": "getticketstub.com",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
+    },
+    {
+      "id": "LP-META-08",
+      "location": "site/index.html:head twitter:description",
+      "exactCopy": "Explore illustrative digital ticket stub keepsakes for concerts, festivals, games and gifts. Physical printing, prices and delivery are pending.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "6d47c94e776ec36b24b28503e435e961c5974081",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/6d47c94e776ec36b24b28503e435e961c5974081/site/index.html"
+      },
+      "productEvidence": "NONE_PRODUCTION; existing provisional copy reused or static preview metadata policy only",
+      "upstreamOwner": "Product and frontend; marketing/brand reviewer; app/hosting owner for indexing",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/marketing owner review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
+      "sourceNote": "Base page supplies draft identity/description. Technical preview/card fields are an author proposal in this metadata change, not an owner-approved fact."
     }
   ]
 }
