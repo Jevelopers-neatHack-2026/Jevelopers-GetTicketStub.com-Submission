@@ -54,7 +54,8 @@ const { migrateProdigi } = await import("../src/server/fulfillment/prodigi-migra
 const { listProdigiAlerts, SqliteProdigiJobQueue, abandonAlertHook } = await import("../src/server/fulfillment/prodigi-jobs.ts");
 const { callbackUrl, prodigiScope } = await import("../src/server/fulfillment/prodigi-config.ts");
 const { ProdigiOrderTrackingError, POST_CREATE_POLL_DELAY_MS, withCallbackUrl } = await import("../src/server/fulfillment/prodigi-orders.ts");
-const { routeLabel } = await import("../src/server/http.ts");
+const { HttpError, route } = await import("../src/server/http.ts");
+const { ringEvents } = await import("../src/server/events.ts");
 const PRODIGI_SCOPE = prodigiScope("test");
 const { VENDORED_FILES } = await import("../scripts/vendor-fulfillment-connectors.mjs");
 
@@ -755,13 +756,42 @@ test("the host closes the database connection it opened when startup fails", () 
   assert.equal(closed, 2, "one close per failed open, no leaked connections");
 });
 
-test("the storage_unavailable route label never carries a path token", () => {
+test("the storage_unavailable wrapper keeps callback and dynamic path tokens out of the event ring", async () => {
   const token = "Abcdefghij_klmnopqrstuvwxyz0123456789-ABCDEF";
-  assert.equal(routeLabel(`/api/fulfillment/prodigi/callbacks/${token}`), "fulfillment_prodigi_callbacks");
-  assert.equal(routeLabel("/api/fulfillment/prodigi/callbacks/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopq"), "fulfillment_prodigi_callbacks");
-  assert.equal(routeLabel("/api/share/Zq9x"), "share");
-  assert.equal(routeLabel("/api/u/abc"), "u");
-  assert.equal(routeLabel("/api/auth/link"), "auth_link");
-  assert.equal(routeLabel("/api/wall/sync"), "wall_sync");
-  assert.equal(routeLabel("/api/files/0f3a.png"), "files");
+  const lowerToken = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopq";
+  const unavailable = route(async () => { throw new HttpError(503, "storage_unavailable", "Storage isn't available.", { "retry-after": "30" }); });
+  delete globalThis.__ticketstubEventRing;
+  delete globalThis.__ticketstubEventSeq;
+  try {
+    for (const [path, expected] of [
+      [`/api/fulfillment/prodigi/callbacks/${token}`, "prodigi_callbacks"],
+      [`/api/fulfillment/prodigi/callbacks/${lowerToken}`, "prodigi_callbacks"],
+      [`/api/share/${token}`, "share_token"],
+      [`/api/u/${lowerToken}`, "u_token"],
+      ["/api/auth/link", "auth_link"],
+      ["/api/wall/sync", "wall_sync"],
+      [`/api/files/${token}.png`, "files_name"],
+      ["/api/fulfillment/prodigi/callbacks", "unknown"],
+      [`/api/fulfillment/prodigi/callbacks/${token}/extra`, "unknown"],
+      [`/api/fulfillment/${lowerToken}/callbacks/${token}`, "unknown"],
+      [`/api/${lowerToken}`, "unknown"],
+      [`/api/SHARE/${token}`, "unknown"],
+    ]) {
+      const response = await unavailable(new Request(`https://preview.example.test${path}?canary=fixture_callback_query`, { headers: { "x-request-id": "req_callback_routes" } }));
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { error: { code: "storage_unavailable", message: "Storage isn't available." } });
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(response.headers.get("retry-after"), "30");
+      assert.equal(response.headers.get("x-request-id"), "req_callback_routes");
+      const event = ringEvents().at(-1);
+      assert.equal(event.type, "storage_unavailable");
+      assert.equal(event.requestId, "req_callback_routes");
+      assert.deepEqual(event.fields, { code: "storage_unavailable", route: expected }, path);
+      const serialized = JSON.stringify(ringEvents());
+      for (const canary of [token, lowerToken, "fixture_callback_query", "preview.example.test"]) assert.ok(!serialized.includes(canary), path);
+    }
+  } finally {
+    delete globalThis.__ticketstubEventRing;
+    delete globalThis.__ticketstubEventSeq;
+  }
 });
