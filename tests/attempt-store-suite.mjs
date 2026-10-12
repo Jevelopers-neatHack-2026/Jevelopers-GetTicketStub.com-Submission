@@ -11,10 +11,13 @@ import {
   ATTEMPT_MODE,
   ATTEMPT_PROVIDER,
   ATTEMPT_SCOPE,
+  boundedGateBudget,
+  buffersEqual,
   makeAttemptRecord,
   makePrivateTempDirectory,
   openAttemptStore,
   openAttemptStoreWithHistoryLimitForTests,
+  readGateExpiry,
   removePrivateTempDirectory,
   retryStartCutoffViolations,
   runAttemptChild,
@@ -1199,12 +1202,16 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
     const paths = statePaths(directory);
     const readyFile = join(root, "writer-lock-ready.json");
     const releaseFile = join(root, "writer-lock-release");
+    const expiredFile = join(root, "writer-lock-gate-expired.json");
+    // Two awaited contender children run while the gate is held; the gate and the
+    // owner's kill timer are derived from that bounded collection budget.
+    const gateBudget = boundedGateBudget({ childRuns: 2 });
     const ownerRun = runAttemptChild({
       directory,
       record: ownerRecord,
       reportAttempts: true,
-      gate: { readyFile, releaseFile, timeoutMs: 20_000 }
-    }).then((value) => ({ status: "fulfilled", value }), (error) => ({ status: "rejected", error: errorDetails(error) }));
+      gate: { readyFile, releaseFile, expiredFile, timeoutMs: gateBudget.gateTimeoutMs }
+    }, gateBudget.ownerKillMs).then((value) => ({ status: "fulfilled", value }), (error) => ({ status: "rejected", error: errorDetails(error) }));
 
     let readyText;
     let gateInfo;
@@ -1225,6 +1232,7 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
     let sameIdentityError;
     let ownerOutcome;
     let operationError;
+    let gateExpiry;
     try {
       const ready = await readReadyRecord(readyFile, 5_000);
       readyText = ready.text;
@@ -1254,6 +1262,7 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
     } finally {
       await writeFile(releaseFile, "release\n", { mode: 0o600 }).catch(() => undefined);
       ownerOutcome = await ownerRun;
+      gateExpiry = await readGateExpiry(expiredFile);
     }
 
     try {
@@ -1269,6 +1278,8 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
       gateInfo,
       operationError,
       ownerOutcome,
+      gateBudget,
+      gateExpiry,
       contender: contender === undefined ? undefined : {
         code: contender.code,
         signal: contender.signal,
@@ -1291,9 +1302,10 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
       snapshotAfter: snapshotAfter === undefined ? undefined : { byteLength: snapshotAfter.byteLength, sha256: createHash("sha256").update(snapshotAfter).digest("hex") },
       markerBefore: markerBefore === undefined ? undefined : { byteLength: markerBefore.byteLength, sha256: createHash("sha256").update(markerBefore).digest("hex") },
       markerAfter: markerAfter === undefined ? undefined : { byteLength: markerAfter.byteLength, sha256: createHash("sha256").update(markerAfter).digest("hex") },
-      snapshotUnchanged: snapshotBefore === undefined ? snapshotAfter === undefined : snapshotBefore.equals(snapshotAfter),
-      markerUnchanged: markerBefore === undefined ? markerAfter === undefined : markerBefore.equals(markerAfter),
-      lockUnchanged: lockBefore === undefined ? lockAfter === undefined : lockBefore.equals(lockAfter),
+      snapshotUnchanged: buffersEqual(snapshotBefore, snapshotAfter),
+      markerUnchanged: buffersEqual(markerBefore, markerAfter),
+      lockUnchanged: buffersEqual(lockBefore, lockAfter),
+      gateExpiredBeforeRelease: gateExpiry !== undefined,
       recordsWhileLocked,
       sameIdentityAfterRelease,
       sameIdentityError,
@@ -1302,6 +1314,7 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
     await persistFixtureDiagnostic(diagnosticsPath, "one-shot-exhaustion-diagnostics.json", diagnostics);
 
     const issues = [];
+    if (gateExpiry !== undefined) issues.push(`gated owner's lock gate expired after ${gateExpiry.waitedMs}ms before the parent released it (budget ${gateBudget.gateTimeoutMs}ms)`);
     if (operationError !== undefined) issues.push(`gate/contender collection failed: ${operationError.code ?? operationError.message}`);
     if (gateInfo?.pid === undefined) issues.push("live-lock owner did not report its pid");
     if (lockBefore === undefined || JSON.parse(lockBefore.toString("utf8")).pid !== gateInfo?.pid) issues.push("writer lock was not held by the gated child");
@@ -1364,6 +1377,135 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
       issues.push("reopened state does not contain exactly the prior and gated owner records");
     }
     assert.deepEqual(issues, [], `one-shot storage exhaustion evidence: ${diagnosticsPath}`);
+  }, { retainOnFailure: true });
+});
+
+test("gate budget outlasts the bounded parent collection and diagnostics tolerate a missing lock", () => {
+  const budget = boundedGateBudget({ childRuns: 2 });
+  assert.ok(budget.gateTimeoutMs > 2 * 30_000, "gate must outlast two contender runs killed at their default timeout");
+  assert.ok(budget.ownerKillMs > budget.gateTimeoutMs, "owner kill timer must outlast its own gate");
+  assert.throws(() => boundedGateBudget({ childRuns: -1 }), RangeError);
+  assert.throws(() => boundedGateBudget({ childRuns: 1.5 }), RangeError);
+  const present = Buffer.from("lock");
+  // The root cause of the lost diagnostics: Buffer.equals does not accept a missing value.
+  assert.throws(() => present.equals(undefined), { code: "ERR_INVALID_ARG_TYPE" });
+  assert.equal(buffersEqual(present, undefined), false);
+  assert.equal(buffersEqual(undefined, present), false);
+  assert.equal(buffersEqual(undefined, undefined), true);
+  assert.equal(buffersEqual(present, Buffer.from("lock")), true);
+  assert.equal(buffersEqual(present, Buffer.from("lock2")), false);
+});
+
+test("gated owner normal release control commits after release with no gate expiry", async () => {
+  await withRoot(async (root) => {
+    const directory = join(root, "attempts");
+    const store = await openAttemptStore(directory);
+    const priorRecord = makeAttemptRecord({
+      idempotencyKey: "control-prior-record",
+      claimId: "control-prior-claim",
+      authorizationId: "control-prior-authorization",
+      actionId: "control-prior-action"
+    });
+    const ownerRecord = makeAttemptRecord({
+      idempotencyKey: "control-owner-record",
+      claimId: "control-owner-claim",
+      authorizationId: "control-owner-authorization",
+      actionId: "control-owner-action"
+    });
+    assert.deepEqual(await store.claimSubmitAttempt(priorRecord), { claimed: true });
+    const lockPath = join(directory, ".attempt-store-v1", ".metering-writer.lock");
+    const readyFile = join(root, "control-ready.json");
+    const releaseFile = join(root, "control-release");
+    const expiredFile = join(root, "control-expired.json");
+    const ownerRun = runAttemptChild({
+      directory,
+      record: ownerRecord,
+      reportAttempts: true,
+      gate: { readyFile, releaseFile, expiredFile, timeoutMs: 20_000 }
+    });
+    const { record: gateInfo } = await readReadyRecord(readyFile, 5_000);
+    const lockWhileHeld = await readFile(lockPath);
+    assert.equal(JSON.parse(lockWhileHeld.toString("utf8")).pid, gateInfo.pid);
+    assert.equal(await readGateExpiry(expiredFile), undefined);
+    assert.equal((await store.listAttempts(ATTEMPT_SCOPE)).length, 1);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+    assert.equal(await readGateExpiry(expiredFile), undefined, "a gate well inside its budget must not expire");
+    await writeFile(releaseFile, "release\n", { mode: 0o600 });
+    const owner = await ownerRun;
+    assert.equal(owner.code, 0);
+    assert.equal(owner.signal, null);
+    assert.equal(parseChildReport(owner).value?.result?.claimed, true);
+    assert.equal(await readGateExpiry(expiredFile), undefined);
+    assert.equal(await readBytesOrMissing(lockPath), undefined, "the owner must release its lock after the gate");
+    const records = await store.listAttempts(ATTEMPT_SCOPE);
+    assert.deepEqual(records.map((record) => record.claimId).sort(), [ownerRecord.claimId, priorRecord.claimId].sort());
+  }, { retainOnFailure: true });
+});
+
+// FC_ATTEMPT_GATE_EXPIRY_CONTROL_MS selects the owner gate for this control. The default keeps
+// the suite fast; running it with 20000 exercises the original 20-second gate boundary.
+const GATE_EXPIRY_CONTROL_MS = Number(process.env.FC_ATTEMPT_GATE_EXPIRY_CONTROL_MS ?? 400);
+test("gated owner gate expiry control records the expiry, releases only its own lock, and commits nothing", async () => {
+  assert.ok(Number.isSafeInteger(GATE_EXPIRY_CONTROL_MS) && GATE_EXPIRY_CONTROL_MS >= 100 && GATE_EXPIRY_CONTROL_MS <= 20_000);
+  await withRoot(async (root) => {
+    const directory = join(root, "attempts");
+    const store = await openAttemptStore(directory);
+    const priorRecord = makeAttemptRecord({
+      idempotencyKey: "expiry-prior-record",
+      claimId: "expiry-prior-claim",
+      authorizationId: "expiry-prior-authorization",
+      actionId: "expiry-prior-action"
+    });
+    const ownerRecord = makeAttemptRecord({
+      idempotencyKey: "expiry-owner-record",
+      claimId: "expiry-owner-claim",
+      authorizationId: "expiry-owner-authorization",
+      actionId: "expiry-owner-action"
+    });
+    assert.deepEqual(await store.claimSubmitAttempt(priorRecord), { claimed: true });
+    const paths = statePaths(directory);
+    const lockPath = join(directory, ".attempt-store-v1", ".metering-writer.lock");
+    const readyFile = join(root, "expiry-ready.json");
+    const releaseFile = join(root, "expiry-release");
+    const expiredFile = join(root, "expiry-expired.json");
+    const ownerRun = runAttemptChild({
+      directory,
+      record: ownerRecord,
+      reportAttempts: true,
+      gate: { readyFile, releaseFile, expiredFile, timeoutMs: GATE_EXPIRY_CONTROL_MS }
+    });
+    const { record: gateInfo } = await readReadyRecord(readyFile, 5_000);
+    const lockBefore = await readFile(lockPath);
+    const snapshotBefore = await readBytesOrMissing(paths.snapshot);
+    const markerBefore = await readBytesOrMissing(paths.marker);
+    assert.equal(JSON.parse(lockBefore.toString("utf8")).pid, gateInfo.pid);
+    // The parent deliberately never releases: only the owner's own gate can end the hold.
+    const owner = await ownerRun;
+    const expiry = await readGateExpiry(expiredFile);
+    assert.ok(expiry !== undefined, "the owner must durably record its gate expiry");
+    assert.equal(expiry.pid, gateInfo.pid);
+    assert.equal(expiry.code, "fixture_lock_gate_timeout");
+    assert.equal(expiry.timeoutMs, GATE_EXPIRY_CONTROL_MS);
+    assert.ok(expiry.waitedMs >= GATE_EXPIRY_CONTROL_MS, `gate expired early after ${expiry.waitedMs}ms`);
+    assert.ok(expiry.expiredAt >= gateInfo.readyAt + GATE_EXPIRY_CONTROL_MS - 50);
+    assert.equal(owner.code, 2);
+    assert.equal(owner.signal, null);
+    const ownerReport = parseChildReport(owner);
+    assert.equal(ownerReport.error, undefined);
+    assert.equal(ownerReport.value.errorCode, "storage_unavailable");
+    assert.equal(ownerReport.value.result, undefined);
+    // Expiry is the only thing that released the lock, and nothing was committed by the owner.
+    const lockAfter = await readBytesOrMissing(lockPath);
+    assert.equal(lockAfter, undefined);
+    assert.equal(buffersEqual(lockBefore, lockAfter), false);
+    assert.equal(buffersEqual(snapshotBefore, await readBytesOrMissing(paths.snapshot)), true);
+    assert.equal(buffersEqual(markerBefore, await readBytesOrMissing(paths.marker)), true);
+    const records = await store.listAttempts(ATTEMPT_SCOPE);
+    assert.deepEqual(records.map((record) => record.claimId), [priorRecord.claimId]);
+    // A late release is harmless and the identity is still claimable exactly once.
+    await writeFile(releaseFile, "release\n", { mode: 0o600 });
+    assert.deepEqual(await store.claimSubmitAttempt(ownerRecord), { claimed: true });
+    assert.equal((await store.claimSubmitAttempt(ownerRecord)).claimed, false);
   }, { retainOnFailure: true });
 });
 

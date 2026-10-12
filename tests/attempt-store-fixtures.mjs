@@ -254,9 +254,37 @@ function childEnvironment(payload) {
   };
 }
 
-export async function runAttemptChild(payload, timeoutMs = 30_000) {
+export const DEFAULT_CHILD_TIMEOUT_MS = 30_000;
+
+// The gated owner's wall-clock gate must outlast everything the parent can spend
+// collecting while it holds the lock: each awaited child run is killed after
+// childTimeoutMs, so the collection phase is bounded by childRuns * childTimeoutMs.
+// The owner's own kill timer must in turn outlast the gate plus a post-release claim.
+export function boundedGateBudget({ childRuns, childTimeoutMs = DEFAULT_CHILD_TIMEOUT_MS, parentSlackMs = 10_000 }) {
+  if (!Number.isSafeInteger(childRuns) || childRuns < 0) throw new RangeError("childRuns must be a non-negative integer");
+  const gateTimeoutMs = childRuns * childTimeoutMs + parentSlackMs;
+  return { gateTimeoutMs, ownerKillMs: gateTimeoutMs + childTimeoutMs };
+}
+
+// Buffer.prototype.equals throws on undefined; a missing file must compare unequal
+// to a present one (and equal to another missing one) so diagnostics always persist.
+export function buffersEqual(left, right) {
+  if (left === undefined || right === undefined) return left === right;
+  return left.equals(right);
+}
+
+export async function readGateExpiry(expiredFile) {
+  try {
+    return JSON.parse(await readFile(expiredFile, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+export async function runAttemptChild(payload, timeoutMs = DEFAULT_CHILD_TIMEOUT_MS) {
   const source = `
-import { link, mkdir, open, readFile, unlink } from "node:fs/promises";
+import { link, mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 const payload = JSON.parse(process.env.FC_ATTEMPT_CHILD_PAYLOAD);
 if (payload.fixtureOutput === "malformed") {
@@ -265,8 +293,9 @@ if (payload.fixtureOutput === "malformed") {
 }
 const imported = await import(process.env.FC_ATTEMPT_MODULE_URL);
 const pause = (milliseconds) => new Promise((resolvePause) => setTimeout(resolvePause, milliseconds));
-async function waitForGateRelease(path, timeoutMs, timeoutCode) {
-  const deadline = Date.now() + timeoutMs;
+async function waitForGateRelease(path, timeoutMs, timeoutCode, expiredFile) {
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
   while (Date.now() < deadline) {
     try {
       await readFile(path);
@@ -275,6 +304,10 @@ async function waitForGateRelease(path, timeoutMs, timeoutCode) {
       if (error?.code !== "ENOENT") throw error;
       await pause(10);
     }
+  }
+  if (expiredFile !== undefined) {
+    const expiredAt = Date.now();
+    await writeFile(expiredFile, JSON.stringify({ pid: process.pid, code: timeoutCode, timeoutMs, startedAt, expiredAt, waitedMs: expiredAt - startedAt }) + "\\n", { flag: "wx", mode: 0o600 });
   }
   const error = new Error(timeoutCode);
   error.code = timeoutCode;
@@ -322,7 +355,7 @@ if (payload.exitAt === "temporary_file_sync") {
     if (payload.afterLockDelayMs !== undefined) await pause(payload.afterLockDelayMs);
     if (payload.gate === undefined) return;
     await publishReadyRecord(payload.gate);
-    await waitForGateRelease(payload.gate.releaseFile, payload.gate.timeoutMs, "fixture_lock_gate_timeout");
+    await waitForGateRelease(payload.gate.releaseFile, payload.gate.timeoutMs, "fixture_lock_gate_timeout", payload.gate.expiredFile);
   };
 }
 const reportAttempts = payload.reportAttempts === true || payload.retryStorageBusy !== undefined;
