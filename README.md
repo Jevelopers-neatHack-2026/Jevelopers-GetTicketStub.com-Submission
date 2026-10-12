@@ -7,30 +7,34 @@
 
 # shared-contracts
 
-Contract design, compatibility handoffs and offline validation tools for the interfaces between TicketStub repositories.
+Versioned schemas, validation and compatibility fixtures for the interfaces between TicketStub repositories.
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
-  <a href="#status"><img alt="Status: local validation tools; canonical package unpublished" src="https://img.shields.io/badge/status-local%20validation-B4693E?style=flat-square&labelColor=17140F"></a>
-  <a href="docs/contract-catalog.md"><img alt="Contract catalog: proposed design" src="https://img.shields.io/badge/catalog-proposed-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: private implementation candidate, no accepted release" src="https://img.shields.io/badge/status-private%20candidate-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href="docs/contract-catalog.md"><img alt="Contract catalog: implemented candidates" src="https://img.shields.io/badge/catalog-candidate-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
-[Status](#status) · [What's here](#whats-here) · [Quickstart](#quickstart) · [Validation](#testing-and-validation) · [Docs](#docs) · [Related](#related-repositories)
+[Status](#status) · [What's here](#whats-here) · [Development](#development) · [Contracts](#contracts) · [Docs](#docs) · [Related](#related-repositories)
 
 ## Status
 
-**Local validation tooling is implemented; the canonical package is not released.** At the 2026-10-12 audit revision [7251a09](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/7251a09c4eaddbb1232d444fd931a01c266095ac), `main` includes the receipt metadata checker, standalone reporting proposal schemas and fixtures, their tests, and an Entire graph artifact workflow. It has no root `package.json`, installable canonical schema package or generated canonical SDK.
+**Private implementation candidate; canonical release remains unaccepted.** [PR #31](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31) integrates the schemas, generated SDK and executable development package with the maintained receipt checker, reporting proposal and graph workflow. Merging this candidate permits development from an immutable source pin; it does not grant owner acknowledgement, consumer adoption or release acceptance.
 
-- **Available locally:** [receipt metadata validation](docs/receipt-checker.md), the [reporting/query/export proposal](proposals/reporting-v1/README.md), and the commands below. A structurally complete receipt does not verify its claims or grant release authority.
-- **Unmerged work:** [draft PR #31](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31) contains the canonical package candidate; [PR #46](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/46) stages SDK and production-boundary integration, and [PR #42](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/42) proposes additional usage-cost fields. A candidate's private development permission, compatibility review, consumer pin and release acceptance are separate records.
-- **Consumer pins:** consumers record their exact candidate revision, archive digest and adoption limitations in local manifests, such as [cost-intelligence's contract lock](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/blob/main/contracts.lock.json). A vendored proposal archive is not a registry release or evidence of acceptance by every consumer. Recheck the current manifest rather than copying a moving candidate version into this README.
-- Planned work is tracked in [SC-EPIC #1](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1) and its linked SC issues, ending with the [SC-12 release gate](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/3). CON-01 to CON-03 stay planned in the [acceptance view](docs/architecture/ACCEPTANCE.md).
+Candidate package **0.10.2** contains 77 wire names across 88 supported schema versions, standalone Node ESM validators, deep readonly TypeScript bindings, pure semantic helpers, compatibility fixtures and offline consumer tooling. The package remains private and unpublished. Finance state, authentication, approval issuance, rendering and supplier operations remain with their domain owners. No project license has been selected.
+
+The usage-cost candidate from [PR #42](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/42) is included. The [reporting/query/export proposal](proposals/reporting-v1/README.md) remains isolated from canonical FinancialSummary contracts. [Receipt metadata validation](docs/receipt-checker.md) checks structure and records; a complete receipt does not verify its claims or grant release authority.
+
+The 0.10.2 repairs prevent reuse of source identifiers in public evaluation projections, require complete dependency authority coverage, and guard additional consumer-driver network/process/debugger entry points. Historical checkpoint dispositions remain records of their original revisions. Consumer hooks and debugger observation are not a hostile-code sandbox.
+
+- **Consumer pins:** record the exact source revision, archive integrity, package-content digest and adoption limitations. Earlier pins, including [cost-intelligence's contract lock](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/blob/main/contracts.lock.json), remain evidence for their original archives; they do not transfer to new package bytes.
+- **Release obligations:** named owner acknowledgements, current consumer receipts, genuine issuer/supplier/Finance integration, and the unsupported preview/CSV/repair interfaces remain governed by the [release guide](docs/release-guide.md), [MVP readiness](docs/mvp-readiness.md), and [SC-12 release gate](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/3). CON-01 to CON-03 retain their scope in the [acceptance view](docs/architecture/ACCEPTANCE.md).
 
 ## What's here
 
 This repository owns versioned request, result, event, error and validation contracts between independently developed repositories. Business behavior and provider implementations stay with their domain owners. See [ownership](docs/architecture/OWNERSHIP.md).
 
-The [contract catalog](docs/contract-catalog.md) is the maintained interface design. Its domain contracts are proposed design; the isolated reporting schemas under `proposals/` do not make the catalog a published package:
+The [contract catalog](docs/contract-catalog.md) describes the implemented candidate interfaces and their ownership and acceptance requirements:
 
 | Section | Covers |
 | --- | --- |
@@ -41,55 +45,123 @@ The [contract catalog](docs/contract-catalog.md) is the maintained interface des
 | [Compatibility acceptance](docs/contract-catalog.md#compatibility-acceptance) | Minimum checks before a contract is accepted |
 | [Error model](docs/contract-catalog.md#error-model) | Typed, retry-safe error fields |
 
-## Quickstart
+## Development
 
-Use Git and Node.js. The [maintained receipt runtime contract](docs/receipt-checker.md#rules-checked) recognizes Node 22.23.3 or later within 22, or 24.21.0 or later within 24; use one of those lines when preparing consumer evidence. There is no root npm installation or build step for the tools currently on `main`.
+Use **Node 22.23.3** for canonical generation, npm and the exact [lockfile](package-lock.json). Installed Node ESM, TypeScript and all-version fixtures were also verified on **Node 24.21.0** for consumer compatibility. The engine range retains Node 22 and permits Node 24 at that tested minimum; renderer/npm platform acceptance remains downstream. Prewarm the locked dependency cache before the isolated run. Validation uses no provider credentials and no provider calls:
 
 ```sh
-git clone https://github.com/Jevelopers-neatHack-2026/shared-contracts.git
-cd shared-contracts
-node --test tests/consumer-receipt.test.mjs tests/graph-workflow.test.mjs
+export npm_config_offline=true npm_config_audit=false npm_config_fund=false
+export SC_AJV_ROOT="$PWD/node_modules"
+npm ci
+npm run build
+npm test
+npm run contracts:check
+npm run contracts:fixtures
+npm run contracts:compat
+npm run contracts:coverage -- --human
+npm run docs:check
+npm run generate -- --check
+git diff --exit-code -- schemas generated fixtures
+npm run test:installed
+npm pack --dry-run
 ```
 
-These tests exercise the local receipt checker and graph-workflow policy. They make no product/provider request and do not accept a canonical package or an integration.
+On an uncommitted implementation checkout, the Git diff command shows intentional candidate changes; `generate -- --check` checks byte drift independently. The exact committed candidate must reproduce cleanly before release. Every required owner/consumer flag and `contracts:consumers` are release gates; their known missing records fail explicitly. [Full validation and coverage](docs/fixture-harness.md), [consumer CI and pins](docs/consumer-handoff.md), and [release checklist/provenance](docs/release-guide.md) describe the commands and limitations. `--foundation` selects two foundation exports, `--implemented` selects all implemented candidates; neither means release acceptance.
 
-## Configuration
+Node ESM and TypeScript use the same export map. Expected scope comes from the authenticated server adapter, outside the payload:
 
-| Setting or input | Used by | Meaning |
-|---|---|---|
-| `SC_AJV_ROOT` | Reporting proposal validator and tests | Absolute path to an externally provisioned `node_modules` directory containing exactly `ajv@8.17.1`; the validator does not install dependencies or fetch schemas |
-| Receipt JSON file | `scripts/check-consumer-receipt.mjs` | A locally prepared receipt matching the [receipt template](docs/consumer-acceptance-receipt.md); input is metadata, not an executable command list |
+```js
+import { parseContract, checkTrustedContext, versions } from '@jevelopers/shared-contracts';
+export function parseIngress(jsonFromCaller, authenticatedScope) {
+  const parsed = parseContract('ProjectRequest', jsonFromCaller);
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+  return checkTrustedContext(parsed.value, authenticatedScope);
+}
+console.log(Object.keys(versions.ProjectRequest)); // exact supported versions
+```
 
-No service credentials or `.env` file are needed for these offline tools. Keep secrets out of receipt fields and fixtures. The graph workflow's CLI/plugin setup is defined separately in [its workflow source](.github/workflows/entire-graph.yml).
+```ts
+import { parseContract } from '@jevelopers/shared-contracts';
+import type { ProjectRequest, ContractVersionMap, TrustedContext } from '@jevelopers/shared-contracts';
+export function decode(json: string): ProjectRequest | undefined {
+  const result = parseContract('ProjectRequest', json);
+  return result.ok ? result.value : undefined;
+}
+export type ProjectV1 = ContractVersionMap['ProjectRequest']['1.0.0'];
+export type ServerScope = TrustedContext;
+```
 
-## Testing and validation
+Structural parsing rejects duplicate JSON members, unsupported exact versions, unknown fields/enums and malformed primitives without coercion, defaults or mutation. Safe failures carry code/path/keyword and never submitted values; unknown-field paths identify their parent container. Pure semantic helpers in the [operations](docs/operations-contracts.md), [research/creative](docs/research-creative-contracts.md) and [commerce/evidence](docs/commerce-evidence-contracts.md) guides compare independently supplied domain contexts. They do not authenticate callers, issue approval, grant spending, render artwork, submit supplier orders or implement a ledger.
 
-| Check | Command or instructions | What it establishes |
-|---|---|---|
-| Receipt and workflow policy tests | Quickstart command above | Local metadata validation and static workflow-policy behavior |
-| Reporting proposal fixtures | `node proposals/reporting-v1/validate.mjs` after setting `SC_AJV_ROOT` | Synthetic fixtures match proposed structural schemas |
-| Reporting runner regressions | `node --test tests/reporting-proposal.test.mjs` with the same dependency setup | Local runner and fixture failure controls |
-| Prepared receipt | `node scripts/check-consumer-receipt.mjs receipt.json` after creating that input file | `METADATA_COMPLETE`, `INCOMPLETE` or `INVALID`; no verification of real artifacts, commands or people |
+## Contracts
 
-The [reporting proposal README](proposals/reporting-v1/README.md#offline-validation) describes dependency provisioning, exit codes and schema limitations. There are no root npm lint, build or test scripts. The existing [Entire graph workflow](.github/workflows/entire-graph.yml) runs on `main` pushes and uploads graph artifacts; it does not run these contract/receipt suites or establish a product release gate.
+The [machine catalog](docs/contract-catalog.md) is the maintained inventory. Every named export links below to its actual schema, derived type, validator/helper, canonical fixtures and accountable domain/owner issue. Named reviewers and acknowledgements are still unassigned. The helper accepts the schema discriminator shown in its fixture; the [API/version map](generated/schema-manifest.json) records exact schema identities and bytes.
 
-## Repository structure
+| Contract | Schema | TypeScript | Validation/helper | Examples | Accountable domain and assignment |
+| --- | --- | --- | --- | --- | --- |
+| FulfillmentCapabilitySnapshot | [schema](schemas/FulfillmentCapabilitySnapshot/1.0.0.json) | [types](generated/FulfillmentCapabilitySnapshot_1_0_0.d.ts) | [helper](tooling/capability.mjs) | [fixtures](fixtures/FulfillmentCapabilitySnapshot.json) | [fulfillment-connectors](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/32) |
+| PrintSpec | [schema](schemas/PrintSpec/1.0.0.json) | [types](generated/PrintSpec_1_0_0.d.ts) | [helper](tooling/capability.mjs) | [fixtures](fixtures/PrintSpec.json) | [fulfillment-connectors](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/32) |
+| CommonEnvelope | [schema](schemas/CommonEnvelope/1.0.0.json) | [types](generated/CommonEnvelope_1_0_0.d.ts) | [helper](tooling/runtime.mjs) | [fixtures](fixtures/CommonEnvelope.json) | [shared-contracts](https://github.com/Jevelopers-neatHack-2026/shared-contracts) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/7) |
+| EvidenceProjection | [schema](schemas/EvidenceProjection/1.0.0.json) | [types](generated/EvidenceProjection_1_0_0.d.ts) | [helper](tooling/runtime.mjs) | [fixtures](fixtures/EvidenceProjection.json) | [shared-contracts](https://github.com/Jevelopers-neatHack-2026/shared-contracts) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/8) |
+| ErrorEnvelope | [schema](schemas/ErrorEnvelope/1.0.0.json) | [types](generated/ErrorEnvelope_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/ErrorEnvelope.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/9) |
+| PartialFailure | [schema](schemas/PartialFailure/1.0.0.json) | [types](generated/PartialFailure_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/PartialFailure.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/9) |
+| JobStatus | [schema](schemas/JobStatus/1.0.0.json) | [types](generated/JobStatus_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/JobStatus.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/10) |
+| JobProgress | [schema](schemas/JobProgress/1.0.0.json) | [types](generated/JobProgress_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/JobProgress.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/10) |
+| Cancellation | [schema](schemas/Cancellation/1.0.0.json) | [types](generated/Cancellation_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/Cancellation.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/10) |
+| JobCommandAcknowledgement | [schema](schemas/JobCommandAcknowledgement/1.0.0.json) | [types](generated/JobCommandAcknowledgement_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/JobCommandAcknowledgement.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/10) |
+| UsageEvent | [schema](schemas/UsageEvent/1.0.0.json) | [types](generated/UsageEvent_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/UsageEvent.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/11) |
+| UsageEvent 2.0.0 | [schema](schemas/UsageEvent/2.0.0.json) | [types](generated/UsageEvent_2_0_0.d.ts) | [opt-in helper](tooling/usage-reported-unsettled.mjs) | [synthetic fixtures](fixtures/UsageEvent.2_0_0.json); [example](examples/usage-reported-unsettled-consumer.mjs) | [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/11); candidate only |
+| ProviderReportedCostEvidence | [schema](schemas/ProviderReportedCostEvidence/1.0.0.json) | [types](generated/ProviderReportedCostEvidence_1_0_0.d.ts) | [opt-in helper](tooling/usage-reported-unsettled.mjs) | [synthetic fixtures](fixtures/ProviderReportedCostEvidence.json) | [proposal criteria](compatibility/usage-reported-unsettled-proposal.json); owner issue [#12](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12); no owner or consumer assigned |
+| BudgetReservation | [schema](schemas/BudgetReservation/2.0.0.json) | [types](generated/BudgetReservation_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/BudgetReservation.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| ReserveRequest | [schema](schemas/ReserveRequest/2.0.0.json) | [types](generated/ReserveRequest_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/ReserveRequest.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| ReserveResult | [schema](schemas/ReserveResult/2.0.0.json) | [types](generated/ReserveResult_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/ReserveResult.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| SettleRequest | [schema](schemas/SettleRequest/2.0.0.json) | [types](generated/SettleRequest_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/SettleRequest.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| SettleResult | [schema](schemas/SettleResult/2.0.0.json) | [types](generated/SettleResult_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/SettleResult.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| ReleaseRequest | [schema](schemas/ReleaseRequest/2.0.0.json) | [types](generated/ReleaseRequest_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/ReleaseRequest.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| ReleaseResult | [schema](schemas/ReleaseResult/2.0.0.json) | [types](generated/ReleaseResult_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/ReleaseResult.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| QueryRequest | [schema](schemas/QueryRequest/2.0.0.json) | [types](generated/QueryRequest_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/QueryRequest.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| QueryResult | [schema](schemas/QueryResult/2.0.0.json) | [types](generated/QueryResult_2_0_0.d.ts) | [helper](tooling/finance-v2.mjs) | [fixtures](fixtures/QueryResult.2_0_0.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12) |
+| FinancialSummary | [schema](schemas/FinancialSummary/1.0.0.json) | [types](generated/FinancialSummary_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/FinancialSummary.json) | [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/13) |
+| DecisionPortRequest | [schema](schemas/DecisionPortRequest/1.0.0.json) | [types](generated/DecisionPortRequest_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/DecisionPortRequest.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/14) |
+| DecisionPortResult | [schema](schemas/DecisionPortResult/1.0.0.json) | [types](generated/DecisionPortResult_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/DecisionPortResult.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/14) |
+| DecisionReceipt | [schema](schemas/DecisionReceipt/1.0.0.json) | [types](generated/DecisionReceipt_1_0_0.d.ts) | [helper](tooling/operations.mjs) | [fixtures](fixtures/DecisionReceipt.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/14) |
+| ProjectRequest | [schema](schemas/ProjectRequest/1.0.0.json) | [types](generated/ProjectRequest_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ProjectRequest.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/15) |
+| ResearchRequest | [schema](schemas/ResearchRequest/1.0.0.json) | [types](generated/ResearchRequest_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchRequest.json) | [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/16) |
+| EventIntelligencePackage | [schema](schemas/EventIntelligencePackage/1.0.0.json) | [types](generated/EventIntelligencePackage_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/EventIntelligencePackage.json) | [event-intelligence](https://github.com/Jevelopers-neatHack-2026/event-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/17) |
+| ResearchCorrectionRequest | [schema](schemas/ResearchCorrectionRequest/1.0.0.json) | [types](generated/ResearchCorrectionRequest_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchCorrectionRequest.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/18) |
+| ResearchCorrectionReceipt | [schema](schemas/ResearchCorrectionReceipt/1.0.0.json) | [types](generated/ResearchCorrectionReceipt_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchCorrectionReceipt.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/18) |
+| ResearchInvalidation | [schema](schemas/ResearchInvalidation/1.0.0.json) | [types](generated/ResearchInvalidation_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchInvalidation.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/18) |
+| CreativeBrief | [schema](schemas/CreativeBrief/1.0.0.json) | [types](generated/CreativeBrief_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/CreativeBrief.json) | [creative-engine](https://github.com/Jevelopers-neatHack-2026/creative-engine) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/19) |
+| DesignControlSchema | [schema](schemas/DesignControlSchema/1.0.0.json) | [types](generated/DesignControlSchema_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/DesignControlSchema.json) | [creative-engine](https://github.com/Jevelopers-neatHack-2026/creative-engine) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/20) |
+| DesignVersion | [schema](schemas/DesignVersion/1.0.0.json) | [types](generated/DesignVersion_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/DesignVersion.json) | [creative-engine](https://github.com/Jevelopers-neatHack-2026/creative-engine) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/21) |
+| ApprovalReference | [schema](schemas/ApprovalReference/1.0.0.json) | [types](generated/ApprovalReference_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ApprovalReference.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/22) |
+| ApprovalReceipt | [schema](schemas/ApprovalReceipt/1.0.0.json) | [types](generated/ApprovalReceipt_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ApprovalReceipt.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/22) |
+| ArtifactHandoffManifest | [schema](schemas/ArtifactHandoffManifest/1.0.0.json) | [types](generated/ArtifactHandoffManifest_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ArtifactHandoffManifest.json) | [creative-engine](https://github.com/Jevelopers-neatHack-2026/creative-engine) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/23) |
+| ProductionBundle | [schema](schemas/ProductionBundle/1.0.0.json) | [types](generated/ProductionBundle_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ProductionBundle.json) | [print-production](https://github.com/Jevelopers-neatHack-2026/print-production) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/24) |
+| FulfillmentQuote | [schema](schemas/FulfillmentQuote/1.0.0.json) | [types](generated/FulfillmentQuote_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/FulfillmentQuote.json) | [fulfillment-connectors](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/25) |
+| OrderAuthorization | [schema](schemas/OrderAuthorization/1.0.0.json) | [types](generated/OrderAuthorization_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/OrderAuthorization.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/26) |
+| FulfillmentStatus | [schema](schemas/FulfillmentStatus/1.0.0.json) | [types](generated/FulfillmentStatus_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/FulfillmentStatus.json) | [fulfillment-connectors](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/27) |
+| EvaluationEvidence | [schema](schemas/EvaluationEvidence/1.0.0.json) | [types](generated/EvaluationEvidence_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/EvaluationEvidence.json) | [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/28) |
+| ResearchRequestReceipt | [schema](schemas/ResearchRequestReceipt/1.0.0.json) | [types](generated/ResearchRequestReceipt_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchRequestReceipt.json) | [event-intelligence](https://github.com/Jevelopers-neatHack-2026/event-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/17) |
+| ResearchAnswerReceipt | [schema](schemas/ResearchAnswerReceipt/1.0.0.json) | [types](generated/ResearchAnswerReceipt_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchAnswerReceipt.json) | [event-intelligence](https://github.com/Jevelopers-neatHack-2026/event-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/17) |
+| ResearchBatchReceipt | [schema](schemas/ResearchBatchReceipt/1.0.0.json) | [types](generated/ResearchBatchReceipt_1_0_0.d.ts) | [helper](tooling/research-creative.mjs) | [fixtures](fixtures/ResearchBatchReceipt.json) | [event-intelligence](https://github.com/Jevelopers-neatHack-2026/event-intelligence) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/17) |
+| ApprovalVerificationRequest | [schema](schemas/ApprovalVerificationRequest/1.0.0.json) | [types](generated/ApprovalVerificationRequest_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ApprovalVerificationRequest.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/22) |
+| ApprovalVerificationOutcome | [schema](schemas/ApprovalVerificationOutcome/1.0.0.json) | [types](generated/ApprovalVerificationOutcome_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ApprovalVerificationOutcome.json) | [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/22) |
+| ArtifactConsumptionReceipt | [schema](schemas/ArtifactConsumptionReceipt/1.0.0.json) | [types](generated/ArtifactConsumptionReceipt_1_0_0.d.ts) | [helper](tooling/commerce-evidence.mjs) | [fixtures](fixtures/ArtifactConsumptionReceipt.json) | [creative-engine](https://github.com/Jevelopers-neatHack-2026/creative-engine) / [owner issue](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/23) |
 
-| Path | Contents |
-|---|---|
-| [`docs/contract-catalog.md`](docs/contract-catalog.md) | Maintained domain-interface design and state ownership |
-| [`docs/consumer-acceptance-receipt.md`](docs/consumer-acceptance-receipt.md) | Consumer handoff template and evidence boundaries |
-| [`docs/mvp-readiness.md`](docs/mvp-readiness.md) | Dated candidate, owner and consumer-readiness snapshot; follow its receipts for later decisions |
-| [`proposals/reporting-v1/`](proposals/reporting-v1/) | Unadopted reporting schemas, synthetic fixtures and isolated validator |
-| [`scripts/`](scripts/) | Offline receipt metadata checker |
-| [`tests/`](tests/) | Receipt, reporting and workflow-policy tests |
-| [`.github/workflows/`](.github/workflows/) | Graph artifact workflow, separate from canonical package acceptance |
+Retained finance 1.0.0 artifacts and exact migration are linked in the [finance guide](docs/finance-v2-contracts.md). The [identity policy](docs/identity-policy.md), [privacy policy](docs/privacy-policy.md), [version/deprecation policy](compatibility/version-policy.json) and [canonical schema ADR](docs/adr/0001-canonical-schemas.md) govern these candidates. [Migration/rollback and aliases](docs/consumer-handoff.md) require reviewed adapters and exact producer/shared/consumer pins; existing local types remain until their owner agrees. Current and previous **accepted** majors are retained by policy, but no previous accepted major exists. Candidate retained-encoding fixtures do not fabricate historical adoption. The [dependency handoff](docs/dependency-handoff.md) separates implementation artifacts and closure evidence while retaining every authoritative edge.
+
+The [installed whole-catalog driver](examples/fixture-consumer.mjs) loads the actual archive, runs all structural and independent semantic fixture adapters, roundtrips generated bindings, verifies hashes and proves false negative acceptance fails its assertions. It supplements the four focused installed examples. These package-owned representative adapters are distinct from actual downstream integrations.
+
+The runner uses the exact checked-in [nine-row handoff manifest](compatibility/consumers.json) and pre-provisioned checkout/source/archive/acknowledgement paths. It never clones or fetches. It verifies clean consumer SHA, actual clean shared source SHA **or** archive integrity, complete package code digest, schema identity/version/bytes, fixture digest, acknowledgement provenance and a receipt bound to the package APIs observed during execution. Actual acknowledgement authenticity and downstream authority behavior require owner review. See the [handoff matrix and exact driver command](docs/consumer-handoff.md).
+
+[Third-party notices](generated/THIRD_PARTY_NOTICES.md) preserve the actual licenses of Ajv and fast-deep-equal code bundled in validators. [Dependency provenance](generated/dependency-provenance.json) records locked versions/integrities; there are no runtime npm dependencies. Synthetic fixture assets have no real customer/provider content and establish no third-party asset rights. No tag, GitHub release, registry publication, visibility change or license choice is part of this candidate.
+
+[Ownership](docs/architecture/OWNERSHIP.md) and [acceptance view](docs/architecture/ACCEPTANCE.md) define boundaries. [Requirements](docs/requirements.json) preserve all SC/global IDs, including ARC-01, CON-01/02/03, ART-02/04/05, FIN-02/03/04 and EVAL-01/04. The [integration-evals master tracker](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.json) remains authoritative. [Architecture snapshot](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) and [original implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md) are historical planning context. Documentation and fixture execution establish no end-to-end product acceptance.
 
 ## Docs
 
 - [Contract catalog](docs/contract-catalog.md)
-- [Receipt checker](docs/receipt-checker.md) · [Consumer acceptance receipt](docs/consumer-acceptance-receipt.md) · [Dated MVP readiness](docs/mvp-readiness.md)
-- [Reporting proposal and open owner questions](proposals/reporting-v1/README.md)
 - [Ownership](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md)
 - [Architecture section 5: shared contracts and data ownership](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md#5-shared-contracts-and-data-ownership)
 - [Architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
@@ -97,17 +169,62 @@ The [reporting proposal README](proposals/reporting-v1/README.md#offline-validat
 
 ## Related repositories
 
-This catalog coordinates producer/consumer interfaces; it is not itself an installed runtime dependency. Relevant handoffs include:
+Related producers, consumers and coordination repositories:
 
 - [fulfillment-connectors](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors): validates through injected ports and records the shared-contracts issues it waits on.
-- [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence): owns Finance semantics and its exact candidate pin; [team-dashboard](https://github.com/Jevelopers-neatHack-2026/team-dashboard) consumes authorized Finance projections.
+- [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence): records the earlier proposal archive described above; accepted adoption remains pending.
 - [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals): hosts the master checklist that tracks CON-01 contract compatibility.
 - [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com): architecture kit and producer/consumer map.
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) and follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Schema changes need review by at least one affected producer and consumer ([compatibility acceptance](docs/contract-catalog.md#compatibility-acceptance)). Keep proposed packets, historical receipts and canonical releases clearly distinguished. Documentation updates do not close the release gate.
+Follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Schema changes need review by at least one affected producer and consumer ([compatibility acceptance](docs/contract-catalog.md#compatibility-acceptance)). Run the development checks above and retain schema, fixture and package provenance for review. No license file is present in this repository.
 
-## License
+### Production contract development candidate
 
-No repository license file is present. An archive, source pin or successful validation does not supply licensing terms.
+Package 0.9.0 adds proposed production interfaces and pure checks. [Protocol and authority boundaries](docs/production-contracts.md) and [migration impact](compatibility/production-impact.json) describe the separate 24 local criteria and pending domain handoffs. The six service bindings use `@jevelopers/shared-contracts/production-operations`; commerce `ProductionContext` retains its existing meaning.
+
+| Candidate | Schema | Types | Checks | Fixtures | Ownership |
+| --- | --- | --- | --- | --- | --- |
+| ProductionReference/1.0.0 | [schema](schemas/ProductionReference/1.0.0.json) | [readonly types](generated/ProductionReference_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionReference.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ProductionPolicy/1.0.0 | [schema](schemas/ProductionPolicy/1.0.0.json) | [readonly types](generated/ProductionPolicy_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionPolicy.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ProductionRuntime/1.0.0 | [schema](schemas/ProductionRuntime/1.0.0.json) | [readonly types](generated/ProductionRuntime_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionRuntime.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ProductionResource/1.0.0 | [schema](schemas/ProductionResource/1.0.0.json) | [readonly types](generated/ProductionResource_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionResource.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ArtifactRef/1.0.0 | [schema](schemas/ArtifactRef/1.0.0.json) | [readonly types](generated/ArtifactRef_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ArtifactRef.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| JobRef/1.0.0 | [schema](schemas/JobRef/1.0.0.json) | [readonly types](generated/JobRef_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/JobRef.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ComposeArtifactRequest/1.0.0 | [schema](schemas/ComposeArtifactRequest/1.0.0.json) | [readonly types](generated/ComposeArtifactRequest_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ComposeArtifactRequest.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| PersonalizeBatchRequest/1.0.0 | [schema](schemas/PersonalizeBatchRequest/1.0.0.json) | [readonly types](generated/PersonalizeBatchRequest_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/PersonalizeBatchRequest.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| InspectArtifactRequest/1.0.0 | [schema](schemas/InspectArtifactRequest/1.0.0.json) | [readonly types](generated/InspectArtifactRequest_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/InspectArtifactRequest.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ExportBundleRequest/1.0.0 | [schema](schemas/ExportBundleRequest/1.0.0.json) | [readonly types](generated/ExportBundleRequest_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ExportBundleRequest.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| CompareTemplateRequest/1.0.0 | [schema](schemas/CompareTemplateRequest/1.0.0.json) | [readonly types](generated/CompareTemplateRequest_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/CompareTemplateRequest.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ArtifactStatusRequest/1.0.0 | [schema](schemas/ArtifactStatusRequest/1.0.0.json) | [readonly types](generated/ArtifactStatusRequest_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ArtifactStatusRequest.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ProductionError/1.0.0 | [schema](schemas/ProductionError/1.0.0.json) | [readonly types](generated/ProductionError_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionError.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ProductionDiagnostic/1.0.0 | [schema](schemas/ProductionDiagnostic/1.0.0.json) | [readonly types](generated/ProductionDiagnostic_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionDiagnostic.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| TemplateSpec/1.0.0 | [schema](schemas/TemplateSpec/1.0.0.json) | [readonly types](generated/TemplateSpec_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/TemplateSpec.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/35) |
+| PersonalizationSchema/1.0.0 | [schema](schemas/PersonalizationSchema/1.0.0.json) | [readonly types](generated/PersonalizationSchema_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/PersonalizationSchema.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36) |
+| Composition/1.0.0 | [schema](schemas/Composition/1.0.0.json) | [readonly types](generated/Composition_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/Composition.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/35) |
+| CompatibilityReport/1.0.0 | [schema](schemas/CompatibilityReport/1.0.0.json) | [readonly types](generated/CompatibilityReport_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/CompatibilityReport.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| PreflightReport/1.0.0 | [schema](schemas/PreflightReport/1.0.0.json) | [readonly types](generated/PreflightReport_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/PreflightReport.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| ArtifactFile/2.0.0 | [schema](schemas/ArtifactFile/2.0.0.json) | [readonly types](generated/ArtifactFile_2_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ArtifactFile.2_0_0.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/37) |
+| ProductionBundle/2.0.0 | [schema](schemas/ProductionBundle/2.0.0.json) | [readonly types](generated/ProductionBundle_2_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionBundle.2_0_0.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/37) |
+| ProductionBundleDetached/1.0.0 | [schema](schemas/ProductionBundleDetached/1.0.0.json) | [readonly types](generated/ProductionBundleDetached_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionBundleDetached.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/37) |
+| ProductionBundleRef/1.0.0 | [schema](schemas/ProductionBundleRef/1.0.0.json) | [readonly types](generated/ProductionBundleRef_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionBundleRef.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| RowResult/1.0.0 | [schema](schemas/RowResult/1.0.0.json) | [readonly types](generated/RowResult_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/RowResult.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36) |
+| BatchResult/1.0.0 | [schema](schemas/BatchResult/1.0.0.json) | [readonly types](generated/BatchResult_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/BatchResult.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36) |
+| ArtifactManifestStatus/1.0.0 | [schema](schemas/ArtifactManifestStatus/1.0.0.json) | [readonly types](generated/ArtifactManifestStatus_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ArtifactManifestStatus.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+| CsvDialect/1.0.0 | [schema](schemas/CsvDialect/1.0.0.json) | [readonly types](generated/CsvDialect_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/CsvDialect.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36) |
+| CsvMapping/1.0.0 | [schema](schemas/CsvMapping/1.0.0.json) | [readonly types](generated/CsvMapping_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/CsvMapping.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36) |
+| CsvCheckpoint/1.0.0 | [schema](schemas/CsvCheckpoint/1.0.0.json) | [readonly types](generated/CsvCheckpoint_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/CsvCheckpoint.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/36) |
+| ProductionExecutionPins/1.0.0 | [schema](schemas/ProductionExecutionPins/1.0.0.json) | [readonly types](generated/ProductionExecutionPins_1_0_0.d.ts) | [pure checks](tooling/production-operations.mjs) | [synthetic fixtures](fixtures/ProductionExecutionPins.json) | [owner leaf](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/34) |
+
+## Receipt and reporting tools
+
+The maintained metadata checker and standalone reporting proposal remain available alongside the canonical candidate:
+
+```sh
+node --test tests/consumer-receipt.test.mjs tests/consumer-receipt-duplicates.test.mjs tests/graph-workflow.test.mjs
+SC_AJV_ROOT="$PWD/node_modules" node proposals/reporting-v1/validate.mjs
+node scripts/check-consumer-receipt.mjs receipt.json
+```
+
+Prepare `receipt.json` using the [consumer receipt template](docs/consumer-acceptance-receipt.md). The checker reports `METADATA_COMPLETE`, `INCOMPLETE` or `INVALID`; it does not verify real artifacts, commands or people. `SC_AJV_ROOT` must name a provisioned directory containing exactly `ajv@8.17.1`. See the [reporting proposal](proposals/reporting-v1/README.md) for its synthetic fixture scope and owner questions.

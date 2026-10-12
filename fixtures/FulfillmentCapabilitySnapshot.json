@@ -1,0 +1,1077 @@
+{
+  "contract": "FulfillmentCapabilitySnapshot",
+  "schema_version": "1.0.0",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_not_provider_eligibility",
+  "valid": {
+    "api_version": "fixture-api-1",
+    "capture_identity": "sha256:bfcc7571199aa593ae36419bf2998eafc0e0b8b9c46ebd20e3161c925d6104d9",
+    "catalog_version": "alpha-r1",
+    "content_identity": "sha256:dc8a3fe48b1154a7bf222453ae82a1d516d5ca2375b3632c45aa46bddee1cd99",
+    "contract": "FulfillmentCapabilitySnapshot",
+    "freshness": {
+      "fresh_until": "2026-10-10T11:00:00.000Z",
+      "maximum_age_seconds": 3600
+    },
+    "policy_version": "1.0.0",
+    "products": [
+      {
+        "api_version": "fixture-api-1",
+        "availability": "available",
+        "constraints": {
+          "color": {
+            "state": "known",
+            "value": {
+              "profiles": [
+                "fixture-coated-v1"
+              ],
+              "spaces": [
+                "CMYK"
+              ]
+            }
+          },
+          "destinations": {
+            "state": "known",
+            "value": [
+              {
+                "country_code": "US",
+                "regions": {
+                  "state": "known",
+                  "value": {
+                    "codes": [
+                      "CA",
+                      "NY"
+                    ],
+                    "mode": "allowlist"
+                  }
+                }
+              },
+              {
+                "country_code": "GB",
+                "regions": {
+                  "state": "known",
+                  "value": {
+                    "mode": "unrestricted"
+                  }
+                }
+              }
+            ]
+          },
+          "files": {
+            "state": "known",
+            "value": {
+              "maximum_count": 2,
+              "mime_types": [
+                "image/png",
+                "application/pdf"
+              ],
+              "minimum_count": 1
+            }
+          },
+          "geometry": {
+            "outer_frame": {
+              "reason_code": "not_in_source",
+              "state": "unknown"
+            },
+            "printable": {
+              "reason_code": "not_in_source",
+              "state": "unknown"
+            },
+            "trim": {
+              "reason_code": "not_in_source",
+              "state": "unknown"
+            }
+          },
+          "inset_geometry_basis": {
+            "reason_code": "not_in_source",
+            "state": "unknown"
+          },
+          "materials": {
+            "state": "known",
+            "value": [
+              "paper-200gsm"
+            ]
+          },
+          "minimum_bleed": {
+            "state": "known",
+            "value": {
+              "bottom_nm": "3000000",
+              "left_nm": "3000000",
+              "right_nm": "3000000",
+              "top_nm": "3000000",
+              "unit": "nm"
+            }
+          },
+          "minimum_resolution_dpi": {
+            "state": "known",
+            "value": 300
+          },
+          "minimum_safe_area": {
+            "state": "known",
+            "value": {
+              "bottom_nm": "5000000",
+              "left_nm": "5000000",
+              "right_nm": "5000000",
+              "top_nm": "5000000",
+              "unit": "nm"
+            }
+          },
+          "options": {
+            "state": "known",
+            "value": [
+              "matte",
+              "gloss"
+            ]
+          },
+          "personalization": {
+            "state": "known",
+            "value": {
+              "maximum_characters_per_field": 40,
+              "maximum_fields": 2,
+              "modes": [
+                "variable_text"
+              ]
+            }
+          },
+          "physical_dimensions": {
+            "state": "known",
+            "value": {
+              "basis": "unspecified_physical_product",
+              "depth_nm": "300000",
+              "height_nm": "457200000",
+              "unit": "nm",
+              "width_nm": "304800000"
+            }
+          },
+          "shipping": {
+            "state": "known",
+            "value": [
+              {
+                "country_code": "US",
+                "methods": [
+                  "standard"
+                ],
+                "region_code": null
+              },
+              {
+                "country_code": "US",
+                "methods": [
+                  "express",
+                  "standard"
+                ],
+                "region_code": "CA"
+              },
+              {
+                "country_code": "US",
+                "methods": [
+                  "standard"
+                ],
+                "region_code": "NY"
+              },
+              {
+                "country_code": "GB",
+                "methods": [
+                  "tracked"
+                ],
+                "region_code": null
+              }
+            ]
+          },
+          "surfaces": {
+            "state": "known",
+            "value": [
+              "front"
+            ]
+          }
+        },
+        "contract": "PrintSpec",
+        "policy_version": "1.0.0",
+        "project_id": "123e4567-e89b-42d3-a456-426614174002",
+        "provider_id": "fixture-provider-alpha",
+        "provider_metadata": {
+          "finishCode": "M-02",
+          "productionLine": "fixture-line-a",
+          "tags": [
+            "paper",
+            "poster"
+          ]
+        },
+        "schema_version": "1.0.0",
+        "sku": "poster-12x18",
+        "spec_identity": "sha256:70fb24408b4d536ea6130d77f181af8bdc254f53cf36be44b009c20d1750542f",
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+        "variant_id": "matte-white"
+      }
+    ],
+    "project_id": "123e4567-e89b-42d3-a456-426614174002",
+    "provider_id": "fixture-provider-alpha",
+    "schema_version": "1.0.0",
+    "source": {
+      "evidence_mode": "synthetic_fixture",
+      "evidence_reference": "fixture:alpha:v1",
+      "input_hash": "sha256:2bbd32eb650c4144bae10b5613615aa470d1adee65c1e37a370f18a2011a1336",
+      "reference": "fixture:alpha/catalog",
+      "retrieved_at": "2026-10-10T10:00:00.000Z",
+      "revision": "revision:fixture-alpha-1"
+    },
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174001"
+  },
+  "cases": [
+    {
+      "id": "minimal-explicit-unknown",
+      "category": "minimal",
+      "policy_version": "1.0.0",
+      "set": {
+        "api_version": "fixture-api-1",
+        "capture_identity": "sha256:f1414027606db33d526600c95c86319c2ca0b842126a3a13364f9894b25d939e",
+        "catalog_version": "alpha-r1",
+        "content_identity": "sha256:292e8721c0c0545817aa54a633ab40a30c780132a6330dd1e7e1faee56eeb514",
+        "contract": "FulfillmentCapabilitySnapshot",
+        "freshness": {
+          "fresh_until": "2026-10-10T11:00:00.000Z",
+          "maximum_age_seconds": 3600
+        },
+        "policy_version": "1.0.0",
+        "products": [
+          {
+            "api_version": "fixture-api-1",
+            "availability": "available",
+            "constraints": {
+              "color": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "destinations": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "files": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "geometry": {
+                "outer_frame": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                },
+                "printable": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                },
+                "trim": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                }
+              },
+              "inset_geometry_basis": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "materials": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "minimum_bleed": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "minimum_resolution_dpi": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "minimum_safe_area": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "options": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "personalization": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "physical_dimensions": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "shipping": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              },
+              "surfaces": {
+                "state": "unknown",
+                "reason_code": "not_in_source"
+              }
+            },
+            "contract": "PrintSpec",
+            "policy_version": "1.0.0",
+            "project_id": "123e4567-e89b-42d3-a456-426614174002",
+            "provider_id": "fixture-provider-alpha",
+            "provider_metadata": {},
+            "schema_version": "1.0.0",
+            "sku": "poster-12x18",
+            "spec_identity": "sha256:12ab24fb22d17301e749b06efcf4a384f06170b46c293646493a9f4d60ab8e27",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+            "variant_id": "matte-white"
+          }
+        ],
+        "project_id": "123e4567-e89b-42d3-a456-426614174002",
+        "provider_id": "fixture-provider-alpha",
+        "schema_version": "1.0.0",
+        "source": {
+          "evidence_mode": "synthetic_fixture",
+          "evidence_reference": "fixture:alpha:v1",
+          "input_hash": "sha256:2bbd32eb650c4144bae10b5613615aa470d1adee65c1e37a370f18a2011a1336",
+          "reference": "fixture:alpha/catalog",
+          "retrieved_at": "2026-10-10T10:00:00.000Z",
+          "revision": "revision:fixture-alpha-1"
+        },
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174001"
+      },
+      "mode": "capability",
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full-alpha-source-unknown-geometry",
+      "category": "full",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full-beta-incompatible-source",
+      "category": "producer_source",
+      "policy_version": "1.0.0",
+      "set": {
+        "api_version": "fixture-api-4",
+        "capture_identity": "sha256:c86ee41941a24439c9b6cbf26e3f5f96ba02a53339621ab9e0f7b5ac2ad35424",
+        "catalog_version": "beta-r9",
+        "content_identity": "sha256:2c59193bf0e88f829ff64840a6d489b0b4d3624e5b94e838f4949c520b70b471",
+        "contract": "FulfillmentCapabilitySnapshot",
+        "freshness": {
+          "fresh_until": "2026-10-10T10:35:00.000Z",
+          "maximum_age_seconds": 1800
+        },
+        "policy_version": "1.0.0",
+        "products": [
+          {
+            "api_version": "fixture-api-4",
+            "availability": "available",
+            "constraints": {
+              "color": {
+                "state": "known",
+                "value": {
+                  "profiles": [
+                    "fixture-srgb-v4"
+                  ],
+                  "spaces": [
+                    "RGB"
+                  ]
+                }
+              },
+              "destinations": {
+                "state": "known",
+                "value": [
+                  {
+                    "country_code": "CA",
+                    "regions": {
+                      "state": "known",
+                      "value": {
+                        "codes": [
+                          "BC",
+                          "ON"
+                        ],
+                        "mode": "allowlist"
+                      }
+                    }
+                  }
+                ]
+              },
+              "files": {
+                "state": "known",
+                "value": {
+                  "maximum_count": 4,
+                  "mime_types": [
+                    "application/pdf"
+                  ],
+                  "minimum_count": 2
+                }
+              },
+              "geometry": {
+                "outer_frame": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                },
+                "printable": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                },
+                "trim": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                }
+              },
+              "inset_geometry_basis": {
+                "reason_code": "not_in_source",
+                "state": "unknown"
+              },
+              "materials": {
+                "state": "known",
+                "value": [
+                  "photo-paper"
+                ]
+              },
+              "minimum_bleed": {
+                "state": "known",
+                "value": {
+                  "bottom_nm": "5000000",
+                  "left_nm": "5000000",
+                  "right_nm": "5000000",
+                  "top_nm": "5000000",
+                  "unit": "nm"
+                }
+              },
+              "minimum_resolution_dpi": {
+                "state": "known",
+                "value": 600
+              },
+              "minimum_safe_area": {
+                "state": "known",
+                "value": {
+                  "bottom_nm": "8000000",
+                  "left_nm": "8000000",
+                  "right_nm": "8000000",
+                  "top_nm": "8000000",
+                  "unit": "nm"
+                }
+              },
+              "options": {
+                "state": "known",
+                "value": [
+                  "satin"
+                ]
+              },
+              "personalization": {
+                "reason_code": "provider_declares_unsupported",
+                "state": "unsupported"
+              },
+              "physical_dimensions": {
+                "state": "known",
+                "value": {
+                  "basis": "unspecified_physical_product",
+                  "depth_nm": "400000",
+                  "height_nm": "450000000",
+                  "unit": "nm",
+                  "width_nm": "300000000"
+                }
+              },
+              "shipping": {
+                "state": "known",
+                "value": [
+                  {
+                    "country_code": "CA",
+                    "methods": [
+                      "economy"
+                    ],
+                    "region_code": null
+                  },
+                  {
+                    "country_code": "CA",
+                    "methods": [
+                      "economy",
+                      "tracked"
+                    ],
+                    "region_code": "BC"
+                  }
+                ]
+              },
+              "surfaces": {
+                "state": "known",
+                "value": [
+                  "front",
+                  "back"
+                ]
+              }
+            },
+            "contract": "PrintSpec",
+            "policy_version": "1.0.0",
+            "project_id": "123e4567-e89b-42d3-a456-426614174002",
+            "provider_id": "fixture-provider-beta",
+            "provider_metadata": {
+              "finishCode": "S-09",
+              "productionLine": "fixture-line-b",
+              "tags": [
+                "satin",
+                "photo"
+              ]
+            },
+            "schema_version": "1.0.0",
+            "sku": "poster-12x18",
+            "spec_identity": "sha256:cdddd2f0c028a37c8affc31a73b522398c2bbe9a04bdeb581ea91f491e3e9ef5",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+            "variant_id": "satin-black"
+          }
+        ],
+        "project_id": "123e4567-e89b-42d3-a456-426614174002",
+        "provider_id": "fixture-provider-beta",
+        "schema_version": "1.0.0",
+        "source": {
+          "evidence_mode": "synthetic_fixture",
+          "evidence_reference": "fixture:beta:v9",
+          "input_hash": "sha256:4ec7090fde1bb2fbc7b20bdb8705b6c3976f2cb21827fba5fca76e75b43d6b9d",
+          "reference": "fixture:beta/catalog",
+          "retrieved_at": "2026-10-10T10:05:00.000Z",
+          "revision": "revision:fixture-beta-9"
+        },
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174001"
+      },
+      "mode": "capability",
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "generic-known-print-geometry-control",
+      "category": "geometry_control",
+      "policy_version": "1.0.0",
+      "set": {
+        "api_version": "fixture-api-1",
+        "capture_identity": "sha256:e27a696bc2464a81e261e4da68e45c41e499eae9a384b902d5b98b7097fadb6e",
+        "catalog_version": "alpha-r1",
+        "content_identity": "sha256:68a0b9ec5ea7bfd6bf7d19b0bc4719aa2d0d8ba95e22ef69c95688c361702480",
+        "contract": "FulfillmentCapabilitySnapshot",
+        "freshness": {
+          "fresh_until": "2026-10-10T11:00:00.000Z",
+          "maximum_age_seconds": 3600
+        },
+        "policy_version": "1.0.0",
+        "products": [
+          {
+            "api_version": "fixture-api-1",
+            "availability": "available",
+            "constraints": {
+              "color": {
+                "state": "known",
+                "value": {
+                  "profiles": [
+                    "fixture-coated-v1"
+                  ],
+                  "spaces": [
+                    "CMYK"
+                  ]
+                }
+              },
+              "destinations": {
+                "state": "known",
+                "value": [
+                  {
+                    "country_code": "US",
+                    "regions": {
+                      "state": "known",
+                      "value": {
+                        "codes": [
+                          "CA",
+                          "NY"
+                        ],
+                        "mode": "allowlist"
+                      }
+                    }
+                  },
+                  {
+                    "country_code": "GB",
+                    "regions": {
+                      "state": "known",
+                      "value": {
+                        "mode": "unrestricted"
+                      }
+                    }
+                  }
+                ]
+              },
+              "files": {
+                "state": "known",
+                "value": {
+                  "maximum_count": 2,
+                  "mime_types": [
+                    "image/png",
+                    "application/pdf"
+                  ],
+                  "minimum_count": 1
+                }
+              },
+              "geometry": {
+                "outer_frame": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                },
+                "printable": {
+                  "state": "known",
+                  "value": {
+                    "width_nm": "310800000",
+                    "height_nm": "463200000",
+                    "unit": "nm",
+                    "evidence_ref": "fixture:generic-known-printable-control"
+                  }
+                },
+                "trim": {
+                  "state": "known",
+                  "value": {
+                    "width_nm": "304800000",
+                    "height_nm": "457200000",
+                    "unit": "nm",
+                    "evidence_ref": "fixture:generic-known-trim-control"
+                  }
+                }
+              },
+              "inset_geometry_basis": {
+                "state": "known",
+                "value": "trim"
+              },
+              "materials": {
+                "state": "known",
+                "value": [
+                  "paper-200gsm"
+                ]
+              },
+              "minimum_bleed": {
+                "state": "known",
+                "value": {
+                  "bottom_nm": "3000000",
+                  "left_nm": "3000000",
+                  "right_nm": "3000000",
+                  "top_nm": "3000000",
+                  "unit": "nm"
+                }
+              },
+              "minimum_resolution_dpi": {
+                "state": "known",
+                "value": 300
+              },
+              "minimum_safe_area": {
+                "state": "known",
+                "value": {
+                  "bottom_nm": "5000000",
+                  "left_nm": "5000000",
+                  "right_nm": "5000000",
+                  "top_nm": "5000000",
+                  "unit": "nm"
+                }
+              },
+              "options": {
+                "state": "known",
+                "value": [
+                  "matte",
+                  "gloss"
+                ]
+              },
+              "personalization": {
+                "state": "known",
+                "value": {
+                  "maximum_characters_per_field": 40,
+                  "maximum_fields": 2,
+                  "modes": [
+                    "variable_text"
+                  ]
+                }
+              },
+              "physical_dimensions": {
+                "state": "known",
+                "value": {
+                  "basis": "unspecified_physical_product",
+                  "depth_nm": "300000",
+                  "height_nm": "457200000",
+                  "unit": "nm",
+                  "width_nm": "304800000"
+                }
+              },
+              "shipping": {
+                "state": "known",
+                "value": [
+                  {
+                    "country_code": "US",
+                    "methods": [
+                      "standard"
+                    ],
+                    "region_code": null
+                  },
+                  {
+                    "country_code": "US",
+                    "methods": [
+                      "express",
+                      "standard"
+                    ],
+                    "region_code": "CA"
+                  },
+                  {
+                    "country_code": "US",
+                    "methods": [
+                      "standard"
+                    ],
+                    "region_code": "NY"
+                  },
+                  {
+                    "country_code": "GB",
+                    "methods": [
+                      "tracked"
+                    ],
+                    "region_code": null
+                  }
+                ]
+              },
+              "surfaces": {
+                "state": "known",
+                "value": [
+                  "front"
+                ]
+              }
+            },
+            "contract": "PrintSpec",
+            "policy_version": "1.0.0",
+            "project_id": "123e4567-e89b-42d3-a456-426614174002",
+            "provider_id": "fixture-provider-alpha",
+            "provider_metadata": {
+              "finishCode": "M-02",
+              "productionLine": "fixture-line-a",
+              "tags": [
+                "paper",
+                "poster"
+              ]
+            },
+            "schema_version": "1.0.0",
+            "sku": "poster-12x18",
+            "spec_identity": "sha256:a09f378b817f6396134bd68fc5b2bb2798daed83286f82dfceadc81f94c59962",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+            "variant_id": "matte-white"
+          }
+        ],
+        "project_id": "123e4567-e89b-42d3-a456-426614174002",
+        "provider_id": "fixture-provider-alpha",
+        "schema_version": "1.0.0",
+        "source": {
+          "evidence_mode": "synthetic_fixture",
+          "evidence_reference": "fixture:alpha:v1",
+          "input_hash": "sha256:2bbd32eb650c4144bae10b5613615aa470d1adee65c1e37a370f18a2011a1336",
+          "reference": "fixture:alpha/catalog",
+          "retrieved_at": "2026-10-10T10:00:00.000Z",
+          "revision": "revision:fixture-alpha-1"
+        },
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174001"
+      },
+      "mode": "capability",
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing-scope",
+      "category": "missing",
+      "policy_version": "1.0.0",
+      "remove": [
+        "tenant_id"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "wrong-provider-type",
+      "category": "type",
+      "policy_version": "1.0.0",
+      "set": {
+        "provider_id": 42
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/provider_id"
+      }
+    },
+    {
+      "id": "unknown-evidence-mode",
+      "category": "enum",
+      "policy_version": "1.0.0",
+      "set": {
+        "source": {
+          "evidence_mode": "authenticated",
+          "evidence_reference": "fixture:alpha:v1",
+          "input_hash": "sha256:2bbd32eb650c4144bae10b5613615aa470d1adee65c1e37a370f18a2011a1336",
+          "reference": "fixture:alpha/catalog",
+          "retrieved_at": "2026-10-10T10:00:00.000Z",
+          "revision": "revision:fixture-alpha-1"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/source/evidence_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "policy_version": "1.0.0",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-major",
+      "category": "unsupported_version",
+      "policy_version": "1.0.0",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "policy_version": "1.0.0",
+      "set": {
+        "extra": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "unknown-critical-control",
+      "category": "unknown_critical",
+      "policy_version": "1.0.0",
+      "set": {
+        "allow_print": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "additive-unreviewed-field-blocked",
+      "category": "additive_field",
+      "policy_version": "1.0.0",
+      "set": {
+        "renderer": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "retained-exact-version",
+      "category": "retained_encoding",
+      "policy_version": "1.0.0",
+      "mode": "parse",
+      "json": "{\"api_version\":\"fixture-api-1\",\"capture_identity\":\"sha256:bfcc7571199aa593ae36419bf2998eafc0e0b8b9c46ebd20e3161c925d6104d9\",\"catalog_version\":\"alpha-r1\",\"content_identity\":\"sha256:dc8a3fe48b1154a7bf222453ae82a1d516d5ca2375b3632c45aa46bddee1cd99\",\"contract\":\"FulfillmentCapabilitySnapshot\",\"freshness\":{\"fresh_until\":\"2026-10-10T11:00:00.000Z\",\"maximum_age_seconds\":3600},\"policy_version\":\"1.0.0\",\"products\":[{\"api_version\":\"fixture-api-1\",\"availability\":\"available\",\"constraints\":{\"color\":{\"state\":\"known\",\"value\":{\"profiles\":[\"fixture-coated-v1\"],\"spaces\":[\"CMYK\"]}},\"destinations\":{\"state\":\"known\",\"value\":[{\"country_code\":\"US\",\"regions\":{\"state\":\"known\",\"value\":{\"codes\":[\"CA\",\"NY\"],\"mode\":\"allowlist\"}}},{\"country_code\":\"GB\",\"regions\":{\"state\":\"known\",\"value\":{\"mode\":\"unrestricted\"}}}]},\"files\":{\"state\":\"known\",\"value\":{\"maximum_count\":2,\"mime_types\":[\"image/png\",\"application/pdf\"],\"minimum_count\":1}},\"geometry\":{\"outer_frame\":{\"reason_code\":\"not_in_source\",\"state\":\"unknown\"},\"printable\":{\"reason_code\":\"not_in_source\",\"state\":\"unknown\"},\"trim\":{\"reason_code\":\"not_in_source\",\"state\":\"unknown\"}},\"inset_geometry_basis\":{\"reason_code\":\"not_in_source\",\"state\":\"unknown\"},\"materials\":{\"state\":\"known\",\"value\":[\"paper-200gsm\"]},\"minimum_bleed\":{\"state\":\"known\",\"value\":{\"bottom_nm\":\"3000000\",\"left_nm\":\"3000000\",\"right_nm\":\"3000000\",\"top_nm\":\"3000000\",\"unit\":\"nm\"}},\"minimum_resolution_dpi\":{\"state\":\"known\",\"value\":300},\"minimum_safe_area\":{\"state\":\"known\",\"value\":{\"bottom_nm\":\"5000000\",\"left_nm\":\"5000000\",\"right_nm\":\"5000000\",\"top_nm\":\"5000000\",\"unit\":\"nm\"}},\"options\":{\"state\":\"known\",\"value\":[\"matte\",\"gloss\"]},\"personalization\":{\"state\":\"known\",\"value\":{\"maximum_characters_per_field\":40,\"maximum_fields\":2,\"modes\":[\"variable_text\"]}},\"physical_dimensions\":{\"state\":\"known\",\"value\":{\"basis\":\"unspecified_physical_product\",\"depth_nm\":\"300000\",\"height_nm\":\"457200000\",\"unit\":\"nm\",\"width_nm\":\"304800000\"}},\"shipping\":{\"state\":\"known\",\"value\":[{\"country_code\":\"US\",\"methods\":[\"standard\"],\"region_code\":null},{\"country_code\":\"US\",\"methods\":[\"express\",\"standard\"],\"region_code\":\"CA\"},{\"country_code\":\"US\",\"methods\":[\"standard\"],\"region_code\":\"NY\"},{\"country_code\":\"GB\",\"methods\":[\"tracked\"],\"region_code\":null}]},\"surfaces\":{\"state\":\"known\",\"value\":[\"front\"]}},\"contract\":\"PrintSpec\",\"policy_version\":\"1.0.0\",\"project_id\":\"123e4567-e89b-42d3-a456-426614174002\",\"provider_id\":\"fixture-provider-alpha\",\"provider_metadata\":{\"finishCode\":\"M-02\",\"productionLine\":\"fixture-line-a\",\"tags\":[\"paper\",\"poster\"]},\"schema_version\":\"1.0.0\",\"sku\":\"poster-12x18\",\"spec_identity\":\"sha256:70fb24408b4d536ea6130d77f181af8bdc254f53cf36be44b009c20d1750542f\",\"tenant_id\":\"123e4567-e89b-42d3-a456-426614174001\",\"variant_id\":\"matte-white\"}],\"project_id\":\"123e4567-e89b-42d3-a456-426614174002\",\"provider_id\":\"fixture-provider-alpha\",\"schema_version\":\"1.0.0\",\"source\":{\"evidence_mode\":\"synthetic_fixture\",\"evidence_reference\":\"fixture:alpha:v1\",\"input_hash\":\"sha256:2bbd32eb650c4144bae10b5613615aa470d1adee65c1e37a370f18a2011a1336\",\"reference\":\"fixture:alpha/catalog\",\"retrieved_at\":\"2026-10-10T10:00:00.000Z\",\"revision\":\"revision:fixture-alpha-1\"},\"tenant_id\":\"123e4567-e89b-42d3-a456-426614174001\"}",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "scope-mismatch",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {},
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174099",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "capture-hash-tamper",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {
+        "capture_identity": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "CAPTURE_HASH_MISMATCH",
+        "path": "/capture_identity"
+      }
+    },
+    {
+      "id": "content-hash-tamper",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {
+        "content_identity": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "CONTENT_HASH_MISMATCH",
+        "path": "/content_identity"
+      }
+    },
+    {
+      "id": "stale-millisecond",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {},
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T11:00:00.001Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_CAPTURE",
+        "path": "/freshness/fresh_until"
+      }
+    },
+    {
+      "id": "before-capture",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {},
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T09:59:59.999Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "CLOCK_BEFORE_CAPTURE",
+        "path": "/now"
+      }
+    },
+    {
+      "id": "invalid-clock",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {},
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-02-30T10:00:00.000Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_CLOCK",
+        "path": "/now"
+      }
+    },
+    {
+      "id": "inclusive-expiry-equality",
+      "category": "clock",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T11:00:00.000Z"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "expiry-mismatch",
+      "category": "consistency",
+      "policy_version": "1.0.0",
+      "mode": "capability",
+      "set": {
+        "freshness": {
+          "fresh_until": "2026-10-10T11:00:00.001Z",
+          "maximum_age_seconds": 3600
+        }
+      },
+      "context": {
+        "trusted_scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174001",
+          "project_id": "123e4567-e89b-42d3-a456-426614174002"
+        },
+        "now": "2026-10-10T10:30:00.000Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "EXPIRY_MISMATCH",
+        "path": "/freshness/fresh_until"
+      }
+    }
+  ]
+}

@@ -1,0 +1,738 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/Composition/1.0.0",
+  "title": "Composition",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "Composition",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "composition_id": {
+      "type": "string",
+      "format": "uuid",
+      "x-classification": "restricted",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-classification": "restricted"
+    },
+    "content_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "design_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "DesignVersion",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "handoff_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "ArtifactHandoffManifest",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "facts_ref": {
+      "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+      "x-classification": "restricted"
+    },
+    "template_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "TemplateSpec",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "spec_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "PrintSpec",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "capability_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "FulfillmentCapabilitySnapshot",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "asset_uses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "asset_ref": {
+            "allOf": [
+              {
+                "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+                "x-classification": "restricted"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "contract": {
+                    "const": "ArtifactFile",
+                    "x-classification": "public"
+                  },
+                  "schema_version": {
+                    "const": "2.0.0",
+                    "x-classification": "public"
+                  }
+                },
+                "required": [
+                  "contract",
+                  "schema_version"
+                ]
+              }
+            ],
+            "x-classification": "restricted"
+          },
+          "permission_ref": {
+            "allOf": [
+              {
+                "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+                "x-classification": "restricted"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "contract": {
+                    "const": "ApprovalReceipt",
+                    "x-classification": "public"
+                  },
+                  "schema_version": {
+                    "const": "1.0.0",
+                    "x-classification": "public"
+                  }
+                },
+                "required": [
+                  "contract",
+                  "schema_version"
+                ]
+              }
+            ],
+            "x-classification": "restricted"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "artwork",
+              "overlay"
+            ],
+            "x-classification": "restricted"
+          },
+          "normalization_policy_ref": {
+            "anyOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+                    "x-classification": "restricted"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "contract": {
+                        "const": "ProductionPolicy",
+                        "x-classification": "public"
+                      },
+                      "schema_version": {
+                        "const": "1.0.0",
+                        "x-classification": "public"
+                      }
+                    },
+                    "required": [
+                      "contract",
+                      "schema_version"
+                    ]
+                  }
+                ],
+                "x-classification": "restricted"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "x-classification": "restricted"
+          }
+        },
+        "required": [
+          "asset_ref",
+          "permission_ref",
+          "purpose",
+          "normalization_policy_ref"
+        ],
+        "x-classification": "restricted"
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "x-classification": "restricted"
+    },
+    "values": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue",
+        "x-classification": "restricted"
+      },
+      "x-classification": "restricted"
+    },
+    "fact_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])",
+            "x-classification": "restricted"
+          },
+          "fact_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])",
+            "x-classification": "restricted"
+          },
+          "value_hash": {
+            "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+            "x-classification": "restricted",
+            "type": "string",
+            "minLength": 71,
+            "maxLength": 71
+          }
+        },
+        "required": [
+          "slot_id",
+          "fact_key",
+          "value_hash"
+        ],
+        "x-classification": "restricted"
+      },
+      "minItems": 0,
+      "maxItems": 32,
+      "x-classification": "restricted"
+    },
+    "policy_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "formatting": {
+          "allOf": [
+            {
+              "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+              "x-classification": "restricted"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "contract": {
+                  "const": "ProductionPolicy",
+                  "x-classification": "public"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "x-classification": "public"
+                }
+              },
+              "required": [
+                "contract",
+                "schema_version"
+              ]
+            }
+          ],
+          "x-classification": "restricted"
+        },
+        "layout": {
+          "allOf": [
+            {
+              "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+              "x-classification": "restricted"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "contract": {
+                  "const": "ProductionPolicy",
+                  "x-classification": "public"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "x-classification": "public"
+                }
+              },
+              "required": [
+                "contract",
+                "schema_version"
+              ]
+            }
+          ],
+          "x-classification": "restricted"
+        },
+        "output": {
+          "allOf": [
+            {
+              "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+              "x-classification": "restricted"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "contract": {
+                  "const": "ProductionPolicy",
+                  "x-classification": "public"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "x-classification": "public"
+                }
+              },
+              "required": [
+                "contract",
+                "schema_version"
+              ]
+            }
+          ],
+          "x-classification": "restricted"
+        },
+        "repair": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+                  "x-classification": "restricted"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "contract": {
+                      "const": "ProductionPolicy",
+                      "x-classification": "public"
+                    },
+                    "schema_version": {
+                      "const": "1.0.0",
+                      "x-classification": "public"
+                    }
+                  },
+                  "required": [
+                    "contract",
+                    "schema_version"
+                  ]
+                }
+              ],
+              "x-classification": "restricted"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-classification": "restricted"
+        }
+      },
+      "required": [
+        "formatting",
+        "layout",
+        "output",
+        "repair"
+      ],
+      "x-classification": "restricted"
+    },
+    "font_refs": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+            "x-classification": "restricted"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "contract": {
+                "const": "ProductionResource",
+                "x-classification": "public"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "x-classification": "public"
+              }
+            },
+            "required": [
+              "contract",
+              "schema_version"
+            ]
+          }
+        ],
+        "x-classification": "restricted"
+      },
+      "minItems": 1,
+      "maxItems": 16,
+      "x-classification": "restricted"
+    },
+    "runtime_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "ProductionRuntime",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "resolved_layout_commitment": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "input_binding_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "barcode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "absent",
+              "x-classification": "public"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "not_applicable",
+                "not_requested"
+              ],
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "bound",
+              "x-classification": "public"
+            },
+            "symbology": {
+              "type": "string",
+              "enum": [
+                "qr",
+                "code128"
+              ],
+              "x-classification": "restricted"
+            },
+            "input_hash": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+              "x-classification": "restricted",
+              "type": "string",
+              "minLength": 71,
+              "maxLength": 71
+            },
+            "slot_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])",
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "state",
+            "symbology",
+            "input_hash",
+            "slot_id"
+          ],
+          "x-classification": "restricted"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "slot_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])",
+            "x-classification": "restricted"
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "asset",
+                    "x-classification": "restricted"
+                  },
+                  "asset_ref": {
+                    "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+                    "x-classification": "restricted"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "asset_ref"
+                ],
+                "x-classification": "restricted"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "value",
+                    "x-classification": "restricted"
+                  },
+                  "field_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])",
+                    "x-classification": "restricted"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "field_id"
+                ],
+                "x-classification": "restricted"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "fact",
+                    "x-classification": "restricted"
+                  },
+                  "fact_key": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])",
+                    "x-classification": "restricted"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "fact_key"
+                ],
+                "x-classification": "restricted"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "policy",
+                    "x-classification": "restricted"
+                  },
+                  "policy_ref": {
+                    "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+                    "x-classification": "restricted"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "policy_ref"
+                ],
+                "x-classification": "restricted"
+              }
+            ],
+            "x-classification": "restricted"
+          }
+        },
+        "required": [
+          "slot_id",
+          "source"
+        ],
+        "x-classification": "restricted"
+      },
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "tenant_id",
+    "project_id",
+    "composition_id",
+    "revision",
+    "content_hash",
+    "design_ref",
+    "handoff_ref",
+    "facts_ref",
+    "template_ref",
+    "spec_ref",
+    "capability_ref",
+    "asset_uses",
+    "values",
+    "fact_bindings",
+    "policy_refs",
+    "font_refs",
+    "runtime_ref",
+    "resolved_layout_commitment",
+    "input_binding_hash",
+    "barcode",
+    "slot_bindings"
+  ],
+  "x-classification": "restricted"
+}

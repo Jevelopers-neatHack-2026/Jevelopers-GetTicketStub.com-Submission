@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/ProductionResource/1.0.0",
+  "title": "ProductionResource",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "ProductionResource",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "x-classification": "restricted",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-classification": "restricted"
+    },
+    "content_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "font",
+        "license",
+        "product",
+        "profile",
+        "asset",
+        "lineage"
+      ],
+      "x-classification": "restricted"
+    },
+    "byte_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted",
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "license_ref": {
+      "anyOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "tenant_id",
+    "project_id",
+    "id",
+    "revision",
+    "content_hash",
+    "kind",
+    "byte_hash",
+    "license_ref"
+  ],
+  "x-classification": "restricted"
+}

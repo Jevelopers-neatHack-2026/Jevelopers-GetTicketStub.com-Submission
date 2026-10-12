@@ -1,0 +1,3943 @@
+{
+  "contract": "ArtifactConsumptionReceipt",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "ArtifactConsumptionReceipt",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000008000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "receipt_id": "123e4567-e89b-42d3-a456-000000000115",
+    "manifest_ref": {
+      "contract": "ArtifactHandoffManifest",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000110",
+      "revision": 1,
+      "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+    },
+    "approval_ref": {
+      "contract": "ApprovalReceipt",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000100",
+      "revision": 1,
+      "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+    },
+    "consumer_id": "print-production",
+    "idempotency_key": "consume_1",
+    "consumed_artifacts": [
+      {
+        "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+        "filename": "artwork.png",
+        "role": "source_artwork",
+        "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+        "byte_size": 3,
+        "media_type": "image/png",
+        "width": 100,
+        "height": 200,
+        "unit": "pixels"
+      }
+    ],
+    "access_grant_refs": [
+      {
+        "contract": "AccessGrant",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000116",
+        "revision": 1,
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "consumed_at": "2026-10-10T12:00:00Z",
+    "status": "consumed_exact_bytes"
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:6d2517ca00e6d2e8b8a400d5af6650aee698c86ee1a7e2a8bc9f7448b2c25c92"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "order_id",
+        "trace_id",
+        "evidence_id",
+        "usage_event_id",
+        "logical_operation_id",
+        "provider_attempt_id",
+        "billable_attempt_id",
+        "transport_attempt_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000",
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:da746df86b539435b56c2568abea6e4a224910042a55ae967fa4570f5cb74478"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "missing",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "billing_mode": 0
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "project_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/project_id"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "revoked",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "revoked",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/status_ref"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "expired",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "expired",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/status_ref"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unavailable",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "unavailable",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/status_ref"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "actor-object",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": {
+          "admin": true
+        },
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRUST_CONTEXT",
+        "path": "/current_approval"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "missing-binding-context",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRUST_CONTEXT",
+        "path": "/current_approval"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "duplicate-consumption",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "prior_consumption": {
+          "contract": "ArtifactConsumptionReceipt",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "receipt_id": "123e4567-e89b-42d3-a456-000000000115",
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "consumer_id": "print-production",
+          "idempotency_key": "consume_1",
+          "consumed_artifacts": [
+            {
+              "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+              "filename": "artwork.png",
+              "role": "source_artwork",
+              "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+              "byte_size": 3,
+              "media_type": "image/png",
+              "width": 100,
+              "height": 200,
+              "unit": "pixels"
+            }
+          ],
+          "access_grant_refs": [
+            {
+              "contract": "AccessGrant",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000116",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ],
+          "consumed_at": "2026-10-10T12:00:00Z",
+          "status": "consumed_exact_bytes"
+        },
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "altered-duplicate",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "consumed_at": "2026-10-10T11:59:00Z"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "prior_consumption": {
+          "contract": "ArtifactConsumptionReceipt",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "receipt_id": "123e4567-e89b-42d3-a456-000000000115",
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "consumer_id": "print-production",
+          "idempotency_key": "consume_1",
+          "consumed_artifacts": [
+            {
+              "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+              "filename": "artwork.png",
+              "role": "source_artwork",
+              "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+              "byte_size": 3,
+              "media_type": "image/png",
+              "width": 100,
+              "height": 200,
+              "unit": "pixels"
+            }
+          ],
+          "access_grant_refs": [
+            {
+              "contract": "AccessGrant",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000116",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ],
+          "consumed_at": "2026-10-10T12:00:00Z",
+          "status": "consumed_exact_bytes"
+        },
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "IDENTITY_COLLISION",
+        "path": "/idempotency_key"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "foreign-manifest",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "manifest_ref": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000999",
+          "revision": 1,
+          "content_hash": "sha256:1b2de6e9b219548c2fbbb65f5616c9353cc8ef50932233d21e016d26aca67d95"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "manifest_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "access_grant_refs/0": {
+            "contract": "AccessGrant",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000116",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "current_approval": {
+          "status": "valid",
+          "receipt": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+            "receipt_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1",
+            "issuer": "getticketstub.com",
+            "audience": "print-production",
+            "actor_id": "actor_1",
+            "binding": {
+              "subject_type": "artwork",
+              "subject_ref": {
+                "contract": "Artifact",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000092",
+                "revision": 1,
+                "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+              },
+              "intended_use": "production",
+              "preview_ref": {
+                "contract": "Preview",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000093",
+                "revision": 1,
+                "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+              },
+              "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+              "composition_hash": null,
+              "asset_hashes": [],
+              "facts_ref": {
+                "contract": "FactSet",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000111",
+                "revision": 1,
+                "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+              },
+              "composition_ref": null
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "ApprovalStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000101",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "expected_binding": {
+          "subject_type": "artwork",
+          "subject_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          },
+          "intended_use": "production",
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+          "composition_hash": null,
+          "asset_hashes": [],
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_ref": null
+        },
+        "audience": "print-production",
+        "actor_id": "actor_1",
+        "design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        },
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "handoff": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "handoff_id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "manifest_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584",
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "filename": "artwork.png",
+            "role": "source_artwork",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "byte_size": 3,
+            "media_type": "image/png",
+            "width": 100,
+            "height": 200,
+            "unit": "pixels"
+          },
+          "preview_ref": {
+            "contract": "Preview",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000093",
+            "revision": 1,
+            "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+          },
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "facts_ref": {
+            "contract": "FactSet",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000111",
+            "revision": 1,
+            "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+          },
+          "composition_hash": null,
+          "asset_permission_refs": [],
+          "product_spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "access": {
+            "locator_ref": {
+              "contract": "ArtifactLocator",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000113",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "policy_ref": {
+              "contract": "ArtifactAccessPolicy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000114",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expires_at": "2026-10-10T13:00:00Z",
+            "renewal_policy": "reauthorize_each_fetch"
+          },
+          "idempotency_key": "handoff_1",
+          "decision_refs": [],
+          "usage_refs": [],
+          "intended_use": "source_artwork_production",
+          "artwork_ref": {
+            "contract": "Artifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000092",
+            "revision": 1,
+            "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          }
+        },
+        "consumer_id": "print-production",
+        "artwork_ref": {
+          "contract": "Artifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000092",
+          "revision": 1,
+          "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+        },
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000093",
+          "revision": 1,
+          "content_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/manifest_ref"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:6d2517ca00e6d2e8b8a400d5af6650aee698c86ee1a7e2a8bc9f7448b2c25c92"
+      },
+      "policy_version": "1.0.0"
+    }
+  ],
+  "schema_version": "1.0.0"
+}

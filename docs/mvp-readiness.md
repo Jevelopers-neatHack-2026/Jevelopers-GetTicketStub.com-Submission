@@ -1,5 +1,13 @@
 # MVP readiness and implementation map
 
+## Current development candidate
+
+The PR #31 integration candidate is private package 0.10.2 with 77 wire names and 88 supported schema versions, generated SDK bindings and standalone validators. It incorporates PR #42's usage-cost candidate and current-main receipt/reporting/governance tooling. This source integration is authorized for merge as development work; it does not accept the canonical release, close leaf issues, authenticate provider evidence or transfer older archive receipts to changed bytes.
+
+The records below retain their original checked revisions and historical PR states. Current package status is in the [README](../README.md); historical consumer, Finance and production-boundary receipts keep their exact-artifact scope.
+
+## Historical governance snapshot
+
 **Snapshot:** 2026-10-12 17:24 UTC, checked against [main at 91736a026c02a3206cb7666ebfbe6134692e5a24](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/91736a026c02a3206cb7666ebfbe6134692e5a24) and the live issue/PR records linked below. Recheck mutable records before acting; this page does not change acceptance or release state.
 
 Related: [contract catalog](contract-catalog.md) · [consumer acceptance receipt](consumer-acceptance-receipt.md) · [receipt metadata checker](receipt-checker.md) · [ownership](architecture/OWNERSHIP.md) · [acceptance view](architecture/ACCEPTANCE.md)

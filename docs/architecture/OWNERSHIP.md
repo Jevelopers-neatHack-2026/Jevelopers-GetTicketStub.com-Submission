@@ -2,7 +2,7 @@
 
 **Repository status:** Public GitHub repository, checked 2026-10-12 against [main at `91736a026c02a3206cb7666ebfbe6134692e5a24`](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/91736a026c02a3206cb7666ebfbe6134692e5a24). This visibility check documents repository metadata; it does not change visibility or imply publication.
 **Proposed owner:** Agent and research (repository role; named contract owners and reviewers remain unassigned).
-**Delivery state:** Main contains maintained interface-design documentation, an offline consumer-receipt metadata checker, and isolated Finance reporting proposal schemas and fixtures. It does not contain a canonical shared-contracts package, generated consumer SDK, or release artifact. Current implementation, consumer receipts, and release blockers are summarized in [MVP readiness](../mvp-readiness.md); individual issue and PR records remain authoritative.
+**Delivery state:** Private candidate package 0.10.2 supplies 77 wire names across 88 schema versions, generated consumer bindings, standalone validators and offline fixtures alongside the receipt metadata checker and isolated reporting proposal. Named owner/reviewer acknowledgements, accepted consumer pins and release obligations remain separate. See [MVP readiness](../mvp-readiness.md); individual issue and PR records remain authoritative.
 
 ## Responsibility
 
@@ -10,17 +10,16 @@ Own versioned interfaces connecting independently developed repositories. Define
 
 The shared package should remain dependency-light. It may distribute generated types and contract validators derived from canonical definitions. It should not become a general utility repository or hold competing versions of financial and commercial policy.
 
-## Not implemented on `main`
+## Maintained package modules
 
-The following are planned release capabilities, not existing canonical directories or exports:
+- `schemas/<Contract>/<version>.json`: Canonical exact-version candidate interfaces for every maintained catalog export.
+- `tooling/`: Pure structural, context, semantic and representative fixture helpers.
+- `scripts/`: Deterministic generation, offline checks, actual source/archive/import binding and sanitized coverage.
+- `generated/`: Reproducible consumer bindings and validators.
+- `fixtures/`: Valid, invalid, and compatibility examples.
+- `compatibility/`: Version policy and consumer impact records.
 
-- versioned schemas for projects, event intelligence, creative briefs, design versions, production, orders, usage, reservations, and finance;
-- agreed public and internal API specifications;
-- reproducible generated consumer bindings and validators;
-- canonical positive, negative, and compatibility fixtures; and
-- accepted consumer pins, migration records, and a release manifest.
-
-The JSON Schemas and synthetic fixtures under [`proposals/reporting-v1/`](../../proposals/reporting-v1/README.md) are an isolated Finance-review proposal. They are not promoted into the canonical contract set. The receipt checker and its tests are governance tooling for recording and shape-checking evidence, not a contract SDK.
+The JSON Schemas and synthetic fixtures under [`proposals/reporting-v1/`](../../proposals/reporting-v1/README.md) remain an isolated Finance-review proposal. They are not promoted into the canonical contract set. The receipt checker is governance tooling for recording and shape-checking evidence.
 
 ## Dependencies and handoff
 
@@ -31,6 +30,8 @@ Collect requirements from every producer and consumer. Each contract names its a
 Agree the minimum contracts for one customer journey: request, research package, design version, production bundle, quote, authorization, usage observation, and financial summary. Pin a compatible contract version across the integration workspace.
 
 ## Acceptance boundary
+
+Local fixture/schema results are contribution evidence. [Consumer handoff](../consumer-handoff.md), [producer findings](../../compatibility/owner-findings.json) and [proposal intake](../../compatibility/proposal-intake.json) record unresolved work. Historical architecture snapshots do not override the maintained catalog or imply an accepted endpoint API.
 
 - [ ] Every initial producer and consumer agrees on required fields and errors.
 - [ ] Unknown, estimated, and confirmed values have distinct representations.

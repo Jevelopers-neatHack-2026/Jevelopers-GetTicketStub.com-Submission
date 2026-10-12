@@ -1,0 +1,2042 @@
+{
+  "provenance": {
+    "kind": "synthetic_consistency_control_only",
+    "source": "independent whole-PR review at10d9710",
+    "input_hash": "sha256:c34e5726a7256b9c280d3ac6994613e5db7d8f3c5b40244bae09f1b183ae5268",
+    "authority_issued": false,
+    "real_domain_geometry_or_consumer_acceptance": false
+  },
+  "valid": {
+    "bundle": {
+      "contract": "ProductionBundle",
+      "schema_version": "2.0.0",
+      "policy_version": "1.0.0",
+      "event_id": "123e4567-e89b-42d3-a456-000000008000",
+      "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+      "project_id": "123e4567-e89b-42d3-a456-000000000002",
+      "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+      "producer": {
+        "module": "shared-contracts",
+        "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+        "build_revision": "fixture-1"
+      },
+      "occurred_at": "2026-10-10T12:00:00Z",
+      "observed_at": "2026-10-10T12:00:01Z",
+      "ingested_at": "2026-10-10T12:00:02Z",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "source_refs": [],
+      "bundle_id": "123e4567-e89b-42d3-a456-000000000060",
+      "bundle_version": 1,
+      "handoff_ref": {
+        "contract": "ArtifactHandoffManifest",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000110",
+        "revision": 1,
+        "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+      },
+      "approval_ref": {
+        "contract": "ApprovalReceipt",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000100",
+        "revision": 1,
+        "content_hash": "sha256:a4fe466d91791eab289b3b6bdccf24130a4a9ad5667d6a9f42ac271fff606a93"
+      },
+      "renderer_ref": {
+        "contract": "ProductionRuntime",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-00000000001e",
+        "revision": 1,
+        "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+      },
+      "template_ref": {
+        "contract": "TemplateSpec",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000033",
+        "revision": 1,
+        "content_hash": "sha256:009ebed70969d8bbdcd8e7c99cf6f03801d68d089a0967a7db13d3eb19a63493"
+      },
+      "font_refs": [
+        {
+          "contract": "ProductionResource",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000000a",
+          "revision": 1,
+          "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+        }
+      ],
+      "spec_ref": {
+        "contract": "PrintSpec",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000028",
+        "revision": 1,
+        "content_hash": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342"
+      },
+      "composition": {
+        "facts_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f",
+        "composition_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085",
+        "source_artwork_hashes": [
+          "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+          "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+        ],
+        "displayed_preview_hash": null,
+        "composed_preview_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+        "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+        "private_revision_hash": "sha256:3189e3588203965eb659e6ac09d10f2907395a3cca51efc0661e93f276de63a2",
+        "input_binding_hash": "sha256:e44b94a5d56d7fa5afcac8335fdb51d32b3cc110afdcec526dbbd1f80a44544f",
+        "barcode_hash": null
+      },
+      "files": [
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-00000000005a",
+          "filename": "output.svg",
+          "role": "print_output",
+          "byte_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+          "byte_size": 18248,
+          "media_type": "image/svg+xml",
+          "geometry": {
+            "width_nm": "304800000",
+            "height_nm": "457200000",
+            "width_px": null,
+            "height_px": null,
+            "effective_dpi": 300
+          },
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-00000000005b",
+          "filename": "output.png",
+          "role": "print_output",
+          "byte_hash": "sha256:f4e9808789923fc07f59c6b939f83ed671053b1ec747605f240ffe78c51434d2",
+          "byte_size": 8589,
+          "media_type": "image/png",
+          "geometry": {
+            "width_nm": "304800000",
+            "height_nm": "457200000",
+            "width_px": null,
+            "height_px": null,
+            "effective_dpi": 300
+          },
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-00000000005c",
+          "filename": "output.pdf",
+          "role": "print_output",
+          "byte_hash": "sha256:03fb642b6a5ff69ebcce0fe14ccf254259edf14ba3bfbcbebd103f478806aa48",
+          "byte_size": 6274,
+          "media_type": "application/pdf",
+          "geometry": {
+            "width_nm": "304800000",
+            "height_nm": "457200000",
+            "width_px": null,
+            "height_px": null,
+            "effective_dpi": 300
+          },
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-00000000005d",
+          "filename": "report.json",
+          "role": "preflight_report",
+          "byte_hash": "sha256:e9a717e1aaca93fa953efa2a1181c08abce1885c9a501215c93b658b304ca147",
+          "byte_size": 1905,
+          "media_type": "application/json",
+          "geometry": null,
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": "sha256:01bc64ec1b46f8936c9d1af52f37bf39cdff1ee056bd58b37bb7419e5b4e013c"
+        },
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-00000000005e",
+          "filename": "profile.json",
+          "role": "profile",
+          "byte_hash": "sha256:f53c5cdf1527e60c978d429b1dccab13edf39ad683cab4182fc42e67da46f0dd",
+          "byte_size": 77,
+          "media_type": "application/json",
+          "geometry": null,
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-00000000005f",
+          "filename": "lineage.json",
+          "role": "lineage",
+          "byte_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308",
+          "byte_size": 401,
+          "media_type": "application/json",
+          "geometry": null,
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "policy_version": "1.0.0",
+          "artifact_id": "123e4567-e89b-42d3-a456-000000008501",
+          "filename": "preview.svg",
+          "role": "composed_preview",
+          "byte_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+          "byte_size": 18248,
+          "media_type": "image/svg+xml",
+          "geometry": null,
+          "profile_ref": null,
+          "characteristics": null,
+          "semantic_hash": null
+        }
+      ],
+      "preflight": {
+        "report_ref": {
+          "contract": "PreflightReport",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000051",
+          "revision": 1,
+          "content_hash": "sha256:01bc64ec1b46f8936c9d1af52f37bf39cdff1ee056bd58b37bb7419e5b4e013c"
+        },
+        "status": "passed",
+        "reasons": []
+      },
+      "usage_refs": [],
+      "decision_refs": [],
+      "composition_ref": {
+        "contract": "Composition",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-00000000003d",
+        "revision": 1,
+        "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+      },
+      "facts_ref": {
+        "contract": "EventIntelligencePackage",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000001",
+        "revision": 1,
+        "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+      },
+      "capability_ref": {
+        "contract": "FulfillmentCapabilitySnapshot",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000029",
+        "revision": 1,
+        "content_hash": "sha256:b80cfed9ab930f19ddd20bd5ed62aa597c5d6e8ce4b04f899420916c27802ddf"
+      },
+      "policy_refs": {
+        "formatting": {
+          "contract": "ProductionPolicy",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000015",
+          "revision": 1,
+          "content_hash": "sha256:b2dca40bca0afeab7c81fc43b9764a6ed13a93c1c743bafe576435f224d20523"
+        },
+        "layout": {
+          "contract": "ProductionPolicy",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000014",
+          "revision": 1,
+          "content_hash": "sha256:6c77cdf12021c39082708d25853ca277cdf80d8a43f9acd66d4419892641ff22"
+        },
+        "output": {
+          "contract": "ProductionPolicy",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000016",
+          "revision": 1,
+          "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+        },
+        "repair": null
+      },
+      "lineage_ref": {
+        "contract": "ProductionResource",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-00000000000c",
+        "revision": 1,
+        "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+      },
+      "row_scope": null,
+      "bundle_hash": "sha256:7c71f5c9d514440f8ffa01e1da2dd1b2250d22b335d9737a35dcd48227573ae3"
+    },
+    "context": {
+      "scope": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+        "project_id": "123e4567-e89b-42d3-a456-000000000002"
+      },
+      "now": "2026-10-10T12:00:00.000Z",
+      "actor_id": "actor_1",
+      "audience": "print-production",
+      "expected_binding": {
+        "subject_type": "composition",
+        "subject_ref": {
+          "contract": "Composition",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000003d",
+          "revision": 1,
+          "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+        },
+        "intended_use": "production",
+        "preview_ref": {
+          "contract": "Preview",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000008501",
+          "revision": 1,
+          "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+        },
+        "facts_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f",
+        "composition_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085",
+        "asset_hashes": [
+          "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+          "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+        ],
+        "facts_ref": {
+          "contract": "EventIntelligencePackage",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000001",
+          "revision": 1,
+          "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+        },
+        "composition_ref": {
+          "contract": "Composition",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000003d",
+          "revision": 1,
+          "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+        }
+      },
+      "composition": {
+        "contract": "Composition",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+        "project_id": "123e4567-e89b-42d3-a456-000000000002",
+        "composition_id": "123e4567-e89b-42d3-a456-00000000003d",
+        "revision": 1,
+        "design_ref": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+        },
+        "handoff_ref": {
+          "contract": "ArtifactHandoffManifest",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000110",
+          "revision": 1,
+          "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+        },
+        "facts_ref": {
+          "contract": "EventIntelligencePackage",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000001",
+          "revision": 1,
+          "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+        },
+        "template_ref": {
+          "contract": "TemplateSpec",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000033",
+          "revision": 1,
+          "content_hash": "sha256:009ebed70969d8bbdcd8e7c99cf6f03801d68d089a0967a7db13d3eb19a63493"
+        },
+        "spec_ref": {
+          "contract": "PrintSpec",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000028",
+          "revision": 1,
+          "content_hash": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342"
+        },
+        "capability_ref": {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000029",
+          "revision": 1,
+          "content_hash": "sha256:b80cfed9ab930f19ddd20bd5ed62aa597c5d6e8ce4b04f899420916c27802ddf"
+        },
+        "asset_uses": [
+          {
+            "asset_ref": {
+              "contract": "ArtifactFile",
+              "schema_version": "2.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000003c",
+              "revision": 1,
+              "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+            },
+            "permission_ref": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "purpose": "artwork",
+            "normalization_policy_ref": null
+          },
+          {
+            "asset_ref": {
+              "contract": "ArtifactFile",
+              "schema_version": "2.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000003e",
+              "revision": 1,
+              "content_hash": "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+            },
+            "permission_ref": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "purpose": "overlay",
+            "normalization_policy_ref": null
+          }
+        ],
+        "values": {
+          "name": {
+            "kind": "display",
+            "value": "0001"
+          },
+          "detail": {
+            "kind": "display",
+            "value": "Áda"
+          }
+        },
+        "fact_bindings": [
+          {
+            "slot_id": "title-slot",
+            "fact_key": "title",
+            "value_hash": "sha256:511396ff8c1a21a14d328a494c6728f7d39d1419dc0e1e46e2aa40e0d92308a6"
+          }
+        ],
+        "policy_refs": {
+          "formatting": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:b2dca40bca0afeab7c81fc43b9764a6ed13a93c1c743bafe576435f224d20523"
+          },
+          "layout": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:6c77cdf12021c39082708d25853ca277cdf80d8a43f9acd66d4419892641ff22"
+          },
+          "output": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+          },
+          "repair": null
+        },
+        "font_refs": [
+          {
+            "contract": "ProductionResource",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000000a",
+            "revision": 1,
+            "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+          }
+        ],
+        "runtime_ref": {
+          "contract": "ProductionRuntime",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000001e",
+          "revision": 1,
+          "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+        },
+        "resolved_layout_commitment": "sha256:d492b574c7820dab19108c3abf9238af0cd8f0edfdbd9d31051f8be4cd899458",
+        "barcode": {
+          "state": "absent",
+          "reason": "not_requested"
+        },
+        "input_binding_hash": "sha256:e44b94a5d56d7fa5afcac8335fdb51d32b3cc110afdcec526dbbd1f80a44544f",
+        "slot_bindings": [
+          {
+            "slot_id": "art-slot",
+            "source": {
+              "kind": "asset",
+              "asset_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003c",
+                "revision": 1,
+                "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              }
+            }
+          },
+          {
+            "slot_id": "logo-slot",
+            "source": {
+              "kind": "asset",
+              "asset_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003e",
+                "revision": 1,
+                "content_hash": "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+              }
+            }
+          },
+          {
+            "slot_id": "name-slot",
+            "source": {
+              "kind": "value",
+              "field_id": "name"
+            }
+          },
+          {
+            "slot_id": "detail-slot",
+            "source": {
+              "kind": "value",
+              "field_id": "detail"
+            }
+          },
+          {
+            "slot_id": "title-slot",
+            "source": {
+              "kind": "fact",
+              "fact_key": "title"
+            }
+          }
+        ],
+        "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+      },
+      "composition_context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002"
+        },
+        "template": {
+          "template_id": "123e4567-e89b-42d3-a456-000000000033",
+          "revision": 1,
+          "product_ref": {
+            "contract": "ProductionResource",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000000b",
+            "revision": 1,
+            "content_hash": "sha256:bfd671837a684ef719607087729df0b8cb3a4b8661bcd460cb7b7f0e90af3656"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000028",
+            "revision": 1,
+            "content_hash": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342"
+          },
+          "capability_ref": {
+            "contract": "FulfillmentCapabilitySnapshot",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000029",
+            "revision": 1,
+            "content_hash": "sha256:b80cfed9ab930f19ddd20bd5ed62aa597c5d6e8ce4b04f899420916c27802ddf"
+          },
+          "layout_policy_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:6c77cdf12021c39082708d25853ca277cdf80d8a43f9acd66d4419892641ff22"
+          },
+          "coordinate_geometry": {
+            "unit": "nm",
+            "origin": "top-left",
+            "canvas": {
+              "width_nm": "101600000",
+              "height_nm": "50800000"
+            },
+            "trim": {
+              "x_nm": "2000000",
+              "y_nm": "2000000",
+              "width_nm": "97600000",
+              "height_nm": "46800000"
+            },
+            "bleed": {
+              "x_nm": "0",
+              "y_nm": "0",
+              "width_nm": "101600000",
+              "height_nm": "50800000"
+            },
+            "safe": {
+              "x_nm": "5000000",
+              "y_nm": "5000000",
+              "width_nm": "91600000",
+              "height_nm": "40800000"
+            }
+          },
+          "orientation": "landscape",
+          "minimum_effective_dpi": 290,
+          "color_policy_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+          },
+          "export_formats": [
+            "svg",
+            "png",
+            "pdf"
+          ],
+          "font_refs": [
+            {
+              "contract": "ProductionResource",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000000a",
+              "revision": 1,
+              "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+            }
+          ],
+          "slots": [
+            {
+              "slot_id": "art-slot",
+              "kind": "artwork",
+              "bounds": {
+                "x_nm": "0",
+                "y_nm": "0",
+                "width_nm": "101600000",
+                "height_nm": "50800000"
+              },
+              "required": true,
+              "font_bounds_nm": null,
+              "allowed_font_refs": [],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": null
+            },
+            {
+              "slot_id": "name-slot",
+              "kind": "text",
+              "bounds": {
+                "x_nm": "7000000",
+                "y_nm": "7000000",
+                "width_nm": "74000000",
+                "height_nm": "16000000"
+              },
+              "required": true,
+              "font_bounds_nm": {
+                "minimum": "2000000",
+                "maximum": "7000000"
+              },
+              "allowed_font_refs": [
+                {
+                  "contract": "ProductionResource",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-00000000000a",
+                  "revision": 1,
+                  "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+                }
+              ],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": "name"
+            },
+            {
+              "slot_id": "detail-slot",
+              "kind": "text",
+              "bounds": {
+                "x_nm": "7000000",
+                "y_nm": "28000000",
+                "width_nm": "74000000",
+                "height_nm": "13000000"
+              },
+              "required": true,
+              "font_bounds_nm": {
+                "minimum": "2000000",
+                "maximum": "7000000"
+              },
+              "allowed_font_refs": [
+                {
+                  "contract": "ProductionResource",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-00000000000a",
+                  "revision": 1,
+                  "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+                }
+              ],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": "detail"
+            },
+            {
+              "slot_id": "logo-slot",
+              "kind": "overlay",
+              "bounds": {
+                "x_nm": "85000000",
+                "y_nm": "7000000",
+                "width_nm": "8000000",
+                "height_nm": "8000000"
+              },
+              "required": true,
+              "font_bounds_nm": null,
+              "allowed_font_refs": [],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": null
+            },
+            {
+              "slot_id": "shape-slot",
+              "kind": "shape",
+              "bounds": {
+                "x_nm": "7000000",
+                "y_nm": "25000000",
+                "width_nm": "86000000",
+                "height_nm": "500000"
+              },
+              "required": false,
+              "font_bounds_nm": null,
+              "allowed_font_refs": [],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": null
+            },
+            {
+              "slot_id": "guide-slot",
+              "kind": "guide",
+              "bounds": {
+                "x_nm": "0",
+                "y_nm": "0",
+                "width_nm": "101600000",
+                "height_nm": "50800000"
+              },
+              "required": false,
+              "font_bounds_nm": null,
+              "allowed_font_refs": [],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": null
+            },
+            {
+              "slot_id": "title-slot",
+              "kind": "text",
+              "bounds": {
+                "x_nm": "7000000",
+                "y_nm": "7000000",
+                "width_nm": "74000000",
+                "height_nm": "16000000"
+              },
+              "required": true,
+              "font_bounds_nm": {
+                "minimum": "2000000",
+                "maximum": "7000000"
+              },
+              "allowed_font_refs": [
+                {
+                  "contract": "ProductionResource",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-00000000000a",
+                  "revision": 1,
+                  "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+                }
+              ],
+              "allowed_fits": [
+                "contain",
+                "exact"
+              ],
+              "allow_crop": false,
+              "maximum_rotation_degrees": 180,
+              "field_id": "title"
+            }
+          ],
+          "personalization_schema_ref": {
+            "contract": "PersonalizationSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000032",
+            "revision": 1,
+            "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+          },
+          "warning_policy_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000018",
+            "revision": 1,
+            "content_hash": "sha256:3d1897f1b8913bc75d6eb60f74caf937ef693704d1f094e002d7b17a53eb1dc9"
+          },
+          "proof_policy_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000019",
+            "revision": 1,
+            "content_hash": "sha256:31d4c0aee5190d2132f3b52ed18917ad6c964218b52e662656d40076e1954d59"
+          },
+          "content_hash": "sha256:009ebed70969d8bbdcd8e7c99cf6f03801d68d089a0967a7db13d3eb19a63493",
+          "contract": "TemplateSpec",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "formatting_policy_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:b2dca40bca0afeab7c81fc43b9764a6ed13a93c1c743bafe576435f224d20523"
+          }
+        },
+        "personalization": {
+          "contract": "PersonalizationSchema",
+          "schema_version": "1.0.0",
+          "schema_id": "123e4567-e89b-42d3-a456-000000000032",
+          "revision": 1,
+          "fields": [
+            {
+              "field_id": "name",
+              "slot_id": "name-slot",
+              "required": true,
+              "maximum_utf16_units": 200,
+              "source_policy": "row_display"
+            },
+            {
+              "field_id": "detail",
+              "slot_id": "detail-slot",
+              "required": true,
+              "maximum_utf16_units": 200,
+              "source_policy": "row_display"
+            },
+            {
+              "field_id": "title",
+              "slot_id": "title-slot",
+              "required": true,
+              "maximum_utf16_units": 200,
+              "source_policy": "approved_fact_readonly"
+            }
+          ],
+          "limits": {
+            "maximum_rows": 100,
+            "maximum_canonical_bytes": 100000,
+            "maximum_fields": 3
+          },
+          "policy_version": "1.0.0",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+        },
+        "facts": {
+          "reference": {
+            "contract": "EventIntelligencePackage",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000001",
+            "revision": 1,
+            "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+          },
+          "package": {
+            "contract": "EventIntelligencePackage",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000001000",
+            "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+            "project_id": "123e4567-e89b-42d3-a456-000000000002",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "package_id": "123e4567-e89b-42d3-a456-000000000001",
+            "package_version": 1,
+            "package_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f",
+            "parent_ref": null,
+            "request_ref": {
+              "contract": "ResearchRequest",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000020",
+              "revision": 1,
+              "content_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08"
+            },
+            "request_receipt_ref": {
+              "contract": "ResearchRequestReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000030",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "answer_receipt_refs": [
+              {
+                "contract": "ResearchAnswerReceipt",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000031",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              }
+            ],
+            "batch_receipt_ref": {
+              "contract": "ResearchBatchReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000032",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "sources": [
+              {
+                "source_id": "source_1",
+                "url": "https://events.example.invalid/show",
+                "retrieved_at": "2026-10-10T11:55:00Z",
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "retention_ref": {
+                  "contract": "RetentionPolicy",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-000000000025",
+                  "revision": 1,
+                  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "access_ref": {
+                  "contract": "AccessPolicy",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-000000000026",
+                  "revision": 1,
+                  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              }
+            ],
+            "facts": [
+              {
+                "fact_id": "123e4567-e89b-42d3-a456-000000000002",
+                "revision": 1,
+                "fact_hash": "sha256:355076231b8f722cf428d8f97e51b4aebfa494641b756172f7e5b038f7358d77",
+                "key": "title",
+                "status": "known",
+                "value": "Synthetic event",
+                "candidate_values": [],
+                "confidence": {
+                  "basis": "sourced",
+                  "value": 0.9
+                },
+                "provenance": [
+                  {
+                    "source_id": "source_1",
+                    "retrieved_at": "2026-10-10T11:55:00Z",
+                    "evidence_ref": {
+                      "contract": "Evidence",
+                      "schema_version": "1.0.0",
+                      "id": "123e4567-e89b-42d3-a456-000000000060",
+                      "revision": 1,
+                      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                    }
+                  }
+                ]
+              }
+            ],
+            "asset_candidates": [
+              {
+                "asset_id": "123e4567-e89b-42d3-a456-000000000003",
+                "revision": 1,
+                "source_id": "source_1",
+                "original_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "transformed_hash": null,
+                "media_type": "image/png",
+                "discovery_url": "https://events.example.invalid/art"
+              }
+            ],
+            "approved_assets": [
+              {
+                "asset_id": "123e4567-e89b-42d3-a456-000000000003",
+                "revision": 1,
+                "artifact_ref": {
+                  "contract": "Artifact",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-000000000003",
+                  "revision": 1,
+                  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "original_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "transformed_hash": null,
+                "intended_use": "display",
+                "approval_ref": {
+                  "contract": "ApprovalReference",
+                  "schema_version": "1.0.0",
+                  "id": "123e4567-e89b-42d3-a456-000000000004",
+                  "revision": 1,
+                  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "expires_at": "2026-10-10T13:00:00Z"
+              }
+            ],
+            "readiness": "ready",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "decision_refs": [],
+            "usage_refs": []
+          }
+        },
+        "expected_references": {
+          "/design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "/handoff_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "/facts_ref": {
+            "contract": "EventIntelligencePackage",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000001",
+            "revision": 1,
+            "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+          },
+          "/template_ref": {
+            "contract": "TemplateSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000033",
+            "revision": 1,
+            "content_hash": "sha256:009ebed70969d8bbdcd8e7c99cf6f03801d68d089a0967a7db13d3eb19a63493"
+          },
+          "/spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000028",
+            "revision": 1,
+            "content_hash": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342"
+          },
+          "/capability_ref": {
+            "contract": "FulfillmentCapabilitySnapshot",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000029",
+            "revision": 1,
+            "content_hash": "sha256:b80cfed9ab930f19ddd20bd5ed62aa597c5d6e8ce4b04f899420916c27802ddf"
+          },
+          "/asset_uses/0/asset_ref": {
+            "contract": "ArtifactFile",
+            "schema_version": "2.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003c",
+            "revision": 1,
+            "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+          },
+          "/asset_uses/0/permission_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "/asset_uses/1/asset_ref": {
+            "contract": "ArtifactFile",
+            "schema_version": "2.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003e",
+            "revision": 1,
+            "content_hash": "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+          },
+          "/asset_uses/1/permission_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "/policy_refs/formatting": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:b2dca40bca0afeab7c81fc43b9764a6ed13a93c1c743bafe576435f224d20523"
+          },
+          "/policy_refs/layout": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:6c77cdf12021c39082708d25853ca277cdf80d8a43f9acd66d4419892641ff22"
+          },
+          "/policy_refs/output": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+          },
+          "/font_refs/0": {
+            "contract": "ProductionResource",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000000a",
+            "revision": 1,
+            "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+          },
+          "/runtime_ref": {
+            "contract": "ProductionRuntime",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000001e",
+            "revision": 1,
+            "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+          },
+          "/slot_bindings/0/source/asset_ref": {
+            "contract": "ArtifactFile",
+            "schema_version": "2.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003c",
+            "revision": 1,
+            "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+          },
+          "/slot_bindings/1/source/asset_ref": {
+            "contract": "ArtifactFile",
+            "schema_version": "2.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003e",
+            "revision": 1,
+            "content_hash": "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+          }
+        },
+        "expected_resolved_layout_commitment": "sha256:d492b574c7820dab19108c3abf9238af0cd8f0edfdbd9d31051f8be4cd899458",
+        "expected_policy_refs": {
+          "formatting": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:b2dca40bca0afeab7c81fc43b9764a6ed13a93c1c743bafe576435f224d20523"
+          },
+          "layout": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:6c77cdf12021c39082708d25853ca277cdf80d8a43f9acd66d4419892641ff22"
+          },
+          "output": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+          },
+          "repair": null
+        },
+        "expected_font_refs": [
+          {
+            "contract": "ProductionResource",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000000a",
+            "revision": 1,
+            "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+          }
+        ],
+        "expected_runtime_ref": {
+          "contract": "ProductionRuntime",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000001e",
+          "revision": 1,
+          "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+        },
+        "asset_bytes": {
+          "123e4567-e89b-42d3-a456-00000000003c": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDEuNm1tIiBoZWlnaHQ9IjUwLjhtbSIgdmlld0JveD0iMCAwIDM4NCAxOTIiPjxzdHlsZT5AZm9udC1mYWNle2ZvbnQtZmFtaWx5OidQUCBDYWxpYnJhdGlvbic7c3JjOnVybChkYXRhOmZvbnQvd29mZjI7YmFzZTY0LGQwOUdNZ0FCQUFBQUFETkFBQkFBQUFBQWJlUUFBRExmQUFFQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFHb0ZFRzZoVUhJVktCbUEvVTFSQlZGNEFnaXdSQ0FxQmlUVHNCd3VFTkFBQk5nSWtBNGhrQkNBRmhIZ0hpVFlNQnh2dFcwVkdiVmJ0RlEraUNEWU9SZ0xoT1lwS1R2SHMvMXNDSjBPRXpvZXF6bDFVU2RvZ21yRkVrTFdQMWhMMkVtaHRkYU9vYjgvWXhQcjY1enpjUnYzM1ZHOHlwazhSVVVVTUN3TkJITCt0NEhsQ3dTL3gzWXBVUU5tNnRrYk04Z2hOVHRISzgvM0w5ZDgrZGZ2TC9ZWlVCaUZTekd6K2hGQXNycHlwbFJGZFAwL2JmTzlmQ09kQlMxbFlpRkdOaVlWcm83YXhpR3hyVmVVLzVyUWtXNG1UOTcvanRJTklzaFhvTnUxUTJza3lXRmY3T3NSOFd4NmlPV3RLZzJnaEVDVWhJb1ltdTBrMlJzU0lJYUp0cVJwVktIVjk2dkoxdUhPb0tMM3J1ZlNrVjZxWFBiWHErWHNrRnlRa1dKVEZvQXdDNHhEV1lmY2R6T3NtaC9vaERveHY5UEV4SXNkSDJkZ0hkbk1YL09tOThyM1dNNjNYMmZwRVRKSnp0bUJLZlAwQVdPcXNKQTArL1EzWHF1bVNqTzlDUmZnSVF4bVBRak0raXZpZ0RFYjhJSHZWaXozc2dVdXAxNEFBQkFLSG4vZUYwcTdsWGVpelBqMEFEL2I5V3UvYlBkc2g2b1NGUXJVVlljSTZ3c2VZTi9mTzFxdXpuUW53NUlab0Fzd1NVRWJHUnFFaWNrOUdvVW8rNi85L09zdDJaclh6emo1MmlQZHl4d2tYRGI1ZUFheXdTbEZKLzQ4c2pjWmFrTTlMM3VRdDRSSFlSejd2YmJ3UUlxeXNFQzZFaUR2QW9pU3FpclJ0MGdHM1hlcUdURWM0cnYxUlZkNkFEV2tXbm1ERmJ0TnZJOS8rMDVUbXNma0ZFeFpaUENNeUdNOGJCakdsWGZkZkgwWnpYWUQ2a2N2a3VBQkg5ZHduQ1NJV1dBNDhRSXhoT0RMTjF5TFFhKytCd21GaDlZR0pnV2dZUDRTSU14ZklYUnlVcWczVU1SRU5iRHM1M0Z6T3Q1ZjduZkxuRUVYNEtjUUhIMkdrWmFDaUNvY2lmUjdZQnRnSW1NNEprVUNKcUppblM0Vll6M2xKV21qM2ZjQmloUlpqai9wOWVrSGt4ZE9hckk5MFNlMmdBa1BOZis3bFhlOFVJcStwN0FxSXBFOWFMQXVWRGk2aUxqeHF6ZnlKQkhHUWV2VzdLU0I2WjRkK1RKY0I0N1hOdWRTblRDa2dCQ2Izbm1GUVFwU3hDUkFBOXJiZzF2eExiNG1Mc3BuOXVsV2VKMFlycGNLU1Fod0tUbVlXdmR4UkpYZ3NYd1o2T2twaUNHc05uTDFUdCtIc3Azb0Radyt1eWxycTNWSDk2UWhEUVVqdUFnUHJMS1FrQ1UwZEloMUVSbnkvQnhqd1lBbmd4TUFLeHdzOFJpUmZlandlTlJ5SUNlQUkyaHRZeFh1RGNNZkMzSmdWalhJcmczZXJoL0hIM2lRdW03OGMzL2M4a2FweDZ1YUpGcXEyTHNjU1hEa2dSNDR5NDhBUTRPYk96bTlrVnBGUGRrb2U4b2FQem5FV1pjRW13YVNCSlI5ZlhPK2h3ZXMvWWlnZy85UnY5Y05lN05IdTdOb2FkbjRuZDlncE9yK1RlbnNNYmY5MmJ2TUd0MnBMTjM4ek4yVWRhMXJOeWhhYWQvYVpNb1c4Y3FlY2VOelJSMG9DTzExYTZoSUlqZi95T3Iva3U1N2gzQjUwcXl2VjdWZnVyZVkvM3NGUnozYTh3KzBkZFhzYkcyakZxaGMzZDROTnIrZmMybXFvcXBJMUZWZ3BHdURPTnJveGJkbkpSeGZHbmpqcWk0bGxsSUlDY25LSlJjRWYzOUo2Tkd6NDNqTTN5NGFkWC9qZitDaUY3dlZzTTRWQlliQ0FzTU40SHNpVjNoRHBpUTYrbHFQdUdVZnRvVjZrZldRNlF3REdBNmJGdHNHczV6aFM1MmVGRGpQSGJzVEhMRUdoUC9nMFVMYzZCYnBiSDNUUXJTRGRNMEY2bTViaW56YU5GZWl2SFIvbThPNWpJMStYcHY2L1oyenE0M3I2dy9sYnF3OWFvVUFPQWhCbTkwUEZlZzM3cERWOG5oY3ZDcjNod1BCUytPU2dWRGhESzlkQ1piK0RPeG9SZ001UXdSRVJpTU9ZK3VrNUppb1VheHpxNjN1bUIyYkJHMEZvajRGSXR2aUtCZmJMdG9mdFpOdlladHJnSGdVYWFJQUhQbWo3K0VUM3JpZnB1S0cxZngwOWF1VXhYWE44eDhCMHdxTm1yOFF1T2Zmc1VleVB2RGQ2ZHJiWkY3RWoycnZobXBWZHhxNG9UT2drbmhNMVh4T3pjaU5IZFdVYzZrbzdZaGNWdTlFcGJnN2hNamN4Y3duSWtXSEhLRXlkcVJYOWxvVmFjM3V0QjRpN2ZxRm56ekZxcm10N1pxdGlnVTdxNmF2dlcyRnZNOEdOemVVbm9OSkFYVGdzWTREK3pERG9tc0lIRGZicFdUWU5TMEFZcm1NWWJLVUtjd1JBdUx5aGVaQWY1TDVETXJUd2dqMDhjQjQrNkFnVkVDYU91YUVDZ0xFWWlLUDFyTmxkNjU3V295dW1nNVl2VUlLZWlrR1Ira2dibmw4QW9FTW93aENPWEhWOFR2RzB2Z2l3RWxpY0RlWmt4bUQrVENLU09Xb2lWTzJzQzU1bExLWkEzSGZEWW5BdXFkT2dFU0hFWUJBY0RpRWhnV1JrVUowNlJMMTZxSEhsVFkzb2lpTmVCeFlSb0pkRWYwN3BPdkV5Wk8yUjRzY3hOM3dad3JJMzNVeS8zU0syTTFKVG85dHZwbzhQMlVHWHZsMmswejluL1V3V0tWWEVaRGllT2RXUjROa0tFUzlUSzZVNkdXU3A2MjU0TForSE5LSk1FcTNJNkVUS0lOS1dFbDBuNVFacHI2TXBSS3plRTlNbzg5ZSsvcWFjcDFLUmV6eHV5WW5ITjVNY3VQTWRWRDFuT3NuVHpFSjBVRExjNzdaSjFkREI3YXB0TWVseis3M0xPK3B0SFgzaUtHMGlIWnV0eGFZZFlvODJ4TGdrZlBjQmJiTjg3YWhFRUVmdmJjR1g4VTdlZTFneGw5T1VQckNZVWs0OUhhSnNXckQwK042TFpva2xGVTc3U0VEbWcyODRmVXZ4MSs1VTJwWUhleXNINjFqbDFaMDM0TW56NWJzVCs4NGRGWTN0em1wYnBPTDRTQUl3ZE5sS2QrNVBOekJpK1FzZ0ZOeG9LL1JGdkFoeFJGS2xVVElscW1RM3F1VXJvbUdoZzJhTmpscG95VW5yUnIzaEpuRXgvZnY3bVdrdWYvTXRFV0s1dGFLc3QwbWlyYlpMdGROZUdmYmJMOGNSeCtVNjZaUUNGelFwUXFRV0MwV3B3SU4ySkJTUlVrNjJ0NGdqSitvcTJrRENXd1FnTlpLQnZNaEdWcFJvbkZnS3hWRW1rWFpTU1V2YkxKRE9kSDlkMnNvQ3hiSXJnVHptdm4yK0FwUkNFQldSVWt4a0lhV0VFczBvMWJ5UjBrSnJOdHBRcVp4Mk9sRmpVS1BXY0dNd3hsSmxuQWhqTlpLaGtWaGdNZFlTQ2kxL1BscGhMZG82bXlCN3dQM1JBWWRSam9BMmpsTGdHRzJjb01CSkVxY2EwUVVYeVYyaVRoMFY2aW5TUUoxR0tqUlI1QXBGcmxQamhyU3ZyRGZhSXZ4bEFTOWVFRWdoazFRS2tGTElzNUZpSk0yZkNnSGtCSk1TMnFMRW1ZSklhU3NHVklpbGpUaEpJQlJCeUgvT3R1UThTOXgrWU1Ud0NRSjZaNkh4SnFFYkVwUW9ic2Vtek1iV2JOeHFHd0dIWXRnYm5YSGNjWnhvM2t5VzZ2Q01tVFExNHJtYUlYM0VKcksrQ095Vy9XMXRmV3ZxeTlKZG15dGwvSmpaaVc3S0tHcXVNV2Q2Y2Q2dkxyTjExNzV4MXlSaTJ2ak02d0FVU01pV08wOUdYb0tGQ0JVbWdzR2RZOFZMbHM3TC9xMlZxakxJTUhuYUNDT05NdG9ZWTBzNXdVVDQ5TEorbHRubUlIYnJoeTkxeERFbjNjRHlVeTJpSWFwSnRIcnNtTHZrdkJac2JLbWxOY3BvWkJwRGliTTZhM1NNVldVSTRVYXVidGdGRkh5OXZsUC80YnBtTUtISGVLVVVMK3NsZlNUakdPSHVqaEo3cUkxOStQQVJzSkUyeWtiYkdLK1BlUlBzU3NpWVlpR1JzRkFuZmYrV2Noa3hJclllNVhxME5vcytWajd3THc0NWhEd3dKSjJTa2RWYmsxMGhraHAzTkFwRUN5WllPQVV6bXBNcERZTG5BVjZpOGs4c1JoUWZQcDA0YUtnM0tFVXBTbEdLOUhjYnhNSWpmNzFtZ0FNdGNwOVV6RDh0T0VQd3lVWHpvdmZFUitQQ3JzS0wvK1FWMU80ZWVrbFI1bEQrTjI1OUdKUmNFMzk5eUwrbUREUEl1cTdQRzBpOTRiWUk0bS9CNkpGQThMQUZBMktpYVlNNHVtSlZ4OEh5ckc5em9iTERCK0FYOXdLdzFsajlWWEpDY3g4MkNyZmhYbjFuSnhweS9EUGpUODMwRm1IMkJwSGpIVXFtSE8rVnpFd2lNMC9meUxhUHZPSzkvamZ3WFQvUmZTZkZkMXJZN3NXQVEwbGUrRWR6TWJMeFQ2SUIvT1l3am54WVdKUll6cnVaZDQ0enk3SGxOeXE5RFBJelFnV0hHUk5mSWJjNzA0NGoraEZjUENEVTljUVFNMVpjRlVFNWVVYm1xTTRRbkJ2QldDSmd4cVNWRFRZSFc0azlNZ2pxSE5kS1R2SUo4U2pGNStTaWk4R3BHRkQzTEFTY2FQOVRPVTl3OUtDV01JUm1hRUxvb2VCeVlER3dIZURZVTY5Yk9BcTZlWW5lVDhIa2twYURQQXlvOVRZQ2JJYUZrQUFGVEZIQVRzanRmMzhkQXNEdGwzUS9aQUxnK0tubklEcUVLeFZXN1UyU0NDaDdFMG04NnBwaW9EWjFWYjBPbkJsQUxMU2tvL0hER2hud2M1Y1o3TCsrZTc1ZDNwM2QycDBIS1pvU1VtNFA3MmNVOVpQNmxmcWRTcVJtVWVsVU5sVkJ6YVVhcVVPYjArbm8vOTdLL3lmSjFGczZ5THRMdjNiVFFBMUtzT3czS3A1S1dpYzVOYWZUc3BQNzN2NDJOd1l6ZjMvOC96OXozcW51NU5lUHdoY3ZYajU2K2ZEbGVXZWNkc0pSZTJ5M2p2ano0R1B3aWVmUU5HQXZHNENkTkh6bmFhUWtnN0JGY0t1eVBxRDJBRmtYckw0RHdIb3ZnTWxaWUV3WlJZdVhXNTNDb0dBcUFTVW9tdWtvaEZGSk5DTnJGWGtva2M3RVBDVlNhQXZMb0FRWWFFUFI0SkpKU2QvSDdwajBaRHJOMDFCNWduK244QmpSL05RMWNJUFc1SHd1WmRwT01KL2NtRVloRWNyRTZiZzNJVmV6aE50K2V3cnladEZWQll0bEpYM1ZzRnllV2VVT3B6NWVVM1BBcEN4OXNkQi9Bdkhnb1lFM01DaEFjQzMwbExyOFJPRWxoUngxeVdNZ2dUR1l1VG5JOXV6YUhQam9FUlF4TWRjMUdNMTU1RlRPVTM1LzZsSG8zOVB2bWVzMXBLbVA0aWJ1cWtaMmJ3NTZGWHNVdW8vcDFiTTRodnRqdUJyZVcvSFFvVU9MUFpTYUVURDM2ZHExSDNsZXRwRHYybFVWV1hHZjBYNi9MajBLUG51ZUtsQmVCWDNVYU1vUDVLSUtDdHdIRkdEZVpNNE5LeXJtWHFCK2hWN0ZZVUd1aTJMbTNrb1JFeEVYbGVlcEdkMXlsQi9nOVNtdzZzL2RtUWNVQmhSVVUzUEI3eitlcUViL2dLYnJyVmhSeGxkYi9Rd2J0RktML2RIMEE5NGsrVW9sVkh4ZFZWMlRnSWJwSTZrUDZUelJkazFqM3FJa3ZBTWI1WC8xQVVDTHRXWko0bzFTeU02aUl2aFhtUUNBQ1poM0k5cmpZdEhRN2ZkZmNBZ1cxbElJQUVsdS9zN2hFd0FnVFRGYWRMRURqYkxma2owNHZKaU84QkkrUlkrRENoN1JlUkRoT2N2TGZ5Y3VXemw0djNQY1BFMzZXTktCdUhJdHp3NCtGRkg5TGJlZldFZXBVb3UvbnNtOUdsL0tlL0JLSXk1VjYraFBxWlcxQ1hVakVUSERoVkdkQklna2xHc08vM0dnbFJ3NzhWUFVTQktHcHhPVE85RDRKZ2EzUkhQcm9XS0xZUUZJcTNtYTM1T0RjSzN5Z2R2dHB1akZoZ0tXNXU5REhTVWxkWmZpYmJnMVpWcjREUXNYZ0F0MEpXWDRvUDY2UkNXUWwveVFVemlEc3ZtVXVrZjJIUUtuWlZrbmh5S3IxTE5yeFA2OXJ1VFhVMnhqcXRpRXNxb3ZXSjhydVFHVDF1ZDZPUHNrOE1TMlQ5TkRvVVk3YVRYQ3B4am5QUTR1RXd1MHdkSVhIWUlvajlaTGdxczVSUkFPTFhYK1NFenRCR1dHKzUxaldJYjE4VXFoZnlRYitBU3d2a2pDTXcrU2pxcWRJL3M5enVVcmd0VGg3cDFNTHJJNmRlZU9TK1RFRHhuYUY0NHFINTUzdHNwdG9xMjlLbjNSTnNzMTIyYlNmazdHR2xQcDhkQ09kbUc1RkRqM21zRjV2U1RndllXZ3NXdGZ4R0I3MmNxWGsrUXlWUVlvVFdUN2lZUDRPYWxRZ1VhQTJ4VERmZklSZ3ZqRkRFcEZzL2Q1OUxEYlBoeXhSb002ZCsyVjN4djJpMjkxbWhwcVhyVmNBSGM0V0lKTW1kWFZFTUlSZCt2R0NLdS8zVmpLN3FJSFdEQ2V6ZWpKZzJvbVBzZ1pYN0NZNVJOMjFYVnkzdU55SUIvU2I0QTdQeGtSd0dVSEdYSjhsM3lXSmhOSlgyZ1Y2dVJwa0hzZU5QMjVNVU1xQnR1SFVkRkk0MS9EMlNKdHB3dXh2dkJiY1VCVDRQMUtQNkVhS2JnV2YrSFFFbUFYbksyVDl1b3F1bVF1SnV4MUUydGdEZDRXNk9LR1lFWlFkVTRURmlKS3lJNElxd3NHVVhubnpBeGQxRlY3MW1meC9ocVBxdkFRK1E2RG45ck9ycnpVcFNpdEg2QnlFQm5JUU9BTEhLQTY3TVNUNkpzYitVTUxXcWw4UVB0a1BtUzR1ZW92TGFnY2xOKy9OdXhtMzc0MWxTNWJVaDFvUHFSb0o5L1RrY2dYS3pnOFNxaFdxRnlsVW4xVzdzQ3RlQVJ1V3AzeTIrR1JnS0phSjNhRmxJR2tiSkJVZFF6UmZuUGEyb0Y0d2d3NEcxVFhJRmswK1JEaGZEY3YxdEdpMFc1YVlBLytFVDJJUTFtTFZSTmQwM2YrT2F5MFVvNE1sWVZ2dXRpVTg1cXhzVVIydGlpRTAyQ2pBeDFjZkIwMTAxNGRKU2xFMk8vTkMzaklkTGdUZjRYakRpbmxGZ0dlL0x5WmI5SHFWVGh3SWMwWUpBZmpLSTRnV3pocUpqV2tIQmJCR3NXSXk5RWcxTUZ3RzU4c1hwVmlVVWVYeHFVMk9yaWZXbTRyV1pxYVFzYWtHK0MrTld6UjduajlKWllUQXV2Rm1rMXYyY09NOGR5MysyTTBwTXVJTm9wVzBHeEhQNlI5NHRxOWhpd1plM2ZDVVkrU1NhOWhHY1c4WXVwM3MyS0NVWHVTcElsWmNFQ0Q0R0V0Y3loYzRwUFFhYTdMVlNaN3Rncm5oamlYVGp5TFNvcTFjKzNzRDczZWE1T2tpaEFRU1plVVhUdm9HV3M4RnRrdXRuM1VnUW5xT3JCWkFIRVRGOU9YVWV6T3BBWGllUzJHQkFrNHNmOUVhUmRxUDV2aGcxd2t3U2kxMU90VTFFSzdJdmJWMUloN2VnMUk4Tk1YbWduS2lEUnFBOUIzZWZnVXNLL1Rhc2dwNW1mbmpNK3liaE5rZS9sYnBHSWVNUkdSOTFvN3NzRlQzSzcrUXZIVUlONXNyR1k0TEJSS2xFVjRxMmx0bG04M2tVRTdvTkVvSXdHT3VQVzdmamxOQ2w1cWFacVhlaDg5Wmt5SDh4VkpDa09UdFNnZ01TSzQ4aDFiV0FNMFZWWUFrRyt6SHRIZ0pkN3V5UVNSZ0lqUFB4Tjh3ZkpjNk1ZTVF2OHo0YkM5Y2RHR2NMVHg2MVJ4bmo1d3FUdVRFczZOVGxja2FaTFlmSFB3S3NieHlnbHhNamRaWmJjYmR3NHdsSm1Ld0d6RUN0WElnV2lxMmpRNUpFdWxrRldRZTdrcHdRV1gvWTdyR1JnanhvZVYxbUhuUXQ5MzRMYlRubVFJcWVMT3V2aFUwRWo5T1dlNTZkbmxnenRNcVRua2psb0l2eERPRVJodEpkVXJEdjE1MnUzdmY3U2gxcnhDMmk5SnNvUzhjNWgvL1FZYmc1eFJWczA2SGE2TnpOTDl4c2xvd3R0Y1gxVVlKZkJjQkdIdTBiSDJENGp5dU9CTGM2cnVqTi9sMXFWY0JYZHpZbUlxZlZINUdVZDFsdVpaK29HMDZpcWw2bEoyVUZuQjZCY2FSc01kWHZMWUFiU1FRY3AxRUwxUTJ1M1ZHUklnRDZWVEhMVWE2dVUzYWRadEJvL1pQNE9ITE56ZDk0RHMrbUhQanEzNEdtS2JJcEVtbnZuOGUrRll6a2Q0WTl6dDZ0WXVObzNzR0Irbm1zVXhCVE5jMWV0TnRDSFV5eU5SZ3pwYU1hNHVPZGdoSWF2a2tJQ0lTRnFEMjMwMklTVEM1bkhBRm9nZHJqeDRLOHFqcEZQRjEyTjF2Q1RnL1FVSFVsTE0zMytNMTNqYktnK0hIMUNTTWJtcGo3S0VSaU9QcWY2Y1hJUjFtMFFRYlE2RlJzRkQxd1dyOGlZZGJvejBaaE50Q1QzdjJESzIzcnpNZDg1RlhLZWZRR2IvdGw4UXdFUVhZcGg1OWFLNmNGUWJibDhJSk1lV1NWdzVuQi9pY3lUd0UzREIwZ2U5RTN4cCtEUHowSjdIV05uRDREL2FVenhzdnh0Y2J5NzhNTlN0blNlaHNHWXo2KzhVRW5jcW1seTBPdE9PQitLMURxL1VKSUNSUmF2U0daZ3FMdEpQY3UyZ1JiNjJvTG5IU1ZURkZwdXozNlN5WjZwSGU0MHQ1cjVTczVHYmN1clFMdlFnNURRbDFheGZjbFdMNmxQcjF5MjhFcDNDNW1FcmJ6eHZkVXNwUGM5NUVLQ2llN2gzVUlpZ3EvK0JXckxZSTVsVG1HalU1UFNSS0NjKzIvSHBMUFlIU1R1bU1ubjMyWUlwTzhsenBLYkw1TnBYelpZSzRkSzVtRDk4NE5LQmVDTVZjSFpJKzltbEVIa3BuZUprd2JJVzZtK1FsQ3hvVjVyT1lLcExkMmkzSkhIQlJqcDBzcXVWVmkzcWxISjBITnlzTCttWFhaTXBFeXBrazZpV2VGaFdwTmFLQzluWTJkMnZwSkR2aW96SXFmck80cXE5dVhmdzdHRDJUUzZKU3ZCdHhkVlFtQ2FVakVhMHdHQXRyRC9HMjAwQVFyL09PWkZ1QVM4OEJFamErNDlXd01iNnY3cFgzYVF4N0NBdDhpcWhnajBTeEM3K1RBYW5EZ0dMQzBYR0ZxZnBGd0c5ejdIS3hEUWdkaURKWFRmYVZLdmRaTW03UmJ3RUFPbEI3U21jZkRHZytIU0pQKzIrQkw2cTF3VkZKbm52WWR3WTdpdnYyTDZ6dmFyOFVtZ3ZTU3NTK0VmdG4rSjl5ZjJVcmxqSEh6Y0d6bUg2OTFqc0ZReEVkRytmUEtPbVRsSWtoLzBZSnczU3lDQm9mSkUrOUtKMEtyYlNRMm8ycCtLRE12RlhDWndpNTRWTENPWU5vSWRWcDhqK0tsMksxaVllOFdDZTdqR1UxczA5RjB5YXFRRXdRUFgyc0RXSzkzMnRRRkFJMkRhclcwL1YySWszenNHUGFRUkV4Um9mT1BrdW42dlc3Y1U2NENjK3kwdUJPdVBKWGYvb3F3eUhTQkhmMGsvdkRaS0FiTE5Kdy9YY2VZSmw2MGRoOGFvalJxNnFVWUhkOTNMd29MbDdMYXVBU0hDd21DNENVUWQyREtkUDBLUlB3QzdTZ2ZGVFdUdVdHZFp6UHpTL1hmUnE5b2NtMW9lekRjc3BPeGJyQnppamxrVFdFR1M0T2ZxNU8xWm5QVWJCdjlLSyt0VC9paWlOT09vSW5PWVRjdzBTbVJncDRnNkVvQ0FVeU5BU3JmL2EwVjNETURySWYxOXVxZytVeGJkRHVzdjdJblNDTlBhaUxrczJWb2tsTWg5TkF6ZEdiWVU5VFUyV0tRNnpiWXBkTk5KVFdNQ211OTF1dW9mTlliazlicTNkcFZnKzdLQ0R5VTYzMnU4aTJpeVgyME4zKzF6ZVo2UUxTTWJVZGliUElOTzVnNlBYTDJ5bnVvK0czMHBhUS8wcnB3WjgzNXA1QVZ3MlVpTlVCM1VLcGhYSitjYmN2WlVwRXlCZVp0SWNKZjhVVTJPRnRWQXg3N3Y5RS9pRkhHYUpjcGVReTN6RG51c0tPR25lckMzd3lrd2ZVbXI2WktxRHNxRmd4UXN2RWU3TDJnUW1wcmw3TGRUSDk3NVlOZTgyY3Jnb213cFdmKzhUUUN1enRnRDR6L1JyMTFUSnhlZFNwbXdyRXZ1UDJvK0d4RDNienFRVTd5dXFqR3NBV25EWGZQZDl5L3Z0RGY3QUFxNDF6TS8wVU4yL3d1dlFnVWwrZlJuZ2ZPYjh4UW5NS2xZQmdTZ3ZINUZRMnpnY1B4ejR1bk5CUW0yUXNDUzdMQ0tEM0ExQitkN3VIdkdlK2tDUnV6R2cyRE92dTRvMEQ0TFVha2hIbmw5VlJaNjcrMnNHSXMwRjFZRmZ5YkhvcUxmcmNnb0xubHhmWndWeGo2d1hMeGRaZlN5M05BL0p6MVk2R2F1L09hZG5PVEVpUTdsSTZjL0xGbFY2eW1vSEIxQ040RHU2bElIb0JmZFFSZkcrb0ZtYlU5R3JLczh1VHozanZWMlBsMWI0YlhyUkYyR0NEaWswNVRscEs3aEtKRHVmL2NLMjYxSnBoOERTMFZJTk9Mc2FkaGZ0RGhTNlhoWS9iN2o4a3BpQWlacUU2cHB4OUw0VWdPWXoxbVpaYm9uQnBtdWFrdTNYVktSSCtWUjFlSW5LU1JVWWxhWWlXeW5KSE8rL1JIVFh1VE5UMzQvYUFOUlNiZXBVWHBQVjJ5SDJZQmkvRldKdTQ1QmlrZEtGcStmSGZIa2Z3Z2kwSlhKRkJXTFROTmZrbUJSQmx0N0JuUEx6VHAzRFhXUTB1aEFKd202bTBpUzFxOEZTNXJSNTduRWpiUkVnamVySzJlckNiSUhyUS8xcHM1S1B5UEp6QWcwU3M2TkpwUFlYeUxobWc2S1NNWjhLQ3pVYVd6a25sS1cwR2gxV3UxSERNT3A1SC81Kzh0S1hneWMxSnFXY1JUdXBFMWRITWVXSUVzUnVMRWp0SlpCMERzd3dvanovd0pvaUlwVVQxMENJK2FMeUNRdFdLaTlIQ3JPYmEzTVFIeHNtazFlcGRYcjhpTjVwa2g0TkZRMFY3WkM5K3lHN1VkZ1JjRlpaWG9lKytjZGs2RWhPV1dQcmpTN0ZkVDk0WC83Z0cyZnZpZDV0UUxQRFBHSWV2ak9mQnNqKzM3dTE5NlRUdGVTN3Z5TEE4bGZzTCtDL0svNUh5SktPNXNrSzhkUXNwS2NpTTcrOHZ0UWpldDlZa01nN1QwNHpZUWRZb2t4Q0FZdXBJMlJLZ0xLL1Zwd1JGSmorRm9xTm51Z01SS2F5ZTJ2OWVrVk5XUTRzOUtmMHhvOU1tRFJSQ1JNb3U3RitSYWx0N255RHIyaUJLbFFwV3VpdVFwWXVObFVWdEJHUEdYYzFZZUVwQjRLaHZUMmxPZHRiZTdaQzFjNzUwb29TNVlMWEF4QlBrQzMxVGRSSHo3dzVHU083UnJBQld0R3pUUCt6WXV5N0hzeTdaQlRuOGJ0NWhvTzc4dHdQUHdYQzRjVkxuVlg4TEdqa1hQUWRDNHVIWk1ONWtUYXg0NStSNTVJU1EyNXVubGRlUE9WVjRjUTE1VlpyUGp2V25xVUhBd3R6aXRrNkc2M0pFRkxQYTBHOEV0K2tHYzdaL3VTODF2NndaVitIUjdnb1VEbEg2ZFBVWXJvWmhTbHVITmphM0J2YXRjOHo1ZTdJczVadHJxTE5aWlBMdGRONmN3T1RwWlg5YTFhQm4xYVBySGFweGhsT3hsc1Z1QlRaZTF5OW9idm9ZSDN2bjJVRGs5TUsyemVFbkhzN080Sjc5a1ltNXpkaFJta09keGxPVVRRTjBjME5GNm5uVDdaVVNPRDQvV1Bid0lLSW84MFJHWW1JMjhRUndJOVMrdEI1dm5UbGlxUmZYelNZZUFXdnZtLy9WWlZCdUhsQ2RDZHlEUkdGZkh6UTNQU3YzNkxEWVB6alZzVkhCWVpQcmo5c0pLcEI1VWhrZXJZYmJQMm1FNVV1bW1CaG4vQ05MSHBxUVkxYkZvNkV6ekVtR1BOUnFPODd3SWJHV1c0VVZoeGxZcTMyalRUTWRLSW1TYUlLcVd2OTRJTmFIMit4dDNLNnd1T2ZvZlJVY0piNDJzeDdCb283bXZzanRyMkt0b2hzWGdQaTl0UWhzbm1SSmUwYnAza2FqTEs1Z0R5OFlrNXJqWkRraG5XdFRMY1hHeGs1YlM4bVdveGgwalVsRWpTQUQycUQ0cFhGbFViczRSUHpsdTJNdVI0ejdJOCsxbkM0UzZnSkczTjRoWkF3LzZhdWNZaTlpaE1adWVhb2kyOE91b3dHaWJtUUFINi9DaFdFdWlST3JpWDJhbE5BMTBUSVVaa3pGUXpHdUlVTFlUODBzajlxNStma3VPc0VocnhLVEdlbTNSWEFTRVFYWGxDWTR3Yld1aThDU3FFVkdDSXp4bDA0MXdzdzV4OWIzcFRweHZKRmZXdW12aHY1SUZoU1hnYTd4U3l2K3Ywd0NBNy9OeHo1YjdoczUvRFE3OWZONXY5SGI5dHhGK1I0UjY0TUYvZU4raTl0YUltSnNXOFlxbHY4WWZIbDRiSzJVNEd0ZlVFNm8zSHJsYUpaUjB2bm42aTd1cVdCeWwzL2RIYnJTV0NxdTZ5NnBpci9ydnQ1VWMxUjNERmMrVE1mSURaZEtLdjgvalFta3ZiOStTcUErZEU0VmRYaWZyem80bndnMmZheTRhV2w3MUVmS0I5T0dBN0dEd044MFlHd1hQaCtCYXlFMFp2eXIyODZUOVh0cUFOWE5sMkhyb00xYi9iRkdENU55a3RlM3hlN01nRlFxRldsUldXdFVHb2hxaVhtRTVIVVRoT1kxTzVaZ2ZrVEkxRlV3MW9WdnhBL2lRalR5NGtPY3ZWRXUwWWhhaFFZd3phbkZBeHA2ZnpVNkVxWFNGZlQyOWRYb3A1UlhhRFh1VVR0c1drRzNldlFla29Pek04TUlhaHFxQ0ZrTVRYVzFKcHFnU0RlM0pham5WWmVEYy9veUxId0NsTm5FQzI5YjBscVJFUUxHNkRaYjF1UlFxaFB1K3c4QXFVQWRIek4xTDYrdnQ0Vk5meXgwZDlqV0QvcFFlaTFPY21NK21QczgweExrYkdrTExVR2JncWJUUjNsRmFaR3dLQWhWWG5LRnF1cWZVSWtWT1pXT05IOWpubXVWSTI5cHdDYUhnN2x6bW95SUdhZHhSMWpUaE5uR2hhRHd0RWxZNkd4TWw0cG1ZSndpeHdjRGRYR3hocC8yNFFWSHRZeGxnQTBUZVhuUElwT05KbG9ka1ZkbzhLYlc1SHE5dmhxTWJtSTAyM0NKSkhpVU9lOUhFMURULytDdVQzcnU2eWlINm5GK21wTGc0azNXSktHU0RGV2FoamhnU0Y4T29jU2s2ajRoUTRIdUlJaXBEUVloSGRvOHcxQ1VrQ0hDYjBPZ1NFY1BvUVgzc3Y0aGt6Nk5nUDdsRVIrQWpBL0VnSmo1bGUvcDFNSFpNMmhCam5GRExPQVloUDVDUmJoQm9IL05hVXlvbERCV2F1V0hUNWQvK2l6TCtWTkYvNjZkVHY0T2dpTzlIaS83S1FWaDBzYVNvTmhuU3ZicVE4SHVNRXd2L2NmdHZvWnNVaUhEZUhOU1pib1JOUUpxdFlyRUVVZktSR0FBSzJpRWhYcHFnb2Jxc3R1djRBempUK0RwQ1FEdlE0eWx6QnpWR0VtYkdiV0djSjUwOXNoaDdVTjBrNGZET21vSlloTXJVWmsxQklkUkFzYnBScXZ0Um40YU5XOXk1WVhxMmRXYVEyODMyLzhGbE5VcEQ4THhWa1NMYWcvYm45T3RLcGhMdG1Ua3FiUExOWkxjbVdmWjVYa2w1aGF3WVVFTklVYVUrbVdRSldxUkRRK0xmd0RKdWxDSlZsTWNhRU5ZbzJlUS9ZbW8rc01EVUVMMGxGZWJtb0NUdG9rK28wRTk0MVhLWlJwVi9Fd0x5dUV0OFJYb3BKL2VnWk9yRlVxa0hLR1B0dWQ5cVA3YllRb01WeGtacFN2Tmlpc25LbENZNXMxSXZPaklUSkN0cVp6MVBPenNOdmZaZERObkJDSUxjaFlmOVB3SUJ2UE41RUVaampienJmVDZaM0tHVnVNVzlTeUgwQUdEbTlKTXFFU2ZUOHhJR0d1M0ZnZURrTTdDdktOajFFdERyd3pnaXZyekp1TStaQ0trbjdDcXVuTUszc0hCNDZLL2VjWHppR2lpTzJMRHRhVUMyc0djTVZXOHN3bmU5RW9RZmVTQTY0eVVVV3hxTzdWY1RRcWRmZDNzMnpreUNDdUhveW1uWSt1V1RhOGRMamFYcUEzMG1yNjc2KzlYdzFBajdKdTZlWUpMMVNvRU1IOXFFVlMva1VsVFc2emNKVjQ1UTNUcmxkcGxEdC9EMldhd0xHbHVaUk5rNHdkK3N4K0JpamVkajFFazVoVWErbm52VnhyaCtjOGJWQWxROEwwWEV0cStnSGFHa1ZKWTh3MHUySXRkU09hQ243NDAvcTFGVkNLcUJNUFV2c3YzdWFOSllvQjJvYUpUSXMyU0pjZzZnSDYrU3FPbFZOMWpyNU9KVU5DOUR5UXBOVjlneVY5MU91Y2RwRkpYajU2OFdISWI5SXg3UktUTkFUcXJibjR0eTA5VHhUUHlZb0ZibU5xSDhHeUNaNlVxVFlKYVJFRW9RZU5QSVVRU3YzT01iUzlzdEpRY3pDUUora01GMHU2Z3dVYi9VYmcrRmdUeEtWbUljOHRPRjdPUmYzeWQvWHZObkNaUHhMbnV2KzAzVG0rVWRoWW9hOFl6SmY1aW9VZ1hKSEYvUU0ycE1DNmluNEtwYkpEci90UHAvOGl1NnlVRUtPRmY5RHIyanNMQjlwaEp6MEUvOEhWWnpFSnU1bXNBWjUyaGovQVl1NG1BbExMeVpLU2UxTm1RaHU4RzFMaHZNQThnVTM1OUR0VFNybFNOTXY2WS9zWUIvbysrYjgvS0tadzgydU41ZGtPdEpPb0p4dlEwdndVRW5ybUNycmNMR2pnS2tUUWRYb05HK2txck5kNFV0OFdocnYrb2RpbWs5SUZiZFVLRzYvUnBzTHYvOVFRYk8yakV3NFltQitmdlFJR0R4TFBwcWVmSlJMTzg1anpsL0RFL1h1MzhVRndkR0YxNWZSYVdGUVR6b1lwYjY4c3IvZ09rd2Y1YlBac3J4NjNZaGswalN4YjVWNmtxcXBTTFhLN1NUTnRUTzIyTDFUVlZHVWZkdGFsaE5wRlJYNUpKd0tMT3IxRkhWS2pzVlBrOVlQWDkxbW5GQnovQ0laVmVjOGtGNVRUMlpUUGw5UG9KQk1PN3NUU05wRkpXVTN1cmRBazlha1Qyek1KZHdpSzk3azR3RWsrY08vVjhzUE4rc3pxYnljZHVqZmFXbVA0b2hiRUxrQ1pyNncyQSt5eU0zTzloVHBZOHNmVDd2OEhxb2UwUjJUZmNNNVJHSE9Fc3I3ODJaUmU5QjkvL3EzL0d5ZzdwU1kyeHlnU3M0MG9ra25NYmE1WXBCcDlHRStrTi9uQ1YyTFpxSkEvQ3VUbWgrYTdpMHVvbDdoc0IxSGQxYjU0N2hkWXFpc3JLMmF0Nko2UkxJQXNXZzF0UDFmdnR0OEVDYjRpczdsQXl0M3plR0xkcDd4Y255WE0rdmVGam1KSXkxSytaakRYS0hNME9mSXZLTlFWWklweFo4RVhSZ0w0NmRlVnVMN0Y1TnlrVHhuWWZVMkFnTU9iazgzUjhXTW4yWnhlQlNwTndOc2FpZ3RGdEhsUWZyN0JQN3lnbUxOemRYVzYzRFd2YXRLMHhTSjVjM0dGdXFWYUJLUEJhSi9VcXJSTjJ0MnBtZmR4Q3ROTElKcjkvS0xjd1o2ZVNqQnBvbjNJbkpHV25KbThzZWRlZ0RxdkdJUzRucUtReFJBTStMeStnRldDc05tMnY5UzVGMld5aTdsNTUyV3k4MkFNSExvM0poZ3l1dldkcElNN3pXckI3RlBEaGQ4N3Bzc0d1bEhXSWZNSmNzVk41UzJpTmIwZ3Y2RGk3cFpacFJoY3JPMm5uYUFDOGNSU1pja3gwYWg0dU92cFpCNUd0ZUF3em02b3dyQ3VEVEdqZDhVYURBRnZEVVBDK2xLYVdINlprQ1Y5bFNzdkpGQ2VRamFSaEw5QWVueXBlcDcvM2ZTczFEdjh5a1VjajNYR3ZpWGFuajkwNUlMODRlWnRyc0RtN3Q3UXJ2MmVLZGR5YlU2Yi9xNjk3ZmVUenBQZlJ3WldyMXBacnBzMk5SZmNMVUFmT25Ud0VQcnd3ZjBINVFlM2UxWWNQSno0bm5kMkNVNHRNZHhWV0k4TGxnY3oxSjRxUXppakNMNG5ONDFMbHBjRjU4a3R1dHY5eG5SK3JucWVZK0VDYkhXUDlzWmNLSTJic3FibHpSSmxlbUJ0SzlQcjJWTCs2NDdNck9pZjFjcCtiUXFSK0pBU0NlaXJ3a1FRMzBBL3VYN0hWWFR5N1JLTFJuZUJteU0yKzJnYWlUbHRoeXQrdEpDb2VjUEZveGFvTjMrVFI2VDhiKzdxZlpsOEV5dWJjY01oc0lRc2hoeG5OVjBIVjFCVkVJalE0Tkk4ZWJORkhaeFE3b3pZNUlWb2o2UFRuaW9YMi9HN2paVlZsa3lsMUU0VG10UnFwYldGNjVrUWpxTEROeFZjT3c0UVlVWTFRYVoxYyswYmZhTGZzMG9ubWpVS0VZL1AxMVBaQnFWMGZEUlg3MFJaWDR2eFJoVjQrTzkvRU9OV2w3Nm9LdnV4c1lPenpGT2VON3RkNjdTMDVXcGJDZ3R6bWhweUxJei9QZjVWOWhvdVh6ZlBGbWpYT1o0MFR4ZG5JeHhxWWJhTVdtamlhM3lGRlNVVWR1OEJJTXMzUHpSL2V4T1hSS1hINDNCLzBhbi9ZdjE3OXdsSVNncm56MnlISEt5ZnJrMWQvOTRyYWcyMGFOSHFiaGFNUGw2LzcvMGJ0S3JCQW5ZQ2RPK3BMUEZkb3RmYW5GUEd1bklnUlJNdUVkS1RLSkFrSlNTTDZQbWZqZjRma1pXa0piNE1mUlY2bVVKS1F2MXg2NzZndW5kNVpFa3RVbVB6R29vbkZLZFhRMDBoMlk5WkpXRGVHUEYzLzN3WFpUekptZlNXNHBycGl5YTJEeFNiOTdXM20vYXNpZlE0Q3lMc0hCdXAwUmlSejJ0RVBDU3VobWFPQlh1cHhvbzhSYk5WVlRPaDNCdDJxT3pvVGtlbkkxVmxyTmY4OFVXdFJtOXFnYlF6dzZIYzZhMlFYVmV0dWErb01PTDlGaGRTVzJ2SUt0YUxWVXBZUkFuclRaU0lYbVFHK1lnajJob3RKaGhxd2I5dnp0eEIwUk8xTzJZZlBseTZKaitSOGVyc2JlRGVhK2FaUWZITEZQSUJHaXlWblpQTHo4b2tmOGdVWC81TStKNUlmSVBIdnlFUzN3T2NVbEhLY1E4ZU96ZEFUY1d0YUpHSE5ZZ0UwMUZIVGNQUGJQbFNpZXpWRjJTam16aitCVUs5NXhkNFVmb0xwOHB5c1B2cUN3VUNaeVFWZ3Nqd3p3T0RrM3hXVTI1MDB6eS85dTc3eXlLRUdnRkRkNStIZmgwNmtPclhsNTFJT0N5Qm1zYzdwN2UzaU81d0tCVGNBNUh3QWQ3T21uc0hIQmlPN0p5UUcyUW1BelVQRHQ1TDlsOVJvQnQrZThXQkdSL0xnNWdsVFBOVkc0SERldkFqemJ6Nk4vaWYrT2FFZUV6Q2MvaitPWm5MeFZOem5PanZuTi9aMEZKUFp3SFNsZUowdzViRTFPUkVWSXdGZGlWNWtLbmRNREEyVnBTVnBsU2tGRmRBNzhabEphSnFVbFRsS2FoSnVKaVBFdm0xNmdSMUhSLzQzeFpVRkxxbDBVdEtQTktQVEZmUExJQStaZGRjaUdzNWNUUE5FRFpBSnAvZFMwV1NTZ3pIakdpaXlDeGdXNlZFODZ0WGt6NEF6aDJIMnAvbmMyU0hwb1BFaVg2TlM2bGg3Umh2LzRLWDdkWHJaWG9TaTBXeVNHeXZFdGhNOTljWlA0UWYvWkJPNnVieHUwbmsyeVVUTGxQemljVE9weU1RaVpnUGZ2bHpaSGhrZUhqNDYycENRZHlka0lSbUtMYTZTVU5GTFp3QXVKOUplWW9qRGNRN1lqamsrdTVGak5ua3pGVU0xc3BNOGl4dzdUSDdFY2VvanZHcjl1UHdMbEx5cms3bC9OM3ArYkFBSE5uZ2NIUzFORm03UEE1blozT1RwY2VyRlhLY0hqZkhLUlN3blI0WDJ3VlNidnBUR0x2ejltU2txeDhSRVI1cXJJU1haMFVnTWROZ1lJaEZGaDdmRDB2U3doVE9UdkdUSHBBSDNXbDQ3YXdzOW5kaWRoOUlXQkRZTGNMbCsvVGZBaUpDaTArZ1QxWHN6dC96TzE1emlXakNSZDhRY3lHckdSSXlZUVByRWZOYklidVZUeDZzU0NNVlRBZEhRdmpRUzZDYzFMYzF6ekkvSk1zcEl5MEpIcC9GV24yL3gyMWNNM2d4OXQxZkJPbVpSNGZMU0FDd0Q0V2JqdG5pOGh1U2NmU1FpK1lVWXVsY0QyMWFkdk83djZPdWh0MytqeGh4SklBYStQbm9DUHU0VjgydTRNYS9lWGwwQldWVGc3NVBjMW9XcTRFcEhPWW5NeWRuMFdQMEZGWDVpWlA3MXVhMjlaYW1ZbVNzU3dTY1AvZTY5d0wrTWN5M0pQSTNHTXdkMnIwQlloZVlINWhCVkF4SUJjQ0pCV2tBU0VFVUd6QUJFQjR3Z0VHUVhtMTMxTDA5VkovV1NYMWVtZHJLTWV1Y3RlSVVRMWIvUkFNNFJuSmxERE1xVjVneHRSenpXMGtWWDNVS1VQZVdxejdkbi9tdHZjd0pLbEZacEFUdk9jVmRxSHVIcno1dHQvcTh0Zk5iMVNxUjZoUW4xYjJUcGo1dGtXT0ZFMXV3Y3BpbU5zNlhjajNNNkYzNElOalI2ZU93OFBrRDlMSCtaZkFiR0FFeTAvdFlIektSWnR6TVRNclJURlBLU2FxMzlUL2x3NENVOTFWNmI5WG45Tk1HcDRFS1FBdklmUHNjT0lVWDRWRU1SMFFUTURubnZGbmwvR205cmN1ZDVoZktCTlpjdVpIWlBPVVM5TFpPbmRZUnluS2xkVy9yWnpKQURYYzJidS9MUW1hbnpJYjNwbVhWVWZ4L1dHbTBEUzAvaW0zSkVoT1ZWYUlidUdxcm1FL1FIYkx1Z2x5cXNJM01pejFuSnVTc1BtZTFacmx0RklaM3FZNTdxQms2ajd6SW0xMWdiQURyeVhxeE8rd3VlOG51c2Z2S0s2VHEwekVINjhsNnNUdnNMbnZKN3JIN0dhK0lFdXZzaFE3Ly95M203ejFiTy8vNS8zL0ZaN3BmdzRtakhmanZDMU9NU0R4MHp2aUh6YWVTNFdNM0pXbjVHMnpuYVhRcG1FSjJNaXNCZGVkelhMTit0dUxpMnNTMXZmREdWSUQ4RkdrR0Fpc1l4UTR6Z0I1Q2taNUpuY1MrTzFMaFVRODkvZUk2M1ljcE9Vd0VKbXBKNXlhSFVaclloNGovb2VubC9pbDJQL09XeHhNa291MnVqVzViSnQwRThtLzhXeWVFTjJpWkhKQzV2QWJvRGpTeGxpT09CZFQ2RzQrMU9HaUdOaEY0d2t3eHlhRWpDOXZ1UHc3NWhOT3NYMnVFNVp3TzJHdk9QYkZiVC9qVDVtM3FYL2FCZmp4enIrMlJJL081YWdWR2xZRDZlSC9ac3N4NS9jYWw5Tnl1S3pyUDFta2V3RThab2dIWnN6Tmtub0RoellHYzNURk9uUVh0aEpLRVBVb2MvRGxTYUdlS0FLNmZ0Yk1Vd1diYnh6eVM1VU9OMENRcnhVYkpXTUFtT0M0dDJudEtFU1pvSjVTZXNFZUpneitEME00VUFYVE91ckdMYXFxSmUvTDJWdlorVnY5bXI1bi9GaXB6QThjdlRHUFc5aDB1WU13UElRUnFYUC94UzVuc1N2bi80eVpTTHdDZjN0MlhBUGo2NHZHS1dmcFo0K2l6RlppUEFBUjhyNThXMURlMHU5TVhwaEd6L2tKS1JUTFpYTjlsWU1wR1NiV1l0dkxGRDUyZ2VpYk1RMGtSTXFZNnArTHc4cnNXbkNUd2lwNHhTV0JLRDY1aUJZRzJvSUhVajlyUkJCcmgrSVprY0d3Z0NaeHBzSXhjZHVja2Zvd1FYWE5BM2FPaWVzVzFTbDRKbGNhS1J6UDUzQ00reHFUZGJNMXNKU0Z2TERmNldpVHZuRktRdHJKaUNYbnVobkYxVzhzS2dmRVl2ckxRRlE3cUlJWlk1WmVyazlTNkYzLzUyZ2lNSmVOZjlTeDVTYUplaWJJaUlaSlpOSG54VVpDWHFQKzNxVkJ2R1FkWUVLN1NXTnNTNDgrMjhjZUZwSkhVdi9IbS9BdkdhcllsSTg5L01OZDRaaWFING5pZmdmUzFHN3pyUTdSU3FxY3h0amljVjBpWFpEVHJnUVNsbGo1dkdPT0JkMXlPK2xzM0RZa29LcU5SS2F1anRwMmxWak53WGVZaHNSZjFTRytxdDJkOXpYVk1CTlZJQmdsTERlZkpOaFhqeG5zcmd5STBnUkp3VUF3NDFSTURjMFZGNVV1MElNT2NDZ0J5VmRSVUZzNlRhZCtvUU4yR0VtV0oraStnT1FLUUNmZEJDUklWNThRSXRUSXJrQUhrQWd0dDFNVWtnV1hzRkRkT0NzOXV4a3hqdEFkRTZNODE4cHR2ZkpWckMzQXo2aS9PcWNlTHBjTzdWKzdBTVhuQk14c1JVRE5ldktmaDE2bDg2aEVOc3BUaEVuV2lEck5wOHh2d2xLbG0vTUNMdWdobTkrNkZncWx5dWJJNlRsSXQrNDd0MEg3WWltK2tTVVF1MEphQW9lOVdsYmRhcm5KRmN5ckhvMFVTU3NsUmxzTjk4eDVUQ2pwUy8yd05mWTNNK1RzVUdQYWpGdks5T1FpeXZnS01GRFEweWVFV0w3UDhlcWFKRU1DTFVZK0hJSGxTaGhEaXdCQkt1UE5EYUs3V0RtSG9UQjdDMHVzc3hOSE15TWtRWUNsZkRFSGd1SXA0ajZsRUFoaDN3eE54d0JtNjZLUkNaNWw2cXRCUmUxWHlkTkVkK2t6eVp1TFZ2cmU3ZTQxNFc2am5waTJQM0ZVUDBRSzhDMWMxT3F2bDhGZ1hLZUxDZTNUNVU2a3RwZmZVVktUQ1cva3BWSk85VjdTcTBGMkpXSGUxSnlqMWdwOGFIaWhJMkF6OThYajB4OGI5MzJKa01EUExFSlB0ZU9ka0daUlNsZmZ6bTFYSGdqeFFQZmp1eFl2VkhKTlM1dXR1Ym5WVUZaZVM5R0lxMUI3S3ZiQ1J0ZFJXKytET3ZWVHlWeVdGQlVTeWRpNjl4OHFPS3J6OVhQcHBTMTdUdk1Nb3Frb3JPaksreWdzeFRhMm5najB5NjRNVVVvTWZmcVlReHhaUFJFeENTa1pPUWNtT2lwcUdsbzQ5QjQ2Y09OTno0Y3FOT3crR01TSTdlL1BoeTI4b0VBTUZXUWpEaEN0eXRJakhpTWZKd1FrU0pVbVdNaWlJNlRLWUtTdmx5QjJZRTQ2ZVg2aElNWXNTelRRZlIrS3R4TnZJbUdYS1ZRUUZLMzdGUTJaN1liVEpKbGhrblpWRncvaGlZSVFaeGFJQUpoVVBZNTF3THh3c3R0NVhYM3l6M0Nibm5MRlpwU3BUVmJ1Z3hsbm4xYnM0ckdYalM3VXVIMzI1TGRyNllKcHJycmlxbmRmZUdzZXF2UTQ2NmFpenBicm9wcXZBUWV3L2EyOTl2TkpYZi8wTU1NaEFleTB6eEdCRERmUEdPL3RMUkI2MjJ1WkdSSERIWFRkdHQ4TnVlNXkwMHk2bmpESDBEOU1XSzE2RTNZcWhDWDBYWmpqZ3l4b2VBVkVtRXJJc0ZOU3V0ME5EN3lFR0poWTJEaTRlUGdFaEVURUpLUms1QlNVVk5ZMXNPWExseVZkQVN3Y0Mwek13UXBpWVdWajdjWnh2dDBjWkRvenFpMWlXenFYV05UTERtbkhmMkh3UldjakJGRXcxWFE3S0hwVWRucjFGbVB6L3lsYVpseEU1WUR0RTdtWGF4bitQQWJocGxTcTFkTVVNWm1YYS9XU1ZPUm1MeFRmcnpVWTc3QldXbE9VTHcwUjY0VmVXNmFEcXhMOCt6U0J5WkRCelBBZXJjeitFaHQzNE9KUWxGbXNXOWJ1OFR0QlNSNWJGK3p6UWphV2t4MlByWWxON3pVWWJqb2ZRZkcwODRkN0JRZUdvYnppZnI0Z0x5VkRCL2xKczJ1QVZHSUJrRFJySkdEeERnekZnRUdnUWtqWDhIQXlDRzlqM0NnQ3ZBQWdPTkFnOFF5QVFHSU5BY09BNUFvSGNUS3FRYmFhKzhWbHRaUHl3NzY0WDcrSXNNaUljM1Rhc2txS3kyenY0SE8rSlZaMi9YcVIrUHc9PSkgZm9ybWF0KCd3b2ZmMicpO2ZvbnQtd2VpZ2h0OjQwMDtmb250LXN0eWxlOm5vcm1hbDtmb250LWRpc3BsYXk6YmxvY2t9PC9zdHlsZT4KPHJlY3Qgd2lkdGg9IjM4NCIgaGVpZ2h0PSIxOTIiIGZpbGw9IndoaXRlIi8+CjxnIGZvbnQtZmFtaWx5PSJQUCBDYWxpYnJhdGlvbiIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9IjQwMCIgZmlsbD0iYmxhY2siPgo8dGV4dCBpZD0ibGluZS0xIiB4PSIxMiIgeT0iMzAiPkNhbGlicmF0aW9uIG9mZmljZSBBViBmaTwvdGV4dD4KPHRleHQgaWQ9ImxpbmUtMiIgeD0iMTIiIHk9IjYwIj5DYWbDqSDDhW5nc3Ryw7ZtIDAxMjM0NTY3ODk8L3RleHQ+Cjx0ZXh0IGlkPSJsaW5lLTMiIHg9IjEyIiB5PSI5MCI+Q2FmZcyBIOKAoiDigJM8L3RleHQ+CjwvZz4KPHJlY3QgeD0iMjY0IiB5PSI5NiIgd2lkdGg9Ijk2IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjZTAwMDAwIi8+CjxyZWN0IHg9IjI2NCIgeT0iOTYiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgZmlsbD0iIzAwMDBlMCIvPgo8cGF0aCBkPSJNMTIgMTU2SDM3MiIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIxIi8+Cjwvc3ZnPgo=",
+          "123e4567-e89b-42d3-a456-00000000003e": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHRpdGxlPlN5bnRoZXRpYyBsb2dvPC90aXRsZT48cmVjdCB4PSI1IiB5PSI1IiB3aWR0aD0iOTAiIGhlaWdodD0iOTAiIGZpbGw9IiMxMzRjNjciLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIyNSIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg=="
+        }
+      },
+      "artifact_ref": {
+        "contract": "ArtifactRef",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "artifact_ref": {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000003c",
+          "revision": 1,
+          "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+        },
+        "composition_ref": {
+          "contract": "Composition",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000003d",
+          "revision": 1,
+          "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+        },
+        "private_revision_hash": "sha256:3189e3588203965eb659e6ac09d10f2907395a3cca51efc0661e93f276de63a2",
+        "source_artwork_hashes": [
+          "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+          "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+        ],
+        "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+        "preview_ref": {
+          "contract": "ArtifactFile",
+          "schema_version": "2.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000008501",
+          "revision": 1,
+          "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+        }
+      },
+      "spec": {
+        "api_version": "fixture-api-1",
+        "availability": "available",
+        "constraints": {
+          "color": {
+            "state": "known",
+            "value": {
+              "profiles": [
+                "fixture-coated-v1"
+              ],
+              "spaces": [
+                "CMYK"
+              ]
+            }
+          },
+          "destinations": {
+            "state": "known",
+            "value": [
+              {
+                "country_code": "US",
+                "regions": {
+                  "state": "known",
+                  "value": {
+                    "codes": [
+                      "CA",
+                      "NY"
+                    ],
+                    "mode": "allowlist"
+                  }
+                }
+              },
+              {
+                "country_code": "GB",
+                "regions": {
+                  "state": "known",
+                  "value": {
+                    "mode": "unrestricted"
+                  }
+                }
+              }
+            ]
+          },
+          "files": {
+            "state": "known",
+            "value": {
+              "maximum_count": 2,
+              "mime_types": [
+                "image/png",
+                "application/pdf"
+              ],
+              "minimum_count": 1
+            }
+          },
+          "geometry": {
+            "outer_frame": {
+              "reason_code": "not_in_source",
+              "state": "unknown"
+            },
+            "printable": {
+              "state": "known",
+              "value": {
+                "width_nm": "304800000",
+                "height_nm": "457200000",
+                "unit": "nm",
+                "evidence_ref": "fixture:independent-geometry"
+              }
+            },
+            "trim": {
+              "state": "known",
+              "value": {
+                "width_nm": "304800000",
+                "height_nm": "457200000",
+                "unit": "nm",
+                "evidence_ref": "fixture:independent-geometry"
+              }
+            }
+          },
+          "inset_geometry_basis": {
+            "state": "known",
+            "value": "trim"
+          },
+          "materials": {
+            "state": "known",
+            "value": [
+              "paper-200gsm"
+            ]
+          },
+          "minimum_bleed": {
+            "state": "known",
+            "value": {
+              "bottom_nm": "3000000",
+              "left_nm": "3000000",
+              "right_nm": "3000000",
+              "top_nm": "3000000",
+              "unit": "nm"
+            }
+          },
+          "minimum_resolution_dpi": {
+            "state": "known",
+            "value": 300
+          },
+          "minimum_safe_area": {
+            "state": "known",
+            "value": {
+              "bottom_nm": "5000000",
+              "left_nm": "5000000",
+              "right_nm": "5000000",
+              "top_nm": "5000000",
+              "unit": "nm"
+            }
+          },
+          "options": {
+            "state": "known",
+            "value": [
+              "matte",
+              "gloss"
+            ]
+          },
+          "personalization": {
+            "state": "known",
+            "value": {
+              "maximum_characters_per_field": 40,
+              "maximum_fields": 2,
+              "modes": [
+                "variable_text"
+              ]
+            }
+          },
+          "physical_dimensions": {
+            "state": "known",
+            "value": {
+              "basis": "unspecified_physical_product",
+              "depth_nm": "300000",
+              "height_nm": "457200000",
+              "unit": "nm",
+              "width_nm": "304800000"
+            }
+          },
+          "shipping": {
+            "state": "known",
+            "value": [
+              {
+                "country_code": "US",
+                "methods": [
+                  "standard"
+                ],
+                "region_code": null
+              },
+              {
+                "country_code": "US",
+                "methods": [
+                  "express",
+                  "standard"
+                ],
+                "region_code": "CA"
+              },
+              {
+                "country_code": "US",
+                "methods": [
+                  "standard"
+                ],
+                "region_code": "NY"
+              },
+              {
+                "country_code": "GB",
+                "methods": [
+                  "tracked"
+                ],
+                "region_code": null
+              }
+            ]
+          },
+          "surfaces": {
+            "state": "known",
+            "value": [
+              "front"
+            ]
+          }
+        },
+        "contract": "PrintSpec",
+        "policy_version": "1.0.0",
+        "project_id": "123e4567-e89b-42d3-a456-000000000002",
+        "provider_id": "fixture-provider-alpha",
+        "provider_metadata": {
+          "finishCode": "M-02",
+          "productionLine": "fixture-line-a",
+          "tags": [
+            "paper",
+            "poster"
+          ]
+        },
+        "schema_version": "1.0.0",
+        "sku": "poster-12x18",
+        "spec_identity": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342",
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+        "variant_id": "matte-white"
+      },
+      "capture": {
+        "api_version": "fixture-api-1",
+        "capture_identity": "sha256:b80cfed9ab930f19ddd20bd5ed62aa597c5d6e8ce4b04f899420916c27802ddf",
+        "catalog_version": "alpha-r1",
+        "content_identity": "sha256:19301a1bdd50677eb5da6e505ec68ff066d93b9e5b499e6154886a8a9fe4690d",
+        "contract": "FulfillmentCapabilitySnapshot",
+        "freshness": {
+          "fresh_until": "2026-10-10T12:30:00.000Z",
+          "maximum_age_seconds": 3600
+        },
+        "policy_version": "1.0.0",
+        "products": [
+          {
+            "api_version": "fixture-api-1",
+            "availability": "available",
+            "constraints": {
+              "color": {
+                "state": "known",
+                "value": {
+                  "profiles": [
+                    "fixture-coated-v1"
+                  ],
+                  "spaces": [
+                    "CMYK"
+                  ]
+                }
+              },
+              "destinations": {
+                "state": "known",
+                "value": [
+                  {
+                    "country_code": "US",
+                    "regions": {
+                      "state": "known",
+                      "value": {
+                        "codes": [
+                          "CA",
+                          "NY"
+                        ],
+                        "mode": "allowlist"
+                      }
+                    }
+                  },
+                  {
+                    "country_code": "GB",
+                    "regions": {
+                      "state": "known",
+                      "value": {
+                        "mode": "unrestricted"
+                      }
+                    }
+                  }
+                ]
+              },
+              "files": {
+                "state": "known",
+                "value": {
+                  "maximum_count": 2,
+                  "mime_types": [
+                    "image/png",
+                    "application/pdf"
+                  ],
+                  "minimum_count": 1
+                }
+              },
+              "geometry": {
+                "outer_frame": {
+                  "reason_code": "not_in_source",
+                  "state": "unknown"
+                },
+                "printable": {
+                  "state": "known",
+                  "value": {
+                    "width_nm": "304800000",
+                    "height_nm": "457200000",
+                    "unit": "nm",
+                    "evidence_ref": "fixture:independent-geometry"
+                  }
+                },
+                "trim": {
+                  "state": "known",
+                  "value": {
+                    "width_nm": "304800000",
+                    "height_nm": "457200000",
+                    "unit": "nm",
+                    "evidence_ref": "fixture:independent-geometry"
+                  }
+                }
+              },
+              "inset_geometry_basis": {
+                "state": "known",
+                "value": "trim"
+              },
+              "materials": {
+                "state": "known",
+                "value": [
+                  "paper-200gsm"
+                ]
+              },
+              "minimum_bleed": {
+                "state": "known",
+                "value": {
+                  "bottom_nm": "3000000",
+                  "left_nm": "3000000",
+                  "right_nm": "3000000",
+                  "top_nm": "3000000",
+                  "unit": "nm"
+                }
+              },
+              "minimum_resolution_dpi": {
+                "state": "known",
+                "value": 300
+              },
+              "minimum_safe_area": {
+                "state": "known",
+                "value": {
+                  "bottom_nm": "5000000",
+                  "left_nm": "5000000",
+                  "right_nm": "5000000",
+                  "top_nm": "5000000",
+                  "unit": "nm"
+                }
+              },
+              "options": {
+                "state": "known",
+                "value": [
+                  "matte",
+                  "gloss"
+                ]
+              },
+              "personalization": {
+                "state": "known",
+                "value": {
+                  "maximum_characters_per_field": 40,
+                  "maximum_fields": 2,
+                  "modes": [
+                    "variable_text"
+                  ]
+                }
+              },
+              "physical_dimensions": {
+                "state": "known",
+                "value": {
+                  "basis": "unspecified_physical_product",
+                  "depth_nm": "300000",
+                  "height_nm": "457200000",
+                  "unit": "nm",
+                  "width_nm": "304800000"
+                }
+              },
+              "shipping": {
+                "state": "known",
+                "value": [
+                  {
+                    "country_code": "US",
+                    "methods": [
+                      "standard"
+                    ],
+                    "region_code": null
+                  },
+                  {
+                    "country_code": "US",
+                    "methods": [
+                      "express",
+                      "standard"
+                    ],
+                    "region_code": "CA"
+                  },
+                  {
+                    "country_code": "US",
+                    "methods": [
+                      "standard"
+                    ],
+                    "region_code": "NY"
+                  },
+                  {
+                    "country_code": "GB",
+                    "methods": [
+                      "tracked"
+                    ],
+                    "region_code": null
+                  }
+                ]
+              },
+              "surfaces": {
+                "state": "known",
+                "value": [
+                  "front"
+                ]
+              }
+            },
+            "contract": "PrintSpec",
+            "policy_version": "1.0.0",
+            "project_id": "123e4567-e89b-42d3-a456-000000000002",
+            "provider_id": "fixture-provider-alpha",
+            "provider_metadata": {
+              "finishCode": "M-02",
+              "productionLine": "fixture-line-a",
+              "tags": [
+                "paper",
+                "poster"
+              ]
+            },
+            "schema_version": "1.0.0",
+            "sku": "poster-12x18",
+            "spec_identity": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342",
+            "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+            "variant_id": "matte-white"
+          }
+        ],
+        "project_id": "123e4567-e89b-42d3-a456-000000000002",
+        "provider_id": "fixture-provider-alpha",
+        "schema_version": "1.0.0",
+        "source": {
+          "evidence_mode": "synthetic_fixture",
+          "evidence_reference": "fixture:alpha:v1",
+          "input_hash": "sha256:2bbd32eb650c4144bae10b5613615aa470d1adee65c1e37a370f18a2011a1336",
+          "reference": "fixture:alpha/catalog",
+          "retrieved_at": "2026-10-10T11:30:00.000Z",
+          "revision": "revision:fixture-alpha-1"
+        },
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000001"
+      },
+      "maximum_nm": "2000000000",
+      "report": {
+        "contract": "PreflightReport",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "report_ref": {
+          "contract": "PreflightReport",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000051",
+          "revision": 1,
+          "content_hash": "sha256:01bc64ec1b46f8936c9d1af52f37bf39cdff1ee056bd58b37bb7419e5b4e013c"
+        },
+        "body": {
+          "artifact_ref": {
+            "contract": "ArtifactRef",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "artifact_ref": {
+              "contract": "ArtifactFile",
+              "schema_version": "2.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000003c",
+              "revision": 1,
+              "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+            },
+            "composition_ref": {
+              "contract": "Composition",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000003d",
+              "revision": 1,
+              "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+            },
+            "private_revision_hash": "sha256:3189e3588203965eb659e6ac09d10f2907395a3cca51efc0661e93f276de63a2",
+            "source_artwork_hashes": [
+              "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+            ],
+            "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+            "preview_ref": {
+              "contract": "ArtifactFile",
+              "schema_version": "2.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000008501",
+              "revision": 1,
+              "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+            }
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000028",
+            "revision": 1,
+            "content_hash": "sha256:beb07e5033873b31534406a70bfc94f965dad9503d2fe807b5f837f5ce5bb342"
+          },
+          "rule_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000001a",
+            "revision": 1,
+            "content_hash": "sha256:10586509bd0378918447848cc7c3c94be2e8d525b31292f6888e998e342c07fa"
+          },
+          "status": "passed",
+          "checked_files": [
+            {
+              "file_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "parser_ref": {
+                "contract": "ProductionRuntime",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000001e",
+                "revision": 1,
+                "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+              },
+              "checks": [
+                {
+                  "name": "dimensions",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "content",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "fonts",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "container",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "profile",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                }
+              ],
+              "composition_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085",
+              "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "semantic_hash": null
+            },
+            {
+              "file_hash": "sha256:f4e9808789923fc07f59c6b939f83ed671053b1ec747605f240ffe78c51434d2",
+              "parser_ref": {
+                "contract": "ProductionRuntime",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000001e",
+                "revision": 1,
+                "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+              },
+              "checks": [
+                {
+                  "name": "dimensions",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "content",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "fonts",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "container",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "profile",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                }
+              ],
+              "composition_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085",
+              "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "semantic_hash": null
+            },
+            {
+              "file_hash": "sha256:03fb642b6a5ff69ebcce0fe14ccf254259edf14ba3bfbcbebd103f478806aa48",
+              "parser_ref": {
+                "contract": "ProductionRuntime",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000001e",
+                "revision": 1,
+                "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+              },
+              "checks": [
+                {
+                  "name": "dimensions",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "content",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "fonts",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "container",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                },
+                {
+                  "name": "profile",
+                  "state": "passed",
+                  "evidence_ref": {
+                    "contract": "ProductionResource",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-00000000000c",
+                    "revision": 1,
+                    "content_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308"
+                  }
+                }
+              ],
+              "composition_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085",
+              "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "semantic_hash": null
+            }
+          ],
+          "findings": [],
+          "model_ready": true,
+          "files_ready": true
+        },
+        "eligibility": {
+          "state": "blocked",
+          "reason_codes": [
+            "CALIBRATION_ONLY",
+            "OWNER_ACCEPTANCE_PENDING"
+          ],
+          "checked_at": "2026-10-11T08:10:00.000Z",
+          "evidence_mode": "offline",
+          "handoff_eligible": false
+        }
+      },
+      "inspection_policy_ref": {
+        "contract": "ProductionPolicy",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-00000000001a",
+        "revision": 1,
+        "content_hash": "sha256:10586509bd0378918447848cc7c3c94be2e8d525b31292f6888e998e342c07fa"
+      },
+      "parser_ref": {
+        "contract": "ProductionRuntime",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-00000000001e",
+        "revision": 1,
+        "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+      },
+      "current_approval": {
+        "receipt": {
+          "contract": "ApprovalReceipt",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "approval_id": "123e4567-e89b-42d3-a456-000000000100",
+          "receipt_hash": "sha256:a4fe466d91791eab289b3b6bdccf24130a4a9ad5667d6a9f42ac271fff606a93",
+          "issuer": "getticketstub.com",
+          "audience": "print-production",
+          "actor_id": "actor_1",
+          "binding": {
+            "subject_type": "composition",
+            "subject_ref": {
+              "contract": "Composition",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000003d",
+              "revision": 1,
+              "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+            },
+            "intended_use": "production",
+            "preview_ref": {
+              "contract": "Preview",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000008501",
+              "revision": 1,
+              "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+            },
+            "facts_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f",
+            "composition_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085",
+            "asset_hashes": [
+              "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+            ],
+            "facts_ref": {
+              "contract": "EventIntelligencePackage",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000001",
+              "revision": 1,
+              "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+            },
+            "composition_ref": {
+              "contract": "Composition",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-00000000003d",
+              "revision": 1,
+              "content_hash": "sha256:6c68a5cc7d4a524560f26ba1c0448eb0ab803aecc154f30c662e82c0903eb085"
+            }
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "status_ref": {
+            "contract": "ApprovalStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000101",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "status": "valid",
+        "checked_at": "2026-10-10T12:00:00.000Z"
+      },
+      "expected_row_scope": null,
+      "accepted_domain_pin": {
+        "contract": "TemplateSpec",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000033",
+        "revision": 1,
+        "content_hash": "sha256:009ebed70969d8bbdcd8e7c99cf6f03801d68d089a0967a7db13d3eb19a63493"
+      },
+      "accepted_consumer_pin": {
+        "contract": "TemplateSpec",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000033",
+        "revision": 1,
+        "content_hash": "sha256:009ebed70969d8bbdcd8e7c99cf6f03801d68d089a0967a7db13d3eb19a63493"
+      }
+    }
+  }
+}

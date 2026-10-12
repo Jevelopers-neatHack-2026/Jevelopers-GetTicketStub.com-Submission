@@ -1,0 +1,1213 @@
+{
+  "contract": "EvaluationEvidence",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "EvaluationEvidence",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000008000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "evidence_id": "123e4567-e89b-42d3-a456-000000000170",
+    "run_id": "123e4567-e89b-42d3-a456-000000000171",
+    "scenario_id": "local_contract_scenario",
+    "evidence_hash": "sha256:e64f906cf7936386f54cdb2ace1656f2e5d7bd0b33c4a6382503019fe84545fb",
+    "acceptance_ids": [
+      "CON-01"
+    ],
+    "claim_scope": "contribution_only",
+    "status": "passed",
+    "components": [
+      {
+        "name": "integration-evals",
+        "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+      }
+    ],
+    "contracts": [
+      {
+        "reference": {
+          "contract": "ApprovalReceipt",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000100",
+          "revision": 1,
+          "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+        },
+        "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+        "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "tools": [
+      {
+        "name": "node",
+        "version": "22.23.3"
+      }
+    ],
+    "input": {
+      "input_id": "synthetic_input",
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "fixture_id": "synthetic_fixture",
+      "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "provider_mode": "mock",
+    "dependency_mode": "pinned_fixture",
+    "started_at": "2026-10-10T11:59:00Z",
+    "finished_at": "2026-10-10T12:00:00Z",
+    "commands": [
+      {
+        "command_id": "test_1",
+        "program": "npm",
+        "invocation": "test",
+        "exit_code": 0,
+        "status": "passed"
+      }
+    ],
+    "metrics": [
+      {
+        "metric_id": "duration",
+        "unit": "ms",
+        "measurement_status": "measured",
+        "value": 1,
+        "basis": "observed"
+      }
+    ],
+    "baseline_ref": null,
+    "artifacts": [
+      {
+        "artifact_id": "sanitized_log",
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "access": "public_sanitized",
+        "reference": {
+          "contract": "SanitizedArtifact",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000172",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    ],
+    "limitations": [
+      "live_provider_not_run"
+    ],
+    "decision_refs": [],
+    "usage_refs": []
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:33b481f346f6f4d3f88e64c1cc5413201b78a8f030b2cb191691994e812cbce8"
+      },
+      "remove": [
+        "workflow_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "order_id",
+        "trace_id",
+        "usage_event_id",
+        "logical_operation_id",
+        "provider_attempt_id",
+        "billable_attempt_id",
+        "transport_attempt_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:429f20942acb4ca16c2eb021d5eb295150e1f2dae2b2c1b7eeaff97f91e791c3"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "missing",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "billing_mode": 0
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [
+          {
+            "command_id": "test_1",
+            "program": "npm",
+            "invocation": "test",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "measured",
+            "value": 1,
+            "basis": "observed"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "project_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [
+          {
+            "command_id": "test_1",
+            "program": "npm",
+            "invocation": "test",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "measured",
+            "value": 1,
+            "basis": "observed"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/project_id"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "planned",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "status": "planned",
+        "finished_at": null,
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "limitations": [
+          "unmeasured"
+        ],
+        "evidence_hash": "sha256:13f7dce607a519be6adaec80eaa55d1a578cd7931ba400b65d020fc5c38c732c"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "blocked",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "status": "blocked",
+        "finished_at": null,
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "limitations": [
+          "unmeasured"
+        ],
+        "evidence_hash": "sha256:9608ca2924e386c0ed4bd6ba77fdcb41b07a39e32c2eb16cdde6cf98351a8ca5"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unmeasured",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "status": "unmeasured",
+        "finished_at": null,
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "limitations": [
+          "unmeasured"
+        ],
+        "evidence_hash": "sha256:31990af649fc07f72b1a859b6753fbb58626f56872e8a796c60be9d134df5123"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "status": "unknown",
+        "finished_at": null,
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "limitations": [
+          "unmeasured"
+        ],
+        "evidence_hash": "sha256:e286ef61c4f82de9504410ffbd93edf4b3f624c58bcdb240f9721f9d41efef41"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unmeasured",
+            "value": null,
+            "basis": "none"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown-not-zero",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "status": "unknown",
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unknown",
+            "value": 0,
+            "basis": "observed"
+          }
+        ],
+        "limitations": [
+          "unknown"
+        ],
+        "evidence_hash": "sha256:fee286803016d1409aad243600ab3dda8bcf1b8046a6f69a8e40b8689c781288"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [
+          {
+            "command_id": "test_1",
+            "program": "npm",
+            "invocation": "test",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "unknown",
+            "value": 0,
+            "basis": "observed"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/metrics/0/value"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "forged-mode",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_mode": "live",
+        "evidence_hash": "sha256:e024e6e8069ad7739fbc782fe80eea6411d16a9a7436a8929f5770d1e31dd091"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [
+          {
+            "command_id": "test_1",
+            "program": "npm",
+            "invocation": "test",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "measured",
+            "value": 1,
+            "basis": "observed"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/dependency_mode"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "mismatched-input",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "evidence_hash": "sha256:4cb1c6cca92067222a5ab5da0089e8dd289cd864d9b5e965dd2b2d2ddf71b8f1"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "contracts/0/reference": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "artifacts/0/reference": {
+            "contract": "SanitizedArtifact",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000172",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "acceptance_ids": [
+          "CON-01"
+        ],
+        "input": {
+          "input_id": "synthetic_input",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "fixture_id": "synthetic_fixture",
+          "fixture_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "components": [
+          {
+            "name": "integration-evals",
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec"
+          }
+        ],
+        "contracts": [
+          {
+            "reference": {
+              "contract": "ApprovalReceipt",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000100",
+              "revision": 1,
+              "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+            },
+            "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+            "schema_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "tools": [
+          {
+            "name": "node",
+            "version": "22.23.3"
+          }
+        ],
+        "provider_mode": "mock",
+        "dependency_mode": "pinned_fixture",
+        "commands": [
+          {
+            "command_id": "test_1",
+            "program": "npm",
+            "invocation": "test",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "metrics": [
+          {
+            "metric_id": "duration",
+            "unit": "ms",
+            "measurement_status": "measured",
+            "value": 1,
+            "basis": "observed"
+          }
+        ],
+        "public_evidence_id": "123e4567-e89b-42d3-a456-000000099170"
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/input"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "global-acceptance-forgery",
+      "category": "structural",
+      "set": {
+        "claim_scope": "global_verified"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/claim_scope"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "sensitive-nested",
+      "category": "structural",
+      "set": {
+        "artifacts": [
+          {
+            "artifact_id": "sanitized_log",
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "access": "public_sanitized",
+            "reference": {
+              "contract": "SanitizedArtifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000172",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "signed_url": "https://example.invalid/?token=SYNTHETIC"
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/artifacts/0"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "raw-source-field",
+      "category": "structural",
+      "set": {
+        "source_text": "SYNTHETIC PRIVATE"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:33b481f346f6f4d3f88e64c1cc5413201b78a8f030b2cb191691994e812cbce8"
+      },
+      "policy_version": "1.0.0"
+    }
+  ],
+  "schema_version": "1.0.0"
+}

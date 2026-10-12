@@ -1,0 +1,378 @@
+{
+  "first": {
+    "value": {
+      "contract": "UsageEvent",
+      "schema_version": "2.0.0",
+      "policy_version": "1.0.0",
+      "event_id": "123e4567-e89b-42d3-a456-000000000100",
+      "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+      "project_id": "123e4567-e89b-42d3-a456-426614174000",
+      "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+      "producer": {
+        "module": "shared-contracts",
+        "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+        "build_revision": "fixture-1"
+      },
+      "occurred_at": "2026-10-10T12:00:00Z",
+      "observed_at": "2026-10-10T12:00:01Z",
+      "ingested_at": "2026-10-10T12:00:02Z",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "source_refs": [],
+      "usage_event_id": "123e4567-e89b-42d3-a456-000000000017",
+      "source_observation_id": "123e4567-e89b-42d3-a456-000000000019",
+      "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+      "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+      "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+      "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000021",
+      "provider_request_id": null,
+      "provider": "synthetic_provider",
+      "model": "synthetic_model",
+      "source": "provider_response",
+      "completeness": "unknown",
+      "usage_units": null,
+      "missing_fields": [
+        "usage_units"
+      ],
+      "valuation": {
+        "basis": "provider_reported_unsettled",
+        "money": {
+          "amount": "0.000003",
+          "currency": "USD",
+          "scale": 6
+        },
+        "rate_card_ref": null,
+        "provider_evidence_ref": {
+          "contract": "ProviderReportedCostEvidence",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000024",
+          "revision": 1,
+          "content_hash": "sha256:e598c9a472902c0e11a9f6d410869cd1b817d67c3c5a0333a5965d61004f4498"
+        }
+      },
+      "outcome": "timeout",
+      "retry_mapping_ref": {
+        "contract": "RetryMapping",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000023",
+        "revision": 1,
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "supersedes_observation_id": "123e4567-e89b-42d3-a456-000000000088",
+      "reconciliation_ref": null
+    },
+    "context": {
+      "scope": {
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000"
+      },
+      "now": "2026-10-10T12:05:00Z",
+      "policy_version": "1.0.0",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "references": {
+        "retry_mapping_ref": {
+          "contract": "RetryMapping",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000023",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "evidence_lookup": {
+        "status": "resolved",
+        "expected_reference": {
+          "contract": "ProviderReportedCostEvidence",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000024",
+          "revision": 1,
+          "content_hash": "sha256:e598c9a472902c0e11a9f6d410869cd1b817d67c3c5a0333a5965d61004f4498"
+        },
+        "record": {
+          "contract": "ProviderReportedCostEvidence",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "evidence_id": "123e4567-e89b-42d3-a456-000000000024",
+          "revision": 1,
+          "content_hash": "sha256:e598c9a472902c0e11a9f6d410869cd1b817d67c3c5a0333a5965d61004f4498",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000019",
+          "provider": "synthetic_provider",
+          "model": "synthetic_model",
+          "source": "provider_response",
+          "source_observed_at": "2026-10-10T12:00:01Z",
+          "source_bytes_hash": "sha256:2b132847dc360e26d4847d40911fb706d0c81d7d8bded8909088cb1212a8bb22",
+          "source_scope": {
+            "kind": "per_billable_attempt",
+            "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+            "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+            "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+            "provider_request_id": null
+          },
+          "reported_cost": {
+            "state": "known",
+            "money": {
+              "amount": "0.000003",
+              "currency": "USD",
+              "scale": 6
+            }
+          }
+        },
+        "source_bytes_hash": "sha256:2b132847dc360e26d4847d40911fb706d0c81d7d8bded8909088cb1212a8bb22",
+        "resolved_at": "2026-10-10T12:00:03Z"
+      },
+      "prior": {
+        "contract": "UsageEvent",
+        "schema_version": "2.0.0",
+        "policy_version": "1.0.0",
+        "event_id": "123e4567-e89b-42d3-a456-000000000100",
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000",
+        "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "producer": {
+          "module": "shared-contracts",
+          "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+          "build_revision": "fixture-1"
+        },
+        "occurred_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:00:02Z",
+        "ingested_at": "2026-10-10T12:00:02Z",
+        "environment": "test",
+        "billing_mode": "simulated",
+        "source_refs": [],
+        "usage_event_id": "123e4567-e89b-42d3-a456-000000000087",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000000088",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000021",
+        "provider_request_id": null,
+        "provider": "synthetic_provider",
+        "model": "synthetic_model",
+        "source": "provider_response",
+        "completeness": "unknown",
+        "usage_units": null,
+        "missing_fields": [
+          "usage_units"
+        ],
+        "valuation": {
+          "basis": "provider_reported_unsettled",
+          "money": {
+            "amount": "0.000004",
+            "currency": "USD",
+            "scale": 6
+          },
+          "rate_card_ref": null,
+          "provider_evidence_ref": {
+            "contract": "ProviderReportedCostEvidence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000086",
+            "revision": 1,
+            "content_hash": "sha256:776231bc258842cf2a39557f3e8498f3a8cd6c0b134811ea5a48c53a3d05a9a6"
+          }
+        },
+        "outcome": "timeout",
+        "retry_mapping_ref": {
+          "contract": "RetryMapping",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000023",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "supersedes_observation_id": "123e4567-e89b-42d3-a456-000000000019",
+        "reconciliation_ref": null
+      }
+    }
+  },
+  "second": {
+    "value": {
+      "contract": "UsageEvent",
+      "schema_version": "2.0.0",
+      "policy_version": "1.0.0",
+      "event_id": "123e4567-e89b-42d3-a456-000000000100",
+      "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+      "project_id": "123e4567-e89b-42d3-a456-426614174000",
+      "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+      "producer": {
+        "module": "shared-contracts",
+        "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+        "build_revision": "fixture-1"
+      },
+      "occurred_at": "2026-10-10T12:00:00Z",
+      "observed_at": "2026-10-10T12:00:02Z",
+      "ingested_at": "2026-10-10T12:00:02Z",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "source_refs": [],
+      "usage_event_id": "123e4567-e89b-42d3-a456-000000000087",
+      "source_observation_id": "123e4567-e89b-42d3-a456-000000000088",
+      "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+      "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+      "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+      "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000021",
+      "provider_request_id": null,
+      "provider": "synthetic_provider",
+      "model": "synthetic_model",
+      "source": "provider_response",
+      "completeness": "unknown",
+      "usage_units": null,
+      "missing_fields": [
+        "usage_units"
+      ],
+      "valuation": {
+        "basis": "provider_reported_unsettled",
+        "money": {
+          "amount": "0.000004",
+          "currency": "USD",
+          "scale": 6
+        },
+        "rate_card_ref": null,
+        "provider_evidence_ref": {
+          "contract": "ProviderReportedCostEvidence",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000086",
+          "revision": 1,
+          "content_hash": "sha256:776231bc258842cf2a39557f3e8498f3a8cd6c0b134811ea5a48c53a3d05a9a6"
+        }
+      },
+      "outcome": "timeout",
+      "retry_mapping_ref": {
+        "contract": "RetryMapping",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000023",
+        "revision": 1,
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "supersedes_observation_id": "123e4567-e89b-42d3-a456-000000000019",
+      "reconciliation_ref": null
+    },
+    "context": {
+      "scope": {
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000"
+      },
+      "now": "2026-10-10T12:05:00Z",
+      "policy_version": "1.0.0",
+      "environment": "test",
+      "billing_mode": "simulated",
+      "references": {
+        "retry_mapping_ref": {
+          "contract": "RetryMapping",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000023",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "evidence_lookup": {
+        "status": "resolved",
+        "expected_reference": {
+          "contract": "ProviderReportedCostEvidence",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000086",
+          "revision": 1,
+          "content_hash": "sha256:776231bc258842cf2a39557f3e8498f3a8cd6c0b134811ea5a48c53a3d05a9a6"
+        },
+        "record": {
+          "contract": "ProviderReportedCostEvidence",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "evidence_id": "123e4567-e89b-42d3-a456-000000000086",
+          "revision": 1,
+          "content_hash": "sha256:776231bc258842cf2a39557f3e8498f3a8cd6c0b134811ea5a48c53a3d05a9a6",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000088",
+          "provider": "synthetic_provider",
+          "model": "synthetic_model",
+          "source": "provider_response",
+          "source_observed_at": "2026-10-10T12:00:02Z",
+          "source_bytes_hash": "sha256:2b132847dc360e26d4847d40911fb706d0c81d7d8bded8909088cb1212a8bb22",
+          "source_scope": {
+            "kind": "per_billable_attempt",
+            "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+            "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+            "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+            "provider_request_id": null
+          },
+          "reported_cost": {
+            "state": "known",
+            "money": {
+              "amount": "0.000004",
+              "currency": "USD",
+              "scale": 6
+            }
+          }
+        },
+        "source_bytes_hash": "sha256:2b132847dc360e26d4847d40911fb706d0c81d7d8bded8909088cb1212a8bb22",
+        "resolved_at": "2026-10-10T12:00:03Z"
+      },
+      "prior": {
+        "contract": "UsageEvent",
+        "schema_version": "2.0.0",
+        "policy_version": "1.0.0",
+        "event_id": "123e4567-e89b-42d3-a456-000000000100",
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000",
+        "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "producer": {
+          "module": "shared-contracts",
+          "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+          "build_revision": "fixture-1"
+        },
+        "occurred_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:00:01Z",
+        "ingested_at": "2026-10-10T12:00:02Z",
+        "environment": "test",
+        "billing_mode": "simulated",
+        "source_refs": [],
+        "usage_event_id": "123e4567-e89b-42d3-a456-000000000017",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000000019",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000021",
+        "provider_request_id": null,
+        "provider": "synthetic_provider",
+        "model": "synthetic_model",
+        "source": "provider_response",
+        "completeness": "unknown",
+        "usage_units": null,
+        "missing_fields": [
+          "usage_units"
+        ],
+        "valuation": {
+          "basis": "provider_reported_unsettled",
+          "money": {
+            "amount": "0.000003",
+            "currency": "USD",
+            "scale": 6
+          },
+          "rate_card_ref": null,
+          "provider_evidence_ref": {
+            "contract": "ProviderReportedCostEvidence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:e598c9a472902c0e11a9f6d410869cd1b817d67c3c5a0333a5965d61004f4498"
+          }
+        },
+        "outcome": "timeout",
+        "retry_mapping_ref": {
+          "contract": "RetryMapping",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000023",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "supersedes_observation_id": "123e4567-e89b-42d3-a456-000000000088",
+        "reconciliation_ref": null
+      }
+    }
+  }
+}

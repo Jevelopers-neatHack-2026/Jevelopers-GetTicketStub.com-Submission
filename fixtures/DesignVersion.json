@@ -1,0 +1,2397 @@
+{
+  "contract": "DesignVersion",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "DesignVersion",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000001000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "design_id": "123e4567-e89b-42d3-a456-000000000089",
+    "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+    "revision": 1,
+    "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+    "parent_ref": null,
+    "lineage_branch": "main",
+    "brief_ref": {
+      "contract": "CreativeBrief",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000070",
+      "revision": 1,
+      "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+    },
+    "configuration_ref": {
+      "contract": "GenerationConfiguration",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000091",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "control_ref": {
+      "contract": "DesignControlSchema",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000080",
+      "revision": 1,
+      "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+    },
+    "policy_ref": {
+      "contract": "policy",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000014",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "job_ref": {
+      "contract": "JobStatus",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000024",
+      "revision": 1,
+      "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+    },
+    "job_outcome": "succeeded",
+    "artifact_state": "available",
+    "artwork": {
+      "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+      "role": "source_artwork",
+      "kind": "generated",
+      "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+      "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+      "source_artifact_ref": null,
+      "media_type": "image/png",
+      "byte_size": 3
+    },
+    "preview": {
+      "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+      "role": "display_preview",
+      "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+      "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+      "media_type": "image/png",
+      "byte_size": 3
+    },
+    "production_output_ref": null,
+    "decision_refs": [],
+    "usage_refs": []
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:6876cb65d1c720f774345374c6639db0bb11552f17ec04b04a9981b6272959ee"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "order_id",
+        "trace_id",
+        "evidence_id",
+        "usage_event_id",
+        "logical_operation_id",
+        "provider_attempt_id",
+        "billable_attempt_id",
+        "transport_attempt_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000",
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:40597dcecb4aa5819879bce11c4e40a78f4140367d3d2cea562bef4472107856"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "required",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "environment": 42
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/environment"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "occurred_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/occurred_at"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "research_creative",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unverified-bytes",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            0,
+            0,
+            0
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/artwork/byte_hash"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "missing-byte-verification",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRUST_CONTEXT",
+        "path": "/artwork"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "mutated-preview-binding",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "preview": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+          "role": "display_preview",
+          "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+          "artwork_byte_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "design_hash": "sha256:8ac805d1b9726083beffad8a923002c5101127713d6bc0326218357d84333e55"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/preview/artwork_byte_hash"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "success-without-artwork",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "artifact_state": "unavailable",
+        "artwork": null,
+        "preview": null,
+        "design_hash": "sha256:a19d51dbd19eaafcec28d2e4c4981de135f2cab87c4474e3e1d122c5e567ce39"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRANSITION",
+        "path": "/artwork"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "wrong-design",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "design_id": "123e4567-e89b-42d3-a456-000000000999",
+        "design_hash": "sha256:064266947323f39d4f5f8d44d9df9d54e7a05fb2f62518e1fe75571c59479743"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "design_id": "123e4567-e89b-42d3-a456-000000000089"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "main",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/design_id"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "mutable-latest",
+      "category": "structural",
+      "set": {
+        "parent_ref": "latest"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/parent_ref"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "new-immutable-branch",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "contract": "DesignVersion",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "event_id": "123e4567-e89b-42d3-a456-000000001000",
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000",
+        "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "producer": {
+          "module": "shared-contracts",
+          "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+          "build_revision": "fixture-1"
+        },
+        "occurred_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:00:01Z",
+        "ingested_at": "2026-10-10T12:00:02Z",
+        "environment": "test",
+        "billing_mode": "simulated",
+        "source_refs": [],
+        "design_id": "123e4567-e89b-42d3-a456-000000000089",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000201",
+        "revision": 2,
+        "design_hash": "sha256:986ee7b17a4b454654e6caf14aae8161c37f74e79c7bcb275630e5c147a6642b",
+        "parent_ref": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+        },
+        "lineage_branch": "branch_a",
+        "brief_ref": {
+          "contract": "CreativeBrief",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000070",
+          "revision": 1,
+          "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+        },
+        "configuration_ref": {
+          "contract": "GenerationConfiguration",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000091",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "control_ref": {
+          "contract": "DesignControlSchema",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000080",
+          "revision": 1,
+          "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+        },
+        "policy_ref": {
+          "contract": "policy",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000014",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "job_ref": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000024",
+          "revision": 1,
+          "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+        },
+        "job_outcome": "succeeded",
+        "artifact_state": "available",
+        "artwork": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+          "role": "source_artwork",
+          "kind": "generated",
+          "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "source_artifact_ref": null,
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "preview": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+          "role": "display_preview",
+          "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+          "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "production_output_ref": null,
+        "decision_refs": [],
+        "usage_refs": []
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "parent_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "branch_a",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+        "prior_design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "in-place-version-id",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "contract": "DesignVersion",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "event_id": "123e4567-e89b-42d3-a456-000000001000",
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000",
+        "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "producer": {
+          "module": "shared-contracts",
+          "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+          "build_revision": "fixture-1"
+        },
+        "occurred_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:00:01Z",
+        "ingested_at": "2026-10-10T12:00:02Z",
+        "environment": "test",
+        "billing_mode": "simulated",
+        "source_refs": [],
+        "design_id": "123e4567-e89b-42d3-a456-000000000089",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+        "revision": 2,
+        "design_hash": "sha256:986ee7b17a4b454654e6caf14aae8161c37f74e79c7bcb275630e5c147a6642b",
+        "parent_ref": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+        },
+        "lineage_branch": "branch_a",
+        "brief_ref": {
+          "contract": "CreativeBrief",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000070",
+          "revision": 1,
+          "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+        },
+        "configuration_ref": {
+          "contract": "GenerationConfiguration",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000091",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "control_ref": {
+          "contract": "DesignControlSchema",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000080",
+          "revision": 1,
+          "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+        },
+        "policy_ref": {
+          "contract": "policy",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000014",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "job_ref": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000024",
+          "revision": 1,
+          "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+        },
+        "job_outcome": "succeeded",
+        "artifact_state": "available",
+        "artwork": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+          "role": "source_artwork",
+          "kind": "generated",
+          "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "source_artifact_ref": null,
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "preview": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+          "role": "display_preview",
+          "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+          "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "production_output_ref": null,
+        "decision_refs": [],
+        "usage_refs": []
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "parent_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "branch_a",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+        "prior_design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000089",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/design_hash"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "mixed-parent-design",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "contract": "DesignVersion",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "event_id": "123e4567-e89b-42d3-a456-000000001000",
+        "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+        "project_id": "123e4567-e89b-42d3-a456-426614174000",
+        "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "producer": {
+          "module": "shared-contracts",
+          "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+          "build_revision": "fixture-1"
+        },
+        "occurred_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:00:01Z",
+        "ingested_at": "2026-10-10T12:00:02Z",
+        "environment": "test",
+        "billing_mode": "simulated",
+        "source_refs": [],
+        "design_id": "123e4567-e89b-42d3-a456-000000000089",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000201",
+        "revision": 2,
+        "design_hash": "sha256:986ee7b17a4b454654e6caf14aae8161c37f74e79c7bcb275630e5c147a6642b",
+        "parent_ref": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+        },
+        "lineage_branch": "branch_a",
+        "brief_ref": {
+          "contract": "CreativeBrief",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000070",
+          "revision": 1,
+          "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+        },
+        "configuration_ref": {
+          "contract": "GenerationConfiguration",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000091",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "control_ref": {
+          "contract": "DesignControlSchema",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000080",
+          "revision": 1,
+          "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+        },
+        "policy_ref": {
+          "contract": "policy",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000014",
+          "revision": 1,
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "job_ref": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000024",
+          "revision": 1,
+          "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+        },
+        "job_outcome": "succeeded",
+        "artifact_state": "available",
+        "artwork": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+          "role": "source_artwork",
+          "kind": "generated",
+          "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "source_artifact_ref": null,
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "preview": {
+          "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+          "role": "display_preview",
+          "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+          "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "media_type": "image/png",
+          "byte_size": 3
+        },
+        "production_output_ref": null,
+        "decision_refs": [],
+        "usage_refs": []
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "parent_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          }
+        },
+        "job": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000024",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "succeeded",
+          "outcome": "succeeded",
+          "execution_state": "finished",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [
+            {
+              "contract": "Artifact",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000092",
+              "revision": 1,
+              "content_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+            }
+          ],
+          "error": null
+        },
+        "expected_branch": "branch_a",
+        "artifact_bytes": {
+          "123e4567-e89b-42d3-a456-000000000092": [
+            1,
+            2,
+            3
+          ],
+          "123e4567-e89b-42d3-a456-000000000093": [
+            4,
+            5,
+            6
+          ]
+        },
+        "preview_artwork_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+        "prior_design": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000001000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "design_id": "123e4567-e89b-42d3-a456-000000000999",
+          "design_version_id": "123e4567-e89b-42d3-a456-000000000090",
+          "revision": 1,
+          "design_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9",
+          "parent_ref": null,
+          "lineage_branch": "main",
+          "brief_ref": {
+            "contract": "CreativeBrief",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:0a2ac07bc5cd6a2401f22fb5aeacbc03ebc3292e12bd8998bec8c2e293487ec9"
+          },
+          "configuration_ref": {
+            "contract": "GenerationConfiguration",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000091",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "control_ref": {
+            "contract": "DesignControlSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000080",
+            "revision": 1,
+            "content_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000024",
+            "revision": 1,
+            "content_hash": "sha256:fd9eb7fcf5a2c6649bbb938575275575945c9d580c3bf80bbb0a4ab5b7df1dbf"
+          },
+          "job_outcome": "succeeded",
+          "artifact_state": "available",
+          "artwork": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000092",
+            "role": "source_artwork",
+            "kind": "generated",
+            "byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "original_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "source_artifact_ref": null,
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "preview": {
+            "artifact_id": "123e4567-e89b-42d3-a456-000000000093",
+            "role": "display_preview",
+            "byte_hash": "sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+            "artwork_byte_hash": "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            "media_type": "image/png",
+            "byte_size": 3
+          },
+          "production_output_ref": null,
+          "decision_refs": [],
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRANSITION",
+        "path": "/parent_ref"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:6876cb65d1c720f774345374c6639db0bb11552f17ec04b04a9981b6272959ee"
+      },
+      "policy_version": "1.0.0"
+    }
+  ],
+  "schema_version": "1.0.0"
+}

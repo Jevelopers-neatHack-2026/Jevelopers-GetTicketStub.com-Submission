@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/CompatibilityReport/1.0.0",
+  "title": "CompatibilityReport",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "CompatibilityReport",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "source_template_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "TemplateSpec",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "target_template_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "TemplateSpec",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "capability_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "FulfillmentCapabilitySnapshot",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "spec_ref": {
+      "allOf": [
+        {
+          "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "const": "PrintSpec",
+              "x-classification": "public"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "x-classification": "public"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version"
+          ]
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "supported",
+        "unsupported",
+        "unknown"
+      ],
+      "x-classification": "restricted"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "APPROVAL_INVALID",
+          "APPROVAL_REVOKED",
+          "APPROVAL_UNAVAILABLE",
+          "SPEC_UNKNOWN",
+          "PRODUCT_MISMATCH",
+          "DIMENSIONS_MISMATCH",
+          "BLEED_MISMATCH",
+          "SAFE_MISMATCH",
+          "DPI_MISMATCH",
+          "PROFILE_UNSUPPORTED",
+          "EXPORT_UNSUPPORTED",
+          "FONT_UNSUPPORTED",
+          "TRANSPARENCY_MISMATCH",
+          "ASPECT_MISMATCH",
+          "SURFACE_UNSUPPORTED",
+          "FACTS_UNSUPPORTED",
+          "PREFLIGHT_FAILED",
+          "PREVIEW_UNKNOWN",
+          "ROW_BINDING_MISMATCH",
+          "SOURCE_MISMATCH",
+          "POLICY_MISMATCH",
+          "CALIBRATION_ONLY",
+          "OWNER_ACCEPTANCE_PENDING",
+          "CANCELLED",
+          "SKIPPED_POLICY",
+          "SKIPPED_CANCELLED",
+          "INVALID_INPUT",
+          "HASH_MISMATCH",
+          "STORAGE_UNAVAILABLE",
+          "RENDER_UNAVAILABLE",
+          "EXPIRED",
+          "STALE",
+          "NOT_FOUND"
+        ],
+        "x-classification": "restricted"
+      },
+      "minItems": 0,
+      "maxItems": 32,
+      "x-classification": "restricted"
+    },
+    "changed_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "canvas",
+          "trim",
+          "bleed",
+          "safe",
+          "orientation",
+          "dpi",
+          "formats",
+          "fonts",
+          "policies",
+          "spec",
+          "capability",
+          "slots"
+        ],
+        "x-classification": "restricted"
+      },
+      "minItems": 0,
+      "maxItems": 32,
+      "x-classification": "restricted"
+    },
+    "relayout": {
+      "type": "boolean",
+      "x-classification": "restricted"
+    },
+    "reapproval": {
+      "type": "boolean",
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "source_template_ref",
+    "target_template_ref",
+    "capability_ref",
+    "spec_ref",
+    "state",
+    "reasons",
+    "changed_constraints",
+    "relayout",
+    "reapproval"
+  ],
+  "x-classification": "restricted"
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/EvidenceProjection/1.0.0",
+  "title": "EvidenceProjection", "type": "object", "additionalProperties": false,
+  "required": ["contract", "schema_version", "policy_version", "evidence_id", "environment", "billing_mode", "outcome", "component"],
+  "properties": {
+    "contract": { "const": "EvidenceProjection", "x-classification": "public" },
+    "schema_version": { "const": "1.0.0", "x-classification": "public" },
+    "policy_version": { "const": "1.0.0", "x-classification": "public" },
+    "evidence_id": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'PublicEvidenceId'>", "x-classification": "public" },
+    "environment": { "type": "string", "enum": ["development", "test", "production"], "x-classification": "public" },
+    "billing_mode": { "type": "string", "enum": ["live", "sandbox", "simulated"], "x-classification": "public" },
+    "outcome": { "type": "string", "enum": ["passed", "failed", "blocked", "unknown"], "x-classification": "public" },
+    "component": { "type": "object", "additionalProperties": false, "required": ["name", "source_revision"], "x-classification": "public",
+      "properties": {
+        "name": { "type": "string", "enum": ["getticketstub.com", "agent-harness", "event-intelligence", "creative-engine", "print-production", "fulfillment-connectors", "cost-intelligence", "team-dashboard", "integration-evals", "shared-contracts"], "x-classification": "public" },
+        "source_revision": { "type": "string", "pattern": "^[a-f0-9]{40}$", "tsType": "Brand<string, 'SourceRevision'>", "x-classification": "public" }
+      }
+    }
+  }
+}

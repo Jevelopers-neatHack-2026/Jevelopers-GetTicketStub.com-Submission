@@ -1,0 +1,79 @@
+# Research and creative candidates: package 0.3.0
+
+Issues #15-21 implement ProjectRequest, ResearchRequest, EventIntelligencePackage, ResearchCorrectionRequest, ResearchCorrectionReceipt, ResearchInvalidation, CreativeBrief, DesignControlSchema and DesignVersion. ResearchRequestReceipt, ResearchAnswerReceipt and ResearchBatchReceipt are separate proposals grounded in EI's exact request/answer/batch receipt handoff. They are indexed individually, not hidden in a package umbrella. Names, mappings and producer/consumer acceptance remain pending.
+
+Each candidate has a canonical JSON Schema 2020-12 definition, derived readonly declarations, standalone ESM validation, positive/negative fixtures and pure semantic helper. Foundation and operations schemas/behavior remain pinned. Package 0.3.0 adds exports while every candidate wire schema is exactly 1.0.0. Unknown execution fields/enums fail; explicit null differs from missing. No defaults, coercion, hash rewrite, network fetch, research, generation, storage, authentication or print composition happens here.
+
+## Trusted boundary and references
+
+Use validateContract/parseContract for structure, then checkResearchCreative or its narrow helper with a separately obtained server context. Tenant/project expectations, permission/budget/policy references, source-domain/action/output limits, current approvals and previous immutable records must come from authenticated/current downstream lookups. Never derive these expectations from the incoming payload. The [installed consumer](../examples/research-creative-consumer.mjs) uses independent synthetic server scope and [typed consumers](../tests/research-creative-types.ts) take injected contexts.
+
+References are exact contract/schema/id/revision/content-hash tuples. Missing or altered expected references fail at their path. URI syntax and allowlisted literal hostname comparison are pure input checks; DNS, redirects, SSRF enforcement, fetching and retention/access execution remain app/harness/EI responsibilities. Source/customer/fact/asset/diagnostic data are restricted fields and do not enter the public EvidenceProjection allowlist.
+
+The 0.8.3 development repair for SC-CHK-011 additionally binds references to the actual independently supplied record. Relabeling the lookup descriptor cannot change that record's contract, supported schema version, ID, explicit revision or digest. Research/design field semantics also require the intended research package, request/receipt, fact, design, control, brief, job, artifact or approval kind. This applies to nested and array references as well as parent/current/new-package routes. The existing exact-version reference validator and canonical schema registry remain the version evidence; no caller-created registry or inferred kind from an opaque ID is introduced.
+
+| Supplied record | Identity and revision evidence | Digest evidence |
+| --- | --- | --- |
+| EventIntelligencePackage, including historical parents/current correction targets/new packages | package_id, package_version, contract, schema_version | Recomputed package_hash |
+| DesignVersion parent | design_version_id, revision, contract, schema_version | Recomputed design_hash |
+| JobStatus | job_id, revision, contract, schema_version | Canonical hash of the full record |
+| ResearchFact embedded in an answer's package | fact_id, revision, ResearchFact kind, containing package's supported schema version | Recomputed fact_hash and containing package_hash |
+| ResearchRequest | request_id, contract, schema_version; revision comes from the independent descriptor | Canonical hash of the full record |
+| ResearchRequestReceipt in a batch | receipt_id, contract, schema_version; revision comes from the independent descriptor | Canonical hash of the full receipt |
+
+ResearchRequest and the research receipts have no domain revision field. Their descriptor revision is therefore independently supplied lookup evidence, not a value inferred from schema_version or fabricated as zero/one. A changed descriptor revision alone remains valid when the actual revision-free record and other supported tuple fields match. Descriptor-only brief/control/design/receipt/invalidation targets still require exact independent lookup and the intended field kind; these helpers do not load absent target records. Historical parents and correction targets are checked for identity and digest without requiring current job, expiry or approval status. Existing current-use package/asset checks retain their separate requirements.
+
+The [reference finding record](../compatibility/research-reference-findings.json) preserves SC-CHK-011 and the independent exclusion of the exploratory request-revision expectation. Immutable historical 44-row inputs/expectations remain unchanged: the repaired replay meets 43/44 original expectations and 44/44 independently dispositioned expectations. These are local development results, not whole-PR approval, accepted consumer pins or service authenticity.
+
+ApprovalVerification is a narrow trusted-context interface, not an approval issuer or wire ApprovalReceipt. It requires explicit expected audience, string actor, tenant/project, subject identity/version/hash/use, issuer, issue/expiry time, current valid/revoked/unknown status and immutable reference. Asset claims must match that externally verified current record; missing, forged, revoked, expired or transformed-byte reuse fails. A URL, payload boolean, discovery or matching hash cannot create permission. Full ApprovalReference/Receipt exports and actual authenticated revocation checks belong to the later group and application owner.
+
+## Project and research ingress
+
+ProjectRequest separates inert customer text/source URLs from server-controlled action, output/variant limits, scope and permission/budget references. ResearchRequest independently carries source seeds, requested facts, bounded domains/source count/freshness, retention/access policy, deadline/cancel and decision/result expectations. Raw text cannot add tools, domains, budget or capabilities. Duplicate source IDs, malformed/credential-bearing URLs, expired requests and policy overrides fail. The package neither checks a live balance nor authorizes a paid provider call.
+
+## Facts, assets, packages and receipts
+
+EventIntelligencePackage has independent package identity/version/hash/parent, exact sources/provenance, fact identity/revision/hash, known/unknown/conflicting/review states and explicit confidence basis. Unknown values are null; conflicting facts retain distinct candidates and provenance; neither becomes a ready fact by default. Ready packages require known facts. Retrieval/freshness and source retention/access references remain explicit.
+
+Asset candidates record discovery and original/transformed hashes. Approved asset references are separate, version-bound records requiring current externally verified permission. Candidate presence alone cannot make an asset approved. Package request/answer/batch receipt, decision and usage references preserve correlation without claiming successful execution or authority.
+
+Request receipts bind the exact request hash and identity; answer receipts bind request/batch, exact package version/hash and fact identities/hashes; batch receipts enforce complete nonduplicate membership and explicit partial/all-or-nothing acceptance. Receipt identities are distinct from request identities. None of these receipts is an approval, spend authorization or proof of actual consumer integration. External descriptor references are compared with trusted lookup expectations; the helper does not authenticate records or materialize their referenced stores.
+
+The 0.8.3 batch helper reconciles terminal rejected admissions with outcome membership. A bound rejected request must be in failed_request_ids, under either policy; listing it as successful or pending returns INVALID_BATCH at the contradictory membership array. Accepted requests can still fail during execution or remain pending, and a partial batch can retain admitted successes alongside rejected failures. This semantic safety narrowing does not change wire schemas, fixture encodings or acceptance authority.
+
+Each independently supplied request receipt must have a unique receipt ID, match one request and one exact contract/schema/receipt-ID/hash reference, and preserve its request-reference identity/hash and admission/error relationship. Rejection requires an ErrorEnvelope reference; other admission states require null error. Exact hashes and membership cannot override admission. The permitted batch outcomes are:
+
+| Request admission | Permitted batch membership |
+| --- | --- |
+| accepted | successful, failed after admission, or pending |
+| rejected | failed |
+| unknown | pending |
+| duplicate | pending until prior admission is independently resolved |
+
+This interface supplies no prior admission record for unknown/duplicate receipts. It therefore cannot infer completed success or failure from those states. The desktop repair's four duplicate-success/failure positive expectations conflicted with the native repair's typed refusals for the same admission states. Integration retains those cases with exact INVALID_BATCH assertions: duplicate delivery is not independent evidence of accepted or rejected admission. A genuine partial batch may mix accepted successes, accepted later failures, rejected failures and unresolved pending items. All-or-nothing disallows successful membership alongside failed or pending items, while preserving wholly failed or pending observations. Omitted, overlapping, duplicated, malformed or foreign-scope receipts/membership return typed failures. Answer receipt descriptors still require independent exact lookup; this helper neither loads answer records nor infers their request identity from an opaque receipt ID.
+
+The [native candidate finding notes](../compatibility/semantic-links-findings.json) retain the 0.8.2 development evidence for SC-CHK-010 and the related SC-CHK-009 tuple repair, integrated in 0.8.3. Wire schemas and canonical fixture bytes are preserved; no accepted pin, upgrade or closure follows from local validation. A fresh independent review of the resulting exact candidate remains required.
+
+## Corrections and invalidations
+
+Correction requests are proposed changes bound to the expected package, actor/authority, allowed facts and provenance/evidence. Application-supplied correction context separately determines proposed/accepted/rejected status. Missing/wrong-type context yields typed INVALID_TRUST_CONTEXT, not a throw or approval. An accepted receipt binds the request hash and a new parent-linked immutable package version. Changed facts must match the requested values/status/provenance with advanced revisions; unchanged facts remain exact. No in-place rewrite, duplicate fact insertion or caller approved=true is accepted. EI owns CAS, history and recomputation.
+
+Invalidation carries observation/event identity, monotonically advancing revision, effective time, freshness/rights/correction reason and exact affected package/asset/approval references. Exact same-revision payloads are duplicate delivery; changed duplicates, stale/out-of-order revisions, recycled event IDs and future effective times fail. The effect is explicitly mark_use_stale; no DesignVersion rewrite is encoded or executed. Durable acknowledgement/delivery and downstream stale-use handling remain owner work.
+
+## Briefs, controls and immutable design
+
+CreativeBrief binds the exact research package and exact selected fact records, preserves unresolved facts under review status, and separates factual composition data from inert visual intent. Ready briefs cannot consume unknown/conflicting facts or revoked assets. Output and model/policy constraints are bound to server expectations. No credential or executable capability is part of the brief.
+
+DesignControlSchema is declarative JSON only: stable ID, inert label/description, set_value action, required/enabled state, explicit default presence, number/unit/range/step, enum, boolean and text constraints. Controls must equal a separately supplied server allowlist. Unknown/privileged actions, scripts/markup, invalid units/bounds/defaults/enums and stale references fail. Validation inserts no default and imports no UI framework.
+
+DesignVersion separates design lineage from immutable version, artwork identity, original/generated/transformed bytes, displayed preview and future production output. A new version binds a selected parent, branch, scope, brief/configuration/control/policy and trusted job status. Outcome and usage reporting remain independent. Successful versions require available artwork/preview whose supplied exact bytes match byte size/hash; unavailable or unverifiable bytes cannot become success. Preview-to-artwork binding comes from an independent trusted renderer expectation. Transformed artwork binds its original source hash/reference. Branch edits use new version IDs; latest pointers, mixed scope/lineage, changed hash reuse and print-ready claims are rejected. Storage, generation and final print composition are not implemented.
+
+## Canonical hash scope and migration
+
+researchContentHash is a pure producer/consumer helper. Fact hashes cover every fact field except fact_hash. Package/brief/control/design hashes cover every non-delivery field except their own digest; contract discriminator, event ID, producer, occurred/observed/ingested times, envelope source_refs, trace and correlation are delivery metadata and excluded. Tenant/project, schema/policy, modes, domain identities/versions, facts/assets/references and constraints remain bound. Byte hashes cover exact supplied bytes; manifest hashes cover canonical UTF-8 JSON. Helpers reject altered data rather than updating hashes. These scopes permit an explicitly proposed name alias without altering content identity, not authenticity or owner acceptance.
+
+The pinned creative source has local 1.0/1.1 EventIntelligencePackage/ResearchPackage proposals, string producer/source references, additive fields, verified/unknown/conflicting statuses and different immutable version fields. EI explicitly leaves alias, receipt names and owner decisions unresolved. adaptResearchPackage supports canonical-alias-1.0.0 and explicit creative-local-1.0/1.1 profiles. It retains the complete original source, requires a separately supplied complete canonical candidate for local proposals, checks exact scope/package/source/fact/provenance agreement, and returns accepted_migration=false. Missing states/provenance, changed scope, omitted disagreements and permission-bearing conversions without an agreed mapping are unrepresentable and refused. Extra legacy data stays in the retained source and is never silently promoted. No alias is accepted by the canonical structural validator unless the explicit adapter is invoked.
+
+Read-only source evidence: [EI handoff](https://github.com/Jevelopers-neatHack-2026/event-intelligence/blob/62dc0e4c1b45cfb78d06a1bd9d2110e23c134650/docs/contracts/research-contract-handoff.md), [EI manifest](https://github.com/Jevelopers-neatHack-2026/event-intelligence/blob/62dc0e4c1b45cfb78d06a1bd9d2110e23c134650/tests/contracts/handoff-manifest.json), [creative local definitions](https://github.com/Jevelopers-neatHack-2026/creative-engine/blob/4e28839ea8baeb4112a4f12340ef2fe84f5c8efe/src/contracts/creative/v1.d.mts). These are discovery/compatibility targets, not accepted integrations.
+
+Run each named schema/fixture command, build/typecheck, test, test:installed, contracts:compat --implemented and generate --check. Full local catalog artifacts now exist; owner/pin gates remain blocked by missing genuine acknowledgements. No previous accepted shared major or producer/consumer approval is invented.

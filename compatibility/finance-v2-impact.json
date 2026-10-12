@@ -1,0 +1,51 @@
+{
+  "status": "breaking_proposal_local_repairs_pending_independent_and_finance_owner_review",
+  "package_version": "0.6.0",
+  "source_checkpoint": "60136d61edce96ae9f1be493796af87de1e7afbc",
+  "contracts": [
+    "BudgetReservation",
+    "ReserveRequest",
+    "ReserveResult",
+    "SettleRequest",
+    "SettleResult",
+    "ReleaseRequest",
+    "ReleaseResult",
+    "QueryRequest",
+    "QueryResult"
+  ],
+  "from": "1.0.0",
+  "to": "2.0.0",
+  "legacy_schema_and_fixture_bytes": "retained_unchanged",
+  "captain_protocol": "ci-reservation-protocol-decision-1.0.0",
+  "captain_source": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/13#issuecomment-6104393313",
+  "breaking_changes": [
+    "required_semantic_fields",
+    "cumulative_settlement_and_explicit_partial_final_intent",
+    "explicit_partial_grant_acknowledgement",
+    "independent_currency_environment_billing_partition",
+    "uncapped_actual_cost_and_overrun_evidence",
+    "exact_command_result_and_revision_binding",
+    "retained_and_released_exposure_conservation",
+    "bounded_pricing_required_for_authorization"
+  ],
+  "legacy_semantics": "all current operational helpers fail closed on 1.0.0; internal non-authoritative historical fixture adapter retains old outcomes; exact wire decoding remains supported",
+  "source_pin_upgrade": "exact shared source/package/SRI/content digest plus every schema/version/hash and fixture digest paired with tested consumer SHA and owner record",
+  "rollback": "retain previous immutable source/archive and decoder, without claiming it has v2 guarantees",
+  "deprecation": "no removal before notice/replacement, minimum90days, producer and all named consumer acknowledgement plus passing migration fixtures",
+  "accepted_producer_review": null,
+  "accepted_consumer_reviews": [],
+  "real_runtime_ledger_conformance": false,
+  "reporting_gap": "GAP-001 remains pending versioned proposal; QueryRequest/Result are single-reservation",
+  "decision_mode_fix": "SC-CHK-002 local semantic safety narrowing on existing immutable v1 wires; explicit modes or independently supplied current budget modes now bind before dispatch and across outputs",
+  "duplicate_result_semantic_repair": {
+    "candidate_package_version": "0.8.1",
+    "starting_source": "a08a24e5849a8012ab9b1a80764c70c1cad0d0ed",
+    "findings": ["FC-003", "FC-004"],
+    "impact": "Reject previously accepted contradictory duplicate outcomes; exact cached positive replays remain supported without new execution or renewed dispatch authority.",
+    "wire_versions": "retained_1.0.0_and_2.0.0_schema_fixture_bytes_unchanged",
+    "classification": "semantic_safety_narrowing_of_unaccepted_candidate",
+    "reviews_required": ["fresh_whole_candidate_Astra_High", "refreshed_Finance_compatibility"],
+    "prior_limited_approval_is_permanent": false,
+    "accepted_upgrade_or_closure": false
+  }
+}

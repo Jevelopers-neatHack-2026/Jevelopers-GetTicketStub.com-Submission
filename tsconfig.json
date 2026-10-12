@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
+    "strict": true, "noUncheckedIndexedAccess": true, "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true, "noPropertyAccessFromIndexSignature": true,
+    "verbatimModuleSyntax": true, "isolatedModules": true, "noEmit": true,
+    "skipLibCheck": false
+  },
+  "include": ["generated/**/*.d.ts", "tests/*.ts"]
+}

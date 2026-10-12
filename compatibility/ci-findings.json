@@ -1,0 +1,38 @@
+{
+  "finding_id": "SC-CI-001",
+  "status": "locally_repaired_transport_verification_blocked_review_pending",
+  "starting_candidate": "dd774d3c22f77de082b483cd1efbfddf49b7fff4",
+  "repair_package_version": "0.7.1",
+  "failure_history": {
+    "push_run": { "id": 38112978297, "conclusion": "failure" },
+    "pr_run": { "id": 38112981179, "conclusion": "success" },
+    "local_prior_suite": { "passed": 1839, "source": "supervisor_supplied" },
+    "failed_case": "SC-CHK-001 merely importing the package does not fabricate canonical fixture execution",
+    "location": "tests/final-harness.test.mjs:319",
+    "test_number": 465,
+    "duration_ms": 61968.593843,
+    "failure_type": "cancelledByParent",
+    "error": "Promise resolution is still pending but the event loop has already resolved",
+    "counts": { "passed": 1838, "failed": 0, "cancelled": 1, "skipped": 0 },
+    "source": "supervisor_checkpoint",
+    "source_log": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/actions/runs/38112978297"
+  },
+  "observed_mechanisms": [
+    "Controlled connection deadline reproduces pending-promise cancellation on the old lifecycle.",
+    "Controlled queued events after socket close reproduce the same cancellation on the old lifecycle.",
+    "The exact event order in the original push run is not observed."
+  ],
+  "repair": [
+    "Preserve the first typed failure and directly interrupt every observer wait.",
+    "Reject pending commands and forbid posts after terminal failure or socket closure.",
+    "Install socket lifecycle handlers before connection readiness and settle child exit/startup failure.",
+    "Fence the current event queue before graceful disconnect; collect final output on child close.",
+    "Close transport, kill active children with SIGKILL and bound cleanup waits."
+  ],
+  "verification_limit": "This local execution sandbox denies the native inspector listener: Starting inspector on 127.0.0.1:0 failed: operation not permitted. Real source/archive observer assertions are retained and fail closed; no passing transport verification is claimed here.",
+  "required_external_verification": [
+    "Fresh same-candidate Linux CI with native inspector transport available.",
+    "Independent exact-candidate review by the supervisor."
+  ],
+  "acceptance": "No adoption, immutable pin update, merge, issue closure or release approval."
+}

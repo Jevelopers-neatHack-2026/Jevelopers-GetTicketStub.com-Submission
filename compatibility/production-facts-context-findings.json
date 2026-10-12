@@ -1,0 +1,11 @@
+{
+  "reviewed_checkpoint": "d96e6cf3d8f390126407cdbc9f37b750d3256069",
+  "reviewer_session": "01a12ce0-5ccb-76b0-800f-7fdaa7309d5c",
+  "historical_verdict": "REQUEST_CHANGES",
+  "candidate_package_version": "0.9.5",
+  "fresh_review": "pending_exact_candidate",
+  "findings": [
+    { "id": "SC-CHK-021", "status": "residual_locally_repaired_review_pending", "repair": "Canonical-check the supplied facts reference after facts validation and before equality. Known ContractError cases return INVALID_TRUST_CONTEXT through composition and eligibility; invalid facts keep FACTS_UNSUPPORTED precedence." }
+  ],
+  "acceptance": "No human/domain approval, accepted dependencies, real consumer adoption or release; unsupported preview binding and external gates remain open."
+}

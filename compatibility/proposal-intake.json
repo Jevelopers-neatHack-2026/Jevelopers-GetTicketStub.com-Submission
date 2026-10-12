@@ -1,0 +1,90 @@
+{
+  "status": "unaccepted_owner_requested_shapes",
+  "catalog_note": "47 candidate wire names / 56 versions. #32 adds only FulfillmentCapabilitySnapshot and PrintSpec producer proposals; other requested services/shapes remain pending.",
+  "requests": [
+    {
+      "owner": "print-production",
+      "source": "https://github.com/Jevelopers-neatHack-2026/print-production/issues/5",
+      "coordination_issues": [
+        4,
+        24
+      ],
+      "requested_names": [
+        "ComposeArtifactRequest",
+        "ComposeArtifactResult",
+        "TemplateSpec",
+        "CapabilitySnapshot",
+        "PersonalizationBatch",
+        "PersonalizationRow",
+        "PersonalizationResult",
+        "PersonalizeBatchRequest",
+        "InspectArtifactRequest",
+        "ExportBundleRequest",
+        "CompareTemplateRequest",
+        "ArtifactStatusRequest",
+        "ProductionContext",
+        "ProductionResult",
+        "PreflightReport",
+        "ArtifactManifestStatus"
+      ],
+      "status": "blocked_concrete_owner_proposal_and_agreement",
+      "capability_disposition": "Supplier proposal FulfillmentCapabilitySnapshot@1.0.0 in #32 does not cover renderer CapabilitySnapshot or full production API."
+    },
+    {
+      "owner": "fulfillment-connectors",
+      "source": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/3",
+      "acceptance_id": "FC-01.4",
+      "coordination_issues": [
+        4,
+        24
+      ],
+      "requested_semantics": [
+        "public operation request/result envelopes",
+        "capability and print-spec metadata",
+        "preflight report"
+      ],
+      "status": "narrow_capability_print_spec_proposal_locally_implemented_owner_consumer_review_pending",
+      "concrete_input": {
+        "source": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/4#issuecomment-6104784220",
+        "merged_source_revision": "cfc03caced85256b5d19f35a80d5886bc2171950",
+        "files": [
+          "src/catalog.ts",
+          "docs/catalog.md",
+          "tests/catalog-fixtures.mjs",
+          "tests/catalog-suite.mjs"
+        ],
+        "private_generic_shapes_not_additional_public_wire_exports": true,
+        "real_prodigi_support": "not_claimed",
+        "fixture_source_sha256": "b72f94405efbd201cad9cc039a326482dae9ab939eef45679df2b7337807e55e"
+      },
+      "canonical_proposal": {
+        "issue": 32,
+        "contracts": [
+          "FulfillmentCapabilitySnapshot@1.0.0",
+          "PrintSpec@1.0.0"
+        ],
+        "mapping": "docs/capability-contracts.md",
+        "source_fixtures": "compatibility/capability-source-fixtures.json",
+        "acceptance": null,
+        "producer_adaptation": "pending",
+        "consumer_adaptation": "pending",
+        "print_production_issue_6_review": "pending",
+        "genuine_provider_gates": "pending",
+        "remaining_scope": [
+          "public operation request/result envelopes",
+          "preflight report"
+        ]
+      }
+    },
+    {
+      "owner": "cost-intelligence",
+      "source": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12#issuecomment-6103878409",
+      "requested_semantics": [
+        "CI-01/CI-08/CI-08X reporting query/export request and manifest",
+        "as-of/watermark/timezone/pagination/snapshot fingerprint",
+        "unknown/partial coverage counts"
+      ],
+      "status": "blocked_concrete_owner_proposal_and_agreement"
+    }
+  ]
+}
