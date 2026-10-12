@@ -1,8 +1,8 @@
 name: Entire graph
 # Generates entire-graph output for the current commit without an agent session
-# or a developer machine (Jevelopers-neatHack-2026/getticketstub.com#27). Run manually from the Actions tab.
+# or a developer machine. Snapshot generation is read-only; publishing generated
+# agent instructions is a separate manual-only job.
 on:
-  # PR runs only check that the graph is generated; pushing a branch is manual-only.
   pull_request:
     paths: [.github/workflows/entire-graph.yml]
   workflow_dispatch:
@@ -11,19 +11,24 @@ on:
         description: Push init-agents output to an entire-graph/<sha> branch for review
         type: boolean
         default: true
+
 permissions:
   contents: read
+
 env:
   ENTIRE_VERSION: v0.11.4
   ENTIRE_NO_AUTO_UPDATE: '1'
+
 jobs:
   graph:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install pinned Entire CLI
         run: |
           mkdir -p "$RUNNER_TEMP/entire" "$HOME/.local/bin"
@@ -55,23 +60,68 @@ jobs:
             echo "- Snapshot records: $(wc -l < "$out/graph-snapshot.ndjson")"
             echo "- Snapshot SHA-256: \`$(sha256sum "$out/graph-snapshot.ndjson" | cut -d' ' -f1)\`"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: entire-graph-${{ github.sha }}
           path: ${{ runner.temp }}/out
           retention-days: 90
-      - name: Write agent instructions
-        run: entire graph init-agents --repo .
-      - name: Push init-agents output for review
-        if: github.event_name == 'workflow_dispatch' && inputs.push_branch
+
+  publish-agent-instructions:
+    # Do not grant a write token when dispatching this workflow from a feature branch.
+    if: github.event_name == 'workflow_dispatch' && inputs.push_branch && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Entire CLI
         run: |
-          branch="entire-graph/${GITHUB_SHA::7}"
+          mkdir -p "$RUNNER_TEMP/entire" "$HOME/.local/bin"
+          cd "$RUNNER_TEMP/entire"
+          base="https://github.com/entireio/cli/releases/download/$ENTIRE_VERSION"
+          curl -fsSLO "$base/entire_linux_amd64.tar.gz"
+          curl -fsSLO "$base/checksums.txt"
+          grep ' entire_linux_amd64.tar.gz$' checksums.txt | sha256sum -c -
+          tar -xzf entire_linux_amd64.tar.gz
+          install -m 0755 entire git-remote-entire "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install graph plugin
+        run: |
+          entire version
+          entire plugin install graph
+          entire graph version --json
+      - name: Generate agent instructions
+        id: instructions
+        run: |
+          entire graph init-agents --repo .
           git add .entire/graph-agent.md AGENTS.md CLAUDE.md
           if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No init-agents changes to push." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "Enable entire-graph (generated from ${GITHUB_SHA::7})"
-          git push origin "HEAD:refs/heads/$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Push generated branch for review
+        if: steps.instructions.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="entire-graph/${GITHUB_SHA::7}"
+          askpass="$RUNNER_TEMP/git-askpass.sh"
+          cat > "$askpass" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' 'x-access-token' ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 0700 "$askpass"
+          GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 \
+            git push "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$branch"
           echo "- Pushed \`$branch\` for review" >> "$GITHUB_STEP_SUMMARY"

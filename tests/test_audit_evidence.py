@@ -287,6 +287,48 @@ class Hardening(Fixture):
         self.sums("evidence/a", [("sk-SECRET-missing.txt", d), ("../sk-SECRET-up", d)])
         self.assertNotIn("SECRET", json.dumps(self.audit()))
 
+    def test_untrusted_paths_never_echoed(self):
+        secret = "customer-ada@example.invalid"
+        os.makedirs(os.path.join(self.root, "evidence", secret))
+        self.write("evidence/" + secret + "/SHA256SUMS", "malformed\n")
+        report = self.audit()
+        self.assertIn("malformed-entry", report["error_counts"])
+        self.assertNotIn(secret, json.dumps(report))
+
+        report = ae.run(
+            self.root,
+            evidence="evidence/" + secret,
+            checklist_json="planning/" + secret + ".json",
+            checklist_md="planning/" + secret + ".md",
+        )
+        self.assertNotIn(secret, json.dumps(report))
+
+    def test_metadata_inputs_are_bounded(self):
+        too_large = "x" * (ae.MAX_METADATA_BYTES + 1)
+        self.write("evidence/a/SHA256SUMS", too_large)
+        self.assertIn("input-too-large", self.codes())
+
+        self.write("planning/acceptance-checklist.json", too_large)
+        self.assertIn("input-too-large", self.codes())
+
+        self.write("planning/acceptance-checklist.md", too_large)
+        self.assertIn("input-too-large", self.codes())
+
+    def test_error_list_is_bounded_but_counts_all_errors(self):
+        total = ae.MAX_ERRORS + 17
+        self.write("evidence/a/SHA256SUMS", "malformed\n" * total)
+        report = self.audit()
+        self.assertEqual(len(report["errors"]), ae.MAX_ERRORS)
+        self.assertTrue(report["errors_truncated"])
+        self.assertEqual(report["error_counts"]["malformed-entry"], total)
+
+    def test_oversized_criterion_id_is_not_echoed(self):
+        long_id = "A" * (ae.MAX_CRITERION_ID_LENGTH + 1) + "-1"
+        self.checklist([crit(long_id), crit("AAA-01")])
+        report = self.audit()
+        self.assertIn("invalid-id", report["error_counts"])
+        self.assertNotIn(long_id, json.dumps(report))
+
     def test_empty_json_criteria(self):
         self.write(self.JSON, json.dumps({"allowed_statuses": list(ae.STATUSES), "criteria": []}))
         self.assertIn("empty-checklist", self.codes())
