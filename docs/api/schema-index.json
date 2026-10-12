@@ -12,6 +12,10 @@
     "integrations": [
       "1.0.0",
       "2.0.0"
+    ],
+    "reconciliation": [
+      "1.0.0",
+      "2.0.0"
     ]
   },
   "package": "@jevelopers/cost-intelligence",
@@ -565,6 +569,63 @@
       "path": "schemas/cost-intelligence/2.0.0/pricing/PricingPartitionGroupSchema.json",
       "completeness": "complete",
       "sha256": "06e14940451ddc69a66b8e61d5293a21d6cd3117f5942a8d991baf8c0564fa69"
+    },
+    {
+      "module": "reconciliation",
+      "name": "CoverageSnapshotReferenceSchema",
+      "schema_version": "1.0.0",
+      "export_name": "CoverageSnapshotReferenceSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/CoverageSnapshotReferenceSchema.json",
+      "completeness": "complete",
+      "sha256": "94d8c4d42df31ea5cd2315cdd85933a63596cdc3448a0ebb9bc88c1d85b8ea41"
+    },
+    {
+      "module": "reconciliation",
+      "name": "CoverageImportRecordSchema",
+      "schema_version": "1.0.0",
+      "export_name": "CoverageImportRecordSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/CoverageImportRecordSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateCoverageImportRecordBoundary",
+      "sha256": "2df879236540beea850e7f0016d4fe332d683d71f956b7d9d206e940ae566901"
+    },
+    {
+      "module": "reconciliation",
+      "name": "CoverageDryRunRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "CoverageDryRunRequestSchema",
+      "path": "schemas/cost-intelligence/2.0.0/reconciliation/CoverageDryRunRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateCoverageDryRunRequestBoundary",
+      "sha256": "0367d3b771d8669435864ecfd5d71a3baf656e5a1a31cbd9019cf8b550687091"
+    },
+    {
+      "module": "reconciliation",
+      "name": "CoverageDryRunReadRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "CoverageDryRunReadRequestSchema",
+      "path": "schemas/cost-intelligence/2.0.0/reconciliation/CoverageDryRunReadRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateCoverageDryRunReadRequestBoundary",
+      "sha256": "2dc092747d7f54547aedb64978b84295d878b5fe39a31146507fa7daca1f1f37"
+    },
+    {
+      "module": "reconciliation",
+      "name": "CoverageDryRunSummarySchema",
+      "schema_version": "2.0.0",
+      "export_name": "CoverageDryRunSummarySchema",
+      "path": "schemas/cost-intelligence/2.0.0/reconciliation/CoverageDryRunSummarySchema.json",
+      "completeness": "complete",
+      "sha256": "01b4de194c450e5d9bb62e011750c841d190d32c08a7faaf298237f5488ce8c3"
+    },
+    {
+      "module": "reconciliation",
+      "name": "CoverageDryRunPageSchema",
+      "schema_version": "2.0.0",
+      "export_name": "CoverageDryRunPageSchema",
+      "path": "schemas/cost-intelligence/2.0.0/reconciliation/CoverageDryRunPageSchema.json",
+      "completeness": "complete",
+      "sha256": "61971a0ffc320140b5f1fdc56b4e55fd81c56ab3776f54b9bd15de7d6c2d1fd3"
     },
     {
       "module": "integrations",

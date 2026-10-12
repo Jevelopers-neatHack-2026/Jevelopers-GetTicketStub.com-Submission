@@ -6,23 +6,41 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
+import { FINANCE_CORE_MIGRATIONS, EXPECTED_MIGRATIONS } from './migration-catalog.mjs';
+import { hasDestructiveMigrationStatement, hasUnapprovedDestructiveMigrationStatement } from './sql-safety.mjs';
 import { appendLedgerEvent, rebuildLedgerProjection } from '../../dist/index.js';
 import { assertDisposableMarker, databaseConfigFromEnvironment, migratorDatabaseConfigFromEnvironment, runtimeDatabaseConfigFromEnvironment, DISPOSABLE_MARKER } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Client, Pool } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// Reporting 0012 is a separate feature capability; it does not add a core-health requirement.
-const FINANCE_CORE_MIGRATIONS = Object.freeze([
-  '0001_foundation.sql', '0002_foundation_health.sql', '0003_financial_ledger.sql',
-  '0004_pricing_catalog.sql', '0005_pricing_valuation_history.sql',
-  '0006_finance_security_roles.sql', '0007_accounting_projection_snapshots.sql',
-  '0008_budget_reservations.sql', '0009_usage_intake.sql', '0010_budget_authority_bindings.sql',
-]);
-const EXPECTED_MIGRATIONS = Object.freeze([...FINANCE_CORE_MIGRATIONS, '0012_reporting_snapshots.sql']);
 function assertKnownMigrationSet(names) {
   assert.deepEqual(names, EXPECTED_MIGRATIONS,
-    'only the exact reviewed Finance core and independent reporting migration are accepted');
+    'only the exact reviewed Finance core and independent reporting/coverage/evidence migrations are accepted');
+}
+async function assertEvidenceCapability(client) {
+  const health = await client.query('SELECT migrations_ready FROM cost_intelligence.evidence_reader_health');
+  assert.deepEqual(health.rows, [{ migrations_ready: true }], 'evidence reader retains its own exact migration capability');
+  const probes = await client.query(`SELECT p.polname FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='cost_intelligence'
+      AND p.polname IN ('ci10_expected_ledger_policy','ci10_expected_privacy_policy')`);
+  assert.deepEqual(probes.rows, [], 'temporary policy probes cannot survive the migration transaction');
+  await assertStoredLineageCapability(client);
+}
+async function assertStoredLineageCapability(client) {
+  const health = await client.query('SELECT migrations_ready FROM cost_intelligence.stored_lineage_reader_health');
+  assert.deepEqual(health.rows, [{ migrations_ready: true }], 'stored lineage retains an independent exact feature capability');
+  const probes = await client.query("SELECT polname FROM pg_policy WHERE polname LIKE 'ci10_lineage_expected_%'");
+  assert.deepEqual(probes.rows, [], 'the four transient lineage policy probes must be removed atomically');
+}
+async function assertCoverageCapability(client) {
+  const health = await client.query('SELECT migrations_ready FROM cost_intelligence.reconciliation_coverage_health');
+  assert.deepEqual(health.rows, [{ migrations_ready: true }], 'coverage-only reconciliation has its own exact artifact capability');
+  const tables = await client.query(`SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, r.rolname AS owner
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner
+    WHERE n.nspname='cost_intelligence' AND c.relname=ANY($1::text[]) AND c.relkind='r' ORDER BY c.relname`,
+    [['reconciliation_coverage_imports', 'reconciliation_coverage_runs']]);
+  assert.deepEqual(tables.rows, ['reconciliation_coverage_imports', 'reconciliation_coverage_runs'].map(relname => ({ relname, relrowsecurity: true, relforcerowsecurity: true, owner: 'ci_finance_owner' })));
 }
 async function assertReportingCapability(client) {
   const health = await client.query('SELECT migrations_ready FROM cost_intelligence.reporting_health');
@@ -69,10 +87,11 @@ function normalizeScopePolicyExpression(value) {
   return String(value).replace(/\bcost_intelligence\./g,'').replace(/[\s()]/g,'');
 }
 function assertKnownScopedPolicies(rows) {
-  const expected=[...FINANCE_CORE_SCOPE_POLICIES,['reporting_snapshots','reporting_snapshots_scope_policy']]
+  const coverageTables=['reconciliation_coverage_imports','reconciliation_coverage_runs'];
+  const expected=[...FINANCE_CORE_SCOPE_POLICIES,['reporting_snapshots','reporting_snapshots_scope_policy'],...coverageTables.map(table=>[table,table+'_scope_policy'])]
     .map(([table,name])=>({schema:'cost_intelligence',table,name})).sort((a,b)=>a.name.localeCompare(b.name));
   assert.deepEqual(rows.map(({schema,table,name})=>({schema,table,name})),expected,
-    'the exact eighteen core policies and independent reporting policy must exist without substitutes');
+    'the exact eighteen core policies and independent reporting/coverage policies must exist without substitutes');
   const reporting=rows.find(row=>row.name==='reporting_snapshots_scope_policy');
   assert.deepEqual({roles:reporting.roles,cmd:reporting.cmd,permissive:reporting.permissive},
     {roles:['ci_finance_runtime'],cmd:'ALL',permissive:'PERMISSIVE'},'reporting policy belongs only to the restricted runtime role');
@@ -82,118 +101,13 @@ function assertKnownScopedPolicies(rows) {
         AND q.environment=reporting_snapshots.environment AND q.billing_mode=reporting_snapshots.billing_mode)`;
   for(const field of ['qual','with_check'])assert.equal(normalizeScopePolicyExpression(reporting[field]),normalizeScopePolicyExpression(expression),
     `reporting ${field} preserves exact tenant/project/environment/billing scope and quarantine refusal`);
-}
-
-function hasDestructiveMigrationStatement(sql, allowedConstraintReplacements = []) {
-  const tokens = [];
-  let index = 0;
-  let statement = 0;
-  const dollarDelimiters = [];
-  while (index < sql.length) {
-    const rest = sql.slice(index);
-    const current = sql[index];
-    if (rest.startsWith('--')) {
-      const newline = sql.indexOf('\n', index + 2);
-      index = newline < 0 ? sql.length : newline + 1;
-      continue;
-    }
-    if (rest.startsWith('/*')) {
-      let depth = 1;
-      index += 2;
-      while (index < sql.length && depth > 0) {
-        if (sql.startsWith('/*', index)) { depth++; index += 2; }
-        else if (sql.startsWith('*/', index)) { depth--; index += 2; }
-        else index++;
-      }
-      continue;
-    }
-    const activeDollarDelimiter = dollarDelimiters.at(-1);
-    if (activeDollarDelimiter && rest.startsWith(activeDollarDelimiter)) {
-      index += activeDollarDelimiter.length;
-      dollarDelimiters.pop();
-      continue;
-    }
-    if (current === '$') {
-      const delimiter = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(rest)?.[0];
-      if (delimiter) {
-        // Procedural bodies can contain their own tagged strings. Track each
-        // delimiter so nested tags cannot merge with or hide SQL keywords.
-        dollarDelimiters.push(delimiter);
-        index += delimiter.length;
-        continue;
-      }
-    }
-    if (current === "'" || current === '"') {
-      const quote = current;
-      index++;
-      let contents = '';
-      while (index < sql.length) {
-        if (sql[index] === '\\' && index + 1 < sql.length) {
-          contents += sql[index + 1];
-          index += 2;
-        } else if (sql[index] === quote && sql[index + 1] === quote) {
-          contents += quote;
-          index += 2;
-        } else if (sql[index] === quote) {
-          index++;
-          break;
-        } else {
-          contents += sql[index++];
-        }
-      }
-      const searchableContents = contents.replace(/\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/g, ' ');
-      for (const match of searchableContents.matchAll(/[A-Za-z_][A-Za-z0-9_$]*/g)) {
-        tokens.push({ kind: 'word', value: match[0].toUpperCase(), statement, quoted: true, inDollar: dollarDelimiters.length > 0 });
-      }
-      continue;
-    }
-    let word = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(rest)?.[0];
-    if (word) {
-      if (dollarDelimiters.length > 0) {
-        const nestedDelimiter = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(word);
-        if (nestedDelimiter) word = word.slice(0, nestedDelimiter.index);
-      }
-      tokens.push({ kind: 'word', value: word.toUpperCase(), statement, quoted: false, inDollar: dollarDelimiters.length > 0 });
-      index += word.length;
-      continue;
-    }
-    if (current === ';' && dollarDelimiters.length === 0) {
-      statement++;
-    } else if (current === ';') {
-      tokens.push({ kind: 'punctuation', value: ';', statement, quoted: false, inDollar: true });
-    }
-    index++;
+  for(const table of coverageTables){
+    const policy=rows.find(row=>row.name===table+'_scope_policy');
+    assert.deepEqual({roles:policy.roles,cmd:policy.cmd,permissive:policy.permissive},{roles:['ci_finance_runtime'],cmd:'ALL',permissive:'PERMISSIVE'});
+    const coverageExpression=`finance_scope_matches(tenant_id,project_id,environment,billing_mode)
+      AND NOT EXISTS(SELECT 1 FROM financial_privacy_quarantine q WHERE q.tenant_id=${table}.tenant_id AND q.project_id=${table}.project_id AND q.environment=${table}.environment AND q.billing_mode=${table}.billing_mode)`;
+    for(const field of ['qual','with_check'])assert.equal(normalizeScopePolicyExpression(policy[field]),normalizeScopePolicyExpression(coverageExpression),`${table} ${field} preserves exact partition and quarantine refusal`);
   }
-
-  return tokens.some(token => {
-    if (token.kind !== 'word') return false;
-    if (token.value === 'DROP') {
-      const statementTokens = tokens.filter(item => item.statement === token.statement);
-      const codeWords = statementTokens.filter(item => item.kind === 'word' && !item.quoted && !item.inDollar);
-      const position = codeWords.indexOf(token);
-      const prefix = codeWords.slice(0, position).map(item => item.value);
-      const suffix = codeWords.slice(position + 1).map(item => item.value);
-      const safeReplacement = allowedConstraintReplacements.some(({ schema, table, constraint }) =>
-        prefix.join(' ') === `ALTER TABLE ${schema.toUpperCase()} ${table.toUpperCase()}`
-          && suffix.join(' ') === `CONSTRAINT ${constraint.toUpperCase()}`);
-      return !safeReplacement;
-    }
-    if (token.value !== 'TRUNCATE') return false;
-
-    // Only the SQL event name in a CREATE TRIGGER ... BEFORE TRUNCATE ON
-    // declaration is safe. Quoted strings and dollar-quoted bodies stay
-    // conservative: they may contain dynamic SQL that executes later.
-    if (token.quoted || token.inDollar) return true;
-    const statementTokens = tokens.filter(item => item.statement === token.statement);
-    const codeWords = statementTokens.filter(item => item.kind === 'word' && !item.quoted && !item.inDollar);
-    const position = codeWords.indexOf(token);
-    const safeTriggerDeclaration = codeWords[0]?.value === 'CREATE'
-      && codeWords[1]?.value === 'TRIGGER'
-      && position > 1
-      && codeWords[position - 1]?.value === 'BEFORE'
-      && codeWords[position + 1]?.value === 'ON';
-    return !safeTriggerDeclaration;
-  });
 }
 
 function testChildEnvironment(prefix) {
@@ -213,6 +127,8 @@ async function verifyDurability(prefix) {
     assert.equal(health.rows[0].migrations_ready, true);
     assert.equal(Number(health.rows[0].required_migrations_present), FINANCE_CORE_MIGRATIONS.length);
     await assertReportingCapability(client);
+    await assertCoverageCapability(client);
+    await assertEvidenceCapability(client);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -621,6 +537,9 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     { version: '0009_usage_intake', status: 'applied' },
     { version: '0010_budget_authority_bindings', status: 'applied' },
     { version: '0012_reporting_snapshots', status: 'applied' },
+    { version: '0013_reconciliation_coverage_runs', status: 'applied' },
+    { version: '0014_evidence_reader_indexes', status: 'applied' },
+    { version: '0015_stored_lineage_reader', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
@@ -638,7 +557,7 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
         const safeConstraintReplacements = names[index] === '0009_usage_intake.sql'
           ? [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }]
           : [];
-        assert.equal(hasDestructiveMigrationStatement(sql, safeConstraintReplacements), false,
+        assert.equal(hasUnapprovedDestructiveMigrationStatement(names[index], sql, safeConstraintReplacements), false,
           'incremental migrations must not start destructive DROP or TRUNCATE statements');
         assert.equal(records.rows[index].version, names[index].replace(/\.sql$/, ''));
         assert.equal(records.rows[index].checksum_sha256.trim(), createHash('sha256').update(sql).digest('hex'));
@@ -747,6 +666,8 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       assert.equal(Number(health.rows[0].required_migrations_present), FINANCE_CORE_MIGRATIONS.length,
         'reporting migration count cannot widen the exact Finance core capability');
       await assertReportingCapability(client);
+      await assertCoverageCapability(client);
+      await assertEvidenceCapability(client);
 
       const roleGroups = await client.query(
         `SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
@@ -2205,6 +2126,8 @@ test('separate migration login applies 0007 accounting, 0008 budget reservations
     );
     assert.deepEqual(health.rows[0], { migrations_ready: true, required_migrations_present: FINANCE_CORE_MIGRATIONS.length });
     await assertReportingCapability(migrator);
+    await assertCoverageCapability(migrator);
+    await assertEvidenceCapability(migrator);
     const intakeProjectionColumns = await migrator.query(
       `SELECT table_name, column_name FROM information_schema.columns
        WHERE table_schema='cost_intelligence' AND (

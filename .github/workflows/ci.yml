@@ -27,6 +27,8 @@ jobs:
         run: npm run typecheck
       - name: Build package and schemas
         run: npm run build
+      - name: Verify exact migration catalog and conservative SQL policy
+        run: node scripts/run-suite.mjs traceability --offline --suite=migration-policy
       - name: Verify contract fixtures
         run: npm run test:contracts
       - name: Verify deterministic accounting projection
@@ -45,6 +47,12 @@ jobs:
         run: npm run test:reporting -- --offline
       - name: Verify PostgreSQL query-to-export financial composition
         run: npm run build --silent && node scripts/with-postgres.mjs exports --suite=postgres
+      - name: Verify scoped reconciliation coverage-only boundaries
+        run: npm run test:reconciliation -- --offline --suite=coverage
+      - name: Verify PostgreSQL reconciliation coverage-only persistence
+        run: npm run build --silent && node scripts/with-postgres.mjs reconciliation --offline --suite=coverage-postgres
+      - name: Verify durable PostgreSQL evidence reader
+        run: npm run test:evidence:postgres -- --offline
       - name: Verify financial authorization and tenant isolation
         run: npm run test:security -- --offline
       - name: Verify atomic budget reservation authorization
@@ -68,6 +76,8 @@ jobs:
           path: |
             artifacts/test-manifests/*.json
             artifacts/test-database/migrations-*.log
+            artifacts/test-database/evidence-*.log
+            artifacts/evidence/stored-lineage-postgres.json
             artifacts/reporting/producer-*-page.json
             artifacts/reporting/ie-ci06-pg-page.json
             artifacts/reporting/failures-*.json

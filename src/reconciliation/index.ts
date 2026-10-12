@@ -1,5 +1,9 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { blockedBoundary, CurrencySchema, DecimalAmountSchema, TrustedScopeSchema, type ApiResult, type RuntimePorts } from '../shared/contracts.js';
+export { CoverageSnapshotReferenceSchema, CoverageImportRecordSchema, CoverageDryRunRequestSchema, CoverageDryRunReadRequestSchema, CoverageDryRunSummarySchema, CoverageDryRunPageSchema } from './coverage-types.js';
+export type { CoverageSnapshotReference, CoverageImportRecord, CoverageDryRunRequest, CoverageDryRunReadRequest, CoverageDryRunSummary, CoverageDryRunPage, CoverageEntry, CoverageImportReaderPort, CoverageStoredRun, CoverageStoreAccess, CoverageRunStorePort, ReconciliationCoveragePorts } from './coverage-types.js';
+export { createPostgresCoverageRunStore, type PostgresCoverageDatabasePort, type PostgresCoverageTransactionPort } from './coverage-store.js';
+export { startCoverageDryRun, getCoverageDryRun, validateCoverageDryRunRequestBoundary, validateCoverageDryRunReadRequestBoundary, validateCoverageImportRecordBoundary, getCoverageImportContentHash } from './coverage-runtime.js';
 
 const SourceSnapshotSchema = Type.Object({
   name: Type.String({ minLength: 1 }), revision: Type.String({ minLength: 1 }), contentHash: Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }),

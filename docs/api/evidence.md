@@ -1,6 +1,6 @@
 # Operational evidence references (CI-10, local slice)
 
-`@jevelopers/cost-intelligence/evidence` implements CI-10.1 reference typing and the local part of CI-10.2 lookup. It is a read-only seam: it persists nothing, returns no trace bodies, prompts, URLs or amounts, and opens no connection.
+`@jevelopers/cost-intelligence/evidence` implements CI-10.1 reference typing and the local part of CI-10.2 lookup. Its original lookup functions read through an injected store. The additive `createPostgresEvidenceReader` factory supplies a private PostgreSQL transaction for each lookup of existing ledger references. Both paths return no trace bodies, prompts, URLs or amounts and write no financial records. Constructing the factory opens no connection; invoking its lookup methods does.
 
 ## References
 
@@ -23,8 +23,15 @@ Raw authority snapshots preserve own-key semantics so malformed response fields 
 
 Completeness gaps are returned explicitly (`reconciliation_lineage_not_linked`, `adjustment_lineage_not_linked`, `export_lineage_not_linked`, `reference_kinds_not_indexed`, `result_limit_reached`, ...).
 
+## PostgreSQL reader
+
+`createPostgresEvidenceReader({ database, clock, financeAuthority })` is exported from the package root and evidence subpath. It exposes the same two request/result shapes with no raw store or transaction capability. The whole lookup runs through a restricted runtime connection, current authorization, existing scope bindings, feature health and the controlled-audit partition gate. Any observed database, privacy, health or related-read fault suppresses the entire result, including a posting retained from an earlier successful read. Its additive migration is `0014_evidence_reader_indexes.sql`.
+
+See [PostgreSQL evidence reader](./evidence-postgres.md) for the required host adapter, supported stored fields, transaction observation boundary and validation commands. Model results do not qualify PostgreSQL behavior. The real PostgreSQL suite is a separate mandatory CI step and part of the integration/release file requirement.
+
 ## Not delivered here
 
-- A PostgreSQL implementation of `EvidenceLinkStorePort` (and RLS/index validation) is not included; no database check was run for this slice.
+- Real PostgreSQL qualification and host/consumer acceptance remain required. Adding the adapter and test source does not establish those outcomes.
 - Trace, run, design, artifact, commit/build and session/checkpoint refs are reported `unavailable: source_not_integrated`; the ledger has no stored source for them, and an accepted shared-contracts mapping is required.
+- Intake observations outside `financial_ledger_events` are not promoted into ledger evidence rows. Their independent durable lineage is a follow-up slice.
 - Reconciliation, adjustment and export lineage linkage; CI-10.3 and CI-10.4 behavior.

@@ -524,3 +524,15 @@ export async function lookupByOperationalReference(value: unknown, ports: Eviden
   if (basis === 'correlation_only') gaps.push('correlation_only_match');
   return { ok: true, value: { schemaVersion: EVIDENCE_REFERENCE_SCHEMA_VERSION, matchBasis: basis, matches, gaps, billingAuthority: false } };
 }
+
+export { createPostgresEvidenceReader, type PostgresEvidenceReader, type PostgresEvidenceReaderPorts,
+  type PostgresEvidenceDatabasePort, type PostgresEvidenceTransactionPort } from './postgres-reader.js';
+export { createPostgresStoredLineageReader } from './stored-lineage.js';
+export {
+  STORED_LINEAGE_SCHEMA_VERSION, IntakeLineageRequestSchema, IntakeLineageResultSchema,
+  SnapshotInputLineageRequestSchema, SnapshotInputLineageResultSchema,
+} from './stored-lineage-types.js';
+export type {
+  IntakeLineageRequest, IntakeLineageResult, SnapshotInputLineageRequest, SnapshotInputLineageResult,
+  PostgresStoredLineageReader, PostgresStoredLineageReaderPorts,
+} from './stored-lineage-types.js';

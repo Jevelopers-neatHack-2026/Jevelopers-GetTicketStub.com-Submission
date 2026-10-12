@@ -145,6 +145,40 @@ test('release suite requires domain leaves and never treats an empty test set as
   assert.match(await readFile(join(root, 'scripts/run-suite.mjs'), 'utf8'), /runTestFile/);
 });
 
+test('PostgreSQL evidence qualification remains mandatory when its model suite is present', async () => {
+  const existing = await testFilesBelow('tests');
+  const postgresFiles = ['tests/evidence/postgres-reader.test.mjs', 'tests/evidence/stored-lineage-postgres.test.mjs'];
+  assert.ok(suitePlan('evidence', existing).requiredFiles.includes('tests/evidence/postgres-model.test.mjs'));
+  assert.ok(suitePlan('evidence', existing).requiredFiles.includes('tests/evidence/stored-lineage-model.test.mjs'));
+  assert.deepEqual(suitePlan('evidence', existing, 'postgres').requiredFiles, postgresFiles);
+  for (const suite of ['integration', 'release']) {
+    for (const postgresFile of postgresFiles) {
+      assert.ok(suitePlan(suite, existing).requiredFiles.includes(postgresFile));
+      const missingDatabase = new Set([...existing].filter(file => file !== postgresFile));
+      assert.ok(suitePlan(suite, missingDatabase).missingFiles.includes(postgresFile));
+    }
+  }
+  const workflow = await readFile(join(root, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(workflow, /run: npm run test:evidence:postgres -- --offline/);
+});
+
+test('integration and release require both coverage files without replacing complete reconciliation or lifting nested-budget deferral', async () => {
+  const existing = await testFilesBelow('tests');
+  const coverageFiles = ['tests/reconciliation/coverage.test.mjs', 'tests/reconciliation/coverage-pg.test.mjs'];
+  for (const suite of ['integration', 'release']) {
+    const plan = suitePlan(suite, existing);
+    for (const file of coverageFiles) {
+      assert.ok(plan.requiredFiles.includes(file), `${suite} must require ${file}`);
+      const missingCoverage = new Set([...existing].filter(candidate => candidate !== file));
+      assert.ok(suitePlan(suite, missingCoverage).missingFiles.includes(file));
+    }
+    assert.ok(plan.requiredFiles.includes('tests/reconciliation/reconciliation.test.mjs'));
+    const missingFullReconciliation = new Set([...existing].filter(file => file !== 'tests/reconciliation/reconciliation.test.mjs'));
+    assert.ok(suitePlan(suite, missingFullReconciliation).missingFiles.includes('tests/reconciliation/reconciliation.test.mjs'));
+    assert.deepEqual(plan.deferredDomainSuites, [{ suite: 'budgets', selector: 'nested-scopes', issue: 17, priority: 'P1', status: 'assigned_not_v1' }]);
+  }
+});
+
 test('runner rejects invalid and empty selectors without falling back to the full suite', async () => {
   for (const selector of ['not-a-suite', '']) {
     const result = spawnSync(process.execPath, ['scripts/run-suite.mjs', 'budgets', `--suite=${selector}`], {

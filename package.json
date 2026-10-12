@@ -64,6 +64,7 @@
     "test:budgets": "npm run build --silent && node scripts/with-postgres.mjs budgets",
     "test:contracts": "npm run build --silent && node scripts/run-suite.mjs contracts",
     "test:evidence": "npm run build --silent && node scripts/run-suite.mjs evidence",
+    "test:evidence:postgres": "npm run build --silent && node scripts/with-postgres.mjs evidence --suite=postgres",
     "test:exports": "npm run build --silent && node scripts/run-suite.mjs exports",
     "test:integration": "npm run build --silent && node scripts/with-postgres.mjs integration",
     "test:ledger": "npm run build --silent && node scripts/with-postgres.mjs ledger",

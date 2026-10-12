@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/reconciliation/CoverageDryRunSummarySchema/2.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "mode",
+    "status",
+    "runId",
+    "inputHash",
+    "ruleVersion",
+    "createdAt",
+    "sourceCount",
+    "ownerReference",
+    "nextAction",
+    "unavailableStages",
+    "financialEffects",
+    "billingAuthority"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0",
+      "type": "string"
+    },
+    "mode": {
+      "const": "coverage_only",
+      "type": "string"
+    },
+    "status": {
+      "const": "needs_review",
+      "type": "string"
+    },
+    "runId": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "inputHash": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "ruleVersion": {
+      "const": "ci07-coverage-1.0.0",
+      "type": "string"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "maxLength": 40,
+      "type": "string"
+    },
+    "sourceCount": {
+      "minimum": 1,
+      "maximum": 100,
+      "type": "integer"
+    },
+    "ownerReference": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "nextAction": {
+      "const": "review_coverage_and_supply_matching_and_apply_dependencies",
+      "type": "string"
+    },
+    "unavailableStages": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "matching",
+        "financialVariance",
+        "apply",
+        "settlement"
+      ],
+      "properties": {
+        "matching": {
+          "const": "unavailable",
+          "type": "string"
+        },
+        "financialVariance": {
+          "const": "unavailable",
+          "type": "string"
+        },
+        "apply": {
+          "const": "unavailable",
+          "type": "string"
+        },
+        "settlement": {
+          "const": "unavailable",
+          "type": "string"
+        }
+      }
+    },
+    "financialEffects": {
+      "const": false,
+      "type": "boolean"
+    },
+    "billingAuthority": {
+      "const": false,
+      "type": "boolean"
+    }
+  }
+}
