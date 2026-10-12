@@ -48,7 +48,8 @@ test('foundation suites name nonempty real evidence and integration/release fail
   assert.deepEqual(integration.requiredDomainSuites, requiredDomainSuites);
   assert.deepEqual(integration.deferredDomainSuites, deferredDomainSuites);
   assert.deepEqual(integration.deferredDomainSuites, [{ suite: 'budgets', selector: 'nested-scopes', issue: 17, priority: 'P1', status: 'assigned_not_v1' }]);
-  assert.ok(integration.missingFiles.some(file => file.startsWith('tests/accounting/')));
+  assert.equal(integration.missingFiles.includes('tests/accounting/accounting.test.mjs'), false, 'the actual accounting leaf is recognized by the integration plan');
+  assert.ok(integration.missingFiles.some(file => file.startsWith('tests/adapters/')), 'unimplemented assigned domains remain explicitly missing');
   assert.ok(existing.has('tests/recovery/recovery.test.mjs'), 'the implemented recovery leaf contributes real suite evidence');
   assert.equal(release.missingFiles.includes('tests/recovery/recovery.test.mjs'), false,
     'the actual recovery leaf is recognized by the release plan');

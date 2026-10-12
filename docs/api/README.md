@@ -1,6 +1,6 @@
 # API foundation
 
-The public package exposes typed schemas and ESM functions for metering, pricing, budget authorization and lifecycle, financial ledger, reporting, reconciliation, and export. V2 pricing implements immutable catalog writes and exact non-posting estimates through injected host ports. The ledger append and projection APIs are implemented as PostgreSQL-backed operations. Budget, reporting, reconciliation, and export leaves that have not landed remain typed unavailable operations. Pricing estimates do not authorize budget capacity, post provider charges, or send data to external services.
+The public package exposes typed schemas and ESM functions for metering, pricing, budget authorization and lifecycle, financial ledger, reporting, reconciliation, and export. V2 pricing implements immutable catalog writes and exact non-posting estimates through injected host ports. The ledger append and projection APIs (`appendLedgerEvent`, `rebuildLedgerProjection`) are implemented as PostgreSQL-backed operations. Leaves that have not landed remain typed unavailable operations: metering `ingestUsage`, the retained pricing 1.0.0 `estimate`, all budget operations, ledger `ingestFinancial`, reporting `querySummary`, reconciliation, and `exportSummary`. Pricing estimates do not authorize budget capacity, post provider charges, or send data to external services.
 
 ## Version and error behavior
 
@@ -23,6 +23,7 @@ Budget wrappers express authorized, denied, partial, and unavailable outcomes, h
 The financial ledger API is documented in [ledger.md](./ledger.md). It persists immutable versioned events, binds operational identities independently, records corrections and reversals by reference, and rebuilds deterministic as-of projections with exact decimal arithmetic. Reservation authorization remains a non-financial memo; linked cumulative consumption contributes its full effective amount, including an observed overrun.
 
 The pricing implementation and host-authority boundary are documented in [pricing.md](./pricing.md). The shared operation matrix, least-privilege rules, safe field projection, and current host integration gaps are documented in [security.md](./security.md). The real issuer adapter remains pending; current operation decisions and evidence resolvers are host-injected ports exercised with synthetic fixtures.
+The pricing implementation and host-authority boundary are documented in [pricing.md](./pricing.md). The manual CFO.ai input mapping and handoff for exports (CI-08X.4) is documented in [cfo-ai-handoff.md](./cfo-ai-handoff.md). Its real issuer adapter remains pending; current operation decisions and evidence resolvers are host-injected ports exercised with synthetic fixtures.
 
 ## Summary and export identity
 

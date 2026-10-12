@@ -197,7 +197,8 @@ async function applyCapabilityMigration(client, name) {
   }
 }
 
-async function createProjectionCapabilityDatabase(withUsageIntake) {
+// `through` is the number of migrations applied: 6 (legacy), 7 (accounting), or 8 (usage intake).
+async function createProjectionCapabilityDatabase(through) {
   const base = databaseConfigFromEnvironment('CI_TEST_DB');
   const name = `ci04a_projection_${randomUUID().replaceAll('-', '')}`;
   const guard = new Client(base);
@@ -230,7 +231,8 @@ async function createProjectionCapabilityDatabase(withUsageIntake) {
     for (const migration of migrations.slice(0, 6)) await applyCapabilityMigration(setup, migration);
     await setup.query('ALTER TABLE cost_intelligence.schema_migrations OWNER TO ci_finance_owner');
     await setup.query('ALTER VIEW cost_intelligence.foundation_health OWNER TO ci_finance_owner');
-    if (withUsageIntake) {
+    await setup.query('GRANT EXECUTE ON FUNCTION cost_intelligence.reject_ledger_projection_mutation() TO ci_finance_owner');
+    if (through > 6) {
       const migrationLogin = new Client({ ...migratorDatabaseConfigFromEnvironment(), database: name });
       await migrationLogin.connect();
       try {
@@ -242,17 +244,17 @@ async function createProjectionCapabilityDatabase(withUsageIntake) {
         assert.deepEqual(role.rows[0], {
           current_user: role.rows[0].current_user, rolsuper: false, rolcreatedb: false,
           rolcreaterole: false, rolbypassrls: false, is_migrator: true,
-        }, '0007 capability setup uses a separate restricted migration login');
+        }, 'post-0006 capability setup uses a separate restricted migration login');
         await migrationLogin.query('SET ROLE ci_finance_migrator');
         await migrationLogin.query('SET ROLE ci_finance_owner');
-        await applyCapabilityMigration(migrationLogin, migrations[6]);
+        for (const migration of migrations.slice(6, through)) await applyCapabilityMigration(migrationLogin, migration);
       } finally {
         await migrationLogin.end();
       }
     }
     const health = await setup.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), withUsageIntake ? 7 : 6);
+    assert.equal(Number(health.rows[0].required_migrations_present), through);
     await setup.end();
     setup = undefined;
     return { name, base };
@@ -367,8 +369,8 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(postgresVersion.slice(0, 2), '16', 'ledger acceptance must run on PostgreSQL 16');
     const health = await pool.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 7,
-      'the additive usage intake migration extends the complete foundation set');
+    assert.equal(Number(health.rows[0].required_migrations_present), 8,
+      'the additive pricing history, accounting projection, and usage intake migrations extend the complete foundation set');
 
     const scope = makeScope('union');
     const eventCases = [
@@ -1915,12 +1917,12 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
   }
 });
 
-test('legacy ledger-only projection omits unavailable intake coverage and preserves its content address', async () => {
+for (const [through, label] of [[6, '0006'], [7, '0007 accounting']]) test(`legacy ledger-only ${label} projection omits unavailable intake coverage and preserves its content address`, async () => {
   let database;
   let runtime;
   let observer;
   try {
-    database = await createProjectionCapabilityDatabase(false);
+    database = await createProjectionCapabilityDatabase(through);
     runtime = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), database: database.name, max: 3 });
     observer = new Client({ ...databaseConfigFromEnvironment('CI_TEST_DB'), database: database.name });
     await observer.connect();
@@ -1942,7 +1944,7 @@ test('legacy ledger-only projection omits unavailable intake coverage and preser
     assert.equal(projected.ok, true, projected.ok ? '' : projected.error.code);
     if (!projected.ok) return;
     assert.equal(Object.hasOwn(projected.value, 'unresolvedIntake'), false,
-      'pre-0007 schema leaves intake coverage unavailable instead of certifying queried zero');
+      'pre-intake schema leaves intake coverage unavailable instead of certifying queried zero');
     assert.equal(projected.value.eventCount, 1);
     assert.equal(amountRow(projected.value, 'expense', 'direct_cost', 'USD')?.totalAmount, '0.37');
 
@@ -1972,7 +1974,7 @@ test('legacy ledger-only projection omits unavailable intake coverage and preser
            ('unknown_economic_exposure_count', 'quarantined_observation_count', 'awaiting_evidence_attempt_count', 'unposted_attempt_count'))
          OR (table_name='financial_projection_quantities' AND column_name='included_in'))`,
     );
-    assert.equal(storedShape.rows[0].count, 0, 'the legacy database remains on its genuine 0006 schema');
+    assert.equal(storedShape.rows[0].count, 0, 'the legacy database remains on its genuine pre-intake schema');
   } finally {
     await runtime?.end().catch(() => undefined);
     await observer?.end().catch(() => undefined);
@@ -1980,12 +1982,12 @@ test('legacy ledger-only projection omits unavailable intake coverage and preser
   }
 });
 
-test('partial current 0007 tables or columns fail projection without hiding unknown intake exposure', async () => {
+test('partial current 0008 tables or columns fail projection without hiding unknown intake exposure', async () => {
   let database;
   let runtime;
   let observer;
   try {
-    database = await createProjectionCapabilityDatabase(true);
+    database = await createProjectionCapabilityDatabase(8);
     runtime = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), database: database.name, max: 3 });
     observer = new Client({ ...databaseConfigFromEnvironment('CI_TEST_DB'), database: database.name });
     await observer.connect();
@@ -2031,7 +2033,7 @@ test('partial current 0007 tables or columns fail projection without hiding unkn
       assert.deepEqual(authoritative.value.unresolvedIntake, {
         unknownEconomicExposureCount: 1, quarantinedObservationCount: 0,
         awaitingEvidenceAttemptCount: 1, unpostedAttemptCount: 1,
-      }, 'the authoritative current-0007 projection exposes durable unknown economic exposure as of the observation');
+      }, 'the authoritative current-0008 projection exposes durable unknown economic exposure as of the observation');
     }
     const authoritativeSnapshot = await observer.query(
       `SELECT unknown_economic_exposure_count, quarantined_observation_count,
@@ -2056,7 +2058,7 @@ test('partial current 0007 tables or columns fail projection without hiding unkn
 
     await observer.query('ALTER TABLE cost_intelligence.usage_intake_inbox DROP COLUMN provenance_sha256');
     const missingColumnResult = await rebuildLedgerProjection(projectionRequest('missing-intake-column'), ports);
-    assert.equal(missingColumnResult.ok, false, 'a missing 0007 source-fact column cannot pass as a complete intake projection');
+    assert.equal(missingColumnResult.ok, false, 'a missing 0008 source-fact column cannot pass as a complete intake projection');
     if (!missingColumnResult.ok) assert.equal(missingColumnResult.error.code, 'SOURCE_UNAVAILABLE');
 
     const after = await observer.query(

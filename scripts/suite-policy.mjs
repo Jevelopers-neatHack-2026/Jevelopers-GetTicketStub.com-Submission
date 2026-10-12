@@ -20,7 +20,7 @@ const leafPaths = Object.freeze({
   adapters: ['tests/adapters/adapters.test.mjs'],
   budgets: ['tests/budgets/authorization.test.mjs', 'tests/budgets/contention.test.mjs', 'tests/budgets/lifecycle.test.mjs'],
   contracts: ['tests/contracts/shared-contracts.test.mjs', 'tests/contracts/api-contract-shapes.test.mjs'],
-  exports: ['tests/exports/public-exports.test.mjs'],
+  exports: ['tests/exports/public-exports.test.mjs', 'tests/exports/csv-encoding.test.mjs'],
   integration: [...foundationTestFiles, ...databaseTestFiles],
   ledger: ['tests/ledger/ledger.test.mjs'],
   metering: ['tests/metering/metering.test.mjs'],

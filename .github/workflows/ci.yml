@@ -29,6 +29,8 @@ jobs:
         run: npm run build
       - name: Verify contract fixtures
         run: npm run test:contracts
+      - name: Verify deterministic accounting projection
+        run: npm run test:accounting -- --offline
       - name: Verify package exports
         run: npm run test:exports
       - name: Verify immutable pricing and exact estimates

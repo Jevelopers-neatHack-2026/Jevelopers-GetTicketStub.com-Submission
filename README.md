@@ -1,52 +1,95 @@
+<a href="https://github.com/Jevelopers-neatHack-2026/cost-intelligence">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-night.svg">
+    <img alt="cost-intelligence — Pricing, budgets and ledger. TicketStub banner showing a curling receipt tape with ruled columns and a small balance glyph." src="docs/assets/readme/banner-day.svg" width="100%">
+  </picture>
+</a>
+
 # cost-intelligence
 
-TypeScript foundation for usage-cost, budget, ledger, reconciliation, summary, and export boundaries.
+TypeScript finance package for TicketStub usage pricing, budgets, the financial ledger, reconciliation, summaries and exports.
 
-## Current delivery state
+<p>
+  <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: local foundation, pricing v2 and ledger implemented locally" src="https://img.shields.io/badge/status-local%20foundation-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href=".node-version"><img alt="Node.js 22.23.3" src="https://img.shields.io/badge/node-22.23.3-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href="postgres-test-image.json"><img alt="PostgreSQL 16, pinned by digest for tests" src="https://img.shields.io/badge/postgresql-16-7CC6D2?style=flat-square&labelColor=17140F"></a>
+</p>
 
-This branch contains the Node/TypeScript package, typed versioned boundaries, generated local schemas, a checksummed PostgreSQL migration foundation, and local offline verification. The financial domain operations remain unavailable: public methods return typed errors until the corresponding accounting, metering, pricing, budget, reporting, reconciliation, and adapter leaves are implemented and accepted.
+[Status](#status) · [Quickstart](#quickstart) · [Checks](#checks) · [Docs](#docs) · [Related](#related-repositories)
 
-The installed `@jevelopers/shared-contracts@0.3.0` artifact is pinned as a **proposal-only test dependency**. It is a draft producer candidate with unresolved finance findings FC-001 through FC-004 and no accepted consumer handoff. See [`contracts.lock.json`](contracts.lock.json) and [API compatibility](docs/api/compatibility.md). Local use proves the pinned artifact is consumed and checked; it does not make it canonical or release-ready.
+## Status
 
-The repository is public. Commit only sanitized fixtures and reports; do not add credentials, production records, connection strings, private customer data, or local absolute paths.
+Implemented locally, exercised with synthetic fixtures against PostgreSQL 16:
 
-## Toolchain and verification
+- **Pricing v2** — `registerPricingRuleV2`, `registerRateCardV2`, `registerFxRateV2` and `estimateV2`: immutable scoped catalog versions and exact, non-posting estimates through host-injected authority, clock and database ports. See [pricing](docs/api/pricing.md).
+- **Financial ledger** — `appendLedgerEvent` and `rebuildLedgerProjection`: append-only PostgreSQL events and deterministic as-of projections. See [ledger](docs/api/ledger.md).
 
-The package is Node.js 22.23.3, npm 10.9.9, TypeScript 5.9.3, ESM, and PostgreSQL 16 for database-backed suites. Use the checked-in `.node-version` and npm lockfile. Hosts running Node 23 or later are outside the package engine range; install the pinned Node/npm pair with a version manager rather than changing global host configuration. When upgrading the runtime, update `.node-version`, `engines`, `packageManager`, and the lockfile together, then rerun the full command contract below and the packed-consumer check. The PostgreSQL image stays pinned by digest independently of the host's local Docker version.
+Still typed unavailable: after validation and scope checks, these public methods always return an error result:
+
+| Module | Methods | Error code |
+| --- | --- | --- |
+| metering | `ingestUsage` | `SOURCE_UNAVAILABLE` |
+| pricing (1.0.0) | `estimate` | `PRICING_UNKNOWN` |
+| budgets | `authorize`, `markDispatched`, `settle`, `release`, `changeBudget` | `BUDGET_UNAVAILABLE` |
+| budgets | `recordExpenseAdjustment` | `SOURCE_UNAVAILABLE` |
+| ledger | `ingestFinancial` | `SOURCE_UNAVAILABLE` |
+| reporting | `querySummary` | `SOURCE_UNAVAILABLE` |
+| reconciliation | `startReconciliation`, `getReconciliation` | `RECONCILIATION_PENDING` |
+| integrations | `exportSummary` | `SOURCE_UNAVAILABLE` |
+
+Pending, and not claimed here:
+
+- **Financial acceptance.** The FIN, BUD, DASH-04 and SPN-03 criteria in the [acceptance view](docs/architecture/ACCEPTANCE.md) are all still `planned` in the integration-evals master checklist; none is verified. `test:integration` and `test:release` fail closed until the missing domain suites land ([details](docs/development.md#suite-selectors-and-gates)).
+- **Host integration.** Pricing's real Finance issuer adapter and the ledger's external trusted-context handoff are still pending.
+- **Shared contracts.** `@jevelopers/shared-contracts@0.3.0` is pinned as a **proposal-only** dependency with unresolved finance findings FC-001 to FC-004 and no accepted consumer handoff. Local use proves the pinned artifact is consumed and checked; it does not make it canonical or release-ready. See [`contracts.lock.json`](contracts.lock.json) and [compatibility](docs/api/compatibility.md).
+
+> [!WARNING]
+> This repository is public. Commit only sanitized fixtures and reports; do not add credentials, production records, connection strings, private customer data, or local absolute paths.
+
+## Quickstart
+
+Requires Node.js 22.23.3 and npm 10.9.9 ([`.node-version`](.node-version), `engine-strict`). Database suites also need Docker with a running daemon.
 
 ```sh
 npm ci
 npm run typecheck
 npm run build
-npm run test:contracts
-npm run test:exports
-npm run test:migrations -- --offline
-npm run test:smoke -- --offline
-npm run test:traceability
 ```
 
-The public script names are `test:accounting`, `test:adapters`, `test:budgets`, `test:contracts`, `test:exports`, `test:integration`, `test:ledger`, `test:metering`, `test:migrations`, `test:pricing`, `test:reconciliation`, `test:recovery`, `test:release`, `test:reporting`, `test:security`, `test:smoke`, `test:traceability`, and `test:unit`. Leaf suites that are not implemented yet deliberately exit nonzero with an evidence manifest; integration and release use `blocked` status until all required leaf implementations and nonempty suites are present.
+`npm run build` compiles to `dist/` and regenerates the versioned JSON Schemas under [`schemas/`](schemas/) and [`docs/api/schema-index.json`](docs/api/schema-index.json).
 
-Docker Engine with a working local daemon is required for database-backed tests. The lifecycle wrapper creates a PostgreSQL 16 container from the immutable digest in [`postgres-test-image.json`](postgres-test-image.json), binds its random port to loopback, generates a random test-only database password in memory, waits for readiness, marks the disposable database, applies checksummed migrations, runs the selected suite, retains sanitized logs, and removes the container in `finally`. The password is not written to logs or manifests. `--offline` means tests do not call providers or external accounting services; Docker may fetch the pinned image when it is not cached.
+## Checks
 
-`npm run test:migrations -- --offline` checks both an empty database and a previous-foundation fixture containing migration `0001`. It creates a uniquely named sibling database for the previous fixture, applies the pending upgrade, verifies health and durable records from a separate worker process, and drops that sibling database in cleanup. A `CI_TEST_DATABASE_URL` override is accepted only after the named target contains `cost-intelligence-disposable-v1`; the wrapper never resets or deletes that target. The override must allow connection to the `postgres` maintenance database and `CREATEDB`/`DROP DATABASE` for the temporary previous-fixture check. Test processes receive host/user/database fields and a separate password variable, not the original connection URL. If creation or cleanup is not permitted, the migration suite fails closed and reports the safe reason.
+```sh
+npm run test:contracts
+npm run test:exports
+npm run test:smoke -- --offline
+npm run test:traceability
+npm run test:pricing -- --offline      # Docker: PostgreSQL 16
+npm run test:ledger -- --offline       # Docker: PostgreSQL 16
+npm run test:migrations -- --offline   # Docker: PostgreSQL 16
+```
 
-The selector contract currently defines budget leaves: `npm run test:budgets -- --suite=authorization`, `--suite=contention`, `--suite=lifecycle`, or `--suite=nested-scopes`; comma-separated distinct selectors may be combined. Nested scopes is the assigned P1 issue #17 and is explicitly deferred from the default v1 integration/release gate per issue #18; manifests record that deferral, while an explicit nested-scopes selector still fails until its test lands. An empty, repeated, unknown, or unsupported selector fails without falling back to the full suite. A recognized selector whose required leaf has not landed also fails and records the missing file. The runner checks Node 22 structured test events separately for every required file, ignores the Node file wrapper, and requires each file to register and complete at least one real test case. Any skipped, todo, cancelled, failed, empty, or missing required file fails the gate; an unrelated passing file cannot satisfy it. See the [Node.js 22 test runner event API](https://nodejs.org/download/release/v22.23.3/docs/api/test.html#test-runner-events) used by the custom reporter.
+`--offline` means no provider or accounting calls; Docker may pull the digest-pinned image. The [development guide](docs/development.md) covers the full suite inventory, the PostgreSQL lifecycle, the `CI_TEST_DATABASE_URL` override, budget selectors (including deferred nested scopes, issues [#17](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/17) and [#18](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/18)) and the packed-consumer check.
 
-`npm run test:integration -- --offline` and `npm run test:release -- --offline` currently fail closed because the required financial leaf suites are absent. Their manifests list the missing suites. They must remain blocked until real domain tests and implementations land; missing or empty suites cannot pass. `npm pack` is also tested in a clean temporary consumer with offline installation, runtime imports for every public subpath, and strict NodeNext declaration compilation; the shared-contract proposal and TypeBox runtime dependencies are bundled from the pinned local install.
+## Docs
 
-## Package and boundaries
+| Document | Covers |
+| --- | --- |
+| [Development and verification](docs/development.md) | Toolchain pins, commands, suites, database lifecycle |
+| [API notes](docs/api/README.md) | Versions, errors, money, scope, schema artifacts |
+| [Pricing](docs/api/pricing.md) · [Ledger](docs/api/ledger.md) | Implemented v2 pricing and ledger behavior |
+| [Compatibility](docs/api/compatibility.md) | Shared-contract pin, FC-001 to FC-004, upgrade gate |
+| [Ownership](docs/architecture/OWNERSHIP.md) · [Decisions](docs/architecture/DECISIONS.md) · [Acceptance](docs/architecture/ACCEPTANCE.md) | Responsibilities, decisions, acceptance IDs |
 
-All modules export typed request/result schemas and ESM entry points under `src/`. Their current implementation status and known proposal gaps are described in [API notes](docs/api/README.md), [compatibility](docs/api/compatibility.md), and [architecture decisions](docs/architecture/DECISIONS.md). Generated JSON Schema documents and their SHA-256 index are under `schemas/cost-intelligence/1.0.0/` and `docs/api/schema-index.json`.
+## Related repositories
 
-Sanitized finance-owned request and response proposal examples live in [`fixtures/api/`](fixtures/api/); contract and smoke tests consume the same files. [`examples/worker-composition.ts`](examples/worker-composition.ts) shows typed in-process composition with injected trusted context, clock, storage, and provider-source ports. It does not start a service, and operations remain fail-closed until their domain leaves are implemented.
+- [shared-contracts](https://github.com/Jevelopers-neatHack-2026/shared-contracts): producer of the pinned proposal schemas
+- [team-dashboard](https://github.com/Jevelopers-neatHack-2026/team-dashboard): finance administration module; planned consumer of finance read projections
+- [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals): authoritative acceptance checklist and evidence
+- [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com): host application and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
 
-The finance-owned summary wrapper carries the query timezone, as-of instant, immutable snapshot identity, query and summary hashes, and source watermarks around the shared `FinancialSummary`. It also defines proposed scoped filters for repository, workstream, provider, model, workflow, job, feature category, and permitted order/customer identifiers. Query execution and export delivery are not implemented.
+## Contributing
 
-## Planning references
-
-- [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
-- [Relevant acceptance criteria](docs/architecture/ACCEPTANCE.md)
-- [Architecture decisions and pending handoffs](docs/architecture/DECISIONS.md)
-- [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
-- [Contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md)
+Follow the organization [contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). No license file is present in this repository.
