@@ -10,6 +10,7 @@ import {
   ProdigiCallbackError,
   ProdigiCallbackReconciler,
   ProdigiSandboxClient,
+  ProdigiSandboxError,
   projectOrderResponse
 } from "../dist/index.js";
 import {
@@ -227,7 +228,8 @@ add("poll, deadline, interval and retention settings are bounded", () => {
     { requestDeadlineMs: 49 }, { requestDeadlineMs: 10_001 }, { readTimeoutMs: 99 }, { minReadIntervalMs: -1 }, { replayTtlMs: 59_999 },
     { maxPendingJobs: 0 }, { scheduler: { schedule() {} } }, { readLimiter: {} }, { pendingJobGraceMs: 999 }, { untrackedAckAfterMs: 59_999 },
     { jobRetryPolicy: { maxAttempts: 0 } }, { jobRetryPolicy: { horizonMs: 999 } }, { jobRetryPolicy: { initialDelayMs: 5000, maxDelayMs: 100 } },
-    { onReconcileAbandoned: "not a function" }
+    { onReconcileAbandoned: "not a function" }, { workerClockSkewMs: 60_001 },
+    { scheduler: { durable: true, schedule() {} } }
   ]) {
     assert.throws(() => new ProdigiCallbackReconciler({ ...base, ...extra }), (e) => e.code === "invalid_config");
   }
@@ -272,16 +274,15 @@ add("malformed CloudEvents are rejected", () => {
     cloudEvent({ time: "yesterday" }),
     encoder.encode(JSON.stringify({ specversion: "1.0", type: STAGE("InProgress"), source: "https://api.sandbox.prodigi.com/v4.0/Orders/", id: "evt_1", time: "2026-10-10T10:31:06Z", subject: FIXTURE_ORDER_ID, data: { id: "ord_999" } })),
     encoder.encode(JSON.stringify({ specversion: "1.0", type: STAGE("InProgress"), source: "https://api.sandbox.prodigi.com/v4.0/Orders/", id: "evt_1", time: "2026-10-10T10:31:06Z", subject: FIXTURE_ORDER_ID, data: { order: { id: "ord_999" } } })),
-    // Source must be the documented sandbox origin: live, other hosts and a missing source are invalid.
-    cloudEvent({ extra: { source: "https://api.prodigi.com/v4.0/Orders/" } }),
-    cloudEvent({ extra: { source: "http://api.prodigi.com/v4.0/Orders/" } }),
-    cloudEvent({ extra: { source: "https://api.sandbox.prodigi.com.evil.example/v4.0/Orders/" } }),
-    cloudEvent({ extra: { source: "https://evil.example/v4.0/Orders/" } }),
     cloudEvent({ extra: { source: undefined } }),
     new Uint8Array([0xff, 0xfe])
   ];
   for (const body of bad) {
     assert.throws(() => parseProdigiCallbackEvent(body), (e) => e instanceof ProdigiCallbackError && e.code === "callback_invalid");
+  }
+  // A well-formed event whose source is not the documented sandbox origin has its own code (host answers 503 and logs).
+  for (const source of ["https://api.prodigi.com/v4.0/Orders/", "http://api.prodigi.com/v4.0/Orders/", "https://api.sandbox.prodigi.com.evil.example/v4.0/Orders/", "https://evil.example/v4.0/Orders/"]) {
+    assert.throws(() => parseProdigiCallbackEvent(cloudEvent({ extra: { source } })), (e) => e instanceof ProdigiCallbackError && e.code === "callback_source_mismatch", source);
   }
 });
 
@@ -411,7 +412,7 @@ add("H1: failed reads return a retryable 503, record nothing, schedule backoff, 
   assert.equal(failed.errorCode, "provider_unavailable");
   assert.equal(failed.scheduled, true);
   assert.equal(jobs.length, 1);
-  assert.equal(jobs[0].attempt, 2);
+  assert.equal(jobs[0].attempt, 1, "job attempt is a sequence number");
   assert.equal(store.stats().replayRecords, 0);
   assert.deepEqual(sleeps, [], "no backoff sleep runs inside the request");
   assert.equal(http.calls.length, 1);
@@ -435,7 +436,7 @@ add("H1: when the request read fails, the scheduled job retries with jittered ba
   assert.equal(second.status, "rescheduled");
   assert.equal(second.errorCode, "rate_limited");
   assert.equal(jobs.length, 2);
-  assert.equal(jobs[1].attempt, 3);
+  assert.equal(jobs[1].attempt, 2);
   // The jittered delay (cap 400 ms) is floored at the per-order read interval (5 s since the last read).
   assert.equal(jobs[1].delayMs, 5000);
   clock.advance(6000);
@@ -543,7 +544,8 @@ add("M1: 20 documented callbacks against a failing provider give at most maxAtte
     clock.advance(6000);
     await reconciler.runScheduledReconciliation(jobs[i]);
   }
-  assert.ok(http.calls.length <= 4, `reads: ${http.calls.length}`);
+  // One in-request read plus at most maxAttempts (4) background reads.
+  assert.ok(http.calls.length <= 5, `reads: ${http.calls.length}`);
   assert.deepEqual(sleeps, []);
 });
 
@@ -1198,6 +1200,235 @@ add("nit: untracked callbacks are 503 while fresh and 200 (untracked_expired) af
   assert.equal(http.calls.length, 0);
   const off = harness({ extra: { untrackedAckAfterMs: 0 } });
   assert.equal((await deliver(off.reconciler, cloudEvent({ id: "evt_old", time: iso(START - 25 * 3600 * 1000) }))).outcome, "not_tracked");
+});
+
+// ---------------------------------------------------------------------------
+// Final review F1-F4
+
+const SHIPMENT = { id: "shp_1", status: "Shipped", carrier: { name: "FixtureCarrier" }, tracking: { number: "TRACK1" }, dispatchDate: "2026-10-10T12:00:00.000Z" };
+
+function flagReader({ lastUpdated = "2026-10-10T11:00:00.000Z" } = {}) {
+  const ctl = { shipped: false, gate: null, reads: 0, fail: null };
+  ctl.reader = {
+    async getOrder() {
+      ctl.reads += 1;
+      const snapshot = ctl.shipped;
+      if (ctl.gate !== null) await ctl.gate.promise;
+      if (ctl.fail !== null) throw new ProdigiSandboxError(ctl.fail, "not_dispatched");
+      return observation({ lastUpdated, shipments: snapshot ? [SHIPMENT] : [] });
+    }
+  };
+  return ctl;
+}
+
+add("F1: a genuine shipment merged into a forged claim's last read gets its own budget, is read and stored", async () => {
+  const ctl = flagReader();
+  const { reconciler, clock, jobs, abandoned, store } = harness({ reader: ctl.reader, queue: recordingScheduler({ durable: true }), extra: { jobRetryPolicy: { maxAttempts: 2 } } });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_forged", type: STAGE("Complete"), time: iso(clock.now()) }))).recommendedHttpStatus, 202);
+  clock.advance(10_000);
+  assert.equal((await reconciler.runScheduledReconciliation(jobs.shift())).status, "rescheduled", "job 1 reads InProgress");
+  clock.advance(10_000);
+  ctl.gate = gate();
+  const running = reconciler.runScheduledReconciliation(jobs.shift());
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  clock.advance(500);
+  ctl.shipped = true;
+  const genuine = await deliver(reconciler, cloudEvent({ id: "evt_shipment", type: "com.prodigi.order.shipments#Shipped", time: iso(clock.now()) }));
+  assert.equal(genuine.outcome, "deferred");
+  assert.equal(genuine.recommendedHttpStatus, 202);
+  ctl.gate.open();
+  ctl.gate = null;
+  const lastOfForged = await running;
+  assert.equal(lastOfForged.status, "rescheduled", "the uncovered receipt is never abandoned on the forged chain's budget");
+  assert.deepEqual(abandoned, []);
+  // The follow-up read (started after the shipment's receipt) stores the shipment.
+  const next = jobs.shift();
+  clock.advance(next.delayMs);
+  await reconciler.runScheduledReconciliation(next);
+  assert.deepEqual([...(await store.getOrder({ scope: SCOPE, orderId: FIXTURE_ORDER_ID })).shipmentIds], ["shp_1"]);
+  // Only the unconfirmed claim remains; it is reported as such once its budget is spent.
+  while (jobs.length > 0) {
+    const job = jobs.shift();
+    clock.advance(job.delayMs);
+    await reconciler.runScheduledReconciliation(job);
+  }
+  assert.equal(abandoned.length, 1);
+  assert.equal(abandoned[0].reason, "claim_unconfirmed");
+  assert.equal(abandoned[0].requiredStage, "Complete");
+  assert.equal(abandoned[0].coverAfter, iso(START + 20_500), "the shipment's receipt was covered before the claim was reported");
+});
+
+add("F1: a durable scheduler without onReconcileAbandoned is refused", () => {
+  const base = { mode: "sandbox", trustedScope: SCOPE, reader: { async getOrder() {} }, store: createInMemoryProdigiReconciliationStore() };
+  assert.throws(() => new ProdigiCallbackReconciler({ ...base, scheduler: { durable: true, schedule() {} } }), (e) => e.code === "invalid_config");
+  assert.doesNotThrow(() => new ProdigiCallbackReconciler({ ...base, scheduler: { durable: true, schedule() {} }, onReconcileAbandoned() {} }));
+  assert.doesNotThrow(() => new ProdigiCallbackReconciler({ ...base, scheduler: { durable: false, schedule() {} } }));
+});
+
+add("F2: duplicate delivery of one job on two workers fires the abandon hook exactly once", async () => {
+  const clock = mutableClock();
+  const store = createInMemoryProdigiReconciliationStore({ clock });
+  const queue = sharedDurableQueue();
+  const abandoned = [];
+  const ctl = flagReader();
+  const a = harness({ store, clock, queue, abandoned, reader: ctl.reader });
+  const b = harness({ store, clock, queue, abandoned, reader: ctl.reader });
+  await a.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(a.reconciler, cloudEvent({ id: "evt_d1" }));
+  clock.advance(1000);
+  assert.equal((await deliver(a.reconciler, cloudEvent({ id: "evt_d2" }))).outcome, "deferred");
+  clock.advance(10_000);
+  ctl.fail = "authentication_failed";
+  ctl.gate = gate();
+  const job = queue.jobs.shift();
+  const runs = [a.reconciler.runScheduledReconciliation(job), b.reconciler.runScheduledReconciliation(job)];
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  ctl.gate.open();
+  const results = await Promise.all(runs);
+  assert.equal(abandoned.length, 1, `hook calls: ${abandoned.length}`);
+  assert.equal(abandoned[0].reason, "read_failed");
+  assert.ok(abandoned[0].dedupeKey.startsWith(`${FIXTURE_ORDER_ID}|`));
+  const statuses = results.map((r) => r.status).sort();
+  assert.equal(statuses.filter((status) => status === "reconcile_abandoned").length, 1, statuses.join(","));
+  assert.ok(["abandon_pending", "obsolete"].includes(statuses.find((status) => status !== "reconcile_abandoned")), statuses.join(","));
+  assert.equal(store.stats().pendingReconciliations, 0);
+  // Any check job left behind finds nothing to do.
+  for (const left of queue.jobs.splice(0)) assert.equal((await a.reconciler.runScheduledReconciliation(left)).status, "obsolete");
+  assert.equal(abandoned.length, 1);
+});
+
+add("F2: a throwing hook keeps the obligation; the retried job calls it again, then deletes the record", async () => {
+  const ctl = flagReader();
+  const calls = [];
+  let failHook = true;
+  const { reconciler, clock, jobs, store } = harness({
+    reader: ctl.reader,
+    queue: recordingScheduler({ durable: true }),
+    extra: { onReconcileAbandoned: (event) => { calls.push(event.reason); if (failHook) throw new Error("poller enqueue failed"); } }
+  });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(reconciler, cloudEvent({ id: "evt_h1" }));
+  clock.advance(1000);
+  await deliver(reconciler, cloudEvent({ id: "evt_h2" }));
+  clock.advance(10_000);
+  ctl.fail = "authentication_failed";
+  const job = jobs.shift();
+  await assert.rejects(reconciler.runScheduledReconciliation(job), /poller enqueue failed/u);
+  assert.equal(store.stats().pendingReconciliations, 1, "the record is kept for the retry");
+  failHook = false;
+  const retried = await reconciler.runScheduledReconciliation(job);
+  assert.equal(retried.status, "reconcile_abandoned");
+  assert.equal(retried.reason, "read_failed");
+  assert.deepEqual(calls, ["read_failed", "read_failed"]);
+  assert.equal(store.stats().pendingReconciliations, 0);
+  assert.equal((await reconciler.runScheduledReconciliation(job)).status, "obsolete");
+  assert.equal(calls.length, 2);
+});
+
+add("F2: a covering read after a failed hook suppresses the next hook call", async () => {
+  const ctl = flagReader();
+  const calls = [];
+  const { reconciler, clock, jobs, store } = harness({
+    reader: ctl.reader,
+    queue: recordingScheduler({ durable: true }),
+    extra: { onReconcileAbandoned: (event) => { calls.push(event.reason); throw new Error("down"); } }
+  });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(reconciler, cloudEvent({ id: "evt_s1" }));
+  clock.advance(1000);
+  await deliver(reconciler, cloudEvent({ id: "evt_s2" }));
+  clock.advance(10_000);
+  ctl.fail = "authentication_failed";
+  const job = jobs.shift();
+  await assert.rejects(reconciler.runScheduledReconciliation(job));
+  // Credentials fixed; the poller's read covers the record.
+  ctl.fail = null;
+  clock.advance(10_000);
+  ctl.shipped = true;
+  assert.equal((await reconciler.reconcileOrder(FIXTURE_ORDER_ID)).status, "applied");
+  assert.equal(store.stats().pendingReconciliations, 0);
+  assert.equal((await reconciler.runScheduledReconciliation(job)).status, "obsolete");
+  assert.deepEqual(calls, ["read_failed"]);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_s2" }))).outcome, "replayed");
+});
+
+add("F3: limiter refusals reschedule without spending reads; only the horizon bounds them", async () => {
+  const clock = mutableClock();
+  let deny = false;
+  const real = createProdigiReadLimiter({ clock });
+  const limiter = { tryAcquire: (key) => (deny ? null : real.tryAcquire(key)) };
+  const http = recordingHttp(Array.from({ length: 10 }, () => readResponse()));
+  const { reconciler, jobs, abandoned } = harness({ clock, http, queue: recordingScheduler({ durable: true }), extra: { readLimiter: limiter, jobRetryPolicy: { maxAttempts: 2, horizonMs: 120_000 } } });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(reconciler, cloudEvent({ id: "evt_l1" }));
+  clock.advance(1000);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_l2" }))).outcome, "deferred");
+  deny = true;
+  const statuses = [];
+  for (let i = 0; i < 5; i += 1) {
+    const job = jobs.shift();
+    clock.advance(job.delayMs);
+    statuses.push((await reconciler.runScheduledReconciliation(job)).status);
+  }
+  assert.deepEqual(statuses, Array(5).fill("rescheduled"), "five refusals exceed maxAttempts (2) without abandoning");
+  assert.equal(http.calls.length, 1);
+  deny = false;
+  const job = jobs.shift();
+  clock.advance(job.delayMs);
+  assert.equal((await reconciler.runScheduledReconciliation(job)).status, "unchanged");
+  assert.equal(http.calls.length, 2);
+  assert.deepEqual(abandoned, []);
+  // Persistent refusal ends at the horizon, with zero reads spent.
+  const always = harness({ clock: mutableClock(), responses: [readResponse()], queue: recordingScheduler({ durable: true }), extra: { readLimiter: { tryAcquire: () => null }, jobRetryPolicy: { maxAttempts: 2, horizonMs: 60_000 } } });
+  await always.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  assert.equal((await deliver(always.reconciler, cloudEvent({ id: "evt_l3" }))).outcome, "deferred");
+  let last;
+  for (let i = 0; i < 200 && always.jobs.length > 0; i += 1) {
+    const next = always.jobs.shift();
+    always.clock.advance(next.delayMs);
+    last = await always.reconciler.runScheduledReconciliation(next);
+  }
+  assert.equal(last.status, "reconcile_abandoned");
+  assert.equal(last.reason, "horizon_exceeded");
+  assert.equal(always.abandoned[0].attempts, 0);
+  assert.equal(always.http.calls.length, 0);
+});
+
+add("F4: a worker whose clock lags 2 s behind reads rather than skipping a callback", async () => {
+  const real = { t: START };
+  const clockB = { now: () => real.t };
+  const clockA = { now: () => real.t - 2000 };
+  const store = createInMemoryProdigiReconciliationStore({ clock: clockB });
+  const ctl = flagReader();
+  const b = harness({ store, clock: clockB, reader: ctl.reader });
+  const a = harness({ store, clock: clockA, reader: ctl.reader });
+  await b.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  real.t += 60_000;
+  assert.equal((await b.reconciler.reconcileOrder(FIXTURE_ORDER_ID)).status, "applied");
+  real.t += 700;
+  ctl.shipped = true;
+  real.t += 300;
+  const result = await deliver(a.reconciler, cloudEvent({ id: "evt_skewed", type: "com.prodigi.order.shipments#Shipped", time: iso(real.t) }));
+  assert.equal(result.outcome, "reconciled");
+  assert.equal(ctl.reads, 2);
+  assert.deepEqual([...(await store.getOrder({ scope: SCOPE, orderId: FIXTURE_ORDER_ID })).shipmentIds], ["shp_1"]);
+  // With the margin disabled, the same sequence would be (wrongly) skipped.
+  const store2 = createInMemoryProdigiReconciliationStore({ clock: clockB });
+  const ctl2 = flagReader();
+  const b2 = harness({ store: store2, clock: clockB, reader: ctl2.reader, extra: { workerClockSkewMs: 0 } });
+  const a2 = harness({ store: store2, clock: clockA, reader: ctl2.reader, extra: { workerClockSkewMs: 0 } });
+  await b2.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await b2.reconciler.reconcileOrder(FIXTURE_ORDER_ID);
+  real.t += 1000;
+  assert.equal((await deliver(a2.reconciler, cloudEvent({ id: "evt_skew0" }))).outcome, "already_reconciled");
+});
+
+add("nit: a source mismatch is callback_source_mismatch (host 503 + log), checked before any store access or read", async () => {
+  const { reconciler, http } = harness({ responses: [readResponse()] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await rejectsWith(deliver(reconciler, cloudEvent({ extra: { source: "https://api.prodigi.com/v4.0/Orders/" } })), "callback_source_mismatch");
+  assert.equal(http.calls.length, 0);
 });
 
 add("the suite made no network request", () => {

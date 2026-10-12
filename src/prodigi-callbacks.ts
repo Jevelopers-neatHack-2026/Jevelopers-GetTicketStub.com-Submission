@@ -49,6 +49,7 @@ export type ProdigiCallbackErrorCode =
   | "callback_token_unavailable"
   | "callback_invalid"
   | "callback_oversized"
+  | "callback_source_mismatch"
   | "invalid_input"
   | "store_unavailable"
   | "deadline_exceeded";
@@ -61,6 +62,7 @@ const CALLBACK_MESSAGES: Readonly<Record<ProdigiCallbackErrorCode, string>> = {
   callback_token_unavailable: "The callback capability token is unavailable.",
   callback_invalid: "The callback did not pass validation.",
   callback_oversized: "The callback exceeded the configured body limit.",
+  callback_source_mismatch: "The callback source is not the expected sandbox origin.",
   invalid_input: "The reconciliation input did not pass validation.",
   store_unavailable: "The reconciliation store is unavailable.",
   deadline_exceeded: "The callback request exceeded its processing deadline."
@@ -160,7 +162,7 @@ export function parseProdigiCallbackEvent(rawBody: Uint8Array): ProdigiCallbackH
   const subject = own("subject");
   const time = own("time");
   const source = own("source");
-  if (typeof source !== "string" || source.length > 256 || !SANDBOX_SOURCE_PATTERN.test(source)) return invalidCallback();
+  if (typeof source !== "string") return invalidCallback();
   if (typeof eventId !== "string" || !EVENT_ID_PATTERN.test(eventId)) return invalidCallback();
   if (typeof type !== "string" || !EVENT_TYPE_PATTERN.test(type)) return invalidCallback();
   if (typeof subject !== "string" || !ORDER_ID_PATTERN.test(subject)) return invalidCallback();
@@ -184,6 +186,10 @@ export function parseProdigiCallbackEvent(rawBody: Uint8Array): ProdigiCallbackH
     claimedStage = Object.prototype.hasOwnProperty.call(STAGE_BY_NAME, name) ? STAGE_BY_NAME[name] as ProdigiOrderStage : null;
     if (claimedStage === null) return invalidCallback();
   }
+  // Checked last, with its own code: a source mismatch means the wire format or
+  // environment differs from the documentation, so the host answers 503 and
+  // logs it (Prodigi redelivers) instead of a 400 that drops the callback.
+  if (source.length > 256 || !SANDBOX_SOURCE_PATTERN.test(source)) throw new ProdigiCallbackError("callback_source_mismatch");
   return Object.freeze({ eventId, orderId: subject, type, claimedStage, eventTime: time });
 }
 
@@ -289,15 +295,32 @@ export interface ProdigiPendingReconciliation {
   readonly coverAfter: string;
   /** Highest stage claimed by a merged callback; the covering read must reach it. Untrusted, so it only ever causes more reads. */
   readonly requiredStage: ProdigiOrderStage | null;
-  /** Receipt time of the oldest callback in this chain; the retry horizon is measured from it. */
+  /** Receipt time of the oldest callback in this chain (informational). */
   readonly firstReceivedAt: string;
+  /**
+   * Start of the current retry budget. It is reset to the receipt time
+   * whenever a newer receipt is merged, so every uncovered receipt gets a full
+   * budget of its own. `horizonMs` is measured from it.
+   */
+  readonly budgetSince: string;
+  /** Reads performed (and not covering) in the current budget; counted against `maxAttempts`. Local refusals do not count. */
+  readonly readsSpent: number;
+  /** Local refusals (limiter, read interval, older in-flight read) in the current budget; only used for backoff. */
+  readonly refusals: number;
+  /**
+   * Set while a worker is reporting this record as abandoned. The worker that
+   * set it (by compare-and-set) calls the hook and then deletes the record.
+   * After `leaseUntil` another run may take it over, so a crash keeps the
+   * obligation (at-least-once). Null otherwise.
+   */
+  readonly abandoning: { readonly reason: ProdigiAbandonReason; readonly errorCode: ProdigiReconcileErrorCode | null; readonly leaseUntil: string } | null;
   /**
    * Event IDs merged into this record (at most 32). When a covering read
    * clears the record they are recorded as reconciled, so their redeliveries
    * are `replayed`. Event IDs beyond the cap only cost a read on redelivery.
    */
   readonly eventIds: readonly string[];
-  /** Attempt number of the currently scheduled job. */
+  /** Sequence number of the currently scheduled job (increments on every reschedule; used to collapse duplicates). */
   readonly attempt: number;
   readonly dueAt: string;
   /**
@@ -587,9 +610,12 @@ export interface ProdigiPollPolicy {
 }
 
 /**
- * Retry budget for deferred (background) jobs. A chain is abandoned, and
- * `reconcile_abandoned` is emitted, once `maxAttempts` jobs have run or
- * `horizonMs` has passed since the chain's first callback.
+ * Retry budget for deferred (background) jobs. `maxAttempts` counts reads
+ * that ran and did not cover the record; local refusals (limiter, read
+ * interval) do not count and are bounded only by `horizonMs`. Both are
+ * measured per budget, and a newly merged receipt starts a fresh budget, so a
+ * receipt is never abandoned on another callback's budget. A chain is
+ * abandoned, and `reconcile_abandoned` is emitted, once its budget runs out.
  *
  * Defaults with a durable scheduler: 2 s initial, 5 min cap, 40 attempts,
  * a 1 h horizon (full jitter; the horizon binds first). With the in-process
@@ -607,7 +633,7 @@ export interface ProdigiJobRetryPolicy {
   readonly horizonMs?: number;
 }
 
-export type ProdigiAbandonReason = "retries_exhausted" | "horizon_exceeded" | "read_failed" | "claim_unconfirmed" | "schedule_failed";
+export type ProdigiAbandonReason = "retries_exhausted" | "horizon_exceeded" | "read_failed" | "claim_unconfirmed" | "receipt_uncovered" | "schedule_failed";
 
 /**
  * Terminal outcome of a background chain that gave up without covering every
@@ -624,6 +650,8 @@ export interface ProdigiReconcileAbandonedEvent {
   readonly requiredStage: ProdigiOrderStage | null;
   readonly firstReceivedAt: string;
   readonly abandonedAt: string;
+  /** Stable across redelivery of the same abandonment (`orderId`, `firstReceivedAt`, `coverAfter`), for at-least-once dedupe. */
+  readonly dedupeKey: string;
   readonly errorCode?: ProdigiReconcileErrorCode;
 }
 
@@ -666,11 +694,25 @@ export interface ProdigiCallbackReconcilerOptions {
    * otherwise 60000..2592000000 ms. Default 86400000 (24 h).
    */
   readonly untrackedAckAfterMs?: number;
+  /**
+   * Bound on wall-clock skew between workers that share the store (keep them
+   * NTP-synchronized within it). Cross-worker coverage comparisons (stored
+   * `confirmedAt` versus a receipt, and a read start versus a stored
+   * `coverAfter`) require this margin, so a lagging worker reads rather than
+   * skips. Job delays are at least this long. 0..60000 ms, default 2000.
+   */
+  readonly workerClockSkewMs?: number;
   /** Read bound. Defaults to `createProdigiReadLimiter()` on this reconciler's clock. Called with the tenant ID. */
   readonly readLimiter?: ProdigiReadLimiter;
   /** Background scheduler. Defaults to in-process timers (`durable: false`). */
   readonly scheduler?: ProdigiReconciliationScheduler;
-  /** Receives every `reconcile_abandoned` outcome. Strongly recommended with a durable scheduler. Errors it throws are swallowed. */
+  /**
+   * Receives every `reconcile_abandoned` outcome, at least once (dedupe on
+   * `dedupeKey`). Required when `scheduler.durable` is true. It is called
+   * before the pending record is deleted; if it throws, the record is kept and
+   * the error is rethrown from `runScheduledReconciliation`, so the queue
+   * retries the job and the hook is called again.
+   */
   readonly onReconcileAbandoned?: (event: ProdigiReconcileAbandonedEvent) => void | Promise<void>;
   readonly clock?: { now(): number };
   /** Uniform random in [0, 1) for full jitter. Injected for tests. */
@@ -759,6 +801,7 @@ export type ProdigiScheduledRunStatus =
   | "rescheduled"
   | "superseded"
   | "obsolete"
+  | "abandon_pending"
   | "reconcile_abandoned";
 
 export interface ProdigiScheduledRunResult {
@@ -878,6 +921,8 @@ interface Receipt {
   readonly seq: number;
 }
 
+type Done = (status: ProdigiScheduledRunStatus, errorCode?: ProdigiReconcileErrorCode, reason?: ProdigiAbandonReason) => ProdigiScheduledRunResult;
+
 type Respond = (outcome: ProdigiCallbackOutcome, extra?: Partial<Pick<ProdigiCallbackResult, "reconciliation" | "errorCode">>, scheduled?: boolean) => ProdigiCallbackResult;
 
 export class ProdigiCallbackReconciler {
@@ -902,6 +947,7 @@ export class ProdigiCallbackReconciler {
   readonly #replayTtlMs: number;
   readonly #maxPendingJobs: number;
   readonly #pendingGraceMs: number;
+  readonly #workerSkewMs: number;
   readonly #untrackedAckAfterMs: number;
   readonly #limiter: ProdigiReadLimiter;
   readonly #scheduler: ProdigiReconciliationScheduler;
@@ -948,6 +994,9 @@ export class ProdigiCallbackReconciler {
       throw new ProdigiCallbackError("invalid_config");
     }
     if (options.onReconcileAbandoned !== undefined && typeof options.onReconcileAbandoned !== "function") throw new ProdigiCallbackError("invalid_config");
+    // A 202 hands the callback to the durable job chain; if that chain gives up,
+    // the hook is the only remaining owner, so it is mandatory.
+    if (options.scheduler?.durable === true && options.onReconcileAbandoned === undefined) throw new ProdigiCallbackError("invalid_config");
     const policy = options.pollPolicy ?? {};
     this.#initialDelayMs = boundedInt(policy.initialDelayMs, 1000, 1, 60_000);
     this.#maxDelayMs = boundedInt(policy.maxDelayMs, Math.max(60_000, this.#initialDelayMs), this.#initialDelayMs, 300_000);
@@ -966,6 +1015,7 @@ export class ProdigiCallbackReconciler {
     this.#replayTtlMs = boundedInt(options.replayTtlMs, 7 * 24 * 3600 * 1000, 60_000, 30 * 24 * 3600 * 1000);
     this.#maxPendingJobs = boundedInt(options.maxPendingJobs, 1000, 1, 100_000);
     this.#pendingGraceMs = boundedInt(options.pendingJobGraceMs, Math.max(120_000, 2 * this.#readTimeoutMs), 1000, 3_600_000);
+    this.#workerSkewMs = boundedInt(options.workerClockSkewMs, 2000, 0, 60_000);
     const untracked = options.untrackedAckAfterMs;
     this.#untrackedAckAfterMs = untracked === 0 ? 0 : boundedInt(untracked, 24 * 3600 * 1000, 60_000, 30 * 24 * 3600 * 1000);
     this.#scope = Object.freeze({ tenantId: scope.tenantId, projectId: scope.projectId });
@@ -1144,25 +1194,23 @@ export class ProdigiCallbackReconciler {
     if (flight !== undefined && flight.seq < receipt.seq) {
       // The read in flight started before this callback arrived, so it cannot
       // cover it. Join the next read: one follow-up job, after the interval.
-      return this.#deferResult(respond, hint, need, 1, Math.max(1, this.#intervalRemaining(key)));
+      return this.#deferResult(respond, hint, need, Math.max(1, this.#intervalRemaining(key)));
     }
     if (flight === undefined) {
       const wait = this.#intervalRemaining(key);
-      if (wait > 0) return this.#deferResult(respond, hint, need, 1, wait);
+      if (wait > 0) return this.#deferResult(respond, hint, need, wait);
       flight = this.#startFlight(hint.orderId);
-      if (flight === undefined) return this.#deferResult(respond, hint, need, 1, this.#jobInitialDelayMs);
+      if (flight === undefined) return this.#deferResult(respond, hint, need, this.#jobInitialDelayMs);
     }
     const reserve = Math.min(250, Math.floor(this.#requestDeadlineMs / 4));
     const read = await raceDeadline(flight.promise, deadline - reserve - this.#clock.now());
     if (read === TIMED_OUT) {
       // The read keeps running and still applies; the job covers this callback either way.
-      return this.#deferResult(respond, hint, need, 1, Math.max(this.#jobInitialDelayMs, this.#intervalRemaining(key)));
+      return this.#deferResult(respond, hint, need, Math.max(this.#jobInitialDelayMs, this.#intervalRemaining(key)));
     }
     if (!read.ok) {
       const retryable = RETRYABLE.has(read.code);
-      const scheduled = retryable && this.#jobMaxAttempts > 1
-        ? await this.#defer(hint.orderId, need, 2, this.#intervalRemaining(key), hint.eventId)
-        : false;
+      const scheduled = retryable ? await this.#defer(hint.orderId, need, this.#intervalRemaining(key), hint.eventId) : false;
       return respond("reconcile_failed", { errorCode: read.code }, scheduled);
     }
     const status = read.result.status;
@@ -1171,16 +1219,16 @@ export class ProdigiCallbackReconciler {
     if (status === "terminal_conflict" ||
         ((status === "applied" || status === "unchanged") && state !== undefined && stageMet(state, need.stage))) {
       await this.#recordEvent(hint.orderId, hint.eventId);
-      if (state !== undefined) await this.#settleQuietly(hint.orderId, read.startedAt, state);
+      if (state !== undefined) await this.#settleQuietly(hint.orderId, state);
       return respond("reconciled", { reconciliation: read.result });
     }
     // A stale or regressed read, or one that has not yet reached the claimed
     // stage (Prodigi read lag): not covered, so read again outside the request.
-    return this.#deferResult(respond, hint, need, 1, Math.max(this.#jobInitialDelayMs, this.#intervalRemaining(key)), read.result);
+    return this.#deferResult(respond, hint, need, Math.max(this.#jobInitialDelayMs, this.#intervalRemaining(key)), read.result);
   }
 
-  async #deferResult(respond: Respond, hint: ProdigiCallbackHint, need: Need, attempt: number, minDelayMs: number, reconciliation?: ProdigiReconcileResult): Promise<ProdigiCallbackResult> {
-    const scheduled = await this.#defer(hint.orderId, need, attempt, minDelayMs, hint.eventId);
+  async #deferResult(respond: Respond, hint: ProdigiCallbackHint, need: Need, minDelayMs: number, reconciliation?: ProdigiReconcileResult): Promise<ProdigiCallbackResult> {
+    const scheduled = await this.#defer(hint.orderId, need, minDelayMs, hint.eventId);
     const extra = reconciliation === undefined ? {} : { reconciliation };
     return scheduled ? respond("deferred", extra, true) : respond("reconcile_failed", extra, false);
   }
@@ -1190,51 +1238,28 @@ export class ProdigiCallbackReconciler {
    * default scheduler calls this; a host with a durable queue calls it when a
    * job it accepted through `scheduler.schedule` is due, on any worker. The
    * pending record in the store is authoritative; it is cleared by whichever
-   * worker's read covers it.
+   * worker's read covers it. If this throws (store unavailable, or the
+   * abandon hook failed), the queue must retry the job.
    */
   async runScheduledReconciliation(job: ProdigiReconcileJob): Promise<ProdigiScheduledRunResult> {
     if (job === null || typeof job !== "object" || typeof job.orderId !== "string" || !ORDER_ID_PATTERN.test(job.orderId) ||
-        !Number.isSafeInteger(job.attempt) || job.attempt < 1 || job.attempt > 1000 ||
+        !Number.isSafeInteger(job.attempt) || job.attempt < 1 ||
         typeof job.coverAfter !== "string" || Number.isNaN(Date.parse(job.coverAfter)) ||
         (job.requiredStage !== null && !STAGES.has(job.requiredStage as string))) {
       throw new ProdigiCallbackError("invalid_input");
     }
     const { orderId, attempt } = job;
     const key = scopeKey(this.#scope, orderId);
-    const done = (status: ProdigiScheduledRunStatus, errorCode?: ProdigiReconcileErrorCode, reason?: ProdigiAbandonReason): ProdigiScheduledRunResult =>
+    const done: Done = (status, errorCode, reason) =>
       Object.freeze({ status, orderId, attempt, ...(errorCode === undefined ? {} : { errorCode }), ...(reason === undefined ? {} : { reason }) });
 
     const pending = await this.#getPending(orderId);
     if (pending === undefined) return done("obsolete");
     if (attempt < pending.attempt) return done("superseded");
-    const need: Need = {
-      after: Math.max(Date.parse(pending.coverAfter), Date.parse(job.coverAfter)),
-      stage: maxStage(pending.requiredStage, job.requiredStage)
-    };
-
-    const retry = async (errorCode: ProdigiReconcileErrorCode | undefined, cause: "claim" | "other", minDelayMs = 0): Promise<ProdigiScheduledRunResult> => {
-      for (let round = 0; round < CAS_ROUNDS; round += 1) {
-        const m = await this.#getPending(orderId);
-        if (m === undefined) return done("obsolete", errorCode);
-        if (attempt < m.attempt) return done("superseded", errorCode);
-        const now = this.#clock.now();
-        const next = m.attempt + 1;
-        if (next > this.#jobMaxAttempts) return this.#abandon(m, cause === "claim" ? "claim_unconfirmed" : "retries_exhausted", errorCode, done);
-        if (now - Date.parse(m.firstReceivedAt) >= this.#jobHorizonMs) return this.#abandon(m, cause === "claim" ? "claim_unconfirmed" : "horizon_exceeded", errorCode, done);
-        const delayMs = Math.max(minDelayMs, this.#jobJitter(next));
-        const updated: ProdigiPendingReconciliation = Object.freeze({
-          ...m, revision: m.revision + 1, attempt: next, dueAt: iso(now + delayMs), staleAt: iso(now + delayMs + this.#pendingGraceMs)
-        });
-        if (!(await this.#casPending(orderId, m.revision, updated))) continue;
-        try {
-          await this.#scheduler.schedule(this.#job(updated, delayMs));
-        } catch {
-          return this.#abandon(updated, "schedule_failed", errorCode, done);
-        }
-        return done("rescheduled", errorCode);
-      }
-      throw new ProdigiCallbackError("store_unavailable");
-    };
+    if (pending.abandoning !== null) {
+      // Another run is reporting this record, or crashed while doing so.
+      return this.#abandon(orderId, pending.abandoning.reason, pending.abandoning.errorCode ?? undefined, done);
+    }
 
     const current = await this.#getOrder(orderId);
     if (current === undefined) {
@@ -1245,49 +1270,44 @@ export class ProdigiCallbackReconciler {
       await this.#clearPending(orderId);
       return done("already_terminal");
     }
-    if (this.#satisfied(current, need)) {
-      const settled = await this.#settle(orderId, Date.parse(current.confirmedAt as string), current);
-      return settled === "remaining" ? retry(undefined, "other", this.#intervalRemaining(key)) : done("covered");
+    if (this.#covers(pending, current)) {
+      const settled = await this.#settle(orderId, current);
+      return settled === "remaining" ? this.#reschedule(orderId, attempt, "refusal", undefined, this.#intervalRemaining(key), done) : done("covered");
     }
+    // Local refusals do not spend the read budget (F3); only horizonMs bounds them.
     let flight = this.#flights.get(key);
-    if (flight !== undefined && flight.startedAt <= need.after) {
-      return retry("read_budget_exhausted", "other", Math.max(1, this.#intervalRemaining(key)));
+    if (flight !== undefined && flight.startedAt <= Date.parse(pending.coverAfter) + this.#workerSkewMs) {
+      return this.#reschedule(orderId, attempt, "refusal", "read_budget_exhausted", this.#intervalRemaining(key), done);
     }
     if (flight === undefined) {
       const wait = this.#intervalRemaining(key);
-      if (wait > 0) return retry("read_budget_exhausted", "other", wait);
+      if (wait > 0) return this.#reschedule(orderId, attempt, "refusal", "read_budget_exhausted", wait, done);
       flight = this.#startFlight(orderId);
-      if (flight === undefined) return retry("read_budget_exhausted", "other");
+      if (flight === undefined) return this.#reschedule(orderId, attempt, "refusal", "read_budget_exhausted", 0, done);
     }
     const read = await flight.promise;
     if (!read.ok) {
-      if (RETRYABLE.has(read.code)) return retry(read.code, "other", this.#intervalRemaining(key));
-      const m = await this.#getPending(orderId);
-      return m === undefined ? done("obsolete", read.code) : this.#abandon(m, "read_failed", read.code, done);
+      if (RETRYABLE.has(read.code)) return this.#reschedule(orderId, attempt, "read", read.code, this.#intervalRemaining(key), done);
+      return this.#abandon(orderId, "read_failed", read.code, done);
     }
     const status = read.result.status;
+    const state = read.result.state;
     if (status === "untracked_order") {
       await this.#clearPending(orderId);
       return done("untracked_order");
     }
-    const state = read.result.state;
     if (status === "terminal_conflict") {
       await this.#clearPending(orderId);
       return done("terminal_conflict");
     }
     if ((status === "applied" || status === "unchanged") && state !== undefined) {
-      const settled = await this.#settle(orderId, read.startedAt, state);
+      const settled = await this.#settle(orderId, state);
       if (settled !== "remaining") return done(status);
-      // A newer callback arrived during the read, or the claimed stage is not
-      // visible yet (read lag): read again.
-      const m = await this.#getPending(orderId);
-      const claimUnmet = m !== undefined && !stageMet(state, m.requiredStage);
-      return retry(undefined, claimUnmet ? "claim" : "other", this.#intervalRemaining(key));
     }
-    // Stale or regressed read: not covered.
-    return retry(undefined, "other", this.#intervalRemaining(key));
+    // Not covered: a newer callback arrived during the read, the claimed stage
+    // is not visible yet (read lag or a forged claim), or the read was stale.
+    return this.#reschedule(orderId, attempt, "read", undefined, this.#intervalRemaining(key), done);
   }
-
   /**
    * Authenticated polling entry point, independent of callbacks: read the
    * order (single-flight, through the read limiter) with bounded, fully
@@ -1313,7 +1333,7 @@ export class ProdigiCallbackReconciler {
         : await flight.promise;
       if (read.ok) {
         if (read.result.state !== undefined && (read.result.status === "applied" || read.result.status === "unchanged")) {
-          await this.#settleQuietly(orderId, read.startedAt, read.result.state);
+          await this.#settleQuietly(orderId, read.result.state);
         }
         return Object.freeze({ ...read.result, attempts, delaysMs: Object.freeze([...delays]) });
       }
@@ -1431,10 +1451,10 @@ export class ProdigiCallbackReconciler {
   // -------------------------------------------------------------------------
   // Coverage, coalescing and scheduling
 
-  /** A read confirmed by the store started strictly after receipt (our clock) and reached any claimed stage. */
+  /** A read confirmed by the store started more than the worker skew margin after receipt (our clock), and reached any claimed stage. */
   #satisfied(state: ProdigiReconciledOrderState, need: Need): boolean {
     if (state.confirmedAt === null) return false;
-    return Date.parse(state.confirmedAt) > need.after && stageMet(state, need.stage);
+    return Date.parse(state.confirmedAt) > need.after + this.#workerSkewMs && stageMet(state, need.stage);
   }
 
   #intervalRemaining(key: string): number {
@@ -1472,50 +1492,85 @@ export class ProdigiCallbackReconciler {
     });
   }
 
+  /** Job delays are at least the worker skew margin, so a job's read starts after `coverAfter + workerClockSkewMs`. */
+  #jobDelay(minDelayMs: number, step: number): number {
+    return Math.max(minDelayMs, this.#workerSkewMs + 1, this.#jobJitter(step));
+  }
+
+  /**
+   * Whether the authoritative state covers a pending record: a read that
+   * started more than the worker skew margin after the record's newest
+   * receipt, and that reached its claimed stage. A terminal state always covers.
+   */
+  #covers(record: ProdigiPendingReconciliation, state: ProdigiReconciledOrderState): boolean {
+    if (isTerminalStage(state.stage) || state.conflict) return true;
+    return this.#receiptsCovered(record, state) && stageMet(state, record.requiredStage);
+  }
+
+  /** Every merged receipt is older than the latest applied read (claims aside). */
+  #receiptsCovered(record: ProdigiPendingReconciliation, state: ProdigiReconciledOrderState | undefined): boolean {
+    if (state === undefined || state.confirmedAt === null) return false;
+    return Date.parse(state.confirmedAt) > Date.parse(record.coverAfter) + this.#workerSkewMs;
+  }
+
   /**
    * Record in the store that a covering read is owed. If a live pending record
    * exists, merge this callback's requirement into it (its job will see it, so
-   * acknowledging is safe). Otherwise create one, subject to `maxPendingJobs`
-   * counted from the store, and schedule its job. Returns whether a job owns
-   * the requirement.
+   * acknowledging is safe). A newer receipt resets the record's retry budget,
+   * so it is never abandoned on another callback's budget. Otherwise create a
+   * record, subject to `maxPendingJobs` counted from the store, and schedule
+   * its job. Returns whether a job owns the requirement.
    */
-  async #defer(orderId: string, need: Need, attempt: number, minDelayMs: number, eventId: string | null): Promise<boolean> {
+  async #defer(orderId: string, need: Need, minDelayMs: number, eventId: string | null): Promise<boolean> {
     const withEvent = (ids: readonly string[]): readonly string[] =>
       eventId === null || ids.includes(eventId) || ids.length >= MAX_PENDING_EVENT_IDS ? ids : Object.freeze([...ids, eventId]);
     for (let round = 0; round < CAS_ROUNDS; round += 1) {
       const now = this.#clock.now();
       const existing = await this.#getPending(orderId);
       if (existing !== undefined && Date.parse(existing.staleAt) > now) {
-        const after = Math.max(Date.parse(existing.coverAfter), need.after);
+        const previousAfter = Date.parse(existing.coverAfter);
+        const after = Math.max(previousAfter, need.after);
         const stage = maxStage(existing.requiredStage, need.stage);
         const eventIds = withEvent(existing.eventIds ?? []);
-        if (after === Date.parse(existing.coverAfter) && stage === existing.requiredStage && eventIds === existing.eventIds) return true;
-        const merged: ProdigiPendingReconciliation = Object.freeze({ ...existing, revision: existing.revision + 1, coverAfter: iso(after), requiredStage: stage, eventIds });
+        if (after === previousAfter && stage === existing.requiredStage && eventIds === existing.eventIds) return true;
+        const fresh = after > previousAfter;
+        const merged: ProdigiPendingReconciliation = Object.freeze({
+          ...existing,
+          revision: existing.revision + 1,
+          coverAfter: iso(after),
+          requiredStage: stage,
+          eventIds,
+          ...(fresh ? { budgetSince: iso(after), readsSpent: 0, refusals: 0 } : {})
+        });
         if (await this.#casPending(orderId, existing.revision, merged)) return true;
         continue;
       }
       if (await this.#countPending(now) >= this.#maxPendingJobs) return false;
-      const delayMs = Math.max(minDelayMs, this.#jobJitter(attempt));
+      const delayMs = this.#jobDelay(minDelayMs, 1);
       // An orphaned record's requirement is carried into the fresh chain.
       const after = existing === undefined ? need.after : Math.max(Date.parse(existing.coverAfter), need.after);
-      const fresh: ProdigiPendingReconciliation = Object.freeze({
+      const record: ProdigiPendingReconciliation = Object.freeze({
         orderId,
         revision: existing === undefined ? 0 : existing.revision + 1,
         coverAfter: iso(after),
         requiredStage: existing === undefined ? need.stage : maxStage(existing.requiredStage, need.stage),
-        firstReceivedAt: iso(need.after),
+        firstReceivedAt: existing === undefined ? iso(need.after) : existing.firstReceivedAt,
+        budgetSince: iso(need.after),
+        readsSpent: 0,
+        refusals: 0,
+        abandoning: null,
         eventIds: withEvent(existing === undefined ? [] : (existing.eventIds ?? [])),
-        attempt,
+        attempt: existing === undefined ? 1 : existing.attempt + 1,
         dueAt: iso(now + delayMs),
         staleAt: iso(now + delayMs + this.#pendingGraceMs)
       });
-      if (!(await this.#casPending(orderId, existing?.revision ?? null, fresh))) continue;
+      if (!(await this.#casPending(orderId, existing?.revision ?? null, record))) continue;
       try {
-        await this.#scheduler.schedule(this.#job(fresh, delayMs));
+        await this.#scheduler.schedule(this.#job(record, delayMs));
         return true;
       } catch {
         try {
-          await this.#casPending(orderId, fresh.revision, null);
+          await this.#casPending(orderId, record.revision, null);
         } catch {
           // Left to expire at staleAt.
         }
@@ -1526,17 +1581,47 @@ export class ProdigiCallbackReconciler {
   }
 
   /**
-   * After a successful read that started at `readStartedAt`, clear the pending
-   * record if that read covers it: it started strictly after the record's
-   * newest receipt and reached its claimed stage (a terminal state always
-   * covers). Atomic, so a callback merged during the read keeps the record.
+   * Reschedule the record's job. `kind: "read"` spends one read of the budget
+   * (`maxAttempts`); `"refusal"` (limiter, interval, older in-flight read)
+   * spends none. Both stop at `horizonMs` since the budget started.
    */
-  async #settle(orderId: string, readStartedAt: number, state: ProdigiReconciledOrderState): Promise<"none" | "cleared" | "remaining"> {
+  async #reschedule(orderId: string, attempt: number, kind: "read" | "refusal", errorCode: ProdigiReconcileErrorCode | undefined, minDelayMs: number, done: Done): Promise<ProdigiScheduledRunResult> {
+    for (let round = 0; round < CAS_ROUNDS; round += 1) {
+      const m = await this.#getPending(orderId);
+      if (m === undefined) return done("obsolete", errorCode);
+      if (attempt < m.attempt) return done("superseded", errorCode);
+      if (m.abandoning !== null) return this.#abandon(orderId, m.abandoning.reason, m.abandoning.errorCode ?? undefined, done);
+      const now = this.#clock.now();
+      const readsSpent = m.readsSpent + (kind === "read" ? 1 : 0);
+      const refusals = m.refusals + (kind === "refusal" ? 1 : 0);
+      if (readsSpent >= this.#jobMaxAttempts) return this.#abandon(orderId, "retries_exhausted", errorCode, done, m.budgetSince);
+      if (now - Date.parse(m.budgetSince) >= this.#jobHorizonMs) return this.#abandon(orderId, "horizon_exceeded", errorCode, done, m.budgetSince);
+      const delayMs = this.#jobDelay(minDelayMs, Math.max(readsSpent, refusals) + 1);
+      const next: ProdigiPendingReconciliation = Object.freeze({
+        ...m, revision: m.revision + 1, attempt: m.attempt + 1, readsSpent, refusals,
+        dueAt: iso(now + delayMs), staleAt: iso(now + delayMs + this.#pendingGraceMs)
+      });
+      if (!(await this.#casPending(orderId, m.revision, next))) continue;
+      try {
+        await this.#scheduler.schedule(this.#job(next, delayMs));
+      } catch {
+        return this.#abandon(orderId, "schedule_failed", errorCode, done);
+      }
+      return done("rescheduled", errorCode);
+    }
+    throw new ProdigiCallbackError("store_unavailable");
+  }
+
+  /**
+   * After a successful read, clear the pending record if the resulting state
+   * covers it. Atomic, so a callback merged during the read keeps the record.
+   * The merged event IDs are then recorded as reconciled.
+   */
+  async #settle(orderId: string, state: ProdigiReconciledOrderState): Promise<"none" | "cleared" | "remaining"> {
     for (let round = 0; round < CAS_ROUNDS; round += 1) {
       const m = await this.#getPending(orderId);
       if (m === undefined) return "none";
-      const terminal = isTerminalStage(state.stage) || state.conflict;
-      if (!terminal && !(Date.parse(m.coverAfter) < readStartedAt && stageMet(state, m.requiredStage))) return "remaining";
+      if (!this.#covers(m, state)) return "remaining";
       if (await this.#casPending(orderId, m.revision, null)) {
         for (const eventId of m.eventIds ?? []) await this.#recordEvent(orderId, eventId);
         return "cleared";
@@ -1545,9 +1630,9 @@ export class ProdigiCallbackReconciler {
     return "remaining";
   }
 
-  async #settleQuietly(orderId: string, readStartedAt: number, state: ProdigiReconciledOrderState): Promise<void> {
+  async #settleQuietly(orderId: string, state: ProdigiReconciledOrderState): Promise<void> {
     try {
-      await this.#settle(orderId, readStartedAt, state);
+      await this.#settle(orderId, state);
     } catch {
       // Best effort: the pending job still runs and finds the order covered.
     }
@@ -1560,43 +1645,114 @@ export class ProdigiCallbackReconciler {
     }
   }
 
-  async #abandon(
-    record: ProdigiPendingReconciliation,
-    reason: ProdigiAbandonReason,
-    errorCode: ProdigiReconcileErrorCode | undefined,
-    done: (status: ProdigiScheduledRunStatus, errorCode?: ProdigiReconcileErrorCode, reason?: ProdigiAbandonReason) => ProdigiScheduledRunResult
-  ): Promise<ProdigiScheduledRunResult> {
-    // Delete with the latest revision, so a requirement merged meanwhile is
-    // part of the reported event rather than silently dropped.
-    let latest: ProdigiPendingReconciliation = record;
-    for (let round = 0; round < CAS_ROUNDS; round += 1) {
-      const m = await this.#getPending(record.orderId);
-      if (m === undefined) break;
-      latest = m;
-      if (await this.#casPending(record.orderId, m.revision, null)) break;
+  /**
+   * Report a chain as abandoned, at least once and without duplicates in the
+   * normal case:
+   *
+   * 1. Re-read the record. Gone: `obsolete` (no hook). Covered by a read
+   *    meanwhile: settle it (no hook).
+   * 2. Claim it by compare-and-set (`abandoning`, with a lease). Only the run
+   *    whose claim succeeds calls the hook; a run that finds a live claim held
+   *    by another run schedules a check job for the lease expiry instead.
+   * 3. Call the hook. If it throws, release the lease and rethrow, so the
+   *    queue retries and the hook is called again. A crash here leaves the
+   *    claim, which expires and is taken over by the job's redelivery.
+   * 4. Delete the record by compare-and-set. If a newer receipt was merged
+   *    meanwhile, resume the chain for it with a fresh budget instead.
+   *
+   * `claim_unconfirmed` is used only when every merged receipt is older than
+   * the latest applied read and just the stage claim is unmet; otherwise a
+   * budget that ran out on non-covering reads is `receipt_uncovered`.
+   */
+  async #abandon(orderId: string, reason: ProdigiAbandonReason, errorCode: ProdigiReconcileErrorCode | undefined, done: Done, budgetSince?: string): Promise<ProdigiScheduledRunResult> {
+    let claimed: ProdigiPendingReconciliation | undefined;
+    for (let round = 0; round < CAS_ROUNDS && claimed === undefined; round += 1) {
+      const m = await this.#getPending(orderId);
+      if (m === undefined) return done("obsolete", errorCode);
+      const now = this.#clock.now();
+      if (m.abandoning !== null && Date.parse(m.abandoning.leaseUntil) > now) {
+        const waitMs = Math.max(this.#workerSkewMs + 1, Date.parse(m.abandoning.leaseUntil) - now + 1);
+        await this.#scheduler.schedule(this.#job(m, waitMs));
+        return done("abandon_pending", errorCode);
+      }
+      const state = await this.#getOrder(orderId);
+      if (state === undefined) {
+        await this.#clearPending(orderId);
+        return done("untracked_order");
+      }
+      if (this.#covers(m, state)) {
+        if ((await this.#settle(orderId, state)) === "remaining") continue;
+        return done("covered");
+      }
+      if (m.abandoning === null && budgetSince !== undefined && m.budgetSince !== budgetSince) {
+        // A newer receipt was merged and reset the budget: it gets its own reads.
+        return this.#reschedule(orderId, m.attempt, "refusal", errorCode, 0, done);
+      }
+      let effective = m.abandoning?.reason ?? reason;
+      const code = m.abandoning !== null ? (m.abandoning.errorCode ?? undefined) : errorCode;
+      if (m.abandoning === null && (effective === "retries_exhausted" || effective === "horizon_exceeded")) {
+        if (this.#receiptsCovered(m, state)) effective = "claim_unconfirmed";
+        else if (code === undefined) effective = "receipt_uncovered";
+      }
+      const leaseUntil = now + this.#pendingGraceMs;
+      const next: ProdigiPendingReconciliation = Object.freeze({
+        ...m,
+        revision: m.revision + 1,
+        abandoning: Object.freeze({ reason: effective, errorCode: code ?? null, leaseUntil: iso(leaseUntil) }),
+        staleAt: iso(Math.max(Date.parse(m.staleAt), leaseUntil + this.#pendingGraceMs))
+      });
+      if (await this.#casPending(orderId, m.revision, next)) claimed = next;
     }
+    if (claimed === undefined || claimed.abandoning === null) throw new ProdigiCallbackError("store_unavailable");
+    const claim = claimed.abandoning;
     const event: ProdigiReconcileAbandonedEvent = Object.freeze({
       outcome: "reconcile_abandoned" as const,
       scope: this.#scope,
-      orderId: latest.orderId,
-      reason,
-      attempts: latest.attempt,
-      coverAfter: latest.coverAfter,
-      requiredStage: latest.requiredStage,
-      firstReceivedAt: latest.firstReceivedAt,
+      orderId,
+      reason: claim.reason,
+      attempts: claimed.readsSpent,
+      coverAfter: claimed.coverAfter,
+      requiredStage: claimed.requiredStage,
+      firstReceivedAt: claimed.firstReceivedAt,
       abandonedAt: iso(this.#clock.now()),
-      ...(errorCode === undefined ? {} : { errorCode })
+      dedupeKey: `${orderId}|${claimed.firstReceivedAt}|${claimed.coverAfter}`,
+      ...(claim.errorCode === null ? {} : { errorCode: claim.errorCode })
     });
     if (this.#onAbandoned !== undefined) {
       try {
         await this.#onAbandoned(event);
-      } catch {
-        // The run result still reports reconcile_abandoned to the job runner.
+      } catch (error) {
+        try {
+          await this.#casPending(orderId, claimed.revision, Object.freeze({
+            ...claimed, revision: claimed.revision + 1, abandoning: Object.freeze({ ...claim, leaseUntil: iso(0) })
+          }));
+        } catch {
+          // The lease expires on its own.
+        }
+        throw error;
       }
     }
-    return done("reconcile_abandoned", errorCode, reason);
+    for (let round = 0; round < CAS_ROUNDS; round += 1) {
+      const m = await this.#getPending(orderId);
+      if (m === undefined) break;
+      if (m.revision === claimed.revision) {
+        if (await this.#casPending(orderId, m.revision, null)) break;
+        continue;
+      }
+      // Changed while the hook ran: a newer receipt (or claim) was merged. The
+      // reported part is done; resume a fresh chain for the rest.
+      const now = this.#clock.now();
+      const delayMs = this.#jobDelay(0, 1);
+      const resumed: ProdigiPendingReconciliation = Object.freeze({
+        ...m, revision: m.revision + 1, abandoning: null, readsSpent: 0, refusals: 0, budgetSince: m.coverAfter,
+        attempt: m.attempt + 1, dueAt: iso(now + delayMs), staleAt: iso(now + delayMs + this.#pendingGraceMs)
+      });
+      if (!(await this.#casPending(orderId, m.revision, resumed))) continue;
+      await this.#scheduler.schedule(this.#job(resumed, delayMs));
+      break;
+    }
+    return done("reconcile_abandoned", claim.errorCode ?? undefined, claim.reason);
   }
-
   #inProcessScheduler(): ProdigiReconciliationScheduler {
     return Object.freeze({
       durable: false,
