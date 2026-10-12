@@ -27,13 +27,15 @@ test('package root and every declared subpath resolve to ESM modules and declara
     ['@jevelopers/cost-intelligence/budgets', ['getReservationSnapshot', 'revalidateAuthorization', 'acknowledgePartial', 'ReservationAuthorityBindingSchema', 'FinanceReservationAuthoritySchema', 'CurrentReservationRequestSchema', 'PartialAcknowledgementRequestSchema', 'authorize', 'markDispatched', 'settle', 'BudgetChangeRequestSchema', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary']],
     ['@jevelopers/cost-intelligence/ledger', ['ingestFinancial', 'FinancialEventSchema', 'appendLedgerEvent', 'rebuildLedgerProjection', 'LedgerEventTypeSchema', 'LedgerClassificationSchema', 'LedgerAppendRequestSchema', 'LedgerAppendReceiptSchema', 'LedgerProjectionRequestSchema', 'LedgerProjectionSchema', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary']],
     ['@jevelopers/cost-intelligence/reporting', ['querySummary', 'FinancialSummaryPageSchema', 'validateFinancialSummaryPageBoundary']],
-    ['@jevelopers/cost-intelligence/evidence', ['lookupPostingEvidence', 'lookupByOperationalReference', 'validateEvidenceReference', 'EvidenceReferenceSchema']],
+    ['@jevelopers/cost-intelligence/evidence', ['lookupPostingEvidence', 'lookupByOperationalReference', 'createPostgresEvidenceReader', 'createPostgresStoredLineageReader', 'IntakeLineageRequestSchema', 'IntakeLineageResultSchema', 'SnapshotInputLineageRequestSchema', 'SnapshotInputLineageResultSchema', 'validateEvidenceReference', 'EvidenceReferenceSchema']],
     ['@jevelopers/cost-intelligence/reconciliation', ['startReconciliation', 'getReconciliation']],
     ['@jevelopers/cost-intelligence/integrations', ['exportSummary', 'releaseExportDisclosure', 'projectSafeFinancialSummary', 'safeCsvCell', 'serializeSafeFinancialSummaryCsv', 'ExportManifestSchema', 'validateExportRequestBoundary']],
   ];
   for (const [specifier, names] of modules) {
     const imported = await import(specifier);
     for (const name of names) assert.ok(name in imported, `${specifier} missing ${name}`);
+    if (specifier === '@jevelopers/cost-intelligence') assert.equal(typeof imported.createPostgresEvidenceReader, 'function');
+    if (specifier === '@jevelopers/cost-intelligence') assert.equal(typeof imported.createPostgresStoredLineageReader, 'function');
     if (specifier === '@jevelopers/cost-intelligence' || specifier === '@jevelopers/cost-intelligence/pricing') {
       assert.equal('VersionedReferenceSchema' in imported, false, `${specifier} must preserve the reviewed 1.0.0 public exports`);
       assert.equal('VersionedReference' in imported, false, `${specifier} must not add a 1.0.0 type export`);
@@ -128,7 +130,7 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
     }));
     await writeFile(join(consumer, 'tsconfig.json'), JSON.stringify({
       compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, noEmit: true, skipLibCheck: false },
-      include: ['consumer.mts', 'worker-composition.mts'],
+      include: ['consumer.mts', 'worker-composition.mts', 'coverage-consumer.mts', 'evidence-reader-consumer.mts', 'stored-lineage-consumer.mts'],
     }));
     await writeFile(join(consumer, 'consumer.mts'), [
       "import { ingestUsage as rootIngest, estimate, estimateV2, registerPricingRuleV2, registerRateCardV2, registerFxRateV2, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, releaseExportDisclosure, validateUsageObservationBoundary, validateEstimateRequestBoundary, validateEstimateRequestV2Boundary, validatePricingRuleV2Boundary, validateRateCardV2Boundary, validateFxRateV2Boundary, validateReservationRequestBoundary, validateSettleReservationCommandBoundary, validateReleaseReservationCommandBoundary, validateReservationCommandBoundary, validateReservationSnapshotBoundary, validateFinancialSummaryPageBoundary, validateLedgerAppendRequestBoundary, validateLedgerProjectionRequestBoundary, validateExportRequestBoundary, RateCardSchema, RateCardV2Schema, PricingRuleV2Schema, EstimateRequestSchema, EstimateRequestV2Schema, EstimateResultSchema, EstimateResultV2Schema } from '@jevelopers/cost-intelligence';",
@@ -218,6 +220,9 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       'void [rootIngest, estimate, estimateV2, registerPricingRuleV2, registerRateCardV2, registerFxRateV2, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, contracts.ErrorEnvelopeSchema, metering.ingestUsage, pricing.estimate, pricing.estimateV2, pricing.registerPricingRuleV2, pricing.registerRateCardV2, pricing.registerFxRateV2, budgets.authorize, ledger.ingestFinancial, ledger.appendLedgerEvent, reporting.querySummary, reconciliation.getReconciliation, integrations.exportSummary];',
     ].join('\n'));
     await writeFile(join(consumer, 'worker-composition.mts'), await readFile(join(root, 'examples/worker-composition.ts'), 'utf8'));
+    await writeFile(join(consumer, 'coverage-consumer.mts'), await readFile(join(root, 'tests/reconciliation/coverage-consumer.mts'), 'utf8'));
+    await writeFile(join(consumer, 'evidence-reader-consumer.mts'), await readFile(join(root, 'tests/evidence/postgres-consumer.mts'), 'utf8'));
+    await writeFile(join(consumer, 'stored-lineage-consumer.mts'), await readFile(join(root, 'tests/evidence/stored-lineage-consumer.mts'), 'utf8'));
 
     runNpm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', tarball], consumer, 'offline packed consumer install');
     run(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--project', join(consumer, 'tsconfig.json')], root, 'packed consumer declaration compile');
@@ -230,10 +235,13 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       "  ['@jevelopers/cost-intelligence/budgets', ['getReservationSnapshot', 'revalidateAuthorization', 'acknowledgePartial', 'ReservationAuthorityBindingSchema', 'FinanceReservationAuthoritySchema', 'CurrentReservationRequestSchema', 'PartialAcknowledgementRequestSchema', 'authorize', 'markDispatched', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary']],",
       "  ['@jevelopers/cost-intelligence/ledger', ['ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'LedgerEventTypeSchema', 'LedgerClassificationSchema', 'LedgerAppendRequestSchema', 'LedgerAppendReceiptSchema', 'LedgerProjectionRequestSchema', 'LedgerProjectionSchema', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary']],",
       "  ['@jevelopers/cost-intelligence/reporting', ['querySummary', 'validateFinancialSummaryPageBoundary']],",
+      "  ['@jevelopers/cost-intelligence/evidence', ['lookupPostingEvidence', 'lookupByOperationalReference', 'createPostgresEvidenceReader', 'createPostgresStoredLineageReader']],",
       "  ['@jevelopers/cost-intelligence/reconciliation', ['getReconciliation']],",
       "  ['@jevelopers/cost-intelligence/integrations', ['exportSummary', 'releaseExportDisclosure', 'validateExportRequestBoundary']],",
       '];',
       'for (const [specifier, names] of entries) { const mod = await import(specifier); for (const name of names) if (!(name in mod)) throw new Error(`${specifier} missing ${name}`); }',
+      "if (typeof (await import('@jevelopers/cost-intelligence')).createPostgresEvidenceReader !== 'function') throw new Error('root missing createPostgresEvidenceReader');",
+      "if (typeof (await import('@jevelopers/cost-intelligence')).createPostgresStoredLineageReader !== 'function') throw new Error('root missing createPostgresStoredLineageReader');",
       "import assert from 'node:assert/strict';",
       "import { readFile } from 'node:fs/promises';",
       "import { createRequire } from 'node:module';",

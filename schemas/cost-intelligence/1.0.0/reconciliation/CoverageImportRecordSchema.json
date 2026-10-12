@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/reconciliation/CoverageImportRecordSchema/1.0.0",
+  "x-schema-completeness": "partial_wrapper_requires_combined_validation",
+  "x-combined-validator": "validateCoverageImportRecordBoundary",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceId",
+    "importId",
+    "revision",
+    "predecessorHash",
+    "scope",
+    "sourceAccountRef",
+    "sourceProjectRef",
+    "currency",
+    "periodStart",
+    "periodEnd",
+    "timeZone",
+    "coverageStart",
+    "coverageEnd",
+    "sourceArtifactHash",
+    "adapterVersion",
+    "sourceSchemaVersion",
+    "cursorRef",
+    "retrievedAt",
+    "retrievalStatus",
+    "recordCount",
+    "zeroEvidenceRef",
+    "evidenceMode",
+    "verificationStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "sourceId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "importId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "predecessorHash": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "scope": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "tenantId",
+        "projectId",
+        "environment",
+        "billingMode"
+      ],
+      "properties": {
+        "tenantId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "projectId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "const": "development",
+              "type": "string"
+            },
+            {
+              "const": "test",
+              "type": "string"
+            },
+            {
+              "const": "production",
+              "type": "string"
+            }
+          ]
+        },
+        "billingMode": {
+          "anyOf": [
+            {
+              "const": "live",
+              "type": "string"
+            },
+            {
+              "const": "sandbox",
+              "type": "string"
+            },
+            {
+              "const": "simulated",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "sourceAccountRef": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceProjectRef": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "currency": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "periodStart": {
+      "format": "date-time",
+      "maxLength": 40,
+      "type": "string"
+    },
+    "periodEnd": {
+      "format": "date-time",
+      "maxLength": 40,
+      "type": "string"
+    },
+    "timeZone": {
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_+/-]+$",
+      "type": "string"
+    },
+    "coverageStart": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coverageEnd": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceArtifactHash": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "adapterVersion": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "sourceSchemaVersion": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "cursorRef": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retrievedAt": {
+      "format": "date-time",
+      "maxLength": 40,
+      "type": "string"
+    },
+    "retrievalStatus": {
+      "anyOf": [
+        {
+          "const": "complete",
+          "type": "string"
+        },
+        {
+          "const": "no_data",
+          "type": "string"
+        },
+        {
+          "const": "delayed",
+          "type": "string"
+        },
+        {
+          "const": "incomplete",
+          "type": "string"
+        },
+        {
+          "const": "explicit_zero",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        }
+      ]
+    },
+    "recordCount": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "zeroEvidenceRef": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidenceMode": {
+      "anyOf": [
+        {
+          "const": "mocked",
+          "type": "string"
+        },
+        {
+          "const": "sandbox",
+          "type": "string"
+        },
+        {
+          "const": "live",
+          "type": "string"
+        }
+      ]
+    },
+    "verificationStatus": {
+      "anyOf": [
+        {
+          "const": "verified",
+          "type": "string"
+        },
+        {
+          "const": "unverified",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}
