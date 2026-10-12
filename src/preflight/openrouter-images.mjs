@@ -134,6 +134,31 @@ function targetContentDigest(cellId, target) {
   }
 }
 
+function deepFreeze(value) {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Reflect.ownKeys(value)) deepFreeze(value[key]);
+  }
+  return value;
+}
+
+/**
+ * The host never receives the caller's live target: it gets a deep-frozen structured clone, so a caller mutating its
+ * object while the host awaits (and restoring it before the digest check) cannot change what the host acts on. The
+ * clone keeps non-JSON extra fields (Date, NaN, undefined); a target holding something structuredClone cannot copy
+ * (a function, a symbol value) fails closed, and so does a clone whose binding digest differs from the original's.
+ */
+function freezeTargetCopy(cellId, target, digestOfTarget) {
+  let copy;
+  try {
+    copy = deepFreeze(structuredClone(target));
+    if (targetContentDigest(cellId, copy) !== digestOfTarget) throw new TypeError('target copy');
+  } catch {
+    throw error('unsupported_image_configuration', 'The OpenRouter image target cannot be copied for the host port.');
+  }
+  return copy;
+}
+
 function safeCredentialEvidence(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || typeof value.ref !== 'string' || !SAFE_REF.test(value.ref)
@@ -373,13 +398,14 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         throw error('credential_unavailable', 'A billable credential needs a provider account and project scope.');
       }
       const targetDigest = targetContentDigest(cell_id, target);
+      const hostTarget = freezeTargetCopy(cell_id, target, targetDigest);
       const assertTargetUnchanged = () => {
         if (targetContentDigest(cell_id, target) !== targetDigest) {
           throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was validated.');
         }
       };
       const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope,
-        target, grantRef: grant_ref, deadlineAt: deadline_at, now });
+        target: hostTarget, grantRef: grant_ref, deadlineAt: deadline_at, now });
       const credential = Object.freeze({ token });
       assertTargetUnchanged();
       // The credential await may outlast the deadline (or the clock may fault), so re-check before the host prepare.
@@ -387,11 +413,11 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         throw error('preflight_deadline_passed', 'The approved operation deadline passed while the credential was resolved.');
       }
       const hostPrepared = dispatchPort.prepare
-        ? await dispatchPort.prepare({ ...input, cell_id, target, configuration: target.configuration, grant_ref, deadline_at,
+        ? await dispatchPort.prepare({ ...input, cell_id, target: hostTarget, configuration: hostTarget.configuration, grant_ref, deadline_at,
           scope: hostScope, credential }) : undefined;
       assertTargetUnchanged();
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id, target, targetDigest, grant_ref, scope, hostScope, deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id, target, hostTarget, targetDigest, grant_ref, scope, hostScope, deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
@@ -429,13 +455,13 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       }
       const timeout = AbortSignal.timeout(Math.min(remaining, 120_000));
       // The bound fields come from the prepared state after the spread, as in prepare: the host sees the values that
-      // were checked and bound, never a re-read of the caller's input. The runner passes the bound target's configuration.
-      const hostArgs = { ...args, cell_id: state.cell_id, target: state.target, configuration: state.target.configuration,
+      // were checked and bound, never a re-read of the caller's input. The host gets the frozen target copy made at prepare.
+      const hostArgs = { ...args, cell_id: state.cell_id, target: state.hostTarget, configuration: state.hostTarget.configuration,
         grant_ref: state.grant_ref, deadline_at: state.deadline_at, scope: state.hostScope,
         prepared: state.hostPrepared, credential: state.credential,
         signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout };
-      // The target content check runs last, immediately before the host port. This guarantees the target was intact
-      // when the host call began; the host holds the bound target object itself and is trusted not to mutate it.
+      // The target content check runs last, immediately before the host port. It confirms the caller's target object
+      // still matches what was validated; the host only ever receives the frozen copy, never that live object.
       if (targetContentDigest(state.cell_id, state.target) !== state.targetDigest) {
         throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
       }

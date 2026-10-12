@@ -664,7 +664,7 @@ test('fields the validator and binding never read do not affect the target diges
   input.target.ratio = Infinity;
   await adapter.dispatch({ ...input, configuration: { divergent: true }, prepared });
   assert.equal(dispatches, 1);
-  assert.equal(hostConfiguration, input.target.configuration, 'a divergent top-level configuration never reaches the host');
+  assert.deepEqual(hostConfiguration, input.target.configuration, 'a divergent top-level configuration never reaches the host');
 });
 
 test('a caller getter that mutates the target while dispatch reads its input is refused before the host dispatch', async () => {
@@ -699,7 +699,8 @@ test('getters on the dispatch input that switch values after N reads never reach
   Object.defineProperty(din, 'grant_ref', { enumerable: true, get: after(1, input.grant_ref, 'grant:evil') });
   await adapter.dispatch(din);
   assert.equal(seen.length, 1);
-  assert.equal(seen[0].target, input.target);
+  assert.notEqual(seen[0].target, input.target, 'the host gets a frozen copy, not the live object');
+  assert.deepEqual(seen[0].target, input.target);
   assert.equal(seen[0].target.model, input.target.model);
   assert.equal(seen[0].scope.project_ref, input.scope.project_ref);
   assert.ok(Object.isFrozen(seen[0].scope));
@@ -709,4 +710,60 @@ test('getters on the dispatch input that switch values after N reads never reach
   await assert.rejects(adapter.dispatch({ ...input, prepared: second, get run_id() { return 1; }, get zz() { throw new Error('boom'); } }),
     (error) => error.code === 'credential_unavailable');
   await assert.rejects(adapter.dispatch(null), (error) => error.code === 'credential_unavailable');
+});
+
+const deepFrozen = (value) => value === null || typeof value !== 'object'
+  || (Object.isFrozen(value) && Reflect.ownKeys(value).every((key) => deepFrozen(value[key])));
+const EVIL_MODEL = 'evil-author/evil-model';
+
+test('the host dispatch only ever sees the validated target, even when the caller flips and restores it while the host awaits', async () => {
+  const seen = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(args) {
+      await null;
+      seen.push({ model: args.target.model, provider_tag: args.configuration.provider_tag, frozen: deepFrozen(args.target) });
+      return {};
+    } } });
+  const input = billable();
+  const model = input.target.model;
+  const prepared = await adapter.prepare(input);
+  const pending = adapter.dispatch({ ...input, prepared });
+  input.target.model = EVIL_MODEL;
+  input.target.configuration.provider_tag = 'evil-tag';
+  await pending;
+  assert.deepEqual(seen, [{ model, provider_tag: target().configuration.provider_tag, frozen: true }]);
+});
+
+test('the host prepare only ever sees the validated target while the caller flips and restores it', async () => {
+  const seen = [];
+  const input = billable();
+  const model = input.target.model;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare(args) {
+      input.target.model = EVIL_MODEL;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      seen.push({ model: args.target.model, frozen: deepFrozen(args.target) });
+      input.target.model = model;
+      return {};
+    },
+    async dispatch() { return {}; } } });
+  await adapter.prepare(input);
+  assert.deepEqual(seen, [{ model, frozen: true }]);
+});
+
+test('dispatch reads each enumerable input property once, and a target the host cannot be given as a copy fails closed', async () => {
+  let reads = 0;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { throw new Error('host prepare must not run'); }, async dispatch() { return {}; } } });
+  const plain = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { return {}; } } });
+  const input = billable();
+  const prepared = await plain.prepare(input);
+  const din = { ...input, prepared };
+  Object.defineProperty(din, 'zz', { enumerable: true, get() { reads += 1; return 1; } });
+  await plain.dispatch(din);
+  assert.equal(reads, 1);
+  const uncloneable = billable();
+  uncloneable.target.hook = () => {};
+  await assert.rejects(adapter.prepare(uncloneable), (error) => error.code === 'unsupported_image_configuration');
 });
