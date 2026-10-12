@@ -8,6 +8,42 @@ import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } 
 const OPERATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.revalidate", "composition.get", "composition.history",
   "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
 const HASH = /^sha256:[a-f0-9]{64}$/;
+const memoryDatabaseSchedulers = new WeakMap();
+const fileDatabaseSchedulers = new WeakMap();
+
+function makeDatabaseScheduler() {
+  return { context: new AsyncLocalStorage(), queue: Promise.resolve() };
+}
+
+function schedulerOwnedBy(databaseScheduler, store) {
+  const owner = databaseScheduler.context.getStore();
+  return owner?.active === true && owner.store === store;
+}
+
+function databaseSchedulerFor(store) {
+  if (store.databasePath === ":memory:") {
+    let scheduler = memoryDatabaseSchedulers.get(store.db);
+    if (!scheduler) {
+      scheduler = makeDatabaseScheduler();
+      memoryDatabaseSchedulers.set(store.db, scheduler);
+    }
+    return scheduler;
+  }
+  // The Store registers a shared live identity per SQLite file. Keeping the
+  // scheduler weakly keyed by that identity means idle adapters retain the
+  // same queue for their whole connection lifetime, while a closed database
+  // can be collected and reopened with a fresh scheduler.
+  const identity = store.sqliteFileIdentity?.active;
+  if (!identity || typeof identity !== "object") {
+    throw new VersionStoreError("unavailable", "database.identity", true);
+  }
+  let scheduler = fileDatabaseSchedulers.get(identity);
+  if (!scheduler) {
+    scheduler = makeDatabaseScheduler();
+    fileDatabaseSchedulers.set(identity, scheduler);
+  }
+  return scheduler;
+}
 
 function record(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 
@@ -196,16 +232,29 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     faultInjector !== undefined && typeof faultInjector !== "function") {
     throw new VersionStoreError("invalid_request", "adapter_options");
   }
-  const transactionContext = new AsyncLocalStorage();
+  const databaseScheduler = databaseSchedulerFor(store);
   const inspectionRepair = createSqliteInspectionRepairController({ database: store.db, now: store.now });
-  let serialQueue = Promise.resolve();
   const serial = (work) => {
-    if (transactionContext.getStore() === store) return Promise.resolve().then(work);
-    const prior = serialQueue;
+    const owner = databaseScheduler.context.getStore();
+    if (owner?.active === true && owner.store === store) return Promise.resolve().then(work);
+    // Waiting on another connection to this file from inside the current
+    // callback would deadlock behind its transaction. Reject that nested use;
+    // independent top-level operations still queue normally.
+    if (owner?.active === true) {
+      return Promise.reject(new VersionStoreError("unavailable", "database.cross_connection", true));
+    }
+    const prior = databaseScheduler.queue;
     let release;
     const barrier = new Promise((resolve) => { release = resolve; });
-    serialQueue = prior.then(() => barrier);
-    return prior.then(() => transactionContext.run(store, work)).finally(() => release());
+    const operationOwner = { store, active: true };
+    databaseScheduler.queue = prior.then(() => barrier);
+    return prior.then(() => databaseScheduler.context.run(operationOwner, work)).finally(() => {
+      // AsyncLocalStorage propagates to detached timers and promises too. Mark
+      // the ownership token inactive before releasing the queue so a late
+      // descendant cannot reuse a transaction's reentrancy privilege.
+      operationOwner.active = false;
+      release();
+    });
   };
 
   const storage = {
@@ -242,7 +291,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       // Publication calls this from completeIfActive while that adapter owns
       // the same connection's BEGIN IMMEDIATE transaction. Preserve a truly
       // synchronous final-owner-fence→CAS ordering inside that transaction.
-      if (transactionContext.getStore() === store) return store.commitCompositionRevision(input, transaction);
+      if (schedulerOwnedBy(databaseScheduler, store)) return store.commitCompositionRevision(input, transaction);
       return serial(() => store.commitCompositionRevision(input, transaction));
     },
     inspectionRepair,
@@ -465,7 +514,9 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     },
     getHandoffContext(input) {
       const get = otherPorts.storage?.getHandoffContext;
-      return typeof get === "function" ? serial(() => get(input)) : Promise.resolve(null);
+      // This injected external read does not use SQLite. Keep it outside the
+      // database queue so unrelated I/O cannot delay local transactions.
+      return typeof get === "function" ? Promise.resolve().then(() => get(input)) : Promise.resolve(null);
     },
     async prepareDesignVersion(input) {
       return serial(async () => {

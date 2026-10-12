@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { spawnSync } from "node:child_process";
-import { cp, readFile, unlink } from "node:fs/promises";
+import { cp, link, readFile, symlink, unlink, writeFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,6 +42,64 @@ function request(actionId, plan) {
     occurred_at: "2026-10-10T12:20:00.000Z", ingested_at: "2026-10-10T12:20:00.000Z",
     environment: "test", billing_mode: "simulated", source_refs: ["source-api-1"],
     operation: "generate", action_id: actionId, payload: { brief_id: SCOPE.brief_id, plan } };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => { resolve = resolvePromise; reject = rejectPromise; });
+  return { promise, resolve, reject };
+}
+
+function concurrentProvider(label, counters, waitForProvider = async () => {}) {
+  // Text bytes stand in for durable object identity only; this fixture declares
+  // image/png to satisfy the edit contract but performs no image codec check.
+  const artifactBytes = Buffer.from(`exact concurrent artifact bytes:${label}`);
+  const content_hash = `sha256:${createHash("sha256").update(artifactBytes).digest("hex")}`;
+  return {
+    resolveRoute: () => ({ retry_mapping_ref: "retry:concurrent-fixture/1", provider: {
+      name: "fixture-provider", model: "fixture-model", endpoint: "test:/image",
+      sdk: { name: "fixture-sdk", version: "1.0" },
+    } }),
+    async generate(input) {
+      counters.provider += 1;
+      (counters.providerTransportIds ??= []).push(input.transport_attempt_id);
+      await input.recordTransportAttempt(input.transport_attempt_id);
+      await waitForProvider(input);
+      return { design_version_id: `design:${label}`, artifact: {
+        artifact_id: `artifact:${label}`, content_hash, media_type: "image/png",
+      }, artifact_bytes: Uint8Array.from(artifactBytes), provider: "fixture-provider", model: "fixture-model",
+      usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 } };
+    },
+    async edit(input) {
+      counters.provider += 1;
+      (counters.providerTransportIds ??= []).push(input.transport_attempt_id);
+      await input.recordTransportAttempt(input.transport_attempt_id);
+      await waitForProvider(input);
+      return { design_version_id: `design:${label}`, artifact: {
+        artifact_id: `artifact:${label}`, content_hash, media_type: "image/png",
+      }, artifact_bytes: Uint8Array.from(artifactBytes), provider: "fixture-provider", model: "fixture-model",
+      usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 } };
+    },
+  };
+}
+
+function barrierFor(participants) {
+  let arrived = 0;
+  const gate = deferred();
+  return async () => {
+    arrived += 1;
+    if (arrived === participants) gate.resolve();
+    await gate.promise;
+  };
+}
+
+function concurrentApi(store, label, counters, waitForProvider) {
+  let portId = 0;
+  let apiId = 0;
+  const ports = portsFor(store, counters, () => `${label}-port-${++portId}`);
+  ports.provider = concurrentProvider(label, counters, waitForProvider);
+  return createCreativeApi({ ports, now: () => NOW, idFactory: () => `${label}-api-${++apiId}` });
 }
 
 function inspectionRequest(actionId, designVersionId) {
@@ -2854,6 +2912,523 @@ test("paired API persists explicit A/B/C branches and restore-by-selection witho
     left_design_version_id: b.design_version_id, right_design_version_id: c.design_version_id });
   assert.equal(comparison.left.parent_version_id, a.design_version_id);
   assert.equal(comparison.right.parent_version_id, a.design_version_id);
+});
+
+test("SQLite publication is safe across adapter factories, file connections, stale CAS, replay, cancel, and restart", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-publication-concurrency-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  const aliasPath = join(root, "versions-symlink.sqlite");
+  const hardLinkPath = join(root, "versions-hardlink.sqlite");
+  const brief = await fixture("brief");
+  const store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
+
+  const makeBody = async (actionId, selection_mode) => {
+    const body = request(actionId, await fixture("generate-plan"));
+    if (selection_mode) body.payload.selection_mode = selection_mode;
+    return body;
+  };
+  const seedCounters = { provider: 0, reserved: 0 };
+  const seedApi = concurrentApi(store, "concurrency-root", seedCounters);
+  const seedBody = await makeBody("concurrency-root-action");
+  const seeded = await seedApi.invoke(actor(), seedBody);
+  assert.equal(seeded.ok, true, JSON.stringify(seeded));
+  assert.equal(seedCounters.provider, 1);
+  const rootVersion = seeded.result.design_version;
+
+  const makeEditBody = async (actionId, parent, selection_mode) => {
+    const plan = await fixture("edit-plan");
+    plan.base = { brief_hash: parent.brief_hash, design_hash: parent.design_hash,
+      design_version_id: parent.design_version_id };
+    for (const step of plan.steps) {
+      if (step.parameters.design_version_id !== undefined) step.parameters.design_version_id = parent.design_version_id;
+      if (step.parameters.artifact_id !== undefined) step.parameters.artifact_id = parent.artifact.artifact_id;
+    }
+    plan.expected_result.parent_version_id = parent.design_version_id;
+    return { ...request(actionId, plan), operation: "edit",
+      payload: { brief_id: SCOPE.brief_id, design_version_id: parent.design_version_id, selection_mode, plan } };
+  };
+
+  const runConcurrentPair = async ({ firstStore, secondStore, parent, firstLabel, secondLabel,
+    firstAction, secondAction, selection_mode }) => {
+    const waitForProvider = barrierFor(2);
+    const firstCounters = { provider: 0, reserved: 0 };
+    const secondCounters = { provider: 0, reserved: 0 };
+    const firstApi = concurrentApi(firstStore, firstLabel, firstCounters, waitForProvider);
+    const secondApi = concurrentApi(secondStore, secondLabel, secondCounters, waitForProvider);
+    const firstBody = await makeEditBody(firstAction, parent, selection_mode);
+    const secondBody = await makeEditBody(secondAction, parent, selection_mode);
+    const [first, second] = await Promise.all([
+      firstApi.invoke(actor(), firstBody), secondApi.invoke(actor(), secondBody),
+    ]);
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(second.ok, true, JSON.stringify(second));
+    assert.deepEqual([firstCounters.provider, secondCounters.provider], [1, 1]);
+    return { firstApi, secondApi, firstBody, secondBody, first, second, firstCounters, secondCounters };
+  };
+
+  // Two factories for one connection keep their per-database transaction
+  // ownership shared even when the queue has become idle between operations.
+  const sameConnection = await runConcurrentPair({ firstStore: store, secondStore: store, parent: rootVersion,
+    firstLabel: "same-connection-a", secondLabel: "same-connection-b",
+    firstAction: "same-connection-branch-a", secondAction: "same-connection-branch-b",
+    selection_mode: "branch" });
+  for (const result of [sameConnection.first, sameConnection.second]) {
+    const bytes = await store.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: result.result.design_version.design_version_id });
+    assert.deepEqual(Buffer.from(bytes), Buffer.from(`exact concurrent artifact bytes:${result.result.design_version.design_version_id.replace("design:", "")}`));
+  }
+  const sameReplay = await sameConnection.secondApi.invoke(actor(), sameConnection.firstBody);
+  assert.equal(sameReplay.ok, true, JSON.stringify(sameReplay));
+  assert.equal(sameReplay.replayed, true);
+  assert.equal(sameConnection.firstCounters.provider, 1, "completed cross-adapter replay does not redispatch");
+  const changedReplayBody = structuredClone(sameConnection.firstBody);
+  changedReplayBody.payload.plan.steps[0].parameters.variant_count = 2;
+  const sameConflict = await sameConnection.secondApi.invoke(actor(), changedReplayBody);
+  assert.equal(sameConflict.ok, false);
+  assert.equal(sameConflict.error.code, "conflict");
+  assert.equal(sameConnection.firstCounters.provider, 1, "duplicate action conflict does not redispatch");
+
+  // A symbolic path alias resolves to the same registered SQLite identity.
+  // This pair uses two separate DatabaseSync connections and must both publish.
+  await symlink(databasePath, aliasPath);
+  assert.throws(() => new CreativeVersionStore({ databasePath: aliasPath,
+    objectRoot: join(root, "mismatched-objects"), now: () => NOW }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "database.object_root_mismatch");
+  const aliasStore = new CreativeVersionStore({ databasePath: aliasPath, objectRoot, now: () => NOW });
+  t.after(() => aliasStore.close());
+  const separateConnections = await runConcurrentPair({ firstStore: store, secondStore: aliasStore, parent: rootVersion,
+    firstLabel: "separate-connection-a", secondLabel: "separate-connection-b",
+    firstAction: "separate-connection-branch-a", secondAction: "separate-connection-branch-b",
+    selection_mode: "branch" });
+
+  // A top-level stale selection CAS remains fenced after both providers have
+  // completed. Exactly one immutable version can advance the empty selection.
+  const staleGate = barrierFor(2);
+  const staleCountersA = { provider: 0, reserved: 0 };
+  const staleCountersB = { provider: 0, reserved: 0 };
+  const staleApiA = concurrentApi(store, "stale-cas-a", staleCountersA, staleGate);
+  const staleApiB = concurrentApi(aliasStore, "stale-cas-b", staleCountersB, staleGate);
+  const staleBodyA = await makeEditBody("stale-cas-action-a", rootVersion, "advance");
+  const staleBodyB = await makeEditBody("stale-cas-action-b", rootVersion, "advance");
+  const staleResults = await Promise.all([staleApiA.invoke(actor(), staleBodyA), staleApiB.invoke(actor(), staleBodyB)]);
+  assert.equal(staleResults.filter((entry) => entry.ok).length, 1, JSON.stringify(staleResults));
+  assert.equal(staleResults.filter((entry) => !entry.ok && entry.error.code === "stale_version").length, 1,
+    JSON.stringify(staleResults));
+  assert.deepEqual([staleCountersA.provider, staleCountersB.provider], [1, 1]);
+  const staleWinner = staleResults.find((entry) => entry.ok);
+  const staleLoserBody = staleResults[0].ok ? staleBodyB : staleBodyA;
+  const staleLoserActionId = staleLoserBody.action_id;
+  const selected = store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  assert.equal(selected.design_version_id, staleWinner.result.design_version.design_version_id);
+  const staleWinnerBody = staleWinner === staleResults[0] ? staleBodyA : staleBodyB;
+  const staleWinnerApi = staleWinner === staleResults[0] ? staleApiB : staleApiA;
+  const staleReplay = await staleWinnerApi.invoke(actor(), staleWinnerBody);
+  assert.equal(staleReplay.ok, true, JSON.stringify(staleReplay));
+  assert.equal(staleReplay.replayed, true);
+
+  // Provider I/O is outside the SQLite queue: a second connection can cancel
+  // an in-flight request, and the late response leaves no visible version.
+  const providerEntered = deferred();
+  const providerRelease = deferred();
+  const cancelCounters = { provider: 0, reserved: 0 };
+  const cancelApi = concurrentApi(store, "cancel-race", cancelCounters, async () => {
+    providerEntered.resolve();
+    await providerRelease.promise;
+  });
+  const cancelController = concurrentApi(aliasStore, "cancel-controller", { provider: 0, reserved: 0 });
+  const cancelBody = await makeEditBody("cancel-race-action", rootVersion, "branch");
+  const pending = cancelApi.invoke(actor(), cancelBody);
+  await providerEntered.promise;
+  const job = store.db.prepare("SELECT job_id FROM creative_jobs WHERE action_id=?").get(cancelBody.action_id);
+  assert.ok(job?.job_id);
+  const cancelRequest = { ...request("cancel-race-command", await fixture("generate-plan")),
+    operation: "cancel", payload: { job_id: job.job_id } };
+  const cancellation = await cancelController.invoke(actor(), cancelRequest);
+  assert.equal(cancellation.ok, true, JSON.stringify(cancellation));
+  assert.equal(cancellation.job.status, "cancelled");
+  providerRelease.resolve();
+  const lateResponse = await pending;
+  assert.equal(lateResponse.ok, false);
+  assert.equal(lateResponse.error.code, "cancelled");
+  assert.equal(cancelCounters.provider, 1);
+  assert.equal(store.db.prepare("SELECT status FROM creative_jobs WHERE job_id=?").get(job.job_id).status, "cancelled");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions WHERE creation_job_id=?")
+    .get(job.job_id).count, 0);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creation_actions WHERE job_id=?")
+    .get(job.job_id).count, 0);
+
+  const committedVersionIds = [
+    rootVersion.design_version_id,
+    sameConnection.first.result.design_version.design_version_id,
+    sameConnection.second.result.design_version.design_version_id,
+    separateConnections.first.result.design_version.design_version_id,
+    separateConnections.second.result.design_version.design_version_id,
+    staleWinner.result.design_version.design_version_id,
+  ];
+  assert.equal(store.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 20 }).items.length, 6);
+
+  store.close();
+  aliasStore.close();
+  const reopened = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => reopened.close());
+  const recovery = await reopened.recover();
+  assert.deepEqual(recovery, { examined: 1, committed: 0, conflicts: 0, unknown: 1 },
+    "recovery records the stale CAS loser as unknown and cannot publish it");
+  assert.equal(reopened.db.prepare("SELECT state FROM creation_actions WHERE action_id=?")
+    .get(staleLoserActionId).state, "unknown");
+  const staleLoserJob = reopened.db.prepare("SELECT status,error_json FROM creative_jobs WHERE action_id=?")
+    .get(staleLoserActionId);
+  assert.equal(staleLoserJob.status, "failed");
+  assert.equal(JSON.parse(staleLoserJob.error_json).code, "stale_version");
+  assert.equal(reopened.db.prepare("SELECT count(*) AS count FROM design_versions WHERE action_id=?")
+    .get(staleLoserActionId).count, 0);
+  assert.equal(reopened.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 20 }).items.length, 6);
+  assert.equal(reopened.db.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+  assert.deepEqual(reopened.db.prepare("PRAGMA foreign_key_check").all(), []);
+  for (const design_version_id of committedVersionIds) {
+    const bytes = await reopened.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id, design_version_id });
+    const label = design_version_id.replace("design:", "");
+    assert.deepEqual(Buffer.from(bytes), Buffer.from(`exact concurrent artifact bytes:${label}`));
+  }
+  const restartCounters = { provider: 0, reserved: 0 };
+  const restartApi = concurrentApi(reopened, "restart-replay", restartCounters);
+  const restartReplay = await restartApi.invoke(actor(), sameConnection.firstBody);
+  assert.equal(restartReplay.ok, true, JSON.stringify(restartReplay));
+  assert.equal(restartReplay.replayed, true);
+  assert.equal(restartCounters.provider, 0, "restart replay uses the committed exact artifact without redispatch");
+  const staleLoserReplay = await restartApi.invoke(actor(), staleLoserBody);
+  assert.equal(staleLoserReplay.ok, true, JSON.stringify(staleLoserReplay));
+  assert.equal(staleLoserReplay.replayed, true);
+  assert.equal(staleLoserReplay.job.status, "failed");
+  assert.equal(staleLoserReplay.job.error.code, "stale_version");
+  assert.equal(restartCounters.provider, 0, "a recovered stale CAS outcome never redispatches");
+
+  reopened.close();
+  // Opt-in evidence capture is used only by the isolated runner; normal tests
+  // leave their temporary database and object tree under the cleanup hook.
+  const evidenceDbPath = process.env.CE_SQLITE_COMPLETION_EVIDENCE_DB;
+  if (typeof evidenceDbPath === "string" && evidenceDbPath.length > 0) {
+    const evidenceObjectPath = `${evidenceDbPath}.objects`;
+    await cp(databasePath, evidenceDbPath, { force: false, errorOnExist: true });
+    await cp(objectRoot, evidenceObjectPath, { recursive: true, force: false, errorOnExist: true });
+    const evidenceDbBytes = await readFile(evidenceDbPath);
+    t.diagnostic(JSON.stringify({ evidence_db_path: evidenceDbPath, evidence_db_bytes: evidenceDbBytes.byteLength,
+      evidence_db_sha256: createHash("sha256").update(evidenceDbBytes).digest("hex"),
+      evidence_object_path: evidenceObjectPath }));
+  }
+  await link(databasePath, hardLinkPath);
+  assert.throws(() => new CreativeVersionStore({ databasePath: hardLinkPath,
+    objectRoot: join(root, "hardlink-objects"), now: () => NOW }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "database.hard_link_alias");
+});
+
+test("SQLite reentrancy expires with its operation and cannot leak through detached async context", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-context-lifetime-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const first = createCreativeVersionApiPorts({ store }).ports;
+  const second = createCreativeVersionApiPorts({ store }).ports;
+  const originalGetBrief = store.getBrief.bind(store);
+  let reentrantChildEntered = false;
+  store.getBrief = (input) => {
+    if (input.test_mode === "outer-reentrant") {
+      return second.storage.getBrief({ ...input, test_mode: "inner-reentrant" });
+    }
+    if (input.test_mode === "inner-reentrant") reentrantChildEntered = true;
+    return originalGetBrief(input);
+  };
+  assert.ok(await first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "outer-reentrant" }));
+  assert.equal(reentrantChildEntered, true, "an active callback may reenter through another factory on the same connection");
+
+  const aliasPath = join(root, "versions-symlink.sqlite");
+  await symlink(join(root, "versions.sqlite"), aliasPath);
+  const aliasStore = new CreativeVersionStore({ databasePath: aliasPath,
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => aliasStore.close());
+  const aliasPorts = createCreativeVersionApiPorts({ store: aliasStore }).ports;
+  store.getBrief = (input) => {
+    if (input.test_mode === "cross-connection-nested") {
+      return aliasPorts.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id });
+    }
+    return originalGetBrief(input);
+  };
+  await assert.rejects(first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "cross-connection-nested" }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "database.cross_connection");
+  store.getBrief = originalGetBrief;
+  assert.ok(await second.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a rejected nested cross-connection call releases the queue");
+
+  const childGate = deferred();
+  const childScheduled = deferred();
+  const childAttempted = deferred();
+  const childFinished = deferred();
+  const holdEntered = deferred();
+  let releaseHold;
+  let childEntered = false;
+  store.getBrief = (input) => {
+    if (input.test_mode === "seed") {
+      setImmediate(async () => {
+        childScheduled.resolve();
+        await childGate.promise;
+        childAttempted.resolve();
+        try { childFinished.resolve(await second.storage.getBrief({ ...input, test_mode: "child" })); }
+        catch (error) { childFinished.reject(error); }
+      });
+      return originalGetBrief(input);
+    }
+    if (input.test_mode === "hold") {
+      holdEntered.resolve();
+      return new Promise((resolve) => { releaseHold = () => resolve(originalGetBrief(input)); });
+    }
+    if (input.test_mode === "child") childEntered = true;
+    return originalGetBrief(input);
+  };
+
+  await first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "seed" });
+  await childScheduled.promise;
+  const holding = first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "hold" });
+  await holdEntered.promise;
+  childGate.resolve();
+  await childAttempted.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(childEntered, false, "a settled operation's inherited ALS context cannot bypass the active database queue");
+  releaseHold();
+  await holding;
+  assert.ok(await childFinished.promise);
+  assert.equal(childEntered, true, "the detached child runs after the current serialized owner releases");
+
+  // A detached child keeps the old AsyncLocalStorage context after the old
+  // Store closes, but a reopened same-path Store has a fresh scheduler owner.
+  const staleContextGate = deferred();
+  const staleChildScheduled = deferred();
+  const staleChildAttempted = deferred();
+  const staleChildFinished = deferred();
+  store.getBrief = (input) => {
+    if (input.test_mode === "stale-context-seed") {
+      setImmediate(async () => {
+        staleChildScheduled.resolve();
+        await staleContextGate.promise;
+        staleChildAttempted.resolve();
+        try { staleChildFinished.resolve(await reopenedPorts.storage.getBrief({
+          scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "stale-context-child",
+        })); } catch (error) { staleChildFinished.reject(error); }
+      });
+    }
+    return originalGetBrief(input);
+  };
+  await first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, test_mode: "stale-context-seed" });
+  await staleChildScheduled.promise;
+  store.close();
+  aliasStore.close();
+  const reopenedStore = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => reopenedStore.close());
+  const reopenedPorts = createCreativeVersionApiPorts({ store: reopenedStore }).ports;
+  const originalReopenedGetBrief = reopenedStore.getBrief.bind(reopenedStore);
+  const reopenedHoldEntered = deferred();
+  const releaseReopened = deferred();
+  let staleChildEntered = false;
+  reopenedStore.getBrief = (input) => {
+    if (input.test_mode === "reopened-hold") {
+      reopenedHoldEntered.resolve();
+      return releaseReopened.promise.then(() => originalReopenedGetBrief(input));
+    }
+    if (input.test_mode === "stale-context-child") staleChildEntered = true;
+    return originalReopenedGetBrief(input);
+  };
+  const reopenedHolding = reopenedPorts.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "reopened-hold" });
+  await reopenedHoldEntered.promise;
+  staleContextGate.resolve();
+  await staleChildAttempted.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(staleChildEntered, false, "an old context cannot reenter the reopened same-inode scheduler");
+  releaseReopened.resolve();
+  await reopenedHolding;
+  assert.ok(await staleChildFinished.promise);
+  assert.equal(staleChildEntered, true);
+  await assert.rejects(first.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    (error) => error instanceof VersionStoreError && error.code === "unavailable");
+});
+
+test("SQLite in-memory schedulers are shared only by the same DatabaseSync instance", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-memory-scheduler-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const firstStore = new CreativeVersionStore({ databasePath: ":memory:", objectRoot: join(root, "first-objects"), now: () => NOW });
+  const secondStore = new CreativeVersionStore({ databasePath: ":memory:", objectRoot: join(root, "second-objects"), now: () => NOW });
+  t.after(() => firstStore.close());
+  t.after(() => secondStore.close());
+  for (const store of [firstStore, secondStore]) {
+    store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  }
+  const firstFactory = createCreativeVersionApiPorts({ store: firstStore }).ports;
+  const secondFactory = createCreativeVersionApiPorts({ store: firstStore }).ports;
+  const independentFactory = createCreativeVersionApiPorts({ store: secondStore }).ports;
+  const originalGetBrief = firstStore.getBrief.bind(firstStore);
+  const holdEntered = deferred();
+  const releaseHold = deferred();
+  let secondFactoryEntered = false;
+  firstStore.getBrief = (input) => {
+    if (input.test_mode === "held-memory-read") {
+      holdEntered.resolve();
+      return releaseHold.promise.then(() => originalGetBrief(input));
+    }
+    if (input.test_mode === "same-memory-instance-queued") secondFactoryEntered = true;
+    return originalGetBrief(input);
+  };
+  const held = firstFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "held-memory-read" });
+  await holdEntered.promise;
+  assert.ok(await independentFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "an independent :memory: connection has an independent scheduler");
+  const queued = secondFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    test_mode: "same-memory-instance-queued" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(secondFactoryEntered, false, "two factories over one :memory: connection share queue ownership");
+  releaseHold.resolve();
+  await held;
+  assert.ok(await queued);
+  assert.equal(secondFactoryEntered, true);
+});
+
+test("failed SQLite construction closes the handle and permits a clean retry at the same path", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-constructor-cleanup-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  await writeFile(databasePath, "not a SQLite database");
+  assert.throws(() => new CreativeVersionStore({ databasePath, objectRoot: join(root, "objects"), now: () => NOW }),
+    (error) => error instanceof VersionStoreError && error.code === "unavailable");
+  await unlink(databasePath);
+  const store = new CreativeVersionStore({ databasePath, objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  assert.equal(store.db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
+  const adapter = createCreativeVersionApiPorts({ store }).ports;
+  assert.equal(typeof adapter.storage.getBrief, "function");
+});
+
+test("SQLite caller transactions remain untouched and external handoff reads stay outside the DB queue", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-boundaries-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const unrelatedStore = new CreativeVersionStore({ databasePath: join(root, "unrelated.sqlite"),
+    objectRoot: join(root, "unrelated-objects"), now: () => NOW });
+  t.after(() => unrelatedStore.close());
+  unrelatedStore.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const adapter = createCreativeVersionApiPorts({ store, otherPorts: { storage: {
+    async getHandoffContext() {
+      assert.equal(store.db.isTransaction, false, "external context must not run under a SQLite write transaction");
+      await externalGate.promise;
+      return null;
+    },
+  } } });
+  const externalGate = deferred();
+  const externalRead = adapter.storage.getHandoffContext({});
+  assert.equal(typeof externalRead?.then, "function", "the injected read keeps its asynchronous API contract");
+  const localRead = await adapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  assert.ok(localRead, "an unresolved external read cannot hold the local SQLite scheduler");
+  externalGate.resolve();
+  assert.equal(await externalRead, null);
+
+  const unrelatedAdapter = createCreativeVersionApiPorts({ store: unrelatedStore }).ports;
+  const originalGetBrief = store.getBrief.bind(store);
+  const localQueueEntered = deferred();
+  const releaseLocalQueue = deferred();
+  let lateFactoryEntered = false;
+  store.getBrief = (input) => {
+    if (input.hold_sqlite_queue) {
+      localQueueEntered.resolve();
+      return releaseLocalQueue.promise.then(() => originalGetBrief(input));
+    }
+    if (input.late_factory) lateFactoryEntered = true;
+    return originalGetBrief(input);
+  };
+  const heldLocalRead = adapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, hold_sqlite_queue: true });
+  await localQueueEntered.promise;
+  const lateFactory = createCreativeVersionApiPorts({ store }).ports;
+  const lateFactoryRead = lateFactory.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id, late_factory: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(lateFactoryEntered, false, "a factory created during a queued DB operation joins its current owner queue");
+  assert.ok(await unrelatedAdapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a waiting operation on one database cannot block an unrelated database");
+  releaseLocalQueue.resolve();
+  await heldLocalRead;
+  assert.ok(await lateFactoryRead);
+  assert.equal(lateFactoryEntered, true);
+  store.getBrief = originalGetBrief;
+
+  const throwingRead = createCreativeVersionApiPorts({ store, otherPorts: { storage: {
+    getHandoffContext() { throw new Error("fixture handoff read failure"); },
+  } } }).storage.getHandoffContext({});
+  assert.equal(typeof throwingRead?.then, "function", "synchronous injected errors keep Promise rejection semantics");
+  await assert.rejects(throwingRead, /fixture handoff read failure/);
+
+  store.db.exec("BEGIN IMMEDIATE; SAVEPOINT caller_owned");
+  await assert.rejects(adapter.jobs.completeIfActive({ operation: "generate" }, async () => {}),
+    (error) => error instanceof VersionStoreError && error.code === "unavailable");
+  assert.equal(store.db.isTransaction, true, "adapter rejection does not roll back a caller-owned transaction or savepoint");
+  store.db.exec("ROLLBACK TO caller_owned; RELEASE caller_owned; ROLLBACK");
+  assert.equal(store.db.isTransaction, false);
+  assert.ok(await adapter.storage.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "a rejected transaction boundary releases its scheduler slot");
+});
+
+test("independent Node processes serialize SQLite BEGIN IMMEDIATE without assuming a process-local queue", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-sqlite-cross-process-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  const store = new CreativeVersionStore({ databasePath, objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.db.exec("BEGIN IMMEDIATE");
+
+  const code = `import { DatabaseSync } from "node:sqlite";
+const db = new DatabaseSync(process.argv.at(-1));
+db.exec("PRAGMA busy_timeout=5000;");
+process.stdout.write("attempting\\n");
+db.exec("BEGIN IMMEDIATE;");
+process.stdout.write("acquired\\n");
+db.exec("COMMIT;");
+db.close();`;
+  const childArgs = ["--input-type=module", "-e", code, databasePath];
+  const child = spawn(process.execPath, childArgs, {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => { if (child.exitCode === null) child.kill("SIGTERM"); });
+  let stdout = "";
+  let stderr = "";
+  let signalAttempting;
+  const attempting = new Promise((resolve) => { signalAttempting = resolve; });
+  const exited = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+    if (stdout.includes("attempting\n")) signalAttempting();
+  });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  await attempting;
+  assert.equal(child.exitCode, null, "the second process waits while the first owns BEGIN IMMEDIATE");
+  store.db.exec("COMMIT");
+  const exit = await exited;
+  assert.deepEqual(exit, { code: 0, signal: null }, stderr);
+  assert.match(stdout, /attempting\nacquired\n/);
+  t.diagnostic(JSON.stringify({ executable: process.execPath, child_pid: child.pid,
+    argv: [process.execPath, ...childArgs], exit_code: exit.code, signal: exit.signal,
+    stdout_bytes: Buffer.byteLength(stdout), stdout_sha256: createHash("sha256").update(stdout).digest("hex"),
+    stdout, stderr_bytes: Buffer.byteLength(stderr), stderr_sha256: createHash("sha256").update(stderr).digest("hex"), stderr }));
 });
 
 test("paired adapter refuses external handoff while a SQLite publication transaction would be open", async (t) => {

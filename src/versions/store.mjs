@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
   canonicalHash,
@@ -33,6 +33,54 @@ const ATTEMPT_FIELDS = [
   "parent_design_hash", "transport_attempt_ids", "provider_request_ids", "usage_refs", "trace_refs",
 ];
 const publicationTransactionRegistries = new WeakMap();
+const activeSqliteFiles = new Map();
+
+function sqliteFileIdentity(databasePath) {
+  const canonicalPath = realpathSync(databasePath);
+  const stat = statSync(canonicalPath, { bigint: true });
+  // SQLite WAL/SHM files are addressed beside the opened pathname, so two
+  // hard-link names for one database file do not share the same sidecars.
+  if (stat.nlink > 1n) reject("unavailable", "database.hard_link_alias", true);
+  return { canonicalPath, key: `${stat.dev}:${stat.ino}` };
+}
+
+function rejectHardLinkAlias(databasePath) {
+  try {
+    const identity = sqliteFileIdentity(databasePath);
+    const active = activeSqliteFiles.get(identity.key);
+    if (active && active.canonicalPath !== identity.canonicalPath) {
+      reject("unavailable", "database.hard_link_alias", true);
+    }
+  } catch (error) {
+    if (error instanceof VersionStoreError || error?.code !== "ENOENT") throw error;
+  }
+}
+
+function registerSqliteFile(databasePath, objectRoot) {
+  const identity = sqliteFileIdentity(databasePath);
+  const canonicalObjectRoot = realpathSync(objectRoot);
+  let active = activeSqliteFiles.get(identity.key);
+  if (active && active.canonicalPath !== identity.canonicalPath) {
+    reject("unavailable", "database.hard_link_alias", true);
+  }
+  if (active && active.canonicalObjectRoot !== canonicalObjectRoot) {
+    reject("unavailable", "database.object_root_mismatch", true);
+  }
+  if (!active) {
+    active = { canonicalPath: identity.canonicalPath, canonicalObjectRoot, openConnections: 0 };
+    activeSqliteFiles.set(identity.key, active);
+  }
+  active.openConnections += 1;
+  return { ...identity, active };
+}
+
+function unregisterSqliteFile(identity) {
+  if (!identity) return;
+  identity.active.openConnections -= 1;
+  if (identity.active.openConnections === 0 && activeSqliteFiles.get(identity.key) === identity.active) {
+    activeSqliteFiles.delete(identity.key);
+  }
+}
 
 function providerTargetHash(value) {
   let serialized;
@@ -1738,11 +1786,20 @@ export class CreativeVersionStore {
     }
     if (this.databasePath !== ":memory:") mkdirSync(dirname(this.databasePath), { recursive: true, mode: 0o700 });
     mkdirSync(this.objectRoot, { recursive: true, mode: 0o700 });
+    if (this.databasePath !== ":memory:") rejectHardLinkAlias(this.databasePath);
     try {
       this.db = new DatabaseSync(this.databasePath);
       makeSchema(this.db);
       initializeCreativeBriefDatabase(this.db);
+      if (this.databasePath !== ":memory:") {
+        this.sqliteFileIdentity = registerSqliteFile(this.databasePath, this.objectRoot);
+      }
     } catch (error) {
+      if (this.sqliteFileIdentity) {
+        unregisterSqliteFile(this.sqliteFileIdentity);
+        this.sqliteFileIdentity = null;
+      }
+      try { this.db?.close(); } catch { /* Preserve the original initialization failure. */ }
       if (error instanceof VersionStoreError) throw error;
       reject("unavailable", "database", true);
     }
@@ -1754,6 +1811,8 @@ export class CreativeVersionStore {
     if (this.closed) return;
     this.db.close();
     this.closed = true;
+    unregisterSqliteFile(this.sqliteFileIdentity);
+    this.sqliteFileIdentity = null;
   }
 
   assertOpen() {
