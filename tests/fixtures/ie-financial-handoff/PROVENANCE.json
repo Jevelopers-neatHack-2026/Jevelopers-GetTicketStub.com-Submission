@@ -1,0 +1,33 @@
+{
+  "classification": "SYNTHETIC",
+  "note": "Frozen, deterministic, sanitized extract of the Integration Evals IE-05c financial handoff packet (packetId ie-05c-financial-handoff-a08760e-v1). Synthetic source-derived input coordination only: it carries no successful FinancialSummary or export output, is PENDING_OWNER_ACCEPTANCE, and is not an acknowledgement or adoption.",
+  "source": {
+    "packetId": "ie-05c-financial-handoff-a08760e-v1",
+    "producerRevision": "a08760e9ea65bda1e116867ac00b3e03d737bb7e",
+    "files": {
+      "manifest.json": "f798d047b995924fc07cb681f136b1359f22c5d6d8ce4cf2e7edb27e7c1e3b24",
+      "vectors.json": "fcfe6f53408f476b26080e250a656ad89779c6237af70021dbc76482dd84722c",
+      "coverage.json": "1b2d0a21107db49c6c0eaea72a80c5a6cf1240fce47cf6aa1e22bee95114302a",
+      "README.md": "a4a9d122202ebe50f93401a608f45c58bfb455721a9a621385c394b8e50a0482"
+    }
+  },
+  "externallyReportedManifestSha256": "f798d047b995924fc07cb681f136b1359f22c5d6d8ce4cf2e7edb27e7c1e3b24",
+  "sanitization": {
+    "removedFields": [
+      "/producer/archiveRoot",
+      "/producer/contractLock/archivePath",
+      "/sourceFixtureFiles/0/archivePath",
+      "/sourceFixtureFiles/1/archivePath",
+      "/sourceFixtureFiles/2/archivePath",
+      "/sourceFixtureFiles/3/archivePath",
+      "/independentReview/path",
+      "/independentReview/indexPath"
+    ],
+    "rule": "string values beginning with /Users/, /tmp/ or /root/ (local machine paths) were removed; every other manifest field is byte-for-byte as sourced",
+    "vectorsExtract": "summary-expectations.json lists every expectedPublicFinancialSummary occurrence in vectors.json with its path and value"
+  },
+  "limits": [
+    "The full vectors.json, coverage.json and README.md are not committed, so their hashes are recorded here but cannot be re-verified from this repository.",
+    "The reduced manifest hash differs from the source manifest hash by design."
+  ]
+}
