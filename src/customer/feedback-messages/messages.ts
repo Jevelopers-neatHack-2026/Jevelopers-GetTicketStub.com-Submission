@@ -52,6 +52,7 @@ export const MESSAGES = {
   unreadable_link: { message: "We couldn't read that link. Paste the event page address, or search for the event by name.", action: RETRY, retryable: true },
   demo_only: { message: "This preview only knows its demo events. Try neatHack, The Pale Hours or Harbour FC.", action: RETRY, retryable: true },
   context_unavailable: { message: "Signed context isn't set up on this server yet, so nothing can use it. Your stubs are unaffected.", action: RETRY, retryable: true },
+  signing_unavailable: { message: "Signing isn't set up on this server yet, so this can't be approved right now. Your stub is unaffected.", action: RETRY, retryable: true },
   approval_conflict: { message: "This stub changed while you were approving it. Look it over once more, then approve it again.", action: RELOAD },
   approval_unavailable: { message: "We can't read this stub's art right now, so it can't be approved yet. Try again in a moment.", action: RETRY, retryable: true },
   approval_invalid: { message: "That approval doesn't cover this use. Approve the stub again from your wall.", action: WALL },

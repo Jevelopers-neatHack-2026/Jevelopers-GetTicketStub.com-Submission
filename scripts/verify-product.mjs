@@ -90,7 +90,7 @@ const gitDirty = git("status", "--porcelain") === null ? null : git("status", "-
 /** The child environment: no provider keys, no mail key, a throwaway database. */
 function childEnv(extra = {}) {
   const env = { ...process.env };
-  for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TICKETMASTER_API_KEY", "RESEND_API_KEY", "TICKETSTUB_RUNTIME_MODE", "APP_URL"]) delete env[k];
+  for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TICKETMASTER_API_KEY", "RESEND_API_KEY", "TICKETSTUB_RUNTIME_MODE", "APP_URL", "APPROVAL_SIGNING_KEYS"]) delete env[k];
   return {
     ...env,
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${guardUrl}`.trim(),
