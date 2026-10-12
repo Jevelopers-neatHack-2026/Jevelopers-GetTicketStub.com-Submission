@@ -1,161 +1,179 @@
 # Human recording runbook (planned internal handoff)
 
-**Asset:** `DEMO-HUMAN-RECORDING-RUNBOOK-001` (suggested ID; root registers it in the inventory and package) · **Acceptance:** MM-03-C
-**Status:** planned internal handoff, not an approved final v1. It is a plan for a human teammate. No dry run, rehearsal, phone QA or recording has been performed from it, and no teammate has reviewed it.
-**Not this:** the 150-second silent rehearsal ([`rehearsal-scenes.json`](rehearsal-scenes.json)) is concept footage. It is not final footage and it is not what this runbook records.
+**Asset:** `DEMO-HUMAN-RECORDING-RUNBOOK-001` · **Acceptance:** MM-03-C
+**Status:** planned internal handoff, not an approved final v1. It is a plan for a human teammate. No dry run, rehearsal, phone QA or recording has been performed from it, and no teammate has reviewed it. Nothing here approves public speaking, captions or publication.
+**Not this:** the 150-second silent rehearsal ([`rehearsal-scenes.json`](rehearsal-scenes.json)) is concept footage and stays as it is. This runbook plans a different, live video of the deployed build and the public sponsor evidence. The live video is not a synthetic concept; the old rehearsal's label does not carry over to it. Shot modes are set per shot in section 6.
 
 ## 1. Who does what
 
 | Role | Who | State |
 | --- | --- | --- |
-| Recorder, editor, submitter | Tentative candidates from the user's reply: `lejefa` and `completedotech` (verbatim reply: "likely lejefa/completedotech") | **Tentative.** No exact role mapping and no confirmed GitHub handle is recorded. Do not guess. |
-| Product / deployment owner | Product owner | Must confirm the deployed build (section 3). |
-| Source owners | Per sponsor row in section 6 | Retain evidence, finance, brand, rights and destination authority. |
-| Agents | None | **No agent records, posts, uploads or submits.** Agent capture is `CANCELLED_USER_REQUEST_NO_RESTART`; restarting it needs a separate, fresh, explicit authorization. |
+| Recorder | **Crystal** | **Confirmed** in the owner relay, [issue 22 comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750). No GitHub handle is recorded and none is needed to record. |
+| Editor | Not confirmed | The same relay says editing ownership is not separately confirmed. Open: is the editor Crystal or someone else. |
+| Submitter (human X account) | Not confirmed | The user's reply "likely lejefa/completedotech" is tentative. No role mapping is recorded and no handle is inferred. Whoever submits uses their own X account and name for the entry. |
+| Product / deployment owner | Product owner | Confirms the deployed build (section 3). |
+| Source owners | Per sponsor, section 6 | Keep evidence, finance, brand, rights and destination authority. |
+| Agents | None | **No agent records, posts, uploads or submits.** Agent capture is `CANCELLED_USER_REQUEST_NO_RESTART`; restarting it needs a separate, fresh, explicit authorization. The owner's choice of a recorder does not reauthorize it. |
 
-The user-assigned marketing-material supervisor stays accountable for this copy. No separate human-only or vendor-only review gate is added here.
+The user-assigned marketing-material supervisor stays accountable for this copy.
 
-## 2. What the organizer requires
+## 2. What the organizer and the entry require
 
-Verified 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): the video is **at most three minutes**, and it must cover architecture, implementation, runtime, reasoning and result for **each** of Neatlogs, Entire and CFO.ai. The page gives no aspect ratio or file-size limit; do not invent one. The submission is a quote-post of the official neatlogs post on X with team, name, project, public repository and demo link; the final cutoff is announced on Discord.
+Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): the video is **at most three minutes** and must cover architecture, implementation, runtime, reasoning and result for **each** of Neatlogs, Entire and CFO.ai. The page gives no aspect ratio or file-size limit; do not invent one. The entry is a quote-post of the official neatlogs post on X with team, name, project, public repository and demo link, plus the business plan required by the owner's [issue 22](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22) entry list. The final cutoff is announced on Discord.
 
-Still unknown and human-only: official post URL, Discord cutoff, final team/name fields, the demo URL, the posted URL, and the submitter's authorization. Recheck all of them immediately before submitting.
+| Entry field | Value | State |
+| --- | --- | --- |
+| Team | Jevelopers | **Known** (`CLAIM-X-DEST-TEAM-001`); wording review pending |
+| Project | TicketStub | **Known** (`CLAIM-X-DEST-PROJECT-001`); wording review pending. Project name only; product availability is unverified. |
+| Public repository | `https://github.com/Jevelopers-neatHack-2026/getticketstub.com` | **Known** (`CLAIM-X-DEST-REPO-001`); wording review pending. Locator only. |
+| Business plan | `https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/f375fcf20584f5c98dbd4f3b69f884c52994224e/evidence/cfo-ai/2026-10-11-r2` | **Known and required** (`CLAIM-X-DEST-PLAN-001`); wording review pending. Locator only; not Finance approval; `CFO-R2-001` unresolved. |
+| Name (submitter) | | **Unknown.** Human submitter's own name. |
+| Demo URL | | **Unknown** until the video is published. |
+| Official neatlogs post URL | | **Unknown.** Recheck before submitting. |
+| Discord cutoff | | **Unknown.** Recheck before submitting. |
+| Posted entry URL | | **Unknown** until a human posts. |
 
 ## 3. Known versus must-confirm before the take
 
-**Known (pin these on the pre-take card):**
+**Known (pin on the pre-take card):**
 
-| Item | Value | Source / note |
+| Item | Value | Source |
 | --- | --- | --- |
-| Product source reviewed by the ledger | `getticketstub.com` `eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073` | `CLAIM-PRODUCT-CAPABILITY-001` limitations. Source availability only. |
-| Newer product source reported by root | `6daa197` (includes the #56 agent-actions / `ask_user` fix and the #61 exact-download fix) | Root-captured deployment receipt 6118271571. **Not published** per the last receipt, and no health commit. Not in the claim ledger. |
-| Eight new SVG styles | On an uncommitted branch, undecided (6118297805) | Do **not** assert 5 or 8 styles on screen or aloud until the owner confirms the deployed set. If the deployed styles are shown, describe them only as "the styles in the deployed build". |
-| Neatlogs source | integration-evals `31b4f53b46a584c4b5b4a6a7076f6800c37b00e5` (PR #35), tree `evidence/neatlogs/2026-10-11` | `CLAIM-SPN-01-NEATLOGS-001` |
-| Entire source | integration-evals `a9d68ef0116b1c20f7d70e0161016e21b4bb13b7` (PR #31), checkpoint `01M4P1DT7TRNWJ5EA42T47R1P0` bound to commit `3358f0d`, ten static CI graphs | `CLAIM-SPN-02-ENTIRE-001` |
-| CFO.ai source | integration-evals r2 `6420af494a5276f69c337f47dac3ad4c1854d524`, merged `f375fcf20584f5c98dbd4f3b69f884c52994224e`; public tree `evidence/cfo-ai/2026-10-11-r2` | `CLAIM-SPN-03-CFO-001` |
-| CFO.ai workbook to show | **Reviewer** workbook `cfo-native-export.xlsx`, SHA-256 `43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14`, guarded blank-cash version | Owner relay 6118253750 (root capture `issue22-premerge-comments-refresh.json`) records the CFO segment as Yes and the reviewer workbook as selected. The relay names Crystal; no GitHub handle or role is inferred. |
-| Generic workbook | `cfo-native-export-generic.xlsx`, `969941bac6f07d9678bb04238f0d5167baab9956f5e320bb33b77841be809416` | **Not accepted as an editable forecast.** `CFO-R2-001` is unresolved. |
+| Product source reviewed by the ledger | `getticketstub.com` `eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073` | `CLAIM-PRODUCT-CAPABILITY-001` limitations; source availability only |
+| Newer product source reported | `6daa197` (merged #56 agent actions with the `ask_user` fix, and #61 exact download) | [issue 22 comment 6118271571](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118271571): **not published** at that time and `/api/health` had no commit field. Not in the claim ledger. |
+| Style set | Current 5 editions versus 8 new SVG templates, undecided | [issue 22 comment 6118297805](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118297805). The style count may be omitted until the owner confirms the deployed set. |
+| Neatlogs source | integration-evals [`31b4f53b46a584c4b5b4a6a7076f6800c37b00e5`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/31b4f53b46a584c4b5b4a6a7076f6800c37b00e5/evidence/neatlogs/2026-10-11) (PR [#35](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/35)) | `CLAIM-SPN-01-NEATLOGS-001` |
+| Entire source | integration-evals [`a9d68ef0116b1c20f7d70e0161016e21b4bb13b7`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11) (PR [#31](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/31)) | `CLAIM-SPN-02-ENTIRE-001` |
+| CFO.ai source | integration-evals r2 [`6420af494a5276f69c337f47dac3ad4c1854d524`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2), merged `f375fcf20584f5c98dbd4f3b69f884c52994224e` (PR [#24](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/24)) | `CLAIM-SPN-03-CFO-001` |
+| CFO.ai workbook to show | **Reviewer** workbook [`cfo-native-export.xlsx`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx), SHA-256 `43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14`, blank-safe opening-cash guards | Selected by the owner in [issue 22 comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750): "Yes to the CFO.ai segment", with exact revision/hash, hypothetical labels and the generic-export limitation disclosed |
+| Generic workbook | [`cfo-native-export-generic.xlsx`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-native-export-generic.xlsx), `969941bac6f07d9678bb04238f0d5167baab9956f5e320bb33b77841be809416` | **Not an accepted editable forecast.** Finance finding [`CFO-R2-001`](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20#issuecomment-6112840013) is unresolved. |
 
-**The owner's chat relay approving a recorder does not reauthorize agent capture.**
+**Must be confirmed before recording (all open blockers):**
 
-**Must be confirmed before recording (all open):**
-
-1. The exact approved deployed product commit (say whether it is `6daa197` or something else) and its URL, from the product owner.
-2. A producer rehearsal of that exact build, run by a human. Do not record the final take against an unrehearsed build.
-3. Which SVG style set is deployed (see above).
-4. Final recorder, editor and submitter mapping, with confirmed handles.
-5. The permission-cleared example input (section 4).
+1. The exact deployed product commit and URL, from the product owner (say whether it is `6daa197` or another).
+2. A human producer rehearsal of that exact build. Do not record the final take against an unrehearsed build.
+3. The deployed style set, if any style count will be shown or said.
+4. The editor (if separate from Crystal) and the human submitter, with the submitter's own account and name.
+5. The cleared example input (section 4).
 6. Whether a recovery moment is selected (section 5).
-7. Exact spoken wording for every product and sponsor line (section 7). Until a ledger row exists, the line stays on-screen text from existing wording or silent action.
+7. The Discord cutoff, official post URL, demo URL and posted URL (section 2).
+8. Claim rows for any spoken line marked draft in section 7.
 
-## 4. Safe example and redaction
+## 4. Safe example, privacy and redaction
 
-- Use only a public or synthetic example whose use is cleared. The ledger's existing fictional example is "The paper moon" (`FICTIONAL EVENT / SYNTHETIC EXAMPLE`). At the ledger pin the product's research uses fixture data for three demo events and refuses arbitrary event links as `demo_only`; confirm what the deployed build accepts.
-- Label the mode on screen the whole time: `SYNTHETIC EXAMPLE`, `SANDBOX` or `DEMO` as the build actually reports, and `PREVIEW ONLY` for physical variants.
-- Blur or avoid: real email addresses, QR codes, customer names, tokens, magic links, cookies, URLs with secrets, account menus, other browser tabs and notifications.
-- Never open private workspaces, dashboards behind login, transcripts or secrets on camera. Neatlogs dashboard links are workspace-only; use the public sanitized files in the pinned tree instead. A permitted human may open a source; agents never read the private workspace.
-- Do not copy images into the repository and do not add new screenshots to it.
-- No paid purchase, print order or budget authority. Checkout is a **sandbox**. Card, Print and Framed are preview only and not orderable. Human review/approval stays in the loop; do not describe the flow as running without a human decision.
+- Use only a public or synthetic example whose use is cleared. The ledger's fictional example is "The paper moon" (`FICTIONAL EVENT / SYNTHETIC EXAMPLE`). At the ledger pin, research uses fixture data for three demo events and refuses other event links as `demo_only`; confirm what the deployed build accepts.
+- Label each shot's mode as in section 6. Show the build's own mode label as the build reports it (for example `SYNTHETIC EXAMPLE`, `SANDBOX` or `DEMO`), `PREVIEW ONLY` for physical variants, and `HYPOTHETICAL FORECAST` for finance.
+- Hide or blur: real email addresses, QR codes, customer names, tokens, magic links, cookies, URLs with secrets, account menus, other tabs, notifications.
+- **Permitted sources.** Prefer the public, sanitized files in the pinned trees. A human may open the owner-authorised, owner-selected CFO.ai plan page in their own account, because the owner chose that segment. Show only the authorised hypothetical plan data. Redact the login screen, credentials, secrets, customer or private financial details, the workspace list, other pages and any workspace content the owner has not approved. If the page cannot be framed that way, show the public screenshot [`cfo-canvas-overview.jpg`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-overview.jpg) and the saved [narrative](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md) instead. Neatlogs dashboard links are workspace-only; use the public files in the pinned tree.
+- No whole-workspace tour and no transcripts on camera. Agents have no private access, and agent capture, upload and posting stay forbidden and cancelled.
+- No paid purchase, print order or budget authority. Checkout is **sandbox**. Card, Print and Framed are preview only and not orderable. A human reviews and approves; do not describe the flow as running without a human decision.
+- Do not add images or recordings to the repository.
 
 ## 5. Recovery moment
 
-Show recovery **only if** the owner explicitly selects it. If selected, label it `DEMO` or `PLANNED` on screen, and show only what the deployed build really does. Do not stage a failure and call it a real recovery, and do not state any improvement or rate. If not selected, drop the beat and use the time for sponsor shots.
+Show recovery **only if** the owner explicitly selects it. The producer's script ([comment 6118223199](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118223199)) lists an optional demo-planner failure and fallback. If selected, label it `DEMO` and show only what the deployed build does. Do not stage a failure and call it a real recovery, and state no improvement or rate. If not selected, drop the beat and use the time for sponsor shots.
 
-## 6. Planned shot list (proposal, not an executed dry run)
+## 6. Planned timed shot list (a plan, not an executed dry run)
 
-Planned length: **170 seconds**, 10 seconds under the 180-second limit (the 2:50 proposal in root receipt 6118223199 is data, not an approved instruction). One continuous take: phone for the product, desktop for the three sponsors. These timings are an author's plan, not measured performance.
+Planned length: **170 seconds**, an estimate that is not measured performance and sits 10 seconds under the 180-second limit. The producer's 2:50 script in [comment 6118223199](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118223199) is the starting point; it is data, not an approved instruction. The plan is a phone for the product and a desktop for the sponsors. That is a planned sequence, not a guaranteed continuous multi-device take; if the take is two clips, the editor assembles them and the cut is confirmed then.
+
+Shot modes depend on the producer-confirmed deployed build. Until it is confirmed, shots 2 to 5 are placeholders and carry the mode "as the confirmed build reports".
 
 | # | Time | Device | Shot (what the human does) | On-screen mode label | Claim IDs |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | 0:00–0:12 | Desktop | Title card: project name and the synthetic label. | `SYNTHETIC CONCEPT` | `CLAIM-PRODUCT-NAME-001`, `CLAIM-SIMULATION-001` |
-| 2 | 0:12–0:30 | Phone | **Input:** open the confirmed deployed URL, enter the cleared example. | build mode as reported | `CLAIM-PRODUCT-CAPABILITY-001` (blocked) |
-| 3 | 0:30–0:50 | Phone | **Research:** show the research result for that example. | build mode as reported | `CLAIM-PRODUCT-CAPABILITY-001` (blocked) |
-| 4 | 0:50–1:10 | Phone | **Edit and approve:** change one visible detail, then approve it as the human reviewer. | `HUMAN REVIEW` | `CLAIM-HUMAN-APPROVAL-CONCEPT-001` (planned), `REHEARSAL-HOLD-REVISE-001` (planned) |
-| 5 | 1:10–1:20 | Phone | **Save and download:** save, then download the exact file. Show Card/Print/Framed as preview only. | `SANDBOX`, `PREVIEW ONLY` | `CLAIM-PRODUCT-CAPABILITY-001` (blocked) |
-| 6 | 1:20–1:45 | Desktop | **Neatlogs** (five facets, section 7). | `SOURCE AVAILABLE; CLAIM PENDING` | `SPN-01`, `CLAIM-SPN-01-NEATLOGS-001` |
-| 7 | 1:45–2:10 | Desktop | **Entire** (five facets). | `SOURCE AVAILABLE; CLAIM PENDING` | `SPN-02`, `CLAIM-SPN-02-ENTIRE-001` |
-| 8 | 2:10–2:35 | Desktop | **CFO.ai**, reviewer workbook (five facets). | `HYPOTHETICAL FORECAST` | `SPN-03`, `CLAIM-SPN-03-CFO-001` |
-| 9 | 2:35–2:50 | Desktop | Close: no-results line, submission fields, docs call to action. | `STATUS` | `CLAIM-NO-RESULTS-VERIFIED-001`, `CLAIM-EVAL02-COMPARISON-001`, `EVENT-SUBMISSION-FIELDS-001`, `CTA-REPOSITORY-DOCS-001` |
-
-Only after the product owner confirms the deployed build may shots 2 to 5 describe current features. Before that they are placeholders.
+| 1 | 0:00–0:12 | Desktop | Title card: Team Jevelopers, Project TicketStub. | `PLANNED LIVE DEMO`, plus the confirmed build's mode | `CLAIM-X-DEST-TEAM-001`, `CLAIM-X-DEST-PROJECT-001` (wording review pending) |
+| 2 | 0:12–0:30 | Phone | **Input:** open the confirmed deployed URL, enter the cleared example. | build mode as reported | `CLAIM-PRODUCT-CAPABILITY-001` (pending-only wording) |
+| 3 | 0:30–0:50 | Phone | **Research:** show the research result. | build mode as reported | same |
+| 4 | 0:50–1:10 | Phone | **Edit and approve:** make one change, then approve it as the human reviewer. | `HUMAN REVIEW`, build mode | `CLAIM-HUMAN-APPROVAL-CONCEPT-001`, `REHEARSAL-HOLD-REVISE-001` (both planned) |
+| 5 | 1:10–1:20 | Phone | **Save and download:** save, download the file; show Card/Print/Framed as preview only. | `SANDBOX`, `PREVIEW ONLY` | `CLAIM-PRODUCT-CAPABILITY-001` |
+| 6 | 1:20–1:45 | Desktop | **Neatlogs** (five facets). | `SOURCE AVAILABLE` | `SPN-01`, `CLAIM-SPN-01-NEATLOGS-001` |
+| 7 | 1:45–2:10 | Desktop | **Entire** (five facets). | `SOURCE AVAILABLE` | `SPN-02`, `CLAIM-SPN-02-ENTIRE-001` |
+| 8 | 2:10–2:35 | Desktop | **CFO.ai**, reviewer workbook (five facets). | `HYPOTHETICAL FORECAST`; workbook hash on screen | `SPN-03`, `CLAIM-SPN-03-CFO-001` |
+| 9 | 2:35–2:50 | Desktop | Close: submission fields and docs call to action. | `STATUS` | `EVENT-SUBMISSION-FIELDS-001`, `CTA-REPOSITORY-DOCS-001`, `CLAIM-EVAL02-COMPARISON-001` |
 
 ### 15-cell coverage matrix
 
-Each cell is: source proof / shot / proposed explanation / limits. "Proposed explanation" is a planning note for the human, **not approved narration**; none of it may be spoken or captioned until a ledger row exists (section 8). Every cell shares the sponsor limits stated under the table.
+Each cell lists public proof, what the human shows, a **proposed human explanation** (a plan, not private reasoning, not new execution, and not approved narration) and the exact gap. Links use the pinned trees:
+`NL` = [Neatlogs tree](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/31b4f53b46a584c4b5b4a6a7076f6800c37b00e5/evidence/neatlogs/2026-10-11) · `EN` = [Entire tree](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11) · `CFO` = [CFO.ai r2 tree](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2).
 
-| Facet | Neatlogs (shot 6) | Entire (shot 7) | CFO.ai (shot 8) |
+#### Neatlogs (shot 6)
+
+| Facet | Proof and shot | Proposed explanation | Exact gap |
 | --- | --- | --- | --- |
-| **Architecture** | Proof: pinned `traces.json` and README at `31b4f53b`. Explain which product runs were recorded in Neatlogs. Limit: only the listed runs; no claim that all work is traced. | Proof: README of the `a9d68ef0` tree. Explain what the checkpoint and the ten graphs are. Limit: static code-structure exports. | Proof: r2 README and `SHA256SUMS`. Explain that the plan is a saved workbook with a reviewer version and a generic version. Limit: generic version not accepted. |
-| **Implementation** | Proof: README and `traces.json` entries (research, agent reply, art, recovery). Explain what each trace entry shows. Limit: fifth entry has no screenshot. | Proof: checkpoint `01M4P1DT7TRNWJ5EA42T47R1P0` on `3358f0d`. Explain it is one historical, manually attached checkpoint. Limit: no live hook; no "every session" claim. | Proof: reviewer workbook hash `43884eaf…12a14`. Explain what the workbook is, by name and hash. Limit: no recalculation here. |
-| **Runtime** | Proof: public screenshots `trace-research-success.jpg`, `trace-research-failure.jpg`, `trace-agent-reply.jpg`. Explain what the recorded runs looked like. Limit: accepted diagnostic once per process, not all 7 exports; 3 of 7 sessions absent from the queried window, not shown to be receiver loss. | Proof: ten CI graph snapshots (headers only). Explain these are static exports. Limit: no runtime behavior shown, nothing mirrored on entire.io. | Proof: none at runtime. Explain that the plan is a document, not a running service. Limit: no runtime facet exists; state "pending". |
-| **Reasoning** | Proof: the research and art trace pages in the pinned tree. Explain only what a trace page visibly shows. Limit: no `EVAL-02` paired comparison; cost is provider-reported and partial, not billing. | Proof: none public (the private transcript was not reviewed). Explain nothing beyond "pending". Limit: reasoning not shown. | Proof: workbook assumption sheet if shown. Explain only that every forecast is hypothetical. Limit: owner decision, not Finance waiver. |
-| **Result** | Proof: art trace `trace-art-image.jpg` (`df77d370…78ed2`). Explain that this trace is a well-formed production art run corrected at PR #35. Limit: no "always falls back" claim; no savings or latency number. | Proof: none. Explain nothing beyond "pending". Limit: no result is shown by static graphs. | Proof: none approved. Explain nothing beyond "pending". Limit: no figures copied or computed; `CFO-R2-001` unresolved. |
+| Architecture | NL README and `traces.json`: which TicketStub runs were recorded. | The listed product runs were traced and the trace export is public. | Only the listed runs; not "all work is traced". |
+| Implementation | NL `traces.json` entries (research, agent reply, art, recovery). | What each entry records. | The fifth entry has no screenshot. |
+| Runtime | NL screenshots `trace-research-success.jpg`, `trace-research-failure.jpg`, `trace-agent-reply.jpg`. | What the recorded runs looked like. | Accepted diagnostic once per process, not all 7 exports; 3 of 7 sessions absent from the queried window, not shown to be receiver loss. |
+| Reasoning | NL research and art trace pages. | Only what a trace page visibly shows. | No `EVAL-02` paired comparison; cost is provider-reported and partial, not billing. |
+| Result | NL `trace-art-image.jpg` (`df77d370…78ed2`). | A well-formed production art run, as corrected at PR #35. | No "always falls back"; no savings or latency number. |
 
-**Neatlogs limits (all cells):** source availability only; owner acceptance was relayed in chat (PR #33 comment 6114638937) and is not an independent review; the independent `REQUEST_CHANGES` `NL-R1/2/3` history is preserved; getticketstub.com#27 comment 6114684677 is a declaration, not approval; there is no durable harness workflow acceptance; no "every step traced".
-**Entire limits (all cells):** acceptance by the owner was relayed in chat at PR #31; not an Entire or independent statement.
-**CFO.ai limits (all cells):** all forecasts are hypothetical; owner acceptance was relayed in chat, then an independent Finance `REQUEST_CHANGES` `CFO-R2-001` followed and is unresolved; there is no Finance package waiver and no actual-expense acceptance; the authoritative cost-intelligence export (issue 3) is pending. The mandatory X business-plan entry links the public plan tree (`CLAIM-X-DEST-PLAN-001`); the human does the final entry.
+#### Entire (shot 7)
 
-The historical count of 14 repositories versus 10 graphs from the original proposal is not asserted. Only the ten known published static graphs are shown.
+Proof set: the [Entire README](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11) records manual GitHub Actions runs of the checksum-verified Entire CLI `v0.11.4` and `entire-graph` `v0.4.0`, one run per repository at an exact `main` commit, and the snapshots copied unchanged from the run artifacts with verified checksums. These are saved execution and output evidence, and the graphs are real results. The ten runs are, by repository and run:
+[getticketstub.com 38166575087](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) · [agent-harness 38167306765](https://github.com/Jevelopers-neatHack-2026/agent-harness/actions/runs/38167306765) · [cost-intelligence 38167313026](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/actions/runs/38167313026) · [creative-engine 38167322823](https://github.com/Jevelopers-neatHack-2026/creative-engine/actions/runs/38167322823) · [event-intelligence 38167329573](https://github.com/Jevelopers-neatHack-2026/event-intelligence/actions/runs/38167329573) · [fulfillment-connectors 38167337832](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/actions/runs/38167337832) · [integration-evals 38167345283](https://github.com/Jevelopers-neatHack-2026/integration-evals/actions/runs/38167345283) · [print-production 38167353404](https://github.com/Jevelopers-neatHack-2026/print-production/actions/runs/38167353404) · [shared-contracts 38167360776](https://github.com/Jevelopers-neatHack-2026/shared-contracts/actions/runs/38167360776) · [team-dashboard 38167367816](https://github.com/Jevelopers-neatHack-2026/team-dashboard/actions/runs/38167367816).
+Each snapshot folder (for example `graph-getticketstub-c384776/` in EN) holds `graph-snapshot.ndjson`, `SHA256SUMS` and `graph-version.json`. Open only what the viewer can reach; if a run page is not public to the viewer, show the snapshot folder in EN instead.
 
-## 7. Spoken lines (source-backed or blocked)
+| Facet | Proof and shot | Proposed explanation | Exact gap |
+| --- | --- | --- | --- |
+| Architecture | EN README configuration table and the snapshot headers. | Entire is configured per repository, checkpoints go to a private checkpoint repository, and the graph export maps files, symbols and relations of each repository. | Project config PRs were open and unmerged when recorded; Entire was removed from the owner's machine; no cloud capture environment is verified. |
+| Implementation | The manual `Entire graph` workflow runs above; EN checkpoint page for the one checkpoint bound to `3358f0d`. | A manual workflow installs the pinned CLI and plugin and exports a compact snapshot for an exact commit. A public relationship graph gives agents and reviewers context about how code connects. | The checkpoint is one historical, manually attached checkpoint; the plugin install is not version-pinned, so each run's `graph-version.json` is the record. |
+| Runtime | The ten run URLs and their downloaded-artifact checksums. | The tooling really ran on GitHub Actions and produced these outputs. | These are CI executions of the graph export. No live agent hook or Entire session is running; nothing is mirrored on entire.io. |
+| Reasoning | Snapshot relations and the merged `init-agents` files (`.entire/graph-agent.md`, `AGENTS.md`, `CLAUDE.md`) named in the README. | How the graph links symbols and files, and why that context helps a person or agent read the code. No private agent decision is claimed. | No transcript or agent decision is shown; transcripts are private and are not needed for this explanation. |
+| Result | The ten snapshots: repository, commit, file, symbol and relation counts from the README table, read from the page. | Ten graph outputs exist, each tied to its repository and commit and checksum-verified. | No measured improvement, `EVAL-02` comparison or savings claim; the counts are shown, not interpreted. |
 
-Every proposed spoken line must trace to an existing claim ID and its current state. Allowed wording is copied exactly; wording review is still pending for all of it.
+#### CFO.ai (shot 8)
 
-| Shot | Proposed spoken line | Claim ID | State |
+Proof set: the [r2 README](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2) records that the repairs were made in the existing CFO.ai canvas, re-exported natively, with a saved canvas narrative, an overview screenshot, and desktop-Excel input-change verification. It is a saved native proof, not merely a document. The human does not recalculate or copy any figure; whatever appears is read live from the workbook or the public page, labelled hypothetical.
+
+| Facet | Proof and shot | Proposed explanation | Exact gap |
+| --- | --- | --- | --- |
+| Architecture | CFO README, `cfo-canvas-narrative.md`, `SHA256SUMS`; the workbook hash on screen. | The plan lives in a native CFO.ai canvas, was exported natively, and is kept as a reviewer workbook plus a generic export. | The canvas needs workspace login and is not public; the generic export is not accepted. |
+| Implementation | `export-postprocessing-diff.json` and the README line on the four blank-safe formulas (`Model inputs!B69, C72, B74, B76`). | The repairs were made in the canvas and re-exported; four opening-cash links were made blank-safe so an unknown cash stays unknown. | The exporter still writes the blank-coercing form in the generic export (`CFO-R2-001`). |
+| Runtime | `excel-verification.json` and the reviewer workbook opened in desktop Excel. **Optional, owner-specified step:** the README's suggested demo coverage edits paid conversion (`01!B7`); after checking the file hash, edit a throwaway copy and discard it, and read the changed output off the screen. | The workbook recalculates in desktop Excel when an input changes. | The recalculation record is agent-prepared, not Finance acceptance. It is a saved workbook run in Excel, not a live CFO.ai service. The edit step needs owner confirmation and is not part of any approved claim. |
+| Reasoning | Narrative and the assumptions in table 01 of the workbook. | State the assumptions (traffic, conversion, costs and the opening cash are estimates), what a blank-safe guard does (blank opening cash shows "Opening cash unknown" in the reviewer workbook), and what it means for plan availability (the funding view is blank until a cash value is entered). | Actual cash, demand, billed usage and taxes are unknown; no Finance waiver; `CFO-R2-001` unresolved. |
+| Result | The scenario view in the reviewer workbook and the saved overview screenshot. | Three hypothetical scenarios (Conservative, Base, Growth) and the separate owner-reported actual-expenses table, shown as on-screen reading only. | Hypothetical forecasts, not actual sales; no figure is stated here or in the voice-over; no Finance, package or actual-sales approval; the generic export is disclosed as limited. |
+
+**Sponsor limits that apply to every cell.**
+Neatlogs: source availability only; owner acceptance was relayed in chat ([integration-evals PR 33 comment 6114638937](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/33#issuecomment-6114638937)) and is not an independent review; the `REQUEST_CHANGES` `NL-R1/2/3` history stays; [getticketstub.com issue 27 comment 6114684677](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27#issuecomment-6114684677) is a declaration, not approval; no "every step traced".
+Entire: owner acceptance was relayed in chat at PR 31, not an Entire or independent statement; the single checkpoint is historical and limited.
+CFO.ai: forecasts are hypothetical; owner acceptance was relayed, then an independent Finance `REQUEST_CHANGES` `CFO-R2-001` followed and is unresolved; no Finance, package or actual-expense approval; the cost-intelligence export (issue 3) is pending. The human does the final plan-link entry.
+
+A count of 14 repositories is not asserted; only the ten published snapshots are shown.
+
+## 7. Spoken lines
+
+Nothing below is approved for public speaking or captioning. "Approved CTA" means exact docs-CTA text and docs-only target already carry wording and route approval; that is not publication approval. "Draft" lines are proposed, unapproved, bounded to what the cited public source states, and need a claims row before use. Until then a draft line stays silent. No figures: no financial, latency, savings or performance numbers, no "every step/session" claims.
+
+| Shot | Proposed line | Basis | State |
 | ---: | --- | --- | --- |
-| 1 | "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated." | `CLAIM-SIMULATION-001` | mock |
-| 4 | "Approval before production." | `CLAIM-HUMAN-APPROVAL-CONCEPT-001` | planned |
-| 4 | "A reviewer may hold or revise this draft; production handoff is planned." | `REHEARSAL-HOLD-REVISE-001` | planned |
-| 6 | "Neatlogs use evidence is pending; no Neatlogs usage claim is approved." | `CLAIM-SPN-01-NEATLOGS-001` | blocked |
-| 7 | "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved." | `CLAIM-SPN-02-ENTIRE-001` | blocked |
-| 8 | "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved." | `CLAIM-SPN-03-CFO-001` | blocked |
-| 6–8 | "Architecture: pending. Implementation: pending. Runtime: pending. Reasoning: pending. Result: pending." | `REHEARSAL-SPONSOR-FACETS-001` | planned |
-| 9 | "No measured improvement or savings claim is approved; comparable baseline evidence is pending." | `CLAIM-EVAL02-COMPARISON-001` | blocked |
-| 9 | "No product or sponsor results verified." | `CLAIM-NO-RESULTS-VERIFIED-001` | blocked |
-| 9 | "Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord." | `EVENT-SUBMISSION-FIELDS-001` | planned |
-| 9 | "Explore the repository docs." | `CTA-REPOSITORY-DOCS-001` | approved CTA text; destination is documentation only |
-| 2, 3, 5 | **No spoken line.** Show the action silently with an existing on-screen label. | `CLAIM-PRODUCT-CAPABILITY-001` (blocked; allowed wording is "pending pinned product-release evidence") | blocked |
+| 1 | "Team Jevelopers. Project TicketStub." | `CLAIM-X-DEST-TEAM-001`, `-PROJECT-001` | wording review pending |
+| 2 | "[If the confirmed build shows it] Start from an example event." | Confirmed build and rehearsal | draft, conditional |
+| 3 | "[If the confirmed build shows it] Research results show where each fact came from." | Producer script, comment 6118223199; confirmed build | draft, conditional |
+| 4 | "A person reviews and approves each change before it is applied." | Confirmed build; `CLAIM-HUMAN-APPROVAL-CONCEPT-001` is the planned ledger form | draft, conditional |
+| 5 | "[If the confirmed build shows it] Save and download the file. Card, Print and Framed are previews only; checkout is a sandbox." | Confirmed build; producer script | draft, conditional |
+| 6 | "Public Neatlogs trace screenshots and a trace export from selected TicketStub runs are in the repository." | NL README at `31b4f53b` | draft, SOURCE-AVAILABLE |
+| 7 | "Entire graph snapshots from manual GitHub Actions runs on ten repository commits are in the repository, along with one historical checkpoint." | EN README at `a9d68ef0` | draft, SOURCE-AVAILABLE |
+| 8 | "This hypothetical business-plan workbook was exported from CFO.ai. It shows assumptions and blank-safe opening-cash guards; it is not actual sales, and the generic export has a documented limitation." | CFO README at `6420af49` | draft, SOURCE-AVAILABLE |
+| 9 | "Quote-post the official neatlogs post with team, name, project, public repository and demo link." | `EVENT-SUBMISSION-FIELDS-001` | planned |
+| 9 | "Explore the repository docs." | `CTA-REPOSITORY-DOCS-001` | approved CTA text; docs-only target |
 
-Do not say or caption: the brand slogan, universal "Every …" claims about tracing or checkpointing, "live" or "available now" product claims, or any financial, latency, savings or performance figure. See the prohibited variants on each ledger row; the rest have no source.
+Do not say or caption: the brand slogan, "Every …" claims about tracing or checkpointing, "live" or "available now" product claims, a style count, or any financial, latency, savings or performance figure. The requests for new claim rows for the draft lines are returned to the claims owner; the existing sponsor ledger rows allow only "pending" wording, so the draft lines are not yet usable.
 
-### Source conflicts, stated plainly
+## 8. Pre-take checklist (human)
 
-- The ledger's only allowed sponsor wording says "pending", while source for each sponsor now exists. The runbook therefore uses the "pending" wording for speech. Richer wording needs new ledger rows.
-- The ledger's product pin (`eb8decce`) differs from the newer reported build (`6daa197`). The ledger does not describe the newer build, so no feature of it may be named.
-- Neatlogs' own README says "silent receiver-side loss"; the ledger uses the narrower "not found in the queried window". Use the ledger form.
-
-## 8. Requests to root (not implemented here)
-
-Source edits are owned by the claims role. These are the rows the claims owner would need to add before any richer speech or captions. Each needs a pinned source, state, limitations and review.
-
-| ID | Needed row or copy map | Why |
-| --- | --- | --- |
-| NSR-01 | Product journey spoken lines (input, research, edit, approve, save, download) with allowed wording, bound to the product owner's confirmed deployed commit, with state and mode labels (`SANDBOX`, `PREVIEW ONLY`, human approval). | `CLAIM-PRODUCT-CAPABILITY-001` allows only the "pending" sentence. |
-| NSR-02 | Per-facet source-availability wording for SPN-01 (five facets) at `31b4f53b`, with the limits above. | The existing allowed wording says only "pending". |
-| NSR-03 | Same for SPN-02 at `a9d68ef0` (one historical manual checkpoint, ten static graphs). | As above. |
-| NSR-04 | Same for SPN-03 using the reviewer workbook hash, a "hypothetical forecast" label and the generic limitation, with no figures. | As above; `CFO-R2-001` open. |
-| NSR-05 | Only if a recovery beat is selected: a `DEMO`/`PLANNED` recovery row. | None exists. |
-| NSR-06 | A deployed-style-count row (5 or 8) once the owner confirms. | Undecided (6118297805). |
-
-Also needed from root: register `DEMO-HUMAN-RECORDING-RUNBOOK-001` in the inventory, provenance and package (issue 11), and refresh checksums.
-
-## 9. Pre-take checklist (human)
-
-- [ ] Product owner has confirmed the exact deployed commit and URL; commit written on the pre-take card.
-- [ ] A producer rehearsal of that exact build is done by a human.
-- [ ] SVG style set confirmed; no unconfirmed count is spoken or shown.
-- [ ] Example input is cleared; email, QR, customer and token data are blurred or absent.
-- [ ] Mode labels are visible: synthetic, sandbox, preview only, hypothetical forecast.
-- [ ] Neatlogs pin `31b4f53b`, Entire pin `a9d68ef0`, CFO.ai r2 `6420af49` and reviewer workbook hash `43884eaf…12a14` are on the pre-take card; the generic workbook is not shown as accepted.
-- [ ] No private workspace, transcript or secret is on screen; only public sanitized files are opened.
-- [ ] Recovery decision made and, if selected, labelled `DEMO`/`PLANNED`.
-- [ ] Every spoken line matches section 7 exactly, or the shot is silent.
-- [ ] Total runtime is under 180 seconds on the real take.
-- [ ] Recorder, editor and submitter are confirmed with handles.
+- [ ] Product owner confirmed the exact deployed commit and URL; written on the pre-take card.
+- [ ] A human producer rehearsed that exact build.
+- [ ] Style set confirmed, or no style count shown or said.
+- [ ] Cleared example input; email, QR, customer and token data hidden.
+- [ ] Mode labels visible: build mode, sandbox, preview only, hypothetical forecast.
+- [ ] Pins on the card: Neatlogs `31b4f53b`, Entire `a9d68ef0`, CFO.ai r2 `6420af49` and reviewer workbook hash `43884eaf…12a14`; the generic workbook is not shown as accepted.
+- [ ] CFO.ai page, if opened live, is the owner-authorised plan only, with login, credentials, workspace list and unapproved content redacted; otherwise the public screenshot is used.
+- [ ] Recovery decision made; if selected, labelled `DEMO`.
+- [ ] Every spoken line is either an approved line, a draft that now has a claims row, or silent.
+- [ ] Editor and submitter confirmed; submitter uses their own X account and name.
 - [ ] Official post URL and Discord cutoff rechecked just before submission.
-- [ ] Team, project, public repository, demo URL and plan link entered by the human submitter.
-- [ ] Captions and transcript match the final audio; redaction checked on rendered pixels.
+- [ ] Team, project, repository and plan link entered by the human submitter; the demo URL is added after publishing.
+- [ ] Real runtime measured and under 180 seconds; captions and transcript match the audio; redaction checked on rendered pixels.
 
-## 10. After the take
+## 9. After the take
 
-The recorder reviews the export end to end and records the real runtime. A human does any posting, upload or submission. Nothing in this runbook is evidence that a recording, QA, a teammate dry run or a submission has happened.
+The recorder reviews the export end to end and records the real runtime. A human does any posting, upload or submission. Nothing in this runbook shows that a recording, QA, a teammate dry run or a submission has happened.
