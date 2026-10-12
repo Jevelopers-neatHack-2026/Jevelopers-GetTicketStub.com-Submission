@@ -69,6 +69,8 @@ This graph was made on GitHub Actions without an agent session. It proves graph 
 
 The plan’s numbers are **forecasts, not sales**. Actual cash is unknown; owner-reported expenses are not reconciled bills. Physical sales are excluded. The record reports desktop Excel checks; this pass rechecked the file hashes, not those spreadsheet calculations.
 
+**Original October 11 export:** [Download the original business-plan workbook](https://raw.githubusercontent.com/Jevelopers-neatHack-2026/integration-evals/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11/cfo-native-export.xlsx). This is byte-for-byte identical to the team-supplied `TicketStub — neatHack Business Plan — 2026-10-11.xlsx` download. It was already included in the source collection. The main workbook link above points to revision 2, a different, later reviewer file. Keep the original as history; use revision 2 with the qualifications below for judging.
+
 The reviewer workbook has four blank-safe formula corrections made through the CFO.ai assistant. The unchanged generic export still has a blank-cash problem in two scenarios. The dated folder says owner acceptance was pending; the later master index records owner acceptance of SPN-03. Preserve both in order: that acceptance does not approve the unresolved generic export issue, CFO-R2-001. The cfo.ai workspace needs login; the linked public files do not.
 
 ## Building in public
