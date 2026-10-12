@@ -5,7 +5,12 @@ for (const operation of ['reset', 'capture']) test(`${operation} waits for an ad
   await expect(page.locator('#composition-status')).toContainText('not initialized');
   await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();
   const response = page.waitForResponse('**/api/composition/apply'); await page.getByRole('button', { name: 'Initialize reviewed composition' }).click();
-  expect((await (await response).json()).result.ok).toBe(true);
+  const initialized = (await (await response).json()).result; expect(initialized.ok).toBe(true);
+  await expect(page.locator('#operation-status')).toContainText(initialized.revision_id);
+  const refreshed = page.waitForResponse('**/api/composition/current');
+  await page.getByRole('button', { name: 'Refresh current composition', exact: true }).click();
+  const currentView = (await (await refreshed).json()).view; expect(currentView.status).toBe('current');
+  expect(currentView.projection.base.revision_sha256).toBe(initialized.revision_sha256);
   await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');
   expect((await request.post('/__fixture/state', { data: { block: 'composition-current' } })).ok()).toBe(true);
   const read = request.get('/api/composition/current');
