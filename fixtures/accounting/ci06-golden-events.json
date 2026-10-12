@@ -1,0 +1,44 @@
+{
+  "description": "CI-06 synthetic golden fixture. All amounts are USD scale-2. Posted events only; produced from synthetic sources, no provider calls. Expected projection and allocation are asserted exactly by tests/accounting/accounting.test.mjs. Finance definitions are PENDING FINANCE-OWNER SIGN-OFF.",
+  "asOf": "2026-10-11T00:00:00Z",
+  "scope": { "tenantId": "tenant-ci06", "projectId": "project-ci06", "environment": "test", "billingMode": "simulated", "actorId": "ci06-fixture" },
+  "events": [
+    { "schemaVersion": "1.0.0", "eventId": "S1", "classification": "sale", "amount": "100.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-01T10:00:00Z", "source": { "name": "stripe", "sourceEventId": "evt_s1", "revision": 0, "contentHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "authenticated": true }, "dimensions": { "orderId": "O1", "channel": "web" } },
+    { "schemaVersion": "1.0.0", "eventId": "S2", "classification": "sale", "amount": "50.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-01T11:00:00Z", "source": { "name": "stripe", "sourceEventId": "evt_s2", "revision": 0, "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "authenticated": true }, "dimensions": { "orderId": "O2", "channel": "web" } },
+    { "schemaVersion": "1.0.0", "eventId": "D1", "classification": "discount", "amount": "10.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-01T10:01:00Z", "source": { "name": "stripe", "sourceEventId": "evt_d1", "revision": 0, "contentHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333", "authenticated": true }, "links": { "originalEventId": "S1" }, "dimensions": { "orderId": "O1" } },
+    { "schemaVersion": "1.0.0", "eventId": "R1", "classification": "refund", "amount": "20.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-02T09:00:00Z", "source": { "name": "stripe", "sourceEventId": "evt_r1", "revision": 0, "contentHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444", "authenticated": true }, "links": { "refundKind": "sale", "originalEventId": "S1" }, "dimensions": { "orderId": "O1" } },
+    { "schemaVersion": "1.0.0", "eventId": "T1", "classification": "tax", "amount": "12.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-01T10:00:30Z", "source": { "name": "stripe", "sourceEventId": "evt_t1", "revision": 0, "contentHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555", "authenticated": true }, "links": { "originalEventId": "S1" }, "dimensions": { "orderId": "O1" } },
+    { "schemaVersion": "1.0.0", "eventId": "F1", "classification": "fee", "amount": "5.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-01T10:00:45Z", "source": { "name": "stripe", "sourceEventId": "evt_f1", "revision": 0, "contentHash": "sha256:6666666666666666666666666666666666666666666666666666666666666666", "authenticated": true }, "dimensions": { "orderId": "O1" } },
+    { "schemaVersion": "1.0.0", "eventId": "C1", "classification": "credit", "amount": "2.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-03T09:00:00Z", "source": { "name": "stripe", "sourceEventId": "evt_c1", "revision": 0, "contentHash": "sha256:7777777777777777777777777777777777777777777777777777777777777777", "authenticated": true }, "links": { "recoveryOf": "fee", "originalEventId": "F1" }, "dimensions": { "orderId": "O1" } },
+    { "schemaVersion": "1.0.0", "eventId": "DC1", "classification": "direct_cost", "amount": "30.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "live", "occurredAt": "2026-10-01T10:05:00Z", "source": { "name": "ai-metering", "sourceEventId": "evt_dc1", "revision": 0, "contentHash": "sha256:8888888888888888888888888888888888888888888888888888888888888888", "authenticated": true }, "dimensions": { "provider": "anthropic", "model": "claude", "workflowId": "wf-1" } },
+    { "schemaVersion": "1.0.0", "eventId": "RB1", "classification": "reimbursement", "amount": "3.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-04T09:00:00Z", "source": { "name": "ops", "sourceEventId": "evt_rb1", "revision": 0, "contentHash": "sha256:9999999999999999999999999999999999999999999999999999999999999999", "authenticated": true }, "links": { "recoveryOf": "direct_cost", "originalEventId": "DC1" } },
+    { "schemaVersion": "1.0.0", "eventId": "RES1", "classification": "direct_cost", "amount": "1.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "live", "occurredAt": "2026-10-01T09:00:00Z", "source": { "name": "ai-metering", "sourceEventId": "evt_res1", "revision": 0, "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "authenticated": true }, "dimensions": { "feature": "shared-research" } },
+    { "schemaVersion": "1.0.0", "eventId": "MAN1", "classification": "direct_cost", "amount": "7.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "live", "occurredAt": "2026-10-05T09:00:00Z", "source": { "name": "manual-import", "sourceEventId": "evt_man1", "revision": 0, "contentHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "authenticated": true }, "manualImport": { "actor": "controller-1", "sourceHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "reason": "vendor-invoice-2026-10", "currency": "USD" }, "dimensions": { "feature": "fulfillment" } },
+    { "schemaVersion": "1.0.0", "eventId": "PO1", "classification": "payout", "amount": "90.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-06T09:00:00Z", "source": { "name": "stripe", "sourceEventId": "evt_po1", "revision": 0, "contentHash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "authenticated": true } },
+    { "schemaVersion": "1.0.0", "eventId": "CM1", "classification": "cash_movement", "amount": "140.00", "currency": "USD", "scale": 2, "recognition": "actual", "evidenceMode": "sandbox", "occurredAt": "2026-10-06T08:00:00Z", "cashDirection": "receipt", "source": { "name": "bank", "sourceEventId": "evt_cm1", "revision": 0, "contentHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "authenticated": true } },
+    { "schemaVersion": "1.0.0", "eventId": "SIM1", "classification": "sale", "amount": "999.00", "currency": "USD", "scale": 2, "recognition": "simulated", "evidenceMode": "sandbox", "occurredAt": "2026-10-01T12:00:00Z", "source": { "name": "sim-harness", "sourceEventId": "evt_sim1", "revision": 0, "contentHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "authenticated": true }, "dimensions": { "orderId": "O-SIM" } }
+  ],
+  "expected": {
+    "grossSales": "150.00",
+    "netSales": "120.00",
+    "directCosts": "38.00",
+    "contribution": "82.00",
+    "cash": { "receipts": "140.00", "payouts": "90.00", "net": "50.00" },
+    "simulated": { "grossSales": "999.00", "netSales": "999.00", "directCosts": "0.00", "contribution": "999.00" },
+    "refundLinks": [{ "refundEventId": "R1", "originalEventId": "S1" }],
+    "recognizedEventCount": 14
+  },
+  "allocation": {
+    "sourceEventId": "RES1",
+    "sourceAmount": "1.00",
+    "currency": "USD",
+    "scale": 2,
+    "targets": [{ "key": "O1", "weight": 1 }, { "key": "O2", "weight": 1 }, { "key": "O3", "weight": 1 }],
+    "expected": {
+      "allocations": [{ "key": "O1", "amount": "0.33" }, { "key": "O2", "amount": "0.33" }, { "key": "O3", "amount": "0.33" }],
+      "allocatedTotal": "0.99",
+      "residual": "0.01",
+      "projectExpense": "1.00"
+    }
+  }
+}

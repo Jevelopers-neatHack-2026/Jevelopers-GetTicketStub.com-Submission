@@ -46,7 +46,8 @@ The public script names are `test:accounting`, `test:adapters`, `test:budgets`, 
 | `pricing` | `tests/pricing/pricing.test.mjs` | PostgreSQL 16 |
 | `ledger` | `tests/ledger/ledger.test.mjs` | PostgreSQL 16 |
 | `migrations` | `tests/migrations/migrations.test.mjs` | PostgreSQL 16 |
-| `accounting`, `adapters`, `budgets`, `metering`, `reconciliation`, `recovery`, `reporting`, `security` | none yet | fail closed |
+| `accounting` | `tests/accounting/accounting.test.mjs` | Node only |
+| `adapters`, `budgets`, `metering`, `reconciliation`, `recovery`, `reporting` | none yet | fail closed |
 | `integration`, `release` | require all domain leaves | fail closed (`blocked`) |
 
 Leaf suites that are not implemented yet deliberately exit nonzero with an evidence manifest; integration and release use `blocked` status until all required leaf implementations and nonempty suites are present.
@@ -65,7 +66,7 @@ The selector contract currently defines budget leaves: `npm run test:budgets -- 
 
 An empty, repeated, unknown, or unsupported selector fails without falling back to the full suite. A recognized selector whose required leaf has not landed also fails and records the missing file. The runner checks Node 22 structured test events separately for every required file, ignores the Node file wrapper, and requires each file to register and complete at least one real test case. Any skipped, todo, cancelled, failed, empty, or missing required file fails the gate; an unrelated passing file cannot satisfy it. See the [Node.js 22 test runner event API](https://nodejs.org/download/release/v22.23.3/docs/api/test.html#test-runner-events) used by the custom reporter.
 
-`npm run test:integration -- --offline` and `npm run test:release -- --offline` currently fail closed because the required financial leaf suites are absent (accounting, adapters, budgets, metering, reconciliation, recovery, reporting; release also requires security). Their manifests list the missing suites. They must remain blocked until real domain tests and implementations land; missing or empty suites cannot pass.
+`npm run test:integration -- --offline` and `npm run test:release -- --offline` currently fail closed because the required financial leaf suites are absent (adapters, budgets, metering, reconciliation, recovery, reporting; the accounting leaf is now implemented, release also requires security). Their manifests list the missing suites. They must remain blocked until real domain tests and implementations land; missing or empty suites cannot pass.
 
 ## Package checks
 
