@@ -1,0 +1,545 @@
+{
+  "status": "ACTUAL_POSTMERGE_SOURCE_AND_MAIN_CI_VERIFIED_SYNTHETIC_CONFORMANCE_ONLY",
+  "actualMerge": "ef6dee41fdce642bc1b90a2acb2640226ec699fe",
+  "candidateHead": "0c4c7024c68b5a52a12f3de3cec891f64aa65bd3",
+  "tree": "377cd19beeafad222b19cd8e1b057552196f64df",
+  "mainRun": 38255883018,
+  "mainUrl": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/actions/runs/38255883018",
+  "actualCheckoutLog": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/main-job-log.txt",
+    "sha256": "268ba7d9132118129e28fcef6a784c406232be0dc7625cc9daa634f9885160fe",
+    "anchors": [
+      "2026-10-12T13:28:05.2837549Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ef6dee41fdce642bc1b90a2acb2640226ec699fe:refs/remotes/origin/main",
+      "2026-10-12T13:28:06.3711336Z  * [new ref]         ef6dee41fdce642bc1b90a2acb2640226ec699fe -> origin/main",
+      "2026-10-12T13:28:06.4107314Z ef6dee41fdce642bc1b90a2acb2640226ec699fe",
+      "2026-10-12T13:29:49.0884743Z test evidence: tests/exports/query-export-pg.test.mjs; registered=10; passed=10; failed=0; skipped=0; todo=0; cancelled=0; status=passed"
+    ]
+  },
+  "sourceVerification": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/actual-merge-source-verification.json",
+    "sha256": "e4c810a3bb278302f4a74b46db7f6fca66ed26d70b21ee441a1b554ec4777640",
+    "files": 226
+  },
+  "typecheck": "passed hosted exact actual checkout",
+  "build": "passed hosted exact actual checkout",
+  "counts": [
+    {
+      "suite": "exportsPG",
+      "registered": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/artifacts/test-manifests/exports-2026-10-12T132945301Z-4473.json",
+      "sha256": "e3b8eab210968e42091dc084ae4931735d755c2c376bd56962d2d9aa66bc824d"
+    },
+    {
+      "suite": "exports",
+      "registered": 195,
+      "passed": 195,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/artifacts/test-manifests/exports-2026-10-12T132827974Z-2489.json",
+      "sha256": "962051925911bef07fe4daad5a2a64f702c405a359c5fcd5c48bbeae91e79f9b"
+    },
+    {
+      "suite": "reporting",
+      "registered": 29,
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/artifacts/test-manifests/reporting-2026-10-12T132937936Z-4142.json",
+      "sha256": "195f1fc97cbd48e24369ee7e785c28b6932be4910b305bac2778fef58d8e1785"
+    },
+    {
+      "suite": "migrations",
+      "registered": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/artifacts/test-manifests/migrations-2026-10-12T133022817Z-6257.json",
+      "sha256": "e8b54986e0a5b476c1e6eedc2a806ec027bf21aac4b1f036a20cd01e32e22bb3"
+    }
+  ],
+  "database": {
+    "manifest": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/artifacts/test-manifests/exports-db-2026-10-12T132943634Z-72db6f56.json",
+    "sha256": "51c4107f2b73f549dfdaf01849cd391d6d84994d13535b46c5f844891524849f",
+    "runtimeRole": {
+      "name": "ci_runtime_7cfda3eab227",
+      "privileges": "ci_finance_runtime; non-owner; non-superuser; no-bypassrls"
+    },
+    "migrationRole": {
+      "name": "ci_migrator_a6a4203a809b",
+      "privileges": "ci_finance_migrator; separate login; non-superuser; scoped migration administration"
+    },
+    "markerValidated": true,
+    "containerStarted": true,
+    "containerCleaned": true,
+    "migrations": [
+      {
+        "name": "0001_foundation.sql",
+        "sha256": "149333f85d5b5673d0a050e001e9cb1fdc370568c37fef23006bb98c9e03a11b"
+      },
+      {
+        "name": "0002_foundation_health.sql",
+        "sha256": "d49306f7312d713b335b3dc5863fe228e8b4daf1a5380138f8847c14a7f62b99"
+      },
+      {
+        "name": "0003_financial_ledger.sql",
+        "sha256": "d8db9d67e42ffa9ac3d5b7205992956a6afef26d8114580a29dc0d2e409a7c6a"
+      },
+      {
+        "name": "0004_pricing_catalog.sql",
+        "sha256": "86ce94579fe19f5edb965721ef1c9d8e5daa874ada4dbeb2b87c23a0a325441b"
+      },
+      {
+        "name": "0005_pricing_valuation_history.sql",
+        "sha256": "b648d9dffbff134250c032622a5a946df903b36ba42f1bdc4daefb81dee9af80"
+      },
+      {
+        "name": "0006_finance_security_roles.sql",
+        "sha256": "fb5ef6ffd1cae4afaf5c3d35092bf837948878aae7ac83dd31566daa0fd06b8e"
+      },
+      {
+        "name": "0007_accounting_projection_snapshots.sql",
+        "sha256": "7fad294f854955f118f65fa3e198cfe4b1a7cb835a22e156a3d3509281f64ca6"
+      },
+      {
+        "name": "0008_budget_reservations.sql",
+        "sha256": "ae4a6eabdfd06779f76c80a204c00b08ed36c493ec08334a84b3bd2dae1da0c0"
+      },
+      {
+        "name": "0009_usage_intake.sql",
+        "sha256": "ad083cdc40e78ac3753e657a46de6c201ca3efb33e6bd3b024bf7e29a3c24b0f"
+      },
+      {
+        "name": "0010_budget_authority_bindings.sql",
+        "sha256": "1f3f1949abd9ce3a4771e17287fce813694a56a93c0f901dfaeb60a568b80af6"
+      },
+      {
+        "name": "0012_reporting_snapshots.sql",
+        "sha256": "a4c6f5aaa5338fd3ff835e08f2cbd8f7a6e9f4f31ca7dac87bdb3a1afffb195a"
+      }
+    ],
+    "postgresImage": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d"
+  },
+  "receipts": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/artifacts/exports/postgres-composition.json",
+    "sha256": "eb247c863738f9d3cb6ecd9a03d7a007e9282b0c7a54945e263e9e5f2780f5b8",
+    "count": 17,
+    "byteHashesAndLengthsVerified": 34,
+    "artifactSetHashesVerified": 17,
+    "failures": [],
+    "byteManifest": [
+      {
+        "receipt": 0,
+        "fileName": "summary.json",
+        "sha256": "dc37e678358a53c6ce4343e21f8de8064f3e1c7010041fda1337614e1baf3e34",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 0,
+        "fileName": "metrics.csv",
+        "sha256": "c054d5231e3aa5c969d3e58007676e7128d6e8e204b212c0daa9986664545411",
+        "byteLength": 3892
+      },
+      {
+        "receipt": 1,
+        "fileName": "summary.json",
+        "sha256": "d04cfa05fc87315c0add50b2b0fb48cb5801e066d9bae16552630d17c7e67d4d",
+        "byteLength": 5926
+      },
+      {
+        "receipt": 1,
+        "fileName": "metrics.csv",
+        "sha256": "e4f0563f9bb8f98f6fce44e2ac09a76e4eb79ed2e2c1a05611a3018812942763",
+        "byteLength": 2953
+      },
+      {
+        "receipt": 2,
+        "fileName": "summary.json",
+        "sha256": "8ff5e58aa063a2bc5adb98d67dd612a13c255b5caa44ed9391b21debce490c7b",
+        "byteLength": 13995
+      },
+      {
+        "receipt": 2,
+        "fileName": "metrics.csv",
+        "sha256": "1b48f450f4117490b48e607cfa43165a4b5337a8a354fb13eb9321686f761a2f",
+        "byteLength": 3932
+      },
+      {
+        "receipt": 3,
+        "fileName": "summary.json",
+        "sha256": "36826cc16febec28e728cae2d899de10396dfd511163103b49149ff4690e2797",
+        "byteLength": 14035
+      },
+      {
+        "receipt": 3,
+        "fileName": "metrics.csv",
+        "sha256": "3546314ade5be2e6eb6f80a5d083514c15c0541ddf8153a0909f26bb3e0974a7",
+        "byteLength": 3928
+      },
+      {
+        "receipt": 4,
+        "fileName": "summary.json",
+        "sha256": "20a297562837465415f255481423950cd5a33e4bf49b462f035bc5bf5cf20f87",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 4,
+        "fileName": "metrics.csv",
+        "sha256": "beb10c9004e1ddd7c1eec9e5a693426ac0238541b10f3ebcf18351f768c761b8",
+        "byteLength": 3892
+      },
+      {
+        "receipt": 5,
+        "fileName": "summary.json",
+        "sha256": "36826cc16febec28e728cae2d899de10396dfd511163103b49149ff4690e2797",
+        "byteLength": 14035
+      },
+      {
+        "receipt": 5,
+        "fileName": "metrics.csv",
+        "sha256": "3546314ade5be2e6eb6f80a5d083514c15c0541ddf8153a0909f26bb3e0974a7",
+        "byteLength": 3928
+      },
+      {
+        "receipt": 6,
+        "fileName": "summary.json",
+        "sha256": "af8045c8c2487a6779881d5660c4ee3c26b1b9bdc8a91c211fbeeeff592f4611",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 6,
+        "fileName": "metrics.csv",
+        "sha256": "443d0373549737777de6c0e200b8bfb5410f87abd82baf67f7dc5d9a656adfe3",
+        "byteLength": 3871
+      },
+      {
+        "receipt": 7,
+        "fileName": "summary.json",
+        "sha256": "1d7e8ccdb9a66548746670b101f6e92175f71c29b67347e63555d62d03bf3d5e",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 7,
+        "fileName": "metrics.csv",
+        "sha256": "24177a678413e2cb99c1f16a51a7855a751e196e21c201984f42401a73b7538f",
+        "byteLength": 3871
+      },
+      {
+        "receipt": 8,
+        "fileName": "summary.json",
+        "sha256": "af8045c8c2487a6779881d5660c4ee3c26b1b9bdc8a91c211fbeeeff592f4611",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 8,
+        "fileName": "metrics.csv",
+        "sha256": "443d0373549737777de6c0e200b8bfb5410f87abd82baf67f7dc5d9a656adfe3",
+        "byteLength": 3871
+      },
+      {
+        "receipt": 9,
+        "fileName": "summary.json",
+        "sha256": "dc3c75387f2bdb4fd17101dcb68cb418d430967847a81a89392ea661e2de758e",
+        "byteLength": 14103
+      },
+      {
+        "receipt": 9,
+        "fileName": "metrics.csv",
+        "sha256": "45d0dd49236da62201784905251746e2ba46d087caa281412425ccfa206f5e27",
+        "byteLength": 3892
+      },
+      {
+        "receipt": 10,
+        "fileName": "summary.json",
+        "sha256": "4bcfedfe9fdb92fabb32eef3227b993107ded3ea0275950aa1f08a8b403300b5",
+        "byteLength": 14073
+      },
+      {
+        "receipt": 10,
+        "fileName": "metrics.csv",
+        "sha256": "338d65ab0fcc701c998f464f8989fd3df2ee3e338a57699b94d58108c4833ba7",
+        "byteLength": 3892
+      },
+      {
+        "receipt": 11,
+        "fileName": "summary.json",
+        "sha256": "dc3c75387f2bdb4fd17101dcb68cb418d430967847a81a89392ea661e2de758e",
+        "byteLength": 14103
+      },
+      {
+        "receipt": 11,
+        "fileName": "metrics.csv",
+        "sha256": "45d0dd49236da62201784905251746e2ba46d087caa281412425ccfa206f5e27",
+        "byteLength": 3892
+      },
+      {
+        "receipt": 12,
+        "fileName": "summary.json",
+        "sha256": "56c76c328608826195e3f356104dad563488bf98076bd8825056788f3e85aedf",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 12,
+        "fileName": "metrics.csv",
+        "sha256": "dffb75b3d743d879e21fec225bdaae4f57d2c8b0f477b3816a35a8575e309ef8",
+        "byteLength": 3871
+      },
+      {
+        "receipt": 13,
+        "fileName": "summary.json",
+        "sha256": "28252fa04ced4ab26cdede726afc307f7b28582b10ae659fe626992b4ba51011",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 13,
+        "fileName": "metrics.csv",
+        "sha256": "ac5105df35f9c0a9bd62d876d5846a35c87e8bbe6b20373619d06407016f1301",
+        "byteLength": 3871
+      },
+      {
+        "receipt": 14,
+        "fileName": "summary.json",
+        "sha256": "2d704d0d4c2d988b233cb74fd5be7143240e83872ccf434839c05252d6f39bf0",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 14,
+        "fileName": "metrics.csv",
+        "sha256": "cd8b8101312f47848b6151157c4368cdd33b3986a40117f4e0627621175bc939",
+        "byteLength": 3871
+      },
+      {
+        "receipt": 15,
+        "fileName": "summary.json",
+        "sha256": "d45c7ead7344c213f73b0810b24de13517e792229e91f9b522dc84b2232269aa",
+        "byteLength": 25935
+      },
+      {
+        "receipt": 15,
+        "fileName": "metrics.csv",
+        "sha256": "a390bef17eadd74474aed6ba0230edaaa03f74ca02530e54b36f7c8db653fb82",
+        "byteLength": 7595
+      },
+      {
+        "receipt": 16,
+        "fileName": "summary.json",
+        "sha256": "37840dcac7c99b791c2c36a66071e439376f72877a6052fc94dae8f26bb7a276",
+        "byteLength": 14013
+      },
+      {
+        "receipt": 16,
+        "fileName": "metrics.csv",
+        "sha256": "a823d1e1d42ae775f6cf6c9ff1ec4d65a730998c87d53f1ced6c3f17179e7705",
+        "byteLength": 3892
+      }
+    ]
+  },
+  "downloadedFiles": [
+    {
+      "path": "exports/postgres-composition.json",
+      "sha256": "eb247c863738f9d3cb6ecd9a03d7a007e9282b0c7a54945e263e9e5f2780f5b8",
+      "byteLength": 392447
+    },
+    {
+      "path": "exports/synthetic-sql-composition.json",
+      "sha256": "33da1f7be655f43ede3b4629041b02f16081547db9eda75e41bce30ea1f4ef7e",
+      "byteLength": 23302
+    },
+    {
+      "path": "reporting/failures-4159.json",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "byteLength": 2
+    },
+    {
+      "path": "reporting/ie-ci06-pg-page.json",
+      "sha256": "ee364821bccf5cb3e99556d36f6a4e24f8166390c1c8773ab2309df452d3e7d0",
+      "byteLength": 37698
+    },
+    {
+      "path": "reporting/producer-budget-v2-page.json",
+      "sha256": "3d77bc8b19c19a6c8a5b6da09376a24543fdd1f2da14a4b085d2fbaa24500c03",
+      "byteLength": 5989
+    },
+    {
+      "path": "reporting/producer-unknown-simulated-v2-page.json",
+      "sha256": "842d5eca37be1bdf8ea3fa8feea197574c29a5f1229eade247b284402e1d776f",
+      "byteLength": 25196
+    },
+    {
+      "path": "reporting/producer-v1-page.json",
+      "sha256": "0b9b7210c515d05af66eea0f48c9fd1b79b737bb60230dcf67b23b4588447be3",
+      "byteLength": 6468
+    },
+    {
+      "path": "reporting/producer-v2-page.json",
+      "sha256": "c272b9b8d25f3d73bed228554f95b448d3951bc2bb9b8defcabc4d633249ac3d",
+      "byteLength": 57668
+    },
+    {
+      "path": "reporting/producer-v2-pagination-page.json",
+      "sha256": "0b69c52a47e13cb181c0abcf388a15753ed9673dc74b583da0a0d305330e4423",
+      "byteLength": 212683
+    },
+    {
+      "path": "reporting/producer-v2-refusals-page.json",
+      "sha256": "3ba9ea8887c6a2e231536a6d6887f8ad3e02b687fcd7df5d3be2d05a80e0afec",
+      "byteLength": 17446
+    },
+    {
+      "path": "test-database/migrations-2026-10-12T133021192Z-8d0da0c2.log",
+      "sha256": "b67c945bc1c3996042d6277ee87be9aaa9659db97a6a7e7bfeda4278095bcf7f",
+      "byteLength": 2363
+    },
+    {
+      "path": "test-manifests/accounting-2026-10-12T132824282Z-2418.json",
+      "sha256": "91545927cf19cd86638198e6a3694ffde73812f10fa3e79b3ee137575affb519",
+      "byteLength": 1739
+    },
+    {
+      "path": "test-manifests/budgets-2026-10-12T133001118Z-5167.json",
+      "sha256": "66becfa9fb807c7aa2d23ddc7299e2e441789502c9f4f42b71d90c28ccf7187a",
+      "byteLength": 1929
+    },
+    {
+      "path": "test-manifests/budgets-2026-10-12T133009784Z-5547.json",
+      "sha256": "8bd68afd8bcdebf6befc51faf7810a9bc639a9bd2469ddda4b1b6a43b2845835",
+      "byteLength": 1909
+    },
+    {
+      "path": "test-manifests/budgets-2026-10-12T133015714Z-5910.json",
+      "sha256": "7d27ba5eb2120a5819f9db97cf6742883d7f22ba9aa92b5f5064d8a40a6ac8ea",
+      "byteLength": 1913
+    },
+    {
+      "path": "test-manifests/budgets-2026-10-12T133034341Z-6662.json",
+      "sha256": "e78aaee46c2e168653a891bd58ba5afbf8b6d2647f608968b387570843698a48",
+      "byteLength": 1376
+    },
+    {
+      "path": "test-manifests/budgets-2026-10-12T133034374Z-6673.json",
+      "sha256": "ef9262ae0ea899ceb8f9695433e9f5188394207fddd27d8e700898de2252084f",
+      "byteLength": 1381
+    },
+    {
+      "path": "test-manifests/budgets-db-2026-10-12T132959754Z-99323a12.json",
+      "sha256": "295ca88120749bc9d83bf3748e83d9e0b445887a5daccc9e86bc9b3f5141c7c4",
+      "byteLength": 4506
+    },
+    {
+      "path": "test-manifests/budgets-db-2026-10-12T133008424Z-df70360d.json",
+      "sha256": "5c0bb1d8c36cab339288f3093db345ab239bfdfa6d56fc45283d9d44a276dc69",
+      "byteLength": 4506
+    },
+    {
+      "path": "test-manifests/budgets-db-2026-10-12T133014361Z-7489e130.json",
+      "sha256": "07303612a4a2548cb55c1b2235899f57f890cd4df10858641620792f76abd245",
+      "byteLength": 4506
+    },
+    {
+      "path": "test-manifests/contracts-2026-10-12T132820073Z-2327.json",
+      "sha256": "d4cb6c8ec228ef2841e5cfc0d275cf1a1adbb12f5f1f6154eabd164ebab496be",
+      "byteLength": 2344
+    },
+    {
+      "path": "test-manifests/exports-2026-10-12T132827974Z-2489.json",
+      "sha256": "962051925911bef07fe4daad5a2a64f702c405a359c5fcd5c48bbeae91e79f9b",
+      "byteLength": 2324
+    },
+    {
+      "path": "test-manifests/exports-2026-10-12T132945301Z-4473.json",
+      "sha256": "e3b8eab210968e42091dc084ae4931735d755c2c376bd56962d2d9aa66bc824d",
+      "byteLength": 1754
+    },
+    {
+      "path": "test-manifests/exports-db-2026-10-12T132943634Z-72db6f56.json",
+      "sha256": "51c4107f2b73f549dfdaf01849cd391d6d84994d13535b46c5f844891524849f",
+      "byteLength": 4507
+    },
+    {
+      "path": "test-manifests/ledger-2026-10-12T132910782Z-3332.json",
+      "sha256": "f8dd58689c1429d995dc44a5daccfc082bcf1b53deaea256b8a8876228ea9168",
+      "byteLength": 1711
+    },
+    {
+      "path": "test-manifests/ledger-db-2026-10-12T132909222Z-03644d27.json",
+      "sha256": "a0db0355eaea60d7065929af9018e7906b1a619b85e058005552bd16ee4e8714",
+      "byteLength": 4504
+    },
+    {
+      "path": "test-manifests/metering-2026-10-12T132905414Z-3059.json",
+      "sha256": "5b9f7a5c7cd1d5c6f189c4ddf56c4aada65ab6ef074e86796d45bf658e0f1124",
+      "byteLength": 1703
+    },
+    {
+      "path": "test-manifests/migrations-2026-10-12T133022817Z-6257.json",
+      "sha256": "e8b54986e0a5b476c1e6eedc2a806ec027bf21aac4b1f036a20cd01e32e22bb3",
+      "byteLength": 1731
+    },
+    {
+      "path": "test-manifests/migrations-db-2026-10-12T133021192Z-8d0da0c2.json",
+      "sha256": "130b1406214d86e67c6174b02900cdce26eeab690b605150d13bce680ed40204",
+      "byteLength": 6389
+    },
+    {
+      "path": "test-manifests/pricing-2026-10-12T132853920Z-2906.json",
+      "sha256": "cc6d8835d4427119e29524c374bd3f7f212cb1efc74bce82850512fe14b01e8c",
+      "byteLength": 1716
+    },
+    {
+      "path": "test-manifests/pricing-db-2026-10-12T132841715Z-86f72ad7.json",
+      "sha256": "e1770a6e60c62a2896c4f91546e172c7ff1f400c1414cb3c3e9d11b17257dc37",
+      "byteLength": 4506
+    },
+    {
+      "path": "test-manifests/recovery-2026-10-12T132930678Z-3752.json",
+      "sha256": "850190db783dfa7d0dac00150cdfb92a436aa346fcf1b09453b4ae0df48cb0cb",
+      "byteLength": 1729
+    },
+    {
+      "path": "test-manifests/recovery-db-2026-10-12T132929243Z-8ae3b851.json",
+      "sha256": "0a3c3a17dcfcb19019b4fa7fa44dd5a780c470cd8d3ad66432108c01a6f1e854",
+      "byteLength": 4508
+    },
+    {
+      "path": "test-manifests/reporting-2026-10-12T132937936Z-4142.json",
+      "sha256": "195f1fc97cbd48e24369ee7e785c28b6932be4910b305bac2778fef58d8e1785",
+      "byteLength": 1734
+    },
+    {
+      "path": "test-manifests/reporting-db-2026-10-12T132936487Z-09dfb0be.json",
+      "sha256": "5bfe1130e5c21977ae6ee58677bd994a3f0e62daf9c06a06896cdbd17a0186b9",
+      "byteLength": 4510
+    },
+    {
+      "path": "test-manifests/security-2026-10-12T132955086Z-4817.json",
+      "sha256": "4b2418f4d103061278af0c3af34894c8b80416db23c5fa4bf256bea9acfc7f86",
+      "byteLength": 1721
+    },
+    {
+      "path": "test-manifests/security-db-2026-10-12T132953269Z-0c94a0ff.json",
+      "sha256": "5d033cc6c4d5ed792f4737f8e7879b2547be526678041f697f236efae308b5ad",
+      "byteLength": 4508
+    },
+    {
+      "path": "test-manifests/smoke-2026-10-12T133030162Z-6496.json",
+      "sha256": "20483d8e12ebb1967e92887e93e6b49bc4942fffbb3182423629176cc912c3cb",
+      "byteLength": 2324
+    },
+    {
+      "path": "test-manifests/smoke-cleanup-probe-db-2026-10-12T133030551Z-b2efe1d7.json",
+      "sha256": "e16b56c5d696ab52489c746e6f5f48be73e4c022202068ec4aaa0d9c90e37491",
+      "byteLength": 2394
+    },
+    {
+      "path": "test-manifests/traceability-2026-10-12T133034159Z-6601.json",
+      "sha256": "4b37418b0ff0e6176b4bbf73b0a618eeab8ca887169457904a16022ab6fa2dee",
+      "byteLength": 2328
+    }
+  ],
+  "artifactScan": "No credential URI, provider key or private-key pattern found in downloaded artifact bytes",
+  "claimLimit": "Source-bound successful 9 children + parent10 includes governed late-grant/context negatives and unchanged controls; manifests expose counts, not raw per-loop assertion receipts. Actual hosted PostgreSQL, synthetic postings and task-local synthetic single-state issuer. No mounted actual host/paid consumer/provider costs/ACK/global11 completion.",
+  "historicalCandidatePacket": "Separate E/hosted-0c4/hosted-verification-report.json; old 52 three-argument failures retained separately",
+  "cleanup": "No local DB/Docker/deps/source modifications; only read-only metadata/artifact evidence capture"
+}

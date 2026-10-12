@@ -1,0 +1,858 @@
+{
+  "handoffVersion": "1.0.0",
+  "status": "EXACT_REVIEWED_EXPORT_PRODUCER_SYNTHETIC_CONFORMANCE_HANDOFF_CONSUMER_ACK_PENDING",
+  "module": "@jevelopers/cost-intelligence (src/integrations; top-level public barrel)",
+  "owner": "Finance; root owner accepted exact candidate after verification; sole export author source stopped",
+  "originalHead": "0c4c7024c68b5a52a12f3de3cec891f64aa65bd3",
+  "tree": "377cd19beeafad222b19cd8e1b057552196f64df",
+  "actualMerge": "ef6dee41fdce642bc1b90a2acb2640226ec699fe",
+  "candidateCheckout": "f8e06f3d9b8c4d98e67b616f869e1392c74b8996",
+  "candidateBase": "06dafe24183c0243b30e5b851b3a6ff218bd88d1",
+  "candidateRun": 38254570860,
+  "candidateArtifact": {
+    "id": 11749324572,
+    "name": "financial-reporting-evidence",
+    "zipByteLength": 92721,
+    "zipSha256": "35db315aaf4dcce46617c8b661ffcd7de9db4458a9b6f46976c618ca0e25b09d",
+    "pinVerifiedBy": "sealed independent review; independently recomputed extracted receipt bytes in producer verification"
+  },
+  "review": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/sealed-independent-review.md",
+    "sha256": "54b83d444b9baa58f8733876894cfb0e182e5176769a42cdf4d91fd53e6b6bdb",
+    "disposition": "APPROVE scoped exact source/tested composition; no actual production host/canonical adoption/selected real run"
+  },
+  "candidateVerification": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/hosted-0c4/hosted-verification-report.json",
+    "sha256": "09d626ac712c5742bebdc49e74ee67cb9286cf7fb0b60b539e7d86b255c4547c",
+    "byteLength": 44548
+  },
+  "postmergeVerification": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/postmerge-ef6/actual-postmerge-verification-report.json",
+    "sha256": "55a3c5c782bd329b9769064d06e96213519a7f34461597b94f6af39d1fa27c79",
+    "byteLength": 20945
+  },
+  "mainRun": 38255883018,
+  "entrypoints": {
+    "createReportingExportRuntimePorts": "(reportingPorts, legacyStore, reportingStore?, disclosureFence?) => ExportRuntimePorts; fourth capability REQUIRED at runtime for both genuine composed versions",
+    "exportSummary": "ExportRequest@1.0.0 => ApiResult<ExportManifest@1.0.0>",
+    "exportSummaryV2": "ExportRequest@1.0.0 => legacy PreparedExportArtifacts; ReportingExportRequest@2.0.0 => ReportingPreparedExportArtifacts@2.0.0",
+    "getPreparedExportArtifacts": "Same overloads; requires original immutable preparation, current verified source and current coherent authority",
+    "validateExportRequestBoundary": "Full legacy nested canonical boundary",
+    "validateReportingExportRequestBoundary": "Full rich nested canonical boundary; use this combined validator rather than partial schema alone",
+    "createFileExportArtifactStore/createFileReportingExportArtifactStore": "Injected artifact persistence, immutable authenticated original receipt; trusted custody/key management does not grant financial access",
+    "querySummary/querySummaryV2": "Producer query APIs; export only original verified stored FIRST page full aggregates, including hasMore true. Continuation page conflicts."
+  },
+  "request": {
+    "schemaVersion": [
+      "1.0.0",
+      "2.0.0"
+    ],
+    "exactFields": [
+      "schemaVersion",
+      "requestId",
+      "idempotencyKey",
+      "scope",
+      "summarySnapshot",
+      "summaryContentHash",
+      "destination",
+      "format",
+      "requestedAt",
+      "evidenceMode",
+      "requestedBy"
+    ],
+    "scope": [
+      "tenantId",
+      "projectId",
+      "actorId",
+      "environment",
+      "billingMode"
+    ],
+    "destination": "cfo.ai",
+    "format": [
+      "json",
+      "csv"
+    ],
+    "summarySnapshot": "Exact matching original producer FIRST page (v1 FinancialSummaryPage or v2 FinancialSummaryPageV2); immutable persisted source retrieved independently",
+    "untrustedLabels": [
+      "requestedBy",
+      "requestedAt",
+      "evidenceMode",
+      "caller summary/hash claims"
+    ],
+    "fixtureRequest": {
+      "source": "fixtures/reporting/prepared-export-request.json",
+      "status": "Committed structural synthetic fixture; NOT captured request for candidate PG receipt snapshots. Actual PG request construction is source-bound in query-export-pg.test.mjs."
+    }
+  },
+  "response": {
+    "envelope": "{ok:true,value} or {ok:false,error}; error has no value/bytes",
+    "legacyFields": [
+      "manifest",
+      "artifactManifest",
+      "artifacts"
+    ],
+    "richFields": [
+      "schemaVersion",
+      "manifest",
+      "artifacts"
+    ],
+    "artifactFields": [
+      "fileName",
+      "mediaType",
+      "content",
+      "contentHash",
+      "byteLength"
+    ],
+    "artifactFiles": [
+      "summary.json",
+      "metrics.csv"
+    ],
+    "status": "prepared",
+    "delivery": "manual_prepared",
+    "deliveryReference": null,
+    "knownUnknown": "Exact signed decimals; independent currencies; seven actual metrics/four simulated ReportingAmounts; null unknown/partial totals and retained knownSubtotal/unknownCount. cash_net explicitly unavailable. No actual external bills supplied."
+  },
+  "errors": {
+    "SOURCE_UNAVAILABLE": "Missing fourth fence/unsupported async or mutable authority/current source unavailable/no original preparation/receipt authentication failure. No bytes.",
+    "FORBIDDEN_SCOPE": "Current coherent scope/context/principal/read/export fails, expiry/revision/revocation veto. No bytes.",
+    "IDEMPOTENCY_CONFLICT": "Changed content/snapshot/destination/format/evidence under key, source-envelope mismatch or continuation. No invented replacement bytes.",
+    "VALIDATION_ERROR": "Invalid/bounded structural or nested financial payload; exact source-qualified nested error retained.",
+    "UNSUPPORTED_VERSION": "Legacy metric/currency cannot map registered canonical definition; no relabel/fake UUID."
+  },
+  "idempotency": "Transport requestId/requestedBy/requestedAt and snapshot requestId are diagnostic; economic snapshot/scope/destination/format/evidence bound. Replay renews same current gate and returns original authenticated timestamp/bytes.",
+  "fence": {
+    "types": [
+      "ExportDisclosureFencePort",
+      "ExportDisclosureFenceRequest",
+      "ExportDisclosureFenceResult",
+      "ExportAccessPermit",
+      "CurrentExportAccessSnapshot"
+    ],
+    "acquire": "Async host-owned immutable opaque private WeakMap permit for full scope + exact requiredPermissions tuple and same authority revisions",
+    "validateCurrent": "SYNCHRONOUS current immutable plain non-proxy snapshot from ONE coherent authoritative context/principal/read/export state; no async/thenable/cached booleans",
+    "permissions": [
+      {
+        "operation": "reporting.querySummary",
+        "permission": "finance.summary.read"
+      },
+      {
+        "operation": "integrations.exportSummary",
+        "permission": "finance.summary.export"
+      }
+    ],
+    "revisionRules": "Every context/principal/scope/read/export/expiry invalidation changes generation. Revoke/restore ABA invalidates old permit. Foreign handles/source callback/object/accessor replacements refused unless reviewed binding remains coherent.",
+    "finalFence": "Resumed handler after source/store/authorization awaits; per-invocation private result binding; resumed outer public wrapper final synchronous check before immutable success handoff, no subsequent host/clock/await/thenable hook.",
+    "missing": "All four composed creation/retrieval paths SOURCE_UNAVAILABLE before protected source/store I/O. Historical three-argument52 failures preserved as compatibility break.",
+    "fixture": "Test-only synthetic single private state/closed transitions in packet; NOT a live Product issuer. Real async-only host cannot claim synchronous coherence by polling or permission aliases."
+  },
+  "pins": {
+    "schemas": [
+      {
+        "module": "reporting",
+        "name": "FinancialSummaryPageSchema",
+        "schema_version": "1.0.0",
+        "export_name": "FinancialSummaryPageSchema",
+        "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryPageSchema.json",
+        "completeness": "partial_wrapper_requires_combined_validation",
+        "combined_validator": "validateFinancialSummaryPageBoundary",
+        "sha256": "d7ff222c7d2dc319d0002eeb0684cad67b67fa5f538e89d3dd0125cd89f4c78c"
+      },
+      {
+        "module": "integrations",
+        "name": "ExportRequestSchema",
+        "schema_version": "1.0.0",
+        "export_name": "ExportRequestSchema",
+        "path": "schemas/cost-intelligence/1.0.0/integrations/ExportRequestSchema.json",
+        "completeness": "partial_wrapper_requires_combined_validation",
+        "combined_validator": "validateExportRequestBoundary",
+        "sha256": "1521e0b629170a50693535190216ff4906e06dbdb901cec6c89ff0eb659df30f"
+      },
+      {
+        "module": "integrations",
+        "name": "ExportManifestSchema",
+        "schema_version": "1.0.0",
+        "export_name": "ExportManifestSchema",
+        "path": "schemas/cost-intelligence/1.0.0/integrations/ExportManifestSchema.json",
+        "completeness": "complete",
+        "sha256": "14e496d5d9113ecf041d28e7e8bb0f741c846790ea146cb218d43527b231555a"
+      },
+      {
+        "module": "integrations",
+        "name": "ReportingExportRequestSchema",
+        "schema_version": "2.0.0",
+        "export_name": "ReportingExportRequestSchema",
+        "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportRequestSchema.json",
+        "completeness": "partial_wrapper_requires_combined_validation",
+        "combined_validator": "validateReportingExportRequestBoundary",
+        "sha256": "1c97ba0d69cd0e5d18baa4b2490e87be2ea57e16a4784e54ec34497dd4989a23"
+      },
+      {
+        "module": "integrations",
+        "name": "ReportingExportManifestSchema",
+        "schema_version": "2.0.0",
+        "export_name": "ReportingExportManifestSchema",
+        "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportManifestSchema.json",
+        "completeness": "complete",
+        "sha256": "7b101a9f29a6945f7ee86406ed9da4045e50de938420d6f22f1cb1b657cc3fb8"
+      },
+      {
+        "module": "integrations",
+        "name": "ReportingExportReceiptSchema",
+        "schema_version": "2.0.0",
+        "export_name": "ReportingExportReceiptSchema",
+        "path": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportReceiptSchema.json",
+        "completeness": "complete",
+        "sha256": "703d3b7501084c88bd5db16a99ed4a044f10f0325d29054b77504d717ce0f92f"
+      },
+      {
+        "module": "reporting",
+        "name": "FinancialSummaryPageSchema",
+        "schema_version": "2.0.0",
+        "export_name": "FinancialSummaryPageV2Schema",
+        "path": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryPageSchema.json",
+        "completeness": "partial_wrapper_requires_combined_validation",
+        "combined_validator": "validateFinancialSummaryPageV2Boundary",
+        "sha256": "862900ad30b1e5684c98852cb93f0010eb73504d2fd9f58018673c9334ddf814"
+      }
+    ],
+    "definitionRegistryRawSha256": "577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1",
+    "definitionRegistryCanonicalHash": "sha256:827ac8d4e37adc354dc8721d4f34c4c3bfb0039b318ae769ed8fec3e249055c2",
+    "sharedFinancialSummary": "1.0.0 in @jevelopers/shared-contracts0.3.0 proposal_only; no adoption",
+    "DashboardSDK": "0.9.7 d432ad5c distinct compatibility; current synthetic consumer840231c1753157bac309cb8f8d2c4b3d26690747 has no exact new producer ACK",
+    "sourceLineage": "Reporting22 fixture/producer labels are lineage, not this export source or execution revision. This packet is original0c4/actualef6 only.",
+    "legacyArtifactManifestV2": "ExportArtifactManifestV2Schema is exported runtime TypeBox/TypeScript schema in pinned src/integrations/runtime.ts. It is not a registered generated JSON schema entry in the committed schema-index; use that exact runtime definition, do not invent a registry/schema file pin."
+  },
+  "candidateReceipts": {
+    "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-postgres-composition.json",
+    "sha256": "6d1995a0091d7d9f2a836ca77b43cbcd86749adf1bb06568dad36ec7a6090da1",
+    "count": 17,
+    "artifactBytes": [
+      {
+        "receiptIndex": 0,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-00/summary.json",
+        "sha256": "9129ef4a88437e70d7c7da85c8ad36d5ce3c9569a66aa779a4e694ee1f1a1353",
+        "byteLength": 14013,
+        "contentHash": "sha256:9129ef4a88437e70d7c7da85c8ad36d5ce3c9569a66aa779a4e694ee1f1a1353",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:80448f1b4ce01f3df2e72e0b374c37365d873828e837bf89cea17ac0c6c999e6",
+          "queryContentHash": "sha256:c37d31cd096f650a79c33b74a865ca5c4b67808e8ad2812e1e69a199293615c7",
+          "summaryContentHash": "sha256:366c764516c4222767479897b26d7d4fd99c37c2bce7115fb213b987aa227755"
+        }
+      },
+      {
+        "receiptIndex": 0,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-00/metrics.csv",
+        "sha256": "38fd0ac898825be6547fe5a014595c06665b7f6ea95cffc28bfffe99dbb31132",
+        "byteLength": 3892,
+        "contentHash": "sha256:38fd0ac898825be6547fe5a014595c06665b7f6ea95cffc28bfffe99dbb31132",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:80448f1b4ce01f3df2e72e0b374c37365d873828e837bf89cea17ac0c6c999e6",
+          "queryContentHash": "sha256:c37d31cd096f650a79c33b74a865ca5c4b67808e8ad2812e1e69a199293615c7",
+          "summaryContentHash": "sha256:366c764516c4222767479897b26d7d4fd99c37c2bce7115fb213b987aa227755"
+        }
+      },
+      {
+        "receiptIndex": 1,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-01/summary.json",
+        "sha256": "0fc1062106526bc110f57cfc96e28b4a9e7d9e4a5f4c8e36903f60b99e81efd1",
+        "byteLength": 5926,
+        "contentHash": "sha256:0fc1062106526bc110f57cfc96e28b4a9e7d9e4a5f4c8e36903f60b99e81efd1",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:5b6586c11c8c35405e01d1c1fb69a526c75d83caa1302473d9d9e3af817be513",
+          "queryContentHash": "sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e",
+          "summaryContentHash": "sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7"
+        }
+      },
+      {
+        "receiptIndex": 1,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-01/metrics.csv",
+        "sha256": "5f39afd6302a7b81f6213e3674e39252ca10be722a22ab69827901537e23fde5",
+        "byteLength": 2953,
+        "contentHash": "sha256:5f39afd6302a7b81f6213e3674e39252ca10be722a22ab69827901537e23fde5",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:5b6586c11c8c35405e01d1c1fb69a526c75d83caa1302473d9d9e3af817be513",
+          "queryContentHash": "sha256:88f5ce9ad7fd5533ccced9f242c88519454194965ef5b2d91ca1abbf3591f68e",
+          "summaryContentHash": "sha256:c7e5ca23237bac32ad6f8e76ddfbd80bf7092d421ff4b0a4369d2afd678941d7"
+        }
+      },
+      {
+        "receiptIndex": 2,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-02/summary.json",
+        "sha256": "d4f57533aa6e382eb2b8afadace1a8e5c4fd5c8dcb3f2548eb247860990e133e",
+        "byteLength": 13995,
+        "contentHash": "sha256:d4f57533aa6e382eb2b8afadace1a8e5c4fd5c8dcb3f2548eb247860990e133e",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:1d1ae0b38c1962e65de7ce1d860c070cb202804d401550d89f76d0fb23cf6be3",
+          "queryContentHash": "sha256:bb5af9522f4b1aed635f93b3615547ebd9f37f4ad277928981915b87a648504a",
+          "summaryContentHash": "sha256:28b4b3ab28010f49fb8ae177f8f5992becac5acb0ceb3bc9b46eaccd472b04f0"
+        }
+      },
+      {
+        "receiptIndex": 2,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-02/metrics.csv",
+        "sha256": "481883402042b7b0333e4ed2394049cd2d47edf80372ffd941935428eaf60d60",
+        "byteLength": 3932,
+        "contentHash": "sha256:481883402042b7b0333e4ed2394049cd2d47edf80372ffd941935428eaf60d60",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:1d1ae0b38c1962e65de7ce1d860c070cb202804d401550d89f76d0fb23cf6be3",
+          "queryContentHash": "sha256:bb5af9522f4b1aed635f93b3615547ebd9f37f4ad277928981915b87a648504a",
+          "summaryContentHash": "sha256:28b4b3ab28010f49fb8ae177f8f5992becac5acb0ceb3bc9b46eaccd472b04f0"
+        }
+      },
+      {
+        "receiptIndex": 3,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-03/summary.json",
+        "sha256": "8eb7d7bcae89fea453bb3d45fe7099aa92b5c1595e33248ec65728551a530b2a",
+        "byteLength": 14035,
+        "contentHash": "sha256:8eb7d7bcae89fea453bb3d45fe7099aa92b5c1595e33248ec65728551a530b2a",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:00fd94ebe47648630d2192e2e417c9d17454c12f1d882106d940e9f505bc90ff",
+          "queryContentHash": "sha256:7fa905f431aac2f5a885a57cb8bc651eae47bcdc221281ce3bd100b2591b6ac3",
+          "summaryContentHash": "sha256:5efa3f0196395084fa2674fb334509688b2cacccab9e7256a735a3a19163c79c"
+        }
+      },
+      {
+        "receiptIndex": 3,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-03/metrics.csv",
+        "sha256": "5f90a7a5e416221dbdbf97ee04454331a0f3ea653477e83da30369cf551e1d63",
+        "byteLength": 3928,
+        "contentHash": "sha256:5f90a7a5e416221dbdbf97ee04454331a0f3ea653477e83da30369cf551e1d63",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:00fd94ebe47648630d2192e2e417c9d17454c12f1d882106d940e9f505bc90ff",
+          "queryContentHash": "sha256:7fa905f431aac2f5a885a57cb8bc651eae47bcdc221281ce3bd100b2591b6ac3",
+          "summaryContentHash": "sha256:5efa3f0196395084fa2674fb334509688b2cacccab9e7256a735a3a19163c79c"
+        }
+      },
+      {
+        "receiptIndex": 4,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-04/summary.json",
+        "sha256": "27c2d089d868f3e616f7ce002a1ceab1c46b1268eb123057a93e814a3e06a950",
+        "byteLength": 14013,
+        "contentHash": "sha256:27c2d089d868f3e616f7ce002a1ceab1c46b1268eb123057a93e814a3e06a950",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:f7baba27ae56e866d4c929ce7f63c0803697893b9f49f556d9fc3f295b820e32",
+          "queryContentHash": "sha256:2835fbb52c6e8b538051d98ec065fddf90431a77faee756e1402e3b1100f32c7",
+          "summaryContentHash": "sha256:651d31d7a055b7dff548fbfe337e8d77e704d2c59618cd56fb92e705a96c4599"
+        }
+      },
+      {
+        "receiptIndex": 4,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-04/metrics.csv",
+        "sha256": "2a003adec10ee33a4058510bd0842e9bcb2a59ad391bfa80f0e20336601a437a",
+        "byteLength": 3892,
+        "contentHash": "sha256:2a003adec10ee33a4058510bd0842e9bcb2a59ad391bfa80f0e20336601a437a",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:f7baba27ae56e866d4c929ce7f63c0803697893b9f49f556d9fc3f295b820e32",
+          "queryContentHash": "sha256:2835fbb52c6e8b538051d98ec065fddf90431a77faee756e1402e3b1100f32c7",
+          "summaryContentHash": "sha256:651d31d7a055b7dff548fbfe337e8d77e704d2c59618cd56fb92e705a96c4599"
+        }
+      },
+      {
+        "receiptIndex": 5,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-05/summary.json",
+        "sha256": "8eb7d7bcae89fea453bb3d45fe7099aa92b5c1595e33248ec65728551a530b2a",
+        "byteLength": 14035,
+        "contentHash": "sha256:8eb7d7bcae89fea453bb3d45fe7099aa92b5c1595e33248ec65728551a530b2a",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:00fd94ebe47648630d2192e2e417c9d17454c12f1d882106d940e9f505bc90ff",
+          "queryContentHash": "sha256:7fa905f431aac2f5a885a57cb8bc651eae47bcdc221281ce3bd100b2591b6ac3",
+          "summaryContentHash": "sha256:5efa3f0196395084fa2674fb334509688b2cacccab9e7256a735a3a19163c79c"
+        }
+      },
+      {
+        "receiptIndex": 5,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-05/metrics.csv",
+        "sha256": "5f90a7a5e416221dbdbf97ee04454331a0f3ea653477e83da30369cf551e1d63",
+        "byteLength": 3928,
+        "contentHash": "sha256:5f90a7a5e416221dbdbf97ee04454331a0f3ea653477e83da30369cf551e1d63",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:00fd94ebe47648630d2192e2e417c9d17454c12f1d882106d940e9f505bc90ff",
+          "queryContentHash": "sha256:7fa905f431aac2f5a885a57cb8bc651eae47bcdc221281ce3bd100b2591b6ac3",
+          "summaryContentHash": "sha256:5efa3f0196395084fa2674fb334509688b2cacccab9e7256a735a3a19163c79c"
+        }
+      },
+      {
+        "receiptIndex": 6,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-06/summary.json",
+        "sha256": "77af36063deb1504b2aa1977e964fa28b5a2618d4db2d6c7c8513b635478cfb3",
+        "byteLength": 14013,
+        "contentHash": "sha256:77af36063deb1504b2aa1977e964fa28b5a2618d4db2d6c7c8513b635478cfb3",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:0f8c5ad3d9e62c541187e2c497f816ad8cf31effbc4062b361c0e4e7ef162c88",
+          "queryContentHash": "sha256:d1b2bc42ecfde9a276cfd011c396acd081e1c2aa6d66fb20c421a15747183cbf",
+          "summaryContentHash": "sha256:83cad7f87123b351c87f0e721c2f7d232af43ba99987bc734b49186577eb3250"
+        }
+      },
+      {
+        "receiptIndex": 6,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-06/metrics.csv",
+        "sha256": "aed0162b3db1e9bf1454c4695603fba0153f80d6cfc08d2373cd6593d1d7fb19",
+        "byteLength": 3871,
+        "contentHash": "sha256:aed0162b3db1e9bf1454c4695603fba0153f80d6cfc08d2373cd6593d1d7fb19",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:0f8c5ad3d9e62c541187e2c497f816ad8cf31effbc4062b361c0e4e7ef162c88",
+          "queryContentHash": "sha256:d1b2bc42ecfde9a276cfd011c396acd081e1c2aa6d66fb20c421a15747183cbf",
+          "summaryContentHash": "sha256:83cad7f87123b351c87f0e721c2f7d232af43ba99987bc734b49186577eb3250"
+        }
+      },
+      {
+        "receiptIndex": 7,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-07/summary.json",
+        "sha256": "44629648f9668620c82a08cc2d1be9d6244fdaddfb23bb43c45bdaa780041056",
+        "byteLength": 14013,
+        "contentHash": "sha256:44629648f9668620c82a08cc2d1be9d6244fdaddfb23bb43c45bdaa780041056",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:b2a8bc3514bfbf7caf6bada7f2fa0f39461ca1675a584c820a5bc0d84de63d4c",
+          "queryContentHash": "sha256:ff13555fb2f771947fad874171c0cd96a1b41b656c6742d300978362407f2b93",
+          "summaryContentHash": "sha256:2cf627875bafe3515df558f1a70e54317e5f15ca89ad9b24d109a288de3837fd"
+        }
+      },
+      {
+        "receiptIndex": 7,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-07/metrics.csv",
+        "sha256": "9927481de4970f46e8b0c5b733f9e97edb80c26d85e44c8f3aed016f88b9b50c",
+        "byteLength": 3871,
+        "contentHash": "sha256:9927481de4970f46e8b0c5b733f9e97edb80c26d85e44c8f3aed016f88b9b50c",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:b2a8bc3514bfbf7caf6bada7f2fa0f39461ca1675a584c820a5bc0d84de63d4c",
+          "queryContentHash": "sha256:ff13555fb2f771947fad874171c0cd96a1b41b656c6742d300978362407f2b93",
+          "summaryContentHash": "sha256:2cf627875bafe3515df558f1a70e54317e5f15ca89ad9b24d109a288de3837fd"
+        }
+      },
+      {
+        "receiptIndex": 8,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-08/summary.json",
+        "sha256": "77af36063deb1504b2aa1977e964fa28b5a2618d4db2d6c7c8513b635478cfb3",
+        "byteLength": 14013,
+        "contentHash": "sha256:77af36063deb1504b2aa1977e964fa28b5a2618d4db2d6c7c8513b635478cfb3",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:0f8c5ad3d9e62c541187e2c497f816ad8cf31effbc4062b361c0e4e7ef162c88",
+          "queryContentHash": "sha256:d1b2bc42ecfde9a276cfd011c396acd081e1c2aa6d66fb20c421a15747183cbf",
+          "summaryContentHash": "sha256:83cad7f87123b351c87f0e721c2f7d232af43ba99987bc734b49186577eb3250"
+        }
+      },
+      {
+        "receiptIndex": 8,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-08/metrics.csv",
+        "sha256": "aed0162b3db1e9bf1454c4695603fba0153f80d6cfc08d2373cd6593d1d7fb19",
+        "byteLength": 3871,
+        "contentHash": "sha256:aed0162b3db1e9bf1454c4695603fba0153f80d6cfc08d2373cd6593d1d7fb19",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:0f8c5ad3d9e62c541187e2c497f816ad8cf31effbc4062b361c0e4e7ef162c88",
+          "queryContentHash": "sha256:d1b2bc42ecfde9a276cfd011c396acd081e1c2aa6d66fb20c421a15747183cbf",
+          "summaryContentHash": "sha256:83cad7f87123b351c87f0e721c2f7d232af43ba99987bc734b49186577eb3250"
+        }
+      },
+      {
+        "receiptIndex": 9,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-09/summary.json",
+        "sha256": "c694bdb2e75fb338971b1d84d5e9b03653f864163c2434c9d5c1b5ff901c0ae8",
+        "byteLength": 14103,
+        "contentHash": "sha256:c694bdb2e75fb338971b1d84d5e9b03653f864163c2434c9d5c1b5ff901c0ae8",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:95194db7e57b681ceb05c3086b0c74bc0cac36618605abefdd41f5692e6d7968",
+          "queryContentHash": "sha256:437a7227fb0c7b24a4ea79522f7998eed4702ffe8f305b43ae52f52c530a7284",
+          "summaryContentHash": "sha256:0f37ff447d957ee14b99795f1f9cf34a1b61290483dd860f1ff67e49bc23a3f1"
+        }
+      },
+      {
+        "receiptIndex": 9,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-09/metrics.csv",
+        "sha256": "b4da4df1f363a17476d2ae46b0c7100aaef1ddf1d84105c689d4cd1eccb185b7",
+        "byteLength": 3892,
+        "contentHash": "sha256:b4da4df1f363a17476d2ae46b0c7100aaef1ddf1d84105c689d4cd1eccb185b7",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:95194db7e57b681ceb05c3086b0c74bc0cac36618605abefdd41f5692e6d7968",
+          "queryContentHash": "sha256:437a7227fb0c7b24a4ea79522f7998eed4702ffe8f305b43ae52f52c530a7284",
+          "summaryContentHash": "sha256:0f37ff447d957ee14b99795f1f9cf34a1b61290483dd860f1ff67e49bc23a3f1"
+        }
+      },
+      {
+        "receiptIndex": 10,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-10/summary.json",
+        "sha256": "7891bd3cd60740d8eb5cee5497902460e5bef8be2884714e58b39412faa4eae6",
+        "byteLength": 14073,
+        "contentHash": "sha256:7891bd3cd60740d8eb5cee5497902460e5bef8be2884714e58b39412faa4eae6",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:7ca42dddfe923e0e02d753bea2c6f0e9f7451aad4b721643be58d66291a59d15",
+          "queryContentHash": "sha256:b6a5cd0bac953a948f3e894d707cdbc33f983a33754bb2f6ac06bea6864fbadd",
+          "summaryContentHash": "sha256:e39fa554e01f13604b77fe25ce6427b763bd4640d1d03f53fcabf2a0ca902e3d"
+        }
+      },
+      {
+        "receiptIndex": 10,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-10/metrics.csv",
+        "sha256": "952ad8f7b93ab73a8a08e8889ef47f6e3b968223568050a7e6deb41b9dc41625",
+        "byteLength": 3892,
+        "contentHash": "sha256:952ad8f7b93ab73a8a08e8889ef47f6e3b968223568050a7e6deb41b9dc41625",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:7ca42dddfe923e0e02d753bea2c6f0e9f7451aad4b721643be58d66291a59d15",
+          "queryContentHash": "sha256:b6a5cd0bac953a948f3e894d707cdbc33f983a33754bb2f6ac06bea6864fbadd",
+          "summaryContentHash": "sha256:e39fa554e01f13604b77fe25ce6427b763bd4640d1d03f53fcabf2a0ca902e3d"
+        }
+      },
+      {
+        "receiptIndex": 11,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-11/summary.json",
+        "sha256": "c694bdb2e75fb338971b1d84d5e9b03653f864163c2434c9d5c1b5ff901c0ae8",
+        "byteLength": 14103,
+        "contentHash": "sha256:c694bdb2e75fb338971b1d84d5e9b03653f864163c2434c9d5c1b5ff901c0ae8",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:95194db7e57b681ceb05c3086b0c74bc0cac36618605abefdd41f5692e6d7968",
+          "queryContentHash": "sha256:437a7227fb0c7b24a4ea79522f7998eed4702ffe8f305b43ae52f52c530a7284",
+          "summaryContentHash": "sha256:0f37ff447d957ee14b99795f1f9cf34a1b61290483dd860f1ff67e49bc23a3f1"
+        }
+      },
+      {
+        "receiptIndex": 11,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-11/metrics.csv",
+        "sha256": "b4da4df1f363a17476d2ae46b0c7100aaef1ddf1d84105c689d4cd1eccb185b7",
+        "byteLength": 3892,
+        "contentHash": "sha256:b4da4df1f363a17476d2ae46b0c7100aaef1ddf1d84105c689d4cd1eccb185b7",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:95194db7e57b681ceb05c3086b0c74bc0cac36618605abefdd41f5692e6d7968",
+          "queryContentHash": "sha256:437a7227fb0c7b24a4ea79522f7998eed4702ffe8f305b43ae52f52c530a7284",
+          "summaryContentHash": "sha256:0f37ff447d957ee14b99795f1f9cf34a1b61290483dd860f1ff67e49bc23a3f1"
+        }
+      },
+      {
+        "receiptIndex": 12,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-12/summary.json",
+        "sha256": "4252325052b278fa4dd46224fc0047388a051783442a9de96031085c21c1d98a",
+        "byteLength": 14013,
+        "contentHash": "sha256:4252325052b278fa4dd46224fc0047388a051783442a9de96031085c21c1d98a",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:9b81d7701b8f3443f7a60ee3f5238112f2f9a8e278003704de451d7c97abc287",
+          "queryContentHash": "sha256:8d1efe126e553daf3e8124a779c399860d3c75a222d954c73e7225614e2caf70",
+          "summaryContentHash": "sha256:0924d80c839b51977704ab3eb615523b9cbf7ad1afce42db22c84b734049524e"
+        }
+      },
+      {
+        "receiptIndex": 12,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-12/metrics.csv",
+        "sha256": "167d915ddea252cbdf319ff61afb1f3e41808a3804ba1afe74f6bce2eb975672",
+        "byteLength": 3871,
+        "contentHash": "sha256:167d915ddea252cbdf319ff61afb1f3e41808a3804ba1afe74f6bce2eb975672",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:9b81d7701b8f3443f7a60ee3f5238112f2f9a8e278003704de451d7c97abc287",
+          "queryContentHash": "sha256:8d1efe126e553daf3e8124a779c399860d3c75a222d954c73e7225614e2caf70",
+          "summaryContentHash": "sha256:0924d80c839b51977704ab3eb615523b9cbf7ad1afce42db22c84b734049524e"
+        }
+      },
+      {
+        "receiptIndex": 13,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-13/summary.json",
+        "sha256": "698e9eff7a742e2bddf76a5006351e4dc8a118353ee9c56cbbf4365d2a3b5f48",
+        "byteLength": 14013,
+        "contentHash": "sha256:698e9eff7a742e2bddf76a5006351e4dc8a118353ee9c56cbbf4365d2a3b5f48",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:6cf2f3f1eea713343b35f2e2ba10a47e592bbcaa873aa757bd69ff7330624daa",
+          "queryContentHash": "sha256:a25324bc17b92ea19419f063e08b85ce21451376f7e4c4413663a3685e8fb377",
+          "summaryContentHash": "sha256:5a5cd03b825b9a989288493b8d3e691f349f9e78dd5caf36b9f02b7384d088a6"
+        }
+      },
+      {
+        "receiptIndex": 13,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-13/metrics.csv",
+        "sha256": "3ddff7b90c2ce5e8214ff754a3b03c5af0f5a1b29a1536d83798ca7821a3ca49",
+        "byteLength": 3871,
+        "contentHash": "sha256:3ddff7b90c2ce5e8214ff754a3b03c5af0f5a1b29a1536d83798ca7821a3ca49",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:6cf2f3f1eea713343b35f2e2ba10a47e592bbcaa873aa757bd69ff7330624daa",
+          "queryContentHash": "sha256:a25324bc17b92ea19419f063e08b85ce21451376f7e4c4413663a3685e8fb377",
+          "summaryContentHash": "sha256:5a5cd03b825b9a989288493b8d3e691f349f9e78dd5caf36b9f02b7384d088a6"
+        }
+      },
+      {
+        "receiptIndex": 14,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-14/summary.json",
+        "sha256": "2ac5de361b7a3a8007186f925c053da420e40bbf372167ab82425ccb46cdc18a",
+        "byteLength": 14013,
+        "contentHash": "sha256:2ac5de361b7a3a8007186f925c053da420e40bbf372167ab82425ccb46cdc18a",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:fa1d6018c688a5c0fc9171c69ea7ae162f345286d51a22e129c7d1d2d012132f",
+          "queryContentHash": "sha256:dd1663abe8daaf771b153db2c3e4cac1ab789ec1fd8daeac47293e4e0caa24eb",
+          "summaryContentHash": "sha256:5a5cd03b825b9a989288493b8d3e691f349f9e78dd5caf36b9f02b7384d088a6"
+        }
+      },
+      {
+        "receiptIndex": 14,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-14/metrics.csv",
+        "sha256": "92bbe1e12cd7b64bd42c38fa7cd68857d88ea1c6926aa2598f1b600ef054f1bc",
+        "byteLength": 3871,
+        "contentHash": "sha256:92bbe1e12cd7b64bd42c38fa7cd68857d88ea1c6926aa2598f1b600ef054f1bc",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:fa1d6018c688a5c0fc9171c69ea7ae162f345286d51a22e129c7d1d2d012132f",
+          "queryContentHash": "sha256:dd1663abe8daaf771b153db2c3e4cac1ab789ec1fd8daeac47293e4e0caa24eb",
+          "summaryContentHash": "sha256:5a5cd03b825b9a989288493b8d3e691f349f9e78dd5caf36b9f02b7384d088a6"
+        }
+      },
+      {
+        "receiptIndex": 15,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-15/summary.json",
+        "sha256": "d45c7ead7344c213f73b0810b24de13517e792229e91f9b522dc84b2232269aa",
+        "byteLength": 25935,
+        "contentHash": "sha256:d45c7ead7344c213f73b0810b24de13517e792229e91f9b522dc84b2232269aa",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:c5905e29f95b261005f4ca10619e92f5e4e984a1a170c9ed6eccb04873bb1e5e",
+          "queryContentHash": "sha256:fd79b88b703c2eae27661f6eba8b7ef0d230555f79a4387c4e3c09351cdbab68",
+          "summaryContentHash": "sha256:52fad72ac9d99fc3e023cf6ba95d8ae8f740ad5a154ee1a5e0316c3fc9bf3c09"
+        }
+      },
+      {
+        "receiptIndex": 15,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-15/metrics.csv",
+        "sha256": "a390bef17eadd74474aed6ba0230edaaa03f74ca02530e54b36f7c8db653fb82",
+        "byteLength": 7595,
+        "contentHash": "sha256:a390bef17eadd74474aed6ba0230edaaa03f74ca02530e54b36f7c8db653fb82",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:c5905e29f95b261005f4ca10619e92f5e4e984a1a170c9ed6eccb04873bb1e5e",
+          "queryContentHash": "sha256:fd79b88b703c2eae27661f6eba8b7ef0d230555f79a4387c4e3c09351cdbab68",
+          "summaryContentHash": "sha256:52fad72ac9d99fc3e023cf6ba95d8ae8f740ad5a154ee1a5e0316c3fc9bf3c09"
+        }
+      },
+      {
+        "receiptIndex": 16,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-16/summary.json",
+        "sha256": "a46cd249adceea653fd5e24afc94115d6c969b95599375abb5865f410ebfbd4a",
+        "byteLength": 14013,
+        "contentHash": "sha256:a46cd249adceea653fd5e24afc94115d6c969b95599375abb5865f410ebfbd4a",
+        "mediaType": "application/json",
+        "snapshotBinding": {
+          "snapshotId": "sha256:225dd7f1d8baa455b5c2d34985827be069a73f4ddc9202c925c7349c05752b99",
+          "queryContentHash": "sha256:dcd2822c02eecc0215fd5824ae1da4d8ef4b60f1af31b4122943eecba7d757f6",
+          "summaryContentHash": "sha256:366c764516c4222767479897b26d7d4fd99c37c2bce7115fb213b987aa227755"
+        }
+      },
+      {
+        "receiptIndex": 16,
+        "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/candidate-artifacts/receipt-16/metrics.csv",
+        "sha256": "00564e7f3c956b9c9ee15d3a6c2a0fca6e39385f7b914ecab3bff6f00e88fe54",
+        "byteLength": 3892,
+        "contentHash": "sha256:00564e7f3c956b9c9ee15d3a6c2a0fca6e39385f7b914ecab3bff6f00e88fe54",
+        "mediaType": "text/csv",
+        "snapshotBinding": {
+          "snapshotId": "sha256:225dd7f1d8baa455b5c2d34985827be069a73f4ddc9202c925c7349c05752b99",
+          "queryContentHash": "sha256:dcd2822c02eecc0215fd5824ae1da4d8ef4b60f1af31b4122943eecba7d757f6",
+          "summaryContentHash": "sha256:366c764516c4222767479897b26d7d4fd99c37c2bce7115fb213b987aa227755"
+        }
+      }
+    ],
+    "verifiedByteHashes": 34,
+    "mode": "Actual hosted PostgreSQL/public append-query-reader-export, synthetic financial postings and synthetic coherent host authority"
+  },
+  "commands": [
+    "npm run build --silent",
+    "npm run typecheck --silent",
+    "npm run test:exports --silent",
+    "npm run build --silent && node scripts/with-postgres.mjs exports --suite=postgres",
+    "node --test tests/exports/disclosure-fence.test.mjs"
+  ],
+  "tests": {
+    "candidate": {
+      "exports": 195,
+      "pgRegistered": 10,
+      "reporting": 29,
+      "migrations": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "main": "Separate exact ef6 proof in postmergeVerification",
+    "independentReview": "218 focused +52 adapted historical +7 independent final-handoff controls; packed installation intentionally excluded locally by reviewer, hosted195 includes it",
+    "pgMeaning": "9 children + parent10. F3 late read/export revocation during governed final context await reaches verified original receipt, all four paths refuse; unchanged controls retrieve original bytes. Aggregate manifests are not separate per-loop receipts."
+  },
+  "privacy": "Only allowlisted fields/labels/dates/money/status and opaque references. Raw IDs/prompts/addresses/credentials/event identifiers excluded. Hash references preserve association but do not guarantee anonymity of guessable values. Protected normalized CSV encoder retained.",
+  "sourceFiles": [
+    {
+      "sourcePath": "src/integrations/disclosure-fence.ts",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/src/integrations/disclosure-fence.ts",
+      "sha256": "3bc3dbdb70f7bf1ecede74373e9270a4471a3c47f93bf176c6414bd62d2b85f8",
+      "byteLength": 8582,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "src/integrations/reporting-export.ts",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/src/integrations/reporting-export.ts",
+      "sha256": "f38b1a948332cfffd6e93f4e521a2bdb09236da99d22760f0ff53c6000907529",
+      "byteLength": 24975,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "src/integrations/runtime.ts",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/src/integrations/runtime.ts",
+      "sha256": "0efe1320f0539a6ba62e1f9c560318bc3b2e1d9c30edba9bee417b26f9aeaaa4",
+      "byteLength": 34588,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "docs/api/prepared-exports.md",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/docs/api/prepared-exports.md",
+      "sha256": "553204ff42b3c7653d75ebc0c51add2e04ff179f9eb12efd0ab0a79a81fdbefe",
+      "byteLength": 14502,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "docs/api/compatibility.md",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/docs/api/compatibility.md",
+      "sha256": "764fc1857f76dfe833fad33e6981b65d96edf09d810cf52bd1b41f51c9395e21",
+      "byteLength": 5544,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "docs/api/cfo-ai-handoff.md",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/docs/api/cfo-ai-handoff.md",
+      "sha256": "d1990cfbeca8cc0cb57d9d1e829fb3fd34fb510b6988db25caffb5bf198ddec6",
+      "byteLength": 8263,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "docs/api/schema-index.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/docs/api/schema-index.json",
+      "sha256": "e9a562104cd8858ff386c162ee897eb19738c5e3e2b7406fa0f3f06c31635110",
+      "byteLength": 29045,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "fixtures/reporting/definition-registry.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/fixtures/reporting/definition-registry.json",
+      "sha256": "577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1",
+      "byteLength": 10413,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "fixtures/reporting/prepared-export-request.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/fixtures/reporting/prepared-export-request.json",
+      "sha256": "c6a0c5729519bee7f977a78b3e229719aa1e9eb295fc68a9eadec572c5d30979",
+      "byteLength": 7471,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "fixtures/reporting/query-export-handoff.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/fixtures/reporting/query-export-handoff.json",
+      "sha256": "eca74fe6fd34b9631fcb3022f3417425ef94580043a67fce4832b52fa6993da9",
+      "byteLength": 2717,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "fixtures/exports/global-scenario-coverage.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/fixtures/exports/global-scenario-coverage.json",
+      "sha256": "3afaadc6a302416c43a311a4e5af121b9a6ca4df32f4d6a2828622d54d5da0c6",
+      "byteLength": 4774,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "tests/exports/synthetic-disclosure-host.mjs",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/tests/exports/synthetic-disclosure-host.mjs",
+      "sha256": "14e6a85190f61b7a167a993f8c24ff1eb8f2acbad6a790d0f479d6017b50fca7",
+      "byteLength": 10005,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "tests/exports/query-export-pg.test.mjs",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/tests/exports/query-export-pg.test.mjs",
+      "sha256": "5f60ff89a86b33f494f5bf9e1f3a62940bc2c8e358a18030483ada08985cd1d1",
+      "byteLength": 22940,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "tests/exports/disclosure-fence.test.mjs",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/tests/exports/disclosure-fence.test.mjs",
+      "sha256": "0fcd45c28c663802f8b80e450ea91a356680c6f5670b2113a5815b49733216dd",
+      "byteLength": 12597,
+      "provenance": "Exact committed bytes in 0c4/actual ef6 identical tree"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryPageSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryPageSchema.json",
+      "sha256": "d7ff222c7d2dc319d0002eeb0684cad67b67fa5f538e89d3dd0125cd89f4c78c",
+      "byteLength": 7115,
+      "provenance": "Exact committed schema bytes"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/1.0.0/integrations/ExportRequestSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/1.0.0/integrations/ExportRequestSchema.json",
+      "sha256": "1521e0b629170a50693535190216ff4906e06dbdb901cec6c89ff0eb659df30f",
+      "byteLength": 10966,
+      "provenance": "Exact committed schema bytes"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/1.0.0/integrations/ExportManifestSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/1.0.0/integrations/ExportManifestSchema.json",
+      "sha256": "14e496d5d9113ecf041d28e7e8bb0f741c846790ea146cb218d43527b231555a",
+      "byteLength": 2471,
+      "provenance": "Exact committed schema bytes"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportRequestSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/2.0.0/integrations/ReportingExportRequestSchema.json",
+      "sha256": "1c97ba0d69cd0e5d18baa4b2490e87be2ea57e16a4784e54ec34497dd4989a23",
+      "byteLength": 100797,
+      "provenance": "Exact committed schema bytes"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportManifestSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/2.0.0/integrations/ReportingExportManifestSchema.json",
+      "sha256": "7b101a9f29a6945f7ee86406ed9da4045e50de938420d6f22f1cb1b657cc3fb8",
+      "byteLength": 4788,
+      "provenance": "Exact committed schema bytes"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/2.0.0/integrations/ReportingExportReceiptSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/2.0.0/integrations/ReportingExportReceiptSchema.json",
+      "sha256": "703d3b7501084c88bd5db16a99ed4a044f10f0325d29054b77504d717ce0f92f",
+      "byteLength": 7211,
+      "provenance": "Exact committed schema bytes"
+    },
+    {
+      "sourcePath": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryPageSchema.json",
+      "path": "/private/tmp/cost-intelligence-managed-checkpoint-20261011/ci08x-export-evidence/export-producer-handoff-0c4/source/schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryPageSchema.json",
+      "sha256": "862900ad30b1e5684c98852cb93f0010eb73504d2fd9f58018673c9334ddf814",
+      "byteLength": 87990,
+      "provenance": "Exact committed schema bytes"
+    }
+  ],
+  "limitations": [
+    "No mounted selected real host/current real issuer/coherent port acceptance",
+    "No implicit finance.read/export alias to Finance permissions",
+    "No Dashboard/IE exact-revision consumer ACK",
+    "No canonical FinancialSummary/definition adoption signoff",
+    "No CFO import/delivery acceptance",
+    "No provider calls/actual provider bills/usage proof",
+    "No actual selected real business run",
+    "No global11 scenarios or SPN03 closure; existing coverage map retains pending receipts",
+    "No issue3 closure"
+  ],
+  "nextConsumerScope": "Bounded synthetic conformance against exact producer source and candidate artifact bytes. Any mounted/paid/runtime acceptance requires genuine independent owner records; never synthesize grants or balances."
+}

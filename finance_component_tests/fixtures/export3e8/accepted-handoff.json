@@ -1,0 +1,34 @@
+{
+  "status": "FINANCE_OWNER_ACCEPTED_SYNTHETIC_DENIAL_CAPTURE_SUPPLEMENT_ONLY",
+  "producerHead": "3e88311d481052f522e8e79ed20155334ab526e7",
+  "tree": "fc3541edcc80ed9c0b30908cd4bbb0425ff15305",
+  "candidateCheckout": "ffe2ae493b61dd7010b2883933d39fecb96d0ec4",
+  "candidateRun": 38259518439,
+  "artifactId": 11751578009,
+  "capturedFile": "/Users/completetech/mvp-orchestration-evidence/2026-10-12/export-3e88311-ci38259518439/exports/postgres-composition.json",
+  "capturedFileSha256": "6305706dbac8f366ca20601e62594b3a534fd79e69c0e1087cb3a9e815203d07",
+  "reviewPath": "/Users/completetech/mvp-orchestration-evidence/2026-10-12/export-3e88311-denial-capture-review/review.md",
+  "reviewSha256": "b7692c464efa96c47c87e7b72f0e8c2f9bd1ea28bc46f1d2a03c21ac10ae807f",
+  "actualMerge": "794dc8b98ad589b553b805f2b8d04d67c07744fb",
+  "mainRun": 38260916721,
+  "mainEvidencePath": "/Users/completetech/mvp-orchestration-evidence/2026-10-12/export-794-main-root-verification.json",
+  "mainStatus": "SUCCESS; source/tree exact approved; main bytes remain separatelyidentified",
+  "actualCases": 92,
+  "typedDenials": {
+    "FORBIDDEN_SCOPE": 60,
+    "SOURCE_UNAVAILABLE": 4
+  },
+  "positiveControls": 28,
+  "originalFinancialReceipts": 17,
+  "verifiedByteHashes": 90,
+  "originalPacketSha256Unchanged": "410a99fe766a6c0b3b36b696bf73b8f5a46590f9ce9170e9fbe02be3939f59c6",
+  "qualifications": [
+    "Current authority is coherent task-local synthetic; real hosted PostgreSQL and syntheticpostings",
+    "60late denials have authenticverification/transitionwitness;4missingfence entrycases zero protectedIO, notlatecoverage",
+    "Scope/sourceQuery counters include transaction/sessionSQL, notdistinct economicqueries",
+    "Legacy differentlyencoded snapshothashes not independentlycrosscompared without rawpreimage; source/runtimebinding remainsqualified",
+    "reportedCheckoutCommit=null; rawcheckout+Gitmetadata supplies provenance",
+    "No future public release API, live issuer/billing/consumerACK/globalacceptance proved"
+  ],
+  "consumerNext": "Dashboard/IE use exactsupplement source/artifacthash alongsideUNCHANGEDoriginalpacket; exactconsumerrevision ACK pending"
+}

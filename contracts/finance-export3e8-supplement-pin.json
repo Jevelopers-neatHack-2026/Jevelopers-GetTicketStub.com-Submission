@@ -1,0 +1,25 @@
+{
+  "mode": "synthetic-captured-export-denial-supplement",
+  "node": "22.23.3",
+  "producer": "3e88311d481052f522e8e79ed20155334ab526e7",
+  "producerTree": "fc3541edcc80ed9c0b30908cd4bbb0425ff15305",
+  "candidateCheckout": "ffe2ae493b61dd7010b2883933d39fecb96d0ec4",
+  "candidateRun": 38259518439,
+  "actualProducerMerge": "794dc8b98ad589b553b805f2b8d04d67c07744fb",
+  "actualMainRun": 38260916721,
+  "ownerAcceptance": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3#issuecomment-6126114381",
+  "originalHandoffSha256": "410a99fe766a6c0b3b36b696bf73b8f5a46590f9ce9170e9fbe02be3939f59c6",
+  "files": {
+    "ErrorEnvelopeSchema.json": "936d6a52cee4cbb2e3dbeed214a5d85927f7e937a900bf980d05bae8cfe20a55",
+    "accepted-handoff.json": "8a38eaaf8af1c2723124958cd2ea0d0e4ce37925cab8268374a1a284ece4bfc3",
+    "hosted-artifacts.json": "8ca89e01bdb1f05f9e259ff17ec9b489a7bd647b57d4732032bccc1caf599d23",
+    "hosted-checkout-commit.json": "837412349e6a52c1e6d4b8b9a3edf8be941886b269cfcd0cb6415fddeaa668d3",
+    "hosted-run.json": "f473e56f1b4fb9fa5e49fe32293aad7c841cdaa0ee7468135da0ca09264dc126",
+    "owner-review.md": "b7692c464efa96c47c87e7b72f0e8c2f9bd1ea28bc46f1d2a03c21ac10ae807f",
+    "postgres-composition.json": "6305706dbac8f366ca20601e62594b3a534fd79e69c0e1087cb3a9e815203d07",
+    "query-export-pg.test.mjs": "e484d24bbb1f94b3240010d82dafc6c1751c13f149a2baa692eed3b8d3a64cdc",
+    "shared-contracts.ts": "208e25709a4246e53c990507a44294d31a1eec4db03a51bd06116aa6cd2d6120",
+    "source-boundary.json": "3c08f5b9e8a57d4a635ea626442412c46e6f54eecabf93ec59753c149a36404e"
+  },
+  "scope": "Captured synthetic authority cases only; no IE producer execution, live authority, HMAC, delivery, adoption or full journey"
+}
