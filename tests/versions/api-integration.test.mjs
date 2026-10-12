@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { cp, link, readFile, readdir, symlink, unlink, writeFile } from "node:fs/promises";
+import { cp, link, mkdir, open, readFile, readdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -4163,6 +4163,485 @@ test("paired API reports handoff unavailable before verifier, context, destinati
   assert.deepEqual(calls, { context: 0, destination: 0, verify: 0, submit: 0 });
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_jobs WHERE action_id=?")
     .get("handoff-preflight-action").count, 0, "unsupported paired handoff must not create a misleading job");
+});
+
+test("a busy SQLite job-start transaction is retryable without losing the public request identity", async (t) => {
+  const evidenceRoot = process.env.CREATIVE_SQLITE_BUSY_EVIDENCE_ROOT;
+  const root = evidenceRoot ?? await mkdtemp(join(tmpdir(), "creative-sqlite-busy-api-"));
+  await mkdir(root, { recursive: true });
+  if (evidenceRoot) assert.deepEqual(await readdir(root), [], "the evidence directory is fresh for this runtime");
+  else t.after(async () => rm(root, { recursive: true, force: true }));
+
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  const store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  // Keep the test bounded while still exercising a real independent SQLite
+  // writer lock and SQLITE_BUSY at BEGIN IMMEDIATE.
+  store.db.exec("PRAGMA busy_timeout=200");
+
+  const counters = { provider: 0, reserved: 0, route: 0 };
+  let portId = 0;
+  let apiId = 0;
+  const ports = portsFor(store, counters, () => `sqlite-busy-port-${++portId}`);
+  const originalResolveRoute = ports.provider.resolveRoute;
+  ports.provider.resolveRoute = (...args) => {
+    counters.route += 1;
+    return originalResolveRoute(...args);
+  };
+  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `sqlite-busy-api-${++apiId}` });
+
+  const lockSource = `import { DatabaseSync } from "node:sqlite";
+const db = new DatabaseSync(process.argv.at(-1));
+db.exec("PRAGMA busy_timeout=15000");
+db.exec("BEGIN IMMEDIATE");
+process.stdout.write(JSON.stringify({ event: "LOCK_ACQUIRED", pid: process.pid }) + "\\n");
+process.stdin.once("data", () => {
+  db.exec("ROLLBACK");
+  db.close();
+  process.stdout.write("LOCK_RELEASED\\n");
+});`;
+  const lockArgs = ["--input-type=module", "-e", lockSource, databasePath];
+  const child = spawn(process.execPath, lockArgs, { stdio: ["pipe", "pipe", "pipe"] });
+  let childStdout = "";
+  let childStderr = "";
+  let lockAcquiredResolve;
+  let lockAcquiredReject;
+  const lockAcquired = new Promise((resolve, reject) => {
+    lockAcquiredResolve = resolve;
+    lockAcquiredReject = reject;
+  });
+  let childClosedResolve;
+  let childClosedReject;
+  const childClosed = new Promise((resolve, reject) => {
+    childClosedResolve = resolve;
+    childClosedReject = reject;
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    childStdout += chunk;
+    if (childStdout.includes("LOCK_ACQUIRED")) lockAcquiredResolve();
+  });
+  child.stderr.on("data", (chunk) => { childStderr += chunk; });
+  child.once("error", (error) => {
+    lockAcquiredReject(error);
+    childClosedReject(error);
+  });
+  child.once("close", (code, signal) => {
+    const result = { code, signal };
+    childClosedResolve(result);
+    if (!childStdout.includes("LOCK_ACQUIRED")) lockAcquiredReject(new Error(`lock child closed before acquisition: ${JSON.stringify(result)}`));
+  });
+  let childReleaseSent = false;
+  const releaseChild = async () => {
+    if (child.exitCode === null && !childReleaseSent) {
+      childReleaseSent = true;
+      child.stdin.end("release\\n");
+    }
+    return childClosed;
+  };
+  t.after(async () => {
+    try { await releaseChild(); } catch { /* the captured test failure remains primary */ }
+  });
+
+  let acquireTimer;
+  await Promise.race([lockAcquired, new Promise((_, reject) => {
+    acquireTimer = setTimeout(() => reject(new Error("independent SQLite lock child did not acquire BEGIN IMMEDIATE")), 10_000);
+  })]).finally(() => clearTimeout(acquireTimer));
+  const lockMarker = childStdout.split("\\n").find((line) => line.includes("LOCK_ACQUIRED"));
+  const lockDetails = lockMarker ? JSON.parse(lockMarker) : null;
+  assert.equal(lockDetails?.pid, child.pid);
+
+  const nativeBeginErrors = [];
+  const nativeExec = store.db.exec.bind(store.db);
+  store.db.exec = (sql) => {
+    try { return nativeExec(sql); }
+    catch (error) {
+      if (sql === "BEGIN IMMEDIATE") nativeBeginErrors.push({ name: error.name, code: error.code,
+        errcode: error.errcode, errstr: error.errstr, message: error.message });
+      throw error;
+    }
+  };
+
+  const encodeValue = (value) => value instanceof Uint8Array
+    ? { blob_base64: Buffer.from(value).toString("base64") }
+    : typeof value === "bigint" ? { integer_string: value.toString() } : value;
+  const tableSnapshot = () => {
+    const schema = store.db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name").all();
+    const tables = store.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
+      .map(({ name }) => {
+        const quoted = `"${name.replaceAll('"', '""')}"`;
+        const rows = store.db.prepare(`SELECT * FROM ${quoted}`).all().map((row) => Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [key, encodeValue(value)])));
+        rows.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+        return { name, rows };
+      });
+    return { schema: schema.map((row) => Object.fromEntries(Object.entries(row)
+      .map(([key, value]) => [key, encodeValue(value)]))), tables };
+  };
+  // Never open the live main/WAL/SHM paths in the process that owns store.db.
+  // On POSIX, closing another descriptor for SQLite's SHM file can release
+  // process-scoped locks; the capture child has only its own file descriptors.
+  const helperProcesses = [];
+  const runNodeHelper = async (kind, label, source, args) => {
+    const nodeArgs = ["--input-type=module", "-e", source, ...args];
+    const startedAt = new Date().toISOString();
+    const childProcess = spawn(process.execPath, nodeArgs, { stdio: ["ignore", "pipe", "pipe"] });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let stdoutEof = false;
+    let stderrEof = false;
+    let spawnError;
+    childProcess.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
+    childProcess.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+    childProcess.stdout.once("end", () => { stdoutEof = true; });
+    childProcess.stderr.once("end", () => { stderrEof = true; });
+    childProcess.once("error", (error) => { spawnError = error; });
+    const exit = await new Promise((resolve) => childProcess.once("close", (code, signal) => resolve({ code, signal })));
+    const stdout = Buffer.concat(stdoutChunks);
+    const stderr = Buffer.concat(stderrChunks);
+    const outputDirectory = join("helper-processes", `${kind}-${label}`);
+    const record = {
+      kind, label, pid: childProcess.pid, argv: [process.execPath, ...nodeArgs],
+      started_utc: startedAt, finished_utc: new Date().toISOString(),
+      exit, spawn_error: spawnError ? { name: spawnError.name, code: spawnError.code, message: spawnError.message } : null,
+      stdout_bytes: stdout.length, stdout_sha256: createHash("sha256").update(stdout).digest("hex"), stdout_eof: stdoutEof,
+      stderr_bytes: stderr.length, stderr_sha256: createHash("sha256").update(stderr).digest("hex"), stderr_eof: stderrEof,
+    };
+    if (evidenceRoot) {
+      const absoluteOutputDirectory = join(root, outputDirectory);
+      await mkdir(absoluteOutputDirectory, { recursive: true, mode: 0o700 });
+      for (const [name, bytes] of [["stdout.raw", stdout], ["stderr.raw", stderr]]) {
+        const rawPath = join(absoluteOutputDirectory, name);
+        await writeFile(rawPath, bytes, { flag: "wx", mode: 0o600 });
+        const handle = await open(rawPath, "r+");
+        try { await handle.sync(); } finally { await handle.close(); }
+        record[`${name === "stdout.raw" ? "stdout" : "stderr"}_path`] = `${outputDirectory}/${name}`;
+      }
+      const resultPath = join(absoluteOutputDirectory, "process-result.json");
+      await writeFile(resultPath, `${JSON.stringify(record, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+      const resultHandle = await open(resultPath, "r+");
+      try { await resultHandle.sync(); } finally { await resultHandle.close(); }
+      record.process_result_path = `${outputDirectory}/process-result.json`;
+    }
+    helperProcesses.push(record);
+    assert.equal(spawnError, undefined, `${kind} helper spawned successfully: ${spawnError?.message}`);
+    assert.deepEqual(exit, { code: 0, signal: null }, `${kind} helper exited normally: ${stderr.toString("utf8")}`);
+    assert.equal(stdoutEof, true, `${kind} helper stdout reached EOF`);
+    assert.equal(stderrEof, true, `${kind} helper stderr reached EOF`);
+    return { record, stdout: stdout.toString("utf8"), stderr: stderr.toString("utf8") };
+  };
+  const databaseFileCaptureSource = `import { createHash } from "node:crypto";
+import { mkdir, open, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+const [root, label, databasePath, captureFlag] = process.argv.slice(-4);
+const captureBytes = captureFlag === "1";
+const files = [];
+for (const [suffix, name] of [["", "main.sqlite"], ["-wal", "wal.sqlite"], ["-shm", "shm.sqlite"]]) {
+  const sourcePath = databasePath + suffix;
+  let bytes;
+  try { bytes = await readFile(sourcePath); }
+  catch (error) {
+    if (error?.code === "ENOENT") { files.push({ suffix, name, source_path: sourcePath, missing: true }); continue; }
+    throw error;
+  }
+  const file = { suffix, name, source_path: sourcePath, bytes: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"), missing: false };
+  if (captureBytes) {
+    const rawDirectory = join(root, "db-raw", label);
+    await mkdir(rawDirectory, { recursive: true, mode: 0o700 });
+    const rawPath = join(rawDirectory, name);
+    await writeFile(rawPath, bytes, { flag: "wx", mode: 0o600 });
+    const handle = await open(rawPath, "r+");
+    try { await handle.sync(); } finally { await handle.close(); }
+    file.raw_capture_path = "db-raw/" + label + "/" + name;
+  }
+  files.push(file);
+}
+process.stdout.write(JSON.stringify({ pid: process.pid, label, database_path: databasePath, files }) + "\\n");`;
+  const captureDatabaseFiles = async (label, captureBytes) => {
+    const { record, stdout } = await runNodeHelper("file-capture", label, databaseFileCaptureSource,
+      [root, label, databasePath, captureBytes ? "1" : "0"]);
+    const captured = JSON.parse(stdout);
+    assert.equal(captured.pid, record.pid);
+    assert.equal(captured.label, label);
+    assert.equal(captured.database_path, databasePath);
+    return captured.files;
+  };
+  const independentDatabaseReaderSource = `import { DatabaseSync } from "node:sqlite";
+const databasePath = process.argv.at(-1);
+const db = new DatabaseSync(databasePath, { readOnly: true });
+const encodeValue = (value) => value instanceof Uint8Array
+  ? { blob_base64: Buffer.from(value).toString("base64") }
+  : typeof value === "bigint" ? { integer_string: value.toString() } : value;
+const schema = db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name").all();
+const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
+  .map(({ name }) => {
+    const quoted = '"' + name.replaceAll('"', '""') + '"';
+    const rows = db.prepare('SELECT * FROM ' + quoted).all().map((row) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, encodeValue(value)])));
+    rows.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    return { name, rows };
+  });
+const schemaAndRows = {
+  schema: schema.map((row) => Object.fromEntries(Object.entries(row)
+    .map(([key, value]) => [key, encodeValue(value)]))), tables,
+};
+db.close();
+process.stdout.write(JSON.stringify({ pid: process.pid, database_path: databasePath,
+  table_count: tables.length, schema_and_rows: schemaAndRows }) + "\\n");`;
+  const readDatabaseIndependently = async (label, path) => {
+    const { record, stdout } = await runNodeHelper("sqlite-reader", label, independentDatabaseReaderSource, [path]);
+    const result = JSON.parse(stdout);
+    assert.equal(result.pid, record.pid);
+    assert.equal(result.database_path, path);
+    assert.equal(result.table_count, result.schema_and_rows.tables.length);
+    return result;
+  };
+  const reconstructAndReadSnapshot = async (label, files, expected) => {
+    const reconstructedDirectory = join(root, "db-reconstructed", label);
+    await mkdir(reconstructedDirectory, { recursive: true, mode: 0o700 });
+    const reconstructedPath = join(reconstructedDirectory, "versions.sqlite");
+    let copiedMain = false;
+    const copiedFiles = [];
+    for (const file of files) {
+      if (file.missing || !file.raw_capture_path) continue;
+      const capturedPath = join(root, file.raw_capture_path);
+      const targetPath = reconstructedPath + file.suffix;
+      const capturedBytes = await readFile(capturedPath);
+      assert.equal(capturedBytes.length, file.bytes, `retained ${file.name} byte count`);
+      assert.equal(createHash("sha256").update(capturedBytes).digest("hex"), file.sha256,
+        `retained ${file.name} hash`);
+      await writeFile(targetPath, capturedBytes, { flag: "wx", mode: 0o600 });
+      const targetHandle = await open(targetPath, "r+");
+      try { await targetHandle.sync(); } finally { await targetHandle.close(); }
+      if (file.suffix === "") copiedMain = true;
+      copiedFiles.push({ suffix: file.suffix, bytes: capturedBytes.length, sha256: file.sha256 });
+    }
+    assert.equal(copiedMain, true, `${label} retains a main SQLite database`);
+    const result = await readDatabaseIndependently(`reconstructed-${label}`, reconstructedPath);
+    assert.equal(result.table_count, 34, `${label} reconstructed all 34 tables`);
+    assert.deepEqual(result.schema_and_rows, expected.schema_and_rows,
+      `${label} reconstructed files match full owner schema, rows, and BLOB values`);
+    return { database_path: reconstructedPath, copied_files: copiedFiles, table_count: result.table_count,
+      schema_and_rows: result.schema_and_rows, process: result.pid };
+  };
+  const objectSnapshot = async (directory, prefix = "") => {
+    const entries = [];
+    for (const entry of await readdir(directory, { withFileTypes: true }).catch((error) => {
+      if (error?.code === "ENOENT") return [];
+      throw error;
+    })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) entries.push(...await objectSnapshot(path, relative));
+      else if (entry.isFile()) {
+        const bytes = await readFile(path);
+        entries.push({ path: relative, bytes: bytes.length,
+          sha256: createHash("sha256").update(bytes).digest("hex") });
+      } else entries.push({ path: relative, type: entry.isSymbolicLink() ? "symlink" : "other" });
+    }
+    return entries.sort((left, right) => left.path.localeCompare(right.path));
+  };
+  const snapshot = async (label, captureDbBytes = false) => {
+    const schemaAndRows = tableSnapshot();
+    const files = await captureDatabaseFiles(label, captureDbBytes);
+    return {
+      schema_and_rows: schemaAndRows,
+      pragmas: {
+        busy_timeout: store.db.prepare("PRAGMA busy_timeout").get(),
+        journal_mode: store.db.prepare("PRAGMA journal_mode").get(),
+        schema_version: store.db.prepare("PRAGMA schema_version").get(),
+        user_version: store.db.prepare("PRAGMA user_version").get(),
+      },
+      is_transaction: store.db.isTransaction,
+      files,
+      objects: await objectSnapshot(objectRoot),
+    };
+  };
+
+  const body = request("sqlite-busy-public-retry", await fixture("generate-plan"));
+  const before = await snapshot("before", true);
+  let blockedResponse;
+  let blockedThrow;
+  try { blockedResponse = await api.invoke(actor(), body); }
+  catch (error) { blockedThrow = { name: error.name, code: error.code, errcode: error.errcode,
+    errstr: error.errstr, message: error.message }; }
+  const whileLocked = await snapshot("while-locked", true);
+  const blockedCounters = { ...counters, api_id_factory_calls: apiId, port_id_factory_calls: portId };
+  const childExit = await releaseChild();
+  const afterRelease = await snapshot("after-release", true);
+  const retriedResponse = await api.invoke(actor(), body);
+  const afterRetry = await snapshot("after-retry", true);
+  const retryLiveObservation = await readDatabaseIndependently("live-after-retry", databasePath);
+  assert.equal(store.db.isTransaction, false, "the public retry has released its SQLite transaction before independent verification");
+  assert.equal(afterRetry.schema_and_rows.tables.length, 34, "the owner snapshot covers all 34 SQLite tables after retry");
+  assert.equal(retryLiveObservation.table_count, 34, "an independent reader sees all 34 live tables before owner close");
+  assert.deepEqual(retryLiveObservation.schema_and_rows, afterRetry.schema_and_rows,
+    "an independent SQLite connection sees the complete retry schema, rows, and BLOBs before owner close");
+  const retryReconstruction = await reconstructAndReadSnapshot("after-retry", afterRetry.files, afterRetry);
+  const effectsAfterRetry = { ...counters, api_id_factory_calls: apiId, port_id_factory_calls: portId };
+  const duplicateResponse = await api.invoke(actor(), body);
+  const afterDuplicate = await snapshot("after-duplicate", true);
+  const duplicateLiveObservation = await readDatabaseIndependently("live-after-duplicate", databasePath);
+  assert.equal(store.db.isTransaction, false, "the duplicate replay has released its SQLite transaction before independent verification");
+  assert.equal(afterDuplicate.schema_and_rows.tables.length, 34, "the owner snapshot covers all 34 SQLite tables after replay");
+  assert.equal(duplicateLiveObservation.table_count, 34, "an independent reader sees all 34 live tables before owner close");
+  assert.deepEqual(duplicateLiveObservation.schema_and_rows, afterDuplicate.schema_and_rows,
+    "an independent SQLite connection sees the complete replay schema, rows, and BLOBs before owner close");
+  const duplicateReconstruction = await reconstructAndReadSnapshot("after-duplicate", afterDuplicate.files, afterDuplicate);
+  const effectsAfterDuplicate = { ...counters, api_id_factory_calls: apiId, port_id_factory_calls: portId };
+
+  const injectedLockedError = Object.assign(new Error("database table is locked"), {
+    code: "ERR_SQLITE_ERROR", errcode: 262, errstr: "database table is locked",
+  });
+  const execBeforeLockedProbe = store.db.exec;
+  store.db.exec = (sql) => {
+    if (sql === "BEGIN IMMEDIATE") throw injectedLockedError;
+    return execBeforeLockedProbe(sql);
+  };
+  let lockedClassificationError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-locked-extended-code",
+      request_hash: canonicalHash({ action_id: "sqlite-locked-extended-code", operation: "generate" }), operation: "generate" });
+  } catch (error) {
+    lockedClassificationError = { name: error.name, module: error.module, code: error.code,
+      field: error.field, retryable: error.retryable, same_error_object: error === injectedLockedError };
+  } finally { store.db.exec = execBeforeLockedProbe; }
+  const afterLockedCodeProbe = await snapshot("after-locked-error");
+
+  const unrelatedSqliteError = Object.assign(new Error("constraint failed"), {
+    code: "ERR_SQLITE_ERROR", errcode: 19, errstr: "constraint failed",
+  });
+  const observedExec = store.db.exec;
+  store.db.exec = (sql) => {
+    if (sql === "BEGIN IMMEDIATE") throw unrelatedSqliteError;
+    return observedExec(sql);
+  };
+  let unrelatedBeginError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-busy-unrelated-error",
+      request_hash: canonicalHash({ action_id: "sqlite-busy-unrelated-error", operation: "generate" }), operation: "generate" });
+  } catch (error) { unrelatedBeginError = error; }
+  finally { store.db.exec = observedExec; }
+  const afterUnrelatedError = await snapshot("after-unrelated-error");
+
+  const borrowerBefore = await snapshot("borrower-before");
+  store.db.exec("BEGIN IMMEDIATE; SAVEPOINT caller_owned_busy_test");
+  store.db.exec("CREATE TEMP TABLE caller_busy_sentinel(value TEXT); INSERT INTO caller_busy_sentinel VALUES('preserved')");
+  let borrowedError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-busy-caller-owned",
+      request_hash: canonicalHash({ action_id: "sqlite-busy-caller-owned", operation: "generate" }), operation: "generate" });
+  } catch (error) {
+    borrowedError = { name: error.name, module: error.module, code: error.code, field: error.field,
+      retryable: error.retryable, message: error.message };
+  }
+  const borrowedTransactionOpen = store.db.isTransaction;
+  const borrowedSentinel = store.db.prepare("SELECT value FROM caller_busy_sentinel").all();
+  store.db.exec("ROLLBACK TO caller_owned_busy_test; RELEASE caller_owned_busy_test; ROLLBACK");
+  const borrowerAfter = await snapshot("borrower-after-rollback");
+  store.close();
+  let closedStoreError;
+  try {
+    await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id: "sqlite-busy-closed-store",
+      request_hash: canonicalHash({ action_id: "sqlite-busy-closed-store", operation: "generate" }), operation: "generate" });
+  } catch (error) {
+    closedStoreError = { name: error.name, module: error.module, code: error.code, field: error.field,
+      retryable: error.retryable, message: error.message };
+  }
+
+  const evidence = {
+    schema: "sqlite-busy-public-retry-regression/1",
+    runtime: process.version,
+    pid: process.pid,
+    argv: process.argv,
+    cwd: process.cwd(),
+    database_path: databasePath,
+    lock_child: { pid: child.pid, argv: [process.execPath, ...lockArgs], exit: childExit,
+      stdout: childStdout, stderr: childStderr, stdout_bytes: Buffer.byteLength(childStdout),
+      stderr_bytes: Buffer.byteLength(childStderr), stdout_sha256: createHash("sha256").update(childStdout).digest("hex"),
+      stderr_sha256: createHash("sha256").update(childStderr).digest("hex") },
+    native_begin_errors: nativeBeginErrors,
+    blocked_throw: blockedThrow ?? null,
+    blocked_response: blockedResponse ?? null,
+    blocked_counters: blockedCounters,
+    before, while_locked: whileLocked, after_release: afterRelease,
+    retry_response: retriedResponse, after_retry: afterRetry,
+    duplicate_response: duplicateResponse, after_duplicate: afterDuplicate,
+    independent_database_observations: {
+      after_retry_live: retryLiveObservation,
+      after_retry_reconstruction: retryReconstruction,
+      after_duplicate_live: duplicateLiveObservation,
+      after_duplicate_reconstruction: duplicateReconstruction,
+    },
+    helper_processes: helperProcesses,
+    effects_after_retry: effectsAfterRetry, effects_after_duplicate: effectsAfterDuplicate,
+    injected_locked_extended_code: lockedClassificationError ?? null,
+    after_locked_extended_code: afterLockedCodeProbe,
+    unrelated_sqlite_error: { name: unrelatedBeginError?.name, code: unrelatedBeginError?.code,
+      errcode: unrelatedBeginError?.errcode, errstr: unrelatedBeginError?.errstr,
+      same_error_object: unrelatedBeginError === unrelatedSqliteError },
+    after_unrelated_error: afterUnrelatedError,
+    borrower: { before: borrowerBefore, error: borrowedError ?? null,
+      transaction_still_open: borrowedTransactionOpen, sentinel_rows: borrowedSentinel, after_rollback: borrowerAfter },
+    closed_store_error: closedStoreError ?? null,
+  };
+  if (evidenceRoot) await writeFile(join(root, "attempt-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
+  t.diagnostic(JSON.stringify(evidence));
+
+  assert.equal(nativeBeginErrors.length, 1, "the public request reaches a real SQLite BEGIN IMMEDIATE failure");
+  assert.ok([5, 6].includes(nativeBeginErrors[0].errcode & 0xff), JSON.stringify(nativeBeginErrors[0]));
+  assert.equal(blockedThrow, undefined, "the API returns its typed unavailable response");
+  assert.equal(blockedResponse?.ok, false);
+  assert.equal(blockedResponse?.error?.code, "unavailable");
+  assert.equal(blockedResponse?.error?.retryable, true);
+  assert.deepEqual(whileLocked.schema_and_rows, before.schema_and_rows,
+    "the failed attempt changes no schema or durable rows while the independent owner holds the lock");
+  assert.deepEqual(whileLocked.objects, before.objects, "the failed attempt changes no artifact files");
+  assert.equal(whileLocked.is_transaction, false, "the failed BEGIN leaves no borrowed transaction active");
+  assert.deepEqual(blockedCounters, { provider: 0, reserved: 0, route: 0,
+    api_id_factory_calls: 1, port_id_factory_calls: 0 },
+  "only the API's local error diagnostic id is allocated; provider, metering, route and job owners are untouched");
+  assert.deepEqual(childExit, { code: 0, signal: null });
+  assert.equal(retriedResponse?.ok, true, JSON.stringify(retriedResponse));
+  assert.equal(retriedResponse?.replayed, undefined);
+  assert.equal(duplicateResponse?.ok, true, JSON.stringify(duplicateResponse));
+  assert.equal(duplicateResponse?.replayed, true);
+  assert.equal(duplicateResponse?.operation_id, retriedResponse?.operation_id);
+  assert.equal(counters.provider, 1, "the exact retry dispatches once");
+  assert.equal(counters.reserved, 1, "the exact retry reserves once");
+  assert.equal(counters.route, 1, "the exact retry resolves one provider route");
+  assert.ok(effectsAfterRetry.port_id_factory_calls >= 2, "the successful request allocates a job and lease");
+  assert.deepEqual(effectsAfterDuplicate, effectsAfterRetry, "replay does not call provider, metering, or adapter ID factories again");
+  assert.deepEqual(afterDuplicate.schema_and_rows, afterRetry.schema_and_rows,
+    "same-identity replay adds no second job, usage, version or selection row");
+  assert.deepEqual(afterDuplicate.objects, afterRetry.objects,
+    "same-identity replay adds no second artifact object");
+  assert.deepEqual(lockedClassificationError, { name: "VersionStoreError", module: "creative-engine.versions",
+    code: "unavailable", field: "job", retryable: true, same_error_object: false },
+  "an injected extended SQLITE_LOCKED code maps through the same neutral acquisition classifier");
+  assert.deepEqual(afterLockedCodeProbe.schema_and_rows, afterDuplicate.schema_and_rows,
+    "locked acquisition classification itself creates no job rows");
+  assert.strictEqual(unrelatedBeginError, unrelatedSqliteError,
+    "non-busy SQLite errors are propagated unchanged by acquisition classification");
+  assert.deepEqual(afterUnrelatedError.schema_and_rows, afterDuplicate.schema_and_rows,
+    "a propagated acquisition error leaves durable schema and rows unchanged");
+  assert.ok(borrowedError && borrowedError.module === "creative-engine.versions" && borrowedError.code === "unavailable",
+    JSON.stringify(borrowedError));
+  assert.equal(borrowedError?.field, "job.begin.transaction");
+  assert.equal(borrowedError?.retryable, true);
+  assert.equal(borrowedTransactionOpen, true, "a rejected borrower does not roll back caller BEGIN/SAVEPOINT");
+  assert.deepEqual(JSON.parse(JSON.stringify(borrowedSentinel)), [{ value: "preserved" }]);
+  assert.deepEqual(borrowerAfter.schema_and_rows, afterDuplicate.schema_and_rows,
+    "caller rollback leaves the durable job tables unchanged");
+  assert.equal(closedStoreError?.name, "VersionStoreError");
+  assert.equal(closedStoreError?.module, "creative-engine.versions");
+  assert.equal(closedStoreError?.code, "unavailable");
+  assert.equal(closedStoreError?.field, "database.identity",
+    "closed-store identity failure remains distinct from a retryable busy acquisition");
 });
 
 test("cancelled dispatch cannot publish but its late worker can persist attempt evidence for reconciliation", async (t) => {

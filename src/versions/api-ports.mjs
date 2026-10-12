@@ -80,6 +80,24 @@ function inspectionSessionFromRows(session, stages) {
 
 function tokenHash(value) { return createHash("sha256").update(value).digest("hex"); }
 
+function isSqliteBusyOrLocked(error) {
+  if (error?.code !== "ERR_SQLITE_ERROR") return false;
+  if (Number.isSafeInteger(error.errcode)) {
+    const primaryCode = error.errcode & 0xff;
+    return primaryCode === 5 || primaryCode === 6;
+  }
+  return typeof error.errstr === "string" &&
+    /^(?:database is (?:busy|locked)|database (?:table|schema) is locked)$/i.test(error.errstr);
+}
+
+function beginImmediate(store, field) {
+  try { store.db.exec("BEGIN IMMEDIATE"); }
+  catch (error) {
+    if (isSqliteBusyOrLocked(error)) throw new VersionStoreError("unavailable", field, true);
+    throw error;
+  }
+}
+
 function jobFromRow(row) {
   if (!row) return null;
   let result;
@@ -326,7 +344,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           brief_hash: input.brief_hash, design_version_id, design_hash: input.design_hash, artifact_id,
           artifact_hash: input.artifact_hash, parent_version_id, parent_design_hash, root_design_version_id,
           root_design_hash: input.root_design_hash };
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "inspection.session");
         try {
           const timestamp = store.timestamp();
           const job = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -410,7 +428,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const intent = safeJson(input?.intent, "inspection.stage.intent");
         const intent_json = canonicalSerialize(intent);
         const intent_hash = canonicalHash(intent);
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "inspection.stage");
         try {
           const timestamp = store.timestamp();
           const job = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -468,7 +486,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const result = safeJson(input?.result, "inspection.stage.result");
         const result_json = canonicalSerialize(result);
         const result_hash = canonicalHash(result);
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "inspection.stage");
         try {
           const timestamp = store.timestamp();
           const job = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -687,7 +705,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         if (!OPERATIONS.has(input.operation)) throw new VersionStoreError("invalid_request", "operation");
         const brief_id = input.scope.brief_id === undefined ? null : safeReference(input.scope.brief_id, "brief_id");
         const now = store.timestamp();
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job");
         try {
           const existing = store.db.prepare(`SELECT * FROM creative_jobs
             WHERE tenant_id=? AND project_id=? AND action_id=?`)
@@ -725,7 +743,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const job_id = safeReference(input.job_id, "job_id");
         const action_id = safeReference(input.action_id, "action_id");
         const request_hash = safeHash(input.request_hash, "request_hash");
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.resume");
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, job_id);
@@ -768,7 +786,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     },
     async authorizeDispatch(input) {
       return serial(() => {
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.dispatch");
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(input.scope.tenant_id, input.scope.project_id, input.job_id);
@@ -951,7 +969,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           throw new VersionStoreError("unavailable", "handoff.durable_result_staging", true);
         }
         const scope = briefScope(input.scope, input.publication_fence?.brief_id);
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.publication");
         let transaction;
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -1066,7 +1084,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       return serial(() => {
         store.assertNoBorrowedTransaction("job.failure.transaction");
         const scope = briefScope(input.scope, input.scope.brief_id ?? "job-scope");
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.failure");
         try {
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, input.job_id);
@@ -1108,7 +1126,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const action_id = safeReference(input.action_id, "action_id");
         const target_action_id = safeReference(input.target_action_id, "target_action_id");
         const request_hash = safeHash(input.request_hash, "request_hash");
-        store.db.exec("BEGIN IMMEDIATE");
+        beginImmediate(store, "job.cancel");
         try {
           const prior = store.db.prepare(`SELECT * FROM creative_cancel_requests WHERE tenant_id=? AND project_id=? AND action_id=?`)
             .get(tenant_id, project_id, action_id);
