@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   evaluateProviderPolicy,
+  PRODIGI_SANDBOX_ADAPTER_ID,
   PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_OPERATION_ENDPOINTS,
   type SandboxDecisionVerifier,
@@ -26,6 +27,8 @@ import type { StatusResult } from "./types.js";
 export const PRODIGI_SANDBOX_ORIGIN = "https://api.sandbox.prodigi.com" as const;
 
 export type ProdigiShippingMethod = "Budget" | "Standard" | "StandardPlus" | "Express" | "Overnight";
+/** Create-quote spelling: the quote reference lists these lowercase values. */
+export type ProdigiQuoteShippingMethod = "budget" | "standard" | "standardplus" | "express" | "overnight";
 export type ProdigiSizing = "fillPrintArea" | "fitPrintArea" | "stretchToPrintArea";
 
 export interface ProdigiHttpRequest {
@@ -67,6 +70,7 @@ export interface ProdigiSandboxClientOptions {
 
 export type ProdigiSandboxErrorCode =
   | "sandbox_calls_disabled"
+  | "aborted"
   | "decision_unverified"
   | "decision_mismatch"
   | "invalid_input"
@@ -84,6 +88,7 @@ export type ProdigiSideEffectState = "not_dispatched" | "possible" | "confirmed"
 
 const ERROR_MESSAGES: Readonly<Record<ProdigiSandboxErrorCode, string>> = {
   sandbox_calls_disabled: "Prodigi sandbox calls are disabled.",
+  aborted: "The Prodigi request was aborted before it was sent.",
   decision_unverified: "The owner sandbox decision could not be verified.",
   decision_mismatch: "The request does not match the verified sandbox decision.",
   invalid_input: "The Prodigi request input did not pass validation.",
@@ -124,6 +129,7 @@ const MD5_PATTERN = /^[a-f0-9]{32}$/u;
 const AMOUNT_PATTERN = /^(0|[1-9][0-9]{0,14})(\.[0-9]{1,6})?$/u;
 const ISSUE_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9._]{0,127}$/u;
 const MAX_RESPONSE_CHARS = 1_048_576;
+const MAX_RESPONSE_BYTES = 1_048_576;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 60_000;
 
@@ -143,7 +149,10 @@ function invalidResponse(sideEffectState: ProdigiSideEffectState, httpStatus: nu
   throw new ProdigiSandboxError("invalid_response", sideEffectState, httpStatus);
 }
 
-/** Case-insensitive mapping of a configured shipping choice to the documented enum. */
+/**
+ * Case-insensitive mapping of a configured shipping choice to the documented
+ * create-order enum (`Budget`, `Standard`, `StandardPlus`, `Express`, `Overnight`).
+ */
 export function toProdigiShippingMethod(value: unknown): ProdigiShippingMethod {
   if (typeof value !== "string") return invalidInput();
   const key = value.toLowerCase();
@@ -185,6 +194,15 @@ function httpsAssetUrl(value: unknown): string {
   return text;
 }
 
+/**
+ * The create-quote reference documents `shippingMethod` as `budget`,
+ * `standard`, `standardplus`, `express` or `overnight`, while create-order uses
+ * PascalCase. Each endpoint gets its own documented spelling.
+ */
+function toQuoteShippingMethod(method: ProdigiShippingMethod): ProdigiQuoteShippingMethod {
+  return method.toLowerCase() as ProdigiQuoteShippingMethod;
+}
+
 // ---------------------------------------------------------------------------
 // Request mapping (pure; exported for tests and review)
 
@@ -209,7 +227,7 @@ export function mapQuoteRequest(request: QuoteProviderRequest, config: ProdigiQu
   const printArea = config.printArea ?? "default";
   if (!PRINT_AREA_PATTERN.test(printArea)) return invalidInput();
   return Object.freeze({
-    shippingMethod: toProdigiShippingMethod(request.shippingMethod),
+    shippingMethod: toQuoteShippingMethod(toProdigiShippingMethod(request.shippingMethod)),
     destinationCountryCode: countryCode,
     currencyCode,
     items: [{
@@ -465,7 +483,11 @@ export function projectQuoteResponse(
 export type ProdigiOrderStage = "InProgress" | "Complete" | "Cancelled";
 export type ProdigiStepState = "NotStarted" | "InProgress" | "Complete" | "Error";
 
-/** PII-free order observation. Recipient, asset URLs, charges and metadata are dropped. */
+/**
+ * PII-free order observation. Recipient, asset URLs, tracking numbers and URLs,
+ * charges and metadata are dropped. A tracking number can reveal the delivery
+ * town and signer, so only its presence is kept.
+ */
 export interface ProdigiOrderObservation {
   readonly outcome: string;
   readonly orderId: string;
@@ -477,8 +499,9 @@ export interface ProdigiOrderObservation {
   readonly shipments: readonly {
     readonly id: string;
     readonly status: string;
+    /** Display-only; `null` when absent or not plain text. */
     readonly carrier: string | null;
-    readonly trackingNumber: string | null;
+    readonly hasTrackingNumber: boolean;
     readonly dispatchDate: string | null;
   }[];
   readonly normalizedState: StatusResult["normalizedState"];
@@ -491,6 +514,7 @@ const STEP_STATES: Readonly<Record<string, ProdigiStepState>> = Object.freeze({
 const DETAIL_KEYS = ["downloadAssets", "printReadyAssetsPrepared", "allocateProductionLocation", "inProduction", "shipping"] as const;
 const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|[+-]\d{2}:\d{2})?$/u;
 const SHORT_TEXT = /^[A-Za-z0-9][A-Za-z0-9 ._:/#-]{0,127}$/u;
+const CARRIER_TEXT = /^[A-Za-z0-9][A-Za-z0-9 ._:/#()&,'+-]{0,127}$/u;
 
 function lookup<T>(table: Readonly<Record<string, T>>, value: unknown): T | undefined {
   if (typeof value !== "string") return undefined;
@@ -502,6 +526,11 @@ function optionalShort(value: unknown, sideEffect: ProdigiSideEffectState, statu
   if (value === undefined || value === null) return null;
   if (typeof value !== "string" || !SHORT_TEXT.test(value)) return invalidResponse(sideEffect, status);
   return value;
+}
+
+/** Display-only optional text degrades to `null` instead of failing the whole read. */
+function lenientText(value: unknown, pattern: RegExp): string | null {
+  return typeof value === "string" && pattern.test(value) ? value : null;
 }
 
 /**
@@ -550,18 +579,19 @@ export function projectOrderResponse(
     const shipmentStatus = optionalShort(shipment.status, sideEffect, httpStatus);
     if (id === null || shipmentStatus === null) return invalidResponse(sideEffect, httpStatus);
     const carrierRecord = shipment.carrier;
-    const carrier = carrierRecord !== null && typeof carrierRecord === "object"
-      ? optionalShort((carrierRecord as JsonRecord).name, sideEffect, httpStatus)
-      : optionalShort(carrierRecord, sideEffect, httpStatus);
+    const carrier = carrierRecord !== null && typeof carrierRecord === "object" && !Array.isArray(carrierRecord)
+      ? lenientText((carrierRecord as JsonRecord).name, CARRIER_TEXT)
+      : lenientText(carrierRecord, CARRIER_TEXT);
     const tracking = shipment.tracking;
-    const trackingNumber = tracking !== null && typeof tracking === "object"
-      ? optionalShort((tracking as JsonRecord).number, sideEffect, httpStatus)
-      : null;
+    const trackingNumber = tracking !== null && typeof tracking === "object" && !Array.isArray(tracking)
+      ? (tracking as JsonRecord).number
+      : undefined;
+    const hasTrackingNumber = typeof trackingNumber === "string" && trackingNumber.trim() !== "";
     const dispatchDate = shipment.dispatchDate;
     if (dispatchDate !== undefined && dispatchDate !== null && (typeof dispatchDate !== "string" || !TIMESTAMP_PATTERN.test(dispatchDate))) {
       return invalidResponse(sideEffect, httpStatus);
     }
-    return Object.freeze({ id, status: shipmentStatus, carrier, trackingNumber, dispatchDate: (dispatchDate as string | undefined) ?? null });
+    return Object.freeze({ id, status: shipmentStatus, carrier, hasTrackingNumber, dispatchDate: (dispatchDate as string | undefined) ?? null });
   });
   const frozenDetails = Object.freeze(details);
   return Object.freeze({
@@ -647,10 +677,11 @@ export class ProdigiSandboxClient {
     signal?: AbortSignal
   ): Promise<ProdigiProviderQuote> {
     const body = mapQuoteRequest(request, config);
-    this.#assertMatchesDecision(request.sku, request.destination.countryCode, body.shippingMethod as ProdigiShippingMethod);
+    const shippingMethod = toProdigiShippingMethod(body.shippingMethod);
+    this.#assertMatchesDecision(request.sku, request.destination.countryCode, shippingMethod);
     const result = await this.#send("quote", "POST", PRODIGI_SANDBOX_OPERATION_ENDPOINTS.quote.path, body, signal);
     return projectQuoteResponse(result, {
-      shippingMethod: body.shippingMethod as ProdigiShippingMethod,
+      shippingMethod,
       currencyCode: config.currencyCode,
       requestDigest: request.requestDigest
     });
@@ -683,7 +714,9 @@ export class ProdigiSandboxClient {
 
   async #send(operation: OperationKey, method: "GET" | "POST", path: string, body: unknown, signal: AbortSignal | undefined): Promise<unknown> {
     if (!this.#enabled) throw new ProdigiSandboxError("sandbox_calls_disabled", "not_dispatched");
+    if (isAborted(signal)) throw new ProdigiSandboxError("aborted", "not_dispatched");
     const policy = await evaluateProviderPolicy({
+      adapterId: PRODIGI_SANDBOX_ADAPTER_ID,
       mode: "sandbox",
       providerId: "prodigi",
       endpoint: PRODIGI_SANDBOX_BASE_URL,
@@ -694,7 +727,10 @@ export class ProdigiSandboxClient {
       shippingMethod: this.#decision.shippingMethod,
       decisionReference: this.#decision.decisionReference
     }, this.#verifier);
-    if (policy.status !== "sandbox_prerequisites_verified" || policy.sandboxRoute?.method !== method) {
+    // The policy is the source of truth: only `sandbox_call_permitted` with
+    // `providerCallPermitted: true` for this exact route may dispatch.
+    if (policy.status !== "sandbox_call_permitted" || policy.providerCallPermitted !== true ||
+        policy.sandboxRoute?.method !== method || policy.sandboxRoute.path !== PRODIGI_SANDBOX_OPERATION_ENDPOINTS[operation].path) {
       throw new ProdigiSandboxError("decision_unverified", "not_dispatched");
     }
     // Paths come only from the fixed endpoint table; the origin is the fixed sandbox host.
@@ -704,6 +740,8 @@ export class ProdigiSandboxClient {
     const http = this.#http;
     const timeoutMs = this.#timeoutMs;
 
+    const uncertain: ProdigiSideEffectState = operation === "submit" ? "unknown" : "not_dispatched";
+    const dispatch: DispatchState = { dispatched: false };
     let outcome: SendOutcome;
     try {
       outcome = await withServerSecret<SendOutcome>({
@@ -711,15 +749,29 @@ export class ProdigiSandboxClient {
         secretReference: this.#secretReference,
         mode: "sandbox",
         source: this.#secrets,
-        use: async ({ secret }) => sendWithSecret(http, operation, method, url, payload, secret, timeoutMs, signal)
+        use: async ({ secret }) => sendWithSecret(http, operation, method, url, payload, secret, timeoutMs, signal, dispatch)
       });
     } catch {
-      // withServerSecret failures happen before the callback runs, or inside it
-      // only for unexpected errors (sendWithSecret itself never throws).
+      // Once the request was handed to the port, the provider may have applied
+      // it: an order may or may not exist, so the outcome is unknown.
+      if (dispatch.dispatched) throw new ProdigiSandboxError("provider_unavailable", uncertain);
       throw new ProdigiSandboxError("credential_unavailable", "not_dispatched");
     }
-    if (!outcome.ok) throw outcome.error ?? new ProdigiSandboxError("provider_unavailable", operation === "submit" ? "unknown" : "not_dispatched");
+    if (!outcome.ok) throw outcome.error ?? new ProdigiSandboxError("provider_unavailable", uncertain);
     return outcome.body;
+  }
+}
+
+interface DispatchState {
+  dispatched: boolean;
+}
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  if (signal === undefined) return false;
+  try {
+    return signal.aborted === true;
+  } catch {
+    return true;
   }
 }
 
@@ -731,29 +783,49 @@ async function sendWithSecret(
   payload: string | undefined,
   secret: string,
   timeoutMs: number,
-  external: AbortSignal | undefined
+  external: AbortSignal | undefined,
+  dispatch: DispatchState
 ): Promise<SendOutcome> {
   const uncertain: ProdigiSideEffectState = operation === "submit" ? "unknown" : "not_dispatched";
+  // The signal may have aborted while the policy or secret was resolving.
+  if (isAborted(external)) return { ok: false, status: 0, error: new ProdigiSandboxError("aborted", "not_dispatched") };
   const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  try {
+    external?.addEventListener("abort", onAbort, { once: true });
+  } catch {
+    return { ok: false, status: 0, error: new ProdigiSandboxError("invalid_input", "not_dispatched") };
+  }
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
-  const onAbort = (): void => controller.abort();
-  external?.addEventListener("abort", onAbort, { once: true });
-  if (external?.aborted === true) controller.abort();
   const headers: Record<string, string> = { "X-API-Key": secret, Accept: "application/json" };
   if (payload !== undefined) headers["Content-Type"] = "application/json";
-  let response: ProdigiHttpResponse;
+  let status: number;
+  let text: unknown;
   try {
-    response = await http.send(Object.freeze({
+    dispatch.dispatched = true;
+    const response: unknown = await http.send(Object.freeze({
       method,
       url,
       headers: Object.freeze(headers),
       ...(payload === undefined ? {} : { body: payload }),
       signal: controller.signal
     }));
+    // Every response field is read inside the try: a throwing getter after
+    // dispatch is an uncertain outcome, never "not dispatched".
+    if (response === null || typeof response !== "object") {
+      return { ok: false, status: 0, error: new ProdigiSandboxError("invalid_response", uncertain) };
+    }
+    const rawStatus: unknown = (response as ProdigiHttpResponse).status;
+    if (typeof rawStatus !== "number" || !Number.isSafeInteger(rawStatus)) {
+      return { ok: false, status: 0, error: new ProdigiSandboxError("invalid_response", uncertain) };
+    }
+    status = rawStatus;
+    if (status < 200 || status > 299) return { ok: false, status, error: classifyHttpFailure(status, operation) };
+    text = (response as ProdigiHttpResponse).bodyText;
   } catch {
     const error = timedOut
       ? new ProdigiSandboxError("timeout", uncertain)
@@ -761,14 +833,12 @@ async function sendWithSecret(
     return { ok: false, status: 0, error };
   } finally {
     clearTimeout(timer);
-    external?.removeEventListener("abort", onAbort);
+    try {
+      external?.removeEventListener("abort", onAbort);
+    } catch {
+      // Listener cleanup failure cannot change the dispatched outcome.
+    }
   }
-  if (response === null || typeof response !== "object" || !Number.isSafeInteger(response.status)) {
-    return { ok: false, status: 0, error: new ProdigiSandboxError("invalid_response", uncertain) };
-  }
-  const status = response.status;
-  if (status < 200 || status > 299) return { ok: false, status, error: classifyHttpFailure(status, operation) };
-  const text = response.bodyText;
   if (typeof text !== "string" || text.length === 0 || text.length > MAX_RESPONSE_CHARS) {
     return { ok: false, status, error: new ProdigiSandboxError("invalid_response", uncertain, status) };
   }
@@ -802,8 +872,38 @@ export function toStatusResult(observation: ProdigiOrderObservation, observedAt:
 }
 
 /**
- * Fetch-backed HTTP port with redirects disabled and a bounded body. It is
- * only ever handed URLs under the fixed sandbox origin by the client above.
+ * Reads at most `MAX_RESPONSE_BYTES` while streaming and cancels the body past
+ * the limit. An oversized body becomes `""`, which the client rejects.
+ */
+async function readBoundedBody(response: Response): Promise<string> {
+  const declared = response.headers?.get?.("content-length");
+  if (declared !== null && declared !== undefined && /^\d+$/u.test(declared) && Number(declared) > MAX_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    return "";
+  }
+  const body = response.body;
+  if (body === null || body === undefined) return "";
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      return "";
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+/**
+ * Fetch-backed HTTP port with redirects disabled and a body bounded while
+ * streaming. It is only ever handed URLs under the fixed sandbox origin by the
+ * client above.
  */
 export function createFetchProdigiHttpPort(fetchImpl: typeof fetch = globalThis.fetch): ProdigiHttpPort {
   return Object.freeze({
@@ -816,8 +916,12 @@ export function createFetchProdigiHttpPort(fetchImpl: typeof fetch = globalThis.
         redirect: "error",
         signal: request.signal
       });
-      const bodyText = await response.text();
-      return { status: response.status, bodyText: bodyText.length > MAX_RESPONSE_CHARS ? "" : bodyText };
+      const status = response.status;
+      if (status < 200 || status > 299) {
+        await response.body?.cancel().catch(() => undefined);
+        return { status, bodyText: "" };
+      }
+      return { status, bodyText: await readBoundedBody(response) };
     }
   });
 }

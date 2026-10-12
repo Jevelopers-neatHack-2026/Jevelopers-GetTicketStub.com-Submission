@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   evaluateProviderPolicy,
+  PRODIGI_SANDBOX_ADAPTER_ID,
   PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_OPERATION_ENDPOINTS,
   PROVIDER_ENVIRONMENT_MATRIX
@@ -303,6 +304,34 @@ cases.push(["sandbox prerequisite success still cannot call an unimplemented pro
   assert.equal(result.providerCallPermitted, false);
   assert.deepEqual(result.reasons, ["provider_adapter_not_implemented"]);
   assertNoEffects(result);
+}]);
+
+cases.push(["only the named sandbox adapter reaches sandbox_call_permitted after full verification", async () => {
+  const fixture = successfulVerifier();
+  for (const operation of ["quote", "submit", "status"]) {
+    const result = await evaluateProviderPolicy(sandboxInput({ operation, adapterId: PRODIGI_SANDBOX_ADAPTER_ID }), fixture.verifier);
+    assert.equal(result.status, "sandbox_call_permitted");
+    assert.equal(result.providerCallPermitted, true);
+    assert.equal(result.providerAdapterImplemented, true);
+    assert.deepEqual(result.sandboxRoute, PRODIGI_SANDBOX_OPERATION_ENDPOINTS[operation]);
+    assert.deepEqual(result.reasons, []);
+    assert.equal(result.networkRequests, 0);
+    assert.equal(result.credentialReads, 0);
+  }
+  const unknown = await evaluateProviderPolicy(sandboxInput({ adapterId: "other-adapter" }), fixture.verifier);
+  assert.equal(unknown.status, "blocked");
+  assert.deepEqual(unknown.reasons, ["invalid_configuration"]);
+  assertNoEffects(unknown);
+  const unverified = await evaluateProviderPolicy(sandboxInput({ adapterId: PRODIGI_SANDBOX_ADAPTER_ID }), { async verify() { return undefined; } });
+  assert.equal(unverified.status, "blocked");
+  assertNoEffects(unverified);
+  const simulated = await evaluateProviderPolicy({ mode: "simulated", adapterId: PRODIGI_SANDBOX_ADAPTER_ID });
+  assert.deepEqual(simulated.reasons, ["simulated_mode_must_be_offline"]);
+  assertNoEffects(simulated);
+  const prodigi = PROVIDER_ENVIRONMENT_MATRIX.providers.find((provider) => provider.providerId === "prodigi");
+  assert.equal(prodigi.sandboxAdapter.adapterId, PRODIGI_SANDBOX_ADAPTER_ID);
+  assert.equal(prodigi.sandboxAdapter.accountTested, false);
+  assert.equal(prodigi.operations.submit.implementation, "not_implemented");
 }]);
 
 export async function runProviderMatrixSuite() {

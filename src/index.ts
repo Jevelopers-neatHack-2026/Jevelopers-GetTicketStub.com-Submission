@@ -34,6 +34,7 @@ export type {
 } from "./attempt-store.js";
 export {
   evaluateProviderPolicy,
+  PRODIGI_SANDBOX_ADAPTER_ID,
   PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_OPERATION_ENDPOINTS,
   PROVIDER_ENVIRONMENT_MATRIX
@@ -198,6 +199,7 @@ export type {
   ProdigiOrderStage,
   ProdigiProviderQuote,
   ProdigiQuoteMappingConfig,
+  ProdigiQuoteShippingMethod,
   ProdigiSandboxClientOptions,
   ProdigiSandboxDecision,
   ProdigiSandboxErrorCode,

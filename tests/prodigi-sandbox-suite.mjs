@@ -1,11 +1,24 @@
+// The guard import must stay first: sibling imports evaluate in source order,
+// so the guard is installed before any dist/ module runs. The runner also
+// preloads it with `node --import`.
+import "./prodigi-sandbox-network-guard.mjs";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import http from "node:http";
+import https from "node:https";
+import net from "node:net";
+import tls from "node:tls";
+import { fileURLToPath } from "node:url";
 import {
   createEnvServerSecretSource,
   createFetchProdigiHttpPort,
   createProdigiQuotePort,
+  evaluateProviderPolicy,
   executePrivateQuote,
   mapOrderRequest,
   mapQuoteRequest,
+  PRODIGI_SANDBOX_ADAPTER_ID,
+  PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_SECRET_BINDING,
   ProdigiSandboxClient,
   ProdigiSandboxError,
@@ -28,12 +41,13 @@ import {
 } from "./prodigi-sandbox-fixtures.mjs";
 import { catalogA, contractValidator, copyCatalog, quoteScope, selectionFor } from "./quote-fixtures.mjs";
 
-// Network guard: any accidental use of global fetch fails the suite.
-let globalFetchCalls = 0;
-globalThis.fetch = async () => {
-  globalFetchCalls += 1;
-  throw new Error("network is forbidden in the Prodigi sandbox suite");
-};
+const guard = globalThis[Symbol.for("fulfillment-connectors.prodigi-sandbox.network-guard")];
+if (guard?.installed !== true) throw new Error("the Prodigi sandbox network guard is not installed");
+
+// A sentinel in the real process environment: every resolver in this suite
+// receives an injected env, so this value must never reach a request.
+const PROCESS_ENV_SENTINEL = "process-env-sentinel-must-not-be-read";
+process.env.PRODIGI_SANDBOX_API_KEY = PROCESS_ENV_SENTINEL;
 
 const cases = [];
 const add = (name, run) => cases.push([name, run]);
@@ -102,7 +116,7 @@ async function rejectsWith(promise, code, sideEffectState) {
 
 // --- Secret-reference resolver -------------------------------------------------
 
-add("secret resolver reads the sandbox reference from env on every call without caching", async () => {
+add("secrets.reads-env-per-call", async () => {
   const env = sandboxEnv("first-fixture-value");
   const source = createEnvServerSecretSource({ bindings: [PRODIGI_SANDBOX_SECRET_BINDING], env });
   const first = await source.load({ providerId: "prodigi", secretReference: "prodigi/sandbox/api-key", mode: "sandbox" });
@@ -113,7 +127,7 @@ add("secret resolver reads the sandbox reference from env on every call without 
   assert.ok(Object.isFrozen(second));
 });
 
-add("secret resolver returns nothing for simulated mode, other providers, unknown references and bad values", async () => {
+add("secrets.rejects-mode-provider-reference-and-values", async () => {
   const source = createEnvServerSecretSource({ bindings: [PRODIGI_SANDBOX_SECRET_BINDING], env: sandboxEnv() });
   const base = { providerId: "prodigi", secretReference: "prodigi/sandbox/api-key" };
   assert.equal(await source.load({ ...base, mode: "simulated" }), undefined);
@@ -129,7 +143,7 @@ add("secret resolver returns nothing for simulated mode, other providers, unknow
   assert.equal(await inherited.load({ ...base, mode: "sandbox" }), undefined);
 });
 
-add("missing credential fails through withServerSecret without exposing the reference value", async () => {
+add("secrets.missing-credential-fails-closed", async () => {
   const source = createEnvServerSecretSource({ bindings: [PRODIGI_SANDBOX_SECRET_BINDING], env: {} });
   let used = false;
   await assert.rejects(withServerSecret({
@@ -139,7 +153,7 @@ add("missing credential fails through withServerSecret without exposing the refe
   assert.equal(used, false);
 });
 
-add("live bindings are refused by default and never issue a lease even when the future flag is set", async () => {
+add("secrets.live-bindings-refused", async () => {
   const live = { reference: "prodigi/live/api-key", providerId: "prodigi", credentialClass: "live", envVar: "PRODIGI_LIVE_API_KEY" };
   assert.throws(() => createEnvServerSecretSource({ bindings: [PRODIGI_SANDBOX_SECRET_BINDING, live], env: {} }),
     (error) => error instanceof SecretResolverError && error.code === "live_binding_refused");
@@ -150,7 +164,7 @@ add("live bindings are refused by default and never issue a lease even when the 
   }
 });
 
-add("sandbox and live references stay distinct by name, variable and class", () => {
+add("secrets.sandbox-live-separation", () => {
   const code = (bindings, options = {}) => {
     try {
       createEnvServerSecretSource({ bindings, env: {}, ...options });
@@ -173,7 +187,7 @@ add("sandbox and live references stay distinct by name, variable and class", () 
   assert.equal(code([sandbox("PRODIGI_SANDBOX_API_KEY")]), "accepted");
 });
 
-add("the package declares only the sandbox binding and no PRODIGI_API_KEY binding", () => {
+add("secrets.only-sandbox-binding-exported", () => {
   assert.deepEqual({ ...PRODIGI_SANDBOX_SECRET_BINDING }, {
     reference: "prodigi/sandbox/api-key", providerId: "prodigi", credentialClass: "sandbox", envVar: "PRODIGI_SANDBOX_API_KEY"
   });
@@ -185,10 +199,10 @@ add("the package declares only the sandbox binding and no PRODIGI_API_KEY bindin
 
 // --- Request mapping ------------------------------------------------------------
 
-add("quote mapping produces the documented v4 create-quote body", () => {
+add("mapping.quote-body", () => {
   const body = mapQuoteRequest(quoteRequest(), { currencyCode: "USD", attributes: { wrap: "White" } });
   assert.deepEqual(JSON.parse(JSON.stringify(body)), {
-    shippingMethod: "Express",
+    shippingMethod: "express",
     destinationCountryCode: "US",
     currencyCode: "USD",
     items: [{ sku: FIXTURE_SKU, copies: 25, attributes: { wrap: "White" }, assets: [{ printArea: "default" }] }]
@@ -202,7 +216,7 @@ add("quote mapping produces the documented v4 create-quote body", () => {
   invalid(quoteRequest(), { currencyCode: "USD", attributes: { "bad key": "x" } });
 });
 
-add("order mapping produces the documented v4 create-order body and validates inputs", () => {
+add("mapping.order-body", () => {
   const body = JSON.parse(JSON.stringify(mapOrderRequest(orderInput())));
   assert.deepEqual(body, {
     merchantReference: "merchant-ref-fixture-1",
@@ -229,7 +243,7 @@ add("order mapping produces the documented v4 create-order body and validates in
 
 // --- Gates before any request ----------------------------------------------------
 
-add("sandbox calls are disabled by default: no secret read and no request", async () => {
+add("gates.disabled-by-default", async () => {
   const http = recordingHttp([]);
   const secrets = countingSecrets();
   const c = new ProdigiSandboxClient({ http: http.port, secrets: secrets.source, decision: fixtureDecision, decisionVerifier: fixtureVerifier() });
@@ -239,7 +253,7 @@ add("sandbox calls are disabled by default: no secret read and no request", asyn
   assert.equal(secrets.counter.loads, 0);
 });
 
-add("an unverified owner decision or a request outside the decision sends nothing", async () => {
+add("gates.decision-unverified-or-mismatch", async () => {
   const http = recordingHttp([]);
   const secrets = countingSecrets();
   const rejecting = client({ http, secrets: secrets.source, verifier: fixtureVerifier({ approve: false }) });
@@ -253,7 +267,7 @@ add("an unverified owner decision or a request outside the decision sends nothin
   assert.equal(secrets.counter.loads, 0);
 });
 
-add("a missing sandbox credential stops before the HTTP port", async () => {
+add("gates.missing-credential", async () => {
   const http = recordingHttp([]);
   const c = client({ http, secrets: countingSecrets({}).source });
   await rejectsWith(c.getOrder(FIXTURE_ORDER_ID), "credential_unavailable", "not_dispatched");
@@ -262,7 +276,7 @@ add("a missing sandbox credential stops before the HTTP port", async () => {
 
 // --- Quote --------------------------------------------------------------------------
 
-add("quote sends one sandbox POST with the key header and projects exact provider terms", async () => {
+add("quote.single-post-and-projection", async () => {
   const http = recordingHttp([{ body: quoteResponse() }]);
   const quote = await client({ http }).createQuote(quoteRequest(), { currencyCode: "USD" });
   assert.equal(http.calls.length, 1);
@@ -271,7 +285,8 @@ add("quote sends one sandbox POST with the key header and projects exact provide
   assert.equal(call.url, "https://api.sandbox.prodigi.com/v4.0/quotes");
   assert.equal(call.headers["X-API-Key"], FIXTURE_SANDBOX_KEY);
   assert.equal(call.headers["Content-Type"], "application/json");
-  assert.equal(JSON.parse(call.body).shippingMethod, "Express");
+  // Quote reference: lowercase `express`; order create stays PascalCase.
+  assert.equal(JSON.parse(call.body).shippingMethod, "express");
   assert.match(quote.providerQuoteReference, /^prodigi-quote:sha256-[a-f0-9]{64}$/);
   assert.deepEqual(JSON.parse(JSON.stringify({ ...quote, providerQuoteReference: "x" })), {
     providerQuoteReference: "x",
@@ -293,7 +308,7 @@ add("quote sends one sandbox POST with the key header and projects exact provide
   assert.equal(JSON.stringify(quote).includes(FIXTURE_SANDBOX_KEY), false);
 });
 
-add("quote tax basis comes only from exact reconciliation; missing totals stay unknown", () => {
+add("quote.tax-basis-reconciliation", () => {
   const expected = { shippingMethod: "Express", currencyCode: "USD", requestDigest: "d" };
   const included = projectQuoteResponse(quoteResponse({ costSummary: { totalTax: { amount: "2.28", currency: "USD" }, totalCost: { amount: "28.50", currency: "USD" } } }), expected);
   assert.equal(included.taxBasis, "included");
@@ -311,7 +326,7 @@ add("quote tax basis comes only from exact reconciliation; missing totals stay u
   assert.equal(branded.taxBasis, "excluded");
 });
 
-add("quote projection selects the requested method and rejects malformed terms", () => {
+add("quote.method-selection-and-malformed", () => {
   const expected = { shippingMethod: "Express", currencyCode: "USD", requestDigest: "d" };
   const budget = quoteResponse().quotes[0];
   const two = quoteResponse({ extraQuotes: [{ ...budget, shipmentMethod: "Budget", costSummary: { ...budget.costSummary, items: { amount: "1.00", currency: "USD" } } }] });
@@ -329,7 +344,7 @@ add("quote projection selects the requested method and rejects malformed terms",
   assert.equal(JSON.stringify(withIssues).includes("free text dropped"), false);
 });
 
-add("the Prodigi quote port feeds executePrivateQuote end to end without order calls", async () => {
+add("quote.port-feeds-execute-private-quote", async () => {
   const catalog = copyCatalog(catalogA);
   catalog.providerId = "prodigi";
   catalog.apiVersion = "v4.0";
@@ -358,7 +373,7 @@ add("the Prodigi quote port feeds executePrivateQuote end to end without order c
 
 // --- Order create and status --------------------------------------------------------
 
-add("order creation posts once to /v4.0/Orders and returns a PII-free observation", async () => {
+add("order.create-pii-free", async () => {
   const http = recordingHttp([{ body: orderResponse() }]);
   const observation = await client({ http }).createOrder(orderInput());
   assert.equal(http.calls.length, 1);
@@ -378,7 +393,7 @@ add("order creation posts once to /v4.0/Orders and returns a PII-free observatio
   }
 });
 
-add("order read uses GET without a body and maps documented stages conservatively", async () => {
+add("order.read-stage-mapping", async () => {
   const shipped = orderResponse({
     stage: "Complete",
     details: { downloadAssets: "Complete", printReadyAssetsPrepared: "Complete", allocateProductionLocation: "Complete", inProduction: "Complete", shipping: "Complete" },
@@ -399,8 +414,9 @@ add("order read uses GET without a body and maps documented stages conservativel
   assert.equal(inProduction.normalizedState, "in_production");
   const complete = await c.getOrder(FIXTURE_ORDER_ID);
   assert.equal(complete.normalizedState, "shipped");
-  assert.deepEqual(JSON.parse(JSON.stringify(complete.shipments)), [{ id: "shp_fixture1", status: "Shipped", carrier: "FixtureCarrier", trackingNumber: "TRACK-FIXTURE-1", dispatchDate: "2026-10-12T09:00:00Z" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(complete.shipments)), [{ id: "shp_fixture1", status: "Shipped", carrier: "FixtureCarrier", hasTrackingNumber: true, dispatchDate: "2026-10-12T09:00:00Z" }]);
   assert.equal(JSON.stringify(complete).includes("tracking.example.invalid"), false);
+  assert.equal(JSON.stringify(complete).includes("TRACK-FIXTURE-1"), false);
   assert.equal((await c.getOrder(FIXTURE_ORDER_ID)).normalizedState, "cancelled");
   const errored = await c.getOrder(FIXTURE_ORDER_ID);
   assert.equal(errored.normalizedState, "unknown");
@@ -414,10 +430,11 @@ add("order read uses GET without a body and maps documented stages conservativel
 
 // --- Failure classification ---------------------------------------------------------
 
-add("HTTP failures map to typed errors; uncertain order creation reports unknown side effects", async () => {
+add("failures.http-classification", async () => {
   const errorBody = { statusText: "fixture", statusCode: 0, data: { echoed: FIXTURE_SANDBOX_KEY }, traceParent: "x" };
   const expectations = [
     [401, "authentication_failed", "not_dispatched", "not_dispatched"],
+    [403, "authentication_failed", "not_dispatched", "not_dispatched"],
     [400, "validation_failed", "not_dispatched", "not_dispatched"],
     [404, "not_found", "not_dispatched", "not_dispatched"],
     [429, "rate_limited", "not_dispatched", "not_dispatched"],
@@ -438,7 +455,7 @@ add("HTTP failures map to typed errors; uncertain order creation reports unknown
   await rejectsWith(c.createOrder(orderInput()), "invalid_response", "unknown");
 });
 
-add("a request exceeding the timeout aborts the port signal and reports timeout", async () => {
+add("failures.timeout", async () => {
   let seenSignal;
   const http = recordingHttp([(request) => new Promise((_, reject) => {
     seenSignal = request.signal;
@@ -448,11 +465,11 @@ add("a request exceeding the timeout aborts the port signal and reports timeout"
   assert.equal(seenSignal.aborted, true);
 });
 
-add("the fetch port refuses non-sandbox URLs and disables redirects", async () => {
+add("fetch-port.sandbox-only-no-redirect", async () => {
   const seen = [];
   const port = createFetchProdigiHttpPort(async (url, init) => {
     seen.push({ url, redirect: init.redirect });
-    return { status: 200, text: async () => "{}" };
+    return new Response("{}", { status: 200 });
   });
   const signal = new AbortController().signal;
   await assert.rejects(port.send({ method: "GET", url: "https://api.prodigi.com/v4.0/orders/ord_1", headers: {}, signal }));
@@ -462,8 +479,163 @@ add("the fetch port refuses non-sandbox URLs and disables redirects", async () =
   assert.deepEqual(seen, [{ url: "https://api.sandbox.prodigi.com/v4.0/orders/ord_1", redirect: "error" }]);
 });
 
-add("the suite made no network request", () => {
-  assert.equal(globalFetchCalls, 0);
+
+// --- Policy, dispatch and abort -----------------------------------------------------
+
+add("policy.adapter-requires-call-permitted-state", async () => {
+  const input = {
+    mode: "sandbox", providerId: "prodigi", endpoint: PRODIGI_SANDBOX_BASE_URL, operation: "submit", credentialClass: "sandbox",
+    sku: fixtureDecision.sku, destinationCountryCode: fixtureDecision.destinationCountryCode, shippingMethod: "Express",
+    decisionReference: fixtureDecision.decisionReference
+  };
+  const prerequisites = await evaluateProviderPolicy(input, fixtureVerifier());
+  assert.equal(prerequisites.status, "sandbox_prerequisites_verified");
+  assert.equal(prerequisites.providerCallPermitted, false);
+  const permitted = await evaluateProviderPolicy({ ...input, adapterId: PRODIGI_SANDBOX_ADAPTER_ID }, fixtureVerifier());
+  assert.equal(permitted.status, "sandbox_call_permitted");
+  assert.equal(permitted.providerCallPermitted, true);
+  assert.equal(permitted.providerAdapterImplemented, true);
+  assert.deepEqual([...permitted.reasons], []);
+  const other = await evaluateProviderPolicy({ ...input, adapterId: "some-other-adapter" }, fixtureVerifier());
+  assert.equal(other.status, "blocked");
+  assert.equal(other.providerCallPermitted, false);
+  // The adapter dispatches only after the policy grants the call; a verifier
+  // that refuses keeps the policy below the permitted state and nothing is sent.
+  const http = recordingHttp([]);
+  await rejectsWith(client({ http, verifier: fixtureVerifier({ approve: false }) }).createOrder(orderInput()), "decision_unverified", "not_dispatched");
+  assert.equal(http.calls.length, 0);
+});
+
+add("dispatch.throwing-response-getter-after-send-is-unknown", async () => {
+  const throwingBody = () => ({ status: 200, get bodyText() { throw new Error(`getter ${FIXTURE_SANDBOX_KEY}`); } });
+  const throwingStatus = () => ({ get status() { throw new Error("status getter"); }, bodyText: "{}" });
+  for (const responder of [throwingBody, throwingStatus]) {
+    const http = recordingHttp([responder, responder]);
+    const c = client({ http });
+    await rejectsWith(c.createOrder(orderInput()), "provider_unavailable", "unknown");
+    await rejectsWith(c.getOrder(FIXTURE_ORDER_ID), "provider_unavailable", "not_dispatched");
+    assert.equal(http.calls.length, 2);
+  }
+});
+
+add("dispatch.signal-listener-failure-after-send-is-unknown", async () => {
+  // A hostile signal whose removeEventListener throws after the send must not
+  // turn a dispatched order into credential_unavailable / not_dispatched.
+  const signal = { aborted: false, addEventListener() {}, removeEventListener() { throw new Error("remove"); } };
+  const http = recordingHttp([{ body: orderResponse() }]);
+  const observation = await client({ http }).createOrder(orderInput(), signal);
+  assert.equal(observation.orderId, FIXTURE_ORDER_ID);
+  const failing = { aborted: false, addEventListener() { throw new Error("add"); }, removeEventListener() {} };
+  const none = recordingHttp([]);
+  await rejectsWith(client({ http: none }).createOrder(orderInput(), failing), "invalid_input", "not_dispatched");
+  assert.equal(none.calls.length, 0);
+});
+
+add("abort.pre-aborted-signal-sends-nothing", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const http = recordingHttp([]);
+  const secrets = countingSecrets();
+  const c = client({ http, secrets: secrets.source });
+  await rejectsWith(c.createOrder(orderInput(), controller.signal), "aborted", "not_dispatched");
+  await rejectsWith(c.createQuote(quoteRequest(), { currencyCode: "USD" }, controller.signal), "aborted", "not_dispatched");
+  await rejectsWith(c.getOrder(FIXTURE_ORDER_ID, controller.signal), "aborted", "not_dispatched");
+  assert.equal(http.calls.length, 0);
+  assert.equal(secrets.counter.loads, 0);
+});
+
+add("abort.signal-aborted-during-secret-resolution-sends-nothing", async () => {
+  const controller = new AbortController();
+  const inner = countingSecrets();
+  const secrets = { async load(input) { controller.abort(); return inner.source.load(input); } };
+  const http = recordingHttp([]);
+  await rejectsWith(client({ http, secrets }).createOrder(orderInput(), controller.signal), "aborted", "not_dispatched");
+  assert.equal(http.calls.length, 0);
+});
+
+add("order.optional-carrier-and-tracking-degrade-to-null", async () => {
+  const shipment = (carrier, tracking) => ({ id: "shp_fixture1", status: "Shipped", carrier, tracking, dispatchDate: null, items: [] });
+  const http = recordingHttp([
+    { body: { ...orderResponse({ shipments: [shipment({ name: "DHL Express (UK)", service: "x" }, { number: "JD0002 ?! 1", url: "https://t.example.invalid" })] }), outcome: "Ok" } },
+    { body: { ...orderResponse({ shipments: [shipment({ name: "Carrier\u0000Bad" }, { number: 42 })] }), outcome: "Ok" } },
+    { body: { ...orderResponse({ shipments: [shipment(["array"], null)] }), outcome: "Ok" } }
+  ]);
+  const c = client({ http });
+  const first = await c.getOrder(FIXTURE_ORDER_ID);
+  assert.equal(first.shipments[0].carrier, "DHL Express (UK)");
+  assert.equal(first.shipments[0].hasTrackingNumber, true);
+  assert.equal(JSON.stringify(first).includes("JD0002"), false);
+  const second = await c.getOrder(FIXTURE_ORDER_ID);
+  assert.equal(second.shipments[0].carrier, null);
+  assert.equal(second.shipments[0].hasTrackingNumber, false);
+  const third = await c.getOrder(FIXTURE_ORDER_ID);
+  assert.equal(third.shipments[0].carrier, null);
+  assert.equal(third.shipments[0].hasTrackingNumber, false);
+});
+
+add("fetch-port.bounds-body-while-streaming", async () => {
+  const signal = new AbortController().signal;
+  const url = "https://api.sandbox.prodigi.com/v4.0/orders/ord_1";
+  const declared = createFetchProdigiHttpPort(async () => new Response("{}", { status: 200, headers: { "content-length": String(2 * 1024 * 1024) } }));
+  assert.equal((await declared.send({ method: "GET", url, headers: {}, signal })).bodyText, "");
+  let pulled = 0;
+  let cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) {
+      pulled += 1;
+      if (pulled > 64) { controller.close(); return; }
+      controller.enqueue(new Uint8Array(64 * 1024));
+    },
+    cancel() { cancelled = true; }
+  });
+  const streamed = createFetchProdigiHttpPort(async () => new Response(stream, { status: 200 }));
+  assert.equal((await streamed.send({ method: "GET", url, headers: {}, signal })).bodyText, "");
+  assert.equal(cancelled, true);
+  assert.ok(pulled <= 18, `read ${pulled} chunks past the limit`);
+  const small = createFetchProdigiHttpPort(async () => new Response(JSON.stringify({ ok: "é" }), { status: 200 }));
+  assert.equal((await small.send({ method: "GET", url, headers: {}, signal })).bodyText, "{\"ok\":\"é\"}");
+  const oversized = recordingHttp([{ body: "" }]);
+  await rejectsWith(client({ http: oversized }).createOrder(orderInput()), "invalid_response", "unknown");
+});
+
+add("env.process-env-is-never-read", async () => {
+  const http = recordingHttp([{ body: quoteResponse() }, { body: orderResponse() }]);
+  const c = client({ http });
+  await c.createQuote(quoteRequest(), { currencyCode: "USD" });
+  await c.createOrder(orderInput());
+  assert.equal(process.env.PRODIGI_SANDBOX_API_KEY, PROCESS_ENV_SENTINEL);
+  assert.equal(JSON.stringify(http.calls).includes(PROCESS_ENV_SENTINEL), false);
+  for (const call of http.calls) assert.equal(call.headers["X-API-Key"], FIXTURE_SANDBOX_KEY);
+});
+
+add("smoke.refuses-without-owner-approval", () => {
+  const guardPath = fileURLToPath(new URL("./prodigi-sandbox-network-guard.mjs", import.meta.url));
+  const smokePath = fileURLToPath(new URL("../scripts/prodigi-sandbox-smoke.mjs", import.meta.url));
+  const env = process.env.PATH === undefined ? {} : { PATH: process.env.PATH };
+  const args = ["--decision-reference", "ref-1", "--sku", FIXTURE_SKU, "--country", "US", "--shipping", "Express"];
+  const child = spawnSync(process.execPath, ["--import", guardPath, smokePath, ...args], { encoding: "utf8", env, timeout: 30_000 });
+  assert.equal(child.status, 2);
+  assert.equal(child.stderr, "");
+  assert.deepEqual(JSON.parse(child.stdout), { status: "refused", reason: "owner_approval_flag_required", externalProviderCalls: 0 });
+});
+
+add("guard.blocks-fetch-http-https-net-and-tls", async () => {
+  const before = guard.probeAttempts;
+  guard.probing = true;
+  try {
+    await assert.rejects(globalThis.fetch("https://api.sandbox.prodigi.com/v4.0/quotes"), /network is forbidden/);
+    assert.throws(() => http.request("http://127.0.0.1:9/"), /network is forbidden/);
+    assert.throws(() => http.get("http://127.0.0.1:9/"), /network is forbidden/);
+    assert.throws(() => https.request("https://api.sandbox.prodigi.com/"), /network is forbidden/);
+    assert.throws(() => https.get("https://api.sandbox.prodigi.com/"), /network is forbidden/);
+    assert.throws(() => net.connect(9, "127.0.0.1"), /network is forbidden/);
+    assert.throws(() => net.createConnection(9, "127.0.0.1"), /network is forbidden/);
+    assert.throws(() => new net.Socket().connect(9, "127.0.0.1"), /network is forbidden/);
+    assert.throws(() => tls.connect(443, "api.sandbox.prodigi.com"), /network is forbidden/);
+  } finally {
+    guard.probing = false;
+  }
+  assert.equal(guard.probeAttempts - before, 9);
 });
 
 export async function runProdigiSandboxSuite() {
@@ -479,10 +651,27 @@ export async function runProdigiSandboxSuite() {
   return results;
 }
 
+/** Measured network attempts outside the guard self-test (each one was refused). */
+export function measuredExternalProviderCalls() {
+  return guard.attempts;
+}
+
 if (import.meta.url === new URL(process.argv[1], "file:").href) {
   const results = await runProdigiSandboxSuite();
-  for (const result of results) process.stdout.write(`${result.status.toUpperCase()} ${result.name}${result.detail ? `: ${result.detail}` : ""}\n`);
   const failed = results.filter((result) => result.status !== "passed");
-  process.stdout.write(`Prodigi sandbox adapter suite: ${results.length - failed.length}/${results.length} passed\n`);
-  if (failed.length > 0) process.exitCode = 1;
+  if (process.argv.includes("--json")) {
+    process.stdout.write(`${JSON.stringify({
+      schemaVersion: "fulfillment-prodigi-sandbox-case-results/1",
+      suite: "prodigi-sandbox",
+      guardInstalled: guard.installed === true,
+      externalProviderCalls: measuredExternalProviderCalls(),
+      passed: results.length - failed.length,
+      failed: failed.length,
+      cases: results.map(({ name, status, detail }) => ({ id: name, status, ...(detail === undefined ? {} : { detail }) }))
+    })}\n`);
+  } else {
+    for (const result of results) process.stdout.write(`${result.status.toUpperCase()} ${result.name}${result.detail ? `: ${result.detail}` : ""}\n`);
+    process.stdout.write(`Prodigi sandbox adapter suite: ${results.length - failed.length}/${results.length} passed (externalProviderCalls: ${measuredExternalProviderCalls()})\n`);
+  }
+  if (failed.length > 0 || measuredExternalProviderCalls() !== 0) process.exitCode = 1;
 }

@@ -37,25 +37,30 @@ Base URL: `https://api.sandbox.prodigi.com/v4.0` (from `PRODIGI_SANDBOX_BASE_URL
 
 | Operation | Request | Mapping |
 | --- | --- | --- |
-| Quote | `POST /v4.0/quotes` | Private `QuoteProviderRequest` → `{ shippingMethod, destinationCountryCode, currencyCode, items: [{ sku, copies, attributes, assets: [{ printArea }] }] }` |
-| Order create | `POST /v4.0/Orders` | Private `ProdigiOrderCreateInput` → `{ merchantReference, idempotencyKey, shippingMethod, recipient, items: [{ sku, copies, sizing, attributes, assets: [{ printArea, url, md5Hash }] }] }`. No `callbackUrl` or `metadata` is sent. |
+| Quote | `POST /v4.0/quotes` | Private `QuoteProviderRequest` → `{ shippingMethod, destinationCountryCode, currencyCode, items: [{ sku, copies, attributes, assets: [{ printArea }] }] }`. `shippingMethod` uses the quote reference's lowercase values (`budget`, `standard`, `standardplus`, `express`, `overnight`). |
+| Order create | `POST /v4.0/Orders` | Private `ProdigiOrderCreateInput` → `{ merchantReference, idempotencyKey, shippingMethod, recipient, items: [{ sku, copies, sizing, attributes, assets: [{ printArea, url, md5Hash }] }] }`. `shippingMethod` uses the order reference's PascalCase values (`Budget`, `Standard`, `StandardPlus`, `Express`, `Overnight`). No `callbackUrl` or `metadata` is sent. |
 | Status | `GET /v4.0/orders/{ord_…}` | Strict `ord_` ID; no body |
 
 No accepted shared-contracts schema exists yet for orders or quotes (shared-contracts #24–#27), so the inputs are the connector's private types. `createProdigiQuotePort` adapts the client to the existing `BoundedQuotePort`, so `executePrivateQuote` normalizes Prodigi quotes through the same exact-money pipeline as the fixtures.
 
 ### Gates, in order, before any request
 
-1. `sandboxCallsEnabled` must be exactly `true` (default off).
-2. `evaluateProviderPolicy` must return `sandbox_prerequisites_verified` for the configured decision (SKU, destination country, shipping method, decision reference) via an injected `SandboxDecisionVerifier`.
-3. The request's SKU, destination and shipping method must equal the verified decision.
-4. `withServerSecret` must resolve a sandbox-class lease. The key exists only inside that callback.
+None of these steps reads a secret or sends anything until step 6.
 
-Any failed gate throws `ProdigiSandboxError` with `sideEffectState: "not_dispatched"`. No secret is read and the HTTP port is not called.
+1. Input validation and mapping (`mapQuoteRequest`, `mapOrderRequest`, the strict `ord_` ID check).
+2. The request's SKU, destination and shipping method must equal the configured decision.
+3. `sandboxCallsEnabled` must be exactly `true` (default off).
+4. The caller's `AbortSignal`, if given, must not already be aborted. An aborted signal throws `aborted` / `not_dispatched`.
+5. `evaluateProviderPolicy`, called with `adapterId: PRODIGI_SANDBOX_ADAPTER_ID`, must return `sandbox_call_permitted` with `providerCallPermitted: true` for the operation's exact route. This needs the configured decision (SKU, destination country, shipping method, decision reference) to pass an injected `SandboxDecisionVerifier`. Without the adapter ID the policy still returns `sandbox_prerequisites_verified` with `providerCallPermitted: false`, which the adapter refuses.
+6. `withServerSecret` must resolve a sandbox-class lease. The key exists only inside that callback. The signal is checked once more just before the request goes to the HTTP port.
+
+Any failed gate throws `ProdigiSandboxError` with `sideEffectState: "not_dispatched"`. The HTTP port is not called, and no secret is read before step 6.
 
 ### Response projection
 
 - **Quote.** The adapter keeps exactly one quote whose `shipmentMethod` matches the request. Line mapping: `production` = `costSummary.items`, `shipping` = `costSummary.shipping`, `tax` = `totalTax`, `total` = `totalCost`. `fee` = `branding`, which is an explicit known zero when absent because the adapter never requests branded inserts. Absent tax or total values stay unknown, never zero. Amounts must be decimal strings in the requested currency (USD, GBP, EUR, CAD or AUD at scale 2). The docs say `totalCost` includes tax but not whether line amounts include it, so the tax basis comes only from exact reconciliation (`excluded` if lines + tax = total, `included` if lines = total and tax > 0, otherwise `unknown`). Prodigi documents no quote ID or expiry, so `providerQuoteReference` is a local SHA-256 digest and expiry and lead time are `unknown/not_disclosed`. Only issue `errorCode`s survive, as warnings; descriptions are dropped.
-- **Order.** Outcome (`created`, `onHold`, `createdWithIssues`, `alreadyExists` for create; `ok` for read) is compared case-insensitively, because the docs mix casing. The observation keeps the order ID, timestamps, stage, step details, issue codes and shipment ID, status, carrier, tracking number and dispatch date. Recipient, addresses, asset URLs, tracking URLs, charges and metadata are dropped.
+- **Order.** Outcome (`created`, `onHold`, `createdWithIssues`, `alreadyExists` for create; `ok` for read) is compared case-insensitively, because the docs mix casing. The observation keeps the order ID, timestamps, stage, step details, issue codes and shipment ID, status, carrier name and dispatch date. Recipient, addresses, asset URLs, tracking numbers, tracking URLs, charges and metadata are dropped. A tracking number usually reveals the delivery town or postcode and the signer, so only `hasTrackingNumber` is kept; reconcile shipments by order and shipment ID. The carrier name is display-only. If it is not plain text (letters, digits, spaces and `._:/#()&,'+-`), it becomes `null` and the read still succeeds. Shipment ID, status, order ID, stage and step details stay strict.
+- **`alreadyExists`.** Prodigi returns the existing order for a reused idempotency key, even when that order's items differ from the new request. The adapter does not compare them; callers must compare the returned order with their own record before treating it as the same order.
 - **Status mapping.** `Cancelled` maps to `cancelled`. `Complete` maps to `shipped` (all shipments notified, not delivered). Any step in `Error` maps to `unknown`. `inProduction` or `shipping` started maps to `in_production`. Anything else maps to `accepted`.
 
 ### Failures
@@ -64,13 +69,16 @@ Each failure is a `ProdigiSandboxError` with a fixed code and message, a `sideEf
 
 - 400 → `validation_failed`, 401 or 403 → `authentication_failed`, 404 → `not_found`, 429 → `rate_limited`. These are `not_dispatched`.
 - Other statuses → `provider_unavailable`. Transport errors → `provider_unavailable`, or `timeout` (default 30 s, maximum 60 s). Malformed bodies → `invalid_response`.
+- A failure after the request reached the HTTP port (including a response whose fields throw when read) is never reported as `credential_unavailable` or `not_dispatched`. For order creation it is `provider_unavailable` with `sideEffectState: "unknown"`: the order may or may not exist.
 - For order creation, every uncertain outcome is `sideEffectState: "unknown"` and must be reconciled with a read, not retried blindly. For quotes and reads it is `not_dispatched`.
 
-The fetch port allows only the sandbox origin and sets `redirect: "error"`.
+The fetch port allows only the sandbox origin and sets `redirect: "error"`. It rejects a declared `content-length` over 1 MiB and otherwise streams the body with a byte counter, cancelling it past 1 MiB. Non-2xx bodies are discarded unread.
 
 ## Tests
 
-`npm run test:prodigi-sandbox` (also part of `npm test`) runs `tests/prodigi-sandbox-suite.mjs` with an empty environment. It replaces `globalThis.fetch` with a guard and asserts zero network use. The fixtures in `tests/prodigi-sandbox-fixtures.mjs` are synthetic and shaped from the public reference (checked 2026-10-11). They are **not recordings** of sandbox traffic.
+`npm run test:prodigi-sandbox` (also part of `npm test`) runs `tests/prodigi-sandbox-suite.mjs` in a child process with a credential-free environment (only `PATH` and temp-directory variables). The suite never reads `process.env` for credentials: every resolver receives an injected env, and a test plants a sentinel `PRODIGI_SANDBOX_API_KEY` in `process.env` and asserts it never reaches a request.
+
+`tests/prodigi-sandbox-network-guard.mjs` is preloaded with `node --import`, before any `dist/` module loads. It makes `fetch`, `http`/`https` `request`/`get`, `net.connect`/`createConnection`, `net.Socket.prototype.connect` and `tls.connect` throw and counts each attempt. The runner pins the case IDs and fails if a case is missing, renamed or reordered. It reports the measured `externalProviderCalls` and fails unless that value is 0. This is an in-process guard, not OS-level network denial. The cases include 403, a pre-aborted signal, a throwing response getter, an oversized streamed body, and the smoke script refusing to run without `--owner-approved`. The fixtures in `tests/prodigi-sandbox-fixtures.mjs` are synthetic and shaped from the public reference (checked 2026-10-11). They are **not recordings** of sandbox traffic.
 
 ## Not done (needs owner approval)
 
@@ -84,7 +92,7 @@ The fetch port allows only the sandbox origin and sets `redirect: "error"`.
    ```
 
    The script's verifier is an operator attestation, not product or account evidence. Output is sanitized: it contains no key, recipient or raw body.
-2. **Confirm wire details from that read:** amount representation (string versus number), `totalTax`/`totalCost` presence and tax basis, accepted `shippingMethod` casing for quotes (the docs disagree), and the outcome casing. Replace synthetic fixtures with sanitized recordings.
+2. **Confirm wire details from that read:** amount representation (string versus number), `totalTax`/`totalCost` presence and tax basis, accepted `shippingMethod` casing for quotes (the adapter sends the documented lowercase values; the docs' own quote example uses `Budget`, so try PascalCase first if the quote fails with `validationFailed`), and the outcome casing. Replace synthetic fixtures with sanitized recordings.
 3. **Print-production approval** of one SKU and print specification, destination and shipping method, and a real `SandboxDecisionVerifier` that resolves that evidence.
-4. **A sandbox order-create test**, under separate owner approval. Then update the provider matrix's `implementation` and `accountTested` fields with the evidence.
+4. **A sandbox order-create test**, under separate owner approval. Then update the provider matrix's per-operation `implementation` and `accountTested` fields, and `sandboxAdapter`, with the evidence.
 5. Cancellation, callbacks, runtime `ProviderAdapter` wiring and live mode remain out of scope.
