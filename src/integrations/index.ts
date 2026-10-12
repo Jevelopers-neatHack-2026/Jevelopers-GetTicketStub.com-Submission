@@ -2,6 +2,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import { errorEnvelope, failure, TrustedScopeSchema, validateRequest, blockedBoundary, type ApiResult, type RuntimePorts, type Validation } from '../shared/contracts.js';
 import { validateFinancialSummaryPageBoundary, FinancialSummaryPageSchema, type FinancialSummaryPage } from '../reporting/index.js';
 import type { SharedFinancialSummary } from '../shared/canonical.js';
+import { encodeTextCell } from './csv.js';
 
 export const ExportRequestSchema = Type.Object({
   schemaVersion: Type.Literal('1.0.0'), requestId: Type.String({ minLength: 1 }), idempotencyKey: Type.String({ minLength: 1 }),
@@ -83,9 +84,8 @@ export function projectSafeFinancialSummary(summary: SharedFinancialSummary): Sa
 /** Quote every cell and neutralize spreadsheet formulas before CSV escaping. */
 export function safeCsvCell(value: string | number | boolean | null): string {
   const text = value === null ? '' : String(value).replace(/\r\n?/g, '\n');
-  const formulaCandidate = /^[\u0000-\u0020\u00a0\ufeff]*[=+\-@]/.test(text) || /^[\t\r\n]/.test(text);
-  const safe = `${formulaCandidate ? "'" : ''}${text}`;
-  return `"${safe.replaceAll('"', '""')}"`;
+  const encoded = encodeTextCell(text);
+  return encoded.startsWith('"') ? encoded : '"' + encoded + '"';
 }
 
 /** Deterministic CSV serialization from the safe allowlist; raw evidence and identifiers are never copied. */

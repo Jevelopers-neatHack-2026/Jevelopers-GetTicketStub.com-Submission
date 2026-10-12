@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,12 @@ import * as accounting from '../../dist/accounting/index.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const golden = JSON.parse(await readFile(join(root, 'fixtures/accounting/ci06-golden-events.json'), 'utf8'));
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
+  return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}';
+}
 
 function shuffle(items, seed) {
   const copy = [...items];
@@ -17,6 +24,13 @@ function shuffle(items, seed) {
     [copy[index], copy[swap]] = [copy[swap], copy[index]];
   }
   return copy;
+}
+
+function permutations(items) {
+  if (items.length <= 1) return [items];
+  return items.flatMap((item, index) => permutations([
+    ...items.slice(0, index), ...items.slice(index + 1),
+  ]).map(rest => [item, ...rest]));
 }
 
 test('CI-06.1 every classification maps to a documented sign-matrix entry and policy is flagged pending sign-off', () => {
@@ -50,6 +64,15 @@ test('CI-06.1/06.2 golden fixture projects exact gross/net/direct/contribution/c
   assert.equal(projection.recognizedEventCount, golden.expected.recognizedEventCount);
   assert.equal(projection.currency, 'USD');
   assert.equal(projection.incomplete.length, 0);
+  const digestInput = {
+    policyVersion: projection.policyVersion, currency: projection.currency, scale: projection.scale,
+    asOf: projection.asOf, grossSales: projection.grossSales, netSales: projection.netSales,
+    directCosts: projection.directCosts, contribution: projection.contribution,
+    cash: projection.cash, simulated: projection.simulated, refundLinks: projection.refundLinks,
+    incomplete: projection.incomplete,
+  };
+  const expectedDigest = createHash('sha256').update(canonicalJson(digestInput), 'utf8').digest('hex');
+  assert.equal(projection.projectionHash, 'sha256:' + expectedDigest, 'projection identity must be a real SHA-256 digest');
 });
 
 test('CI-06.2 cash receipts/payouts stay separate from accounting totals', () => {
@@ -84,6 +107,81 @@ test('CI-06.4 repeated and reordered adjustments keep only the highest revision 
   assert.equal(onlyLow.netSales, '95.00');
   assert.equal(bothOrderA.netSales, '91.00');
   assert.equal(bothOrderB.netSales, bothOrderA.netSales);
+});
+
+test('conflicting source facts for one revision are excluded deterministically', () => {
+  const sale = golden.events.find(event => event.eventId === 'S1');
+  const candidate = (eventId, amount, contentHash) => ({
+    ...sale,
+    eventId,
+    amount,
+    source: {
+      ...sale.source, name: 'conflicting-source', sourceEventId: 'same-revision',
+      revision: 8, contentHash: 'sha256:' + contentHash,
+    },
+  });
+  const differentHashes = [
+    candidate('SOURCE-CONFLICT-A', '1.00', 'a'.repeat(64)),
+    candidate('SOURCE-CONFLICT-B', '90.00', 'b'.repeat(64)),
+  ];
+  const sameHashDifferentFacts = [
+    candidate('SAME-HASH-A', '1.00', 'c'.repeat(64)),
+    candidate('SAME-HASH-B', '90.00', 'c'.repeat(64)),
+  ];
+  for (const events of [differentHashes, sameHashDifferentFacts]) {
+    const forward = accounting.projectAccounting(events, { asOf: golden.asOf });
+    const reverse = accounting.projectAccounting([...events].reverse(), { asOf: golden.asOf });
+    assert.equal(forward.recognizedEventCount, 0);
+    assert.equal(forward.grossSales, '0.00');
+    assert.deepEqual(forward.incomplete.map(record => record.reason), ['source_revision_conflict', 'source_revision_conflict']);
+    assert.equal(forward.projectionHash, reverse.projectionHash, 'input order must not select a conflicting source fact');
+  }
+});
+
+test('a conflicting source revision taints its whole subject before identity deduplication', () => {
+  const sale = golden.events.find(event => event.eventId === 'S1');
+  const candidate = (eventId, amount, revision, contentHash) => ({
+    ...sale,
+    eventId,
+    amount,
+    source: {
+      ...sale.source, name: 'conflicting-source', sourceEventId: 'tainted-subject',
+      revision, contentHash: 'sha256:' + contentHash,
+    },
+  });
+  const scenarios = [
+    {
+      label: 'a different hash cannot hide a same-hash conflict at that revision',
+      events: [
+        candidate('TAINT-HASH-A', '1.00', 8, 'a'.repeat(64)),
+        candidate('TAINT-HASH-B', '90.00', 8, 'a'.repeat(64)),
+        candidate('TAINT-HASH-C', '40.00', 8, 'b'.repeat(64)),
+      ],
+    },
+    {
+      label: 'a conflict at the latest revision cannot expose an obsolete revision',
+      events: [
+        candidate('TAINT-OLD', '5.00', 7, 'c'.repeat(64)),
+        candidate('TAINT-LATEST-A', '1.00', 8, 'd'.repeat(64)),
+        candidate('TAINT-LATEST-B', '90.00', 8, 'd'.repeat(64)),
+      ],
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const projections = permutations(scenario.events).map(events =>
+      accounting.projectAccounting(events, { asOf: golden.asOf }));
+    const expectedIds = scenario.events.map(event => event.eventId).sort();
+    const expectedIncomplete = expectedIds.map(eventId => ({ eventId, reason: 'source_revision_conflict' }));
+
+    for (const projection of projections) {
+      assert.equal(projection.recognizedEventCount, 0, scenario.label);
+      assert.equal(projection.grossSales, '0.00', scenario.label);
+      assert.deepEqual(projection.incomplete, expectedIncomplete, scenario.label);
+    }
+    assert.equal(new Set(projections.map(projection => projection.projectionHash)).size, 1,
+      `${scenario.label}: input order must not change the projection`);
+  }
 });
 
 test('CI-06.4 unauthenticated sources and manual imports missing evidence stay visibly incomplete', () => {

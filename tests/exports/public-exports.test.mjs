@@ -66,6 +66,16 @@ test('financial exports contain only the safe allowlist and neutralize CSV formu
   for (const value of ['=1+1', '+1', '-1', '@SUM(A1:A2)', '\t=1+1', '\r=1+1']) {
     assert.equal(integrationApi.safeCsvCell(value).startsWith('"\''), true, `formula-like cell was not neutralized: ${JSON.stringify(value)}`);
   }
+  for (const value of ['＝1+1', '  ＠SUM(A1:A2)', '\u200B＋1']) {
+    assert.equal(integrationApi.safeCsvCell(value).startsWith('"\''),
+      true, 'normalized formula-like cells must be neutralized');
+  }
+  for (const value of ['\u061C1+1', '\uFEFF=1+1', '\u0085unsafe', '\uD800']) {
+    assert.throws(() => integrationApi.safeCsvCell(value), { code: 'INVALID_TEXT' });
+  }
+  const formulaSummary = structuredClone(fixture);
+  formulaSummary.environment = '＝1+1';
+  assert.ok(integrationApi.serializeSafeFinancialSummaryCsv(formulaSummary).includes('"\'＝1+1"'));
   assert.equal(integrationApi.safeCsvCell('plain,"quoted"'), '"plain,""quoted"""');
 });
 

@@ -1,5 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
+import { createHash } from 'node:crypto';
 import {
   CurrencySchema,
   NonNegativeDecimalAmountSchema,
@@ -167,6 +168,15 @@ function identityKey(event: AccountingEvent): string {
   return JSON.stringify([event.source.name, event.source.sourceEventId, event.source.revision, event.source.contentHash]);
 }
 
+function sourcePayloadKey(event: AccountingEvent): string {
+  const { eventId: _eventId, ...payload } = event;
+  return canonicalJson(payload);
+}
+
+function sourceSubjectKey(event: AccountingEvent): string {
+  return JSON.stringify([event.source.name, event.source.sourceEventId]);
+}
+
 function matrixKey(event: AccountingEvent): string {
   if (event.classification === 'refund') return `refund:${event.links?.refundKind ?? 'sale'}`;
   return event.classification;
@@ -212,27 +222,80 @@ export function projectAccounting(events: readonly AccountingEvent[], options: P
   const incomplete: IncompleteRecord[] = [];
   const duplicateEventIds: string[] = [];
 
-  // 1. Dedupe by trusted source identity (handles replay / reorder).
-  const byIdentity = new Map<string, AccountingEvent>();
+  // Preserve source-subject conflict evidence before identity dedupe. The
+  // identity pass below intentionally drops a same-identity conflict group;
+  // without this taint, another hash or an older revision for the same source
+  // subject could then be mistaken for its authoritative event.
+  const revisionGroups = new Map<string, AccountingEvent[]>();
   for (const event of events) {
-    const key = identityKey(event);
-    const existing = byIdentity.get(key);
-    if (existing) {
-      duplicateEventIds.push(event.eventId);
-      continue;
+    const key = JSON.stringify([
+      event.source.name, event.source.sourceEventId, event.source.revision,
+    ]);
+    const group = revisionGroups.get(key) ?? [];
+    group.push(event);
+    revisionGroups.set(key, group);
+  }
+  const conflictedSubjects = new Set<string>();
+  for (const group of revisionGroups.values()) {
+    const first = group[0];
+    if (first && new Set(group.map(sourcePayloadKey)).size > 1) {
+      conflictedSubjects.add(sourceSubjectKey(first));
     }
-    byIdentity.set(key, event);
   }
 
-  // 2. For adjustment subjects (source name+object revision chain), keep only the
-  //    highest revision per (source name, sourceEventId) so reordered / repeated
-  //    adjustments do not double-apply. Non-adjustment events are keyed uniquely.
-  const bySubject = new Map<string, AccountingEvent>();
+  // 1. Dedupe by trusted source identity (handles replay / reorder).
+  const identityGroups = new Map<string, AccountingEvent[]>();
+  for (const event of events) {
+    const key = identityKey(event);
+    const group = identityGroups.get(key) ?? [];
+    group.push(event);
+    identityGroups.set(key, group);
+  }
+  const byIdentity = new Map<string, AccountingEvent>();
+  for (const [key, group] of identityGroups) {
+    const payloads = new Set(group.map(sourcePayloadKey));
+    if (payloads.size > 1) {
+      for (const event of group) incomplete.push({ eventId: event.eventId, reason: 'source_revision_conflict' });
+      continue;
+    }
+    group.sort((left, right) => left.eventId.localeCompare(right.eventId));
+    const [first, ...duplicates] = group;
+    if (first) byIdentity.set(key, first);
+    duplicateEventIds.push(...duplicates.map(event => event.eventId));
+  }
+
+  // 2. For each source revision subject, keep the highest revision so reordered
+  //    or repeated source updates cannot double-apply.
+  const subjectGroups = new Map<string, AccountingEvent[]>();
   for (const event of byIdentity.values()) {
-    const subjectKey = JSON.stringify([event.source.name, event.source.sourceEventId]);
-    const current = bySubject.get(subjectKey);
-    if (!current || event.source.revision > current.source.revision) bySubject.set(subjectKey, event);
-    else if (event.source.revision < current.source.revision) duplicateEventIds.push(event.eventId);
+    const subjectKey = sourceSubjectKey(event);
+    const group = subjectGroups.get(subjectKey) ?? [];
+    group.push(event);
+    subjectGroups.set(subjectKey, group);
+  }
+  const bySubject = new Map<string, AccountingEvent>();
+  for (const [subjectKey, group] of subjectGroups) {
+    const byRevision = new Map<number, AccountingEvent[]>();
+    for (const event of group) {
+      const revisions = byRevision.get(event.source.revision) ?? [];
+      revisions.push(event);
+      byRevision.set(event.source.revision, revisions);
+    }
+    const hasConflict = conflictedSubjects.has(subjectKey)
+      || [...byRevision.values()].some(revisions => new Set(revisions.map(sourcePayloadKey)).size > 1);
+    if (hasConflict) {
+      for (const event of group) incomplete.push({ eventId: event.eventId, reason: 'source_revision_conflict' });
+      continue;
+    }
+    const latestRevision = Math.max(...byRevision.keys());
+    const latest = (byRevision.get(latestRevision) ?? []).sort((left, right) => left.eventId.localeCompare(right.eventId));
+    const chosen = latest[0];
+    if (chosen) bySubject.set(subjectKey, chosen);
+    for (const event of group) {
+      if (event.source.revision < latestRevision || (event.source.revision === latestRevision && event !== chosen)) {
+        duplicateEventIds.push(event.eventId);
+      }
+    }
   }
 
   const accepted: AccountingEvent[] = [];
@@ -425,23 +488,7 @@ export function allocateSharedExpense(
 // ----- deterministic content hash (no network, no secrets) -----
 
 function stableHash(value: unknown): string {
-  const canonical = canonicalJson(value);
-  // Small, dependency-free FNV-1a-style 256-bit hash over the canonical bytes.
-  let h0 = 0x811c9dc5n;
-  let h1 = 0xcbf29ce4n;
-  let h2 = 0x84222325n;
-  let h3 = 0xf29ce484n;
-  const prime = 0x01000193n;
-  const mask = 0xffffffffn;
-  const bytes = new TextEncoder().encode(canonical);
-  for (let index = 0; index < bytes.length; index++) {
-    const byte = BigInt(bytes[index] as number);
-    h0 = ((h0 ^ byte) * prime) & mask;
-    h1 = ((h1 ^ ((byte + 7n) & 0xffn)) * prime) & mask;
-    h2 = ((h2 ^ ((byte + 131n) & 0xffn)) * prime) & mask;
-    h3 = ((h3 ^ ((byte + 251n) & 0xffn)) * prime) & mask;
-  }
-  return [h0, h1, h2, h3].map(part => part.toString(16).padStart(8, '0')).join('').padStart(64, '0');
+  return createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
 }
 
 function canonicalJson(value: unknown): string {
