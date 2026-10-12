@@ -11,6 +11,8 @@ jobs:
     env:
       CONTROLS_PACKAGE_EVIDENCE: build/controls-package-evidence
       CONTROLS_BROWSER_EVIDENCE_DIR: test-results/browser-stores
+      # Playwright clears test-results before launch; retain HTTP custody outside it.
+      CONTROLS_LIFECYCLE_EVIDENCE_DIR: ${{ github.workspace }}/build/controls-package-evidence/lifecycle-stores
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +40,8 @@ jobs:
       - name: Browser runtime
         working-directory: examples/frontend-action-roundtrip
         run: npx playwright install --with-deps chromium
+      - name: Lifecycle store evidence destination
+        run: mkdir -p "$CONTROLS_LIFECYCLE_EVIDENCE_DIR"
       - name: Full build and types
         run: make build
       - name: Aggregate offline mock checks
