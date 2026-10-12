@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadAjv2020, compileSchemas, readSchemas, evaluate, applyPatch, checkFixtureStructure, AJV_VERSION } from '../proposals/reporting-v1/validate.mjs';
+import { run, loadAjv2020, compileSchemas, readSchemas, readSchemaBuffers, evaluate, applyPatch, checkFixtureStructure, AJV_VERSION } from '../proposals/reporting-v1/validate.mjs';
 
 // SYNTHETIC fixtures only. Ajv is provisioned outside the repo and named explicitly by SC_AJV_ROOT.
 const RUNNER = new URL('../proposals/reporting-v1/validate.mjs', import.meta.url).pathname;
@@ -30,6 +31,9 @@ const docs = () => {
 };
 const runCli = (args = [], env = { SC_AJV_ROOT: AJV_ROOT }) =>
   spawnSync(process.execPath, [RUNNER, ...args], { env, encoding: 'utf8', timeout: 60000 });
+const ordinalOf = (fx, id) => fx.cases.findIndex((c) => c.id === id) + 1;
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+const SCHEMA_DIR = new URL('../proposals/reporting-v1/', import.meta.url).pathname;
 const tmp = () => mkdtempSync(join(tmpdir(), 'sc-reporting-'));
 
 test('SC_AJV_ROOT is provisioned and is the pinned Ajv version', () => {
@@ -162,8 +166,9 @@ test('schemas with additionalProperties:false stripped are caught by the unknown
   const ajv = new Ajv2020({ strict: true, allErrors: true });
   const broken = { query: ajv.compile(strip(structuredClone(schemas.query))), manifest: ajv.compile(strip(structuredClone(schemas.manifest))) };
   const { failures } = evaluate(fixtures(), broken);
-  const ids = failures.map((f) => f.id);
-  for (const id of ['query.neg.unknown_key_top', 'query.neg.unknown_key_page', 'manifest.neg.unknown_key_top', 'manifest.neg.unknown_key_file']) assert.ok(ids.includes(id), id);
+  const fx = fixtures();
+  const ids = failures.map((f) => f.ordinal);
+  for (const id of ['query.neg.unknown_key_top', 'query.neg.unknown_key_page', 'manifest.neg.unknown_key_top', 'manifest.neg.unknown_key_file']) assert.ok(ids.includes(ordinalOf(fx, id)), id);
 });
 
 test('error_at must match: wrong location is reported as a mismatch', () => {
@@ -171,7 +176,7 @@ test('error_at must match: wrong location is reported as a mismatch', () => {
   const neg = fx.cases.find((c) => c.id === 'query.neg.currency_lowercase');
   neg.error_at = '/period';
   const { failures } = evaluate(fx, validators());
-  assert.deepEqual(failures.map((f) => [f.id, f.reason]), [['query.neg.currency_lowercase', 'error_location_mismatch']]);
+  assert.deepEqual(failures.map((f) => [f.ordinal, f.reason]), [[ordinalOf(fx, 'query.neg.currency_lowercase'), 'error_location_mismatch']]);
 });
 
 test('tampered fixture expectations fail in-process and in the CLI', () => {
@@ -193,7 +198,8 @@ test('tampered fixture expectations fail in-process and in the CLI', () => {
     const r = runCli([file]);
     assert.equal(r.status, 1);
     assert.match(r.stdout, /"failed": 1/);
-    assert.match(r.stdout, /manifest\.neg\.decimal_exponent/);
+    assert.equal(JSON.parse(r.stdout).failures[0].ordinal, ordinalOf(raw, 'manifest.neg.decimal_exponent'));
+    assert.ok(!r.stdout.includes('manifest.neg.decimal_exponent'), 'ids are never emitted');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -202,10 +208,10 @@ test('tampered fixture expectations fail in-process and in the CLI', () => {
 test('tampered fixture data (positive broken, negative repaired) fails', () => {
   const broken = fixtures();
   broken.cases.find((c) => c.id === 'query.positive.pinned').data.currency = 'usd';
-  assert.ok(evaluate(broken, validators()).failures.some((f) => f.id === 'query.positive.pinned' && f.reason === 'expected_valid_got_invalid'));
+  assert.ok(evaluate(broken, validators()).failures.some((f) => f.ordinal === ordinalOf(broken, 'query.positive.pinned') && f.reason === 'expected_valid_got_invalid'));
   const repaired = fixtures();
   repaired.cases.find((c) => c.id === 'query.neg.currency_lowercase').patch = [{ op: 'replace', path: '/query_id', value: 'q-other' }];
-  assert.deepEqual(evaluate(repaired, validators()).failures.map((f) => [f.id, f.reason]), [['query.neg.currency_lowercase', 'expected_invalid_got_valid']]);
+  assert.deepEqual(evaluate(repaired, validators()).failures.map((f) => [f.ordinal, f.reason]), [[ordinalOf(repaired, 'query.neg.currency_lowercase'), 'expected_invalid_got_valid']]);
 });
 
 test('malformed fixtures are rejected before any validation', () => {
@@ -243,6 +249,111 @@ test('CLI failure output stays path/value free', () => {
     const r = runCli([file], { SC_AJV_ROOT: AJV_ROOT });
     assert.equal(r.status, 1);
     for (const leak of [SECRET, 'zz_extra_key_name', dir, AJV_ROOT]) assert.ok(!r.stdout.includes(leak) && !r.stderr.includes(leak));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('schema_sha256 is the sha256 of the raw committed bytes, and formatting changes alter it', () => {
+  const r = runCli();
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  const buffers = readSchemaBuffers();
+  const files = { query: 'reporting-query.schema.json', manifest: 'reporting-export-manifest.schema.json' };
+  for (const k of ['query', 'manifest']) {
+    assert.equal(out.schema_sha256[k], sha256(readFileSync(join(SCHEMA_DIR, files[k]))), `${k} raw file hash`);
+    assert.equal(out.schema_sha256[k], sha256(buffers[k]));
+    assert.notEqual(out.schema_sha256[k], sha256(Buffer.from(JSON.stringify(JSON.parse(buffers[k].toString('utf8'))))), `${k} not the parsed-and-restringified hash`);
+  }
+  // Control: same parsed content, different bytes -> different hash through the real runner.
+  const dir = tmp();
+  try {
+    for (const k of ['query', 'manifest']) {
+      writeFileSync(join(dir, files[k]), buffers[k]);
+    }
+    const run1 = (d) => run({ root: AJV_ROOT, schemaDir: d }).schema_sha256;
+    const before = run1(dir);
+    assert.deepEqual(before, out.schema_sha256, 'byte-identical copy hashes the same');
+    const reformatted = JSON.stringify(JSON.parse(buffers.query.toString('utf8')), null, '\t') + '\n\n';
+    assert.notEqual(reformatted, buffers.query.toString('utf8'));
+    writeFileSync(join(dir, files.query), reformatted);
+    const after = run1(dir);
+    assert.deepEqual(parsedOf(dir, files.query), parsedOf(SCHEMA_DIR, files.query), 'parsed content unchanged');
+    assert.notEqual(after.query, before.query, 'bytes changed, hash changes');
+    assert.equal(after.query, sha256(Buffer.from(reformatted)));
+    assert.equal(after.manifest, before.manifest);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const parsedOf = (d, f) => JSON.parse(readFileSync(join(d, f), 'utf8'));
+
+test('hostile fixture ids never reach diagnostics, errors or CLI output', () => {
+  const MARKER = 'SYNTHETIC_SECRET_MARKER';
+  const hostile = (n) => `${MARKER}-${n}-/Users/x/secret`;
+  const noLeak = (text) => { for (const leak of [MARKER, '/Users/x/secret']) assert.ok(!text.includes(leak), `leak: ${leak}`); };
+
+  // Tampered expectation with a hostile id: mismatch is still reported, by ordinal only.
+  const fx = fixtures();
+  const i = fx.cases.findIndex((c) => c.id === 'manifest.neg.decimal_exponent');
+  fx.cases[i].id = hostile('tamper');
+  fx.cases[i].expect = 'valid';
+  const { failures, counts } = evaluate(fx, validators());
+  assert.equal(counts.failed, 1);
+  assert.deepEqual(failures.map((f) => [f.ordinal, f.reason]), [[i + 1, 'expected_valid_got_invalid']]);
+  assert.deepEqual(Object.keys(failures[0]).sort(), ['errors', 'ordinal', 'reason']);
+  noLeak(JSON.stringify(failures));
+
+  // Malformed controls: every structure error must be marker-free and name only the ordinal.
+  const mutations = [
+    (c) => { c.schema = 'nope'; },
+    (c) => { c.expect = 'maybe'; },
+    (c) => { c.data = {}; },
+    (c) => { delete c.patch; },
+    (c) => { c.patch = []; },
+    (c) => { c.base = hostile('missing-base'); },
+    (c) => { delete c.error_at; },
+  ];
+  for (const [n, mutate] of mutations.entries()) {
+    const bad = fixtures();
+    const j = bad.cases.findIndex((c) => c.expect === 'invalid');
+    bad.cases[j].id = hostile(`m${n}`);
+    mutate(bad.cases[j]);
+    let message;
+    try { checkFixtureStructure(bad); } catch (e) { message = e.message; }
+    assert.ok(message, `mutation ${n} must be rejected`);
+    noLeak(message);
+    assert.match(message, new RegExp(`case #${j + 1}:`));
+    assert.throws(() => evaluate(bad, validators()), (e) => !e.message.includes(MARKER));
+  }
+  // Duplicate hostile ids.
+  const dup = fixtures();
+  dup.cases[0].id = hostile('dup');
+  dup.cases[1].id = hostile('dup');
+  assert.throws(() => checkFixtureStructure(dup), (e) => /case #2: .*unique/.test(e.message) && !e.message.includes(MARKER));
+
+  // Public CLI: tampered, malformed and a hostile base reference.
+  const dir = tmp();
+  try {
+    const cli = (raw) => {
+      const file = join(dir, 'h.json');
+      writeFileSync(file, JSON.stringify(raw));
+      return runCli([file]);
+    };
+    const tampered = cli(fx);
+    assert.equal(tampered.status, 1);
+    assert.equal(JSON.parse(tampered.stdout).failures[0].ordinal, i + 1);
+    noLeak(tampered.stdout + tampered.stderr);
+    assert.ok(!(tampered.stdout + tampered.stderr).includes(dir) && !(tampered.stdout + tampered.stderr).includes(AJV_ROOT));
+
+    const malformed = fixtures();
+    malformed.cases[i].id = hostile('cli-malformed');
+    malformed.cases[i].base = hostile('cli-base');
+    const m = cli(malformed);
+    assert.equal(m.status, 2);
+    assert.match(m.stderr, new RegExp(`case #${i + 1}:`));
+    noLeak(m.stdout + m.stderr);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

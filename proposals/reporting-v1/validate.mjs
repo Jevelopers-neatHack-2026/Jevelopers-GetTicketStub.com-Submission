@@ -4,7 +4,7 @@
 // Usage: SC_AJV_ROOT=/abs/path/to/node_modules node proposals/reporting-v1/validate.mjs [fixtures.json]
 //
 // Ajv 8.17.1 is provisioned outside this repo. Nothing is installed or fetched.
-// Output is counts, case ids, error keywords and sanitised schema locations only.
+// Output is counts, case ordinals, error keywords and sanitised schema locations only.
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -80,9 +80,17 @@ export function compileSchemas(Ajv2020, schemas) {
   return validators;
 }
 
-export function readSchemas(dir = HERE, names = null) {
-  const fixtures = names ?? { query: 'reporting-query.schema.json', manifest: 'reporting-export-manifest.schema.json' };
-  return Object.fromEntries(SCHEMA_KEYS.map((k) => [k, JSON.parse(readFileSync(join(dir, fixtures[k]), 'utf8'))]));
+const SCHEMA_FILES = { query: 'reporting-query.schema.json', manifest: 'reporting-export-manifest.schema.json' };
+
+// Raw committed bytes. Hashing and parsing both use these same buffers.
+export function readSchemaBuffers(dir = HERE, names = SCHEMA_FILES) {
+  return Object.fromEntries(SCHEMA_KEYS.map((k) => [k, readFileSync(join(dir, names[k]))]));
+}
+
+export const parseSchemaBuffers = (buffers) => Object.fromEntries(SCHEMA_KEYS.map((k) => [k, JSON.parse(buffers[k].toString('utf8'))]));
+
+export function readSchemas(dir = HERE, names = SCHEMA_FILES) {
+  return parseSchemaBuffers(readSchemaBuffers(dir, names));
 }
 
 // ---- fixtures: positives and negatives are full documents or a base plus JSON-pointer-style patch ----
@@ -146,28 +154,30 @@ export function applyPatch(doc, patch) {
   return out;
 }
 
+// Fixture ids are untrusted data and are never put in messages. Diagnostics carry only the 1-based case ordinal.
 export function checkFixtureStructure(fx) {
   if (fx?.synthetic !== true || !Array.isArray(fx.cases) || fx.cases.length === 0) throw new RunnerError('fixtures must be marked synthetic and contain cases');
   const byId = new Map();
-  for (const c of fx.cases) {
-    if (typeof c.id !== 'string' || byId.has(c.id)) throw new RunnerError('fixture ids must be unique strings');
-    if (!SCHEMA_KEYS.includes(c.schema)) throw new RunnerError(`case ${c.id}: unknown schema key`);
-    if (c.expect !== 'valid' && c.expect !== 'invalid') throw new RunnerError(`case ${c.id}: expect must be valid|invalid`);
+  fx.cases.forEach((c, i) => {
+    const at = `case #${i + 1}`;
+    if (c === null || typeof c !== 'object' || typeof c.id !== 'string' || byId.has(c.id)) throw new RunnerError(`${at}: fixture ids must be unique strings`);
+    if (!SCHEMA_KEYS.includes(c.schema)) throw new RunnerError(`${at}: unknown schema key`);
+    if (c.expect !== 'valid' && c.expect !== 'invalid') throw new RunnerError(`${at}: expect must be valid|invalid`);
     const full = 'data' in c;
-    if (full === ('base' in c)) throw new RunnerError(`case ${c.id}: exactly one of data or base`);
+    if (full === ('base' in c)) throw new RunnerError(`${at}: exactly one of data or base`);
     if (!full) {
       const b = byId.get(c.base);
-      if (!b || b.schema !== c.schema || !('data' in b)) throw new RunnerError(`case ${c.id}: base must be an earlier full document of the same schema`);
-      if (!Array.isArray(c.patch) || c.patch.length === 0) throw new RunnerError(`case ${c.id}: patch required`);
+      if (!b || b.schema !== c.schema || !('data' in b)) throw new RunnerError(`${at}: base must be an earlier full document of the same schema`);
+      if (!Array.isArray(c.patch) || c.patch.length === 0) throw new RunnerError(`${at}: patch required`);
     }
-    if (c.expect === 'invalid' && (typeof c.error_at !== 'string' || !('base' in c))) throw new RunnerError(`case ${c.id}: negatives need base and error_at`);
+    if (c.expect === 'invalid' && (typeof c.error_at !== 'string' || !('base' in c))) throw new RunnerError(`${at}: negatives need base and error_at`);
     byId.set(c.id, c);
-  }
+  });
   return byId;
 }
 
 // Only keywords and locations made of known-safe characters are reported. Instance values, schema params
-// (which may echo property names), messages and file paths are never emitted.
+// (which may echo property names), messages, fixture ids and file paths are never emitted.
 const safeLocation = (p) => (/^(\/[A-Za-z0-9_]{1,40}){0,12}$/.test(p) ? p : '/?');
 const summariseErrors = (errors) => (errors ?? []).slice(0, 5).map((e) => ({ keyword: String(e.keyword).replace(/[^A-Za-z0-9$]/g, '').slice(0, 24), at: safeLocation(e.instancePath) }));
 
@@ -175,7 +185,7 @@ export function evaluate(fx, validators) {
   const byId = checkFixtureStructure(fx);
   const failures = [];
   const counts = { cases: fx.cases.length, valid_expected: 0, invalid_expected: 0, passed: 0, failed: 0 };
-  for (const c of fx.cases) {
+  for (const [i, c] of fx.cases.entries()) {
     const data = 'data' in c ? c.data : applyPatch(byId.get(c.base).data, c.patch);
     const validate = validators[c.schema];
     const ok = validate(data) === true;
@@ -187,7 +197,7 @@ export function evaluate(fx, validators) {
     else if (c.expect === 'invalid' && !(errors ?? []).some((e) => e.instancePath.startsWith(c.error_at) && (!c.keyword || e.keyword === c.keyword))) reason = 'error_location_mismatch';
     if (reason) {
       counts.failed++;
-      failures.push({ id: c.id, reason, errors: summariseErrors(errors) });
+      failures.push({ ordinal: i + 1, reason, errors: summariseErrors(errors) });
     } else counts.passed++;
   }
   return { counts, failures };
@@ -197,7 +207,8 @@ const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
 export function run({ root, fixturesPath = join(HERE, 'fixtures.json'), schemaDir = HERE }) {
   const { Ajv2020, version } = loadAjv2020(root);
-  const schemas = readSchemas(schemaDir);
+  const buffers = readSchemaBuffers(schemaDir);
+  const schemas = parseSchemaBuffers(buffers);
   const validators = compileSchemas(Ajv2020, schemas);
   const raw = readFileSync(fixturesPath);
   let fx;
@@ -213,7 +224,7 @@ export function run({ root, fixturesPath = join(HERE, 'fixtures.json'), schemaDi
     strict_compile: true,
     schemas_compiled: SCHEMA_KEYS.length,
     fixtures_sha256: sha256(raw),
-    schema_sha256: Object.fromEntries(SCHEMA_KEYS.map((k) => [k, sha256(Buffer.from(JSON.stringify(schemas[k])))])),
+    schema_sha256: Object.fromEntries(SCHEMA_KEYS.map((k) => [k, sha256(buffers[k])])),
     ...counts,
     failures,
     scope: 'structural validation of synthetic fixtures only; not semantic acceptance',
