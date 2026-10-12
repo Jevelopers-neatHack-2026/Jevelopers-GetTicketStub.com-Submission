@@ -52,6 +52,8 @@ npm test
 npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/local-macos
 ```
 
+Local macOS runs pass only on the exact pinned macOS profile; the Linux CI `runtime` workflow is the authoritative evidence. See [Authoritative evidence and the local macOS profile](docs/runtime/README.md#authoritative-evidence-and-the-local-macos-profile).
+
 `--suite`, `--mode offline` and `--evidence-dir` are all mandatory; the runtime suite writes `runtime.json` and two renders under the evidence directory. Linux CI ([runtime workflow](.github/workflows/runtime.yml)) runs the bounded workloads and final verification in a digest-pinned Playwright image with networking disabled, including the Linux sandbox suites.
 
 ## Module map
