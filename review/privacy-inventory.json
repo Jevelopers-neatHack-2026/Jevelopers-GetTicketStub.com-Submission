@@ -5,7 +5,7 @@
     "Product and frontend",
     "Finance and reliability"
   ],
-  "auditedSourceRevision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+  "auditedSourceRevision": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
   "executableScriptSha256": [
     "2b01e1d0f5ba18ee57a1420149ce8f8b94e776195f29bfc76db93c245ead4320",
     "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
@@ -26,9 +26,10 @@
   "reviewStatus": "PENDING",
   "styleSha256": [
     "a4a477526673b7cbb466775e39698516d7867f308f9c94fd1f243e5ffe190c75",
-    "d54e4f8996037bb3a998695bc1e322b0be4580a97e925df73c698814fc784249"
+    "c371b66ba86be9430a9d01464e67012686caed85d63d13be3acaa154c71ef073",
+    "d794bf312858c123506cfca13294e201a9eb23dcfe9aba60d1b5e7dc66f47852"
   ],
-  "markupTagsSha256": "90a084ab64d12fee88b5eeac7cb5dd00598fbac5d8964cd54cf8d76586339288",
+  "markupTagsSha256": "7c887b7b519d5d2c95707cea14966d18d8d77019498fd60531e8851a8b73f343",
   "scriptTagsSha256": [
     "9dd69297ac344fd1e671b9a35840de9829937c6a9b43e06b6b4cf615b2bf26ce",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -37,10 +38,11 @@
   ],
   "styleTagsSha256": [
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ],
-  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged. R1 current author audit resolves the complete page at auditedSourceRevision from local Git objects; historicalSourceReferences preserves both the valid PR #29 header audit revision and the earlier mismatched base reference without upgrading owner approval. CSS-only opaque maker copy surface audited against immutable source b5205f0c749ec81e1d75e3da75cc236dd79f692e; external resource and data boundaries unchanged. Specific maker reduced-motion overrides audited against 3c510591150e3bb44eb1fa44e9993ae32677ad3d with source/data boundaries unchanged.",
-  "pageSha256": "8c8252a8740ff2e9285e82e25868a0cf3bd8a9efdaca554ba45cacb950d3a6c7",
+  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged. R1 current author audit resolves the complete page at auditedSourceRevision from local Git objects; historicalSourceReferences preserves both the valid PR #29 header audit revision and the earlier mismatched base reference without upgrading owner approval. CSS-only opaque maker copy surface audited against immutable source b5205f0c749ec81e1d75e3da75cc236dd79f692e; external resource and data boundaries unchanged. Specific maker reduced-motion overrides audited against 3c510591150e3bb44eb1fa44e9993ae32677ad3d with source/data boundaries unchanged. Native maker overflow and explicit noscript fallback audited against 4cc7cea5f879545f3758b05eaab9bc9f1d0b1324. Approved native fallback is exact/no-query; source build validation must withdraw it alongside config, and JS runtime cannot change JS-disabled markup.",
+  "pageSha256": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
   "historicalSourceReferences": [
     {
       "revision": "096fe76f8f559ac504693168e3cd6068337d0bb3",
@@ -57,6 +59,10 @@
     {
       "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
       "relationship": "Earlier maker surface audit before specific reduced-motion overrides; page/CSS differ from current, privacy approval remains pending."
+    },
+    {
+      "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+      "relationship": "Prior CSS-only maker source before overflow/no-JavaScript fallback; source history preserved, current full-page bytes differ."
     }
   ]
 }

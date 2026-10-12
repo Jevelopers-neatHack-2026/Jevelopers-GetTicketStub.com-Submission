@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Existing illustrative assets retained for local review; release blocked",
-  "pageSha256": "8c8252a8740ff2e9285e82e25868a0cf3bd8a9efdaca554ba45cacb950d3a6c7",
+  "pageSha256": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
     "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
@@ -659,8 +659,8 @@
   "recheckBy": "2026-11-12",
   "auditedSource": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-    "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
-    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3c510591150e3bb44eb1fa44e9993ae32677ad3d/site/index.html"
+    "revision": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/4cc7cea5f879545f3758b05eaab9bc9f1d0b1324/site/index.html"
   },
   "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
   "historicalSourceReferences": [
@@ -675,6 +675,12 @@
       "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
       "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b5205f0c749ec81e1d75e3da75cc236dd79f692e/site/index.html",
       "relationship": "Earlier CSS-only maker surface audit before the reduced-motion correction; preserved as historical, not approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3c510591150e3bb44eb1fa44e9993ae32677ad3d/site/index.html",
+      "relationship": "Earlier maker surface/motion audit before native overflow and no-JavaScript escape; historical only, not current approval."
     }
   ]
 }
