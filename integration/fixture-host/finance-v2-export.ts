@@ -3,6 +3,7 @@ import type { FinanceV2ExportHostAccess, FinanceV2Input, FinanceV2Page, FinanceV
 import { FINANCE_V2_EXPORT_KIND } from '../../src/views/finance-v2';
 import { financeV2Fixture } from '../../src/views/finance-v2/fixtures';
 import receiptZero from '../../tests/fixtures/export-conformance/candidate-receipts/receipt-00.json';
+import denialCapture from '../../tests/fixtures/export-denial-conformance/candidate-postgres-composition.json';
 
 /**
  * SYNTHETIC_EXPORT_CONFORMANCE_ONLY fixture-host data. The export port REPLAYS the Finance producer's ACTUAL candidate receipt 0 (its exact manifest and artifact bytes, committed under
@@ -40,12 +41,19 @@ export const withoutCapability = (access: FinanceV2ExportHostAccess, capability:
 export const withCapability = (access: FinanceV2ExportHostAccess, capability: string): FinanceV2ExportHostAccess => ({ ...access, capabilities: access.capabilities.includes(capability) ? access.capabilities : [...access.capabilities, capability] });
 
 export const exportBehaviors = [
-  'ok', 'csv-control', 'forbidden', 'source', 'conflict', 'validation', 'unsupported', 'tamper-snapshot', 'tamper-query', 'tamper-csv-scope', 'delivered', 'legacy', 'extra', 'slow', 'hang', 'fault500', 'revoke-during',
+  'ok', 'csv-control', 'captured-late-forbidden', 'captured-entry-source', 'forbidden', 'source', 'conflict', 'validation', 'unsupported', 'tamper-snapshot', 'tamper-query', 'tamper-csv-scope', 'delivered', 'legacy', 'extra', 'slow', 'hang', 'fault500', 'revoke-during',
 ] as const;
 export type ExportBehavior = (typeof exportBehaviors)[number];
 
 export const EXPORT_CANARY = 'CANARY-PORT-MESSAGE-must-never-be-shown';
 export type ExportPortLog = { requests: Array<{ format: string; actorId: string; revision: string; token: string; snapshotId: string; destination: string }> };
+/**
+ * SYNTHETIC_DENIAL_CAPTURE_SUPPLEMENT_ONLY: the exact `actualResult` of two ACTUAL captured producer cases (task-local PostgreSQL with synthetic postings behind a synthetic single-state
+ * authority host, not a live issuer), replayed unchanged. The Dashboard's own access is ALLOWED in the page; the producer denies. Not fresh database execution and not a live fence.
+ */
+const capturedAnswer = (caseId: string): unknown => structuredClone((denialCapture.authorizationCases as { caseId: string; actualResult: unknown }[]).find((item) => item.caseId === caseId)!.actualResult);
+export const CAPTURED_LATE_FORBIDDEN = '2.0.0.create.F1.denyExport';
+export const CAPTURED_ENTRY_SOURCE = '2.0.0.create.missing-fourth-fence';
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const failure = (code: string) => ({ ok: false, error: { code, safe_message: EXPORT_CANARY, diagnostic: { token: 'CANARY-TOKEN' } } });
 
@@ -62,6 +70,8 @@ export function exportConformancePort(behavior: ExportBehavior, log: ExportPortL
       switch (behavior) {
         // TEST_BUILT CSV control: receipt 0 untouched except `requestedFormat`; its original metrics.csv bytes, contentHash and length are replayed. Not a producer CSV preparation.
         case 'csv-control': receipt.manifest.requestedFormat = 'csv'; return { ok: true, value: receipt };
+        case 'captured-late-forbidden': return capturedAnswer(CAPTURED_LATE_FORBIDDEN);
+        case 'captured-entry-source': return capturedAnswer(CAPTURED_ENTRY_SOURCE);
         case 'slow': await delay(1500); return { ok: true, value: receipt };
         case 'hang': return new Promise<never>(() => undefined);
         case 'fault500': throw Object.assign(new Error(EXPORT_CANARY), { status: 503 });

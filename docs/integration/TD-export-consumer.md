@@ -68,3 +68,14 @@ earlier source-22 / pagination inputs are unchanged and re-pinned by the conform
 No mounted selected host, no live Product issuer, no coherent live fence, no CFO import/delivery, no consumer ACK, no provider evidence, no actual business run. The producer
 captured only `json`-prepared receipts, so CSV behaviour is covered with clearly labelled test-built receipts; in the fixture host a CSV request is answered with the exact
 JSON-prepared receipt and is refused on format, which is the intended negative control.
+
+## Denial-capture supplement (SYNTHETIC_DENIAL_CAPTURE_SUPPLEMENT_ONLY)
+
+`tests/fixtures/export-denial-conformance/candidate-postgres-composition.json` is the Finance producer's accepted capture, committed byte for byte (1,021,876 bytes, SHA-256 `6305706d…203d07`; see `PROVENANCE.json` there). It is separate from the earlier `export-conformance` packet, which is unchanged.
+
+- 92 captured cases: 60 late `FORBIDDEN_SCOPE`, 4 entry `SOURCE_UNAVAILABLE` (missing fourth fence), 28 positives (14 legacy 1.0.0, 14 rich 2.0.0).
+- `tests/components/finance-v2-export-denial.test.tsx` runs all 64 typed failures through the public async `checkPreparedExport`, the hook and the panel: only the closed code is kept, `safe_message` and `diagnostic_ref` are never echoed, nothing is downloadable, and a failure carrying a later `value` is refused.
+- The 14 rich positives pass the guard against a frozen TEST_BUILT expectation (query and projection hashes from the capture's `sourceBinding`; snapshot id, scope, as-of, period and currencies hydrated from the captured answer, which is NOT the actual PostgreSQL request). The 14 legacy ones stay `UNSUPPORTED_SHAPE`. Byte-change and changed-source controls are refused.
+- All 90 captured file bytes (34 original receipt files + 56 positive case files) are re-hashed with node crypto.
+- Late denials are not a claim of fresh database execution or zero SQL reads (their captured counters grow). The entry cases did no protected I/O (equal counters, `storeLookups` 0).
+- Fixture host: `v2export=captured-late-forbidden` and `v2export=captured-entry-source` replay the exact captured `actualResult` while the page's own access is allowed. The authority behind the capture is a synthetic single-state host, not a live issuer; no CFO delivery or consumer acceptance is implied.
