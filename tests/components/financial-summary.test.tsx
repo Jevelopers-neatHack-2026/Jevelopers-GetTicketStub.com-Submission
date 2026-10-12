@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { readFinancialSummary, type ProjectionResult, type SummaryProjection } from '../../src/data/shared-contracts-adapter';
@@ -231,11 +232,20 @@ describe('readFinancePage keeps the Finance wrapper apart and hands only the exa
   });
 });
 
-const packet = '/tmp/ie-financial-fixture-handoff';
-describe.skipIf(!existsSync(`${packet}/manifest.json`))('IE financial handoff packet (read-only, when present on this machine)', () => {
-  const manifest = existsSync(`${packet}/manifest.json`) ? JSON.parse(readFileSync(`${packet}/manifest.json`, 'utf8')) : {};
-  it('matches its manifest hashes for vectors, coverage and README', () => {
-    for (const file of manifest.files) expect(createHash('sha256').update(readFileSync(`${packet}/${file.path}`)).digest('hex')).toBe(file.sha256);
+/** Committed, frozen, sanitized extract of the synthetic IE handoff packet; see PROVENANCE.json. No machine-local path, never skipped. */
+const fixtureDir = `${resolve(process.cwd(), 'tests/fixtures/ie-financial-handoff')}/`;
+const fixture = (name: string) => JSON.parse(readFileSync(`${fixtureDir}${name}`, 'utf8'));
+describe('IE financial handoff packet (committed sanitized synthetic fixture)', () => {
+  const manifest = fixture('manifest.sanitized.json');
+  const provenance = fixture('PROVENANCE.json');
+  it('records explicit source provenance and sanitization, with no machine-local path left in the committed files', () => {
+    expect(provenance.classification).toBe('SYNTHETIC');
+    expect(provenance.source.packetId).toBe(manifest.packetId);
+    expect(provenance.source.files['manifest.json']).toBe('f798d047b995924fc07cb681f136b1359f22c5d6d8ce4cf2e7edb27e7c1e3b24');
+    for (const hash of Object.values(provenance.source.files)) expect(hash).toMatch(/^[0-9a-f]{64}$/u);
+    expect(provenance.sanitization.removedFields.length).toBeGreaterThan(0);
+    for (const name of ['manifest.sanitized.json', 'summary-expectations.json']) expect(readFileSync(`${fixtureDir}${name}`, 'utf8')).not.toMatch(/"\/(Users|tmp|root)\//u);
+    expect(createHash('sha256').update(readFileSync(`${fixtureDir}manifest.sanitized.json`)).digest('hex')).not.toBe(provenance.source.files['manifest.json']);
   });
   it('is pending owner acceptance: schema-compatible in synthetic development at most, never production adoption', () => {
     expect(manifest.acceptanceState).toBe('PENDING_OWNER_ACCEPTANCE');
@@ -247,10 +257,8 @@ describe.skipIf(!existsSync(`${packet}/manifest.json`))('IE financial handoff pa
     expect(evaluateFinancePacket(manifest, trusted(), 'production')).toMatchObject({ outcome: 'refused', result: { code: 'UNACCEPTED_INTERFACE' } });
   });
   it('carries no successful FinancialSummary for the dashboard to render', () => {
-    const found: unknown[] = [];
-    const walk = (node: unknown) => { if (Array.isArray(node)) node.forEach(walk); else if (node && typeof node === 'object') for (const [key, value] of Object.entries(node)) { if (key === 'expectedPublicFinancialSummary') found.push(value); else walk(value); } };
-    walk(JSON.parse(readFileSync(`${packet}/vectors.json`, 'utf8')));
+    const found: { path: string; value: unknown }[] = fixture('summary-expectations.json').expectedPublicFinancialSummary;
     expect(found.length).toBeGreaterThan(0);
-    expect(found.every((value) => value === null)).toBe(true);
+    expect(found.every((entry) => entry.path.endsWith('/expectedPublicFinancialSummary') && entry.value === null)).toBe(true);
   });
 });

@@ -19,6 +19,8 @@ const synthetic = (over: Partial<SummaryProjection> = {}): SummaryProjection => 
   badges: ['fixture', 'estimated', 'unreconciled'],
   observedAt: '2026-10-08T00:05:00Z', ingestedAt: '2026-10-08T00:06:00Z', producerRevision: 'synthetic-producer-revision', ...over,
 });
+/** A producer-unknown metric cannot sit under `complete` coverage, so the unknown fixture is incomplete with unknown expected sources and the partial badge, as in `partial`. */
+const incompleteUnknownCoverage: Partial<SummaryProjection> = { axes: { valuation: 'estimated', settlement: 'unpaid', reconciliation: 'unmatched', reservation: 'held', completeness: 'incomplete' }, coverage: { observed: 1, expected: null, missingSources: ['synthetic-source-b'] }, badges: ['fixture', 'estimated', 'unreconciled', 'partial'] };
 const unknownMetric = { amount: { status: 'unknown' }, definition: { id: 'synthetic-definition-u', revision: 1 }, sourceCount: 1 } as const;
 /** Schema digest recorded by the independent 2026-10-12 mechanical review (FinancialSummary 1.0.0, byte-identical in Finance 0.3.0 and Dashboard 0.9.7). A development binding for these fixtures, not an acceptance. */
 const reviewedSchemaSha256 = '8d73d97e86d0684ccbb84fc1838de9d7802438966be60bd1f2da3347833067d9';
@@ -37,9 +39,9 @@ export function summaryFixture(name: SummaryFixtureName, evaluate: (manifest: un
   const gated = (manifest: unknown): SummaryFixture => { const packet = evaluate(manifest, trustedExpectation); return { result: packet.outcome === 'refused' ? packet.result : { status: 'unknown', authority } }; };
   switch (name) {
     case 'ready': return { result: { status: 'ready', authority, data: synthetic() }, wrapper: syntheticWrapper };
-    case 'partial': return { result: { status: 'ready', authority, data: synthetic({ axes: { valuation: 'estimated', settlement: 'unpaid', reconciliation: 'unmatched', reservation: 'held', completeness: 'incomplete' }, coverage: { observed: 1, expected: null, missingSources: ['synthetic-source-b'] }, badges: ['fixture', 'estimated', 'unreconciled', 'partial'] }) } };
+    case 'partial': return { result: { status: 'ready', authority, data: synthetic(incompleteUnknownCoverage) } };
     case 'stale': return { result: { status: 'stale', authority, ageMs: 7_200_000, data: synthetic({ badges: ['fixture', 'estimated', 'unreconciled', 'stale'] }) } };
-    case 'unknown': return { result: { status: 'ready', authority, data: synthetic({ metrics: { 'synthetic.metric_u': unknownMetric }, requested: { 'synthetic.metric_u': { status: 'unknown' } }, missingMetrics: [] }) } };
+    case 'unknown': return { result: { status: 'ready', authority, data: synthetic({ ...incompleteUnknownCoverage, metrics: { 'synthetic.metric_u': unknownMetric }, requested: { 'synthetic.metric_u': { status: 'unknown' } }, missingMetrics: [] }) } };
     case 'missing': return { result: { status: 'missing', authority } };
     case 'restricted': return { result: { status: 'restricted', authority } };
     case 'refused': return { result: { status: 'refused', authority, code: 'CONTRACT_REFUSED', path: '/synthetic' } };

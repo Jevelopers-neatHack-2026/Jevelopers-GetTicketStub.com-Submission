@@ -16,9 +16,11 @@ test.beforeEach(async ({ page, context }) => {
   page.on('console', (message) => { if (message.type() === 'error') throw new Error(message.text()); });
 });
 
+/** The one labelled summary region (`section` named by its `h2`); the heading itself is a different role, so this resolves to exactly one element. */
+const summaryRegion = (page: Page) => page.getByRole('region', { name: 'Financial summary', exact: true });
 async function open(page: Page, summary: string) {
   await page.goto(`/admin/finance?state=ready&summary=${summary}`);
-  await expect(page.getByRole('region', { name: 'Financial summary' }).or(page.getByRole('heading', { name: 'Financial summary' }))).toBeVisible();
+  await expect(summaryRegion(page)).toBeVisible();
 }
 async function scan(page: Page, name: string) {
   const results = await new AxeBuilder({ page }).analyze();
@@ -43,6 +45,9 @@ test('unknown producer metric reads unknown, not zero', async ({ page }) => {
   await open(page, 'unknown');
   await expect(card(page, 'synthetic.metric_u')).toContainText('Amount unknown');
   await expect(card(page, 'synthetic.metric_u')).toContainText('not zero');
+  await expect(page.getByRole('region', { name: 'Summary states' })).toContainText('incomplete');
+  await expect(page.getByRole('region', { name: 'Summary states' }).getByText('Coverage: partial')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Coverage and freshness' })).toContainText('Unknown');
   await scan(page, 'financial-summary-unknown');
 });
 
@@ -121,7 +126,13 @@ test('keyboard reaches the overflowing provenance table scroll controls at 320 C
   const right = page.getByRole('button', { name: 'Scroll Metric provenance right' });
   await expect(right).toBeVisible();
   const viewport = page.getByRole('region', { name: 'Metric provenance' });
-  await right.focus();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  let reached = false;
+  for (let tabs = 0; tabs < 300 && !reached; tabs += 1) {
+    await page.keyboard.press('Tab');
+    reached = await right.evaluate((element) => element === document.activeElement);
+  }
+  expect(reached, 'Tab alone must reach the scroll-right button').toBe(true);
   await expect(right).toBeFocused();
   await page.keyboard.press('End');
   await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
