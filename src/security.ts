@@ -723,7 +723,7 @@ function snapshotAssetHeaders(value: unknown, diagnosticReference?: unknown): Re
   const result: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const key of Object.keys(raw)) {
     const normalized = key.toLowerCase();
-    if (!/^[a-z0-9-]{1,128}$/.test(key) || typeof raw[key] !== "string" || Object.hasOwn(result, normalized)) {
+    if (!/^[A-Za-z0-9-]{1,128}$/.test(key) || typeof raw[key] !== "string" || Object.hasOwn(result, normalized)) {
       throw failure("asset_response_invalid", diagnosticReference);
     }
     result[normalized] = raw[key] as string;
