@@ -158,10 +158,13 @@ class NarrativeHandoffTests(unittest.TestCase):
         quote_template, build_update_template = text_blocks
         self.assertLessEqual(len(quote_template), 280)
         self.assertLessEqual(len(build_update_template), 280)
-        self.assertIn("[TEAM_NAME_PENDING]", quote_template)
+        self.assertIn("Team: Jevelopers", quote_template)
         self.assertIn("[SUBMITTER_NAME_PENDING]", quote_template)
-        self.assertIn("[PROJECT_NAME_PENDING]", quote_template)
-        self.assertIn("[PUBLIC_PROJECT_REPOSITORY_URL_PENDING]", quote_template)
+        self.assertIn("Project: TicketStub", quote_template)
+        self.assertIn(
+            "Repository: https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
+            quote_template,
+        )
         self.assertIn("[PUBLIC_DEMO_URL_PENDING]", quote_template)
         self.assertIn("#neatHack", quote_template)
         self.assertIn("DATED, SOURCE-LINKED ACTIVITY", build_update_template)
