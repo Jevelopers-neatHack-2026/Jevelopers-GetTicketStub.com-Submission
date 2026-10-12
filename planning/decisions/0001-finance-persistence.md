@@ -1,6 +1,6 @@
 # Decision 0001: Production finance persistence
 
-- Status: **proposed; owner decision required.** Nothing here is accepted or implemented. No account was created and no terms were accepted.
+- Status: **accepted (owner-delegated 2026-10-12).** See [0003](0003-owner-delegated-decisions-2026-10-12.md) rows P1-P3. Sub-choices made: Neon (Option C), Postgres 16, Launch plan; region `aws-us-east-1` (or `aws-us-west-2` if the dashboard shows a western host origin); scale to zero disabled on `production`, kept on `preview`. Supabase stays the fallback only. Accepting the decision executed nothing: no account was created, no terms were accepted and no database exists. Owner actions 2-6 below remain owner-only.
 - Tracker: [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27), "Select and integrate production finance persistence". Related: LIVE-02 (restore), BUD-01..04, FIN-01..10 in the [acceptance checklist](../acceptance-checklist.md).
 - Decider: Finance and reliability owner (CompleteDotTech). Implementation in `cost-intelligence` stays with its owners; the CI-05A/B reservation authority ([#12](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/12), [#13](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/13)) is unaffected by this memo.
 - Date: 2026-10-11
