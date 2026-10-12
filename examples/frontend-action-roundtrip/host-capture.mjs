@@ -1,7 +1,7 @@
 /** Exact custody of a quiescent MOCK host; failed close/copy never certifies it. */
 import { mkdtempSync, mkdirSync, cpSync, writeFileSync, readdirSync, readFileSync, renameSync, existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { attemptFormat, inventoryTree } from './host-capture-inventory.mjs';
+import { attemptFormat, inventoryTree, readCertifiedCapture } from './host-capture-inventory.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { join, basename } from 'node:path';
 let captureSequence = 0;
@@ -10,8 +10,10 @@ function persistAttempt(attempt, io) {
   if (attempt.record.files === undefined) attempt.record.files = files;
   else assert.deepEqual(files, attempt.record.files, 'Owned incomplete capture changed before inventory publication');
   for (const fragment of attempt.record.fragments) {
-    const bytes = readFileSync(join(attempt.root, fragment.name));
-    assert.deepEqual(fragment, { name: fragment.name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+    const bytes = io.read(join(attempt.root, fragment.name));
+    const measured = { name: fragment.name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+    if (fragment.bytes === undefined) Object.assign(fragment, measured);
+    else assert.deepEqual(fragment, measured);
   }
   const fragment = `${attempt.record.attempt}.record-${randomUUID()}`, temporary = join(attempt.root, fragment), target = join(attempt.root, `${attempt.record.attempt}.json`);
   try {
@@ -20,7 +22,14 @@ function persistAttempt(attempt, io) {
     io.rename(temporary, target);
   } catch (error) {
     attempt.record.record_failures++;
-    if (existsSync(temporary)) { const bytes = readFileSync(temporary); attempt.record.fragments.push({ name: fragment, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }); }
+    // Own the path before reading it: even a failed read must block publication.
+    if (existsSync(temporary)) {
+      const owned = { name: fragment }; attempt.record.fragments.push(owned);
+      try {
+        const bytes = io.read(temporary);
+        Object.assign(owned, { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+      } catch (readError) { throw new AggregateError([error, readError], 'Incomplete-attempt record write and fragment measurement failed'); }
+    }
     throw error;
   }
 }
@@ -52,6 +61,7 @@ export function closeAndCaptureHost(session, reason, evidence = process.env.CONT
     stage = 'receipt'; io.write(join(target, 'receipt.json'), JSON.stringify({ reason, captured_at: new Date().toISOString(), node: process.version, node_executable: process.execPath,
       cwd: process.cwd(), mode: 'mock', live_calls: 0, counters, membership: 'explicit MOCK fixture', files: files.length }, null, 2) + '\n');
     stage = 'publish';
+    readCertifiedCapture(target);
     const published = join(evidence, basename(target).replace(/^attempt-/, 'session-'));
     if (existsSync(published)) throw new Error('Capture publication target already exists');
     io.rename(target, published); session.finalized = true;

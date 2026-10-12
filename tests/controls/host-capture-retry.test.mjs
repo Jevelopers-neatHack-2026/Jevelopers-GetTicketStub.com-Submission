@@ -9,15 +9,22 @@ import { createHostLifecycle } from '../../examples/frontend-action-roundtrip/ho
 import { closeAndCaptureHost } from '../../examples/frontend-action-roundtrip/host-capture.mjs';
 import { inventoryTree, readCaptureInventory } from '../../examples/frontend-action-roundtrip/host-capture-inventory.mjs';
 const fault = stage => Object.assign(new Error(`MOCK ${stage} failure`), { code: 'EIO' });
-async function setup(t, stage, recordFailures = 0) {
+async function setup(t, stage, recordFailures = 0, fragmentReadFailures = 0) {
   const dir = mkdtempSync(join(tmpdir(), 'capture-retry-host-'));
   const evidence = mkdtempSync(join(process.env.CONTROLS_LIFECYCLE_EVIDENCE_DIR ?? tmpdir(), 'capture-retry-'));
   const host = await createIntegratedHost(dir, { enableComposition: true });
-  let fail = stage !== undefined, remainingRecords = recordFailures, counts = 0, copies = 0;
+  let fail = stage !== undefined, remainingRecords = recordFailures, remainingReads = fragmentReadFailures, counts = 0, copies = 0;
   const count = host.counts.bind(host); host.counts = () => { counts++; return count(); };
   const operations = {
-    copy(from, to, options) { copies++; cpSync(from, to, options); if (fail && stage === 'copy') { fail = false; throw fault(stage); } },
-    read(path) { if (fail && stage === 'walk') { fail = false; throw fault(stage); } return readFileSync(path); },
+    copy(from, to, options) {
+      copies++; cpSync(from, to, options);
+      if (fail && stage === 'membership') { mkdirSync(join(to, 'unexpected-empty-directory')); fail = false; }
+      if (fail && stage === 'copy') { fail = false; throw fault(stage); }
+    },
+    read(path) {
+      if (basename(path).includes('.record-') && remainingReads > 0) { remainingReads--; throw fault('fragment read'); }
+      if (fail && stage === 'walk') { fail = false; throw fault(stage); } return readFileSync(path);
+    },
     write(path, bytes, options) {
       const metadata = stage === 'manifest' ? 'manifest.json' : 'receipt.json';
       if (fail && ['manifest', 'receipt'].includes(stage) && basename(path) === metadata) {
@@ -66,6 +73,36 @@ test('partial failed-inventory writes remain owned and block new certification u
   assert.equal(complete.attempts[0].record_failures, 2); assert.equal(complete.attempts[0].fragments.length, 2);
   const after = inventoryTree(join(value.evidence, 'attempts'));
   for (const entry of first) assert.deepEqual(after.find(file => file.path === entry.path), entry, 'Earlier failed bytes must remain unchanged');
+  assert.equal(value.counts(), 1); assert.equal(value.copies(), 2);
+});
+test('failed fragment reads retain ownership and block new certification until measured', async t => {
+  const value = await setup(t, 'receipt', 1, 2);
+  await assert.rejects(value.lifecycle.change('capture'), error => error instanceof AggregateError && error.errors[0].message === 'MOCK receipt failure' &&
+    error.errors[1] instanceof AggregateError && error.errors[1].errors.map(item => item.message).join(',') === 'MOCK attempt inventory failure,MOCK fragment read failure');
+  const before = inventoryTree(join(value.evidence, 'attempts'));
+  await assert.rejects(value.lifecycle.change('capture'), /MOCK fragment read failure/);
+  assert.equal(value.copies(), 1); assert.equal(value.lifecycle.state().finalized, false); assert.equal(existsSync(value.dir), true);
+  assert.deepEqual(inventoryTree(join(value.evidence, 'attempts')), before);
+  await value.lifecycle.change('capture');
+  const complete = readCaptureInventory(value.evidence);
+  assert.equal(complete.sessions.length, 1); assert.equal(complete.attempts.length, 1);
+  assert.equal(complete.attempts[0].record_failures, 1); assert.equal(complete.attempts[0].fragments.length, 1);
+  const after = inventoryTree(join(value.evidence, 'attempts'));
+  for (const entry of before) assert.deepEqual(after.find(file => file.path === entry.path), entry);
+  assert.equal(value.counts(), 1); assert.equal(value.copies(), 2);
+});
+test('strict completed-stage membership is validated before certification', async t => {
+  const value = await setup(t, 'membership');
+  await assert.rejects(value.lifecycle.change('capture'), /Unexpected certified store directory/);
+  assert.equal(value.lifecycle.state().closed, true); assert.equal(value.lifecycle.state().finalized, false);
+  assert.equal(existsSync(value.dir), true);
+  const failed = readCaptureInventory(value.evidence);
+  assert.equal(failed.sessions.length, 0); assert.equal(failed.attempts.length, 1); assert.equal(failed.attempts[0].stage, 'publish');
+  assert.ok(failed.attempts[0].files.some(file => file.path === 'store-root/unexpected-empty-directory' && file.kind === 'directory'));
+  const before = inventoryTree(join(value.evidence, 'attempts'));
+  await value.lifecycle.change('capture');
+  const complete = readCaptureInventory(value.evidence); assert.equal(complete.sessions.length, 1); assert.equal(complete.attempts.length, 1);
+  assert.deepEqual(inventoryTree(join(value.evidence, 'attempts')), before);
   assert.equal(value.counts(), 1); assert.equal(value.copies(), 2);
 });
 test('strict inventory rejects unknown and altered members on disposable copies only', async t => {

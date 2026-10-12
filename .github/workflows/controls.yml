@@ -48,6 +48,9 @@ jobs:
         run: make check TARGET=all MODE=mock
       - name: Validate server, public types and browser roundtrip (mock boundaries)
         run: node fixtures/controls/check.mjs --browser --out examples/frontend-action-roundtrip/test-results/controls-evidence.json
+      - name: Preserve complete capture directory custody
+        if: always()
+        run: node fixtures/controls/package-capture-custody.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 tag verified 2026-10-10
         if: always()
         with:

@@ -81,7 +81,8 @@ application authority or acceptance evidence.
 
 ### Capture publication and incomplete attempts
 
-A capture is certified only when its completed staging directory is atomically
+A capture is certified only when the shared `readCertifiedCapture` validator
+accepts its completed staging directory and that directory is atomically
 renamed to a `session-NNNN-SUFFIX` child of the evidence root. Its existing
 `store-root/`, `manifest.json` and `receipt.json` format is unchanged. The manifest
 pins every regular file's path, byte length and SHA-256. Store directories must
@@ -109,7 +110,10 @@ not a certificate.
 Failed inventory writes are themselves preserved as regular
 `attempt-NNNN-SUFFIX.record-UUID` fragments. Each fragment's name, byte length
 and hash appears in the completed attempt record's `fragments` array;
-`record_failures` counts failed record-persistence operations. Pending record
+`record_failures` counts failed record write/publication operations. A partial
+fragment's path is owned before any read; readable fragments are hashed
+immediately. A failed read retains the owned path and blocks certification until
+its bytes can be measured. Pending record
 ownership remains with the session and blocks any later certification until the
 record is complete. A retry does not overwrite failed directories or fragments.
 
@@ -126,6 +130,39 @@ failed bytes, provenance and one successful retry beneath
 `CONTROLS_LIFECYCLE_EVIDENCE_DIR` when enabled. Negative inventory mutations use
 disposable copies outside that retained corpus. Existing Controls artifact
 uploads cover both certified sessions and the attempts namespace.
+
+### Directory-preserving capture transport
+
+GitHub artifact upload omits empty directories. Controls CI therefore runs
+`node fixtures/controls/package-capture-custody.mjs` after browser execution,
+including when a test fails, before the existing unconditional artifact upload.
+This CI-only tool requires GNU tar on the Ubuntu runner; it adds no public package
+runtime dependency. The uncompressed deterministic
+`build/controls-package-evidence/capture-custody.tar` contains exactly the two
+repository-relative roots `build/controls-package-evidence/lifecycle-stores`
+and `examples/frontend-action-roundtrip/test-results/browser-stores`. It retains
+directory entries, including empty `attempts/` and `objects/staging`, file modes,
+regular bytes and symbolic-link text without following link targets. Regular hard
+links are emitted as independent file bytes. Modification times and numeric
+owner/group metadata are fixed to zero; entry order is sorted.
+
+The adjacent `capture-custody.receipt.json` uses
+`format: controls-capture-custody-transport/1`. Its `archive` gives the archive's
+repository-relative `path`, `bytes` and `sha256`; `roots` lists each expected
+`path` and `present` flag; `members` inventories every retained entry by `path`,
+`kind` and permission `mode`. Files and symbolic links additionally pin `bytes`
+and `sha256` (link text only). FIFO/character/block members, if present in failed
+attempts, have their explicit kind and device identifier; they never certify a
+store. The producer checks the complete source inventory before and after
+archiving. Existing transport outputs cannot be overwritten, and failed archive
+or receipt writes retain their `.incomplete` files.
+
+`complete` is true only when both required roots exist. Missing roots produce a
+receipt with `complete: false` and a failing packaging step, rather than a claim
+of complete custody. Raw directories remain in the outer artifact. An auditor
+must verify the inner archive hash, full archive membership/types/modes/bytes
+against its receipt, then validate the enclosed capture inventories. It must not
+synthesize omitted directories from the flattened outer ZIP.
 
 The existing controls CI workflow defines the controls/browser checks on both
 pinned runtimes. Codec setup, public controls export/build and the actual package
