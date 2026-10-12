@@ -1431,6 +1431,158 @@ add("nit: a source mismatch is callback_source_mismatch (host 503 + log), checke
   assert.equal(http.calls.length, 0);
 });
 
+// ---------------------------------------------------------------------------
+// Confirmation review R1-R3, N3
+
+async function abandonSetup({ hook, extra = {} } = {}) {
+  const clock = mutableClock();
+  const store = createInMemoryProdigiReconciliationStore({ clock });
+  const queue = sharedDurableQueue();
+  const ctl = flagReader();
+  const fired = [];
+  const onReconcileAbandoned = async (event) => { fired.push(event); if (hook) await hook(event, fired.length); };
+  const make = (more = {}) => harness({ store, clock, queue, reader: ctl.reader, extra: { onReconcileAbandoned, ...extra, ...more } });
+  const a = make();
+  await a.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(a.reconciler, cloudEvent({ id: "evt_r1" }));
+  clock.advance(1000);
+  assert.equal((await deliver(a.reconciler, cloudEvent({ id: "evt_r2" }))).outcome, "deferred");
+  clock.advance(10_000);
+  ctl.fail = "authentication_failed";
+  return { clock, store, queue, ctl, fired, make, a, job: queue.jobs.shift() };
+}
+
+async function drain(reconciler, queue, clock) {
+  const runs = [];
+  for (let i = 0; i < 50 && queue.jobs.length > 0; i += 1) {
+    const job = queue.jobs.shift();
+    clock.advance(job.delayMs);
+    runs.push((await reconciler.runScheduledReconciliation(job)).status);
+  }
+  return runs;
+}
+
+add("R1 (probe D): a receipt merged during a failing hook is read on the retry, not reported under the old reason", async () => {
+  const hookGate = gate();
+  const s = await abandonSetup({ hook: async (_event, n) => { await hookGate.promise; if (n === 1) throw new Error("enqueue failed"); } });
+  const first = s.a.reconciler.runScheduledReconciliation(s.job);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  s.ctl.fail = null;
+  s.clock.advance(500);
+  s.ctl.shipped = true;
+  const genuine = await deliver(s.a.reconciler, cloudEvent({ id: "evt_ship", type: "com.prodigi.order.shipments#Shipped", time: iso(s.clock.now()) }));
+  assert.equal(genuine.recommendedHttpStatus, 202);
+  hookGate.open();
+  await assert.rejects(first, /enqueue failed/u);
+  s.clock.advance(5000);
+  assert.equal((await s.a.reconciler.runScheduledReconciliation(s.job)).status, "rescheduled", "the retry resumes a fresh chain");
+  const runs = await drain(s.a.reconciler, s.queue, s.clock);
+  assert.ok(runs.includes("applied"), runs.join(","));
+  assert.deepEqual([...(await s.store.getOrder({ scope: SCOPE, orderId: FIXTURE_ORDER_ID })).shipmentIds], ["shp_1"]);
+  assert.equal(s.fired.length, 1, "only the original (failed) report; the merged receipt was read instead");
+  assert.equal(s.store.stats().pendingReconciliations, 0);
+});
+
+add("R1 (probe E'): after a crash in the hook, a takeover finds the merged receipt and resumes; the shipment is read and stored", async () => {
+  const s = await abandonSetup({ hook: async (_event, n) => { if (n === 1) await new Promise(() => {}); } });
+  s.a.reconciler.runScheduledReconciliation(s.job);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  s.ctl.fail = null;
+  s.clock.advance(500);
+  s.ctl.shipped = true;
+  const b = s.make({ readLimiter: { tryAcquire: () => null } });
+  assert.equal((await deliver(b.reconciler, cloudEvent({ id: "evt_ship", type: "com.prodigi.order.shipments#Shipped", time: iso(s.clock.now()) }))).outcome, "deferred");
+  const readsBefore = s.ctl.reads;
+  s.clock.advance(10 * 60_000);
+  const c = s.make();
+  assert.equal((await c.reconciler.runScheduledReconciliation(s.job)).status, "rescheduled");
+  const runs = await drain(c.reconciler, s.queue, s.clock);
+  assert.ok(runs.includes("applied"), runs.join(","));
+  assert.equal(s.ctl.reads - readsBefore, 1);
+  assert.deepEqual([...(await s.store.getOrder({ scope: SCOPE, orderId: FIXTURE_ORDER_ID })).shipmentIds], ["shp_1"]);
+  assert.equal(s.fired.length, 1);
+});
+
+add("R2: a hook that outlives the lease is not mistaken for a merge: no resumed chain, no extra read, one dedupeKey", async () => {
+  const hookGate = gate();
+  const s = await abandonSetup({ hook: async (_event, n) => { if (n === 1) await hookGate.promise; } });
+  const b = s.make();
+  const first = s.a.reconciler.runScheduledReconciliation(s.job);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal((await b.reconciler.runScheduledReconciliation(s.job)).status, "abandon_pending");
+  const check = s.queue.jobs.shift();
+  s.clock.advance(check.delayMs + 1);
+  const takeover = await b.reconciler.runScheduledReconciliation(check);
+  assert.equal(takeover.status, "reconcile_abandoned");
+  hookGate.open();
+  assert.equal((await first).status, "reconcile_abandoned");
+  assert.deepEqual(s.queue.jobs, [], "no resumed chain");
+  assert.equal(s.ctl.reads, 2, "the original read plus the failed job read; nothing extra");
+  assert.equal(s.store.stats().pendingReconciliations, 0);
+  assert.equal(new Set(s.fired.map((e) => e.dedupeKey)).size, 1, "the takeover's report dedupes with the original");
+  assert.ok(s.fired.length <= 2);
+});
+
+add("R2: if schedule() throws after the resume write, the error propagates and the queue's retry runs the resumed chain", async () => {
+  const hookGate = gate();
+  const s = await abandonSetup({ hook: async () => { await hookGate.promise; } });
+  const first = s.a.reconciler.runScheduledReconciliation(s.job);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  s.ctl.fail = null;
+  s.clock.advance(500);
+  s.ctl.shipped = true;
+  await deliver(s.a.reconciler, cloudEvent({ id: "evt_ship", type: "com.prodigi.order.shipments#Shipped", time: iso(s.clock.now()) }));
+  const original = s.queue.scheduler.schedule;
+  s.queue.scheduler.schedule = () => { throw new Error("queue down"); };
+  hookGate.open();
+  await assert.rejects(first, /queue down/u);
+  s.queue.scheduler.schedule = original;
+  assert.equal(s.store.stats().pendingReconciliations, 1, "the merged receipt still has a live record");
+  s.clock.advance(10_000);
+  assert.equal((await s.a.reconciler.runScheduledReconciliation(s.job)).status, "applied", "the retried job runs the resumed chain");
+  assert.deepEqual([...(await s.store.getOrder({ scope: SCOPE, orderId: FIXTURE_ORDER_ID })).shipmentIds], ["shp_1"]);
+  assert.equal(s.fired.length, 1);
+});
+
+add("R3: the abandoned event's attempts equals the background reads actually spent", async () => {
+  for (const [label, responses, reason] of [["failing", Array.from({ length: 10 }, () => ({ status: 503, body: "x" })), "retries_exhausted"], ["claim", Array.from({ length: 10 }, () => readResponse()), "claim_unconfirmed"]]) {
+    const { reconciler, http, clock, jobs, abandoned } = harness({ responses, queue: recordingScheduler({ durable: true }), extra: { jobRetryPolicy: { maxAttempts: 3 } } });
+    await reconciler.trackOrder(FIXTURE_ORDER_ID);
+    await deliver(reconciler, cloudEvent({ id: "evt_a1", type: STAGE("Complete") }));
+    const before = http.calls.length;
+    while (jobs.length > 0) {
+      const job = jobs.shift();
+      clock.advance(job.delayMs);
+      await reconciler.runScheduledReconciliation(job);
+    }
+    assert.equal(abandoned.length, 1, label);
+    assert.equal(abandoned[0].reason, reason, label);
+    assert.equal(abandoned[0].attempts, http.calls.length - before, label);
+    assert.equal(abandoned[0].attempts, 3, label);
+  }
+});
+
+add("N3: a refuse-forever limiter with skew 0 and zero jitter gives a bounded number of runs within the horizon", async () => {
+  const { reconciler, clock, jobs, abandoned, http } = harness({
+    responses: [readResponse()],
+    queue: recordingScheduler({ durable: true }),
+    extra: { readLimiter: { tryAcquire: () => null }, workerClockSkewMs: 0, random: () => 0, jobRetryPolicy: { initialDelayMs: 2000, horizonMs: 600_000 } }
+  });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_n3" }))).outcome, "deferred");
+  let runs = 0;
+  while (jobs.length > 0 && runs < 10_000) {
+    const job = jobs.shift();
+    assert.ok(runs === 0 || job.delayMs >= 2000, `refusal delay ${job.delayMs}`);
+    clock.advance(job.delayMs);
+    await reconciler.runScheduledReconciliation(job);
+    runs += 1;
+  }
+  assert.ok(runs <= 600_000 / 2000 + 2, `runs: ${runs}`);
+  assert.equal(abandoned[0].reason, "horizon_exceeded");
+  assert.equal(http.calls.length, 0);
+});
+
 add("the suite made no network request", () => {
   if (guard !== undefined) {
     assert.equal(guard.installed, true);

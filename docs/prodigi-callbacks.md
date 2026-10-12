@@ -112,7 +112,7 @@ Deferral state lives in the store (`ProdigiPendingReconciliation`), not in proce
 | `budgetSince` | Start of the current retry budget. A merge that advances `coverAfter` resets it, together with `readsSpent` and `refusals`, so every uncovered receipt gets a full budget of its own. `horizonMs` is measured from it. |
 | `readsSpent` | Reads that background jobs ran in this budget without covering the record (failures, stale reads, an unconfirmed claim). Counted against `maxAttempts`. |
 | `refusals` | Local refusals in this budget (limiter, read interval, an older in-flight read). They only grow the backoff and never count against `maxAttempts`. |
-| `abandoning` | Set (with a lease) while a run reports the record as abandoned; see below. |
+| `abandoning` | Set while a run reports the record as abandoned: a unique `claimId`, the `reason`/`errorCode`, a `leaseUntil`, and the `coverAfter`, `requiredStage` and `readsSpent` being reported. See below. |
 | `attempt`, `dueAt` | Sequence number and due time of the currently scheduled job. `attempt` increments on every reschedule and is used to collapse duplicate jobs. |
 | `staleAt` | `dueAt + pendingJobGraceMs` (default max(120 s, 2 × `readTimeoutMs`)). After it the record is orphaned (its job was lost, for example an in-process timer after a restart): it no longer counts toward `maxPendingJobs`, and the next callback replaces it and schedules a fresh job, carrying its requirement and event IDs. |
 
@@ -121,7 +121,9 @@ Deferral state lives in the store (`ProdigiPendingReconciliation`), not in proce
 - Jobs (`ProdigiReconcileJob`: `key`, `orderId`, `attempt`, `delayMs`, `coverAfter`, `requiredStage`) carry the order and the receipt time they must cover. The worker running the job uses the stored record, which may be newer.
 - A job whose record is gone is `obsolete` (another read covered it) and reads nothing. A job older than the record's attempt is `superseded`, so duplicate jobs collapse. Queues must not drop a job in favor of an older one for the same `key`.
 
-The default scheduler is in-process timers (`durable: false`; `close()` cancels them). A host with a durable queue implements `{ durable: true, schedule(job) }` and calls `runScheduledReconciliation(job)` on any worker when the job is due. If that call throws (for example `store_unavailable`), the queue must retry the job.
+The default scheduler is in-process timers (`durable: false`; `close()` cancels them). A host with a durable queue implements `{ durable: true, schedule(job) }` and calls `runScheduledReconciliation(job)` on any worker when the job is due. If that call throws (for example `store_unavailable`, a failing abandon hook, or a `schedule()` failure while resuming a chain), the queue must retry the job.
+
+**Queues must honor `job.delayMs`.** It is the only thing that spaces out a chain's runs. Local refusals are not counted toward `maxAttempts` and are bounded only by `horizonMs`, so a queue that runs jobs immediately would spin on refusals until the horizon. With delays honored, refusal reschedules are at least `jobRetryPolicy.initialDelayMs` apart (default 2 s with a durable scheduler), so the worst case is `horizonMs / initialDelayMs` runs per chain (1,800 per hour with the defaults, and typically about 30 with jitter).
 
 ### Job runs
 
@@ -133,7 +135,7 @@ A job run clears the record and reads nothing if the order is untracked or termi
 - `maxAttempts` bounds `readsSpent`, the background reads that did not cover the record. The in-request read is not counted.
 - `horizonMs` bounds the wall-clock time since `budgetSince`. It is the only bound on local refusals.
 
-A newly merged receipt starts a fresh budget. Each delay is fully jittered: uniform in (0, `min(maxDelayMs, initialDelayMs × 2^(n−1))`], where n is the next read or refusal count. It is never less than the order's remaining read interval or `workerClockSkewMs` + 1 ms.
+A newly merged receipt starts a fresh budget. Each delay is fully jittered: uniform in (0, `min(maxDelayMs, initialDelayMs × 2^(n−1))`], where n is the next read or refusal count. It is never less than the order's remaining read interval or `workerClockSkewMs` + 1 ms, and a refusal reschedule is never less than `initialDelayMs`.
 
 | Scheduler | `initialDelayMs` | `maxDelayMs` | `maxAttempts` | `horizonMs` |
 | --- | --- | --- | --- | --- |
@@ -142,7 +144,7 @@ A newly merged receipt starts a fresh budget. Each delay is fully jittered: unif
 
 Bounds: `initialDelayMs` 1–600000, `maxDelayMs` `initialDelayMs`–3600000, `maxAttempts` 1–1000, `horizonMs` 1000–86400000. With the durable defaults the horizon binds first, so a chain keeps retrying for about an hour. `jobRetryBudget()` returns the effective values.
 
-A chain that gives up never drops silently. `onReconcileAbandoned` is **required** whenever `scheduler.durable` is true (construction fails with `invalid_config` otherwise), because after a 202 it is the only remaining owner. A `ProdigiReconcileAbandonedEvent` carries `outcome: "reconcile_abandoned"`, `scope`, `orderId`, `reason`, `attempts` (reads spent), `coverAfter`, `requiredStage`, `firstReceivedAt`, `abandonedAt`, `dedupeKey` and an optional `errorCode`. The `runScheduledReconciliation` result also reports `reconcile_abandoned` with the `reason`.
+A chain that gives up never drops silently. `onReconcileAbandoned` is **required** whenever `scheduler.durable` is true (construction fails with `invalid_config` otherwise), because after a 202 it is the only remaining owner. A `ProdigiReconcileAbandonedEvent` carries `outcome: "reconcile_abandoned"`, `scope`, `orderId`, `reason`, `attempts` (the background reads actually spent in the reported budget, including the one that triggered the abandonment), `coverAfter`, `requiredStage`, `firstReceivedAt`, `abandonedAt`, `dedupeKey` and an optional `errorCode`. The `runScheduledReconciliation` result also reports `reconcile_abandoned` with the `reason`.
 
 Reasons:
 
@@ -155,11 +157,15 @@ Reasons:
 **Delivery is at least once, with duplicates suppressed in normal operation:**
 
 1. The run re-reads the record. If it is gone, the result is `obsolete` and no hook fires. If a read has covered it meanwhile, it is settled and no hook fires.
-2. The run claims the record by compare-and-set (`abandoning`, with a lease of `pendingJobGraceMs`). Only the run whose claim succeeds calls the hook. A duplicate delivery of the same job finds a live claim and schedules a check job for the lease expiry instead (`abandon_pending`).
+2. The run claims the record by compare-and-set: `abandoning` with a unique `claimId`, a lease of `pendingJobGraceMs`, and the `coverAfter`, `requiredStage` and `readsSpent` it reports. Only the run whose claim succeeds calls the hook. A duplicate delivery of the same job finds a live claim and schedules a check job for the lease expiry instead (`abandon_pending`).
 3. The hook is called **before** the record is deleted. If it throws, the lease is released and the error is rethrown from `runScheduledReconciliation`. The queue retries the job, and the hook is called again. If the worker crashes here, the claim expires and the job's redelivery takes over.
-4. The record is deleted by compare-and-set. If a newer receipt was merged while the hook ran, the chain is resumed for it with a fresh budget instead.
+4. If the claim is still this run's (same `claimId`), the record is deleted by compare-and-set. If a newer receipt or a higher stage claim was merged while the hook ran, the chain is resumed for it with a fresh budget instead. If another run took the claim over, the record is left to that run.
 
-Hosts should dedupe on `dedupeKey`.
+**A receipt merged into a record that is being abandoned is never reported under the old reason without a read.** A retry (after a hook throw) or a takeover (after a crash) compares the record with the claim's `coverAfter` and `requiredStage`. If either has advanced, it drops the claim and resumes a fresh chain, so the newer receipt gets its own read. A covering read for it also covers the older receipts.
+
+A resume keeps the job's `attempt`. If `schedule()` throws right after the resume is written, the error propagates, and the queue's retry of the current job runs the resumed chain itself. The merged receipt is never left without a job.
+
+Hosts should dedupe on `dedupeKey` (`orderId|firstReceivedAt|coverAfter`). **The hook should finish well within `pendingJobGraceMs`** (default max(120 s, 2 × `readTimeoutMs`)). If it takes longer, a duplicate job may take the expired claim over and call the hook again with the same `dedupeKey`. The claim identity keeps that takeover from being mistaken for a merge, so it causes no resumed chain and no extra read.
 
 **Poller contract:** the hook must enqueue the order for the poller (`reconcileOrder`) and alert. A 202 told Prodigi not to redeliver, so this hook and the poller own the event after abandonment.
 
@@ -222,6 +228,11 @@ The callback ID pattern in `ingestProviderCallback` now allows `_` after the fir
   - F2: a duplicate job delivered to two workers fires the hook once. A throwing hook keeps the record, and the retried job calls the hook again and then deletes the record. A covering read after a failed hook suppresses the next call.
   - F3: limiter refusals beyond `maxAttempts` do not abandon the chain. Persistent refusal ends at the horizon with zero reads spent.
   - F4: a worker 2 s behind reads rather than skipping. The same sequence with the margin set to 0 shows the skip.
+- **Confirmation review (R1–R3, N3):**
+  - R1: a receipt merged during a failing hook (probe D) and during a crashed hook followed by a takeover (probe E′) is read, and its shipment stored.
+  - R2: a hook that outlives the lease causes no resumed chain and no extra read, and the reports share one `dedupeKey`. A `schedule()` failure after the resume write propagates, and the retried job runs the resumed chain.
+  - R3: the event's `attempts` equals the background reads spent, both on retryable failures and on an unconfirmed claim.
+  - N3: a limiter that always refuses, with skew 0 and zero jitter, gives at most `horizonMs / initialDelayMs` runs.
 - **Nits:** `source` validation (live, foreign and look-alike sources give `callback_source_mismatch`; a missing source is invalid), `data.order.id`, and `untracked_expired` after the configured age.
 - **Earlier findings:** a callback before `trackOrder`, then redelivered; failed reads returning 503, then a redelivery and a background retry; a forged `#Complete` followed by the genuine one; 20 invented types cause zero reads and zero store calls; 20 documented callbacks against a failing provider cause at most `maxAttempts` reads; the limiter bounds reads across 20 orders; concurrent callbacks share a single flight; 1,000 unknown orders leave zero stored entries; replay TTL and cap; a hung read and a hung store are both cut off at the in-request deadline; unknown reader errors are not retried; an older `Cancelled` after `Complete` is a conflict; stored-token checks; previous-token rotation.
 
