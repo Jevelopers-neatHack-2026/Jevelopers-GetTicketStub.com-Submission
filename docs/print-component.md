@@ -223,8 +223,9 @@ CLI command, and all eight original protocol controls retain their assertions.
 The latter holds the original Node pidfd from initial authenticated binding before
 request delivery. Initial stop checks that held handle, start time, executable
 inode/argv, role, namespace and cgroup. Subsequent pulses fully authenticate the
-already stopped Node, then send CONT, allow at most 500 microseconds within the
-original deadline, and send STOP through the same continuously held descriptor.
+already stopped Node, then send CONT, request a 500-microsecond scheduling quantum
+subject to scheduler delay and the unchanged absolute deadline, and send STOP
+through the same continuously held descriptor.
 No expensive `/proc` round trip occurs while the Node runs; the kernel handle
 cannot target a recycled PID, and a departed task fails without rebinding or retry.
 After each STOP, full identity authentication and observed T state are mandatory
