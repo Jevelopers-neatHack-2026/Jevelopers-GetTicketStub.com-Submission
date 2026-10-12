@@ -1,0 +1,142 @@
+TAP version 13
+# Subtest: command log requires every successful CI command in order and rejects additions
+ok 1 - command log requires every successful CI command in order and rejects additions
+  ---
+  duration_ms: 2.176686
+  type: 'test'
+  ...
+# Subtest: empty and malformed reports fail before status validation
+ok 2 - empty and malformed reports fail before status validation
+  ---
+  duration_ms: 0.362619
+  type: 'test'
+  ...
+# Subtest: Vitest validates each test even when aggregate counts claim success
+ok 3 - Vitest validates each test even when aggregate counts claim success
+  ---
+  duration_ms: 0.591159
+  type: 'test'
+  ...
+# Subtest: Playwright rejects failures hidden behind passing aggregate counters
+ok 4 - Playwright rejects failures hidden behind passing aggregate counters
+  ---
+  duration_ms: 1.332221
+  type: 'test'
+  ...
+# Subtest: contrast report accepts intentional negative controls only when they match expectation
+ok 5 - contrast report accepts intentional negative controls only when they match expectation
+  ---
+  duration_ms: 0.256462
+  type: 'test'
+  ...
+# Subtest: contrast rejects a false positive below 3 even when both flags agree
+ok 6 - contrast rejects a false positive below 3 even when both flags agree
+  ---
+  duration_ms: 0.12742
+  type: 'test'
+  ...
+# Subtest: contrast rejects a false negative above 3 even when both flags agree
+ok 7 - contrast rejects a false negative above 3 even when both flags agree
+  ---
+  duration_ms: 0.158235
+  type: 'test'
+  ...
+# Subtest: contrast rejects a false negative exactly at 3
+ok 8 - contrast rejects a false negative exactly at 3
+  ---
+  duration_ms: 0.098576
+  type: 'test'
+  ...
+# Subtest: contrast uses an inclusive, unrounded comparison at 3
+ok 9 - contrast uses an inclusive, unrounded comparison at 3
+  ---
+  duration_ms: 0.468487
+  type: 'test'
+  ...
+# Subtest: contrast rejects a false positive below 4.5 even when both flags agree
+ok 10 - contrast rejects a false positive below 4.5 even when both flags agree
+  ---
+  duration_ms: 0.259846
+  type: 'test'
+  ...
+# Subtest: contrast rejects a false negative above 4.5 even when both flags agree
+ok 11 - contrast rejects a false negative above 4.5 even when both flags agree
+  ---
+  duration_ms: 0.122533
+  type: 'test'
+  ...
+# Subtest: contrast rejects a false negative exactly at 4.5
+ok 12 - contrast rejects a false negative exactly at 4.5
+  ---
+  duration_ms: 0.067981
+  type: 'test'
+  ...
+# Subtest: contrast uses an inclusive, unrounded comparison at 4.5
+ok 13 - contrast uses an inclusive, unrounded comparison at 4.5
+  ---
+  duration_ms: 0.197283
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy accepts the nine required pairs in any order
+ok 14 - dashboard contrast policy accepts the nine required pairs in any order
+  ---
+  duration_ms: 0.281779
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy rejects omissions, duplicates, extras and unknown names
+ok 15 - dashboard contrast policy rejects omissions, duplicates, extras and unknown names
+  ---
+  duration_ms: 0.476939
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy pins source and method identities
+ok 16 - dashboard contrast policy pins source and method identities
+  ---
+  duration_ms: 0.307117
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy rejects weakened thresholds and changed expectations
+ok 17 - dashboard contrast policy rejects weakened thresholds and changed expectations
+  ---
+  duration_ms: 0.537088
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy rejects malformed records and impossible ratios
+ok 18 - dashboard contrast policy rejects malformed records and impossible ratios
+  ---
+  duration_ms: 0.838356
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy preserves unrounded thresholds and physical endpoints
+ok 19 - dashboard contrast policy preserves unrounded thresholds and physical endpoints
+  ---
+  duration_ms: 0.271264
+  type: 'test'
+  ...
+# Subtest: dashboard contrast policy retains generic rejection of inconsistent or malformed flags
+ok 20 - dashboard contrast policy retains generic rejection of inconsistent or malformed flags
+  ---
+  duration_ms: 0.37649
+  type: 'test'
+  ...
+# Subtest: unchanged real CSS contrast producer satisfies the independent dashboard policy
+ok 21 - unchanged real CSS contrast producer satisfies the independent dashboard policy
+  ---
+  duration_ms: 29.185372
+  type: 'test'
+  ...
+# Subtest: CLI enforces dashboard coverage and recovers with a complete valid report
+ok 22 - CLI enforces dashboard coverage and recovers with a complete valid report
+  ---
+  duration_ms: 151.741683
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 274.883785
