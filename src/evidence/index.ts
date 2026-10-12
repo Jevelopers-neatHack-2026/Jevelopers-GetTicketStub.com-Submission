@@ -347,10 +347,20 @@ function recordHasReference(record: EvidenceLedgerRecord, wanted: ResolvedEviden
 }
 
 async function authorize(request: { requestId: string; scope: TrustedScope }, ports: EvidenceRuntimePorts) {
+  const authority = ports.financeAuthority;
+  const financeAuthority: FinanceAuthorizationPort | undefined = authority === undefined ? undefined : {
+    async authorizeCurrent(input) {
+      const authorizeCurrent = authority.authorizeCurrent.bind(authority);
+      // Detach the full raw response before the shared gate validates it. A
+      // retained host alias must not replace the validated principal revision
+      // while this lookup resumes from a later authorization await.
+      return Value.Clone(await authorizeCurrent(input));
+    },
+  };
   // Reads reuse the existing ledger snapshot read grant; no new permission is introduced by this slice.
   return authorizeFinanceOperation({
     module: 'ledger', requestOperation: 'authorizeFinanceOperation', operation: 'ledger.readSnapshot',
-    scope: request.scope, requestId: request.requestId, clock: ports.clock, financeAuthority: ports.financeAuthority,
+    scope: request.scope, requestId: request.requestId, clock: ports.clock, financeAuthority,
   });
 }
 
