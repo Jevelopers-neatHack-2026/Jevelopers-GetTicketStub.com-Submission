@@ -1,17 +1,21 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { APPROVAL_TTL_MS } from "./approval-token";
+import { ORDER_AUTH_TTL_MS } from "./order-auth-token";
 import { isLiveRuntime } from "./context";
 import { HttpError } from "./http";
 import { loadKeyring, type Keyring, type KeysetProblem } from "./keyring";
 
 // The environment bindings for the versioned token key sets (integration-evals decision 0003, row K4). Each token class
 // has its own key set, so one leaked secret can mint only one class:
-//   APPROVAL_SIGNING_KEYS  artwork approvals (ticketstub.approval/1, 7-day tokens)
+//   APPROVAL_SIGNING_KEYS    artwork approvals (ticketstub.approval/1, 7-day tokens)
+//   ORDER_AUTH_SIGNING_KEYS  order authorizations (ticketstub.order-authorization/1, 15-minute tokens)
+// ORDER_AUTH_CONSUMER_KEY is not a token key: it only signs consumer requests (order-authorization.ts).
 // CONTEXT_SECRET stays a single key, for five-minute context tokens only (context.ts). The format and the rules are in
 // keyring.ts and docs/architecture/identity.md "Signing keys".
 
 export const APPROVAL_KEYS_ENV = "APPROVAL_SIGNING_KEYS";
+export const ORDER_AUTH_KEYS_ENV = "ORDER_AUTH_SIGNING_KEYS";
 
 const g = globalThis as unknown as { __ticketstubKeyringFallback?: Map<string, Buffer>; __ticketstubKeyringWarned?: Set<string> };
 
@@ -37,6 +41,22 @@ function contextSecretBytes(): Buffer[] {
   return s ? [Buffer.from(s)] : [];
 }
 
+/** Every key value another key set's variable holds, without validating it, so no two token classes share a key. */
+function setKeyBytes(name: string): Buffer[] {
+  try {
+    const doc = JSON.parse(process.env[name] ?? "") as { keys?: { key?: unknown }[] };
+    return (Array.isArray(doc.keys) ? doc.keys : []).flatMap((e) => (typeof e?.key === "string" && e.key ? [Buffer.from(e.key, "base64url")] : []));
+  } catch {
+    return [];
+  }
+}
+
+/** ORDER_AUTH_CONSUMER_KEY's bytes as the consumer port keys its HMAC, so a token key never doubles as the request key. */
+function consumerKeyBytes(): Buffer[] {
+  const s = process.env.ORDER_AUTH_CONSUMER_KEY?.trim();
+  return s ? [Buffer.from(s)] : [];
+}
+
 function keyringFor(name: string, retentionMs: number, forbidden: Buffer[]): Keyring | null {
   const r = loadKeyring({ name, raw: process.env[name], live: isLiveRuntime(), retentionMs, forbidden, fallback: () => fallbackKey(name) });
   if (r.ok) return r.keyring;
@@ -46,12 +66,24 @@ function keyringFor(name: string, retentionMs: number, forbidden: Buffer[]): Key
 
 /** The approval keyring, or null when it is unset in live mode or invalid in any mode (then nothing verifies). */
 export function approvalKeyring(): Keyring | null {
-  return keyringFor(APPROVAL_KEYS_ENV, APPROVAL_TTL_MS, contextSecretBytes());
+  return keyringFor(APPROVAL_KEYS_ENV, APPROVAL_TTL_MS, [...contextSecretBytes(), ...consumerKeyBytes(), ...setKeyBytes(ORDER_AUTH_KEYS_ENV)]);
 }
 
 /** The approval keyring for issuing. Throws 503 signing_unavailable when there is none, before anything is written. */
 export function requireApprovalKeyring(): Keyring {
   const k = approvalKeyring();
   if (!k) throw new HttpError(503, "signing_unavailable", "Approvals aren't set up on this server yet.");
+  return k;
+}
+
+/** The order-authorization keyring, or null when it is unset in live mode or invalid in any mode (then nothing verifies). */
+export function orderAuthKeyring(): Keyring | null {
+  return keyringFor(ORDER_AUTH_KEYS_ENV, ORDER_AUTH_TTL_MS, [...contextSecretBytes(), ...consumerKeyBytes(), ...setKeyBytes(APPROVAL_KEYS_ENV)]);
+}
+
+/** The order-authorization keyring for issuing. Throws 503 signing_unavailable when there is none, before anything is written. */
+export function requireOrderAuthKeyring(): Keyring {
+  const k = orderAuthKeyring();
+  if (!k) throw new HttpError(503, "signing_unavailable", "Order authorization isn't set up on this server yet.");
   return k;
 }

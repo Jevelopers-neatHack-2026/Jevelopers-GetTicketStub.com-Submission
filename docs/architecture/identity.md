@@ -42,7 +42,7 @@ The server decides who is asking and what they own. It does this from two httpOn
 | Replay | Magic links are single use. Claim links are one claimer. Context tokens live five minutes and are checked against the session and revision. |
 | Bounds | JSON bodies are size-checked before parsing (1 KB to 32 MB by route). Stubs are re-validated and capped at 2 MB after art moves to files. |
 | Rate limits | In memory, per IP and per account or email, before any work: links, email change, orders, shares, revoke, context verify. Art has daily caps in SQLite. |
-| Secrets | `CONTEXT_SECRET`, `APPROVAL_SIGNING_KEYS`, `RESEND_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` are read on the server only. The smoke test scans every response body and the built client chunks for them. |
+| Secrets | `CONTEXT_SECRET`, `APPROVAL_SIGNING_KEYS`, `ORDER_AUTH_SIGNING_KEYS`, `ORDER_AUTH_CONSUMER_KEY`, `RESEND_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` are read on the server only. The smoke test scans every response body and the built client chunks for them. |
 
 ## The signed context (GT-08.2, GT-08.5)
 
@@ -131,8 +131,11 @@ Each token class has its own key, so one leaked secret can mint only one class (
 | --- | --- | --- | --- |
 | `ticketstub.context` | 5 minutes | `CONTEXT_SECRET`: one key, 32+ characters | none |
 | `ticketstub.approval` | 7 days | `APPROVAL_SIGNING_KEYS`: versioned key set | in the header |
+| `ticketstub.order-authorization` | 15 minutes | `ORDER_AUTH_SIGNING_KEYS`: versioned key set | in the header |
 
-**Format.** A key set is one environment variable holding versioned JSON, the same shape as fulfillment-connectors' `FULFILLMENT_TOMBSTONE_KEYSET` with `kid` as the version name:
+`ORDER_AUTH_CONSUMER_KEY` is not a token key: it signs consumer requests to the order-authorization port only ([order-authorization.md](order-authorization.md)).
+
+**Format.** A key set is one environment variable holding versioned JSON, the same shape as fulfillment-connectors' `FULFILLMENT_TOMBSTONE_KEYSET` with `kid` as the version name (the example is the approval set; the order-authorization set has the same shape, suggested kids `order-auth-g<generation>`):
 
 ```json
 {"v":1,"keys":[
@@ -141,18 +144,18 @@ Each token class has its own key, so one leaked secret can mint only one class (
 ]}
 ```
 
-- `kid`: 1-64 of `[A-Za-z0-9._-]`. Suggested `approval-g<generation>`. Kids starting with `fixture` or `sandbox` are reserved and refused.
+- `kid`: 1-64 of `[A-Za-z0-9._-]`. Suggested `approval-g<generation>` and `order-auth-g<generation>`. Kids starting with `fixture` or `sandbox` are reserved and refused.
 - `state`: exactly one `active` key, and it is the newest. `retiredAt` is required on a `retired` key and absent on the active one.
-- `key`: canonical base64url of 32-1024 random bytes (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`). Fewer than 17 distinct byte values, text containing `FIXTURE-ONLY`, a key repeated in the set, or a key equal to `CONTEXT_SECRET` is refused.
+- `key`: canonical base64url of 32-1024 random bytes (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`). Fewer than 17 distinct byte values, text containing `FIXTURE-ONLY`, a key repeated in the set, or a key equal to `CONTEXT_SECRET`, `ORDER_AUTH_CONSUMER_KEY` or any key of the other set is refused.
 - At most 16 keys. Timestamps may be at most 5 minutes in the future (clock skew).
 
-**Signing and verifying** (`src/server/keyring.ts`, bound to the environment in `src/server/signing-keys.ts`). The server signs with the active key and writes its `kid` into the token header, `{"alg":"HS256","typ":"ticketstub.approval","kid":"approval-g2"}`. A verifier looks the `kid` up: the active key, or a retired key until `retiredAt` + the class's token lifetime (7 days for approvals) + 5 minutes. A missing or malformed `kid` is `unknown`; an unknown `kid`, or a retired key past that window, is `forged`. The `typ` check and the separate keys mean a context token never verifies as an approval, and an approval-shaped token signed with `CONTEXT_SECRET` is `forged`.
+**Signing and verifying** (`src/server/keyring.ts`, bound to the environment in `src/server/signing-keys.ts`). The server signs with the active key and writes its `kid` into the token header, `{"alg":"HS256","typ":"ticketstub.approval","kid":"approval-g2"}`. A verifier looks the `kid` up: the active key, or a retired key until `retiredAt` + the class's token lifetime (7 days for approvals, 15 minutes for order authorizations) + 5 minutes. A missing or malformed `kid` is `unknown`; an unknown `kid`, or a retired key past that window, is `forged`. The `typ` check and the separate keys mean no token class verifies as another, and a token signed with `CONTEXT_SECRET` or another class's key is `forged`.
 
 **Failure modes.**
 
-| `APPROVAL_SIGNING_KEYS` | Live runtime | Other runtimes |
+| `APPROVAL_SIGNING_KEYS`, `ORDER_AUTH_SIGNING_KEYS` | Live runtime | Other runtimes |
 | --- | --- | --- |
-| unset or blank | **fail closed**: issuing and listing answer 503 `signing_unavailable`, the verify port answers `forged` | a random per-process key, kid `sandbox`; records say `mode: "sandbox"` (tokens die on restart), like `CONTEXT_SECRET` |
+| unset or blank | **fail closed**: issuing and listing answer 503 `signing_unavailable`, the verify (and claim, revalidate, lookup) ports answer `forged` | a random per-process key, kid `sandbox`; records say `mode: "sandbox"` (tokens die on restart), like `CONTEXT_SECRET` |
 | set but invalid | fail closed, as above | fail closed, as above (a misconfigured secret is never silently replaced) |
 | set and valid | records say `mode: "live"` | records say `mode: "sandbox"` |
 
@@ -162,9 +165,9 @@ A refused set logs one line per process, `[signing-keys] APPROVAL_SIGNING_KEYS u
 
 1. Generate a new key. Write the set with the new entry `active` (next generation, `activatedAt` = now) and the previous one `retired` with `retiredAt` = the same time. Keep every other retired entry that is still inside its window.
 2. Replace the secret in GoDaddy (Preview and Publish separately; a secret can't be edited in place, so delete, re-add, save, restart).
-3. After `retiredAt` + 7 days + 5 minutes the retired key verifies nothing. Remove it at the next rotation.
+3. After `retiredAt` + the token lifetime + 5 minutes (7 days for approvals, 15 minutes for order authorizations) the retired key verifies nothing. Remove it at the next rotation.
 
-Approval tokens are derived from the stored record on demand, so after a rotation the owner's approval list hands out tokens under the new `kid`, and tokens already handed out keep verifying under the old one until they expire. On an incident, retiring the exposed key still lets it verify for 7 days; to cut it off at once, delete its entry instead: every outstanding approval token under it then reads `forged`, and owners re-fetch theirs from the list (the approvals themselves are records and survive).
+Approval tokens are derived from the stored record on demand, so after a rotation the owner's approval list hands out tokens under the new `kid`, and tokens already handed out keep verifying under the old one until they expire. On an incident, retiring the exposed key still lets it verify for 7 days; to cut it off at once, delete its entry instead: every outstanding approval token under it then reads `forged`, and owners re-fetch theirs from the list (the approvals themselves are records and survive). The same holds for order authorizations: a deleted key makes its in-flight tokens `forged`, and the owner re-issues (the stored record and any committed claim survive).
 
 ## Downstream verification port
 
@@ -184,7 +187,7 @@ Dashboard and cost-intelligence consume a context; neither is an identity author
 - **SQLite only**, one writer, one process. The `Storage` interface is the seam for Postgres. Migrations are forward-only.
 - **`verifyContextToken` is synchronous**, so alone it cannot see stale or revoked. Use `verifyContextTokenLive` or pass `state`.
 - **Token revocation is a lookup**, not a push: a consumer that never asks the issuer will honour a token for up to five minutes after a sign-out.
-- **Context tokens: one key, no rotation overlap.** Rotating `CONTEXT_SECRET` invalidates outstanding context tokens (at most five minutes' worth; a consumer re-fetches). Approval tokens rotate with overlap through `APPROVAL_SIGNING_KEYS` (see [Signing keys](#signing-keys-decision-0003-k4)).
+- **Context tokens: one key, no rotation overlap.** Rotating `CONTEXT_SECRET` invalidates outstanding context tokens (at most five minutes' worth; a consumer re-fetches). Approval and order-authorization tokens rotate with overlap through `APPROVAL_SIGNING_KEYS` and `ORDER_AUTH_SIGNING_KEYS` (see [Signing keys](#signing-keys-decision-0003-k4)).
 - **Art files stay readable by hash** after sharing stops, and may sit in caches.
 - **Old anonymous share rows** (owner `anon`, before device binding) have no owner: nobody can revoke them.
 - **Gift messages** are readable by anyone holding the gift link (that is the design) and are kept until the sender revokes, stops the share or deletes the account; there is no expiry. `ClaimClient` still decodes legacy payloads locally.

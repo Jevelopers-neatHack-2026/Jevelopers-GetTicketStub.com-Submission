@@ -185,18 +185,8 @@ function signingKey(): string {
   return (g.__ticketstubContextKey ??= newToken(32));
 }
 
-/**
- * CONTEXT_SECRET's HMAC key. Throws 503 in live mode without CONTEXT_SECRET. Context tokens only: artwork approvals sign
- * with their own APPROVAL_SIGNING_KEYS (signing-keys.ts, decision 0003 K4), never with this key.
- */
-export function tokenSigningKey(): string {
-  return signingKey();
-}
-
-/** "live" only when CONTEXT_SECRET is set and the runtime is live; otherwise "sandbox". */
-export function signingMode(): "sandbox" | "live" {
-  return contextSecret() && isLiveRuntime() ? "live" : "sandbox";
-}
+// signingKey() is not exported: artwork approvals and order authorizations sign with their own key sets
+// (signing-keys.ts, decision 0003 K4), never with CONTEXT_SECRET.
 
 /** The deployment environment, as the context reports it. */
 export const contextEnvironment = environment;
