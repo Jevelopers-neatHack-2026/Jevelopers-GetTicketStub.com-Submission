@@ -1,9 +1,32 @@
-# creative-engine integration (adapter only, no runtime calls)
+# Creative-engine application integration
+
+Finance-owner review of source `48dd51940381882c2160a6139aa0c0bbf46d60d6` found F1–F4 incompatible with the accepted public lifecycle. Producer adoption/shipping is **blocked**. The historical offline CI and UI/component review do not establish Finance acceptance; their receipts remain preserved as superseded evidence.
+
+`POST /api/creative` invokes the canonical owned `creative-engine/api/v1` API for scoped read/state operations. It accepts `{projectId, operation, actionId, payload, sourceRefs?, environment?}` with a development environment that must equal the server. Current staff session, existing stub ownership and private registry scope/permissions remain required. `brief.create`, `list`, `compare`, `restore`, `cancel` and `job.status` preserve existing state and recovery. `generate` and `edit` fail with `creative_finance_lifecycle_unavailable` before C03 admission, provider DNS or provider writes. A key, registry field, environment variable or test cannot override the source-owned barrier.
+
+Direct new Finance admission/dispatch authorization is also unavailable. The Product no longer imports or calls the exported lower settlement/release engines, creates financial finality from counters/estimates, or allocates compatibility UUID/model/quote projections. Settlement/release requests retain recovery state and existing holds. Finance must first release its accepted public intake/custody and atomic settlement/unused-release lifecycle, then the exact Product consumer needs independent review and a named owner ACK. Finance PR40, proposal schemas, development aliases, synthetic fixtures and syntactically valid registry records are not that release/ACK.
+
+Bounded recovery may acknowledge an already committed dispatch command only. It preserves the original command bytes and IDs, verifies the actual current owner SQL state/revision/binding, prevents a new append using the old expected revision, and accepts only the owner's exact `replay` outcome. Missing, divergent, uncommitted or incomplete-custody records remain held. Source/service/policy/account/project/grant/model/operation identity is compared to the held record after every digest/snapshot/replay await; the context/storage-owned synchronous session/staff/revision/ownership fence also runs before local ACK. Comparison snapshots and request digests do not mint authority or adoption.
+
+Original CE observations, persisted requests, actual historical intake receipts, pending/retry outboxes, reservations, jobs and artifacts remain available for recovery. No new intake/quote delivery or expense posting is enabled while public custody is unavailable. An accepted durable intake receipt is neither posted expense nor atomic completed settlement/finality/full unused release. Pending/retry receipts retain a recovery hold. Provider-reported unsettled cost and estimate provenance remain distinct from invoice reconciliation.
+
+Concurrent recovery writers reload the latest SQLite row and compare immutable custody before merging their own fields. An exact-byte conditional update retries a competing write across request instances or connections to the same database. Distinct observations remain durable; repeated identical observation IDs are idempotent, conflicting bytes are denied, and replay ACKs preserve existing usage receipts and unknown holds. This storage coordination does not enable new Finance writes.
+
+The existing vendored source manifests and assembly tooling pin the owned components. `npm run verify:creative-host` is mandatory real-PostgreSQL qualification of this **blocked/recovery boundary**, not a positive paid-journey acceptance test. It exercises actual app sessions/read state, zero new admissions/provider writes/artifacts, exact committed-command replay without duplicate money, current custody changes, concurrent immutable observations/replay ACKs and durable pending/retry recovery. External records and IDs are explicitly synthetic fixture data; they confer no live/source authenticity. The source at 48dd and its earlier positive artifact evidence are historical and superseded for lifecycle acceptance.
+
+The current studio `/api/art` remains a separate credential/provider consumer. See [deployed settings](../operations/deployed-settings.md) for the inventory and Finance-first deployment/rollback gate. No production setting, paid call or publication is authorized by these repairs.
+
+## Historical studio mapper boundary
+
+The existing studio `/api/art` is still a separate provider consumer. Its client mapper and the material below
+document the earlier proposal; they do not establish a migrated studio creative journey or new server authority.
 
 Code: `src/customer/studio/creative/` (`contracts.ts`, `controls.ts`, `adapter.ts`, `fixtures/`).
-Check: `node scripts/check-creative-adapter.mjs` (Node 22.15+). It builds a brief, edit plans, a control schema and API envelopes from the demo stub and compares keys and enums with creative-engine's fixture JSON.
+Check: `node scripts/check-creative-adapter.mjs` (Node22.23.3). It builds a brief, edit plans, a control schema and API envelopes from the demo stub and compares keys and enums with creative-engine's fixture JSON.
 
-Source of truth: `Jevelopers-neatHack-2026/creative-engine`, branch `impl/creative-brief-integrated` (commit `96d56f3`; the most complete branch, and it contains the contracts, controls, API, brief and version-store work). `main` only has architecture docs. Everything upstream is a **local consumer proposal**: `MODE=live` is not implemented, `make acceptance` exits 2 until the owner agreements are signed, and the shared-contracts catalog (`docs/contract-catalog.md`) describes `CreativeBrief`, `DesignControlSchema` and `DesignVersion` as proposed interfaces.
+The mapper originally tracked `impl/creative-brief-integrated` at `96d56f3`. Current runtime source instead
+comes from the exact vendored creative-engine revision. Historical `PENDING_` refs below are not accepted
+host authority; actual deployment still requires current owner agreements and live evidence.
 
 ## Mapping table
 
@@ -96,7 +119,7 @@ Checked at the type level (`Pending<K>` = `` `PENDING_${K}` ``); a real hash alw
 - `inspect`, `list`, `compare`, `restore`, `handoff` are supported by `toApiRequest` types but unused by the studio.
 - Upstream is on Node 22.23.3 / 24.15.0 and the `.d.mts` types aren't published as a package; `contracts.ts` mirrors them by hand. Re-check against upstream when they pin a release.
 
-## One-file swap plan for `/api/art`
+## Historical swap proposal for `/api/art` (not implemented by this host)
 
 Today `src/app/api/art/route.ts` takes `{event, vibe, seed, edition, first}` and returns an `ArtLayer`. The client (`research/client.ts` `remixArt`) and `addArtVersion` stay unchanged, because the route keeps that request and response.
 
