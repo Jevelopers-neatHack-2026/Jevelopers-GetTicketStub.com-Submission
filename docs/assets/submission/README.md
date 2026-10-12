@@ -20,7 +20,7 @@ Official sponsor asset sources, checked October 12: [Entire](https://neatlogs.co
 
 The [searchable usage HTML](timothy-wayne-gregg-usage-2026-10-12-143507.html) and [complete ZIP](timothy-wayne-gregg-usage-2026-10-12-143507.zip) are unchanged copies supplied for Timothy's same `143507` snapshot. The originals were `exhaustive/report.html` and `exhaustive-report.zip`. Download and extract the ZIP to keep the HTML's CSV links working; GitHub does not render uploaded HTML as a live page. All 50 bundled checksums passed, and all extracted files passed the secret scan. [Validation and scope](../../judges/USAGE.md#file-integrity) distinguish agreement within the exported data from an audit of original logs or charges.
 
-The [Zach usage PDF](zach-zwright-usage-2026-10-12.pdf) is an unchanged copy of `NeatHack2026-Jevelopers-usage-report (1).pdf`, supplied and attributed to Zach (`zwright`) by the team on October 12. It covers a reported October 10–12 Codex log selection. [Scope and evidence limits](../../judges/ZACH-USAGE.md) explain the estimated prices, missing underlying data, and team-supplied identity. Its checksum is in the asset manifest.
+The [Crystal Codex usage PDF](crystal-lajefa-usage-2026-10-12.pdf) is an unchanged copy of `NeatHack2026-Jevelopers-usage-report (1).pdf`, supplied on October 12. The team corrected its attribution from Zach to Crystal (`lajefa`). It covers a reported October 10–12 Codex log selection. [Scope and evidence limits](../../judges/CRYSTAL-CODEX-USAGE.md) explain the estimated prices, missing underlying data, and team-supplied identity. Its checksum is in the asset manifest.
 
 ## Image generation record
 

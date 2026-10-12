@@ -22,6 +22,11 @@
       "sha256": "f325dbd0c07a2370b3839029e0703260f870234fad30f2761882e5d73a6e260b"
     },
     {
+      "file": "crystal-lajefa-usage-2026-10-12.pdf",
+      "bytes": 37086,
+      "sha256": "d2c607148ffd163271f6be190a15f890c3e14d0d48a375be0974018bbaf288e5"
+    },
+    {
       "file": "entire-official.svg",
       "bytes": 2075,
       "sha256": "b76053b525d0c5f48f906b5fe2cbb73bf29109d7a98065a88d9a888d568e2a5f"
@@ -110,11 +115,6 @@
       "file": "tools.svg",
       "bytes": 8888,
       "sha256": "2d4b27e75becd7f06c978da7a781ca8a60b716697b59c0251b8fe015455e2cf4"
-    },
-    {
-      "file": "zach-zwright-usage-2026-10-12.pdf",
-      "bytes": 37086,
-      "sha256": "d2c607148ffd163271f6be190a15f890c3e14d0d48a375be0974018bbaf288e5"
     }
   ]
 }

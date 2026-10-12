@@ -6,6 +6,10 @@
 
 The pasted report is titled **GetTicketStub — AI Usage Ledger**. It says it was generated on **October 12 at 17:55 UTC** and covers **May 19–October 12, 2026**. Much of that window predates neatHack. It is not a hackathon-only usage total.
 
+## Separate PDF supplied later
+
+The team also attributed a [Codex usage PDF](CRYSTAL-CODEX-USAGE.md) to Crystal, correcting its earlier Zach credit. That PDF covers October 10–12 and reports 3,859,621,041 tokens. It is not the source file for the Claude Code/Copilot ledger summarized here. Their relationship has not been verified; no combined total is claimed.
+
 ## Reported totals
 
 | Measure | Supplied value |
