@@ -6,6 +6,14 @@
 
 Tokens are small pieces of text processed by a model. These records describe local coding-agent work assigned to the project. They do not measure customer use of TicketStub.
 
+## Explore the report
+
+- **[Complete report and CSVs (ZIP, 32.1 MB)](../assets/submission/timothy-wayne-gregg-usage-2026-10-12-143507.zip):** download and unzip, then open `exhaustive/report.html` in a browser. Search each table or click a column heading to sort it. CSV links work within this extracted folder.
+- **[Searchable HTML file (646 KB)](../assets/submission/timothy-wayne-gregg-usage-2026-10-12-143507.html):** GitHub displays source code, not the interactive report. Download the file to use its table filters. Its CSV links require the ZIP's folder structure.
+- **[Designed PDF (198 pages)](../assets/submission/timothy-wayne-gregg-token-usage-2026-10-12-143507.pdf):** charts, clickable navigation, and 43 sections, including session and source-file breakdowns.
+
+These are the same snapshot through October 12 at 2:34 p.m. Eastern. The ZIP includes the PDF, HTML, event-level CSVs, summary tables, saved prices, scope notes, and file hashes. It contains local paths and session IDs. It contains derived usage records, not original conversation transcripts. Its README also mentions a separate native dashboard that is not included; use `exhaustive/report.html` here.
+
 ## What the report records
 
 The window runs from **October 10 at 6:09:05 a.m. to October 12 at 2:34:36 p.m., Eastern time (UTC−04:00)**. This is a saved snapshot of active logs. It extends beyond the website cutoff recorded in the [rules checklist](RULES-CHECKLIST.md); the controlling Discord deadline remains unverified. Do not treat the full window as confirmed event-eligible work.
@@ -33,7 +41,7 @@ Repeated input makes up most of the token count. More tokens alone do not prove 
 
 - Other users, machines, and remote runtime calls are outside the stated scope. Mixed-project sessions may need manual review. Page 198 separates workspace evidence from task or parent-session inference.
 - Four Codex sessions differ from database counters by more than 2% (page 190). Claude's older stats cache cannot check this window (page 191).
-- Pages 191–192 explain excluded records and limits. The companion CSV files and original logs were not supplied with this PDF or independently checked here.
+- Pages 191–192 explain excluded records and limits. The companion CSVs are now supplied and their totals were checked as described below. Original logs and the producer's ingestion rules were not independently audited.
 - This later snapshot does not independently audit the earlier Day 2 post. Do not add their overlapping totals together.
 - Usage records do not establish code authorship, event eligibility, or a complete live customer result. See the [rules checklist](RULES-CHECKLIST.md).
 
@@ -46,3 +54,7 @@ The [earlier supplied PDF](../assets/submission/timothy-wayne-gregg-token-usage-
 Both supplied PDFs are retained unchanged. The latest source filename ends in `20261012-143507-designed-report.pdf`. Its filename now identifies Timothy; the report's internal title is preserved. [The asset manifest](../assets/submission/ASSET-MANIFEST.json) records its size and SHA-256 file fingerprint.
 
 We checked the cited text, visually inspected the latest cover, token breakdown, and scope page, and scanned all extracted text for secrets. The PDF contains local workspace paths and session IDs, but no embedded files or JavaScript. No raw logs or private checkpoint contents were added.
+
+The HTML and ZIP are also unchanged copies of the supplied files, with fingerprints in the asset manifest. All 50 checksums in the ZIP passed. Its PDF exactly matches the published PDF. All extracted files passed Gitleaks with no size limit or ignore file. The HTML uses local table filtering and sorting; it references no remote resources.
+
+We summed the event CSV: **209,429 records, 28,316,587,424 tokens, and $8,503.11 estimated API value**. Its token categories match `summary.json`. All 34 partition tables match the event count and tokens, and their estimated values agree within one cent. These checks establish internal agreement; they do not verify the original usage capture, saved prices, or actual charges.

@@ -83,6 +83,8 @@ The posts prove public updates, not every product claim in their copy. Day 1’s
 
 **Zach's token counts:** a team-pasted message attributed to **Zach (zwright)** reports **3,859,621,041 tokens**, including cached input, fresh input, and output. The categories add correctly. [Read the supplied table and limits](ZACH-USAGE.md). The usage dates, source logs, and counting method were not supplied. This is a separate owner report, not a verified hackathon-only or team-wide total.
 
+Timothy's [searchable report and complete CSV bundle](USAGE.md#explore-the-report) are now retained with the PDF. The event CSV and all 34 partition tables reconcile internally. That does not verify original log capture, actual charges, or overlap with other team members' reports.
+
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
 
 **Still missing:** a verified final demo quote-post of the official launch post. The two build posts predate that launch and do not satisfy this step. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
