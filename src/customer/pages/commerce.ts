@@ -145,12 +145,14 @@ export interface OrderPayment {
   provider: "dodo";
   /** test_mode charges nothing real. */
   environment: "test_mode" | "live_mode";
-  status: "pending" | "paid" | "failed" | "cancelled";
+  status: "pending" | "paid" | "failed" | "cancelled" | "needs_review";
   /** The amount the server derived and asked the provider to charge, before any provider-added tax. */
   amountMinor: number;
   currency: "USD";
   checkoutSessionId: string;
   paymentId?: string;
+  /** What the provider actually charged (tax included), set when the payment is confirmed. The receipt prints this. */
+  chargedMinor?: number;
   updatedAt: string;
 }
 
@@ -233,6 +235,10 @@ export function addOrderStored(order: Omit<Order, "id" | "mode" | "createdAt">):
   const full: Order = { currency: "USD", ...order, lines, capabilityVersion: CAPABILITY_VERSION, id: `sbx_${Math.random().toString(36).slice(2, 10)}`, mode: "sandbox", createdAt: new Date().toISOString() };
   const stored = write(ORDERS_KEY, [full, ...loadOrders()]);
   return { order: full, stored };
+}
+/** Forgets a local order record: used when a checkout turns out to be the provider's to settle, not a sandbox order. */
+export function dropOrder(id: string): void {
+  write(ORDERS_KEY, loadOrders().filter((o) => o.id !== id));
 }
 export function addOrder(order: Omit<Order, "id" | "mode" | "createdAt">): Order {
   return addOrderStored(order).order;

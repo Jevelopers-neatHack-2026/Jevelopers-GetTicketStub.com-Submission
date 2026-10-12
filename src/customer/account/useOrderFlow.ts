@@ -2,26 +2,32 @@
 // Placing an order with honest progress: the local record lands first, then the server is told. `placed` is
 // null while the request is out (see `progress` for sending, "Still working..." and unknown), and carries a
 // `code` when the server didn't take it, in which case `retry` sends the same order again (no second local copy).
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useProgress } from "@/customer/feedback-messages/progress";
-import { placeOrder, resendOrder, type Placed } from "./orders";
+import { goToCheckout, placeOrder, resendOrder, type Placed } from "./orders";
 
 export function useOrderFlow() {
   const { state, run } = useProgress();
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [held, setHeld] = useState<Placed | null>(null);
 
+  // What the caller does once the order is placed (empty the cart, tear the stub). Never run for a checkout that is
+  // still to be paid, or one that couldn't start: the buyer may come back from the provider with nothing bought.
+  const afterPlaced = useRef<(() => void) | undefined>(undefined);
+
   function settle(p: Placed | undefined) {
     if (!p) return;
     // The server started a provider checkout: payment happens on the provider's page, which returns to /payment/return.
-    if (p.checkoutUrl && /^https:\/\//.test(p.checkoutUrl)) {
-      window.location.assign(p.checkoutUrl);
-      return;
+    if (goToCheckout(p)) return;
+    if (p.code !== "payment_unavailable") {
+      afterPlaced.current?.();
+      afterPlaced.current = undefined;
     }
     setHeld(p);
     setPlaced(p);
   }
-  function place(draft: Parameters<typeof placeOrder>[0]) {
+  function place(draft: Parameters<typeof placeOrder>[0], onPlaced?: () => void) {
+    afterPlaced.current = onPlaced;
     setPlaced(null);
     void run(() => placeOrder(draft)).then(settle);
   }

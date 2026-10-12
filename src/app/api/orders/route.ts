@@ -61,6 +61,15 @@ function parseOrder(v: unknown): Omit<Order, "id" | "mode" | "createdAt"> {
   return out;
 }
 
+/** Where the provider sends the buyer back. A live charge is only ever sent to APP_URL, never to a host the request names. */
+function returnOrigin(req: Request, environment: "test_mode" | "live_mode"): string {
+  if (environment === "live_mode" && !process.env.APP_URL?.trim()) {
+    console.error("[payments] live payments need APP_URL; checkout refused");
+    throw new HttpError(502, "payment_unavailable", "We couldn't start the payment. Nothing was charged. Try again in a moment.");
+  }
+  return appOrigin(req);
+}
+
 export const POST = route(async (req: Request) => {
   requireStorage();
   checkOrigin(req);
@@ -95,7 +104,7 @@ export const POST = route(async (req: Request) => {
   if (dodo && isDigitalOnly(order) && allOrderable(order) && PAID_METHODS.has(order.method)) {
     const amountMinor = verifiedTotalMinor(order);
     try {
-      const c = await createCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl: `${appOrigin(req)}/payment/return?order=${encodeURIComponent(order.id)}` });
+      const c = await createCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl: `${returnOrigin(req, dodo.environment)}/payment/return?order=${encodeURIComponent(order.id)}` });
       order.payment = { provider: "dodo", environment: dodo.environment, status: "pending", amountMinor, currency: "USD", checkoutSessionId: c.sessionId, updatedAt: new Date().toISOString() };
       checkoutUrl = c.checkoutUrl;
     } catch (e) {
@@ -107,7 +116,9 @@ export const POST = route(async (req: Request) => {
   await getStorage().createOrder(order, account?.id ?? null, email);
   // A paid order's receipt is sent once its payment is confirmed (see the Dodo webhook), not now.
   if (!checkoutUrl) await sendReceipt(order, account?.id ?? null, email, appOrigin(req));
-  await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
+  // A started checkout is not an order yet: it counts as paid only when the provider's webhook says so (order_paid).
+  if (checkoutUrl) await recordEvent(req, "checkout_started", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor, provider: "dodo" }, { ctx });
+  else await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
   return json(checkoutUrl ? { order, checkoutUrl } : { order });
 });
 

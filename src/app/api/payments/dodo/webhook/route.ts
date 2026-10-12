@@ -1,5 +1,7 @@
 import type { OrderPayment } from "@/customer/pages/commerce";
-import { HttpError, appOrigin, isObject, json, route } from "@/server/http";
+import { HttpError, appOrigin, isObject, json, readBody, route } from "@/server/http";
+import { recordEvent } from "@/server/event-log";
+import { refOf } from "@/server/events";
 import { getStorage, requireStorage } from "@/server/index";
 import { DodoError, dodoConfig, getPayment, verifyWebhook, type DodoPayment } from "@/server/payments/dodo";
 import { sendReceipt } from "@/server/receipt";
@@ -30,8 +32,7 @@ export const POST = route(async (req: Request) => {
   const dodo = dodoConfig();
   if (!dodo) throw new HttpError(503, "payments_off", "Payments are not configured.");
   requireStorage();
-  const raw = await req.text();
-  if (raw.length > MAX_BODY) throw new HttpError(413, "too_large", "That webhook is too large.");
+  const raw = (await readBody(req, MAX_BODY)).toString("utf8");
   if (!verifyWebhook(dodo.webhookKey, req.headers, raw)) throw new HttpError(401, "bad_signature", "The webhook signature is not valid.");
 
   let event: unknown;
@@ -57,23 +58,29 @@ export const POST = route(async (req: Request) => {
   if (!orderId) return json({ ok: true, handled: false });
 
   const status = nextStatus(payment);
-  let mismatch = false;
+  let mismatch: "amount" | "currency" | null = null;
   const result = await getStorage().updateOrderPayment(orderId, (order) => {
     const cur = order.payment;
-    if (!cur || cur.provider !== "dodo" || cur.status === "paid") return null;
+    if (!cur || cur.provider !== "dodo" || cur.status === "paid" || cur.status === "needs_review") return null;
     if (payment.checkout_session_id && payment.checkout_session_id !== cur.checkoutSessionId) return null;
+    const now = new Date().toISOString();
+    // A real charge that isn't what we asked for is held for staff, not left pending: nobody else would ever look at it.
     if (status === "paid" && !amountMatches(payment, cur)) {
-      mismatch = true;
-      return null;
+      mismatch = payment.currency === cur.currency ? "amount" : "currency";
+      return { ...cur, status: "needs_review", paymentId: payment.payment_id, chargedMinor: payment.total_amount, updatedAt: now };
     }
     if (status === cur.status && cur.paymentId === payment.payment_id) return null;
-    return { ...cur, status, paymentId: payment.payment_id, updatedAt: new Date().toISOString() };
+    return { ...cur, status, paymentId: payment.payment_id, ...(status === "paid" ? { chargedMinor: payment.total_amount } : {}), updatedAt: now };
   });
-  if (mismatch) console.error(`[payments] dodo amount or currency mismatch for an order; left unpaid`);
+  if (mismatch && result) {
+    console.error(`[payments] dodo charge needs review: ${mismatch} mismatch, order ${refOf(orderId)}`);
+    await recordEvent(req, "payment_needs_review", { order: refOf(orderId), provider: "dodo", reason: mismatch });
+  }
   // Unknown order, or nothing to change (a repeat, an older event, a refused charge).
   if (!result || result.after === result.before) return json({ ok: true, handled: false });
 
   if (result.before.payment?.status !== "paid" && result.after.payment?.status === "paid") {
+    await recordEvent(req, "order_paid", { order: refOf(orderId), totalMinor: result.after.payment.chargedMinor ?? result.after.payment.amountMinor, provider: "dodo" });
     const row = await getStorage().getOrder(orderId);
     const email = row?.email ?? result.after.email;
     if (email) await sendReceipt(result.after, row?.accountId ?? null, email, appOrigin(req));

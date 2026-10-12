@@ -1,7 +1,7 @@
 "use client";
 // Placing a sandbox order: the local record always lands first (it is the offline copy), then the server
 // is told so it can keep the order and email the receipt. A failed request never undoes the order.
-import { OrderBlocked, addOrderStored, type Order } from "@/customer/pages/commerce";
+import { OrderBlocked, addOrderStored, dropOrder, type Order } from "@/customer/pages/commerce";
 import { codeOf } from "@/customer/feedback-messages/messages";
 import { count, errorCode, flow, major } from "@/customer/flows/events";
 import { api } from "./api";
@@ -42,6 +42,13 @@ export function reportOrder(draft: Draft, receipt: "server" | "local", stored: b
   });
 }
 
+/** True when the order was handed to the provider's hosted checkout, so the browser is leaving for it. */
+export function goToCheckout(p: Placed): boolean {
+  if (!p.checkoutUrl || !/^https:\/\//.test(p.checkoutUrl)) return false;
+  window.location.assign(p.checkoutUrl);
+  return true;
+}
+
 export async function placeOrder(draft: Draft): Promise<Placed> {
   let made: { order: Order; stored: boolean };
   try {
@@ -59,12 +66,21 @@ export async function placeOrder(draft: Draft): Promise<Placed> {
   }
   try {
     const { order, checkoutUrl } = await api.order(draft);
+    if (checkoutUrl) {
+      // Not an order until the provider confirms the payment: no sandbox_order (the server counted a checkout_started),
+      // no local record, and a receipt only once it is paid.
+      dropOrder(local.id);
+      return { order, receipt: false, checkoutUrl };
+    }
     reportOrder(draft, "server", made.stored);
-    // A paid order's receipt is sent once the provider confirms the payment, so it isn't promised here.
-    return checkoutUrl ? { order, receipt: false, checkoutUrl } : { order, receipt: !!draft.email };
+    return { order, receipt: !!draft.email };
   } catch (e) {
-    reportOrder(draft, "local", made.stored, e);
-    return { order: local, receipt: false, code: codeOf(e) };
+    const code = codeOf(e);
+    // A payment that couldn't start is no order: nothing was charged, so this device keeps no record of it.
+    const unpaid = code === "payment_unavailable";
+    if (unpaid) dropOrder(local.id);
+    reportOrder(draft, "local", made.stored && !unpaid, e);
+    return { order: local, receipt: false, code };
   }
 }
 
@@ -73,9 +89,9 @@ export async function resendOrder(placed: Placed): Promise<Placed> {
   if (isSavingOff()) return placed;
   const { order } = placed;
   try {
-    const sent = await api.order({ stubIds: order.stubIds, lines: order.lines, capabilityVersion: order.capabilityVersion, totalMinor: order.totalMinor, currency: order.currency, quoteId: order.quoteId, method: order.method, email: order.email });
+    const { order: sent, checkoutUrl } = await api.order({ stubIds: order.stubIds, lines: order.lines, capabilityVersion: order.capabilityVersion, totalMinor: order.totalMinor, currency: order.currency, quoteId: order.quoteId, method: order.method, email: order.email });
     flow("sandbox_order_retry", { result: "server" });
-    return { order: sent.order, receipt: !!order.email };
+    return checkoutUrl ? { order: sent, receipt: false, checkoutUrl } : { order: sent, receipt: !!order.email };
   } catch (e) {
     flow("sandbox_order_retry", { result: "local", error_code: errorCode(e) });
     return { order, receipt: false, code: codeOf(e) };

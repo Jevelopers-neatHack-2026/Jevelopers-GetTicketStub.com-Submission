@@ -145,14 +145,10 @@ test("marks an order paid only from the payment fetched back from Dodo, once, an
   assert.equal(await statusOf("ord_a"), "paid");
 });
 
-test("ignores the webhook body's claims and refuses a mismatched charge", async () => {
+test("ignores the webhook body's claims and another checkout session's payment", async () => {
   await placePending("ord_b", 1800);
-  // the API says the charge was smaller than the order: it stays unpaid
-  remote.pay_b = { payment_id: "pay_b", status: "succeeded", total_amount: 100, currency: "USD", checkout_session_id: "cks_ord_b", metadata: { order_id: "ord_b" } };
-  assert.equal((await deliver("payment.succeeded", "pay_b")).json.handled, false);
-  assert.equal(await statusOf("ord_b"), "pending");
   // another checkout session for the same order id is not this order's payment
-  remote.pay_b = { ...remote.pay_b, total_amount: 1800, checkout_session_id: "cks_other" };
+  remote.pay_b = { payment_id: "pay_b", status: "succeeded", total_amount: 1800, currency: "USD", checkout_session_id: "cks_other", metadata: { order_id: "ord_b" } };
   assert.equal((await deliver("payment.succeeded", "pay_b")).json.handled, false);
   assert.equal(await statusOf("ord_b"), "pending");
   // tax added on top of the asked amount is accepted
@@ -169,4 +165,58 @@ test("records a failure, refuses bad signatures and acknowledges unrelated event
   assert.deepEqual((await deliver("refund.succeeded", "pay_c")).json, { ok: true, handled: false });
   // a payment Dodo doesn't know makes Dodo retry later
   assert.equal((await deliver("payment.succeeded", "pay_missing")).status, 502);
+});
+
+const eventsOf = async (type) => (await getStorage().listEvents({ limit: 200 })).filter((e) => e.type === type);
+
+test("holds a charge that isn't the asked amount or currency for review, with an event and an order ref, and never overwrites it", async () => {
+  const { refOf } = await import("../src/server/events.ts");
+  await placePending("ord_m", 1800);
+  // the API says the charge was smaller than the order: a real charge, so it is not left pending
+  remote.pay_m = { payment_id: "pay_m", status: "succeeded", total_amount: 100, currency: "USD", checkout_session_id: "cks_ord_m", metadata: { order_id: "ord_m" } };
+  const r = await deliver("payment.succeeded", "pay_m");
+  assert.deepEqual([r.status, r.json.status], [200, "needs_review"]);
+  assert.equal(await statusOf("ord_m"), "needs_review");
+  const [ev] = (await eventsOf("payment_needs_review")).filter((e) => e.fields.order === refOf("ord_m"));
+  assert.deepEqual([ev.fields.provider, ev.fields.reason], ["dodo", "amount"]);
+  // a later, correct-looking delivery cannot talk it into paid
+  remote.pay_m = { ...remote.pay_m, total_amount: 1800 };
+  assert.equal((await deliver("payment.succeeded", "pay_m")).json.handled, false);
+  assert.equal(await statusOf("ord_m"), "needs_review");
+  // a wrong currency is held too
+  await placePending("ord_n");
+  remote.pay_n = { payment_id: "pay_n", status: "succeeded", total_amount: 900, currency: "EUR", checkout_session_id: "cks_ord_n", metadata: { order_id: "ord_n" } };
+  assert.equal((await deliver("payment.succeeded", "pay_n")).json.status, "needs_review");
+  assert.ok((await eventsOf("payment_needs_review")).some((e) => e.fields.reason === "currency"));
+});
+
+test("records order_paid once, on the transition to paid, with what was charged", async () => {
+  const { refOf } = await import("../src/server/events.ts");
+  await placePending("ord_p");
+  remote.pay_p = { payment_id: "pay_p", status: "succeeded", total_amount: 1050, tax: 150, currency: "USD", checkout_session_id: "cks_ord_p", metadata: { order_id: "ord_p" } };
+  await deliver("payment.succeeded", "pay_p");
+  await deliver("payment.succeeded", "pay_p");
+  const paid = (await eventsOf("order_paid")).filter((e) => e.fields.order === refOf("ord_p"));
+  assert.equal(paid.length, 1);
+  assert.deepEqual([paid[0].fields.totalMinor, paid[0].fields.provider], [1050, "dodo"]);
+  assert.equal((await getStorage().getOrder("ord_p")).order.payment.chargedMinor, 1050);
+});
+
+test("the receipt prints what was charged, tax included", async () => {
+  const { receiptMail } = await import("../src/server/templates.ts");
+  const order = { id: "ord_r", mode: "sandbox", createdAt: "x", stubIds: [], lines: [line("digital", "matte", 900)], totalMinor: 900, currency: "USD", method: "card",
+    payment: { provider: "dodo", environment: "test_mode", status: "paid", amountMinor: 900, chargedMinor: 1050, currency: "USD", checkoutSessionId: "c", updatedAt: "x" } };
+  const mail = receiptMail(order, "https://getticketstub.test/wall", "");
+  assert.match(mail.text, /Tax: \$1\.5\n/);
+  assert.match(mail.text, /Total: \$10\.5\n/);
+  assert.match(receiptMail({ ...order, payment: undefined }, "https://getticketstub.test/wall", "").text, /Total: \$9\n/);
+});
+
+test("caps the webhook body while it streams, before anything is parsed", async () => {
+  const big = "x".repeat(300 * 1024);
+  // no content-length (a chunked body), so only the streaming cap can refuse it
+  const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(big)); c.close(); } });
+  const req = new Request("https://getticketstub.test/api/payments/dodo/webhook", { method: "POST", headers: sign(big), body: stream, duplex: "half" });
+  const res = await POST(req);
+  assert.equal(res.status, 413);
 });

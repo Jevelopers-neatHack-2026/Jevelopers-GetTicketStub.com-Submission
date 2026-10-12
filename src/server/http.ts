@@ -118,8 +118,8 @@ export function foreignOrigin(req: Request): boolean {
   }
 }
 
-/** Reads a JSON body, refusing anything over `maxBytes` before it is parsed. */
-export async function readJson(req: Request, maxBytes: number): Promise<unknown> {
+/** Reads a raw body, refusing anything over `maxBytes` while it streams. */
+export async function readBody(req: Request, maxBytes: number): Promise<Buffer> {
   const tooBig = () => new HttpError(413, "too_large", "That's too much to send in one go.");
   const declared = Number(req.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) throw tooBig();
@@ -137,8 +137,14 @@ export async function readJson(req: Request, maxBytes: number): Promise<unknown>
     }
     chunks.push(value);
   }
+  return Buffer.concat(chunks);
+}
+
+/** Reads a JSON body, refusing anything over `maxBytes` before it is parsed. */
+export async function readJson(req: Request, maxBytes: number): Promise<unknown> {
+  const body = await readBody(req, maxBytes);
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(body.toString("utf8"));
   } catch {
     throw new HttpError(400, "bad_json", "Send a JSON body.");
   }
