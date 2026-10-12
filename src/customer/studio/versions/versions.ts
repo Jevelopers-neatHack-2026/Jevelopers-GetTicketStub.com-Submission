@@ -2,6 +2,7 @@
 // A DesignVersion is art plus edition. Restoring only changes which version is selected: it overwrites nothing and
 // generates nothing, and the next edit branches from the restored version because new versions take the selected one as parent.
 import type { ArtLayer, DesignVersion, Stub, VersionContext } from "../types";
+import { artUnavailable } from "./retention";
 
 /** A short, stable id for a version: a hash of what makes it what it is. Inline image data is hashed by its length and ends. */
 export function versionHash(v: DesignVersion): string {
@@ -31,7 +32,7 @@ export function sameArt(a: ArtLayer, b: ArtLayer): boolean {
 /** What the art is, in plain words. Sample and procedural art never reads as the real thing. */
 export function artLabel(a: ArtLayer): { text: string; sample: boolean } {
   if (a.vibe === "photo") return { text: "Your photo", sample: false };
-  if (a.kind === "procedural" && a.provenance === "live") return { text: "Generated art, image not kept on this device (sample shown)", sample: true };
+  if (artUnavailable(a)) return { text: "Generated art, image not kept on this device (sample shown)", sample: true };
   if (a.kind === "procedural") return { text: "Procedural art (sample)", sample: true };
   if (a.provenance === "live") return { text: "Generated art", sample: false };
   return { text: "Sample art (not generated)", sample: true };

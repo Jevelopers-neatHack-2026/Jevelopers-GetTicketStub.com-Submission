@@ -9,6 +9,7 @@ import { play } from "@/customer/studio/feedback";
 import { PunchTabs, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { atVersion } from "../editor/ops";
 import { whenLabel } from "../facts/FactsReview";
+import { artUnavailable } from "./retention";
 import { artLabel, compareVersions, howMade, listVersions, restoreVersion, selectedSummary, versionHash } from "./versions";
 import styles from "./Versions.module.css";
 
@@ -62,7 +63,11 @@ export function VersionsPanel({ stub, onChange, layout }: Props) {
   const restore = (v: DesignVersion) => {
     onChange(restoreVersion(stub, v.id));
     play("stamp");
-    setSaid(`Selected #${versionHash(v)}. Nothing was overwritten and nothing was made again.`);
+    setSaid(
+      artUnavailable(v.art)
+        ? `Selected #${versionHash(v)}, but its image is not kept on this device, so a sample is shown. Nothing was overwritten and nothing was made again.`
+        : `Selected #${versionHash(v)}. Nothing was overwritten and nothing was made again.`,
+    );
   };
 
   return (
