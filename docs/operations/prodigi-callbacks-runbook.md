@@ -105,7 +105,7 @@ The app itself never logs or stores the path. The `storage_unavailable` event la
 
 - the route: off → 404 with the body unread; `live` and unrecognized values → 404; a wrong token → 404 with no store access; untracked → 503; good → 200; replay → 200 `replayed`; previous token; oversize (413 with the right token, 404 with a wrong one); malformed → 400; source mismatch → 503;
 - store compare-and-set across two connections, pending records only for tracked orders, replay TTL and cap;
-- the scheduler: a 202 deferral, `delayMs` honored, restart survival with a second process running the job, lease takeover after a crash, a lease per job (a slow first job never exposes the next row), retry on a throw, and two environments on one database never running each other's jobs;
+- the scheduler: a 202 deferral, `delayMs` honored, persisted jobs running after a host/database close and reopen in the same process, expired-lease takeover, a lease per job (a slow first job never exposes the next row), retry on a throw, and two environments on one database never running each other's jobs;
 - the abandon alert: stored once, logged, poll queued and its outcome recorded, idempotent on `dedupeKey`;
 - order creation: `callbackUrl` only when on and only on create, `trackOrder` before returning, the delayed read-back poll, a queued `track` job when `trackOrder` fails, a `track_failed` alert and an explicit error when that job also fails, `not_dispatched` when the wrapper refuses, and nothing sent on misconfiguration;
 - the host closes its connection when startup fails, and the event-ring route label never carries the token.

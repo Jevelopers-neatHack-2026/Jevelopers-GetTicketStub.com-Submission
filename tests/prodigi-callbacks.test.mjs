@@ -443,10 +443,10 @@ test("store: replay records expire at expiresAt and are capped oldest first", as
 
 // ---- durable scheduler ----
 
-test("scheduler: a deferred callback is 202, its job honours delayMs, survives a restart, and a new process runs it", async () => {
+test("scheduler: a deferred callback is 202, its job honours delayMs and runs after the host reopens in the same process", async () => {
   const file = freshDbFile();
   const clk = clock();
-  // First process: Prodigi is down, so the in-request read fails retryably and a durable job is recorded.
+  // First host: the fixture provider is down, so the in-request read fails retryably and a durable job is recorded.
   const first = host({ file, clk, respond: (r) => (r.method === "GET" ? { status: 503, body: {} } : okReads()(r)) });
   await first.h.reconciler.trackOrder("ord_100");
   const res = await call(first.h, TOKEN, event());
@@ -461,11 +461,11 @@ test("scheduler: a deferred callback is 202, its job honours delayMs, survives a
   assert.ok(job.dueAt > clk.now(), "due in the future: delayMs is honoured");
   assert.equal(await first.h.worker.tick(), 0, "nothing runs before it is due");
   assert.equal(first.fake.reads(), 1);
-  // Crash: the process goes away without running the job.
+  // Close the host and database without running the job; this is not a process crash.
   first.h.close();
   first.db.close();
 
-  // Second process on the same file, Prodigi back up.
+  // Reopen a host on the same file in this process, with the fixture provider back up.
   clk.set(job.dueAt + 1);
   const second = host({ file, clk });
   assert.deepEqual(second.h.queue.list().map((j) => j.kind), ["reconcile"], "the job survived the restart");
