@@ -9,6 +9,7 @@ const typedArray = Object.getPrototypeOf(Uint8Array.prototype);
 const tag = Object.getOwnPropertyDescriptor(typedArray, Symbol.toStringTag).get;
 const length = Object.getOwnPropertyDescriptor(typedArray, 'length').get;
 const set = Uint8Array.prototype.set;
+const nativeThen = Promise.prototype.then;
 const MAX_BYTES = 20 * 1024 * 1024;
 
 const MESSAGES = Object.freeze({
@@ -90,7 +91,17 @@ export function createRevalidationContext({ signal, timeoutMs, request, readReta
     if (closed) revalidationFail('REVALIDATION_DENIED');
   }
   async function wait(value) {
-    check();
+    try { check(); }
+    catch (error) {
+      // A trusted callback can stop this operation before its already-created
+      // native Promise reaches wait(). Observe that Promise without adopting
+      // arbitrary thenables or replacing the original cancellation/deadline.
+      if (types.isPromise(value)) {
+        try { Reflect.apply(nativeThen, value, [() => {}, () => {}]); }
+        catch { /* Preserve the original refusal if observation is unavailable. */ }
+      }
+      throw error;
+    }
     let listener;
     const stoppedPromise = new Promise((resolve, reject) => {
       listener = () => reject(new CacheRevalidationError(stopped ?? 'REVALIDATION_CANCELLED'));

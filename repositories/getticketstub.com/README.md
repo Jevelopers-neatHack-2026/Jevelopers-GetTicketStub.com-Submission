@@ -92,6 +92,7 @@ The [runtime workflow](.github/workflows/runtime.yml) also runs offline Chrome a
 | Document | What it covers |
 | --- | --- |
 | [Preview runtime and providers](docs/operations/preview-runtime.md) | Toolchain, build and start, Plus Launch settings, runtime mode, direct and OpenRouter provider settings, verification |
+| [Prodigi sandbox callbacks](docs/operations/prodigi-callbacks-runbook.md) | The off-by-default callback route, durable store and job worker, settings, and the owner steps before callback registration |
 | [Studio module](src/customer/studio/README.md) | Routes, real versus simulated behaviour, storage, brand rules |
 | [Assembly evidence](docs/integration/assembly-evidence.md) | Offline component/fixture snapshots and their limits |
 | [Context fixtures](fixtures/context/README.md) · [Approval fixtures](fixtures/approval/README.md) · [Order-authorization fixtures](fixtures/order-authorization/README.md) | Public synthetic protocols, verifier commands and consumer boundaries |
@@ -173,6 +174,8 @@ npm run verify:product -- --suite foundation --mode fixture --evidence-dir out/e
 `--mode fixture` is the only supported mode. Production-server suites start isolated servers on free ports with throwaway storage and fixture account configuration. Those suites require `npm run build` first. The source/fixture-only `research`, `creative`, `review`, `capabilities` and `messages` suites do not require a production build. [`scripts/verify-product.mjs`](scripts/verify-product.mjs) declares each suite's prerequisites.
 
 The runner blocks every outbound host except loopback ([fixture network guard](scripts/lib/fixture-network-guard.mjs)); a blocked attempt fails the run even if the code swallowed it. Unknown suites and missing declared prerequisites exit nonzero. Each run writes `<evidence-dir>/<suite>-<timestamp>.json` with the command, exit code, counts, timestamps, git SHA, mode and per-step results. Review the actual results and any skipped checks; fixture evidence is not integrated acceptance. See the [route and state map](docs/architecture/routes.md) and [runtime decision](docs/adr/0001-runtime.md).
+
+Each child check must exit zero, emit at least one explicit `ok`, `PASS` or `OK:` result, and report no failed or unfinished required checks. A zero exit cannot hide a `FAIL` line, a contradictory failure/skip summary, or an empty/unrecognized report. Passing counts reflect emitted results; the creative adapter's terminal `OK:` is one structural result, not a count of its internal assertions. Failure/skip counts retain the larger of explicit result counts and reported totals without counting the same result twice; skipped counts include declared TODO and cancelled checks. A summary that says only `some failed` refuses qualification and retains an unknown-count detail.
 
 ### For judging
 

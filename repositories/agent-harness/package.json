@@ -2,6 +2,7 @@
   "name": "@jevelopers/agent-harness-runtime",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Experimental internal durability primitives for agent-harness",
   "engines": {

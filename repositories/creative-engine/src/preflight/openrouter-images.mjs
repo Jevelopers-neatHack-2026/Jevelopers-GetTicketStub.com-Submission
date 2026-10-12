@@ -39,6 +39,33 @@ const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$/;
 const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const METADATA_TIMEOUT_MS = 15_000;
 const BILLABLE_TIMEOUT_MAX_MS = 120_000;
+// Capture before adapter option getters or injected callbacks can replace mutable
+// globals. Final authority traversal and credential-bearing operations use these
+// references rather than looking up another callback at the handoff boundary.
+const nativeReflectApply = Reflect.apply;
+const nativeObjectFreeze = Object.freeze;
+const nativeObjectCreate = Object.create;
+const nativeObjectKeys = Object.keys;
+const nativeObjectDefineProperty = Object.defineProperty;
+const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const nativeObjectGetPrototypeOf = Object.getPrototypeOf;
+const nativeObjectHasOwn = Object.hasOwn;
+const nativeObjectPrototype = Object.prototype;
+const nativeArrayIsArray = Array.isArray;
+const nativeArrayPrototype = Array.prototype;
+const nativeIsProxy = utilTypes.isProxy;
+const NativeSet = Set;
+const nativeSetHas = Set.prototype.has;
+const nativeSetAdd = Set.prototype.add;
+const nativeSetDelete = Set.prototype.delete;
+const NativeWeakMap = WeakMap;
+const nativeWeakMapGet = WeakMap.prototype.get;
+const nativeWeakMapSet = WeakMap.prototype.set;
+const nativeWeakMapDelete = WeakMap.prototype.delete;
+const nativeStringTrim = String.prototype.trim;
+const nativeRegExpExec = RegExp.prototype.exec;
+const nativeNumberIsFinite = Number.isFinite;
+const nativeDateParse = Date.parse;
 // Native signals need own data state and proxy-free prototypes. The native getter alone accepts
 // inherited-state facades; public `aborted` shadows must not hide cancellation.
 const nativeAbortSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
@@ -50,15 +77,15 @@ function error(code, message) {
 function readClock(now) {
   let value;
   try { value = now(); } catch { value = undefined; }
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  if (typeof value !== 'number' || !nativeNumberIsFinite(value)) {
     throw error('adapter_unavailable', 'The clock option must return a finite number of milliseconds.');
   }
   return value;
 }
 
 function remainingUntil(deadlineAt, now) {
-  const remaining = Date.parse(deadlineAt) - readClock(now);
-  if (!Number.isFinite(remaining) || remaining <= 0) {
+  const remaining = nativeDateParse(deadlineAt) - readClock(now);
+  if (!nativeNumberIsFinite(remaining) || remaining <= 0) {
     throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
   }
   return remaining;
@@ -172,6 +199,110 @@ function targetBinding(target, scope) {
   };
 }
 
+// Read the final authority view without invoking accessors, proxy traps, or
+// coercion hooks after the injected clock. Callback-backed authority cannot
+// provide a stable final fence; unrelated target annotations are outside it.
+function dataProperty(object, key) {
+  if (!object || typeof object !== 'object' || nativeIsProxy(object)) throw new TypeError('authority record');
+  const prototype = nativeObjectGetPrototypeOf(object);
+  if (prototype !== nativeObjectPrototype && prototype !== null
+    && !(nativeArrayIsArray(object) && prototype === nativeArrayPrototype)) {
+    throw new TypeError('authority prototype');
+  }
+  const descriptor = nativeObjectGetOwnPropertyDescriptor(object, key);
+  if (!descriptor) return undefined;
+  if (!nativeObjectHasOwn(descriptor, 'value')) throw new TypeError('authority accessor');
+  return descriptor.value;
+}
+
+function defineAuthorityData(object, key, value, writable = false) {
+  // ToPropertyDescriptor also looks for inherited get/set fields. A null
+  // prototype keeps that conversion free of caller-installed accessors.
+  const descriptor = nativeObjectCreate(null);
+  descriptor.value = value;
+  descriptor.enumerable = true;
+  descriptor.writable = writable;
+  descriptor.configurable = writable;
+  nativeObjectDefineProperty(object, key, descriptor);
+}
+
+function copyAuthorityData(value, seen = new NativeSet(), depth = 0) {
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'function' || typeof value === 'symbol') throw new TypeError('authority value');
+    return value;
+  }
+  if (nativeIsProxy(value) || nativeReflectApply(nativeSetHas, seen, [value]) || depth >= 32) {
+    throw new TypeError('authority graph');
+  }
+  dataProperty(value, '');
+  nativeReflectApply(nativeSetAdd, seen, [value]);
+  const copy = nativeArrayIsArray(value) ? [] : nativeObjectCreate(null);
+  const keys = nativeObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    defineAuthorityData(copy, key, copyAuthorityData(dataProperty(value, key), seen, depth + 1), true);
+  }
+  if (nativeArrayIsArray(value)) copy.length = dataProperty(value, 'length');
+  nativeReflectApply(nativeSetDelete, seen, [value]);
+  return copy;
+}
+
+function prepareAuthorityData(input) {
+  const field = (object, key) => copyAuthorityData(dataProperty(object, key));
+  const target = dataProperty(input, 'target');
+  const sdk = dataProperty(target, 'sdk');
+  const scope = dataProperty(input, 'scope');
+  const current = {
+    cell_id: field(input, 'cell_id'), grant_ref: field(input, 'grant_ref'),
+    deadline_at: field(input, 'deadline_at'),
+    scope: { tenant_id: field(scope, 'tenant_id'), project_id: field(scope, 'project_id'),
+      budget_scope_id: field(scope, 'budget_scope_id'), account_ref: field(scope, 'account_ref'),
+      project_ref: field(scope, 'project_ref') },
+    target: { service: field(target, 'service'), endpoint: field(target, 'endpoint'), model: field(target, 'model'),
+      configuration_sha256: field(target, 'configuration_sha256'),
+      sdk: { name: field(sdk, 'name'), version: field(sdk, 'version') },
+      configuration: field(target, 'configuration') },
+  };
+  if (nativeObjectHasOwn(input, 'configuration')) {
+    defineAuthorityData(current, 'configuration', field(input, 'configuration'));
+  }
+  if (nativeObjectHasOwn(input, 'authorization_evidence')) {
+    // The existing canonical binding treats an explicitly present null/undefined
+    // authorization value identically, while presence itself remains bound.
+    defineAuthorityData(current, 'authorization_evidence', field(input, 'authorization_evidence') ?? null);
+  }
+  return current;
+}
+
+// Compare only our descriptor-produced copies. Avoid canonicalHash here: its
+// serialization helpers may have been replaced by the final injected callback.
+// Object key order and -0 retain canonical JSON equality. Arrays bind length,
+// holes and indexed values; canonical JSON does not bind extra array properties.
+function sameAuthorityData(left, right) {
+  if (left === right) return true;
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false;
+  const array = nativeArrayIsArray(left);
+  if (array !== nativeArrayIsArray(right) || (array && left.length !== right.length)) return false;
+  const leftKeys = nativeObjectKeys(left);
+  const rightKeys = nativeObjectKeys(right);
+  const isIndex = (key) => {
+    const index = +key;
+    return index >= 0 && index < left.length && index % 1 === 0 && `${index}` === key;
+  };
+  let leftCount = 0;
+  for (let index = 0; index < leftKeys.length; index += 1) {
+    const key = leftKeys[index];
+    if (array && !isIndex(key)) continue;
+    leftCount += 1;
+    if (!nativeObjectHasOwn(right, key) || !sameAuthorityData(left[key], right[key])) return false;
+  }
+  let rightCount = 0;
+  for (let index = 0; index < rightKeys.length; index += 1) {
+    if (!array || isIndex(rightKeys[index])) rightCount += 1;
+  }
+  return leftCount === rightCount;
+}
+
 function capturePrepareBinding(input) {
   let cellId;
   let sourceTarget;
@@ -272,7 +403,7 @@ function capturePrepareBinding(input) {
         && targetContentDigest(currentCell, currentTarget) === targetHash;
     } catch { return false; }
   };
-  const hostInput = Object.freeze({ ...hostExtras, cell_id: cellId, target, scope, grant_ref: grantRef, deadline_at: deadlineAt,
+  const hostInput = nativeObjectFreeze({ ...hostExtras, cell_id: cellId, target, scope, grant_ref: grantRef, deadline_at: deadlineAt,
     ...(Object.hasOwn(input, 'configuration') ? { configuration: target.configuration } : {}) });
   return { cellId, sourceTarget, target, targetHash, scope, grantRef, deadlineAt, hasConfiguration,
     pinnedConfigurationHash, matches, matchesTarget, hostInput, authorizationHash, hasAuthorization };
@@ -301,6 +432,9 @@ export function validateOpenRouterImageTarget(cellId, target) {
   }
   if (target.endpoint !== OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT || typeof target.model !== 'string' || !MODEL_ID.test(target.model)) {
     throw error('unsupported_image_configuration', 'OpenRouter endpoint and explicit author/slug model must match the pin.');
+  }
+  if (!hashString(target.configuration_sha256)) {
+    throw error('unsupported_image_configuration', 'OpenRouter configuration_sha256 must be a primitive SHA-256 pin.');
   }
   const config = target.configuration;
   const required = ['prompt_template_ref', 'prompt_template_sha256', 'provider_tag', 'profile_sha256',
@@ -341,7 +475,7 @@ function targetContentDigest(cellId, target) {
 
 function deepFreeze(value) {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
-    Object.freeze(value);
+    nativeObjectFreeze(value);
     for (const key of Reflect.ownKeys(value)) deepFreeze(value[key]);
   }
   return value;
@@ -365,7 +499,7 @@ function freezeTargetCopy(cellId, target, digestOfTarget) {
 }
 
 function safeCredentialEvidence(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)
+  if (!value || typeof value !== 'object' || nativeArrayIsArray(value)
     || typeof value.ref !== 'string' || !SAFE_REF.test(value.ref)
     || typeof value.sha256 !== 'string' || !HASH.test(value.sha256)
     || typeof value.pinned_revision !== 'string' || !SAFE_REF.test(value.pinned_revision)
@@ -377,7 +511,9 @@ function safeCredentialEvidence(value) {
 }
 
 function snapshotCredentialResponse(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  // Resolver records can contain private or discarded fields. Even their type
+  // and key guards must not pass those records to a caller-replaced global.
+  if (!value || typeof value !== 'object' || nativeArrayIsArray(value)) {
     throw error('credential_unavailable', 'Trusted credential resolver did not return a response object.');
   }
   const decision = value.decision;
@@ -391,33 +527,48 @@ function snapshotCredentialResponse(value) {
   const expiresAt = value.expires_at;
   const sourceBinding = value.binding;
   const sourceEvidence = value.evidence;
-  if (!sourceBinding || typeof sourceBinding !== 'object' || Array.isArray(sourceBinding)
-    || !sourceEvidence || typeof sourceEvidence !== 'object' || Array.isArray(sourceEvidence)) {
+  if (!sourceBinding || typeof sourceBinding !== 'object' || nativeArrayIsArray(sourceBinding)
+    || !sourceEvidence || typeof sourceEvidence !== 'object' || nativeArrayIsArray(sourceEvidence)) {
     throw error('credential_unavailable', 'Credential binding and pinned evidence must be response records.');
   }
-  const bindingFields = Object.freeze(Object.keys(sourceBinding));
-  const binding = Object.freeze({ service: sourceBinding.service, account_ref: sourceBinding.account_ref,
+  const bindingFields = nativeObjectFreeze(nativeObjectKeys(sourceBinding));
+  const binding = nativeObjectFreeze({ service: sourceBinding.service, account_ref: sourceBinding.account_ref,
     project_ref: sourceBinding.project_ref, target_binding_sha256: sourceBinding.target_binding_sha256,
     grant_ref: sourceBinding.grant_ref });
   const sourceReview = sourceEvidence.independent_review;
-  if (!sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)) {
+  if (!sourceReview || typeof sourceReview !== 'object' || nativeArrayIsArray(sourceReview)) {
     throw error('credential_unavailable', 'Credential evidence must include an independent review.');
   }
-  const evidence = Object.freeze({ ref: sourceEvidence.ref, sha256: sourceEvidence.sha256,
+  const evidence = nativeObjectFreeze({ ref: sourceEvidence.ref, sha256: sourceEvidence.sha256,
     pinned_revision: sourceEvidence.pinned_revision,
-    independent_review: Object.freeze({ ref: sourceReview.ref, sha256: sourceReview.sha256 }) });
-  return Object.freeze({ decision, evidence_mode: evidenceMode, token, expires_at: expiresAt,
+    independent_review: nativeObjectFreeze({ ref: sourceReview.ref, sha256: sourceReview.sha256 }) });
+  return nativeObjectFreeze({ decision, evidence_mode: evidenceMode, token, expires_at: expiresAt,
     binding, binding_fields: bindingFields, evidence });
 }
 
+function credentialBindingFieldsAllowed(fields, grantRef) {
+  // These frozen keys come from the captured enumeration of the resolver's
+  // binding. Do not construct or inspect the allowlist through mutable array
+  // predicates or an iterator after a caller callback has run.
+  for (let index = 0; index < fields.length; index += 1) {
+    const key = fields[index];
+    if (key !== 'service' && key !== 'account_ref' && key !== 'project_ref'
+      && key !== 'target_binding_sha256' && !(grantRef && key === 'grant_ref')) return false;
+  }
+  return true;
+}
+
 async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt, now }) {
+  let resolved;
+  let expiresAt;
+  let deadline;
   try {
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
       throw error('credential_unavailable', 'Provider account and project references must be safe opaque IDs.');
     }
-    const binding = Object.freeze(targetBinding(target, scope));
+    const binding = nativeObjectFreeze(targetBinding(target, scope));
     const expectedBindingHash = digest(Buffer.from(JSON.stringify(binding), 'utf8'));
-    const request = Object.freeze({
+    const request = nativeObjectFreeze({
       service: OPENROUTER_PREFLIGHT_SERVICE,
       purpose,
       account_ref: scope.account_ref,
@@ -425,43 +576,49 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       target_binding: binding,
       ...(grantRef ? { grant_ref: grantRef } : {}),
     });
-    const resolved = snapshotCredentialResponse(await credentialPort.resolveCredential(request));
-    if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)
+    resolved = snapshotCredentialResponse(await credentialPort.resolveCredential(request));
+    if (!resolved || typeof resolved !== 'object' || nativeArrayIsArray(resolved)
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
     }
-    const allowedBindingFields = ['service', 'account_ref', 'project_ref', 'target_binding_sha256', ...(grantRef ? ['grant_ref'] : [])];
-    if (!resolved.binding || resolved.binding_fields.some((key) => !allowedBindingFields.includes(key))
+    if (!resolved.binding || !credentialBindingFieldsAllowed(resolved.binding_fields, grantRef)
       || resolved.binding.service !== OPENROUTER_PREFLIGHT_SERVICE
       || resolved.binding.account_ref !== scope.account_ref || resolved.binding.project_ref !== scope.project_ref
       || resolved.binding.target_binding_sha256 !== expectedBindingHash
       || (grantRef && resolved.binding.grant_ref !== grantRef)) {
       throw error('credential_unavailable', 'Credential identity does not match the requested provider account and project.');
     }
-    if (typeof resolved.token !== 'string' || resolved.token.trim().length === 0 || /[\r\n]/.test(resolved.token)) {
+    if (typeof resolved.token !== 'string' || nativeReflectApply(nativeStringTrim, resolved.token, []).length === 0
+      || nativeReflectApply(nativeRegExpExec, /[\r\n]/, [resolved.token]) !== null) {
       throw error('credential_unavailable', 'Trusted credential resolver did not return a usable bearer token.');
     }
     safeCredentialEvidence(resolved.evidence);
-    const checkedAt = readClock(now);
-    const expiresAt = Date.parse(resolved.expires_at);
-    const deadline = deadlineAt ? Date.parse(deadlineAt) : undefined;
-    if (deadlineAt && (!Number.isFinite(deadline) || deadline <= checkedAt)) {
-      throw error('preflight_deadline_passed', 'The approved operation deadline passed during credential resolution.');
+    if (typeof resolved.expires_at !== 'string') {
+      throw error('credential_unavailable', 'Credential expiry must be a timestamp string.');
     }
-    if (typeof resolved.expires_at !== 'string' || !Number.isFinite(expiresAt)
-      || expiresAt <= checkedAt || (deadlineAt && expiresAt < deadline)) {
-      throw error('credential_unavailable', 'Scoped credential is expired or will not remain valid through the operation deadline.');
-    }
-    return resolved.token;
-  } catch (cause) {
-    if (cause instanceof AccessPreflightError && ['adapter_unavailable', 'preflight_deadline_passed'].includes(cause.code)) throw cause;
+    expiresAt = nativeDateParse(resolved.expires_at);
+    deadline = deadlineAt ? nativeDateParse(deadlineAt) : undefined;
+  } catch {
+    // Resolver invocation, response accessors and validation share one private
+    // boundary. Never inspect or forward their thrown value, even if it claims
+    // one of this adapter's own clock/deadline error codes.
     throw error('credential_unavailable', 'Credential provider did not return a usable access token.');
   }
+  // Only adapter-origin clock and deadline failures retain these typed codes.
+  // The credential snapshot and parsed timestamps cannot invoke resolver code.
+  const checkedAt = readClock(now);
+  if (deadlineAt && (!nativeNumberIsFinite(deadline) || deadline <= checkedAt)) {
+    throw error('preflight_deadline_passed', 'The approved operation deadline passed during credential resolution.');
+  }
+  if (!nativeNumberIsFinite(expiresAt) || expiresAt <= checkedAt || (deadlineAt && expiresAt < deadline)) {
+    throw error('credential_unavailable', 'Credential provider did not return a usable access token.');
+  }
+  return resolved.token;
 }
 
 async function boundedJson(response) {
   const declared = Number(response.headers?.get?.('content-length'));
-  if (Number.isFinite(declared) && declared > MAX_METADATA_BYTES) {
+  if (nativeNumberIsFinite(declared) && declared > MAX_METADATA_BYTES) {
     try { await response.body?.cancel(); } catch { /* nothing provider-specific leaves the adapter */ }
     return undefined;
   }
@@ -618,7 +775,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
   if (dispatchPort) {
     // The runner passes `prepared` from prepare to dispatch. Only values this adapter minted are accepted, so a
     // dispatch cannot reach the host port without a credential that was resolved for this grant and deadline.
-    const preparedState = new WeakMap();
+    const preparedState = new NativeWeakMap();
     adapter.prepare = async (input) => {
       // Snapshot top-level getters once. Keep the original object only for the post-await binding fence: a caller
       // changing a credential-bearing value while resolution or host preparation is pending fails closed.
@@ -640,21 +797,33 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       const binding = capturePrepareBinding(args);
       assertNotCancelled();
       if (typeof binding.grantRef !== 'string' || !SAFE_REF.test(binding.grantRef)
-        || typeof binding.deadlineAt !== 'string' || !Number.isFinite(Date.parse(binding.deadlineAt))
-        || Date.parse(binding.deadlineAt) <= readClock(now)) {
+        || typeof binding.deadlineAt !== 'string' || !nativeNumberIsFinite(nativeDateParse(binding.deadlineAt))
+        || nativeDateParse(binding.deadlineAt) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
       const hostTarget = binding.target;
       const hostInputValues = { ...binding.hostInput, target: hostTarget, scope: binding.scope };
       if (binding.hasConfiguration) hostInputValues.configuration = hostTarget.configuration;
       else delete hostInputValues.configuration;
-      const hostInput = Object.freeze(hostInputValues);
+      const hostInput = nativeObjectFreeze(hostInputValues);
+      const expectedAuthority = prepareAuthorityData(hostInput);
       const assertBindingsUnchanged = () => {
         if (!binding.matches(input)) {
           if (!binding.matchesTarget(input)) {
             throw error('unsupported_image_configuration', 'The OpenRouter image target changed during billable preparation.');
           }
           throw error('credential_unavailable', 'Billable preparation bindings changed while an asynchronous operation was pending.');
+        }
+      };
+      const assertFinalBindingsUnchanged = () => {
+        let current;
+        try { current = prepareAuthorityData(input); }
+        catch { throw error('credential_unavailable', 'Billable authority requires stable own data properties.'); }
+        if (!sameAuthorityData(current, expectedAuthority)) {
+          if (current.cell_id !== expectedAuthority.cell_id || !sameAuthorityData(current.target, expectedAuthority.target)) {
+            throw error('unsupported_image_configuration', 'The OpenRouter image target changed during billable preparation.');
+          }
+          throw error('credential_unavailable', 'Billable preparation authority changed before host preparation.');
         }
       };
       assertNotCancelled();
@@ -676,9 +845,13 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       // Fence their elapsed time before exposing credentials; the host receives only frozen snapshots.
       remainingUntil(binding.deadlineAt, now);
       assertNotCancelled();
-      const credential = Object.freeze({ token });
+      const credential = nativeObjectFreeze({ token });
+      const prepareInput = nativeObjectFreeze({ ...hostInput, credential });
+      // The final clock can also mutate authority. Read only own data properties
+      // after every callback-capable boundary, then invoke the captured function.
+      assertFinalBindingsUnchanged();
       const hostPrepared = prepareHost
-        ? await prepareHost.call(dispatchPort, Object.freeze({ ...hostInput, credential })) : undefined;
+        ? await nativeReflectApply(prepareHost, dispatchPort, [prepareInput]) : undefined;
       assertNotCancelled();
       assertBindingsUnchanged();
       assertNotCancelled();
@@ -687,13 +860,13 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       assertNotCancelled();
       assertBindingsUnchanged();
       assertNotCancelled();
-      const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id: binding.cellId, source_target: binding.sourceTarget, target: hostTarget,
+      const prepared = nativeObjectFreeze({ prepared: true });
+      nativeReflectApply(nativeWeakMapSet, preparedState, [prepared, { cell_id: binding.cellId, source_target: binding.sourceTarget, target: hostTarget,
         target_hash: binding.targetHash, target_digest: binding.targetHash,
         has_configuration: binding.hasConfiguration, configuration_hash: binding.pinnedConfigurationHash,
         scope: binding.scope, grant_ref: binding.grantRef, deadline_at: binding.deadlineAt, credential, hostPrepared,
         authorization_evidence: binding.hostInput.authorization_evidence, authorization_hash: binding.authorizationHash,
-        has_authorization: binding.hasAuthorization });
+        has_authorization: binding.hasAuthorization }]);
       return prepared;
     };
     adapter.dispatch = async (input) => {
@@ -707,13 +880,13 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         throw error('credential_unavailable', 'The dispatch input could not be read.');
       }
       const preparedValue = args.prepared;
-      const state = isRecord(preparedValue) ? preparedState.get(preparedValue) : undefined;
+      const state = isRecord(preparedValue) ? nativeReflectApply(nativeWeakMapGet, preparedState, [preparedValue]) : undefined;
       let targetDigest;
       try {
         validateOpenRouterImageTarget(args.cell_id, args.target);
         targetDigest = targetContentDigest(args.cell_id, args.target);
       } catch (cause) {
-        if (state && args.target === state.source_target && !preparedState.delete(preparedValue)) {
+        if (state && args.target === state.source_target && !nativeReflectApply(nativeWeakMapDelete, preparedState, [preparedValue])) {
           throw error('credential_unavailable', 'Prepared credentials were already consumed.');
         }
         if (cause instanceof AccessPreflightError) throw cause;
@@ -725,7 +898,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       if (targetDigest !== state.target_digest) {
         // A changed original target consumes its identity so restoring the object cannot replay prepared work. A
         // different supplied target remains a nondestructive binding mismatch.
-        if (args.target === state.source_target && !preparedState.delete(preparedValue)) {
+        if (args.target === state.source_target && !nativeReflectApply(nativeWeakMapDelete, preparedState, [preparedValue])) {
           throw error('credential_unavailable', 'Prepared credentials were already consumed.');
         }
         throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
@@ -769,7 +942,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       const dispatchHost = dispatchPort.dispatch;
       // A trusted port accessor can run code too; leave authority unconsumed until the final fence.
       assertTransportSignalCurrent(state.deadline_at, callerSignal, signal, now);
-      if (!preparedState.delete(preparedValue)) {
+      if (!nativeReflectApply(nativeWeakMapDelete, preparedState, [preparedValue])) {
         throw error('credential_unavailable', 'Prepared credentials were already consumed.');
       }
       const hostInput = { ...args, cell_id: state.cell_id, target: state.target, scope: state.scope,
@@ -779,12 +952,12 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       else delete hostInput.authorization_evidence;
       if (state.has_configuration) hostInput.configuration = state.target.configuration;
       else delete hostInput.configuration;
-      return Reflect.apply(dispatchHost, dispatchPort, [hostInput]);
+      return nativeReflectApply(dispatchHost, dispatchPort, [hostInput]);
     };
   } else {
     adapter.dispatch = async () => {
       throw error('adapter_unavailable', 'No trusted OpenRouter billable dispatch port was composed.');
     };
   }
-  return Object.freeze(adapter);
+  return nativeObjectFreeze(adapter);
 }
