@@ -74,6 +74,12 @@ def assert_active_compose(directory: Path) -> int:
         read_bytes(directory / "active-compose.json")
     )
     assert active["request_delivered"] is True
+    assert active["owner_path"] == "original-positive-control"
+    command = TypeAdapter(tuple[str, ...]).validate_python(active["command"])
+    assert command[1] == "dist/tests/fixtures/integration-evals/positive-control.js"
+    key_source = TypeAdapter(dict[str, str]).validate_python(active["key_source"])
+    assert key_source["kind"] == "immutable-original-owner-fixture"
+    assert len(key_source["sha256"]) == 64
     attempt = TypeAdapter(dict[str, JsonValue]).validate_python(active["attempt"])
     assert attempt["pending"] is True
     assert attempt["outcome"] is None

@@ -1,14 +1,20 @@
 """Actual Linux filesystem-lease and stale-pidfd regressions, without owner substitution."""
 
+import hashlib
 import json
 import os
 import select
 import socket
+import sqlite3
 import stat
+import subprocess
+import sys
+from contextlib import closing
 from pathlib import Path
 from time import monotonic
 
 import pytest
+from pydantic import JsonValue, TypeAdapter
 
 from component_tests.container_docker import Docker
 from component_tests.container_pidfd import open_pidfd
@@ -82,3 +88,89 @@ def test_stale_numeric_owner_binding_sends_zero_signals(
             )
     assert signals == []
     _ = (tmp_path / "rejected-stale-identity.json").write_text(json.dumps({"signals": signals}))
+
+
+def test_observer_reads_pending_state_and_schema_from_original_wal_siblings(tmp_path: Path) -> None:
+    database = tmp_path / "state.sqlite"
+    with closing(sqlite3.connect(database)) as connection:
+        _ = connection.execute("PRAGMA journal_mode=WAL")
+        _ = connection.executescript(
+            """CREATE TABLE attempts(id TEXT,operation TEXT,started INTEGER,outcome TEXT);
+               CREATE TABLE operations(id TEXT,key TEXT);
+               CREATE TABLE observations(attempt TEXT,kind TEXT);"""
+        )
+        key = hashlib.sha256(b'["composeArtifact","original-key"]').hexdigest()
+        _ = connection.execute("INSERT INTO operations VALUES (?,?)", ("operation", key))
+        _ = connection.execute(
+            "INSERT INTO attempts VALUES (?,?,?,?)", ("attempt", "operation", 123, None)
+        )
+        _ = connection.execute(
+            "INSERT INTO observations VALUES (?,?)", ("attempt", "execution_started")
+        )
+        connection.commit()
+        _ = (tmp_path / "mapping.json").write_text(
+            '{"canonical_request":{"idempotency_key":"original-key"}}'
+        )
+        # Keep writer connection open: all schema/rows remain in the original WAL.
+        result = subprocess.run(  # noqa: S603 - fixed interpreter and readonly observer module
+            (
+                sys.executable,
+                "-B",
+                "-m",
+                "component_tests.guarded_compose_probe",
+                str(database),
+                str(monotonic() + 3),
+            ),
+            check=True,
+            capture_output=True,
+            timeout=3,
+        )
+        observed = TypeAdapter(dict[str, JsonValue]).validate_json(result.stdout)
+        assert observed["pending"] is True
+        assert observed["operation_name"] == "composeArtifact"
+        assert observed["execution_started_events"] == 1
+        assert observed["database_inode"] == database.stat().st_ino
+        assert observed["wal_inode"] == Path(str(database) + "-wal").stat().st_ino
+        assert observed["shm_inode"] == Path(str(database) + "-shm").stat().st_ino
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm"])
+@pytest.mark.parametrize("replacement", ["symlink", "fifo"])
+def test_observer_refuses_owner_sidecar_replacement_before_sqlite_reads(
+    tmp_path: Path, suffix: str, replacement: str
+) -> None:
+    database = tmp_path / "state.sqlite"
+    outside = tmp_path / "private-marker"
+    _ = outside.write_bytes(b"PRIVATE_TEST_MARKER")
+    with closing(sqlite3.connect(database)) as connection:
+        _ = connection.execute("PRAGMA journal_mode=WAL")
+        _ = connection.execute("CREATE TABLE original(value TEXT)")
+        connection.commit()
+        sidecar = Path(str(database) + suffix)
+        backup = sidecar.with_name(sidecar.name + ".original")
+        _ = sidecar.rename(backup)
+        if replacement == "symlink":
+            sidecar.symlink_to(outside)
+        else:
+            os.mkfifo(sidecar)
+        try:
+            result = subprocess.run(  # noqa: S603 - fixed interpreter/readonly module, owned fixture
+                (
+                    sys.executable,
+                    "-B",
+                    "-m",
+                    "component_tests.guarded_compose_probe",
+                    str(database),
+                    str(monotonic() + 3),
+                    "original-key",
+                ),
+                check=False,
+                capture_output=True,
+                timeout=3,
+            )
+            assert result.returncode != 0
+            assert result.stdout == b""
+        finally:
+            sidecar.unlink()
+            _ = backup.rename(sidecar)
+    assert outside.read_bytes() == b"PRIVATE_TEST_MARKER"

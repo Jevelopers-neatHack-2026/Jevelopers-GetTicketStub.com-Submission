@@ -9,7 +9,12 @@ from time import monotonic
 import pytest
 
 from component_tests.container_records import Configuration
-from component_tests.guarded_print import GuardedPrint, PrintDocker, reserve_custody
+from component_tests.guarded_print import (
+    GuardedPrint,
+    InvocationState,
+    PrintDocker,
+    reserve_custody,
+)
 from integration_evals.artifacts import load_record
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.print_setup import PROFILE_PATH, PrintProfile
@@ -79,3 +84,60 @@ def test_unknown_teardown_preserves_home_before_expired_budget_and_receipt_write
         directory / "quarantined-home/owner-artifact"
     ).read_bytes() == b"retained-original-bytes"
     assert (directory / "invocation.json").exists() is (failure == "expired-budget")
+
+
+def test_proved_teardown_flushes_small_response_for_independent_file_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "retained"
+    directory.mkdir(mode=0o700)
+    _ = (directory / "pre-dispatch.json").write_bytes(b"{}")
+    home = tmp_path / "home"
+    home.mkdir()
+    profile = load_record(Path(__file__).resolve().parents[1] / PROFILE_PATH, PrintProfile)
+    configuration = Configuration(
+        producer=tmp_path, directory=directory, name="ie-lifetime-" + "a" * 32
+    )
+    docker = PrintDocker(configuration, monotonic() + 30, tmp_path, tmp_path, home)
+    response = b'{"small-original-owner-response":true}\n'
+    published = home / "stdout"
+    namespace_stopped = False
+
+    def prepared(*_: object) -> tuple[PrintDocker, dict[str, str], PrintProfile]:
+        return docker, {}, profile
+
+    def captured(
+        _backend: GuardedPrint,
+        _command: tuple[str, ...],
+        _settings: ProcessSettings,
+        _docker: PrintDocker,
+        _environment: dict[str, str],
+        state: InvocationState,
+    ) -> None:
+        assert published.read_bytes() == b""
+        state.output = response
+        state.exit_code = 0
+
+    def reaped(*_: object) -> bool:
+        return True
+
+    def stopped(*_: object, **_unused: object) -> bool:
+        nonlocal namespace_stopped
+        assert published.read_bytes() == b""
+        namespace_stopped = True
+        return True
+
+    def no_chown(*_: object) -> None:
+        assert namespace_stopped
+
+    monkeypatch.setattr(GuardedPrint, "prepare", prepared)
+    monkeypatch.setattr(GuardedPrint, "run", captured)
+    monkeypatch.setattr("component_tests.guarded_print.reap_clients", reaped)
+    monkeypatch.setattr("component_tests.guarded_print.finish", stopped)
+    monkeypatch.setattr("component_tests.guarded_print.own_tree", no_chown)
+    with published.open("w+b") as output:
+        settings = ProcessSettings(tmp_path, {}, b"", output, 30, writable_directory=home)
+        assert GuardedPrint(tmp_path, directory)(("original-owner",), settings) == 0
+        assert namespace_stopped
+        # Still inside BufferedRandom's context: independent FD must see the bytes now.
+        assert published.read_bytes() == response

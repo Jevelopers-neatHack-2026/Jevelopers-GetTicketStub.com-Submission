@@ -10,6 +10,7 @@ from contextlib import ExitStack, closing
 from pathlib import Path
 from time import monotonic
 from typing import TypedDict, cast
+from urllib.parse import quote
 
 
 class Mapping(TypedDict):
@@ -77,28 +78,41 @@ def descriptors() -> dict[int, tuple[int, int]]:
     return result
 
 
-def observe(path: Path, deadline: float) -> dict[str, str | int | bool | None]:
+def observe(
+    path: Path, deadline: float, key: str | None = None
+) -> dict[str, str | int | bool | None]:
     if not path.exists():
-        return {"pending": False}
+        return {"pending": False, "phase": "database-not-ready"}
     with ExitStack() as handles:
+        directory = os.open(
+            path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        )
+        _ = handles.callback(os.close, directory)
         pinned: dict[str, tuple[int, int]] = {}
-        main = -1
         for suffix, cap in (("", 16 * 1024 * 1024), ("-wal", 16 * 1024 * 1024), ("-shm", 1048576)):
-            candidate = Path(str(path) + suffix)
-            if suffix and not candidate.exists():
+            try:
+                descriptor = os.open(
+                    path.name + suffix,
+                    os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=directory,
+                )
+            except FileNotFoundError:
+                assert suffix
                 continue
-            descriptor = os.open(candidate, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
             _ = handles.callback(os.close, descriptor)
             pinned[suffix] = identity(descriptor)
             assert os.fstat(descriptor).st_size <= cap
-            if not suffix:
-                main = descriptor
         before = descriptors()
         try:
-            # The kernel FD alias retains the bound inode; SQLite's actual DB/WAL FDs
-            # are checked below rather than trusting a pathname reopening that alias.
+            # Keep the original basename under a pinned directory FD: SQLite must
+            # find the real '-wal'/'-shm' siblings, not synthetic '<DBfd>-wal' paths.
+            # Its actual opened inode identities remain independently checked below.
             with closing(
-                sqlite3.connect(f"file:/proc/self/fd/{main}?mode=ro", uri=True, timeout=0.01)
+                sqlite3.connect(
+                    f"file:/proc/self/fd/{directory}/{quote(path.name, safe='')}?mode=ro",
+                    uri=True,
+                    timeout=0.01,
+                )
             ) as connection:
                 _ = connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 65536)
                 _ = connection.setlimit(sqlite3.SQLITE_LIMIT_SQL_LENGTH, 4096)
@@ -106,12 +120,15 @@ def observe(path: Path, deadline: float) -> dict[str, str | int | bool | None]:
                 connection.set_progress_handler(lambda: int(monotonic() >= deadline), 100)
                 _ = connection.execute("PRAGMA query_only=ON")
                 _ = connection.execute("BEGIN")
-                mapping = cast(
-                    "Mapping", json.loads(bounded_file(path.parent / "mapping.json", 1048576))
-                )
-                result = pending_attempt(
-                    connection, mapping["canonical_request"]["idempotency_key"]
-                )
+                if key is None:
+                    mapping = cast(
+                        "Mapping",
+                        json.loads(
+                            bounded_file(Path(f"/proc/self/fd/{directory}/mapping.json"), 1048576)
+                        ),
+                    )
+                    key = mapping["canonical_request"]["idempotency_key"]
+                result = pending_attempt(connection, key)
                 actual = {
                     value for descriptor, value in descriptors().items() if descriptor not in before
                 }
@@ -137,8 +154,15 @@ def observe(path: Path, deadline: float) -> dict[str, str | int | bool | None]:
                 "database is locked",
             }:
                 raise
-            return {"pending": False}
+            return {"pending": False, "phase": "schema-not-ready-or-locked"}
 
 
 if __name__ == "__main__":
-    _ = sys.stdout.write(json.dumps(observe(Path(sys.argv[1]), float(sys.argv[2]))) + "\n")
+    _ = sys.stdout.write(
+        json.dumps(
+            observe(
+                Path(sys.argv[1]), float(sys.argv[2]), sys.argv[3] if len(sys.argv) == 4 else None
+            )
+        )
+        + "\n"
+    )

@@ -646,4 +646,5 @@ class GuardedPrint:
             _ = settings.stdout.seek(0)
             _ = settings.stdout.truncate()
             _ = settings.stdout.write(state.output)
+            settings.stdout.flush()
         return state.exit_code

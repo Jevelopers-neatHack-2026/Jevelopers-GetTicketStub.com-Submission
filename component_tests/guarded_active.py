@@ -13,7 +13,36 @@ from pydantic import JsonValue, TypeAdapter
 from component_tests.container_docker import Docker
 from component_tests.container_pidfd import send_pidfd_signal
 from component_tests.guarded_identity import OwnerBinding, authenticate_owner
-from integration_evals.artifacts import read_bytes
+from integration_evals.artifacts import digest, read_bytes
+
+
+def positive_key(docker: Docker, binding: OwnerBinding) -> tuple[str, dict[str, str]]:
+    assert binding.command[1] == "dist/tests/fixtures/integration-evals/positive-control.js"
+    launch = TypeAdapter(dict[str, JsonValue]).validate_json(
+        read_bytes(
+            docker.configuration.directory / "launch/launch.json",
+            max_bytes=65536,
+            deadline=docker.deadline,
+        )
+    )
+    checkout = launch["checkout"]
+    assert isinstance(checkout, str)
+    fixture = (
+        Path(checkout)
+        / "node_modules/@jevelopers/shared-contracts/fixtures/ComposeArtifactRequest.json"
+    )
+    assert fixture.resolve(strict=True) == fixture
+    raw = read_bytes(fixture, max_bytes=65536, deadline=docker.deadline)
+    payload = TypeAdapter(dict[str, JsonValue]).validate_json(raw)
+    valid = TypeAdapter(dict[str, JsonValue]).validate_python(payload["valid"])
+    key = valid["idempotency_key"]
+    assert isinstance(key, str)
+    assert 0 < len(key) <= 128
+    return key, {
+        "path": str(fixture),
+        "sha256": digest(raw),
+        "kind": "immutable-original-owner-fixture",
+    }
 
 
 def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descriptor: int) -> None:
@@ -26,13 +55,15 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
         )
     )
     _ = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
+    key, key_source = positive_key(docker, binding)
     artifact = home / "artifacts" / f"pp-{namespace}"
     database = artifact / "state.sqlite"
     info = read_bytes(
         Path(f"/proc/self/fdinfo/{descriptor}"), max_bytes=65536, deadline=docker.deadline
     )
-    # Mapping is written by the original CLI just before its actual compose call.
-    while not (artifact / "mapping.json").exists():
+    # Original positive-control creates the real source DB, but no mapping artifact.
+    # WAL readiness only starts sampling; it does not establish a started compose.
+    while not Path(str(database) + "-wal").exists():
         if monotonic() >= docker.deadline:
             raise subprocess.TimeoutExpired(("compose-active",), 30)
         sleep(0.0001)
@@ -65,9 +96,25 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                 "component_tests.guarded_compose_probe",
                 str(database),
                 str(docker.deadline),
+                key,
             )
         )
         attempt = TypeAdapter(dict[str, JsonValue]).validate_json(raw)
+        with (docker.configuration.directory / "compose-probes.jsonl").open("a") as progress:
+            _ = progress.write(
+                json.dumps(
+                    {
+                        "host_owner_pid": current.pid,
+                        "state": current.status["State"],
+                        "pending": attempt["pending"],
+                        "phase": attempt.get("phase"),
+                        "database_inode": attempt.get("database_inode"),
+                        "wal_inode": attempt.get("wal_inode"),
+                        "shm_inode": attempt.get("shm_inode"),
+                    }
+                )
+                + "\n"
+            )
         if attempt["pending"] is True:
             _ = (docker.configuration.directory / "active-compose.json").write_text(
                 json.dumps(
@@ -76,6 +123,10 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                         "host_owner": current.model_dump(),
                         "attempt": attempt,
                         "request_delivered": True,
+                        "owner_path": "original-positive-control",
+                        "command": binding.command,
+                        "key_source": key_source,
+                        "qualification": "synthetic offline/simulated; no real authority",
                         "pidfd_target": str(Path(f"/proc/self/fd/{descriptor}").readlink()),
                         "pidfd_fdinfo": info.decode(),
                         "pidfd_inheritable": os.get_inheritable(descriptor),

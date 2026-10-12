@@ -213,7 +213,13 @@ Every invocation runs hostile guard/init signal, ptrace, FD and control-socket
 probes, a host-only read probe and a real denied network connection. A detached
 closed-stdio sibling occupies the same namespace as the original Node command.
 Additional SIGKILL tests pause the creator at Docker exec launch, attach, the
-real original owner awaiting its request, and an unfinished actual compose.
+real original CLI owner awaiting its request, and an unfinished actual compose.
+Only the fourth stage runs the producer's existing pinned positive-control command,
+which calls the real candidate `composeArtifact` and private SVG composer with the
+source fixture's real font/asset/render ports. Its host remains explicitly synthetic,
+test/offline and simulated billing, with mock authorization callbacks. This grants
+no real permission or domain acceptance. The first three stages retain the original
+CLI command, and all eight original protocol controls retain their assertions.
 The latter holds the original Node pidfd from initial authenticated binding before
 request delivery. Before every signal it checks that held handle, start time,
 executable inode/argv, role, namespace and cgroup; it never reopens a stored numeric
@@ -222,7 +228,15 @@ through the held pidfd,
 and uses a readonly observer as the same nonroot container user. An explicit SQLite
 read transaction must observe the original request-bound compose operation,
 pending attempt and its `execution_started` event; actual opened DB/WAL/SHM
-descriptors must match held nofollow source descriptors. DB/WAL size limits,
+descriptors must match held nofollow source descriptors. SQLite opens the original
+basename through a held parent directory FD so its real WAL/SHM siblings resolve;
+individual file pins and exact actually-opened inode matching remain mandatory.
+The expected operation key comes from the readonly original owner request fixture,
+with fixture hash and actual command recorded in the root-owned phase receipt.
+Positive-control does not write a mapping artifact; no mapping or pending state is
+fabricated. Database readiness merely starts sampling and is not phase proof.
+Actual Linux native checks exercise WAL-only schema/pending reads and reject replaced
+symlink/FIFO sidecars. DB/WAL size limits,
 query limits and the original absolute deadline bound this observation. Mapping
 existence or request delivery alone is insufficient. Tests inspect kernel pidfds
 for both Docker clients and the active original Node, require their death and
@@ -235,7 +249,9 @@ unknown-container records remain intact for independent recovery. A same-device
 check reserves the empty protected destination before dispatch. Atomic preservation
 runs in a `finally` before any receipt work, even after an expired reap budget or
 failed teardown diagnostic write. The predispatch digest is cached before execution;
-a failed invocation-receipt write cannot skip quarantine. Failed preservation has
+a failed invocation-receipt write cannot skip quarantine. Response publication flushes
+the original buffered capture only after verified namespace teardown; independent
+file readers then see even small cleanup/positive responses. Failed preservation has
 its own custody error and is never reported as successful.
 
 The protected filesystem socket is bound through a held nofollow/CLOEXEC control
@@ -273,6 +289,13 @@ while its request clock was midnight. The sixteen guarded cases therefore failed
 shared baseline setup; no producer-control or active-compose pass is claimed.
 The explicit guarded logical-clock correction leaves fixture/capability bytes,
 source validity predicates, and all original comparison assertions intact.
+The `e263b72` dispatch passed eleven lifecycle/native and thirteen guarded cases.
+Replay repeat-cleanup and positive response checks failed because captured responses
+were buffered without a publication flush: receipts retain their actual 76/1300
+bytes and zero exits with proved teardown. Active-compose also failed its required
+checkpoint; it is not an acceptance pass. The next candidate corrects publication
+and WAL addressing, uses the unchanged source positive command only for that fourth
+stage, and adds real native reader regressions. Fresh full Linux proof is required.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

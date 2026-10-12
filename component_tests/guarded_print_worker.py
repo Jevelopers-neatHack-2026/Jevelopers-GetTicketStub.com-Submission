@@ -35,7 +35,12 @@ def main(configuration: WorkerConfiguration) -> int:
     with (configuration.home / "stdout").open("w+b") as output:
         settings = invocation.settings(output)
         node = str(configuration.producer / "out/toolchain/node-v24.21.0-linux-x64/bin/node")
-        return invoke((node, "dist/scripts/integration-evals/cli.js", "run"), settings)
+        command = (
+            (node, "dist/tests/fixtures/integration-evals/positive-control.js")
+            if configuration.compose_checkpoint
+            else (node, "dist/scripts/integration-evals/cli.js", "run")
+        )
+        return invoke(command, settings)
 
 
 if __name__ == "__main__":
