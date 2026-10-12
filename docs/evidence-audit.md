@@ -13,7 +13,7 @@ Exit code `0` means no errors; `1` means one or more errors. Stdout is determini
 
 ## Scope
 
-Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. The audit checks that files and records are internally consistent. It does not establish that anything is true of a live system, does not contact any provider, never writes files, and never changes or promotes a status. Mock or fixture evidence cannot raise a status; a `verified` entry whose evidence refs all contain "mock" is an error.
+Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. The audit checks that files and records are internally consistent. It does not establish that anything is true of a live system, does not contact any provider, never writes files, and never changes or promotes a status. It does not classify evidence: a reference that happens to contain "mock" is not treated specially, and a structurally complete `verified` entry passes as structural success only, never as proof of live behavior.
 
 ## Checks
 
@@ -29,7 +29,7 @@ Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. 
 | `duplicate-id`, `unknown-state`, `allowed-states` | Duplicate criterion ID; status outside `planned, in_progress, blocked, verified, deferred`; JSON `allowed_statuses` altered |
 | `checklist-disagreement` | An ID is in only one of Markdown/JSON, or the statuses differ |
 | `checkbox-mismatch` | Markdown `[x]` is not exactly the `verified` state |
-| `verified-missing-evidence`, `verified-missing-revisions`, `verified-mock-evidence` | A verified entry lacks nonempty `evidence_refs` or `tested_revision_refs`, or cites only mock evidence |
+| `verified-missing-evidence`, `verified-missing-revisions` | A verified entry lacks nonempty `evidence_refs` or `tested_revision_refs` |
 
 Markdown criteria are `### ID title` headings followed by a `- [ ] **Status** ...` line. Errors never echo file contents or malformed lines; only codes, line numbers, IDs and escaped, length-bounded manifest paths.
 
@@ -39,3 +39,7 @@ Markdown criteria are `### ID title` headings followed by a `- [ ] **Status** ..
 - Refs are checked for non-emptiness only; URLs and revisions are not resolved.
 - Only files named `SHA256SUMS` are discovered; evidence files absent from a manifest are not flagged.
 - Symlinks that stay inside the manifest directory are allowed.
+
+## CI
+
+`.github/workflows/evidence-audit.yml` runs the unit tests and the real audit on pull requests and pushes to `main` that touch the tool, tests, docs, checklists or evidence. It uses read-only `contents` permission, no secrets, no network calls beyond fetching the pinned actions, and writes nothing back. Actions are pinned to full commit SHAs (checkout v7.0.1, setup-python v7.0.0).

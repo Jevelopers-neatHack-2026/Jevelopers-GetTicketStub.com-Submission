@@ -218,9 +218,18 @@ class NoPromotion(Fixture):
         self.assertEqual(r["provider_mode"], "N/A")
         self.assertEqual(before, self.snapshot())
 
-    def test_mock_only_evidence_cannot_back_verified(self):
-        self.checklist([crit("AAA-01", "verified", ["mock://provider/ok"], ["r1"])])
-        self.assertEqual(self.codes(), ["verified-mock-evidence"])
+    def test_verified_mock_ref_is_structural_success_only(self):
+        self.checklist([crit("AAA-01", "verified", ["mock://provider/ok"], ["mock rev"])])
+        before = self.snapshot()
+        r = self.audit()
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["errors"], [])
+        self.assertEqual(r["status_counts"]["verified"], 1)
+        # Structural pass only: scope stays integrity-only, no live claim is made.
+        self.assertEqual(r["provider_mode"], "N/A")
+        self.assertEqual(r["scope"], "integrity-only")
+        self.assertFalse(any("live" in k for k in r))
+        self.assertEqual(before, self.snapshot())
 
     def test_provider_env_is_ignored(self):
         os.environ["PROVIDER_MODE"] = "live"

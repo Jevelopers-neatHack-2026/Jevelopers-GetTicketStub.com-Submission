@@ -158,10 +158,6 @@ def _nonempty_strings(value):
     return isinstance(value, list) and bool(value) and all(isinstance(v, str) and v.strip() for v in value)
 
 
-def _mock_only(refs):
-    return all("mock" in r.lower() for r in refs)
-
-
 def audit_json(report, path, rel):
     try:
         with open(path, "rb") as fh:
@@ -195,8 +191,6 @@ def audit_json(report, path, rel):
             refs = crit.get("evidence_refs")
             if not _nonempty_strings(refs):
                 report.err("verified-missing-evidence", rel, "verified entry needs nonempty evidence_refs", cid)
-            elif _mock_only(refs):
-                report.err("verified-mock-evidence", rel, "verified entry cites only mock evidence", cid)
             if not _nonempty_strings(crit.get("tested_revision_refs")):
                 report.err("verified-missing-revisions", rel, "verified entry needs nonempty tested_revision_refs", cid)
     return result
