@@ -18,7 +18,12 @@ from integration_evals.errors import fail
 from integration_evals.models import Digest, Identifier, Record
 from integration_evals.validation import unique_ids
 
-type SemanticProfile = Literal["legacy_candidate_no_v2_guarantees", "cumulative_v2_proposal"]
+type SemanticProfile = Literal[
+    "legacy_candidate_no_v2_guarantees",
+    "cumulative_v2_proposal",
+    "immutable_v1_behavior",
+    "provider_reported_unsettled_candidate",
+]
 
 
 class Metadata(Record):
@@ -210,7 +215,12 @@ def validate_semantic_records(
                 for case in index.cases
                 if case.mode == "semantic" and case.id not in row.failures
             )
-        case "cumulative_v2_proposal" | None:
+        case (
+            "cumulative_v2_proposal"
+            | "immutable_v1_behavior"
+            | "provider_reported_unsettled_candidate"
+            | None
+        ):
             expected = ()
         case _:
             assert_never(target.semantic_profile)
