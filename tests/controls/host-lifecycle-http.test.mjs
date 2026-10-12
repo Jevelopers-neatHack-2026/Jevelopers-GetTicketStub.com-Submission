@@ -7,6 +7,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { readCaptureInventory } from '../../examples/frontend-action-roundtrip/host-capture-inventory.mjs';
 import { DatabaseSync } from 'node:sqlite';
 const fixture = new URL('../../examples/frontend-action-roundtrip/server.mjs', import.meta.url);
 async function server(t) {
@@ -58,8 +59,9 @@ function captureFiles(root, prefix = '') {
   return files;
 }
 function validateCapture(evidence, expectedPreviewCount) {
-  const sessions = readdirSync(evidence); assert.equal(sessions.length, 1, 'one completed capture of the retired host');
-  const root = join(evidence, sessions[0]), receipt = JSON.parse(readFileSync(join(root, 'receipt.json')));
+  const inventory = readCaptureInventory(evidence); assert.equal(inventory.sessions.length, 1, 'one completed capture of the retired host');
+  assert.equal(inventory.attempts.length, 0, 'Normal HTTP captures must not contain failed attempts');
+  const { root, receipt } = inventory.sessions[0];
   assert.equal(receipt.counters.composition_previews, expectedPreviewCount); assert.equal(receipt.live_calls, 0);
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json')));
   assert.equal(receipt.files, manifest.length);
@@ -80,7 +82,7 @@ for (const transition of ['reset', 'capture']) test(`${transition} drains an adm
   const original = await read; assert.equal(original.view.status, 'current'); assert.equal(original.view.projection.base.revision_id, initialized.revision_id);
   assert.equal(original.counters.composition_previews, 1); assert.equal((await change).ok, true);
   validateCapture(evidence, 1);
-  if (transition === 'capture') { assert.equal((await call('/__fixture/capture', {})).ok, true); assert.equal(readdirSync(evidence).length, 1); assert.equal((await call('/__fixture/reset', { lock_logo: true })).ok, true); }
+  if (transition === 'capture') { assert.equal((await call('/__fixture/capture', {})).ok, true); assert.equal(readCaptureInventory(evidence).sessions.length, 1); assert.equal((await call('/__fixture/reset', { lock_logo: true })).ok, true); }
   assert.ok((await call('/api/schema')).schema); const replacement = await call('/api/composition/current');
   assert.equal(replacement.view.status, 'not_initialized'); assert.equal(replacement.counters.composition_previews, 0);
 });

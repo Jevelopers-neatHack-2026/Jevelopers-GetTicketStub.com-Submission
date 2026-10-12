@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createHostSessions } from '../../examples/frontend-action-roundtrip/host-session.mjs';
 import { CreativeVersionStore } from 'creative-engine/versions';
 import { createIntegratedHost } from '../../fixtures/controls/integrated-host.mjs';
+import { readCaptureInventory } from '../../examples/frontend-action-roundtrip/host-capture-inventory.mjs';
 import { closeAndCaptureHost } from '../../examples/frontend-action-roundtrip/host-capture.mjs';
 import { createHostLifecycle } from '../../examples/frontend-action-roundtrip/host-lifecycle.mjs';
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -94,7 +95,7 @@ test('actual host retries each failed close component and never captures a parti
   assert.equal(lifecycle.state().closed, false); assert.deepEqual(readdirSync(evidence), []); assert.equal(existsSync(dir), true);
   await assert.rejects(lifecycle.acquire(), /finalized/);
   await lifecycle.change('capture'); assert.equal(lifecycle.state().closed, true); assert.equal(host.store.closed, true);
-  assert.equal(adapterCalls, 2); assert.equal(storeCalls, 2); assert.equal(readdirSync(evidence).length, 1);
+  assert.equal(adapterCalls, 2); assert.equal(storeCalls, 2); assert.equal(readCaptureInventory(evidence).sessions.length, 1);
   await lifecycle.stop(); assert.equal(existsSync(dir), false); assert.equal(adapterCalls, 2); assert.equal(storeCalls, 2);
 });
 test('successful close components are not retried when another component fails', async t => {

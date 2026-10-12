@@ -79,6 +79,54 @@ receipts. `CONTROLS_LIFECYCLE_EVIDENCE_DIR` retains the HTTP regression captures
 its destination must already exist. These are synthetic fixture receipts, not
 application authority or acceptance evidence.
 
+### Capture publication and incomplete attempts
+
+A capture is certified only when its completed staging directory is atomically
+renamed to a `session-NNNN-SUFFIX` child of the evidence root. Its existing
+`store-root/`, `manifest.json` and `receipt.json` format is unchanged. The manifest
+pins every regular file's path, byte length and SHA-256. Store directories must
+match the parent paths implied by those files plus the fixture object's retained
+`objects/staging` directory; copied links or special
+files cannot become certified captures.
+
+The evidence root also contains an explicitly inventoried `attempts/` directory.
+A failed staging directory remains there as `attempt-NNNN-SUFFIX`, with every raw
+copied file and partially written manifest or receipt untouched. Its separate
+`attempt-NNNN-SUFFIX.json` record uses
+`format: controls-fixture-capture-attempt/1` and `status: incomplete`. The record
+contains `attempt`, `stage`, `reason`, `started_at`, `node`, `node_executable`,
+`cwd`, `mode`, `live_calls`, `files`, `record_failures` and `fragments`.
+
+`stage` identifies `copy`, `walk`, `manifest`, `receipt` or `publish` failure.
+`files` inventories complete raw membership: directory entries have `path` and
+`kind: directory`; regular files have `kind: file`, `bytes` and `sha256`; symbolic
+links have `kind: symlink` with length/hash of the link text, without following
+the target; other filesystem entries have `kind: special` and their mode. These
+last two kinds describe failed evidence, never a certified store or verified
+stream content. Partial JSON inside a failed directory is opaque raw evidence,
+not a certificate.
+
+Failed inventory writes are themselves preserved as regular
+`attempt-NNNN-SUFFIX.record-UUID` fragments. Each fragment's name, byte length
+and hash appears in the completed attempt record's `fragments` array;
+`record_failures` counts failed record-persistence operations. Pending record
+ownership remains with the session and blocks any later certification until the
+record is complete. A retry does not overwrite failed directories or fragments.
+
+`readCaptureInventory` in the example's `host-capture-inventory.mjs` checks every
+root and attempts member, validates certified manifests and receipts, and
+verifies failed-attempt and fragment membership/hashes. Unpaired directories,
+unknown files, truncated record JSON and altered bytes fail validation. Counting
+certified sessions alone or recursively treating failed receipts as certificates
+is insufficient. The HTTP checks require one certified retired-host capture;
+failed-attempt recovery checks separately require their preserved inventories.
+
+The regular-file copy/walk/metadata/publication failure fixtures retain their
+failed bytes, provenance and one successful retry beneath
+`CONTROLS_LIFECYCLE_EVIDENCE_DIR` when enabled. Negative inventory mutations use
+disposable copies outside that retained corpus. Existing Controls artifact
+uploads cover both certified sessions and the attempts namespace.
+
 The existing controls CI workflow defines the controls/browser checks on both
 pinned runtimes. Codec setup, public controls export/build and the actual package
 consumer require serialized root integration. A workflow definition is not a
