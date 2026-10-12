@@ -27,15 +27,15 @@ npm ci                          # repo toolchain: Node 24.21.0 (engines >=24.15.
 npm run contracts:provision     # clone at pinned head, Node 22.23.3: npm ci, build, pack; verify sha256 + SRI (fail closed); offline install
 npm run lint && npm run typecheck && npm test -- --run && npm run build   # unchanged gates; none needs the archive
 npm run test:contracts          # driver first (independent package verification), then tsc -p tsconfig.contracts.json and the vitest contracts config
-node scripts/run-contract-driver.mjs                                       # verifies the installed package with scripts/package-verify.mjs (no package imports; recomputes hashManifest(files) against the pin, byte-checks every file, rejects unlisted executables), then runs the driver and checks its receipt
+node scripts/run-contract-driver.mjs                                       # verifies the installed package with scripts/package-verify.mjs (no package imports; recomputes hashManifest(files) against the pin, byte-checks every file, rejects any symlink or non-regular entry, any unlisted file, and any path resolving outside the package), then runs the driver and checks its receipt
 node scripts/producer-consumer-check.mjs <temp copy of producer checkout> .shared-contracts/jevelopers-shared-contracts-0.9.7.tgz
 ```
 
-`contracts:provision` clones into the gitignored `.shared-contracts/`, needs Node 22.23.3 as the producer toolchain: either first on `PATH` or given as a bin directory in `SHARED_CONTRACTS_NODE_BIN`. The exact version is asserted and it fails clearly otherwise. It removes any previously installed package before starting and on every failure, and copies the installed package into `node_modules/@jevelopers/`. It does not touch `package.json` or the lockfile, so `npm ci` works for people without the archive. The package is not a declared dependency, so the next `npm ci` removes it; re-run the provision script.
+`contracts:provision` clones into the gitignored `.shared-contracts/`, needs Node 22.23.3 as the producer toolchain: either first on `PATH` or given as a bin directory in `SHARED_CONTRACTS_NODE_BIN`. The exact version is asserted and it fails clearly otherwise. It runs the clone, producer `npm ci`/build and install with a minimal environment (PATH, HOME, TMPDIR only) and removes any previously installed package before starting and on every failure, and copies the installed package into `node_modules/@jevelopers/`. It does not touch `package.json` or the lockfile, so `npm ci` works for people without the archive. The package is not a declared dependency, so the next `npm ci` removes it; re-run the provision script.
 
 ## Results
 
-Tested consumer: commit `42e8d5e378e814d43f681688d2e03b107a60c792`, tree `1a2c695496f20f65b4416a1378f2cc059b2342c1`. The commit that adds this document changes documentation only. Base: origin/main `380bba6c75789ac65a7cc6eb6d6d19469a4e5823`.
+Tested consumer: commit `6db0c4079d9e63b2f2e3fa651dd059af7d847c15`, tree `6c83377f36d1477fc657268c5431c85d76e3918e`. The commit that adds this document changes documentation only. Base: origin/main `380bba6c75789ac65a7cc6eb6d6d19469a4e5823`.
 
 | Command | Result |
 | --- | --- |
@@ -44,7 +44,7 @@ Tested consumer: commit `42e8d5e378e814d43f681688d2e03b107a60c792`, tree `1a2c69
 | `npm run typecheck` | pass |
 | `npm test -- --run` | 5 files, 177 tests passed (same counts as the base) |
 | `npm run build` | pass |
-| `npm run test:contracts` | driver (with independent package verification) passed; tsc pass; 3 files, 74 tests passed |
+| `npm run test:contracts` | driver (with independent package verification) passed; tsc pass; 3 files, 86 tests passed |
 | driver on Node 22.23.3 and on 24.21.0 | passed; 11 contracts, 249 package fixture cases, 13 of 13 domain cases |
 | producer `consumerChecks` on a temp copy, Node 22.23.3 | team-dashboard row passed; 11 observed contracts; 249 trusted fixture cases; 27 package modules imported and byte-checked; zero team-dashboard failures |
 
