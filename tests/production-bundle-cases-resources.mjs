@@ -319,6 +319,8 @@ export function register(define_) {
   const pureBounds = (overrides = {}) => ({ maxCount: realLimits().outerDescriptors, aggregateCap: realLimits().archiveBytes + realLimits().manifestBytes + realLimits().detachedBytes + realLimits().payloadBytes,
     payloadGroupCap: realLimits().payloadBytes, isPayload: () => true, ...overrides });
   const tiny = (name, size = 4) => ({ filename: name, bytes: new Uint8Array(size).fill(7) });
+  /** Small summary for assertions: a failing `deepEqual` on a result that holds copies of 8-40 MiB views would render the whole typed arrays and exhaust the test runner (the M31 lesson of 7f6321e). */
+  const brief = (result) => (result.ok ? { ok: true } : { ok: false, reason: result.reason });
 
   define_("bounds.duplicate-and-case-variant-names-rejected-before-any-copy", async () => {
     for (const names of [["a.bin", "a.bin"], ["a.bin", "A.BIN"], ["archive.zip", "Archive.Zip"], ["x.bin", "y.bin", "z.bin", "Y.BIN"]]) {
@@ -369,12 +371,12 @@ export function register(define_) {
       assert.equal(criterion(over, "byte_custody").code, "SNAPSHOT_REJECTED", name); assert.ok(over.diagnostic.reasons.includes("SNAPSHOT_OVER_CAP"), `${name} one byte over its cap`);
     }
     assert.equal(criterion(validateFiles([{ filename: "extra.bin", bytes: new Uint8Array(l.entryBytes) }], anchor), "byte_custody").state, "verified_local", "an unknown name at exactly the entry cap is bounded, then judged by the owner");
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: "ARCHIVE.ZIP", bytes: new Uint8Array(l.entryBytes + 1) }], (name) => (name === "archive.zip" ? l.archiveBytes : l.entryBytes), pureBounds()), { ok: false, reason: "over_cap" }, "a case variant of an anchored name does not inherit that role's cap");
+    assert.deepEqual(brief(bundle.snapshotProductionBundleFiles([{ filename: "ARCHIVE.ZIP", bytes: new Uint8Array(l.entryBytes + 1) }], (name) => (name === "archive.zip" ? l.archiveBytes : l.entryBytes), pureBounds())), { ok: false, reason: "over_cap" }, "a case variant of an anchored name does not inherit that role's cap");
     // The payload group: five 8 MiB payload-class views sum to 40 MiB > 32 MiB. They share ONE caller buffer; nothing is copied.
     const shared = new Uint8Array(l.entryBytes);
     const names = Array.from({ length: 5 }, (_, index) => `p${index}.bin`);
     assert.equal(bundle.snapshotProductionBundleFiles(names.slice(0, 4).map((filename) => ({ filename, bytes: shared })), () => l.entryBytes, pureBounds()).ok, true, "4 x 8 MiB = exactly the 32 MiB payload group");
-    assert.deepEqual(bundle.snapshotProductionBundleFiles(names.map((filename) => ({ filename, bytes: shared })), () => l.entryBytes, pureBounds()), { ok: false, reason: "payload_group_over_cap" });
+    assert.deepEqual(brief(bundle.snapshotProductionBundleFiles(names.map((filename) => ({ filename, bytes: shared })), () => l.entryBytes, pureBounds())), { ok: false, reason: "payload_group_over_cap" });
     const grouped = validateFiles(names.map((filename) => ({ filename, bytes: shared })), anchor);
     assert.ok(grouped.diagnostic.reasons.includes("SNAPSHOT_PAYLOAD_GROUP_OVER_CAP"));
     // Single-file roles are NOT payload-group members: archive.zip (anchored role "archive") does not eat the payload allowance.
