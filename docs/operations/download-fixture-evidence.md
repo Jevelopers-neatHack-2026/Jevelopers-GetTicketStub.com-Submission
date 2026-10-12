@@ -48,3 +48,39 @@ edited-title changes and back parity. Receipt success proves which Blob was deli
 the application rendered the right version or pixels. An unchanged edited Blob remains a failed edit assertion;
 a failed reference capture remains failed. Preserve previous failed evidence and label synthetic controls and
 diagnostic subsets when handing evidence to reviewers.
+
+## First-capture qualification and diagnostic state
+
+The complete gate retains the original matrix and requires three original/edited first-capture pairs for
+`pale/researched` at each of 390 and 1440 pixels: the baseline pair, then two additional fresh-page pairs per
+viewport. All six pairs and twelve first-capture comparisons must finish and pass. Every first screenshot has
+a unique capture ID, file and SHA-256; its result cannot be overwritten by a subsequent comparison. The fixed
+plan continues after a failed pair or page exception. A missing capture, comparison, pair, invalid receipt or
+any failed assertion fails the run even if every later pair passes. The additional pages share the same browser
+profile and cache. Only the baseline's first studio load/download is throttled; these are not cold-cache trials.
+The `captureQualification` record states the selected scope and exact expected, recorded and compared counts.
+`DOWNLOAD_ONLY`/`DOWNLOAD_VP` retain their diagnostic-subset meaning and do not qualify the complete gate.
+
+The existing final pre-screenshot evaluation also records bounded computed state for the actual image, figure
+and up to sixteen ancestors per image, including ancestors above the figure. It records numeric transforms,
+opacity, visibility, mask/filter presence, four allowlisted numeric tilt variables, and up to four active
+Web Animations API entries per node. Animation names, keyframes, CSS URLs, arbitrary custom properties, classes,
+text and raw image sources are omitted. JavaScript animation loops are not enumerated by `getAnimations()`;
+zero animations therefore does not establish that a preview is stationary. Source strings are hashed only after
+the first screenshot, with an explicit size limit. Image, ancestor, node, source and snapshot omissions are recorded.
+
+A passive `LayerTree` listener starts before navigation. At the screenshot request and response it freezes
+separate received-event sequences and the latest bounded layer tree. The optional protocol is experimental:
+enable errors/timeouts, absent trees, caps, dropped events and listener cleanup are explicit. Events are associated
+with the CDP session since its last observed main-frame navigation; they have no committed-screenshot-frame
+identifier and do not attest that artwork pixels were composited. The exact retained pre-first node references
+are mapped to backend node IDs only after the screenshot, with identity/connectivity/ancestry checks before and
+after mapping. Replacements or unavailable mapping remain unavailable. An image may share an ancestor's layer;
+absence of a dedicated image layer does not prove a paint failure.
+
+Computed-style reads can flush layout, and diagnostic instrumentation can affect timing. These effects are
+disclosed in each record; they are not readiness predicates. The original screenshot bytes and comparison
+tolerances remain authoritative. A failed comparison still saves exactly two separately named diagnostic frames
+at requested offsets of 100 and 500 ms after the failed comparison completes. Those later frames cannot pass or
+replace the first one. This bounded qualification strengthens evidence for the retained intermittent capture
+failures; it does not demonstrate a compositor repair or establish that the application caused the mismatch.

@@ -18,8 +18,11 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
 import { launchBrowser, chromePath } from "./lib/cdp.mjs";
 import { BEGIN_CAPTURE_PROVENANCE, browserProvenance, captureFailureFrames, readCaptureProvenance } from "./lib/download-capture-diagnostics.mjs";
+import { DownloadLayerDiagnostics } from "./lib/download-layer-diagnostics.mjs";
+import { CaptureQualification, captureQualificationPlan, retainFirstCapture } from "./lib/download-capture-qualification.mjs";
 import { DownloadReceipts } from "./lib/download-receipts.mjs";
 import { checkDownloadReceiptControls } from "./lib/download-receipt-controls.mjs";
 import { MESSAGES } from "../src/customer/feedback-messages/messages.ts";
@@ -70,6 +73,8 @@ let failed = 0;
 let passed = 0;
 const T0 = Date.now();
 const evidence = { chrome: chromePath(), base, tolerance: TOLERANCE, cases: [] };
+const capturePlan = captureQualificationPlan(VIEWPORTS);
+const qualification = new CaptureQualification(capturePlan, { diagnosticSubset: !!ONLY });
 function check(name, ok, detail = "") {
   if (ok) passed++;
   else failed++;
@@ -183,6 +188,8 @@ function pngSize(buf) {
 
 const browser = await launchBrowser();
 const receipts = new DownloadReceipts(browser, dlDir);
+const layerObservers = [];
+evidence.layerObserverCleanup = [];
 try {
   // Startup provenance is outside the capture path; an executable path/inventory is not a measured browser version.
   evidence.browser = await browserProvenance(browser.conn);
@@ -213,9 +220,14 @@ try {
   const against = (ref, png, sides) => inTab(`window.__cmp.against(${JSON.stringify(ref.toString("base64"))}, ${JSON.stringify(png.toString("base64"))}, ${sides})`);
   const between = (a, b, region) => inTab(`window.__cmp.between(${JSON.stringify(a.toString("base64"))}, ${JSON.stringify(b.toString("base64"))}, ${JSON.stringify(region)})`);
 
-  for (const vp of VIEWPORTS) {
-    const page = await browser.newPage({ width: vp.width, height: vp.height, dpr: 2, mobile: vp.mobile });
+  for (const { viewport: vp, trial, kind } of capturePlan) {
+    let page, layers;
+    try {
+    page = await browser.newPage({ width: vp.width, height: vp.height, dpr: 2, mobile: vp.mobile });
     await receipts.install(page); // observe before app code; every press below gets a fresh openStudio document
+    layers = new DownloadLayerDiagnostics(page);
+    layerObservers.push(layers);
+    await layers.start(); // passive, bounded protocol setup before this page's first navigation
     const pngs = []; // [{ id, png }] for the control
     /** The studio, with the stored stub changed the way the editor stores it. */
     async function openStudio(c, mutate) {
@@ -282,12 +294,14 @@ try {
           await sleep(400);
         }
       }
+      const captureId = randomUUID();
       const info = await page.eval(`(() => {
         const f = ${figure};
         if (!f) return null;
         const images = [...f.querySelectorAll("img")];
         if (document.fonts.status !== "loaded" || images.some((img) => !img.complete || !img.naturalWidth || !img.naturalHeight)) throw new Error("screen stub readiness changed before capture");
-        window.__ticketstubCaptureProvenance?.sample("before_original_capture", f, images);
+        // These bounded reads may flush layout; they observe presentation, never establish readiness.
+        window.__ticketstubCaptureProvenance?.sample("before_original_capture", f, images, true, ${JSON.stringify(captureId)});
         const r = f.getBoundingClientRect();
         const t = f.querySelector('[class*="_title"]');
         const tr = t ? t.getBoundingClientRect() : null;
@@ -297,11 +311,18 @@ try {
         } };
       })()`);
       if (!info) return null;
+      const beforeRequest = layers.mark(captureId, "before_screenshot_request");
       const { data } = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, clip: { x: info.x, y: info.y, width: info.width, height: info.height, scale: 1 } });
       const capturedAt = performance.now();
-      // All hashing/style reads occur after the authoritative screenshot. They may affect later scheduling.
+      const afterResponse = layers.mark(captureId, "after_screenshot_response");
+      const png = Buffer.from(data, "base64");
+      const sha256 = createHash("sha256").update(png).digest("hex");
+      // Hashes and backend-node mapping occur only after the authoritative screenshot. Pre-first
+      // presentation reads and passive event instrumentation are explicitly disclosed in its record.
       info.captureProvenance = await readCaptureProvenance(page, figure);
-      return { png: Buffer.from(data, "base64"), info, capturedAt, figure };
+      info.layerProvenance = await layers.record({ captureId, beforeRequest, afterResponse, provenance: info.captureProvenance,
+        figure, screenshotSha256: sha256 });
+      return { png, info, capturedAt, figure, captureId, sha256 };
     }
     const diagnoseFailure = (matched, shot, tag) => captureFailureFrames({
       matched, page, figure: shot.figure, originalCapturedAt: shot.capturedAt,
@@ -331,12 +352,24 @@ try {
       }
     }
 
-    for (const c of CASES) {
-      const label = `${vp.name}px ${c.key}/${c.edition} (${c.art} art, ${c.finish})`;
-      const rec = { viewport: vp.name, ...c };
+    for (const c of kind === "baseline" ? CASES : CASES.filter((c) => c.key === "pale" && c.edition === "researched")) {
+      const label = `${vp.name}px ${c.key}/${c.edition} (${c.art} art, ${c.finish})${trial ? ` fresh-page trial ${trial + 1}/3` : ""}`;
+      const rec = { viewport: vp.name, trial, kind, ...c };
       evidence.cases.push(rec);
+      const tag = `${vp.name}-${c.key}-${c.edition}${trial ? `-fresh-${trial}` : ""}`;
+      const pairId = c.key === "pale" && c.edition === "researched" ? `${vp.name}:${trial}` : null;
+      const failedBefore = failed;
+      let exception = false;
+      if (pairId) qualification.begin(pairId);
+      const retainFirst = (phase, shot) => {
+        if (!shot) return;
+        const file = `${tag}${phase === "edited" ? "-edited" : ""}-screen.png`;
+        rec[phase === "edited" ? "editedScreen" : "screen"] = shot.info;
+        retainFirstCapture({ directory: outDir, file, png: shot.png, captureId: shot.captureId, sha256: shot.sha256, qualification, pairId, phase });
+      };
       try {
-        // the very first capture of the run is also taken slow (CPU 6x, a slow link): the cold-load race must not show
+        // Only the baseline's first studio load/download is throttled. Fresh pages share this browser's
+        // profile/cache, and do not claim a cold-cache run or deterministic composited-art readiness.
         const cold = !evidence.cases.slice(0, -1).length;
         if (cold) {
           await page.send("Emulation.setCPUThrottlingRate", { rate: 6 });
@@ -352,24 +385,23 @@ try {
         if (!check(`${label}: the stub is on the studio desk${cold ? " (first load, throttled)" : ""}`, opened)) continue;
         if (!check(`${label}: the Download button saved a file`, !got.error, got.error)) continue;
         const shot = await screenStub(c, { checkout: true });
+        retainFirst("original", shot);
         if (!check(`${label}: the on-screen stub was captured`, !!shot)) continue;
         const sz = pngSize(got.buf);
         const wantW = (LANDSCAPE.has(c.edition) ? WIDTH.landscape : WIDTH.portrait) * SCALE;
         const wantH = Math.round(wantW * ASPECT[c.edition]);
         check(`${label}: file name is ticketstub-<slug>-<date>.png (${got.name})`, /^ticketstub-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.png$/.test(got.name));
         check(`${label}: a PNG, ${sz.width} x ${sz.height} (want ${wantW} x ${wantH})`, sz.sig && sz.width === wantW && Math.abs(sz.height - wantH) <= 1, JSON.stringify(sz));
+        writeFileSync(join(outDir, `${tag}.png`), got.buf);
         const m = await against(shot.png, got.buf, true);
         rec.diff = { mean: +m.mean.toFixed(2), bad: +m.bad.toFixed(4) };
         rec.shape = m.shape;
-        const tag = `${vp.name}-${c.key}-${c.edition}`;
-        rec.screen = shot.info;
-        writeFileSync(join(outDir, `${tag}.png`), got.buf);
-        writeFileSync(join(outDir, `${tag}-screen.png`), shot.png);
         writeFileSync(join(outDir, `${tag}-sidebyside.jpg`), Buffer.from(m.sides.split(",")[1], "base64"));
         check(`${label}: decodes at ${m.shape.width} x ${m.shape.height}, not blank (tone spread ${m.shape.sd.toFixed(0)}, ${m.shape.colours} colours, ${(m.shape.opaque * 100).toFixed(0)}% opaque)`, m.shape.width === sz.width && m.shape.sd > 12 && m.shape.colours > 30 && m.shape.opaque > 0.85, JSON.stringify(m.shape));
         check(`${label}: the same shape as the screen (aspect ${(m.shape.width / m.shape.height).toFixed(3)} vs ${(shot.info.width / shot.info.height).toFixed(3)})`, Math.abs(m.shape.width / m.shape.height - shot.info.width / shot.info.height) < 0.01);
         if (c.edition === "researched") check(`${label}: the perforated edge is cut out (${(m.shape.edgeClear * 100).toFixed(1)}% of the border is clear)`, m.shape.edgeClear > 0.015);
         const matched = check(`${label}: matches the screen (mean ${m.mean.toFixed(2)} <= ${tol(c.edition).mean}, differing pixels ${(m.bad * 100).toFixed(2)}% <= ${(tol(c.edition).bad * 100).toFixed(0)}%)`, m.mean <= tol(c.edition).mean && m.bad <= tol(c.edition).bad, JSON.stringify({ mean: m.mean, bad: m.bad }));
+        if (pairId) qualification.compared(pairId, "original", matched, m);
         if (!matched) rec.captureFailure = await diagnoseFailure(matched, shot, tag);
         const other = pngs.find((p) => p.edition === c.edition && p.key !== c.key) ?? pngs.find((p) => p.edition !== c.edition);
         if (other) {
@@ -385,10 +417,9 @@ try {
         const got2 = await download("front", `${label}: edited front`);
         rec.editedDownloadReceipt = got2.receipt;
         const shot2 = await screenStub(c, { checkout: true });
+        retainFirst("edited", shot2);
         if (!check(`${label}: the edited stub downloads`, !got2.error && !!shot2, got2.error)) continue;
-        rec.editedScreen = shot2.info;
         writeFileSync(join(outDir, `${tag}-edited.png`), got2.buf);
-        writeFileSync(join(outDir, `${tag}-edited-screen.png`), shot2.png);
         const region = first.info.title;
         const d = await between(got.buf, got2.buf, region);
         rec.edit = { inside: +d.in.bad.toFixed(3), outside: +d.out.bad.toFixed(3) };
@@ -397,10 +428,11 @@ try {
         rec.editedDiff = { mean: +m2.mean.toFixed(2), bad: +m2.bad.toFixed(4) };
         writeFileSync(join(outDir, `${tag}-edited-sidebyside.jpg`), Buffer.from(m2.sides.split(",")[1], "base64"));
         const editedMatched = check(`${label}: the edited PNG matches the edited screen (mean ${m2.mean.toFixed(2)}, differing ${(m2.bad * 100).toFixed(2)}%)`, m2.mean <= tol(c.edition).mean && m2.bad <= tol(c.edition).bad);
+        if (pairId) qualification.compared(pairId, "edited", editedMatched, m2);
         if (!editedMatched) rec.editedCaptureFailure = await diagnoseFailure(editedMatched, shot2, `${tag}-edited`);
 
         // the back, for the first two editions of each viewport (a landscape and a portrait)
-        if (c.key === "pale" && c.edition === "researched" || c.edition === "letterpress") {
+        if (kind === "baseline" && (c.key === "pale" && c.edition === "researched" || c.edition === "letterpress")) {
           if (!(await openStudio(c))) continue;
           const back = await download("back", `${label}: back`);
           rec.backDownloadReceipt = back.receipt;
@@ -417,11 +449,15 @@ try {
           if (!backMatched) rec.backCaptureFailure = await diagnoseFailure(backMatched, sh, `${tag}-back`);
         }
       } catch (e) {
+        exception = true;
+        rec.exception = "case_did_not_complete";
         check(`${label}: ran to completion`, false, e instanceof Error ? e.message : String(e));
+      } finally {
+        if (pairId) qualification.finish(pairId, failed - failedBefore, exception);
       }
     }
 
-    if (vp.name === "390") {
+    if (kind === "baseline" && vp.name === "390") {
       const c = CASES[0];
       const label = `${vp.name}px delivery paths`;
       try {
@@ -470,14 +506,25 @@ try {
         check(`${label}: ran to completion`, false, e instanceof Error ? e.message : String(e));
       }
     }
-    await page.close();
+    } catch (e) {
+      check(`${vp.name}px ${kind} trial ${trial + 1}: page setup or execution completed`, false, e instanceof Error ? e.message : String(e));
+    } finally {
+      if (layers) evidence.layerObserverCleanup.push(await layers.stop());
+      try { if (page) await page.close(); }
+      catch (e) { check(`${vp.name}px ${kind} trial ${trial + 1}: page closed`, false, e instanceof Error ? e.message : String(e)); }
+    }
   }
 } finally {
-  await browser.close();
+  for (const layers of layerObservers) if (!layers.stopped) evidence.layerObserverCleanup.push(await layers.stop());
+  try { await browser.close(); }
+  catch (e) { check("browser completed bounded shutdown", false, e instanceof Error ? e.message : String(e)); }
   // Unknown, duplicate and late deliveries remain failures, including arrivals after a no-download terminal.
   evidence.downloadReceipts = { directory: dlDir, ...receipts.snapshot() };
   receipts.stop();
   check("all native downloads have one current document/action/Blob receipt and completed matching GUID", evidence.downloadReceipts.violations.length === 0, JSON.stringify(evidence.downloadReceipts.violations));
+  evidence.captureQualification = qualification.snapshot();
+  check("all fixed original/edited first-capture pairs completed and passed", evidence.captureQualification.passed,
+    JSON.stringify(evidence.captureQualification));
 }
 evidence.passed = passed;
 evidence.failed = failed;
