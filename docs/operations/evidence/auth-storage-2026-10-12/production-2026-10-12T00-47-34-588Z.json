@@ -1,0 +1,36 @@
+{
+  "suite": "production",
+  "mode": "fixture",
+  "command": "npm run verify:product -- --suite production --mode fixture --evidence-dir <scratch>",
+  "exitCode": 0,
+  "counts": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0
+  },
+  "startedAt": "2026-10-12T00:47:34.588Z",
+  "finishedAt": "2026-10-12T00:47:35.452Z",
+  "gitSha": "5b5c8f29f186542cb4b8aceaa020761b30603f0a",
+  "gitDirty": false,
+  "node": "v22.23.3",
+  "blockedNetwork": [],
+  "steps": [
+    {
+      "name": "fixture mode refuses outbound network",
+      "ok": true
+    },
+    {
+      "name": "scripts/smoke-production.mjs",
+      "command": "node scripts/smoke-production.mjs",
+      "exitCode": 0,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "ok": true
+    },
+    {
+      "name": "no outbound network attempted",
+      "ok": true
+    }
+  ]
+}
