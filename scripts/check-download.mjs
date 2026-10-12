@@ -16,8 +16,10 @@
 // and art that cannot be read (another origin without CORS) ends in a message instead of a broken file.
 // Writes the PNGs, the screenshots and side-by-sides to <evidence-dir>/download/. Offline: Chrome resolves loopback only.
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { launchBrowser, chromePath } from "./lib/cdp.mjs";
+import { BEGIN_CAPTURE_PROVENANCE, browserProvenance, captureFailureFrames, readCaptureProvenance } from "./lib/download-capture-diagnostics.mjs";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const evidenceDir = resolve(process.argv[3] ?? "out/gt-evidence");
@@ -193,6 +195,8 @@ const clearDownloads = () => {
 
 const browser = await launchBrowser();
 try {
+  // Startup provenance is outside the capture path; an executable path/inventory is not a measured browser version.
+  evidence.browser = await browserProvenance(browser.conn);
   await browser.conn.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dlDir });
   // Each comparison gets a fresh blank tab: one tab kept for the whole run stopped answering after many large images.
   const within = async (promise, what, ms = 60_000) => {
@@ -269,8 +273,12 @@ try {
         window.scrollTo(0, 0);
         const f = ${figure};
         await document.fonts.ready;
-        await Promise.all([...f.querySelectorAll("img")].map((img) => img.decode()));
+        const images = [...f.querySelectorAll("img")];
+        const diagnostic = ${BEGIN_CAPTURE_PROVENANCE};
+        diagnostic.sample("decode_start", f, images);
+        await Promise.all(images.map((img) => img.decode()));
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        diagnostic.sample("after_existing_decode_and_frames", f, [...f.querySelectorAll("img")]);
         return true;
       })()`), "the screen stub's decode and paint", 15000);
       if (checkout) {
@@ -288,6 +296,7 @@ try {
         if (!f) return null;
         const images = [...f.querySelectorAll("img")];
         if (document.fonts.status !== "loaded" || images.some((img) => !img.complete || !img.naturalWidth || !img.naturalHeight)) throw new Error("screen stub readiness changed before capture");
+        window.__ticketstubCaptureProvenance?.sample("before_original_capture", f, images);
         const r = f.getBoundingClientRect();
         const t = f.querySelector('[class*="_title"]');
         const tr = t ? t.getBoundingClientRect() : null;
@@ -298,8 +307,20 @@ try {
       })()`);
       if (!info) return null;
       const { data } = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, clip: { x: info.x, y: info.y, width: info.width, height: info.height, scale: 1 } });
-      return { png: Buffer.from(data, "base64"), info };
+      const capturedAt = performance.now();
+      // All hashing/style reads occur after the authoritative screenshot. They may affect later scheduling.
+      info.captureProvenance = await readCaptureProvenance(page, figure);
+      return { png: Buffer.from(data, "base64"), info, capturedAt, figure };
     }
+    const diagnoseFailure = (matched, shot, tag) => captureFailureFrames({
+      matched, page, figure: shot.figure, originalCapturedAt: shot.capturedAt,
+      clip: { x: shot.info.x, y: shot.info.y, width: shot.info.width, height: shot.info.height, scale: 1 },
+      save: async (offsetMs, png) => {
+        const file = `${tag}-diagnostic-after-failure-${offsetMs}ms.png`;
+        await writeFile(join(outDir, file), png, { signal: AbortSignal.timeout(2000) });
+        return file;
+      },
+    });
     const press = (side) =>
       page.eval(`(() => {
         const els = [...document.querySelectorAll('[data-download="${side}"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== "hidden"; });
@@ -354,7 +375,8 @@ try {
         check(`${label}: decodes at ${m.shape.width} x ${m.shape.height}, not blank (tone spread ${m.shape.sd.toFixed(0)}, ${m.shape.colours} colours, ${(m.shape.opaque * 100).toFixed(0)}% opaque)`, m.shape.width === sz.width && m.shape.sd > 12 && m.shape.colours > 30 && m.shape.opaque > 0.85, JSON.stringify(m.shape));
         check(`${label}: the same shape as the screen (aspect ${(m.shape.width / m.shape.height).toFixed(3)} vs ${(shot.info.width / shot.info.height).toFixed(3)})`, Math.abs(m.shape.width / m.shape.height - shot.info.width / shot.info.height) < 0.01);
         if (c.edition === "researched") check(`${label}: the perforated edge is cut out (${(m.shape.edgeClear * 100).toFixed(1)}% of the border is clear)`, m.shape.edgeClear > 0.015);
-        check(`${label}: matches the screen (mean ${m.mean.toFixed(2)} <= ${tol(c.edition).mean}, differing pixels ${(m.bad * 100).toFixed(2)}% <= ${(tol(c.edition).bad * 100).toFixed(0)}%)`, m.mean <= tol(c.edition).mean && m.bad <= tol(c.edition).bad, JSON.stringify({ mean: m.mean, bad: m.bad }));
+        const matched = check(`${label}: matches the screen (mean ${m.mean.toFixed(2)} <= ${tol(c.edition).mean}, differing pixels ${(m.bad * 100).toFixed(2)}% <= ${(tol(c.edition).bad * 100).toFixed(0)}%)`, m.mean <= tol(c.edition).mean && m.bad <= tol(c.edition).bad, JSON.stringify({ mean: m.mean, bad: m.bad }));
+        if (!matched) rec.captureFailure = await diagnoseFailure(matched, shot, tag);
         const other = pngs.find((p) => p.edition === c.edition && p.key !== c.key) ?? pngs.find((p) => p.edition !== c.edition);
         if (other) {
           const ctl = await against(shot.png, other.png, false);
@@ -379,7 +401,8 @@ try {
         const m2 = await against(shot2.png, got2.buf, true);
         rec.editedDiff = { mean: +m2.mean.toFixed(2), bad: +m2.bad.toFixed(4) };
         writeFileSync(join(outDir, `${tag}-edited-sidebyside.jpg`), Buffer.from(m2.sides.split(",")[1], "base64"));
-        check(`${label}: the edited PNG matches the edited screen (mean ${m2.mean.toFixed(2)}, differing ${(m2.bad * 100).toFixed(2)}%)`, m2.mean <= tol(c.edition).mean && m2.bad <= tol(c.edition).bad);
+        const editedMatched = check(`${label}: the edited PNG matches the edited screen (mean ${m2.mean.toFixed(2)}, differing ${(m2.bad * 100).toFixed(2)}%)`, m2.mean <= tol(c.edition).mean && m2.bad <= tol(c.edition).bad);
+        if (!editedMatched) rec.editedCaptureFailure = await diagnoseFailure(editedMatched, shot2, `${tag}-edited`);
 
         // the back, for the first two editions of each viewport (a landscape and a portrait)
         if (c.key === "pale" && c.edition === "researched" || c.edition === "letterpress") {
@@ -390,9 +413,12 @@ try {
           const bm = sh ? await against(sh.png, back.buf, true) : null;
           if (!check(`${label}: the back is on screen to compare`, !!bm)) continue;
           writeFileSync(join(outDir, `${tag}-back.png`), back.buf);
+          writeFileSync(join(outDir, `${tag}-back-screen.png`), sh.png);
           writeFileSync(join(outDir, `${tag}-back-sidebyside.jpg`), Buffer.from(bm.sides.split(",")[1], "base64"));
+          rec.backScreen = sh.info;
           rec.backDiff = { mean: +bm.mean.toFixed(2), bad: +bm.bad.toFixed(4) };
-          check(`${label}: the back matches the screen (mean ${bm.mean.toFixed(2)}, differing ${(bm.bad * 100).toFixed(2)}%, not blank sd ${bm.shape.sd.toFixed(0)})`, bm.mean <= tol(c.edition).mean && bm.bad <= tol(c.edition).bad && bm.shape.sd > 12);
+          const backMatched = check(`${label}: the back matches the screen (mean ${bm.mean.toFixed(2)}, differing ${(bm.bad * 100).toFixed(2)}%, not blank sd ${bm.shape.sd.toFixed(0)})`, bm.mean <= tol(c.edition).mean && bm.bad <= tol(c.edition).bad && bm.shape.sd > 12);
+          if (!backMatched) rec.backCaptureFailure = await diagnoseFailure(backMatched, sh, `${tag}-back`);
         }
       } catch (e) {
         check(`${label}: ran to completion`, false, e instanceof Error ? e.message : String(e));
