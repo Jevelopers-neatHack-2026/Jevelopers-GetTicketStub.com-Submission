@@ -170,12 +170,21 @@ The [provenance register](../provenance/register.json) and [allowlist](../proven
 | Consumer / owner boundary | Required input before a corresponding decision or release | Reviewer / notification evidence |
 |---|---|---|
 | getticketstub.com — app assembly | Exact consumed brand revision, app-versus-marketing theme scope, font network strategy, and tested asset/token imports | Reviewer appointment/ACK **pending**; [existing Product handoff](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/19#issuecomment-6121957840) remains the request of record. |
-| landing-page-repo — rendered landing copy | Exact mark/theme/font adoption and evidence-backed public claims | Reviewer appointment/ACK **pending**; [LP-02](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/4). |
-| marketing-material — collateral and claim approval | MM-02 approved wording, imagery permissions, exact export version | Reviewer appointment/ACK **pending**; [MM-02](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5). |
+| landing-page-repo — rendered landing copy | Exact mark/theme/font adoption and evidence-backed public claims; disposition of the documented font/fallback/stamp differences | Reviewer appointment/ACK **pending**. [LP-06 source at `dda1b5d48e71ed9c111b82111676b7ef033fe5ef`](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/dda1b5d48e71ed9c111b82111676b7ef033fe5ef/integration/brand-consumption.md) supplies provisional observations; [LP-02](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/4) owns rendered copy. |
+| marketing-material — collateral and claim approval | MM-02 approved wording, imagery permissions, exact export version | Existing user-assigned marketing-material root/supervisor is the accountable content/brand/handoff reviewer and receiver per the [MM-06 role receipt](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7#issuecomment-6105489382) and [later MM-02 confirmation](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5#issuecomment-6112307412). Exact-artifact ACK and this packet's approval remain **pending**. |
 | team-dashboard — internal financial UI | Token/typography/focus usage, exact imports, financial-state readability evidence | Reviewer appointment/ACK **pending**; [consumer issue #15](https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/15). |
 | creative-engine / print-production / fulfillment owner | Artwork-versus-master scope; printable composition, supported formats and permissions; no producer-defined foreign contract | Exact ACKs **pending**; [existing handoff receipt](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/10#issuecomment-6121958209) requests exact full-consumer evidence and explicitly preserves a blocked domain ACK. The earlier PR #3 receipt abbreviated this as `Fulfillment10#6121958209`; the destination was verified read-only on 2026-10-12. The shared-contracts owner retains canonical interfaces. |
 
 This document is the reviewable packet, not a sent notification or an ACK. Existing owner requests are linked to avoid inventing or duplicating responses.
+
+The marketing role receipt does not transfer that foreign supervisor's authority to
+the brand-kit execution agent or supply source-owned identity/rights approval.
+Landing's exact pinned record now supplies concrete review questions: six external
+font families with differing axes/weights, fallback-order and Archivo display
+adaptations, and a source stamp height of 21 CSS pixels against the existing 24-pixel
+minimum. The [consumer observation matrix](consumers.md#landing-observations-at-the-inspected-revision)
+records those inputs and their owners. No font, typography or size exception is
+approved by adding that source evidence to this packet.
 
 ## Evidence and validation
 
@@ -190,7 +199,8 @@ The public-copy negative fixture is documented in the [claim register](claims-re
 | Accountable approver | @CompleteDotTech | [Nomination only](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6113526793) | **Pending** — nomination is not this packet's approval. |
 | Technical token/export | Unknown | Pending appointment and acknowledgement | **Pending** |
 | Provenance/rights | Unknown | Pending appointment and acknowledgement | **Pending** |
-| Affected consumers | Unknown for each required consumer | Pending explicit role ACKs and reviewed source evidence | **Pending** |
+| Marketing consumer | Existing user-assigned marketing-material root/supervisor | [MM-06 role receipt](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7#issuecomment-6105489382); [later MM-02 confirmation](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5#issuecomment-6112307412) | **Pending** — existing role evidence is not this packet's approval or the exact-artifact ACK. |
+| Other affected consumers | Unknown for each remaining required consumer | Pending explicit role ACKs and reviewed source evidence | **Pending** |
 | Design recommendation sought from Lars | @lmvdz, identified in the owner's request | [Open BK-02.3 question](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/9#issuecomment-6118216028) | **Pending** — this request does not appoint every reviewer role. |
 
 Documentation-only reconciliation follows [one independent reviewer other than the author](brand-governance.md#change-classes-bk-073), with the approver informed. Core decisions require the actual roles shown above; independent source review cannot substitute for them.

@@ -89,6 +89,19 @@ def approved_shape_fixture(root: Path) -> tuple[bytes, dict]:
     return dist.build_bytes(root, "approved")
 
 
+def approved_gate_shape_fixture(root: Path) -> tuple[bytes, dict]:
+    """Complete synthetic gate receipts at the approved subset, not the proposal."""
+    _, manifest = approved_shape_fixture(root)
+    receipt = synthetic_receipt(manifest["files_digest"])
+    record = json.loads((root / dist.REVIEW).read_text())
+    record["leaf_evidence"] = {name: receipt for name in release.LEAVES}
+    record["manual_evidence"] = {name: receipt for name in release.MANUAL}
+    record["release_review"] = receipt
+    (root / dist.REVIEW).write_bytes(dist.canonical(record))
+    commit_synthetic(root, "complete gate receipt shapes; no actual approvals")
+    return dist.build_bytes(root, "approved")
+
+
 class DistributionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -465,6 +478,140 @@ class DistributionTests(unittest.TestCase):
             result = consumers.validate_tailwind(self.root, Path(tmp), Path(tmp))
         self.assertEqual(result["status"], "skipped")
         self.assertTrue(result["required"])
+
+    def test_gate_binds_approved_subset_to_actual_package_output(self):
+        # Real archive and receipt validation; leaf command execution is isolated.
+        # These receipt shapes are synthetic, never owner or release evidence.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            shutil.copytree(self.root, root)
+            data, manifest = approved_gate_shape_fixture(root)
+            _, proposal = dist.build_bytes(root, "review")
+            self.assertNotEqual(manifest["files_digest"], proposal["files_digest"])
+
+            def synthetic_collect(root, target, output, number, timeout):
+                if target == "package-brand":
+                    dist.write_new(output / "approved-brand.zip", data)
+                return {"target": target, "result": "pass", "required": True, "exit_code": 0}
+
+            output = Path(tmp) / "run"
+            with patch.object(release, "collect_check", side_effect=synthetic_collect):
+                report = release.gate(root, output)
+            self.assertEqual(report["result"], "recorded_checks_pass", report["blockers"])
+            self.assertEqual(report["artifact"]["kind"], "approved_subset")
+            self.assertEqual(report["artifact"]["files_digest"], manifest["files_digest"])
+            self.assertEqual(report["artifact"]["archive_sha256"], dist.digest(data))
+            self.assertEqual(report["artifact"]["path"], "approved-brand.zip")
+            self.assertTrue(report["artifact"]["from_package_brand"])
+            self.assertEqual((output / "approved-brand.zip").read_bytes(), data)
+            self.assertFalse((output / "review-brand.zip").exists())
+            self.assertFalse(report["release_approved"])
+
+    def test_gate_stale_consumer_receipt_does_not_approve_subset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            shutil.copytree(self.root, root)
+            approved_gate_shape_fixture(root)
+            _, proposal = dist.build_bytes(root, "review")
+            record = json.loads((root / dist.REVIEW).read_text())
+            record["consumer_acknowledgments"]["getticketstub.com"]["files_digest"] = proposal["files_digest"]
+            (root / dist.REVIEW).write_bytes(dist.canonical(record))
+            commit_synthetic(root, "stale consumer receipt must not approve a different subset")
+            data, _ = dist.build_bytes(root, "approved")
+
+            def synthetic_collect(root, target, output, number, timeout):
+                if target == "package-brand":
+                    dist.write_new(output / "approved-brand.zip", data)
+                return {"target": target, "result": "pass", "required": True, "exit_code": 0}
+
+            with patch.object(release, "collect_check", side_effect=synthetic_collect):
+                report = release.gate(root, Path(tmp) / "run")
+            self.assertEqual(report["result"], "blocked")
+            self.assertIn("getticketstub.com: acknowledgment does not bind this exact export", report["blockers"])
+
+    def test_gate_requires_matching_package_bytes_and_successful_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            shutil.copytree(self.root, root)
+            data, _ = approved_gate_shape_fixture(root)
+            for case in ("missing", "tampered", "failed_command"):
+                with self.subTest(case=case):
+                    def synthetic_collect(root, target, output, number, timeout):
+                        result = "pass"
+                        if target == "package-brand":
+                            if case != "missing":
+                                dist.write_new(output / "approved-brand.zip", data + b"tampered" if case == "tampered" else data)
+                            if case == "failed_command":
+                                result = "fail"
+                        return {"target": target, "result": result, "required": True,
+                                "exit_code": 0 if result == "pass" else 1}
+
+                    output = Path(tmp) / case
+                    with patch.object(release, "collect_check", side_effect=synthetic_collect):
+                        report = release.gate(root, output)
+                    self.assertEqual(report["result"], "blocked")
+                    self.assertTrue(any("package-brand" in blocker for blocker in report["blockers"]))
+                    if case == "failed_command":
+                        self.assertTrue(report["artifact"]["from_package_brand"])
+                    else:
+                        self.assertIsNone(report["artifact"])
+                    if case == "tampered":
+                        self.assertEqual((output / "approved-brand.zip").read_bytes(), data + b"tampered")
+
+    def test_gate_review_archive_is_diagnostic_when_approval_is_absent(self):
+        def synthetic_collect(root, target, output, number, timeout):
+            return {"target": target, "result": "pass", "required": True, "exit_code": 0}
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(release, "collect_check", side_effect=synthetic_collect):
+            report = release.gate(self.root, Path(tmp) / "run")
+            self.assertEqual(report["result"], "blocked")
+            self.assertEqual(report["artifact"]["kind"], "review_candidate")
+            self.assertEqual(report["artifact"]["path"], "review-brand.zip")
+            self.assertFalse(report["artifact"]["from_package_brand"])
+            self.assertTrue(any("diagnostic only" in blocker for blocker in report["blockers"]))
+            self.assertFalse(report["release_approved"])
+
+    def test_gate_does_not_record_nested_exception_details(self):
+        def synthetic_collect(root, target, output, number, timeout):
+            return {"target": target, "result": "pass", "required": True, "exit_code": 0}
+
+        sentinel = "SYNTHETIC_PRIVATE_DIAGNOSTIC_SENTINEL"
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(release, "collect_check", side_effect=synthetic_collect), \
+                patch.object(dist, "build_bytes", side_effect=dist.DistributionError(sentinel)):
+            output = Path(tmp) / "run"
+            report = release.gate(self.root, output)
+            self.assertEqual(report["result"], "blocked")
+            self.assertIn("exact candidate archive or required approval inputs are unavailable", report["blockers"])
+            self.assertNotIn(sentinel, (output / "report.json").read_text())
+
+    def test_gate_asset_builds_use_fresh_outputs_across_revisions(self):
+        # Use a real Make subprocess and a synthetic builder that preserves any
+        # existing output, as build_assets does. No raster/font dependency needed.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            (root / "Makefile").write_text(
+                'PYTHON ?= python3\nASSET_OUTPUT ?= build/asset-review\n.PHONY: build-assets\n'
+                'build-assets:\n\t"$(PYTHON)" asset-build.py "$(ASSET_OUTPUT)"\n')
+            (root / "asset-build.py").write_text(
+                'from pathlib import Path\nimport sys\n'
+                'output = Path(sys.argv[1])\n'
+                'output.mkdir(parents=True, exist_ok=False)\n'
+                '(output / "source.txt").write_bytes(Path("source.txt").read_bytes())\n')
+            previous = root / "build/asset-review"
+            previous.mkdir(parents=True)
+            (previous / "prior-failure.txt").write_text("preserve this earlier failed snapshot")
+            with patch.dict(release.os.environ, {"PYTHON": sys.executable, "ASSET_OUTPUT": str(previous)}):
+                for revision in ("first-revision", "second-revision"):
+                    output = Path(tmp) / (revision + " run")
+                    output.mkdir()
+                    (root / "source.txt").write_text(revision)
+                    result = release.collect_check(root, "build-assets", output, 1, 10)
+                    self.assertEqual(result["result"], "pass", result)
+                    self.assertEqual((output / "asset-review/source.txt").read_text(), revision)
+            self.assertEqual((previous / "prior-failure.txt").read_text(), "preserve this earlier failed snapshot")
+            self.assertEqual(list(previous.iterdir()), [previous / "prior-failure.txt"])
 
     def test_gate_retains_failed_and_skipped_required_checks(self):
         def synthetic_collect(root, target, output, number, timeout):

@@ -19,16 +19,41 @@ artifact; source-only references remain outside that artifact.
 | Consumer | Owning role | Observed source evidence | Required brand contract |
 |---|---|---|---|
 | getticketstub.com | Product/frontend application composition | [GT-10B #19](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/19) requires actual brand pins; its assembly tool labels missing pins pending | Approved archive/version/file-set hash, CSS/logo import, external-font policy, exact upgrade/rollback and named acknowledgment |
-| landing-page-repo | Product/frontend public-site owner, with brand identity reviewer | [LP-06 #8](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/8) allows local work while final brand conformance is blocked | The same approved subset, font rules, public-export limits, representative rendered review and named early acknowledgment |
+| landing-page-repo | Product/frontend public-site owner, with brand identity reviewer | [Provisional consumption at `dda1b5d48e71ed9c111b82111676b7ef033fe5ef`](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/dda1b5d48e71ed9c111b82111676b7ef033fe5ef/integration/brand-consumption.md) inventories existing inline identity, local aliases and external resource declarations against brand source `3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4`; no approved distribution is consumed | The same approved subset, font rules, public-export limits, representative rendered review and named early acknowledgment; [LP-06 #8](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/8) remains open |
 | team-dashboard | Product/frontend dashboard integration owner | [TD-10 source](https://github.com/Jevelopers-neatHack-2026/team-dashboard/blob/e7e9aece87eac258369ed551cb9800282575cc45/docs/integration/TD-10-components.md) records brand `3822635aff507cd5918a08a0c636bb0e41705261`, isolated styles and platform fallbacks | Deliberate token migration inside `.team-dashboard`, no global resets/font requests, and named design-owner acceptance in its own issue |
-| marketing-material | Product/frontend collateral owner and brand/landing reviewers | [Draft consumption](https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/62742934652aad8872c388e4d3fa77dddf93cbc9/review/brand-consumption.md) uses `3822635aff507cd5918a08a0c636bb0e41705261` guidance only; no logo/font binary imported; conformance blocked | Approved subset/voice, medium-specific adaptations, exact asset hashes/restrictions and named early acknowledgment |
+| marketing-material | Existing user-assigned marketing-material root/supervisor for content/brand/handoff review and receipt; source-owned brand/rights decisions remain with their owners | [Draft consumption at `79ae21607eb4d98188f85ce3c42b8be6eb5688bc`](https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/79ae21607eb4d98188f85ce3c42b8be6eb5688bc/review/brand-consumption.md) uses `3822635aff507cd5918a08a0c636bb0e41705261` guidance only; no logo/font binary imported; conformance blocked | Approved subset/voice, medium-specific adaptations, exact asset hashes/restrictions and the existing supervisor's early acknowledgment of the exact artifact |
 
 These are read-only observations and role boundaries, not appointments or tested
-adoption of a new release. Accountable brand approver @CompleteDotTech is nominated;
-technical, provenance, consumer and release reviewer acknowledgments remain missing
-in [governance](brand-governance.md). Lars is addressed as @lmvdz in the
+adoption of a new release. Accountable brand approver @CompleteDotTech is nominated.
+Marketing's [MM-06 receipt](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7#issuecomment-6105489382)
+and [later MM-02 confirmation](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5#issuecomment-6112307412)
+already identify its user-assigned supervisor as accountable marketing
+content/brand/handoff reviewer and receiver. That role evidence does not acknowledge
+this exact brand artifact or transfer the supervisor's authority to this brand-kit
+agent. The remaining role gaps and all missing exact-decision acknowledgments are
+recorded in [governance](brand-governance.md). Lars is addressed as @lmvdz in the
 [#14 coordination request](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14#issuecomment-6118157033);
 that request does not appoint or approve every role.
+
+### Landing observations at the inspected revision
+
+The pinned [Landing consumption record](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/dda1b5d48e71ed9c111b82111676b7ef033fe5ef/integration/brand-consumption.md)
+was read on 2026-10-12. It records `importedBrandFiles` as empty and keeps its
+observed upstream allowlist empty. Its local checks establish provisional source
+consistency; they do not establish approval or adoption of a brand release.
+
+| Surface | Landing's recorded source observation | Required owner disposition |
+|---|---|---|
+| External fonts | Six Google Fonts families: Archivo, Big Shoulders Display, IBM Plex Mono, Abril Fatface, Fraunces and Inter Tight. Declared axes/weights differ from the brand source's two-family explicit opt-in. Fetched responses and transitive requests are unmeasured. | Brand/type and privacy owners review the exact families, axes, network/CSP and fallback contract under the existing no-self-hosted-font constraint. |
+| Typography and fallbacks | Fraunces/Inter Tight fallback lists and order differ from the canonical lists; Archivo is the primary display treatment. | Brand/type reviewer accepts the specific consumer adaptation or supplies a reviewed change. Existing use does not amend the master typography. |
+| Stamp size | Existing `.logo-stamp` source is 17 by 21 CSS pixels; the brand logo guide specifies a 24-pixel minimum stamp height. | Landing and brand reviewers resolve the size/variant and inspect the actual rendered placement. This source observation is not a browser measurement. |
+| Inline marks and imagery | Existing inline symbol bytes and ten WebP/JSON assets are inventoried, but exact mark derivation, permissions and rendered placement remain unverified. | Source rights and brand/publication owners provide the applicable evidence before final conformance. A matching file hash does not supply permission. |
+
+These are the consumer's documented observations at the linked revision, not new
+provider or browser tests by brand-kit. They identify concrete review inputs for
+BK-02/BK-03B/BK-09 and LP-06 without changing either repository's identity rules,
+consumer files or approval state. The current brand contract still requires a
+separate exact-artifact acknowledgment.
 
 ## Obtain, verify and import
 
