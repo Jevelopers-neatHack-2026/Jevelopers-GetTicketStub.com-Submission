@@ -229,7 +229,7 @@
       "sceneRefs": ["scene-10-status-and-docs-cta"],
       "claimIds": ["CLAIM-NO-RESULTS-VERIFIED-001"],
       "ctaIds": ["CTA-REPOSITORY-DOCS-001"],
-      "limitations": ["Draft templates only; no automatic posting or authorization to publish.", "Team name, submitter, official post, cutoff, public repository URL, and demo URL remain pending."]
+      "limitations": ["Draft templates only; no automatic posting or authorization to publish.", "Team, project, and repository are known draft fields (review pending, not approved); submitter, public demo URL, official post, cutoff, and approvals remain pending."]
     },
     {
       "recordId": "LAUNCH-X-KEY-VISUAL-001-svg",
