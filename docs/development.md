@@ -28,13 +28,15 @@ Database-backed suites (need Docker, see below):
 npm run test:pricing -- --offline
 npm run test:ledger -- --offline
 npm run test:migrations -- --offline
+npm run test:evidence:postgres -- --offline
+npm run build --silent && node scripts/with-postgres.mjs reconciliation --offline --suite=coverage-postgres
 ```
 
-These are the steps run by the [`foundation` workflow](../.github/workflows/ci.yml). Every `test:*` script runs `npm run build` first.
+These offline commands are a subset of the [`foundation` workflow](../.github/workflows/ci.yml); the scoped gates below list additional coverage and evidence checks. The workflow is authoritative for the complete hosted sequence. Every `test:*` script runs `npm run build` first; direct `with-postgres.mjs` invocations need an explicit build.
 
 ## Suite inventory
 
-The public script names are `test:accounting`, `test:adapters`, `test:budgets`, `test:contracts`, `test:exports`, `test:integration`, `test:ledger`, `test:metering`, `test:migrations`, `test:pricing`, `test:reconciliation`, `test:recovery`, `test:release`, `test:reporting`, `test:security`, `test:smoke`, `test:traceability`, and `test:unit`. Required files per suite are defined in [`scripts/suite-policy.mjs`](../scripts/suite-policy.mjs).
+The public script names are `test:accounting`, `test:adapters`, `test:budgets`, `test:contracts`, `test:evidence`, `test:evidence:postgres`, `test:exports`, `test:integration`, `test:ledger`, `test:metering`, `test:migrations`, `test:pricing`, `test:reconciliation`, `test:recovery`, `test:release`, `test:reporting`, `test:security`, `test:smoke`, `test:traceability`, and `test:unit`. Required files per suite are defined in [`scripts/suite-policy.mjs`](../scripts/suite-policy.mjs).
 
 | Suite | Test files at this revision | Runner |
 | --- | --- | --- |
@@ -46,19 +48,20 @@ The public script names are `test:accounting`, `test:adapters`, `test:budgets`, 
 | `pricing` | `tests/pricing/pricing.test.mjs` | PostgreSQL 16 |
 | `ledger` | `tests/ledger/ledger.test.mjs` | PostgreSQL 16 |
 | `migrations` | `tests/migrations/migrations.test.mjs` | PostgreSQL 16 |
-| `accounting`, `evidence`, `security` | Files registered in `scripts/suite-policy.mjs` | Node or PostgreSQL as package scripts specify |
+| `accounting`, `security` | Files registered in `scripts/suite-policy.mjs` | Node or PostgreSQL as package scripts specify |
+| `evidence` | `tests/evidence/evidence.test.mjs`, `tests/evidence/postgres-model.test.mjs`, `tests/evidence/stored-lineage-model.test.mjs` | Node-only modeled suites; `test:evidence:postgres` uses disposable PostgreSQL |
 | `budgets` | Authorization, contention and lifecycle files | PostgreSQL 16 |
 | `metering` | Registered suite file | Node only |
 | `recovery`, `reporting` | Registered suite files | PostgreSQL 16 |
-| `adapters`, `reconciliation` | Required leaf files are currently absent | Fail closed |
+| `adapters`, full `reconciliation` | `tests/adapters/adapters.test.mjs` and `tests/reconciliation/reconciliation.test.mjs` are absent; scoped coverage tests are separate | Full selector fails closed |
 | `integration`, `release` | Compose the required domain files; release also requires security and traceability | Fail closed while required leaf files are absent |
 
-The `scripts/suite-policy.mjs` inventory is authoritative for each selected file. At this revision the adapters and reconciliation leaf files are missing, so integration and release fail closed with missing-file evidence. This gate status concerns test inventory; it is not a finance acceptance result.
+The `scripts/suite-policy.mjs` inventory is authoritative for selected files and selectors. Integration and release require the missing adapter and full reconciliation leaf files, so they still fail closed. The scoped coverage/evidence selectors below do not replace the missing full-domain tests. This gate status concerns test inventory; it is not a finance acceptance result.
 
 
 ## PostgreSQL lifecycle
 
-Docker Engine with a working local daemon is required for database-backed tests (`budgets`, `integration`, `ledger`, `migrations`, `pricing`, `recovery`, `release`, all run through [`scripts/with-postgres.mjs`](../scripts/with-postgres.mjs)). The lifecycle wrapper creates a PostgreSQL 16 container from the immutable digest in [`postgres-test-image.json`](../postgres-test-image.json), binds its random port to loopback, generates a random test-only database password in memory, waits for readiness, marks the disposable database, applies checksummed migrations, runs the selected suite, retains sanitized logs, and removes the container and its anonymous data volume in `finally` (`docker rm --force --volumes <container-name>`; named volumes are left alone). The password is not written to logs or manifests. `--offline` means tests do not call providers or external accounting services; Docker may fetch the pinned image when it is not cached.
+Docker Engine with a working local daemon is required for database-backed tests (including `budgets`, `integration`, `ledger`, `migrations`, `pricing`, `recovery`, `release`, the PostgreSQL `evidence` selector, reconciliation `coverage-postgres`, and the `exports` PostgreSQL selector, all run through [`scripts/with-postgres.mjs`](../scripts/with-postgres.mjs)). The lifecycle wrapper creates a PostgreSQL 16 container from the immutable digest in [`postgres-test-image.json`](../postgres-test-image.json), binds its random port to loopback, generates a random test-only database password in memory, waits for readiness, marks the disposable database, applies checksummed migrations, runs the selected suite, retains sanitized logs, and removes the container and its anonymous data volume in `finally` (`docker rm --force --volumes <container-name>`; named volumes are left alone). The password is not written to logs or manifests. `--offline` means tests do not call providers or external accounting services; Docker may fetch the pinned image when it is not cached.
 
 `npm run test:migrations -- --offline` checks both an empty database and a previous-foundation fixture containing migration `0001`. It creates a uniquely named sibling database for the previous fixture, applies the pending upgrade, verifies health and durable records from a separate worker process, and drops that sibling database in cleanup.
 
@@ -66,7 +69,20 @@ A `CI_TEST_DATABASE_URL` override is accepted only after the named target contai
 
 ## Suite selectors and gates
 
-The selector contract currently defines budget leaves: `npm run test:budgets -- --suite=authorization`, `--suite=contention`, `--suite=lifecycle`, or `--suite=nested-scopes`; comma-separated distinct selectors may be combined. Nested scopes is the assigned P1 issue [#17](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/17) and is explicitly deferred from the default v1 integration/release gate per issue [#18](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/18); manifests record that deferral, while an explicit nested-scopes selector still fails until its test lands.
+The coverage and evidence selectors distinguish modeled behavior from PostgreSQL execution:
+
+| Purpose | Command | Boundary |
+| --- | --- | --- |
+| Coverage-only request/read model | `npm run test:reconciliation -- --offline --suite=coverage` | Synthetic/model storage; does not prove PostgreSQL durability. |
+| Coverage PostgreSQL persistence | `npm run build --silent && node scripts/with-postgres.mjs reconciliation --offline --suite=coverage-postgres` | Disposable PostgreSQL 16 and restricted runtime role required. |
+| Stored-lineage model | `npm run test:evidence -- --offline --suite=stored-lineage` | Synthetic model only. |
+| PostgreSQL evidence readers | `npm run test:evidence:postgres -- --offline` | Disposable PostgreSQL; selects both existing evidence and stored-lineage PostgreSQL readers. |
+| Stored-lineage PostgreSQL only | `npm run build --silent && node scripts/with-postgres.mjs evidence --offline --suite=stored-lineage-postgres` | Disposable PostgreSQL 16 required. |
+| Migration catalog/policy | `npm run test:traceability -- --offline --suite=migration-policy` | Static migration-catalog and SQL-policy check; not a database execution. |
+
+The full `reconciliation` suite remains separate from `coverage` and `coverage-postgres`; the missing full reconciliation leaf keeps integration/release closed. PostgreSQL selectors use disposable synthetic fixtures and do not establish live provider access, current deployed host composition, Finance acceptance or consumer adoption.
+
+The selector contract includes budget leaves: `npm run test:budgets -- --suite=authorization`, `--suite=contention`, `--suite=lifecycle`, or `--suite=nested-scopes`; comma-separated distinct selectors may be combined. Nested scopes is the assigned P1 issue [#17](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/17) and is explicitly deferred from the default v1 integration/release gate per issue [#18](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/18); manifests record that deferral, while an explicit nested-scopes selector still fails until its test lands.
 
 An empty, repeated, unknown, or unsupported selector fails without falling back to the full suite. A recognized selector whose required leaf has not landed also fails and records the missing file. The runner checks Node 22 structured test events separately for every required file, ignores the Node file wrapper, and requires each file to register and complete at least one real test case. Any skipped, todo, cancelled, failed, empty, or missing required file fails the gate; an unrelated passing file cannot satisfy it. See the [Node.js 22 test runner event API](https://nodejs.org/download/release/v22.23.3/docs/api/test.html#test-runner-events) used by the custom reporter.
 
