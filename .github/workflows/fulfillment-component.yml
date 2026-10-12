@@ -1,0 +1,58 @@
+name: Fulfillment bundle consumer DEVELOPMENT
+on:
+  pull_request:
+    paths:
+      - fulfillment_component_tests/**
+      - contracts/fulfillment-producer-pin.json
+      - docs/fulfillment-component-development.md
+      - .github/workflows/fulfillment-component.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-bundle-consumer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/fulfillment-connectors
+          ref: a1c04e6424626475c7c6db3d397cc6e3392c1600
+          path: reports/runs/fulfillment-source
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.21.0'
+      - name: Bootstrap exact npm without provider configuration
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/fulfillment-bootstrap"
+          env -i PATH="$PATH" HOME="$RUNNER_TEMP/fulfillment-bootstrap" npm_config_cache="$RUNNER_TEMP/fulfillment-bootstrap/cache" \
+            npm install --prefix "$RUNNER_TEMP/fulfillment-npm" --ignore-scripts --no-audit --no-fund npm@11.19.0
+      - name: Verify outer archive custody and fail-closed controls
+        shell: bash
+        run: |
+          mkdir -p reports/runs/fulfillment-controls
+          env -i PATH="$PATH" FC_TEST_SOURCE="$PWD/reports/runs/fulfillment-source" FC_TEST_EVIDENCE="$PWD/reports/runs/fulfillment-controls" \
+            node --test --test-reporter=tap fulfillment_component_tests/receipt.test.mjs > reports/runs/fulfillment-controls/unit.tap 2>&1
+      - name: Build locked private source then run owner and consumer in isolated network namespace
+        shell: bash
+        run: |
+          env -i PATH="$RUNNER_TEMP/fulfillment-npm/node_modules/.bin:$PATH" \
+            GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            node fulfillment_component_tests/run.mjs "$PWD/reports/runs/fulfillment-source" \
+              "$PWD/fulfillment_component_tests/fixtures/print-corpus.zip" "$PWD/reports/runs/fulfillment-component"
+      - name: Preserve sanitized failure and success evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fulfillment-component-development-${{ github.sha }}
+          path: |
+            reports/runs/fulfillment-component/*.json
+            reports/runs/fulfillment-controls/*.json
+            reports/runs/fulfillment-controls/*.tap
+          if-no-files-found: error
+          retention-days: 30
