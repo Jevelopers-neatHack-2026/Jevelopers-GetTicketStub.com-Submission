@@ -133,7 +133,8 @@ export function verifyEvidencePage(page: EvidencePage): boolean {
 		if (typeof page !== "object" || page === null) return false;
 		const proto = Object.getPrototypeOf(page);
 		if (proto !== Object.prototype && proto !== null) return false;
-		const payload: Record<string, unknown> = {};
+		// Null prototype: own "__proto__" keys must stay data, not hit the setter.
+		const payload: Record<string, unknown> = Object.create(null);
 		let integrity: unknown;
 		for (const key of Reflect.ownKeys(page)) {
 			if (typeof key !== "string") return false;

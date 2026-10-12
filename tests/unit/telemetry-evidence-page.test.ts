@@ -389,3 +389,19 @@ test("verification never invokes getters at the root or nested levels", () => {
 	assert.equal(calls, 0);
 	assert.equal(verifyEvidencePage(page), true);
 });
+
+test("verification preserves own __proto__ keys instead of dropping them", () => {
+	using f = fixture();
+	seedJob(f);
+	const page = readEvidencePage(f.outbox, scope);
+	for (const value of [null, 17]) {
+		const forged = JSON.parse(
+			JSON.stringify(page).replace(/^\{/, `{"__proto__":${value},`),
+		);
+		assert.equal(Object.hasOwn(forged, "__proto__"), true);
+		assert.equal(forged.integrity.payloadDigest, page.integrity.payloadDigest);
+		assert.equal(verifyEvidencePage(forged), false);
+	}
+	assert.equal(verifyEvidencePage(JSON.parse(JSON.stringify(page))), true);
+	assert.equal(verifyEvidencePage(page), true);
+});
