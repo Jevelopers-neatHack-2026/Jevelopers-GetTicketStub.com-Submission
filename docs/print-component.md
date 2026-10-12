@@ -296,6 +296,14 @@ bytes and zero exits with proved teardown. Active-compose also failed its requir
 checkpoint; it is not an acceptance pass. The next candidate corrects publication
 and WAL addressing, uses the unchanged source positive command only for that fourth
 stage, and adds real native reader regressions. Fresh full Linux proof is required.
+The `b417bcc` dispatch passed twelve lifecycle/native and fifteen guarded cases.
+Four sidecar tests failed before observer execution because their setup left the
+SQLite WAL-selection cursor unconsumed, so no real sidecars existed to replace.
+Active-compose failed before DB observation: the unchanged original request fixture
+is 225610 bytes and exceeded the reader's 64 KiB bound. The successor retains a
+finite 256 KiB fixture bound, tests original-size and hostile replacements, and
+requires confirmed WAL selection and actual regular sidecars before native tamper
+checks. No active-compose or hostile-sidecar acceptance is claimed from that run.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

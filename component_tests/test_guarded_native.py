@@ -93,7 +93,8 @@ def test_stale_numeric_owner_binding_sends_zero_signals(
 def test_observer_reads_pending_state_and_schema_from_original_wal_siblings(tmp_path: Path) -> None:
     database = tmp_path / "state.sqlite"
     with closing(sqlite3.connect(database)) as connection:
-        _ = connection.execute("PRAGMA journal_mode=WAL")
+        with closing(connection.execute("PRAGMA journal_mode=WAL")) as cursor:
+            assert cursor.fetchone() == ("wal",)
         _ = connection.executescript(
             """CREATE TABLE attempts(id TEXT,operation TEXT,started INTEGER,outcome TEXT);
                CREATE TABLE operations(id TEXT,key TEXT);
@@ -143,10 +144,12 @@ def test_observer_refuses_owner_sidecar_replacement_before_sqlite_reads(
     outside = tmp_path / "private-marker"
     _ = outside.write_bytes(b"PRIVATE_TEST_MARKER")
     with closing(sqlite3.connect(database)) as connection:
-        _ = connection.execute("PRAGMA journal_mode=WAL")
+        with closing(connection.execute("PRAGMA journal_mode=WAL")) as cursor:
+            assert cursor.fetchone() == ("wal",)
         _ = connection.execute("CREATE TABLE original(value TEXT)")
         connection.commit()
         sidecar = Path(str(database) + suffix)
+        assert stat.S_ISREG(sidecar.stat().st_mode)
         backup = sidecar.with_name(sidecar.name + ".original")
         _ = sidecar.rename(backup)
         if replacement == "symlink":

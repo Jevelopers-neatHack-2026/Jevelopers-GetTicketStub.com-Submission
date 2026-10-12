@@ -32,7 +32,8 @@ def positive_key(docker: Docker, binding: OwnerBinding) -> tuple[str, dict[str, 
         / "node_modules/@jevelopers/shared-contracts/fixtures/ComposeArtifactRequest.json"
     )
     assert fixture.resolve(strict=True) == fixture
-    raw = read_bytes(fixture, max_bytes=65536, deadline=docker.deadline)
+    # The unchanged pinned 0.9.7 fixture is 225610 bytes; keep a finite bound.
+    raw = read_bytes(fixture, max_bytes=256 * 1024, deadline=docker.deadline)
     payload = TypeAdapter(dict[str, JsonValue]).validate_json(raw)
     valid = TypeAdapter(dict[str, JsonValue]).validate_python(payload["valid"])
     key = valid["idempotency_key"]
