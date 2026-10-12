@@ -120,14 +120,27 @@ export type ViewSnapshot =
   | { readonly ok: false; readonly reason: SnapshotReason };
 
 export interface SnapshotOptions {
-  /** Test-only switch proving own shadows are inert without the deny-list. Never set by production code. */
+  /**
+   * Test-only switch proving own shadows are inert without the deny-list (it only drops the typed `own_shadow`
+   * diagnostic; bytes and verdicts are identical). It is accepted by the exported low-level snapshot helpers ONLY: it is
+   * not a member of `ValidateBytesOptions`, so neither `validateProductionBundleBytes` nor the gate can be given it.
+   */
   readonly skipShadowDenyList?: boolean;
 }
 
 const rejected = (reason: SnapshotReason): { readonly ok: false; readonly reason: SnapshotReason } => ({ ok: false, reason });
 
-/** Copies the exact intrinsic window of a `Uint8Array` into a fresh private `ArrayBuffer`. Never throws. */
-export function snapshotProductionBundleView(view: unknown, cap: number, options: SnapshotOptions = {}): ViewSnapshot {
+type InspectedView =
+  | { readonly ok: true; readonly buffer: unknown; readonly offset: number; readonly length: number }
+  | { readonly ok: false; readonly reason: SnapshotReason };
+
+/**
+ * NO-COPY inspection: every structural defence (Proxy, exact Uint8Array, tag, own-shadow descriptors, SharedArrayBuffer,
+ * resizable/detached) plus the intrinsic length against `cap` and the window against the intrinsic buffer length. It reads
+ * metadata through the captured native getters only; no value is read from the caller's object, no byte is copied, the
+ * dense index range is never enumerated. Never throws.
+ */
+function inspectView(view: unknown, cap: number, options: SnapshotOptions): InspectedView {
   try {
     if (view === null || typeof view !== "object") return rejected("not_object");
     if (isProxy(view)) return rejected("proxy");
@@ -145,8 +158,19 @@ export function snapshotProductionBundleView(view: unknown, cap: number, options
     const offset = apply(taByteOffsetGetter, view, []) as number;
     if (length > cap) return rejected("over_cap");
     if (offset + length > (apply(abByteLengthGetter, buffer, []) as number)) return rejected("window");
-    const copy = new U8(new AB(length));
-    apply(taSet, copy, [makeU8(buffer, offset, length)]);
+    return { ok: true, buffer, offset, length };
+  } catch {
+    return rejected("threw");
+  }
+}
+
+/** Copies the exact intrinsic window of a `Uint8Array` into a fresh private `ArrayBuffer`. Never throws. */
+export function snapshotProductionBundleView(view: unknown, cap: number, options: SnapshotOptions = {}): ViewSnapshot {
+  const inspected = inspectView(view, cap, options);
+  if (!inspected.ok) return rejected(inspected.reason);
+  try {
+    const copy = new U8(new AB(inspected.length));
+    apply(taSet, copy, [makeU8(inspected.buffer, inspected.offset, inspected.length)]);
     return { ok: true, bytes: copy };
   } catch {
     return rejected("threw");
@@ -161,20 +185,41 @@ function dataValue(record: object, key: string): { readonly value: unknown } | n
 export type SnapshotFile = { readonly filename: string; readonly bytes: Uint8Array };
 export type FilesSnapshot =
   | { readonly ok: true; readonly files: readonly SnapshotFile[] }
-  | { readonly ok: false; readonly reason: SnapshotReason | "count" | "hole_or_accessor" | "files_not_plain_array" | "not_plain_object" | "accessor_or_missing" | "filename" };
+  | { readonly ok: false; readonly reason: SnapshotReason | "count" | "hole_or_accessor" | "files_not_plain_array" | "not_plain_object" | "accessor_or_missing" | "filename" | "duplicate_filename" | "aggregate_over_cap" | "payload_group_over_cap" };
+
+/** Everything a file list must satisfy BEFORE the first byte is copied. All numbers come from the owner's exported limits. */
+export interface FileListBounds {
+  /** Exact maximum entry count (the owner's `outer_descriptors`). */
+  readonly maxCount: number;
+  /** Maximum sum of the intrinsic lengths of all entries. */
+  readonly aggregateCap: number;
+  /** Maximum sum of the intrinsic lengths of the entries for which `isPayload` is true (the owner's `payload_bytes`). */
+  readonly payloadGroupCap: number;
+  readonly isPayload: (filename: string) => boolean;
+}
 
 /**
- * Snapshots a caller-supplied file list: `[{ filename, bytes }]`. The array length is read through an own data
- * descriptor and bounded BEFORE any element is touched; elements are read by data descriptor (no iterator, so an
- * `@@iterator` hook is inert); entries must be plain objects with data properties `filename` and `bytes`, and no
- * other key is ever read.
+ * Snapshots a caller-supplied file list: `[{ filename, bytes }]`, in TWO passes.
+ *
+ * Pass 1 copies nothing. The array length is read through an own data descriptor and bounded BEFORE any element is
+ * touched; elements are read by data descriptor (no iterator, so an `@@iterator` hook is inert); entries must be plain
+ * objects with data properties `filename` and `bytes`, and no other key is ever read. Each name is checked for a
+ * case-insensitive duplicate, each view is inspected through the native intrinsics (see `inspectView`) against its own
+ * per-name cap, and the running sums are checked against the aggregate and payload-group caps with safe-integer
+ * arithmetic. A view repeated under many names therefore counts once per entry and cannot amplify memory.
+ *
+ * Pass 2 allocates the private copies, only after the whole list passed pass 1, so the copies can never exceed
+ * `aggregateCap` bytes in total.
  */
-export function snapshotProductionBundleFiles(files: unknown, capFor: (filename: string) => number, maxCount: number, options: SnapshotOptions = {}): FilesSnapshot {
+export function snapshotProductionBundleFiles(files: unknown, capFor: (filename: string) => number, bounds: FileListBounds, options: SnapshotOptions = {}): FilesSnapshot {
   try {
     if (!isArray(files) || isProxy(files)) return { ok: false, reason: "files_not_plain_array" };
     const lengthDescriptor = getOwnDescriptor(files, "length");
-    if (lengthDescriptor === undefined || !("value" in lengthDescriptor) || !Number.isSafeInteger(lengthDescriptor.value) || (lengthDescriptor.value as number) > maxCount) return { ok: false, reason: "count" };
-    const out: SnapshotFile[] = [];
+    if (lengthDescriptor === undefined || !("value" in lengthDescriptor) || !Number.isSafeInteger(lengthDescriptor.value) || !((lengthDescriptor.value as number) <= bounds.maxCount)) return { ok: false, reason: "count" };
+    const planned: { readonly filename: string; readonly view: unknown; readonly cap: number }[] = [];
+    const names = new Set<string>();
+    let total = 0;
+    let payloadTotal = 0;
     for (let index = 0; index < (lengthDescriptor.value as number); index += 1) {
       const element = getOwnDescriptor(files, String(index));
       if (element === undefined || !("value" in element)) return { ok: false, reason: "hole_or_accessor" };
@@ -184,9 +229,25 @@ export function snapshotProductionBundleFiles(files: unknown, capFor: (filename:
       const bytes = dataValue(entry, "bytes");
       if (name === null || bytes === null) return { ok: false, reason: "accessor_or_missing" };
       if (typeof name.value !== "string" || name.value.length === 0 || name.value.length > 128) return { ok: false, reason: "filename" };
-      const copy = snapshotProductionBundleView(bytes.value, capFor(name.value), options);
+      const folded = name.value.toLowerCase();
+      if (names.has(folded)) return { ok: false, reason: "duplicate_filename" };
+      names.add(folded);
+      const cap = capFor(name.value);
+      const inspected = inspectView(bytes.value, cap, options);
+      if (!inspected.ok) return { ok: false, reason: inspected.reason };
+      total += inspected.length;
+      if (!Number.isSafeInteger(total) || !(total <= bounds.aggregateCap)) return { ok: false, reason: "aggregate_over_cap" };
+      if (bounds.isPayload(name.value)) {
+        payloadTotal += inspected.length;
+        if (!Number.isSafeInteger(payloadTotal) || !(payloadTotal <= bounds.payloadGroupCap)) return { ok: false, reason: "payload_group_over_cap" };
+      }
+      planned.push({ filename: name.value, view: bytes.value, cap });
+    }
+    const out: SnapshotFile[] = [];
+    for (const item of planned) {
+      const copy = snapshotProductionBundleView(item.view, item.cap, options);
       if (!copy.ok) return copy;
-      out.push(freeze({ filename: name.value, bytes: copy.bytes }));
+      out.push(freeze({ filename: item.filename, bytes: copy.bytes }));
     }
     return { ok: true, files: freeze(out) };
   } catch {
@@ -357,6 +418,13 @@ export const isIssuedTrustAnchor = (candidate: unknown): candidate is Production
 export interface AnchorSuccess { readonly ok: true; readonly anchor: ProductionBundleTrustAnchor }
 export interface AnchorFailure { readonly ok: false; readonly codes: readonly string[]; readonly commitmentSha256?: string; readonly provenance?: ProductionBundleAnchorProvenance }
 
+/** archive + manifest + detached + payload, all from the owner export. */
+function aggregateCapOf(limits: OwnerLimits): number {
+  return limits.archiveBytes + limits.manifestBytes + limits.detachedBytes + limits.payloadBytes;
+}
+
+const SINGLE_FILE_ROLES: ReadonlySet<string> = new Set(["archive", "manifest", "detached"]);
+
 function roleCap(role: string, limits: OwnerLimits): number {
   return role === "archive" ? limits.archiveBytes : role === "manifest" ? limits.manifestBytes : role === "detached" ? limits.detachedBytes : limits.entryBytes;
 }
@@ -368,7 +436,7 @@ function roleCap(role: string, limits: OwnerLimits): number {
 export function deriveBudgets(commitment: OwnerBundleRef, limits: OwnerLimits): { readonly ok: true; readonly descriptors: readonly AnchoredDescriptor[] } | { readonly ok: false; readonly code: string } {
   const fileSet = (commitment as unknown as { readonly file_set: readonly { readonly filename: string; readonly role: string; readonly byte_size: number; readonly byte_hash: string }[] }).file_set;
   if (!Array.isArray(fileSet) || fileSet.length < 1 || fileSet.length > limits.outerDescriptors) return { ok: false, code: "BUDGET_DESCRIPTOR_COUNT" };
-  const aggregateCap = limits.archiveBytes + limits.manifestBytes + limits.detachedBytes + limits.payloadBytes;
+  const aggregateCap = aggregateCapOf(limits);
   const descriptors: AnchoredDescriptor[] = [];
   const names = new Set<string>();
   let total = 0;
@@ -771,7 +839,6 @@ async function bindTrustedTerms(acc: Accumulator, verified: OwnerVerified, terms
 export interface ValidateBytesOptions {
   readonly clock: Clock;
   readonly consumerRevision?: string | null;
-  readonly snapshot?: SnapshotOptions;
 }
 
 /**
@@ -785,9 +852,17 @@ export function validateProductionBundleBytes(input: { readonly files: unknown }
     acc.fail("anchor_resolution", "ANCHOR_NOT_ISSUED");
     return buildReport(acc, options.clock, revision);
   }
-  const byName = new Map(anchor.descriptors.map((descriptor) => [descriptor.filename, descriptor.cap]));
+  const byName = new Map(anchor.descriptors.map((descriptor) => [descriptor.filename, descriptor]));
   const limits = ownerLimits();
-  const snapshot = snapshotProductionBundleFiles(input.files, (filename) => byName.get(filename) ?? limits.entryBytes, limits.outerDescriptors + 8, options.snapshot);
+  // Bounds-before-copy for the pure API (PBR-05): the count, the per-name caps (an unnamed file gets the generic entry cap), the
+  // aggregate and the payload group are all checked on intrinsic lengths before a single byte is copied. Unknown names are payload-group
+  // members, so an extra file is bounded yet still reaches the owner, which rejects it with its own attribution.
+  const snapshot = snapshotProductionBundleFiles(input.files, (filename) => byName.get(filename)?.cap ?? limits.entryBytes, {
+    maxCount: limits.outerDescriptors,
+    aggregateCap: aggregateCapOf(limits),
+    payloadGroupCap: limits.payloadBytes,
+    isPayload: (filename) => !SINGLE_FILE_ROLES.has(byName.get(filename)?.role ?? "")
+  });
   if (!snapshot.ok) {
     acc.set("anchor_resolution", "verified_local", null);
     acc.anchor = freeze({ provenance: anchor.provenance, commitmentSha256: anchor.commitmentSha256 });

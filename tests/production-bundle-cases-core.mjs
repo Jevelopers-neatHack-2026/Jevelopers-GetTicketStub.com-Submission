@@ -527,10 +527,22 @@ export function register(define) {
       traversal: [...filesOf(f.baseline().files).filter((file) => file.filename !== "lineage.json"), { filename: "../lineage.json", bytes: f.clone(f.baseline().files.get("lineage.json")) }],
       duplicate: [...filesOf(f.baseline().files), { filename: "output.png", bytes: f.clone(f.baseline().files.get("output.png")) }]
     };
+    // Independent of the consumer's own pre-copy pass: the OWNER itself rejects each of the three lists.
+    for (const [label, files] of Object.entries(cases)) {
+      const direct = ownerWrapper.ownerVerifyBundle(files, f.baselineCommitment, ownerWrapper.toOwnerScope(f.SCOPE));
+      assert.equal(direct.ok, false, `${label}: the owner verifier rejects it directly`);
+    }
     for (const [label, files] of Object.entries(cases)) {
       const report = validateFiles(files, anchor);
       assert.equal(report.verdict, "integrity_failed", label);
-      assert.equal(criterion(report, "owner_integrity").state, "failed", label);
+      if (label === "traversal") {
+        assert.equal(criterion(report, "owner_integrity").state, "failed", label);
+      } else {
+        // A case-insensitive duplicate name is now refused by the no-copy first pass, before anything is copied or handed to the owner.
+        assert.equal(criterion(report, "byte_custody").code, "SNAPSHOT_REJECTED", label);
+        assert.ok(report.diagnostic.reasons.includes("SNAPSHOT_DUPLICATE_FILENAME"), label);
+        assert.equal(criterion(report, "owner_integrity").state, "not_observed", label);
+      }
     }
     const traversal = validateFiles(cases.traversal, anchor);
     assert.ok(traversal.diagnostic.attribution.problems.includes("extra:unsafe-name"));

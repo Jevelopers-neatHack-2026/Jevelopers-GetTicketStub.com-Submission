@@ -658,6 +658,43 @@ export function register(define) {
     await expectConnectorError(submit(failed, p2.command), "bundle_invalid", "not_dispatched");
   });
 
+  define("runtime.fixed-criterion-code-tamper-with-recomputed-digests-rejected-zero-effects", async () => {
+    // R43-02. A branded gate rewrites the CODE of a frozen criterion to another well-formed REASON code and then recomputes everything the
+    // validator can cross-check: the open critical codes and the report digest. Only the frozen-table fixed check can catch this.
+    const real = await reportOf();
+    const consistent = (mutate) => { const copy = structuredClone(real); mutate(copy); copy.openCriticalCodes = [...contract.openCriticalCodes(copy.criteria)]; return redigest(copy); };
+    const validate = (report) => contract.validateGateReport(report, { bundleDigest: f.BUNDLE_HASH });
+    assert.equal(validate(consistent(() => {})).ok, true, "control: the recomputation helper itself yields a valid report");
+    const fixedRows = contract.PRODUCTION_BUNDLE_CRITERIA.filter((row) => row.fixed !== null);
+    assert.ok(fixedRows.length >= 20, `the frozen table has ${fixedRows.length} fixed rows`);
+    let changedEvidence = 0;
+    for (const row of fixedRows) {
+      assert.deepEqual([...row.allowedStates], [row.fixed.state], `${row.id}: the allowed-state check alone pins the state, so only the fixed check can pin the CODE`);
+      for (const replacement of ["TAMPERED_FIXED_CODE", row.fixed.code === "PRINTSPEC_BYTES_UNAVAILABLE" ? "OWNER_ACCEPTANCE_PENDING" : "PRINTSPEC_BYTES_UNAVAILABLE"]) {
+        const tampered = consistent((r) => { r.criteria.find((x) => x.id === row.id).code = replacement; });
+        assert.equal(tampered.reportDigest, contract.computeReportDigest(tampered), `${row.id}: digest recomputed`);
+        assert.deepEqual(tampered.openCriticalCodes, [...contract.openCriticalCodes(tampered.criteria)], `${row.id}: open critical codes recomputed`);
+        assert.deepEqual(validate(tampered), { ok: false, reason: "REPORT_FIXED_CRITERION" }, `${row.id} -> ${replacement}`);
+        if (JSON.stringify(tampered.openCriticalCodes) !== JSON.stringify(real.openCriticalCodes)) changedEvidence += 1;
+      }
+    }
+    assert.ok(changedEvidence > 0, "at least some tampered reports also changed the evidence's open critical codes (the harm this guard prevents)");
+    // Through the runtime with a genuinely branded gate: bundle_invalid, nothing claimed, budgeted, persisted, adapted or sent.
+    for (const id of ["owner_eligibility", "approval_exact_preview", "accepted_pins"]) {
+      const tampered = consistent((r) => { r.criteria.find((x) => x.id === id).code = "TAMPERED_FIXED_CODE"; });
+      const rt = f.createGateRuntime({ gate: sealedGate(() => tampered) });
+      const { command } = await f.prepareBundleSubmit(rt);
+      await expectConnectorError(submit(rt, command), "bundle_invalid", "not_dispatched");
+      assert.equal(rt.counters.claim, 0, id); assert.equal(rt.counters.budget, 0, id); assert.equal(rt.counters.persistenceClaim, 0, id);
+      assert.equal(rt.counters.adapter.validateBeforeSubmit ?? 0, 0, id); assert.equal(transportsOf(rt).length, 0, id);
+    }
+    // The untampered report through the same kind of gate still proceeds as the labelled no-effect simulation: the guard is not over-eager.
+    const honest = f.createGateRuntime({ gate: sealedGate(() => consistent(() => {})) });
+    const prepared = await f.prepareBundleSubmit(honest);
+    const response = await submit(honest, prepared.command);
+    assert.equal(response.productionBundleEvidence.simulation, "no_effect_simulation");
+  });
+
   define("runtime.gate-report-literals-digests-provenance-sorted-codes-validated", async () => {
     const real = await reportOf();
     const validation = contract.validateGateReport(real, { bundleDigest: f.BUNDLE_HASH });

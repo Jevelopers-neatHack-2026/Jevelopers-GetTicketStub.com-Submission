@@ -16,6 +16,8 @@ const hashOf = (bytes) => f.sha256Hex(bytes);
 const define = (target, key, value) => Object.defineProperty(target, key, { value, configurable: true, writable: true });
 const TypedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
 const snap = (view, cap = 64, options) => bundle.snapshotProductionBundleView(view, cap, options);
+/** Count-only wrapper for the low-level list helper: these older cases are about shape and hostility, so aggregate and payload bounds are lifted. The bounded behaviour has its own cases below. */
+const snapFiles = (files, capFor, maxCount, options) => bundle.snapshotProductionBundleFiles(files, capFor, { maxCount, aggregateCap: Number.MAX_SAFE_INTEGER, payloadGroupCap: Number.MAX_SAFE_INTEGER, isPayload: () => true }, options);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -104,14 +106,14 @@ export function register(define_) {
     // File entries are read as data properties exactly once: an accessor is rejected without being invoked.
     let invoked = 0;
     const entry = { filename: "a.bin", get bytes() { invoked += 1; return data(); } };
-    assert.equal(bundle.snapshotProductionBundleFiles([entry], () => 64, 8).ok, false);
+    assert.equal(snapFiles([entry], () => 64, 8).ok, false);
     assert.equal(invoked, 0);
   });
 
   define_("snapshot.owner-and-png-see-private-copy-only", async () => {
     const anchor = await issuedAnchor();
     const originals = filesOf(f.baseline().files);
-    const copies = bundle.snapshotProductionBundleFiles(originals, () => 8 * MiB, 20);
+    const copies = snapFiles(originals, () => 8 * MiB, 20);
     assert.equal(copies.ok, true);
     assert.equal(Object.isFrozen(copies.files), true);
     copies.files.forEach((file, index) => {
@@ -195,11 +197,11 @@ export function register(define_) {
     assert.deepEqual(snap(new Proxy(data(), {})), { ok: false, reason: "proxy" });
     assert.deepEqual(snap(revocable.proxy), { ok: false, reason: "proxy" });
     const entry = () => ({ filename: "a.bin", bytes: data() });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles(new Proxy([entry()], {}), () => 64, 8), { ok: false, reason: "files_not_plain_array" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([new Proxy(entry(), {})], () => 64, 8), { ok: false, reason: "not_plain_object" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: "a.bin", bytes: new Proxy(data(), {}) }], () => 64, 8), { ok: false, reason: "proxy" });
+    assert.deepEqual(snapFiles(new Proxy([entry()], {}), () => 64, 8), { ok: false, reason: "files_not_plain_array" });
+    assert.deepEqual(snapFiles([new Proxy(entry(), {})], () => 64, 8), { ok: false, reason: "not_plain_object" });
+    assert.deepEqual(snapFiles([{ filename: "a.bin", bytes: new Proxy(data(), {}) }], () => 64, 8), { ok: false, reason: "proxy" });
     const revokedEntry = Proxy.revocable(entry(), {}); revokedEntry.revoke();
-    assert.equal(bundle.snapshotProductionBundleFiles([revokedEntry.proxy], () => 64, 8).ok, false);
+    assert.equal(snapFiles([revokedEntry.proxy], () => 64, 8).ok, false);
   });
 
   define_("snapshot.shadows-inert-without-denylist-copy-hash-equals-truth", () => {
@@ -226,7 +228,7 @@ export function register(define_) {
     let files, result;
     try {
       Array.isArray = () => true; Object.getOwnPropertyDescriptor = () => ({ value: 99 });
-      files = bundle.snapshotProductionBundleFiles([{ filename: "a.bin", bytes: data() }], () => 64, 8);
+      files = snapFiles([{ filename: "a.bin", bytes: data() }], () => 64, 8);
       result = bundle.snapshotByteSourceResult({ status: "found", bytes: data() }, 64);
     } finally {
       Object.defineProperty(Array, "isArray", savedDescriptor); Object.getOwnPropertyDescriptor = savedGetOwn;
@@ -237,30 +239,30 @@ export function register(define_) {
 
   define_("snapshot.entry-accessor-rejected-extra-getter-never-read", () => {
     const base = () => ({ filename: "a.bin", bytes: data() });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: "a.bin", get bytes() { return data(); } }], () => 64, 8), { ok: false, reason: "accessor_or_missing" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ get filename() { return "a.bin"; }, bytes: data() }], () => 64, 8), { ok: false, reason: "accessor_or_missing" });
+    assert.deepEqual(snapFiles([{ filename: "a.bin", get bytes() { return data(); } }], () => 64, 8), { ok: false, reason: "accessor_or_missing" });
+    assert.deepEqual(snapFiles([{ get filename() { return "a.bin"; }, bytes: data() }], () => 64, 8), { ok: false, reason: "accessor_or_missing" });
     let reads = 0;
     const extra = base(); Object.defineProperty(extra, "extra", { get() { reads += 1; throw new Error("never read"); }, enumerable: true });
-    const result = bundle.snapshotProductionBundleFiles([extra], () => 64, 8);
+    const result = snapFiles([extra], () => 64, 8);
     assert.equal(result.ok, true); assert.equal(reads, 0, "keys other than filename/bytes are never read");
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: 7, bytes: data() }], () => 64, 8), { ok: false, reason: "filename" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: "", bytes: data() }], () => 64, 8), { ok: false, reason: "filename" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: "x".repeat(129), bytes: data() }], () => 64, 8), { ok: false, reason: "filename" });
+    assert.deepEqual(snapFiles([{ filename: 7, bytes: data() }], () => 64, 8), { ok: false, reason: "filename" });
+    assert.deepEqual(snapFiles([{ filename: "", bytes: data() }], () => 64, 8), { ok: false, reason: "filename" });
+    assert.deepEqual(snapFiles([{ filename: "x".repeat(129), bytes: data() }], () => 64, 8), { ok: false, reason: "filename" });
   });
 
   define_("snapshot.files-array-hostile-length-holes-iterator-hook", () => {
     const entry = () => ({ filename: "a.bin", bytes: data() });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles(new Array(2 ** 32 - 1), () => 64, 100), { ok: false, reason: "count" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles(Array.from({ length: 101 }, entry), () => 64, 100), { ok: false, reason: "count" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles([entry(), , entry()], () => 64, 100), { ok: false, reason: "hole_or_accessor" });
+    assert.deepEqual(snapFiles(new Array(2 ** 32 - 1), () => 64, 100), { ok: false, reason: "count" });
+    assert.deepEqual(snapFiles(Array.from({ length: 101 }, entry), () => 64, 100), { ok: false, reason: "count" });
+    assert.deepEqual(snapFiles([entry(), , entry()], () => 64, 100), { ok: false, reason: "hole_or_accessor" });
     const hooked = [entry()]; let invoked = 0;
     Object.defineProperty(hooked, Symbol.iterator, { value: () => { invoked += 1; throw new Error("iterator hook"); } });
     define(hooked, "map", () => { invoked += 1; throw new Error("map hook"); });
-    const result = bundle.snapshotProductionBundleFiles(hooked, () => 64, 100);
+    const result = snapFiles(hooked, () => 64, 100);
     assert.equal(result.ok, true); assert.equal(invoked, 0, "no iterator, spread, map or species is consulted");
     const accessorElement = []; Object.defineProperty(accessorElement, "0", { get() { return entry(); }, enumerable: true }); accessorElement.length = 1;
-    assert.deepEqual(bundle.snapshotProductionBundleFiles(accessorElement, () => 64, 100), { ok: false, reason: "hole_or_accessor" });
-    assert.deepEqual(bundle.snapshotProductionBundleFiles({ 0: entry(), length: 1 }, () => 64, 100), { ok: false, reason: "files_not_plain_array" });
+    assert.deepEqual(snapFiles(accessorElement, () => 64, 100), { ok: false, reason: "hole_or_accessor" });
+    assert.deepEqual(snapFiles({ 0: entry(), length: 1 }, () => 64, 100), { ok: false, reason: "files_not_plain_array" });
   });
 
   define_("snapshot.byte-source-result-shapes-typed", () => {
@@ -288,9 +290,9 @@ export function register(define_) {
     for (const value of hostile) {
       assert.doesNotThrow(() => snap(value));
       assert.doesNotThrow(() => bundle.snapshotByteSourceResult(value, 64));
-      assert.doesNotThrow(() => bundle.snapshotProductionBundleFiles(value, () => 64, 8));
-      assert.doesNotThrow(() => bundle.snapshotProductionBundleFiles([value], () => 64, 8));
-      assert.doesNotThrow(() => bundle.snapshotProductionBundleFiles([{ filename: "a", bytes: value }], () => 64, 8));
+      assert.doesNotThrow(() => snapFiles(value, () => 64, 8));
+      assert.doesNotThrow(() => snapFiles([value], () => 64, 8));
+      assert.doesNotThrow(() => snapFiles([{ filename: "a", bytes: value }], () => 64, 8));
     }
     const anchor = await issuedAnchor();
     for (const files of [null, undefined, 7, "x", { length: 1 }, new Proxy([], {}), [null], [{ filename: "a" }]]) {
@@ -310,6 +312,137 @@ export function register(define_) {
     assert.equal(result.ok, true); assert.equal(result.length, 40 * MiB); assert.equal(result.intact, true); assert.equal(result.sameBuffer, false);
     assert.ok(result.heapDeltaMiB < 8, `heap delta ${result.heapDeltaMiB} MiB must stay far below the ~1280 MiB that enumerating 40 MiB of own keys costs`);
     assert.ok(result.arrayBuffersDeltaMiB >= 39 && result.arrayBuffersDeltaMiB <= 41, `exactly one private copy: ${result.arrayBuffersDeltaMiB} MiB`);
+  });
+
+  // ---- bounds before copy (R43-01, PBR-05): the public pure API --------------------------------------------------
+  const realLimits = () => ownerWrapper.ownerLimits();
+  const pureBounds = (overrides = {}) => ({ maxCount: realLimits().outerDescriptors, aggregateCap: realLimits().archiveBytes + realLimits().manifestBytes + realLimits().detachedBytes + realLimits().payloadBytes,
+    payloadGroupCap: realLimits().payloadBytes, isPayload: () => true, ...overrides });
+  const tiny = (name, size = 4) => ({ filename: name, bytes: new Uint8Array(size).fill(7) });
+
+  define_("bounds.duplicate-and-case-variant-names-rejected-before-any-copy", async () => {
+    for (const names of [["a.bin", "a.bin"], ["a.bin", "A.BIN"], ["archive.zip", "Archive.Zip"], ["x.bin", "y.bin", "z.bin", "Y.BIN"]]) {
+      const result = bundle.snapshotProductionBundleFiles(names.map((name) => tiny(name)), () => 64, pureBounds());
+      assert.deepEqual(result, { ok: false, reason: "duplicate_filename" }, names.join());
+    }
+    // The decision is made in the first pass: a hostile LATER entry is never reached once a duplicate was seen, and a hostile EARLIER one wins.
+    const hostile = { filename: "z.bin", bytes: new Proxy(new Uint8Array(4), {}) };
+    assert.deepEqual(bundle.snapshotProductionBundleFiles([tiny("a.bin"), tiny("A.bin"), hostile], () => 64, pureBounds()), { ok: false, reason: "duplicate_filename" });
+    assert.deepEqual(bundle.snapshotProductionBundleFiles([hostile, tiny("a.bin"), tiny("A.bin")], () => 64, pureBounds()), { ok: false, reason: "proxy" });
+    // Distinct names are untouched.
+    const ok = bundle.snapshotProductionBundleFiles([tiny("a.bin"), tiny("b.bin")], () => 64, pureBounds());
+    assert.equal(ok.ok, true); assert.deepEqual(ok.files.map((file) => file.filename), ["a.bin", "b.bin"]);
+    // Through the public pure API with the real anchor: a typed, attributed rejection; the owner is never consulted.
+    const anchor = await issuedAnchor();
+    for (const variant of ["output.png", "OUTPUT.PNG", "Output.Png"]) {
+      const files = [...filesOf(f.baseline().files), { filename: variant, bytes: f.clone(f.baseline().files.get("output.png")) }];
+      const report = validateFiles(files, anchor);
+      assert.equal(report.verdict, "integrity_failed", variant);
+      assert.equal(criterion(report, "byte_custody").code, "SNAPSHOT_REJECTED", variant);
+      assert.ok(report.diagnostic.reasons.includes("SNAPSHOT_DUPLICATE_FILENAME"), variant);
+      assert.equal(criterion(report, "owner_integrity").state, "not_observed", variant);
+      assert.equal(report.unchanged, true);
+    }
+  });
+
+  define_("bounds.count-is-exactly-owner-outer-descriptors-without-slack", async () => {
+    const max = realLimits().outerDescriptors;
+    assert.equal(max, 100); assert.equal(max, f.ownerLimitsDirect.outer_descriptors, "read from the owner export at call time");
+    const list = (count) => Array.from({ length: count }, (_, index) => tiny(`f${String(index).padStart(3, "0")}.bin`, 1));
+    assert.equal(bundle.snapshotProductionBundleFiles(list(max), () => 64, pureBounds()).ok, true, "exactly the owner limit is accepted by the first pass");
+    for (const count of [max + 1, max + 8, max + 9, 108, 109]) assert.deepEqual(bundle.snapshotProductionBundleFiles(list(count), () => 64, pureBounds()), { ok: false, reason: "count" }, `${count} entries`);
+    const anchor = await issuedAnchor();
+    const over = validateFiles(list(max + 1), anchor);
+    assert.equal(criterion(over, "byte_custody").code, "SNAPSHOT_REJECTED"); assert.ok(over.diagnostic.reasons.includes("SNAPSHOT_COUNT"));
+    const atLimit = validateFiles(list(max), anchor);
+    assert.equal(criterion(atLimit, "byte_custody").state, "verified_local", "100 entries pass custody and are then judged by the owner");
+    assert.equal(atLimit.verdict, "integrity_failed"); assert.equal(criterion(atLimit, "owner_integrity").state, "failed");
+  });
+
+  define_("bounds.per-name-role-caps-and-payload-group-checked-before-copy", async () => {
+    const anchor = await issuedAnchor();
+    const l = realLimits();
+    // Per-name caps come from the ANCHOR's roles; an unnamed file gets the generic entry cap and cannot borrow the archive's.
+    const cases = { "extra.bin": l.entryBytes, "output.png": l.entryBytes, "manifest.json": l.manifestBytes, "detached.json": l.detachedBytes, "archive.zip": l.archiveBytes };
+    for (const [name, ceiling] of Object.entries(cases)) {
+      const over = validateFiles([{ filename: name, bytes: new Uint8Array(ceiling + 1) }], anchor);
+      assert.equal(criterion(over, "byte_custody").code, "SNAPSHOT_REJECTED", name); assert.ok(over.diagnostic.reasons.includes("SNAPSHOT_OVER_CAP"), `${name} one byte over its cap`);
+    }
+    assert.equal(criterion(validateFiles([{ filename: "extra.bin", bytes: new Uint8Array(l.entryBytes) }], anchor), "byte_custody").state, "verified_local", "an unknown name at exactly the entry cap is bounded, then judged by the owner");
+    assert.deepEqual(bundle.snapshotProductionBundleFiles([{ filename: "ARCHIVE.ZIP", bytes: new Uint8Array(l.entryBytes + 1) }], (name) => (name === "archive.zip" ? l.archiveBytes : l.entryBytes), pureBounds()), { ok: false, reason: "over_cap" }, "a case variant of an anchored name does not inherit that role's cap");
+    // The payload group: five 8 MiB payload-class views sum to 40 MiB > 32 MiB. They share ONE caller buffer; nothing is copied.
+    const shared = new Uint8Array(l.entryBytes);
+    const names = Array.from({ length: 5 }, (_, index) => `p${index}.bin`);
+    assert.equal(bundle.snapshotProductionBundleFiles(names.slice(0, 4).map((filename) => ({ filename, bytes: shared })), () => l.entryBytes, pureBounds()).ok, true, "4 x 8 MiB = exactly the 32 MiB payload group");
+    assert.deepEqual(bundle.snapshotProductionBundleFiles(names.map((filename) => ({ filename, bytes: shared })), () => l.entryBytes, pureBounds()), { ok: false, reason: "payload_group_over_cap" });
+    const grouped = validateFiles(names.map((filename) => ({ filename, bytes: shared })), anchor);
+    assert.ok(grouped.diagnostic.reasons.includes("SNAPSHOT_PAYLOAD_GROUP_OVER_CAP"));
+    // Single-file roles are NOT payload-group members: archive.zip (anchored role "archive") does not eat the payload allowance.
+    const roles = bundle.snapshotProductionBundleFiles([{ filename: "archive.zip", bytes: new Uint8Array(16) }, ...names.slice(0, 4).map((filename) => ({ filename, bytes: shared }))], (name) => (name === "archive.zip" ? l.archiveBytes : l.entryBytes), pureBounds({ isPayload: (name) => name !== "archive.zip" }));
+    assert.equal(roles.ok, true);
+    // Extra-file distinction is preserved: a small unreferenced file passes the first pass and the OWNER rejects it, with its own attribution.
+    const withExtra = validateFiles([...filesOf(f.baseline().files), { filename: "extra.bin", bytes: new Uint8Array(10).fill(1) }], anchor);
+    assert.equal(withExtra.verdict, "integrity_failed"); assert.equal(criterion(withExtra, "byte_custody").state, "verified_local");
+    assert.ok(withExtra.diagnostic.attribution.problems.includes("extra:extra.bin"));
+  });
+
+  define_("bounds.aggregate-and-group-sums-explicit-with-safe-integer-arithmetic", () => {
+    const entries = [tiny("a.bin", 40), tiny("b.bin", 40), tiny("c.bin", 40)];
+    const run = (bounds) => bundle.snapshotProductionBundleFiles(entries, () => 64, { maxCount: 10, ...bounds });
+    assert.equal(run({ aggregateCap: 120, payloadGroupCap: 120, isPayload: () => true }).ok, true, "exactly at the aggregate cap");
+    assert.deepEqual(run({ aggregateCap: 119, payloadGroupCap: 120, isPayload: () => true }), { ok: false, reason: "aggregate_over_cap" });
+    assert.deepEqual(run({ aggregateCap: 120, payloadGroupCap: 119, isPayload: () => true }), { ok: false, reason: "payload_group_over_cap" });
+    assert.equal(run({ aggregateCap: 120, payloadGroupCap: 80, isPayload: (name) => name !== "c.bin" }).ok, true, "only payload-class names count toward the payload group");
+    assert.deepEqual(run({ aggregateCap: 120, payloadGroupCap: 79, isPayload: (name) => name !== "c.bin" }), { ok: false, reason: "payload_group_over_cap" });
+    // Comparisons are written so that a nonsensical cap fails CLOSED: NaN or a negative cap rejects everything, never admits everything.
+    for (const aggregateCap of [Number.NaN, -1]) assert.deepEqual(run({ aggregateCap, payloadGroupCap: 120, isPayload: () => true }), { ok: false, reason: "aggregate_over_cap" }, `aggregate cap ${aggregateCap}`);
+    assert.deepEqual(run({ aggregateCap: 120, payloadGroupCap: Number.NaN, isPayload: () => true }), { ok: false, reason: "payload_group_over_cap" });
+    assert.deepEqual(bundle.snapshotProductionBundleFiles(entries, () => 64, { maxCount: Number.NaN, aggregateCap: 120, payloadGroupCap: 120, isPayload: () => true }), { ok: false, reason: "count" });
+    // With the owner's real numbers the group caps already imply the aggregate: 40 + 4 + 1 + 32 MiB = 77 MiB, and no input reaches more.
+    const l = realLimits();
+    assert.equal((l.archiveBytes + l.manifestBytes + l.detachedBytes + l.payloadBytes) / MiB, 77);
+    // Every accepted list is therefore bounded by 77 MiB of copies, whatever the caller's views alias.
+    assert.ok(l.archiveBytes + l.manifestBytes + l.detachedBytes + l.payloadBytes < l.outerDescriptors * l.entryBytes, "the bound is far below count x entry cap (the old amplification ceiling)");
+  });
+
+  define_("bounds.repeated-view-no-copy-amplification-child-process", () => {
+    const runChild = (mode) => {
+      const child = spawnSync(process.execPath, ["--max-old-space-size=256", "--expose-gc", new URL("./production-bundle-allocation-child.mjs", import.meta.url).pathname, mode], {
+        encoding: "utf8", timeout: 120_000, env: { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR ?? "/tmp" }
+      });
+      assert.equal(child.status, 0, `${mode} exited ${child.status}: ${child.stderr.slice(0, 300)}`);
+      assert.equal(child.stderr, "", mode);
+      return JSON.parse(child.stdout);
+    };
+    // Baseline control: one accepted 40 MiB entry costs one private copy, so the measurement can see a copy at all.
+    const control = runChild("bounds-control-one-copy");
+    assert.equal(control.byteCustody.state, "verified_local");
+    assert.ok(control.peakRssDeltaMiB >= 30, `control peak RSS delta ${control.peakRssDeltaMiB} MiB must show a 40 MiB copy`);
+    // Each hostile list below used to allocate one copy per entry (6 x 40 MiB = 240 MiB, reviewer-measured +282 MiB); now nothing is copied.
+    for (const [mode, expectedReason] of [["bounds-repeat6-same-name", "SNAPSHOT_DUPLICATE_FILENAME"], ["bounds-repeat6-case-variants", "SNAPSHOT_DUPLICATE_FILENAME"],
+      ["bounds-repeat6-distinct-unknown-names", "SNAPSHOT_OVER_CAP"], ["bounds-payload-group", "SNAPSHOT_PAYLOAD_GROUP_OVER_CAP"]]) {
+      const result = runChild(mode);
+      assert.equal(result.byteCustody.code, "SNAPSHOT_REJECTED", mode); assert.ok(result.reasons.includes(expectedReason), `${mode}: ${result.reasons}`);
+      assert.equal(result.verdict, "integrity_failed", mode);
+      assert.ok(result.peakRssDeltaMiB < 8, `${mode}: peak RSS grew ${result.peakRssDeltaMiB} MiB; the rejection must happen before any copy (control copy: ${control.peakRssDeltaMiB} MiB)`);
+      assert.ok(result.elapsedMs < 1000, `${mode} is finite and fast: ${result.elapsedMs} ms`);
+    }
+  });
+
+  define_("bounds.shadow-denylist-switch-unreachable-from-the-validators", async () => {
+    const anchor = await issuedAnchor();
+    const hostile = filesOf(f.baseline().files);
+    Object.defineProperty(hostile[0].bytes, "byteLength", { value: 1, configurable: true });
+    for (const extra of [{ snapshot: { skipShadowDenyList: true } }, { skipShadowDenyList: true }]) {
+      const report = validateFiles(hostile, anchor, extra);
+      assert.equal(report.verdict, "integrity_failed"); assert.ok(report.diagnostic.reasons.includes("SNAPSHOT_OWN_SHADOW"), "the test-only switch cannot be passed to the validator: the typed diagnostic is kept");
+    }
+    // The switch exists on the low-level helper only, where the suite uses it to prove shadows are inert.
+    assert.deepEqual(snap(hostile[0].bytes, 64 * MiB), { ok: false, reason: "own_shadow" });
+    assert.equal(snap(hostile[0].bytes, 64 * MiB, { skipShadowDenyList: true }).ok, true);
+    const source = readFileSync(new URL("../src/production-bundle.ts", import.meta.url), "utf8");
+    const options = source.slice(source.indexOf("export interface ValidateBytesOptions"), source.indexOf("export function validateProductionBundleBytes"));
+    assert.ok(!/snapshot|skipShadowDenyList/u.test(options.replace(/\/\*[\s\S]*?\*\//gu, "")), "ValidateBytesOptions has no snapshot member");
   });
 
   // ---- budgets ----------------------------------------------------------------------------------------------
