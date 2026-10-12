@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const evidence = process.argv[2];
 const receipts = [];
 const observations = new Map();
+let consumerIdentity;
 for (const [lane, expected] of [['old', [76, 86, 1641]], ['new', [77, 88, 1673]]]) {
   for (const surface of ['source', 'installed']) {
     for (const scope of ['candidate', 'full']) {
@@ -13,6 +14,12 @@ for (const [lane, expected] of [['old', [76, 86, 1641]], ['new', [77, 88, 1673]]
       assert.equal(names.length, 1, 'Use a fresh evidence directory for each run');
       const path = join(directory, names[0], 'contracts.json');
       const receipt = JSON.parse(readFileSync(path, 'utf8'));
+      assert.equal(receipt.integration_dirty, false);
+      assert.match(receipt.integration_revision, /^[a-f0-9]{40}$/);
+      assert.match(receipt.integration_source_digest, /^[a-f0-9]{64}$/);
+      const identity = { revision: receipt.integration_revision, source_digest: receipt.integration_source_digest };
+      if (consumerIdentity === undefined) consumerIdentity = identity;
+      assert.deepEqual(identity, consumerIdentity);
       assert.equal(receipt.execution, 'passed');
       assert.equal(receipt.product_acceptance, 'blocked');
       assert.equal(receipt.owner_acknowledgement, null);
@@ -34,5 +41,5 @@ const historical = observation => observation.results.filter(row => row.semantic
 const oldHistorical = historical(observations.get('old'));
 assert.equal(oldHistorical.length, 9);
 assert.deepEqual(historical(observations.get('new')), oldHistorical);
-console.log(JSON.stringify({ receipts, historical_rows_preserved: 9,
+console.log(JSON.stringify({ receipts, consumer_identity: consumerIdentity, historical_rows_preserved: 9,
   product_acceptance: 'blocked', owner_acknowledgement: null }, null, 2));

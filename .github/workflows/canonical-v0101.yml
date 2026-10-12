@@ -29,7 +29,7 @@ jobs:
           uv run basedpyright candidate_tests/v0101/tests
           uv run ruff check
           uv run ruff format --check
-          uv run pytest tests/test_contract_v0101_metadata.py tests/test_contract_sources.py tests/test_contract_pins.py --junitxml=reports/unit-junit.xml
+          uv run pytest tests/test_contract_v0101_metadata.py tests/test_contract_sources.py tests/test_contract_pins.py --junitxml=reports/runs/canonical-v0101/unit-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
@@ -56,12 +56,12 @@ jobs:
           export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"
           sudo -n env PATH="$PATH" bash candidate_tests/v0101/run.sh \
             "$PWD/.contract-producer/new" "$PWD/.contract-producer/old" \
-            "$RUNNER_TEMP/contract-opt-in" "$PWD/reports/opt-in" \
+            "$RUNNER_TEMP/contract-opt-in" "$PWD/reports/runs/canonical-v0101/opt-in" \
             "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc"
       - name: Preserve sanitized development receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: canonical-v0101-development-${{ github.sha }}
-          path: reports/
+          path: reports/runs/canonical-v0101/
           retention-days: 30

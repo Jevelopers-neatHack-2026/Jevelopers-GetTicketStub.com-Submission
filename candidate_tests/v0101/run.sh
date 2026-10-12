@@ -68,4 +68,5 @@ IE_CONTRACT_EVIDENCE="$evidence/new/receipts" \
   .venv/bin/python -m pytest candidate_tests/v0101/tests --import-mode=importlib \
   --junitxml="$evidence/new/junit.xml" > "$evidence/new/tests.log" 2>&1
 node candidate_tests/v0101/compare-receipts.mjs "$evidence" > "$evidence/comparison.json"
+IE_COMPARISON_EVIDENCE="$evidence" node --test candidate_tests/v0101/compare-receipts.test.mjs > "$evidence/comparison-tests.log" 2>&1
 printf 'PASS: both exact pins, source/installed candidate/full receipts, boundary controls and candidate negatives\n'
