@@ -19,17 +19,29 @@ The public introduction to TicketStub: what it is, who it is for, and the way in
 
 ## Status
 
-**Static site added.** The Crystal landing page lives in [`site/`](site/README.md) as a single static page with its assets. There is no package manifest, build, test or CI configuration yet. No acceptance has been verified.
+**Static site added.** The Crystal landing page lives in [`site/`](site/README.md) as a single static page with its assets. A dependency-free local artifact build, preview and foundation checks are available. Product/app-owner approval and release acceptance remain pending.
 
 - Planned work is tracked in [LP-EPIC #2](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/2), from the page map and static site foundation ([LP-01 #3](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/3)) to the release gate ([LP-10 #12](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/12)).
-- As of 2026-10-11 no pull requests are open. The only merged change is the architecture baseline in [PR #1](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pull/1). See [open pull requests](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pulls) for anything newer.
+- Architecture provenance remains in [PR #1](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pull/1); scroll lifecycle work is in [PR #18](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pull/18). See [open pull requests](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pulls) for current work.
 - Relevant acceptance criteria (EVAL-03, EVAL-04) stay planned in the [acceptance view](docs/architecture/ACCEPTANCE.md).
 
 ## Crystal landing page
 
-The landing page for personalized ticket stub keepsakes is in [`site/`](site/README.md): [`site/index.html`](site/index.html) plus its 3D model, flight data and scene images in [`site/assets/`](site/assets/). It needs no build.
+The landing page for personalized ticket stub keepsakes is in [`site/`](site/README.md): [`site/index.html`](site/index.html) plus its 3D model, flight data and scene images in [`site/assets/`](site/assets/). The original source remains intact; the build copies public payloads and records their SHA-256 hashes in `dist/site/manifest.json`.
 
-Run it locally with `cd site && python3 -m http.server 8080`, then open http://localhost:8080.
+Use Node 24.15.0 (pinned in `.nvmrc`); no package install is required:
+
+```sh
+node scripts/build.mjs
+./scripts/validate-landing --suite foundation
+node --test tests/scroll.test.mjs
+node scripts/preview.mjs --port 8080
+# Open http://127.0.0.1:8080/.
+```
+
+`./scripts/validate-landing` runs every required suite and exits nonzero for missing validators. A green foundation check establishes local artifact behavior only. The existing fonts/animation libraries still load from CDNs in a browser; offline animation, art rights and actual host routing are not verified here.
+
+The [page inventory](integration/site-map.md), [runtime and validation decision](integration/runtime.md), and [static output proposal](integration/static-output.md) record current behavior and unresolved owner approvals. The host's proposed `/landing/` assets and source-component integration require an agreed adapter before this standalone artifact can be integrated.
 
 ## What it owns
 
