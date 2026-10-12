@@ -61,7 +61,7 @@ Every public operation requires current `integrations.exportSummary` /
 storage. The composed source and every later artifact/disclosure gate also require current `finance.summary.read`.
 Scope includes tenant, project, actor, environment and billing mode. Grants,
 revocation and expiry are freshly checked after async source/storage waits and
-before response. Both grants are renewed independently through the bound Finance issuer; neither initial source authorization nor receipt authentication replaces current read access. Both returned decisions are privately copied and their expiry is checked after both authority waits finish. Request/scope are privately copied and frozen before the first
+before response. Both grants are renewed independently through the bound Finance issuer; neither initial source authorization nor receipt authentication replaces current read access. Both returned decisions are privately copied. The separately bound `trustedContext.resolve` must then return the same complete tenant/project/actor/environment/billing scope; null, foreign or unavailable context vetoes disclosure even when both grants remain allowed. Grant expiry is checked again after this context await. Generic issuer contracts do not waive this independently required producer veto. Request/scope are privately copied and frozen before the first
 await. Dashboard `finance.read` / `finance.export` actions are not these Finance
 permissions; reviewed Product adapter and mounted issuer acceptance remain
 external prerequisites. A low-level store is a trusted host port, not a public
@@ -161,7 +161,7 @@ legacy/rich versions, opaque scopes, mixed currencies, exact decimals,
 idempotency, restart, grants and revocation. It fails closed without the approved
 disposable database configuration; no mocked fallback or skipped PG tests exist.
 
-Local Docker is blocked by read-only daemon metadata. Historical tree `fc559295ecd827ded06c3054e51ebabb063c129a` passed hosted composed PG10/10 and had its 17 receipts independently inspected. The later independent four-path read-revocation probe failed on that tree; its green PG receipt is not approval of this repair. The repaired exact head requires fresh genuine hosted CI and whole-candidate review. `artifacts/exports/synthetic-sql-composition.json` is a
+Local Docker is blocked by read-only daemon metadata. Historical tree `fc559295ecd827ded06c3054e51ebabb063c129a` passed hosted composed PG10/10 and had its 17 receipts independently inspected. The later independent four-path read-revocation probe failed on that tree. Its repair at `0490ed4` passed the original grant matrix and hosted PG10/10, but a subsequent independent eight-case null/foreign context matrix failed because the separate context veto was not renewed. Both historical green PG receipts are retained and do not approve the context repair. The repaired exact head requires fresh genuine hosted CI and whole-candidate review. `artifacts/exports/synthetic-sql-composition.json` is a
 pure example; `artifacts/exports/postgres-composition.json` is written only by
 the actual PG test and records failures/results without private store keys.
 Earlier failures are retained. `prepared` / `manual_prepared` means executed

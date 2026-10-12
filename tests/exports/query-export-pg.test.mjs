@@ -175,6 +175,30 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
         if (first) assert.deepEqual(control, first);
         else assert.equal(control.manifest.createdAt, '2026-10-12T22:00:00.000Z');
       }
+      for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) for (const context of ['null', 'foreign']) {
+        const current = await setup(); let page = current.page;
+        if (version === '1.0.0') {
+          const legacy = { ...current.q, schemaVersion: version, filters: { ...current.q.filters, currency: 'USD' } }; delete legacy.policyVersion; delete legacy.groupings;
+          page = await checked(finance.querySummary(legacy, current.host.ports));
+        }
+        const request = exportRequest(page, current.scope);
+        const legacyStore = finance.createFileExportArtifactStore(current.storeOptions), richStore = finance.createFileReportingExportArtifactStore(current.storeOptions);
+        const selected = version === '1.0.0' ? legacyStore : richStore;
+        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore);
+        const first = replay ? await checked(finance.exportSummaryV2(request, ports)) : null;
+        const verify = selected.verifyOriginal, resolve = current.host.ports.trustedContext.resolve; let triggered = false;
+        selected.verifyOriginal = async (...args) => {
+          const original = await verify(...args); assert.equal(original, true);
+          if (!triggered) { current.host.ports.trustedContext.resolve = async () => context === 'null' ? null : { ...current.scope, projectId: 'foreign-context-project' }; triggered = true; }
+          return original;
+        };
+        const response = await (replay ? finance.getPreparedExportArtifacts : finance.exportSummaryV2)(request, ports);
+        assert.equal(triggered, true); assert.equal(response.ok, false); assert.equal(response.error.code, 'FORBIDDEN_SCOPE');
+        assert.equal(current.host.state.denyRead, false); assert.equal(current.host.state.denyExport, false);
+        current.host.ports.trustedContext.resolve = resolve;
+        const control = await checked(finance.getPreparedExportArtifacts(request, ports));
+        if (first) assert.deepEqual(control, first); else assert.equal(control.manifest.createdAt, '2026-10-12T22:00:00.000Z');
+      }
 
     });
   } finally {

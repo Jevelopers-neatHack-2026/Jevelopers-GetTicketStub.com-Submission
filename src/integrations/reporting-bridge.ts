@@ -3,7 +3,7 @@ import { createReportingSnapshotReader, readVerifiedSummarySnapshotV2, REPORTING
 import { checkFinancialSummary, type VersionedReference } from '@jevelopers/shared-contracts';
 import type { FinancialSummaryPage } from '../reporting/index.js';
 import { hashExportCanonical, freezeExportValue, type ExportRuntimePorts, type ExportArtifactStorePort } from './runtime.js';
-import { authorizeFinanceOperation, errorEnvelope, type FinanceAuthorizationResult, type TrustedScope } from '../shared/contracts.js';
+import { authorizeFinanceOperation, errorEnvelope, sameScope, type ApiResult, type FinanceAuthorizationResult, type TrustedScope } from '../shared/contracts.js';
 import type { ReportingExportArtifactStorePort } from './reporting-export.js';
 
 /** Exact immutable Finance-owned registry body; raw committed fixture SHA is independently tested. */
@@ -30,6 +30,7 @@ type SnapshotReference = { readonly scope: TrustedScope; readonly snapshotId: st
 export type ReportingExportBridge = {
   readonly registry: Registry;
   readonly artifactStoreV2?: ReportingExportArtifactStorePort;
+  resolveCurrentContext(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<ApiResult<TrustedScope>>;
   authorizeCurrentRead(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<FinanceAuthorizationResult>;
   readVerifiedSnapshotV2(request: SnapshotReference): Promise<FinancialSummaryPageV2 | null>;
 };
@@ -45,6 +46,17 @@ export function createReportingExportRuntimePorts(ports: ReportingPorts, artifac
   bridges.set(configured, Object.freeze({
     registry: PINNED_REGISTRY,
     ...(artifactStoreV2 ? { artifactStoreV2 } : {}),
+    async resolveCurrentContext(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<ApiResult<TrustedScope>> {
+      try {
+        const frozen = freezeExportValue(request);
+        const received = await ports.trustedContext.resolve(frozen.scope);
+        const current = received === null ? null : freezeExportValue(received);
+        if (!current || !sameScope(current, frozen.scope)) return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'FORBIDDEN_SCOPE', 'unavailable', 'The requested financial scope is not authorized.') };
+        return { ok: true, value: current };
+      } catch {
+        return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'SOURCE_UNAVAILABLE', 'unavailable', 'Current financial context is temporarily unavailable.', true) };
+      }
+    },
     async authorizeCurrentRead(request: { readonly scope: TrustedScope; readonly requestId: string }) {
       const frozen = freezeExportValue(request);
       return authorizeFinanceOperation({ module: 'integrations', requestOperation: 'exportSummary', operation: 'reporting.querySummary',
@@ -62,7 +74,8 @@ export function reportingExportBridge(ports: ExportRuntimePorts): ReportingExpor
 }
 /** Renew both independently scoped operations after every composed export await.
  * The read issuer is the captured Finance reporting host, never a caller flag.
- * Copy each decision immediately and validate freshness once both awaits finish.
+ * Copy each decision immediately; preserve the independently bound context veto,
+ * and validate grant freshness after all authority/context awaits finish.
  */
 export async function authorizeExportAccess(ports: ExportRuntimePorts, request: { readonly scope: TrustedScope; readonly requestId: string }, bridge?: ReportingExportBridge): Promise<FinanceAuthorizationResult> {
   try {
@@ -71,6 +84,12 @@ export async function authorizeExportAccess(ports: ExportRuntimePorts, request: 
     if (bridge) checks.push(bridge.authorizeCurrentRead({ scope: request.scope, requestId: request.requestId }));
     const decisions = await Promise.all(checks.map(async check => freezeExportValue(await check)));
     for (const decision of decisions) if (!decision.ok) return decision;
+    // The producer requires this separate veto as well as current grants.
+    // Resolve after both grant awaits, then check their expiry at this final point.
+    if (bridge) {
+      const current = await bridge.resolveCurrentContext({ scope: request.scope, requestId: request.requestId });
+      if (!current.ok) return current;
+    }
     const now = ports.clock.now().getTime();
     if (!Number.isFinite(now)) return { ok: false, error: errorEnvelope('integrations', 'exportSummary', 'SOURCE_UNAVAILABLE', 'unavailable', 'Current financial authorization is temporarily unavailable.', true) };
     for (const result of decisions) {
