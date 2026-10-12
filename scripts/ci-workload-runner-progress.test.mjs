@@ -73,5 +73,8 @@ test("private customer name", () => { throw Error("private diagnostic"); });`,
 		{ event: "started", filePathSha256 },
 		{ event: "summary", filePathSha256 },
 	]);
-	assert.equal(JSON.stringify({ observed, result }).includes("token=secret"), false);
+	assert.equal(
+		JSON.stringify({ observed, result }).includes("token=secret"),
+		false,
+	);
 });

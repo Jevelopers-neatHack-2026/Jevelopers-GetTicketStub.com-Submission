@@ -30,7 +30,10 @@ test("emits only one path digest per file boundary and preserves entry-file iden
 	for (let i = 0; i < 10; i++) emit({ type: "test:dequeue", data });
 	emit({ type: "test:summary", data });
 	emit({ type: "test:summary", data });
-	assert.deepEqual(output, [wire("started", digest(path)), wire("summary", digest(path))]);
+	assert.deepEqual(output, [
+		wire("started", digest(path)),
+		wire("summary", digest(path)),
+	]);
 	assert.equal(output.join("").includes("private"), false);
 	assert.equal(output.join("").includes("token=secret"), false);
 });
@@ -39,7 +42,14 @@ test("ignores raw output, names, failures and global or missing-file summaries",
 	const output = [];
 	const emit = createProgressEmitter((line) => output.push(line), root);
 	for (const type of ["test:stdout", "test:stderr", "test:fail", "test:enqueue"])
-		emit({ type, data: { file, name: "secret", message: wire("started", "0".repeat(64)) } });
+		emit({
+			type,
+			data: {
+				file,
+				name: "secret",
+				message: wire("started", "0".repeat(64)),
+			},
+		});
 	for (const value of [undefined, null, 1, {}, ""])
 		emit({ type: "test:summary", data: { file: value } });
 	emit({ type: "test:summary" });
@@ -52,7 +62,10 @@ test("a file summary is diagnostic and does not claim success or completion of t
 	emit({ type: "test:summary", data: { file, success: false } });
 	const second = "dist/tests/unit/other.test.js";
 	emit({ type: "test:dequeue", data: { file: join(root, second) } });
-	assert.deepEqual(output, [wire("summary", digest(path)), wire("started", digest(second))]);
+	assert.deepEqual(output, [
+		wire("summary", digest(path)),
+		wire("started", digest(second)),
+	]);
 	assert.equal(output.join("").includes("success"), false);
 });
 
@@ -63,9 +76,17 @@ test("forwards every split of a valid record without forwarding the wire prefix"
 		const forward = createProgressForwarder((line) => output.push(line));
 		forward(Buffer.from(input.slice(0, split)));
 		forward(Buffer.from(input.slice(split)));
-		assert.deepEqual(output.map((line) => JSON.parse(line)), [{
-			ciWorkloadProgress: { event: "started", filePathSha256: digest(path) },
-		}]);
+		assert.deepEqual(
+			output.map((line) => JSON.parse(line)),
+			[
+				{
+					ciWorkloadProgress: {
+						event: "started",
+						filePathSha256: digest(path),
+					},
+				},
+			],
+		);
 	}
 });
 
@@ -79,7 +100,8 @@ test("drops malformed records and private text while retaining subsequent valid 
 		` ${wire("started", digest(path))}`,
 		wire("started", digest(path)).replace("\n", " extra\n"),
 		"PP_CI_FILE started /private/path\n",
-	]) forward(Buffer.from(line));
+	])
+		forward(Buffer.from(line));
 	forward(Buffer.from(wire("summary", digest(path))));
 	assert.equal(output.length, 1);
 	assert.equal(JSON.parse(output[0]).ciWorkloadProgress.event, "summary");
@@ -106,15 +128,27 @@ test("does not treat an unterminated or interrupted record as evidence", () => {
 test("handles multiple records and rejects embedded control characters", () => {
 	const output = [];
 	const forward = createProgressForwarder((line) => output.push(line));
-	forward(Buffer.from(`\u0000${wire("started", digest(path))}${wire("started", digest(path))}${wire("summary", digest(path))}`));
-	assert.deepEqual(output.map((line) => JSON.parse(line).ciWorkloadProgress.event), ["started", "summary"]);
+	forward(
+		Buffer.from(
+			`\u0000${wire("started", digest(path))}${wire("started", digest(path))}${wire("summary", digest(path))}`,
+		),
+	);
+	assert.deepEqual(
+		output.map((line) => JSON.parse(line).ciWorkloadProgress.event),
+		["started", "summary"],
+	);
 });
 
-test("native reporter exposes progress before exit and keeps forged test stderr private", { timeout: 10000 }, async (t) => {
-	const directory = await mkdtemp(join(tmpdir(), "pp-progress-"));
-	t.after(() => rm(directory, { recursive: true, force: true }));
-	const name = "gate.test.mjs";
-	await writeFile(join(directory, name), `
+test(
+	"native reporter exposes progress before exit and keeps forged test stderr private",
+	{ timeout: 10000 },
+	async (t) => {
+		const directory = await mkdtemp(join(tmpdir(), "pp-progress-"));
+		t.after(() => rm(directory, { recursive: true, force: true }));
+		const name = "gate.test.mjs";
+		await writeFile(
+			join(directory, name),
+			`
 import { test } from "node:test";
 import { existsSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
@@ -123,24 +157,47 @@ console.log("private customer token=secret");
 test("private customer name", { timeout: 5000 }, async (t) => {
   while (!existsSync("release")) await setTimeout(10, undefined, { signal: t.signal });
 });
-`);
-	const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("NODE_TEST_")));
-	const execution = promisify(execFile)(process.execPath, [
-		"--test",
-		`--test-reporter=${resolve(import.meta.dirname, "ci-workload-reporter.mjs")}`,
-		name,
-	], { cwd: directory, env: environment, timeout: 8000 });
-	const output = [];
-	execution.child.stderr.on("data", createProgressForwarder((line) => {
-		const progress = JSON.parse(line).ciWorkloadProgress;
-		output.push(progress);
-		if (progress.event === "started" && progress.filePathSha256 === digest(name))
-			writeFileSync(join(directory, "release"), "released by observed progress");
-	}));
-	const result = await execution;
-	assert.ok(output.some((item) => item.event === "started" && item.filePathSha256 === digest(name)));
-	assert.equal(output.some((item) => item.filePathSha256 === "0".repeat(64)), false);
-	assert.equal(result.stdout.includes("token=secret"), false);
-	assert.equal(result.stderr.includes("token=secret"), false);
-	assert.equal(JSON.stringify(output).includes(name), false);
-});
+`,
+		);
+		const environment = Object.fromEntries(
+			Object.entries(process.env).filter(
+				([key]) => !key.startsWith("NODE_TEST_"),
+			),
+		);
+		const execution = promisify(execFile)(
+			process.execPath,
+			[
+				"--test",
+				`--test-reporter=${resolve(import.meta.dirname, "ci-workload-reporter.mjs")}`,
+				name,
+			],
+			{ cwd: directory, env: environment, timeout: 8000 },
+		);
+		const output = [];
+		execution.child.stderr.on(
+			"data",
+			createProgressForwarder((line) => {
+				const progress = JSON.parse(line).ciWorkloadProgress;
+				output.push(progress);
+				if (
+					progress.event === "started" &&
+					progress.filePathSha256 === digest(name)
+				)
+					writeFileSync(join(directory, "release"), "released by observed progress");
+			}),
+		);
+		const result = await execution;
+		assert.ok(
+			output.some(
+				(item) => item.event === "started" && item.filePathSha256 === digest(name),
+			),
+		);
+		assert.equal(
+			output.some((item) => item.filePathSha256 === "0".repeat(64)),
+			false,
+		);
+		assert.equal(result.stdout.includes("token=secret"), false);
+		assert.equal(result.stderr.includes("token=secret"), false);
+		assert.equal(JSON.stringify(output).includes(name), false);
+	},
+);
