@@ -38,7 +38,7 @@ jobs:
       - name: Repeat the real React hook tests and retain every outcome
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           evidence="$RUNNER_TEMP/ticketstub-progress-repeats"
           mkdir -p "$evidence"
           node --input-type=module - "$evidence" <<'NODE'
