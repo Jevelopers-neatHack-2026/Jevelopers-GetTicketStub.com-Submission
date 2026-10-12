@@ -1,0 +1,43 @@
+✔ actual MVP source has valid static anchors, named controls and a coherent main heading sequence (2.731834ms)
+✔ missing anchor targets reject the actual source fixture (0.550708ms)
+✔ duplicate static IDs fail, including the CTA target (0.424125ms)
+✔ empty link names fail even when its target exists (0.210292ms)
+✔ a visible link without destination fails (0.206792ms)
+✔ duplicate h1 cannot pass a heading count check (0.9675ms)
+✔ main heading jumps fail while existing whole-document review remains pending (0.387375ms)
+✔ empty heading names fail (0.465375ms)
+✔ missing named navigation or main landmark fails (0.759333ms)
+✔ preview input needs a real label, not only a placeholder (0.463584ms)
+✔ missing description target fails (0.368041ms)
+✔ empty example button name fails (0.280792ms)
+✔ missing focus or reduced-motion source hook fails without asserting browser behavior (1.367834ms)
+✔ static explanation survives removing media and executable code as text evidence only (1.258958ms)
+✔ image alternatives and media-independent explanation cannot be silently removed (0.741208ms)
+✔ local group and non-submitting button remain compatible with a deferred external destination (0.858167ms)
+✔ wheel keeps moving forward/backward after the 3D loop exits on context loss (1.450541ms)
+✔ an animation exception cannot strand wheel input and starts readable static art (0.374875ms)
+✔ display-only rail tracks native scrolling/resizing without rendering frames (0.320833ms)
+✔ rail is decorative and passes pointer input through (0.162209ms)
+✔ switching to static art restores scene copy hidden by an interrupted 3D frame (0.316875ms)
+✔ native navigation reaches scenes and maker, with reduced motion false (0.914292ms)
+✔ native navigation reaches scenes and maker, with reduced motion true (0.364875ms)
+✔ user wheel input cancels pending maker focus (0.321917ms)
+✔ seamless hero wrap uses an immediate native jump (0.393958ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 81.135459
+ux: source checks and real-handler scroll tests passed; 5 unresolved review/evidence items; browser/WCAG/lab performance not certified
+✔ real built artifact cannot claim UX release from local source checks alone (277.287291ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 367.834334

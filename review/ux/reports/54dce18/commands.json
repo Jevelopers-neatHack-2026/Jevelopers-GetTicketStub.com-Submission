@@ -1,0 +1,83 @@
+[
+  {
+    "id": "ux-tests",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "--test",
+      "tests/ux.test.mjs"
+    ],
+    "startedAt": "2026-10-12T11:46:53.251Z",
+    "endedAt": "2026-10-12T11:46:53.681Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/reports/54dce18/ux-tests.stdout.log",
+    "stderr": "review/ux/reports/54dce18/ux-tests.stderr.log"
+  },
+  {
+    "id": "all-tests",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "--test",
+      "tests/content-proof.test.mjs",
+      "tests/cta.test.mjs",
+      "tests/foundation.test.mjs",
+      "tests/metadata.test.mjs",
+      "tests/privacy.test.mjs",
+      "tests/scroll.test.mjs",
+      "tests/ux.test.mjs"
+    ],
+    "startedAt": "2026-10-12T11:46:53.685Z",
+    "endedAt": "2026-10-12T11:46:54.857Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/reports/54dce18/all-tests.stdout.log",
+    "stderr": "review/ux/reports/54dce18/all-tests.stderr.log"
+  },
+  {
+    "id": "ux-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T11:46:54.859Z",
+    "endedAt": "2026-10-12T11:46:55.218Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/reports/54dce18/ux-draft.stdout.log",
+    "stderr": "review/ux/reports/54dce18/ux-draft.stderr.log"
+  },
+  {
+    "id": "ux-release",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux"
+    ],
+    "startedAt": "2026-10-12T11:46:55.219Z",
+    "endedAt": "2026-10-12T11:46:55.554Z",
+    "exitCode": 1,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/reports/54dce18/ux-release.stdout.log",
+    "stderr": "review/ux/reports/54dce18/ux-release.stderr.log"
+  },
+  {
+    "id": "build",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "scripts/build.mjs"
+    ],
+    "recordedAt": "2026-10-12T11:48:56.583Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/reports/54dce18/build.stdout.log",
+    "stderr": "review/ux/reports/54dce18/build.stderr.log"
+  }
+]
