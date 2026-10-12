@@ -12,7 +12,7 @@ import { financeV2Fixture, financeV2FixtureNames, syntheticQueryContentHash, syn
  * fixtures. Not live Finance data, not a grant, not a production acknowledgement. The identities below are host literals stated independently of each page;
  * `tests/components/finance-v2-conformance.test.tsx` re-hashes the committed files and checks these literals against its own.
  */
-export const conformanceFixtureNames = ['conformance-base', 'conformance-budget', 'conformance-unknown-simulated', 'conformance-pg', 'conformance-v1-refused'] as const;
+export const conformanceFixtureNames = ['conformance-base', 'conformance-budget', 'conformance-unknown-simulated', 'conformance-pg', 'conformance-v1-refused', 'conformance-forged-policy'] as const;
 export type ConformanceFixtureName = (typeof conformanceFixtureNames)[number];
 export type HostFixtureName = FinanceV2FixtureName | ConformanceFixtureName;
 export const hostFixtureNames: readonly HostFixtureName[] = [...financeV2FixtureNames, ...conformanceFixtureNames];
@@ -44,6 +44,13 @@ export function hostFixture(name: HostFixtureName): HostFixture {
       'sha256:9a0c1845f1bfd9b4da4c5639fba7a9972a123bca214729153cd175995c977715', 'sha256:e22bc18cd309a4c9f7e99b8086619cb35cfe2d7768a4fa531f63bdc147d066d0', 'sha256:f4f55d6902c9f0213b1407ac0a44135d490051ed5b28ceb4f7b845bf5120347d');
     case 'conformance-v1-refused': return conformance(producerV1, scope('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'live'),
       'sha256:c5e4651418bd5d0178528e1c44ca1938b1a283da4d4c2276463e58eac1033bf0', 'sha256:' + '0'.repeat(64), 'sha256:' + '0'.repeat(64));
+    // The unknown-simulated page with its policy reference rewritten inside the payload. The host's registry-derived references must still win and refuse it.
+    case 'conformance-forged-policy': {
+      const forged = structuredClone(producerUnknownSimulated) as typeof producerUnknownSimulated;
+      forged.canonicalSummaries[0]!.policy_ref.content_hash = 'sha256:' + 'f'.repeat(64);
+      return conformance(forged, scope('1e61a0e5-d091-4213-a6e1-ba3a95f42bf7', '222a194b-afc4-44ea-9217-2db0bb62da30', 'simulated'),
+        'sha256:699b8545b69300dd290ea6828bec88cd109ec6af4783d1b86fb292e3f844af78', 'sha256:cf56d6609c4230f4c387813a90cce0dab768fef574b71d53aaee48baa36c0ada', 'sha256:6a9b080dddfe044c29f88660875647b1952fb12401491222995ecafa3620b54c');
+    }
     default: {
       const fixture = financeV2Fixture(name);
       return { ...fixture, expectedQueryContentHash: syntheticQueryContentHash, expectedSummaryContentHash: syntheticSummaryContentHash };

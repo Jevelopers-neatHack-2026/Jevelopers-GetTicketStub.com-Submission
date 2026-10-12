@@ -3,14 +3,15 @@
   "note": "Byte-for-byte copies of the reviewed, synthetic Finance-producer outputs named in the tested handoff manifest. They are not live grants, not production data and not an owner or production acknowledgement. Every committed file is re-hashed by tests/components/finance-v2-conformance.test.tsx against the digests below; nothing is read from /tmp.",
   "producer": {
     "revision": "22a3237dd44f376017969ac881586ff396f19cf8",
-    "treePrefix": "4f8dcc",
-    "treeNote": "Only the 6-character tree prefix was supplied with the handoff; the full tree digest is not recorded here and cannot be re-verified from this repository."
+    "tree": "4f8dcc44019ec0f73ab3aa7c0eb1d5de40bb777e",
+    "treeNote": "Full producer tree digest, supplied with the corrected handoff. It names the producer tree the nine committed files were taken from. This repository records it and re-hashes every committed file; it cannot recompute a producer tree from nine files."
   },
   "handoff": {
     "review": "SCOPED_APPROVE",
     "reviewSha256": "3a9fb67fb1445cf22c57a180f8ad0f0a587576b15783ed56a075f685a5db2eb1",
     "producerGate": "PG 29/29 pass",
-    "producerFullCi": "FAIL (migration)",
+    "producerFullCi": "FAIL (migration) at producer 22a3237dd44f376017969ac881586ff396f19cf8: historical result, neither reproduced nor waived nor relabelled here",
+    "laterProducerFullCi": "SUCCESS at the later producer head 667 with production bytes unchanged: separate evidence, not a retroactive waiver of the historical FAIL",
     "authority": "synthetic reviewed outputs; not live grants or owner ACK",
     "acceptance": "Finance-owner accepted SYNTHETIC_CONFORMANCE_ONLY",
     "ownerReceipt": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2#issuecomment-6123320849"
@@ -28,7 +29,7 @@
   ],
   "limits": [
     "The page schema declares x-schema-completeness partial_wrapper_requires_combined_validation: the committed JSON schema alone is not the full producer validator.",
-    "Producer full CI failed on the migration job; only the producer gate (29/29) passed. This repository neither reproduces nor waives that failure.",
+    "Producer full CI at 22a3237 failed on the migration job; only the producer gate (29/29) passed. This repository neither reproduces nor waives that historical failure. The later 667 full-CI success is recorded separately and does not retroactively change it.",
     "source/schema-v2.ts is producer TypeScript that imports producer-only modules; it is committed byte for byte as a pinned reference, excluded from this repository's tsc and eslint, and never imported or executed here."
   ]
 }

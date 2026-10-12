@@ -65,9 +65,12 @@ const clone = (key: keyof typeof EXPECTED) => structuredClone(json(EXPECTED[key]
 describe('committed artifacts and pins (portable: no /tmp, no skips)', () => {
   it.each(Object.entries(PINS))('%s hashes to its pinned digest', (file, digest) => { expect(sha256(bytes(file))).toBe(digest); });
   it('keeps PROVENANCE.json in step with the literal pins in this test', () => {
-    const provenance = json('PROVENANCE.json') as { classification: string; producer: { revision: string; treePrefix: string }; handoff: { ownerReceipt: string; acceptance: string; producerFullCi: string }; committed: { path: string; sha256: string }[] };
+    const provenance = json('PROVENANCE.json') as { classification: string; producer: { revision: string; tree: string }; handoff: { ownerReceipt: string; laterProducerFullCi: string; acceptance: string; producerFullCi: string }; committed: { path: string; sha256: string }[] };
     expect(provenance.classification).toBe('SYNTHETIC_CONFORMANCE_ONLY');
-    expect(provenance.producer).toEqual({ revision: '22a3237dd44f376017969ac881586ff396f19cf8', treePrefix: '4f8dcc', treeNote: expect.any(String) });
+    expect(provenance.producer).toEqual({ revision: '22a3237dd44f376017969ac881586ff396f19cf8', tree: '4f8dcc44019ec0f73ab3aa7c0eb1d5de40bb777e', treeNote: expect.any(String) });
+    expect(provenance.committed.every((item) => /^[0-9a-f]{64}$/u.test(item.sha256))).toBe(true);
+    expect(JSON.stringify(provenance)).not.toMatch(/treePrefix|not recorded here|cannot be re-verified|\/tmp\//u);
+    expect(provenance.handoff.laterProducerFullCi).toMatch(/^SUCCESS/u);
     expect(provenance.handoff.ownerReceipt).toMatch(/issues\/2#issuecomment-6123320849$/u);
     expect(provenance.handoff.acceptance).toBe('Finance-owner accepted SYNTHETIC_CONFORMANCE_ONLY');
     expect(provenance.handoff.producerFullCi).toMatch(/^FAIL/u);
