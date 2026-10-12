@@ -85,6 +85,8 @@ The posts prove public updates, not every product claim in their copy. Day 1’s
 
 **Crystal's separate Codex PDF:** the team corrected the 11-page report's attribution from Zach to **Crystal (lajefa)**. It reports **3,859,621,041 tokens** across **16,189 calls**, through October 12 at 2:31:50 p.m. Eastern. [Read the PDF and limits](CRYSTAL-CODEX-USAGE.md). Its totals exactly match the [earlier pasted table credited to Zach](ZACH-USAGE.md); these are not established as separate usage. Original logs, identity, overlap, and event eligibility remain unverified. Do not combine these records into a team total.
 
+**Lars's usage report:** team-supplied text reports **5,716 calls and 1,198,266,955 tokens**, including preparation from October 8–12 in Chicago time. The **$359.71 API-price estimate** is not measured spending. [Read the tables, reported checks, and limits](LARS-USAGE.md). The totals reconcile; the displayed cache-savings calculation differs by one cent. Underlying files were not supplied, and overlap with other reports is unverified.
+
 Timothy's [searchable report and complete CSV bundle](USAGE.md#explore-the-report) are now retained with the PDF. The event CSV and all 34 partition tables reconcile internally. That does not verify original log capture, actual charges, or overlap with other team members' reports.
 
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.

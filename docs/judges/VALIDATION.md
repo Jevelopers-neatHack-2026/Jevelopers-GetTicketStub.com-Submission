@@ -24,6 +24,8 @@ Checked October 12, 2026. These are engineering checks, not organizer approval.
 
 - **Original contributor history:** all 1,944 source commits at the imported pins are reachable from submission main, with 14 exact snapshot trees verified. GitHub commit API checks preserve all 14 original author-name/email pairs sampled, and its contributor API lists the team accounts. [Import and account-matching limits](CONTRIBUTORS.md) record two unlinked identities and an existing name/email mismatch. Source IDs, dates, and author metadata were not rewritten.
 
+- **Lars's pasted usage report:** model and daily tables each total 5,716 calls and 1,198,266,955 tokens. Token categories reconcile, and rounded model costs sum to $359.71. Cached reads are 97.952% of prompt tokens, rounding to 98.0%. The claimed $3,787.46 cache reduction differs by one cent from subtraction of the displayed prices; underlying precision was unavailable. [Scope and limits](LARS-USAGE.md) distinguish these arithmetic checks from the producer's unrerun log and pricing checks.
+
 Run the local checks:
 
 ```sh
