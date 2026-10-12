@@ -24,6 +24,9 @@ export type FinanceV2ViewProps = Readonly<{
   /** The host's own opaque scope. A page for any other scope is refused, never shown. Nothing is derived from it. */
   expectedScope: OpaqueProductScope;
   expectedSnapshotId?: string;
+  /** The query and summary hashes the host asked for. A page carrying other hashes is refused. Compared as strings only; never computed here. */
+  expectedQueryContentHash?: string;
+  expectedSummaryContentHash?: string;
   /** Detail id for `transaction-detail`. */
   detailId?: string;
   detailHref?: (detailId: string) => string;
@@ -282,7 +285,7 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
  */
 export function FinanceV2View(props: FinanceV2ViewProps) {
   const headingId = useId();
-  const { view, input, expectedScope, expectedSnapshotId, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange } = props;
+  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange } = props;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[view] ?? 'Finance v2'}</h2>{body}</section>;
   if (props.mode !== 'SYNTHETIC_PROPOSAL') return wrap(<Notice alert title="Unsupported mode">This presentation only renders in explicit SYNTHETIC_PROPOSAL mode. Nothing is shown. Code UNSUPPORTED_MODE.</Notice>);
   if (!input || typeof input !== 'object') return wrap(<Notice title="Finance state unknown">The state of this report could not be determined. No amounts are shown.</Notice>);
@@ -290,7 +293,10 @@ export function FinanceV2View(props: FinanceV2ViewProps) {
   if (input.status === 'restricted') return wrap(<Notice title="Report restricted">This report is restricted for your access. No amounts are shown.</Notice>);
   if (input.status === 'unauthorized') return wrap(<Notice alert title="Not authorized">You are not authorized to view this report. No amounts are shown.</Notice>);
   if (input.status !== 'ready') return wrap(<Notice title="Finance state unknown">The state of this report could not be determined. No amounts are shown.</Notice>);
-  const checked = checkFinanceV2Page(input.page, expectedScope, expectedSnapshotId);
+  const checked = checkFinanceV2Page(input.page, expectedScope, expectedSnapshotId, {
+    ...(expectedQueryContentHash !== undefined ? { queryContentHash: expectedQueryContentHash } : {}),
+    ...(expectedSummaryContentHash !== undefined ? { summaryContentHash: expectedSummaryContentHash } : {}),
+  });
   if (!checked.ok) {
     return wrap(<section className="td-example-section" role="alert"><h3>Report refused</h3>
       <p>This report failed the presentation check, so it is not displayed. No amounts are shown.</p>

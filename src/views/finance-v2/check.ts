@@ -96,8 +96,11 @@ function detailPath(detail: unknown, index: number, currencies: ReadonlySet<stri
   return undefined;
 }
 
-/** `expectedScope` is the host's own opaque scope. `expectedSnapshotId` is optional; when given, a different snapshot is refused. */
-export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductScope, expectedSnapshotId?: string): FinanceV2Check {
+/** Identity the host asked for, stated independently of the response. The browser only compares these strings for equality; it never computes or vouches for a hash. */
+export type FinanceV2ExpectedHashes = Readonly<{ queryContentHash?: string; summaryContentHash?: string }>;
+
+/** `expectedScope` is the host's own opaque scope. `expectedSnapshotId` and `expected` are optional; when given, a different snapshot or hash is refused. */
+export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductScope, expectedSnapshotId?: string, expected: FinanceV2ExpectedHashes = {}): FinanceV2Check {
   if (!record(raw)) return refuse('INVALID_SHAPE', '/');
   if (raw.schemaVersion !== '2.0.0') return refuse('UNSUPPORTED_VERSION', '/schemaVersion');
   if (!record(raw.scope)) return refuse('INVALID_SHAPE', '/scope');
@@ -109,6 +112,8 @@ export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductSco
   for (const key of ['snapshotId', 'queryContentHash', 'summaryContentHash'] as const) if (typeof raw[key] !== 'string' || !HASH.test(raw[key])) return refuse('INVALID_SHAPE', `/${key}`);
   if (!record(raw.period) || !text(raw.period.start) || !text(raw.period.end)) return refuse('INVALID_SHAPE', '/period');
   if (expectedSnapshotId !== undefined && raw.snapshotId !== expectedSnapshotId) return refuse('SNAPSHOT_MISMATCH', '/snapshotId');
+  if (expected.queryContentHash !== undefined && raw.queryContentHash !== expected.queryContentHash) return refuse('QUERY_HASH_MISMATCH', '/queryContentHash');
+  if (expected.summaryContentHash !== undefined && raw.summaryContentHash !== expected.summaryContentHash) return refuse('SUMMARY_HASH_MISMATCH', '/summaryContentHash');
   const bad = summaryPath(raw.summary);
   if (bad) return refuse('INVALID_SHAPE', bad);
   if (!Array.isArray(raw.details)) return refuse('INVALID_SHAPE', '/details');
