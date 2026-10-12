@@ -7,6 +7,7 @@ import pytest
 from integration_evals import artifacts
 from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
 from integration_evals.errors import InvalidArtifactError
+from tests.leak_matrix import BENIGN, CASES, deep_scalar
 
 
 def payload_id(payload: bytes) -> str:
@@ -155,3 +156,38 @@ def test_accepts_ordinary_non_json_and_bounded_json(payload: bytes) -> None:
     # When scanning them.
     reject_leaks(payload, "fixture")
     # Then normal non-JSON handling is preserved.
+
+
+@pytest.mark.parametrize(
+    ("payload", "code"), [case[1:] for case in CASES], ids=[c[0] for c in CASES]
+)
+def test_rejects_decoded_json_keys_and_values_with_the_full_plaintext_policy(
+    payload: bytes, code: str
+) -> None:
+    # Given an escaped policy class in a JSON key, value or embedded JSON.
+    # When scanning the raw bytes.
+    with pytest.raises(InvalidArtifactError) as caught:
+        reject_leaks(payload, "fixture")
+    # Then the same class code is raised without echoing the value.
+    assert caught.value.code == code
+    assert str(caught.value) == f"{code}: fixture"
+
+
+@pytest.mark.parametrize("payload", BENIGN, ids=payload_id)
+def test_accepts_benign_escaped_json_and_embedded_scalars(payload: bytes) -> None:
+    # Given ordinary escaped and embedded JSON without policy content.
+    # When scanning it.
+    reject_leaks(payload, "fixture")
+    # Then the policy does not over-reject.
+
+
+def test_rejects_embedded_scalar_nesting_beyond_depth_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given a scalar string re-encoded as JSON, whose size doubles per level.
+    monkeypatch.setattr(artifacts, "MAX_JSON_DEPTH", 6)
+    reject_leaks(deep_scalar(1), "fixture")
+    # When it nests past the depth limit.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content"):
+        reject_leaks(deep_scalar(8), "fixture")
+    # Then unbounded nesting fails closed while shallow nesting passes.

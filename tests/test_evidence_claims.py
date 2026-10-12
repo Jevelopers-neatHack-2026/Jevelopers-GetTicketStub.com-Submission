@@ -21,6 +21,7 @@ from integration_evals.models import (
 )
 from integration_evals.output_evidence import check_claim, retain
 from integration_evals.packaging import copy_artifacts
+from tests.leak_matrix import BENIGN, CASES
 
 
 def controlled_case() -> Case:
@@ -190,3 +191,49 @@ def test_archive_copy_rejects_quoted_or_bearer_credentials_without_echo(
     # Then no bytes are published and the diagnostic omits the value.
     assert b"fictional" not in str(caught.value).encode()
     assert not (destination / "output.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("payload", "code"), [case[1:] for case in CASES], ids=[c[0] for c in CASES]
+)
+def test_export_paths_reject_decoded_json_policy_classes(
+    tmp_path: Path, payload: bytes, code: str
+) -> None:
+    # Given matching-digest output hiding a policy class in escaped JSON keys or values.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    _ = (staging / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    # When retaining and archiving it.
+    with pytest.raises(InvalidArtifactError) as retained:
+        _ = retain(case, context, (item,), staging)
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    with pytest.raises(InvalidArtifactError) as copied:
+        copy_artifacts(Run.model_construct(evidence=(item,)), staging, destination)
+    # Then both fail with the class code, publish nothing, and keep the value out.
+    assert retained.value.code == copied.value.code == code
+    assert str(copied.value) == f"{code}: evaluation"
+    assert not (destination / "output.json").exists()
+    assert not (context.settings.artifacts / context.run_id / case.id / "output.json").exists()
+
+
+@pytest.mark.parametrize("payload", BENIGN, ids=payload_id)
+def test_export_paths_keep_benign_escaped_json(tmp_path: Path, payload: bytes) -> None:
+    # Given ordinary escaped and embedded JSON.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    _ = (staging / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    # When retaining and archiving it.
+    kept = retain(case, context, (item,), staging)
+    copy_artifacts(Run.model_construct(evidence=(item,)), staging, destination)
+    # Then both preserve the exact bytes.
+    assert (context.settings.artifacts / kept[0].path).read_bytes() == payload
+    assert (destination / "output.json").read_bytes() == payload

@@ -98,64 +98,78 @@ def _decode(raw: bytes | str) -> JsonValue:
     return result
 
 
-def _text_leak(value: str, depth: int) -> bool:
-    """Scan decoded text, descending into JSON documents embedded in strings."""
-    if any(pattern.search(value.encode(errors="replace")) for pattern in SECRET_PATTERNS):
-        return True
-    if value.lstrip()[:1] not in {"{", "["}:
-        return False
+def _pattern_hit(data: bytes) -> bool:
+    return any(pattern.search(data) for pattern in SECRET_PATTERNS)
+
+
+def _url_code(data: bytes) -> str | None:
+    """Return the URL policy failure code for embedded URLs, if any."""
+    for match in re.finditer(rb"https?://[^\s\"<>]+", data):
+        try:
+            parsed = urlsplit(match.group().decode())
+        except (UnicodeDecodeError, ValueError):
+            return "invalid_export_reference"
+        if parsed.username or parsed.password:
+            return "credential_url"
+        if any(key.lower() in SIGNED_KEYS for key, _ in parse_qsl(parsed.query)):
+            return "signed_access_url"
+    return None
+
+
+def _plaintext_code(data: bytes) -> str | None:
+    """Apply the complete plaintext policy: secret patterns, then URL rules."""
+    return "sensitive_content" if _pattern_hit(data) else _url_code(data)
+
+
+def _text_code(value: str, depth: int) -> str | None:
+    """Apply the plaintext policy to decoded text, descending into embedded JSON."""
+    code = _plaintext_code(value.encode(errors="replace"))
+    if code or value.lstrip()[:1] not in {"{", "[", '"'}:
+        return code
     try:
         nested = _decode(value)
     except json.JSONDecodeError:
-        return False  # Text, not JSON. Other ValueErrors (resource limits) propagate.
-    return _json_leak(nested, depth + 1)
+        return None  # Text, not JSON. Other ValueErrors (resource limits) propagate.
+    return _json_code(nested, depth + 1)
 
 
-def _json_leak(value: JsonValue, depth: int = 0) -> bool:
-    """Find sensitive keys and secret text in decoded (including string-embedded) JSON."""
+def _entry_code(key: str, item: JsonValue, depth: int) -> str | None:
+    if (
+        key.lower().replace("-", "_") in SENSITIVE_JSON_KEYS
+        and isinstance(item, str)
+        and len(item) >= MIN_SECRET
+    ):
+        return "sensitive_content"
+    return _text_code(key, depth) or _json_code(item, depth + 1)
+
+
+def _json_code(value: JsonValue, depth: int = 0) -> str | None:
+    """Scan every decoded key and string value; excess depth fails closed."""
     if depth > MAX_JSON_DEPTH:
-        return True
+        return "sensitive_content"
     if isinstance(value, dict):
-        return any(
-            (
-                key.lower().replace("-", "_") in SENSITIVE_JSON_KEYS
-                and isinstance(item, str)
-                and len(item) >= MIN_SECRET
-            )
-            or _json_leak(item, depth + 1)
-            for key, item in value.items()
-        )
+        return next((c for k, v in value.items() if (c := _entry_code(k, v, depth))), None)
     if isinstance(value, list):
-        return any(_json_leak(item, depth + 1) for item in value)
-    return isinstance(value, str) and _text_leak(value, depth)
+        return next((c for v in value if (c := _json_code(v, depth + 1))), None)
+    return _text_code(value, depth) if isinstance(value, str) else None
 
 
-def _document_leaks(data: bytes) -> bool:
+def _document_code(data: bytes) -> str | None:
     """Scan JSON documents; ambiguous or pathological structure is treated as a leak."""
     try:
-        return _json_leak(_decode(data))
+        return _json_code(_decode(data))
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return False  # Not a JSON document; the byte patterns already applied.
+        return None  # Not a JSON document; the raw policy applies separately.
     except (ValueError, _AmbiguousJsonError, RecursionError):
-        return True  # Resource limits and ambiguity fail closed.
+        return "sensitive_content"  # Resource limits and ambiguity fail closed.
 
 
 def reject_leaks(data: bytes, reference: str) -> None:
     """Reject sensitive exports without including the matched value in errors."""
-    if any(pattern.search(data) for pattern in SECRET_PATTERNS):
-        fail("sensitive_content", reference)
-    if _document_leaks(data):
-        fail("sensitive_content", reference)
-    for match in re.finditer(rb"https?://[^\s\"<>]+", data):
-        raw = match.group()
-        try:
-            parsed = urlsplit(raw.decode())
-        except (UnicodeDecodeError, ValueError):
-            fail("invalid_export_reference", reference)
-        if parsed.username or parsed.password:
-            fail("credential_url", reference)
-        if any(key.lower() in SIGNED_KEYS for key, _ in parse_qsl(parsed.query)):
-            fail("signed_access_url", reference)
+    code = ("sensitive_content" if _pattern_hit(data) else None) or _document_code(data)
+    code = code or _url_code(data)
+    if code:
+        fail(code, reference)
 
 
 def public_reference(reference: str) -> None:
