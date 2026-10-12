@@ -5,18 +5,39 @@
 
 ## A. Required official X quote-post — field template
 
-The organizer's current requirement is one public quote-post of its official neatlogs submission post, carrying the team, name, project, public repository, and demo link. The official page checked **2026-10-11 UTC** says the final cutoff will be announced on Discord. The official post URL, confirmed cutoff, team, submitter name, confirmed project name, public project-repository URL, public demo URL, and submitter authorization are unresolved here. Do not invent or leave any of these fields looking final.
+The organizer's current requirement is one public quote-post of its official neatlogs submission post, carrying the team, name, project, public repository, and demo link. The official page checked **2026-10-11 UTC** says the final cutoff will be announced on Discord. The official post URL, confirmed cutoff, submitter name, public demo URL, and submitter authorization are unresolved here. The team, project, and repository values below come from the owner's marketing-material issue 22 entry-contents list through three pending ledger rows; they are draft field values, not approved external copy. Do not invent or leave any pending field looking final.
 
 **Attach/quote target outside the copy body:** `[OFFICIAL NEATLOGS SUBMISSION POST — not yet published or supplied]`
 **Final cutoff:** `[PENDING — check the official Discord announcement]`
 
 ```text
-Team: [TEAM_NAME_PENDING] · Name: [SUBMITTER_NAME_PENDING] · Project: [PROJECT_NAME_PENDING] · Repository: [PUBLIC_PROJECT_REPOSITORY_URL_PENDING] · Demo: [PUBLIC_DEMO_URL_PENDING] #neatHack
+Team: Jevelopers · Name: [SUBMITTER_NAME_PENDING] · Project: TicketStub · Repository: https://github.com/Jevelopers-neatHack-2026/getticketstub.com · Demo: [PUBLIC_DEMO_URL_PENDING] #neatHack
 ```
 
-All bracketed fields are placeholders. The current `TicketStub` entry in the claim ledger is a project identifier only and does not establish the final submission title or product availability. The submitter must confirm the exact project name. Replace the public repository and demo placeholders only with the intended publicly accessible project links; the marketing-material documentation URL is not a substitute for the project repository or demo.
+Filled fields (each row is `state: planned`, `reviewStatus: pending`; none is approved):
 
-The ordinary X post limit recorded from [X Help: How to Post](https://help.x.com/en/using-x/how-to-post) is **280 characters**, checked **2026-10-11 UTC**. This template is sized as a draft shell; final field values can change the count. Recount the completed body and verify it in X's composer. Keep the official post attached as a quote-post. This package does not assume a longer-post subscription. No X draft was created and no post was sent.
+- `Team: Jevelopers` — `CLAIM-X-DEST-TEAM-001`.
+- `Project: TicketStub` — `CLAIM-X-DEST-PROJECT-001`. Required qualifier: “Project name only; product availability is unverified.” Keep that qualifier in review notes or accompanying text; the field itself does not state availability. This row does not extend `CLAIM-PRODUCT-NAME-001`, which stays scoped to concept artwork.
+- `Repository: https://github.com/Jevelopers-neatHack-2026/getticketstub.com` — `CLAIM-X-DEST-REPO-001`. Qualifier: repository locator only; not a product route, transaction, or availability statement. The getticketstub.com route owner has not confirmed the locator for this use, and marketing did not verify the repository's visibility, contents, or hackathon-dated commits.
+
+Still bracketed and pending: `[SUBMITTER_NAME_PENDING]`, `[PUBLIC_DEMO_URL_PENDING]`, the official post attachment, and the Discord cutoff. The submitter must supply their own name and authorization. The demo link must be a publicly accessible project demo; the marketing-material documentation URL is not a substitute for the project repository or demo.
+
+### 280-character fit
+
+The ordinary X post limit recorded from [X Help: How to Post](https://help.x.com/en/using-x/how-to-post) is **280 characters**, checked **2026-10-11 UTC**. This package does not assume a longer-post subscription. Keep the official post attached as a quote-post. No X draft was created and no post was sent.
+
+Counts below are my own computation with a local script that applies the documented X weighting as I understand it: a URL with an `https://` scheme counts as 23 characters regardless of its length, and characters in the Latin and punctuation ranges (including `·`) count as 1. Emoji and CJK count as 2 under that rule and are not used in the template.
+
+| Body variant | Raw characters | Weighted (URL = 23) | Fits 280 |
+| --- | --- | --- | --- |
+| Previous all-placeholder shell | 190 | 190 | Yes (not a final count) |
+| Known fields; submitter name left as `[SUBMITTER_NAME_PENDING]`; demo as a stand-in `https://` URL | 194 | 151 | Yes (placeholder name is not final) |
+| Known fields; empty name; demo as a stand-in `https://` URL | 170 | 127 | Yes |
+| Build-in-public shell (section B) | 118 | 118 | Yes (the bracket slot is not a final count) |
+
+- **Name and demo budget:** with the demo link as a 23-weight URL, roughly 150 weighted characters remain for the submitter name (the script's margin was 153 with an empty name field; 150 is the conservative figure). The raw repository URL is 61 characters but weighs 23.
+- **Method limits:** the weighting rule is taken from public X documentation of how links count and is not read from a live X composer, so it can differ from what X actually applies. The demo URL is a stand-in; a demo URL without a scheme may not be treated as a link and could weigh its full length. The real submitter name, any non-ASCII characters in it, and any change to the field order or separators change the count. The script's URL matching is simple and does not reproduce X's full parser.
+- **Human composer check: pending.** A person must paste the completed body into X's composer, confirm the character indicator, and confirm the quote-post attachment before anything is submitted. This count is not a substitute for that check.
 
 ## B. Reusable build-in-public update — documentation CTA only
 
@@ -43,8 +64,13 @@ X Help currently says one image with standard ratios between 2:1 and 3:4 display
 | --- | --- | --- |
 | “Explore the repository docs.” | `CTA-REPOSITORY-DOCS-001`; pinned README target above | Route scoped to docs; exact wording review pending |
 | `#neatHack` | Official event page, checked 2026-10-11 UTC | Organizer-required tag; refresh before use |
-| Team/name/project/repository/demo fields | Official event page, checked 2026-10-11 UTC | Values pending; final project name and submitter confirmation not supplied |
+| Field set (team/name/project/repository/demo) | Official event page, checked 2026-10-11 UTC | Required fields per organizer; submitter name and demo value pending |
+| `Team: Jevelopers` | `CLAIM-X-DEST-TEAM-001`; source: marketing-material issue 22 entry contents (mutable issue text, not a commit) | planned / review pending; not approved |
+| `Project: TicketStub` | `CLAIM-X-DEST-PROJECT-001`; qualifier “Project name only; product availability is unverified.” | planned / review pending; not approved; separate from `CLAIM-PRODUCT-NAME-001` (concept artwork only) |
+| `Repository: https://github.com/Jevelopers-neatHack-2026/getticketstub.com` | `CLAIM-X-DEST-REPO-001`; locator only, not a product route | planned / review pending; route-owner confirmation pending |
+| Submitter name, demo URL | None. No ledger row | Pending; no value supplied |
 | Official post and cutoff fields | Official event page says final cutoff is announced on Discord; exact post/cutoff not supplied | Pending; must be refreshed before submission |
-| Project name, if later filled | `CLAIM-PRODUCT-NAME-001` allows `TicketStub` only with “Project name only; product availability is unverified.” in concept artwork context | Not approved for this public destination; submitter and marketing review required |
+
+Binding note: the three `CLAIM-X-DEST-*` rows were added to `messaging/claims.json` by the ledger lease (uncommitted at the time of this edit). Checksum and provenance bindings for the changed ledger and this copy are not refreshed here; the later package lifecycle handles that.
 
 Product and sponsor capability/results copy remains blocked. The exact ledger keeps Neatlogs, Entire, CFO.ai, comparison, product-runtime, and route evidence separate. Do not infer any of them from the rehearsal or announcement draft.

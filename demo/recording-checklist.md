@@ -21,11 +21,20 @@ Do not turn the rehearsal into a final demo until each item below has a pinned, 
 - **Product behavior:** the source used by the earlier documentation-only rehearsal baseline is historical (`getticketstub.com` ownership at `5a298645`). The pinned `eb8decce` source, after runtime PR #20 merged, documents a runnable Next.js App Router preview with sandbox mail and sandbox orders; the default demo is simulated (earlier `7f59d339` pin from PR #22 is historical). Source availability is not producer acceptance, and the separate limited local observations of that revision were cancelled mid-QA with no runtime media committed. That preview description is not proof of the complete product journey, live sponsor/provider behavior, production readiness, or release acceptance; GT-12 issue #6 remains open. The product owner must supply the validated journey and relevant implementation/failure evidence before it can support a final demo.
 - **Neatlogs / SPN-01:** source-owned, sanitized evidence for architecture, implementation, runtime, reasoning, and result; each field remains distinct and the usage claim receives source-owner review.
 - **Entire / SPN-02:** source-owned, sanitized evidence for architecture, implementation, runtime, reasoning, and result, including the required checkpoint/graph material; no Neatlogs evidence can fill this class.
-- **CFO.ai / SPN-03:** the actual business plan and owner-reviewed evidence for architecture, implementation, runtime, reasoning, and result; no placeholder or estimate can stand in for the plan.
+- **CFO.ai / SPN-03:** per `CLAIM-SPN-03-CFO-001`, an authentic plan is available as producer evidence at integration-evals revision 2 (`6420af494a5276f69c337f47dac3ad4c1854d524`, PR #24, merged as `f375fcf20584f5c98dbd4f3b69f884c52994224e`). Two decisions are recorded separately and in order: a relayed owner acceptance (a chat decision, not an independent human GitHub review), then a later independent Finance `REQUEST_CHANGES` `CFO-R2-001` because the generic export turns genuinely blank opening cash into zero. That finding is unresolved; no package-wide Finance approval or waiver exists, and the authoritative cost-intelligence export (issue 3) is pending. Availability and owner acceptance do not approve any CFO.ai use or financial claim, and the five-facet evidence and Finance/reliability review stay `PENDING`.
+  - Reviewer workbook `cfo-native-export.xlsx` SHA-256: `43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14`.
+  - Generic workbook `cfo-native-export-generic.xlsx` SHA-256: `969941bac6f07d9678bb04238f0d5167baab9956f5e320bb33b77841be809416`. The generic export is not an accepted editable forecast.
+  - Before any CFO.ai screen is recorded: name the exact revision and workbook hash on screen or in notes; keep every forecast labeled "hypothetical forecast"; show no credentials, private workspace or account data, customer data, or secrets; and never present the generic export as accepted. Do not state or compute financial figures here.
 - **Comparison / EVAL-02:** comparable baseline and candidate runs, a reviewed method, and pinned outputs before any comparative, timing, efficiency, or savings result appears.
 - **Privacy, rights, and accessibility:** format-specific source/derivative lineage, permission for the actual destination, sanitized evidence, redaction review, rendered pixel/text/metadata inspection, visible qualifiers, exact alt text/captions/transcript, and reviewer/date. Current mockups and the text-only canary do not pass media rights or pixel review.
 - **Brand and exact claims:** approved brand subset and candidate review; supervisor joins any proposed scene wording to the exact claim ledger and obtains source-owner and destination decisions. Any source, wording, evidence, crop, or destination change triggers review again.
 - **Submission details:** current organizer page, official X post URL, actual Discord cutoff, accountable submitter authorization, final team/name/project fields, public project-repository URL, public demo URL, and supporting evidence links. Verify those values immediately before submission.
+
+## Capture status and roles
+
+Agent capture is cancelled and stays stopped. Restarting any agent capture requires a separate, fresh, explicit authorization. The recorder and the submitter are human teammates, and no agent posts, uploads, or submits.
+
+SPN-01 and SPN-02 remain `PENDING`. Entire's static public source is available, which is source availability only and not runtime proof.
 
 ## Final capture sequence
 
@@ -43,7 +52,7 @@ Do not turn the rehearsal into a final demo until each item below has a pinned, 
 | Product behavior and product owner review | `BLOCKED` | Pinned runtime/evidence and owner decision |
 | SPN-01 Neatlogs | `PENDING` | Its own five-facet evidence and source-owner review |
 | SPN-02 Entire | `PENDING` | Its own five-facet checkpoint/graph evidence and source-owner review |
-| SPN-03 CFO.ai | `PENDING` | Actual plan, five-facet evidence, and Finance/reliability review |
+| SPN-03 CFO.ai | `PENDING` | Plan available at r2 (owner acceptance recorded); `CFO-R2-001` unresolved; five-facet evidence and Finance/reliability review still needed |
 | EVAL-02 comparable result | `PENDING` | Reproducible baseline/candidate data and reviewed method |
 | EVAL-04 privacy/redaction | `PENDING` | Sanitized, format-specific media review |
 | Brand, rights, accessibility, CTA | `PENDING` | Exact-source approvals, rendered checks, destination review |

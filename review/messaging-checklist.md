@@ -22,6 +22,15 @@ This is an executable review brief for MM-02. A checked item needs a source link
 - [ ] Reject unimplemented, unavailable, or unconfirmed targets and CTAs that imply an unsupported capability or purchase.
 - [ ] If a landing/application CTA is proposed, obtain product/landing route-owner confirmation of both the exact target and availability before approval.
 
+## X submission destination review (pending)
+
+Rows: `CLAIM-X-DEST-TEAM-001`, `CLAIM-X-DEST-PROJECT-001`, `CLAIM-X-DEST-REPO-001`. All three are `planned`/`pending`, sourced to the entry-contents list in marketing-material issue 22 (created 2026-10-11T19:31:01Z), a mutable issue record rather than an immutable revision.
+
+- [ ] Confirm each field matches the exact allowed wording in the ledger and that the project name keeps the qualifier “Project name only; product availability is unverified.”
+- [ ] The getticketstub.com route owner confirms the repository locator and that it is used as a locator only, not a product route or transaction CTA. `CLAIM-PRODUCT-NAME-001` stays scoped to concept artwork and is not extended.
+- [ ] Count the assembled quote-post against the 280-character limit using realistic maximum-length placeholders; the final composer check is a human step.
+- [ ] Submitter name and authorization, demo URL, the official neatlogs post URL and the Discord-governed cutoff stay bracketed/pending. Agents do not post.
+
 ## Required exercises
 
 - [ ] Reject “fully automated” capability wording.
@@ -31,6 +40,19 @@ This is an executable review brief for MM-02. A checked item needs a source link
 - [ ] Reject a CTA with missing target or unavailable/unconfirmed route.
 - [ ] Verify `--mode selected --select ASSET_ID` requires a nonempty, unique known selection and evaluates only its mapped copy, qualifier contexts, CTAs, and rights/lineage.
 - [ ] Verify `--mode submission --select ASSET_ID` additionally requires the inventory's named final outputs, product/EVAL/SPN claims and evidence, and brand/organizer gates. Unused internal guardrail rows and the synthetic canary are not global approval prerequisites.
+
+### Exercise execution record (MM-02-C)
+
+Independently re-executed by the Opus 5.5 coordinator in round 2 (not by the author of this change) against verified baseline `b7ff115`: `/usr/bin/python3 -B -m unittest -v` on six tests in `tests.test_collateral_validation.CollateralPolicyValidationTests`, all passed in 0.308s with a clean worktree afterwards.
+
+- `test_unsupported_automation_live_and_savings_copy_is_rejected` (three prohibited phrases)
+- `test_labeled_synthetic_copy_is_accepted_and_mapped_exactly` (labeled simulation)
+- `test_sponsor_evidence_classes_cannot_be_collapsed` (three sponsor classes)
+- `test_unavailable_route_cannot_be_approved_as_a_cta`
+- `test_selected_scope_rejects_empty_unknown_duplicate_and_unsafe_copy`
+- `test_submission_requires_explicit_assets_and_producer_gates`
+
+These tests also passed in the 109-test post-merge run at `b7ff115`. This record cites that result; it does not tick any box above, and owner-evidence and route-owner criteria (MM-02-A, MM-02-D) remain open.
 
 ## Current draft outcome
 

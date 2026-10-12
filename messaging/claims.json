@@ -2665,6 +2665,110 @@
         "Scene wording, source pin, associated claims, event page/cutoff, rights or intended destination changes.",
         "Before any external use, recheck source owner and independent review."
       ]
+    },
+    {
+      "id": "CLAIM-X-DEST-TEAM-001",
+      "kind": "submission_field",
+      "allowedWording": "Team: Jevelopers",
+      "prohibitedVariants": [
+        "Treat this field as a submitter identity, authorization, or approval to post.",
+        "Team: Jevelopers, a sponsor-verified entry."
+      ],
+      "audience": "Internal teammates preparing the X quote-post draft; not approved as external copy.",
+      "destination": "X quote-post entry field only (team); external posting and submission remain blocked and human-only.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "issues/22",
+        "revision": null,
+        "revisionKind": "upstream_issue_not_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22"
+      },
+      "evidenceReference": "MM-SUB-ISSUE-22-ENTRY-CONTENTS",
+      "evidenceClassification": "repository_owner_issue_text",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent wording review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account); the issue is a mutable record, not an immutable revision, and was read from a local copy of it.",
+        "This records team-name text only. The submitter name and authorization, the official neatlogs post URL and the Discord-governed cutoff are not supplied and stay pending; agents do not post.",
+        "A draft field is not submission readiness, eligibility, sponsor completion or publication permission."
+      ],
+      "reReviewTrigger": [
+        "Issue 22 entry contents change, or the team name is corrected by the repository owner.",
+        "The organizer changes the required submission fields or the official post is published."
+      ]
+    },
+    {
+      "id": "CLAIM-X-DEST-PROJECT-001",
+      "kind": "project_identifier",
+      "allowedWording": "Project: TicketStub",
+      "requiredQualifier": "Project name only; product availability is unverified.",
+      "prohibitedVariants": [
+        "TicketStub is live and available.",
+        "Use TicketStub now."
+      ],
+      "audience": "Internal teammates preparing the X quote-post draft; not approved as external copy.",
+      "destination": "X quote-post entry field only (project name); the project-name-only qualification must remain available in accompanying text or review notes. Does not extend CLAIM-PRODUCT-NAME-001, which stays scoped to concept artwork.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "issues/22",
+        "revision": null,
+        "revisionKind": "upstream_issue_not_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22"
+      },
+      "evidenceReference": "MM-SUB-ISSUE-22-ENTRY-CONTENTS",
+      "evidenceClassification": "repository_owner_issue_text",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; independent wording review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account); the issue is a mutable record, not an immutable revision.",
+        "The name does not imply an available or released application, a deployed route, a transaction, or any capability.",
+        "Product capability and availability remain governed by CLAIM-PRODUCT-CAPABILITY-001 (blocked). This row does not change that state."
+      ],
+      "reReviewTrigger": [
+        "Issue 22 entry contents or the project name change.",
+        "Product name, release status, or product-owner availability decision changes."
+      ]
+    },
+    {
+      "id": "CLAIM-X-DEST-REPO-001",
+      "kind": "project_repository_locator",
+      "allowedWording": "Repository: https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
+      "requiredQualifier": "Repository locator only; not a product route, transaction, or availability statement.",
+      "prohibitedVariants": [
+        "Use the app at this repository.",
+        "This link is a live product or checkout."
+      ],
+      "audience": "Internal teammates preparing the X quote-post draft; not approved as external copy.",
+      "destination": "X quote-post entry field only (public repository locator). Distinct from the repository-documentation CTAs, which point at the marketing-material README; the route owner is the getticketstub.com product repository.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "issues/22",
+        "revision": null,
+        "revisionKind": "upstream_issue_not_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22"
+      },
+      "evidenceReference": "MM-SUB-ISSUE-22-ENTRY-CONTENTS",
+      "evidenceClassification": "repository_owner_issue_text",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "getticketstub.com route owner; locator and availability confirmation pending. Marketing wording review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "Source is the entry-contents list in the body of marketing-material issue 22 (created 2026-10-11T19:31:01Z by the repository owner account), which states the repository must stay public. Marketing did not verify repository visibility, contents or hackathon-dated commits for this row.",
+        "A plain repository link is not a transaction CTA and does not show deployment, a customer route, payment, fulfillment or sponsor evidence.",
+        "The route owner (getticketstub.com) has not confirmed the locator for this use; the 280-character composer check and all posting stay human steps."
+      ],
+      "reReviewTrigger": [
+        "Issue 22 entry contents change, the repository is renamed, moved or made private.",
+        "The getticketstub.com route owner confirms or changes the locator, or the organizer changes the required repository field."
+      ]
     }
   ],
   "ctas": [
