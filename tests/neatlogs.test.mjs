@@ -40,6 +40,7 @@ const scratch = mkdtempSync(join(tmpdir(), "ticketstub-neatlogs-"));
 process.env.TICKETSTUB_DB = join(scratch, "ops.sqlite");
 process.env.TICKETSTUB_FILES = join(scratch, "files");
 delete process.env.TICKETSTUB_OPS_TELEMETRY;
+delete process.env.NEATLOGS_INGEST_KEY;
 delete process.env.NEATLOGS_API_KEY;
 
 const { neatlogsConfig, neatlogsSink, buildTrace, encodeTrace, rejectedSpans, neatlogsStats, resetNeatlogsStats } = await import("../src/server/observability/neatlogs.ts");
@@ -109,26 +110,31 @@ function decode(body) {
 
 test("config needs the key and accepts only the documented ingest origins", () => {
   assert.equal(neatlogsConfig({}), undefined);
-  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: "  " }), undefined);
-  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: KEY }).endpoint, "https://ingest.neatlogs.com");
-  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: KEY, NEATLOGS_ENDPOINT: "https://eu.ingest.neatlogs.com/" }).endpoint, "https://eu.ingest.neatlogs.com");
+  assert.equal(neatlogsConfig({ NEATLOGS_INGEST_KEY: "  " }), undefined);
+  assert.equal(neatlogsConfig({ NEATLOGS_INGEST_KEY: KEY }).endpoint, "https://ingest.neatlogs.com");
+  assert.equal(neatlogsConfig({ NEATLOGS_INGEST_KEY: KEY, NEATLOGS_ENDPOINT: "https://eu.ingest.neatlogs.com/" }).endpoint, "https://eu.ingest.neatlogs.com");
   for (const bad of ["http://ingest.neatlogs.com", "https://ingest.neatlogs.com.evil.example", "https://collector.example"]) {
-    assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: KEY, NEATLOGS_ENDPOINT: bad }), undefined, bad);
+    assert.equal(neatlogsConfig({ NEATLOGS_INGEST_KEY: KEY, NEATLOGS_ENDPOINT: bad }), undefined, bad);
   }
-  assert.deepEqual(neatlogsConfig({ NEATLOGS_API_KEY: KEY, TICKETSTUB_COMMIT_SHA: "0f9baa5" }).tags, ["ticketstub", "ticketstub@0f9baa5"]);
-  assert.deepEqual(neatlogsConfig({ NEATLOGS_API_KEY: KEY, TICKETSTUB_COMMIT_SHA: "not a sha" }).tags, ["ticketstub"]);
-  assert.ok(!JSON.stringify(neatlogsConfig({ NEATLOGS_API_KEY: KEY })).includes("neatlogs.com/v1"));
+  assert.deepEqual(neatlogsConfig({ NEATLOGS_INGEST_KEY: KEY, TICKETSTUB_COMMIT_SHA: "0f9baa5" }).tags, ["ticketstub", "ticketstub@0f9baa5"]);
+  assert.deepEqual(neatlogsConfig({ NEATLOGS_INGEST_KEY: KEY, TICKETSTUB_COMMIT_SHA: "not a sha" }).tags, ["ticketstub"]);
+  assert.ok(!JSON.stringify(neatlogsConfig({ NEATLOGS_INGEST_KEY: KEY })).includes("neatlogs.com/v1"));
+});
+
+test("the pre-rename NEATLOGS_API_KEY is still read, and NEATLOGS_INGEST_KEY wins when both are set", () => {
+  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: KEY }).apiKey, KEY);
+  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: "old-key-value", NEATLOGS_INGEST_KEY: KEY }).apiKey, KEY);
 });
 
 test("neatlogs is selected only with both the setting and the key; log keeps working alongside", () => {
   process.env.TICKETSTUB_OPS_TELEMETRY = "neatlogs";
   assert.equal(activeSink(), undefined, "no key: off");
-  process.env.NEATLOGS_API_KEY = KEY;
+  process.env.NEATLOGS_INGEST_KEY = KEY;
   assert.equal(activeSink().name, "neatlogs");
   assert.equal(activeSink(), activeSink(), "one sink per process holds open operations");
   process.env.TICKETSTUB_OPS_TELEMETRY = "log, neatlogs";
   assert.equal(activeSink().name, "log,neatlogs");
-  delete process.env.NEATLOGS_API_KEY;
+  delete process.env.NEATLOGS_INGEST_KEY;
   assert.equal(activeSink(), logSink, "log survives a missing key");
   process.env.TICKETSTUB_OPS_TELEMETRY = "https://collector.example";
   assert.equal(activeSink(), undefined);
@@ -253,17 +259,17 @@ test("a busy operation is truncated, not lost: the closing event always exports"
 
 test("quoted settings are accepted and problems are explained without values", async () => {
   const { neatlogsConfigProblem, resetNeatlogsNotes } = await import("../src/server/observability/neatlogs.ts");
-  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: `"${KEY}"`, NEATLOGS_ENDPOINT: "'https://ingest.neatlogs.com'" }).apiKey, KEY);
-  assert.equal(neatlogsConfigProblem({}), "NEATLOGS_API_KEY is not set");
-  assert.match(neatlogsConfigProblem({ NEATLOGS_API_KEY: KEY, NEATLOGS_ENDPOINT: "https://ingest.neatlogs.com/v1/traces" }), /NEATLOGS_ENDPOINT must be/);
-  assert.equal(neatlogsConfigProblem({ NEATLOGS_API_KEY: KEY }), undefined);
+  assert.equal(neatlogsConfig({ NEATLOGS_INGEST_KEY: `"${KEY}"`, NEATLOGS_ENDPOINT: "'https://ingest.neatlogs.com'" }).apiKey, KEY);
+  assert.equal(neatlogsConfigProblem({}), "NEATLOGS_INGEST_KEY is not set");
+  assert.match(neatlogsConfigProblem({ NEATLOGS_INGEST_KEY: KEY, NEATLOGS_ENDPOINT: "https://ingest.neatlogs.com/v1/traces" }), /NEATLOGS_ENDPOINT must be/);
+  assert.equal(neatlogsConfigProblem({ NEATLOGS_INGEST_KEY: KEY }), undefined);
   // The configuration warning is logged once and never contains the key.
   resetNeatlogsNotes();
   const lines = [];
   const warn = console.warn; console.warn = (l) => lines.push(l);
   try {
     process.env.TICKETSTUB_OPS_TELEMETRY = "neatlogs";
-    process.env.NEATLOGS_API_KEY = KEY;
+    process.env.NEATLOGS_INGEST_KEY = KEY;
     process.env.NEATLOGS_ENDPOINT = "https://collector.example";
     activeSink(); activeSink();
   } finally { console.warn = warn; }
@@ -298,7 +304,7 @@ test("the selected sinks are noted once, with names only, and quoted/semicolon l
   const lines = [];
   const info = console.info; console.info = (l) => lines.push(l);
   try {
-    process.env.NEATLOGS_API_KEY = KEY;
+    process.env.NEATLOGS_INGEST_KEY = KEY;
     process.env.TICKETSTUB_OPS_TELEMETRY = '"log; neatlogs"';
     assert.equal(activeSink().name, "log,neatlogs");
     activeSink();

@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/Jevelopers-neatHack-2026/agent-harness",
-  "commit": "4dc24f5ea66333c8e1ed4ff7822552f9af88b807",
+  "commit": "340f5abff0837c8fb8f7c9a5454aee58ee2071fb",
   "files": {
     "src/integrations/ticketstub/index.js": "774f452ee856e96c88408f5d258dedcf79518e64717c636422642c174965db2f",
     "src/integrations/ticketstub/index.d.ts": "8bccd82c0af444c8f09cd9f338b523d3f1ba93c471f1d30bbc2cce19b7c4867e",
-    "src/observability/private/neatlogs-config.js": "be4c04f58520549381a46e242f6137a3e384a0ce6cb9891e1cee08be46cfe370",
+    "src/observability/private/neatlogs-config.js": "b47ac380e070d110a2ec134fd23a99f71797eb53b1b43d8177de249faf139d71",
     "src/observability/private/neatlogs-live.js": "c816ebc500ed30274f7647bd753c792a010961a89f5c9ec27d7e8f1b375d3a2b",
     "src/observability/private/neatlogs-otlp.js": "a565f300990b3a99d475e4b27ce3ad98a350b9c3901c2b2191fec595cc243dab",
     "src/observability/private/neatlogs-delivery-queue.js": "dd23ac81425c53e69f7dfba39fd69c8403fd2f744747499c6a953dada2b83f01",
