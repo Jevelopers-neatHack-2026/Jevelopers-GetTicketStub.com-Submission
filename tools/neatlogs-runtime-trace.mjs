@@ -40,7 +40,7 @@ function usage(message) {
   process.stderr.write([
     'Usage: node tools/neatlogs-runtime-trace.mjs --mode <run|send-and-readback|drain>',
     '         --outbox <dir> --evidence <path> --component-revision <sha>',
-    '         [--env-file <path>] [--max-polls <n>] [--poll-interval-ms <ms>]',
+    '         [--env-file <path>] [--max-polls <n>] [--poll-interval-ms <ms>] [--recover]',
     ''
   ].join('\n'));
   process.exit(2);
@@ -143,6 +143,19 @@ function sanitizeBatch(batch) {
       expectedSpans: batch.send.expectedSpans ?? null,
       rejectedSpans: batch.send.rejectedSpans ?? null
     },
+    recovery: batch.recovery ? {
+      regeneratedFrom: batch.recovery.regeneratedFrom,
+      regeneratedTo: batch.recovery.regeneratedTo,
+      basis: batch.recovery.basis ?? null,
+      duplicateDeliveryRisk: batch.recovery.duplicateDeliveryRisk ?? null,
+      send: batch.recovery.send && {
+        status: batch.recovery.send.status,
+        httpStatus: batch.recovery.send.httpStatus ?? null,
+        attempts: batch.recovery.send.attempts ?? null,
+        expectedSpans: batch.recovery.send.expectedSpans ?? null,
+        rejectedSpans: batch.recovery.send.rejectedSpans ?? null
+      }
+    } : null,
     readback: batch.readback && {
       status: batch.readback.status,
       reasonCode: batch.readback.reasonCode ?? null,
@@ -162,6 +175,7 @@ function sanitizeBatch(batch) {
           finalizationStatus: read.finalizationStatus ?? null,
           spansCount: read.spansCount ?? null,
           markerStored: read.markerStored ?? null,
+          duplicateTraceIds: read.duplicateTraceIds ?? [],
           problems: read.problems
         }
       };
@@ -178,7 +192,8 @@ async function main() {
       'env-file': { type: 'string' },
       'component-revision': { type: 'string' },
       'max-polls': { type: 'string' },
-      'poll-interval-ms': { type: 'string' }
+      'poll-interval-ms': { type: 'string' },
+      recover: { type: 'boolean' }
     },
     strict: true
   });
@@ -244,6 +259,7 @@ async function main() {
       forbidden,
       send: true,
       readback: optIn.config.summary.readbackReady,
+      recover: values.recover === true,
       readbackOptions: options
     });
     evidence.batches = results.map(result => sanitizeBatch(result.batch ?? { state: result.state, records: [] }));

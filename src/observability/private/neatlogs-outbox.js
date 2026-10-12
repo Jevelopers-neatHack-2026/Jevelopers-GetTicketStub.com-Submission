@@ -11,6 +11,7 @@ import {
   deterministicNeatlogsIds,
   encodeNeatlogsExportRequest,
   NEATLOGS_LIVE_WORKFLOW_NAME,
+  nextNeatlogsGeneration,
   parseNeatlogsJson,
   planNeatlogsExport,
   validateNeatlogsTags
@@ -176,26 +177,36 @@ function serializablePlan(plan) {
  * Rebuilds the readback plan from the batch's validated records. IDs and the
  * canonical input are derived again rather than trusted from the file.
  */
-export function readbackPlanFromRecords(records, tags) {
+export function readbackPlanFromRecords(records, tags, generations = {}) {
   const validated = validateNeatlogsSourceRecords(records);
-  const traces = validated.map(record => Object.freeze({
-    ...deterministicNeatlogsIds(record.eventId, 0),
-    generation: 0,
-    priorTraceIds: Object.freeze([]),
-    sessionId: record.workflowId,
-    eventToken: record.eventId,
-    sequence: record.sequence,
-    revision: record.revision,
-    eventType: record.eventType,
-    fence: record.fence,
-    input: canonicalNeatlogsInput(record),
-    record
-  }));
+  const traces = validated.map(record => {
+    const generation = generations[record.sequence] ?? 0;
+    return Object.freeze({
+      ...deterministicNeatlogsIds(record.eventId, generation),
+      generation,
+      priorTraceIds: Object.freeze(Array.from({ length: generation },
+        (_, prior) => deterministicNeatlogsIds(record.eventId, prior).traceId)),
+      sessionId: record.workflowId,
+      eventToken: record.eventId,
+      sequence: record.sequence,
+      revision: record.revision,
+      eventType: record.eventType,
+      fence: record.fence,
+      input: canonicalNeatlogsInput(record),
+      record
+    });
+  });
   return Object.freeze({
     workflowName: NEATLOGS_LIVE_WORKFLOW_NAME,
     tags: validateNeatlogsTags(tags),
     traces: Object.freeze(traces)
   });
+}
+
+function storedGenerations(batch) {
+  const generations = {};
+  for (const trace of batch.plan?.traces ?? []) generations[trace.sequence] = trace.generation;
+  return generations;
 }
 
 /** Returns which forbidden strings (raw IDs, credentials) occur in the outbound body. */
@@ -234,6 +245,7 @@ export async function drainNeatlogsOutbox({
   forbidden = [],
   send = true,
   readback = false,
+  recover = false,
   fetch: fetchImpl,
   sendOptions = {},
   readbackOptions = {},
@@ -270,9 +282,65 @@ export async function drainNeatlogsOutbox({
         : RETRYABLE_SEND.has(result.status) ? 'pending_send' : result.status;
       persist();
     }
+    // Opt-in recovery, same semantics as the PR #38 verifier: only traces that
+    // were 404 for the whole bounded readback window are re-sent, once, under
+    // the next delivery generation. A delayed earlier generation can still
+    // appear, so the duplicate risk is recorded rather than hidden.
+    if (send && recover && batch.state === 'missing' && batch.plan) {
+      const missing = (batch.readback?.traces ?? []).filter(trace => trace.status === 'missing').map(trace => trace.traceId);
+      const envelope = await captureEnvelope(batch.records, captureTimeoutMs);
+      const fresh = planNeatlogsExport(envelope, { tags: batch.plan.tags });
+      const current = storedGenerations(batch);
+      // Put each trace back at its stored generation, then advance the missing ones by one.
+      const atCurrent = Object.freeze({ ...fresh, traces: Object.freeze(fresh.traces.map(trace => {
+        const generation = current[trace.sequence] ?? 0;
+        if (generation === 0) return trace;
+        return Object.freeze({
+          ...trace,
+          ...deterministicNeatlogsIds(trace.eventToken, generation),
+          generation,
+          priorTraceIds: Object.freeze(Array.from({ length: generation },
+            (_, prior) => deterministicNeatlogsIds(trace.eventToken, prior).traceId))
+        });
+      })) });
+      const wanted = atCurrent.traces.filter(trace => missing.includes(trace.traceId)).map(trace => trace.traceId);
+      if (wanted.length !== missing.length || wanted.length === 0) throw new NeatlogsOutboxError('RECOVERY_PLAN_MISMATCH');
+      const regenerated = nextNeatlogsGeneration(atCurrent, wanted);
+      const findings = outboundLeakFindings(regenerated, scan);
+      if (findings.length > 0) {
+        batch.state = 'blocked';
+        batch.recovery = { regeneratedFrom: wanted, regeneratedTo: [], send: { status: 'rejected', reasonCode: 'LEAK_GATE_FAILED', findings, attempts: 0 } };
+        persist();
+        results.push({ path, state: batch.state, batch });
+        continue;
+      }
+      const result = await sendNeatlogsPlan(config, regenerated, {
+        ...sendOptions, ...(fetchImpl ? { fetch: fetchImpl } : {})
+      });
+      const byOld = new Map(regenerated.traces.map((trace, index) => [wanted[index], trace]));
+      batch.recovery = {
+        regeneratedFrom: wanted,
+        regeneratedTo: regenerated.traces.map(trace => trace.traceId),
+        basis: 'NOT_OBSERVED_WITHIN_BOUNDED_POLL_WINDOW',
+        duplicateDeliveryRisk: 'PRIOR_GENERATION_MAY_APPEAR_LATER',
+        send: { ...result, sentAt: new Date().toISOString() }
+      };
+      if (result.status === 'receiver_accepted') {
+        batch.plan = {
+          ...batch.plan,
+          traces: batch.plan.traces.map(trace => {
+            const next = byOld.get(trace.traceId);
+            return next ? { ...trace, traceId: next.traceId, rootSpanId: next.rootSpanId,
+              markerSpanId: next.markerSpanId, generation: next.generation } : trace;
+          })
+        };
+        batch.state = 'receiver_accepted';
+      }
+      persist();
+    }
     if (readback && batch.state !== 'pending_send' && batch.state !== 'blocked'
         && batch.send?.status === 'receiver_accepted' && !TERMINAL_READBACK.has(batch.state)) {
-      const plan = readbackPlanFromRecords(batch.records, batch.plan?.tags ?? validatedTags);
+      const plan = readbackPlanFromRecords(batch.records, batch.plan?.tags ?? validatedTags, storedGenerations(batch));
       if (batch.plan && JSON.stringify(serializablePlan(plan).traces.map(t => t.traceId))
           !== JSON.stringify(batch.plan.traces.map(t => t.traceId))) {
         throw new NeatlogsOutboxError('PLAN_IDENTITY_MISMATCH');

@@ -57,7 +57,7 @@ function recordsIn(directory) {
 }
 
 // Fake ingest + Public API. Readback serves exactly what a record set derives to.
-function fakeNeatlogs({ ingestStatus = 200, tags = TAGS } = {}) {
+function fakeNeatlogs({ ingestStatus = 200, tags = TAGS, droppedIds = [], generations = () => ({}) } = {}) {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url: String(url), init });
@@ -68,9 +68,9 @@ function fakeNeatlogs({ ingestStatus = 200, tags = TAGS } = {}) {
       'content-type': 'application/json'
     });
     if (path === '/project') return ok({ id: PROJECT_ID, name: 'Test project' });
-    const plan = readbackPlanFromRecords(fakeNeatlogs.records, tags);
+    const plan = readbackPlanFromRecords(fakeNeatlogs.records, tags, generations());
     const match = /^\/traces\/([0-9a-f]{32})(\/spans(?:\/([0-9a-f]{16})\/payload)?)?$/.exec(path);
-    const trace = plan.traces.find(item => item.traceId === match?.[1]);
+    const trace = droppedIds.includes(match?.[1]) ? null : plan.traces.find(item => item.traceId === match?.[1]);
     if (!trace) return response(404, '{}', { 'content-type': 'application/problem+json' });
     if (!match[2]) {
       return ok({
@@ -251,6 +251,35 @@ describe('drain', () => {
     });
     assert.deepEqual(second.flatMap(result => result.batch.plan.traces.map(trace => trace.traceId)), firstIds);
     assert.ok(second.every(result => result.state === 'verified'));
+  });
+
+  test('opt-in recovery re-sends only a bounded-404 trace under the next generation', async () => {
+    const directory = copyOutbox('drain-recover');
+    fakeNeatlogs.records = recordsIn(directory);
+    const lost = readbackPlanFromRecords(fakeNeatlogs.records, TAGS).traces.at(-1).traceId;
+    let served = {};
+    const fake = fakeNeatlogs({ droppedIds: [lost], generations: () => served });
+    const first = await drainNeatlogsOutbox({
+      directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl, readback: true,
+      readbackOptions: { pollIntervalMs: 0, maxPolls: 2 }
+    });
+    assert.equal(first.at(-1).state, 'missing');
+    const sendsBefore = fake.calls.filter(call => call.url.endsWith('/v1/traces')).length;
+    // Without --recover nothing is re-sent.
+    await drainNeatlogsOutbox({ directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl });
+    assert.equal(fake.calls.filter(call => call.url.endsWith('/v1/traces')).length, sendsBefore);
+    served = { [fakeNeatlogs.records.at(-1).sequence]: 1 };
+    const second = await drainNeatlogsOutbox({
+      directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl, readback: true, recover: true,
+      readbackOptions: { pollIntervalMs: 0, maxPolls: 1 }
+    });
+    const batch = second.at(-1).batch;
+    assert.equal(second.at(-1).state, 'verified');
+    assert.deepEqual(batch.recovery.regeneratedFrom, [lost]);
+    assert.equal(batch.plan.traces.at(-1).generation, 1);
+    assert.notEqual(batch.plan.traces.at(-1).traceId, lost);
+    assert.equal(fake.calls.filter(call => call.url.endsWith('/v1/traces')).length, sendsBefore + 1);
+    assert.ok(second.slice(0, -1).every(result => result.state === 'verified'));
   });
 
   test('the leak gate blocks a batch before any request', async () => {

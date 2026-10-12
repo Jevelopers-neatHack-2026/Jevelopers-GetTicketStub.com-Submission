@@ -106,6 +106,7 @@ This is how a trace of a real harness workflow reaches Neatlogs. It is off by de
    - `outcome_unknown`, `not_accepted`, `aborted` and `not_configured` stay `pending_send`. A later drain resends the same deterministic IDs.
    - With `readback`, accepted batches are verified with `readbackNeatlogsPlan`. The plan is re-derived from the stored records, not trusted from the file. The resulting state (`verified`, `pending`, `missing`, `mismatch`, `readback_failed`) is persisted without the project UUID.
    - Tags are `agent-harness@<sha>`, `evidence:runtime` and `harness-mode:<mode>`. The drain refuses `evidence:synthetic`.
+   - With `recover` (`--recover` on the tool), a `missing` batch re-sends only its bounded-404 traces under the next delivery generation. This follows the verifier's recovery semantics: earlier IDs are kept as `priorTraceIds`, the duplicate risk is recorded, and there are at most 3 generations.
 5. **Mapper allowlist.** The SDK mapper now accepts every event type on the durable telemetry allowlist, including the `operations_work_*` types. A test asserts that the two lists are equal.
 
 The cursor now advances when the batch is durably in the outbox. "Sent, awaiting readback" is the batch file's state.
@@ -157,6 +158,7 @@ node tools/neatlogs-runtime-trace.mjs --mode send-and-readback --env-file .env -
   --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-live.json
 
 # Resume: send pending batches and read back accepted ones in an existing outbox.
+# Add --recover to re-send bounded-404 `missing` traces once under the next generation.
 node tools/neatlogs-runtime-trace.mjs --mode drain --env-file .env --outbox /tmp/neatlogs-outbox \
   --component-revision "$(git rev-parse HEAD)" --evidence /tmp/neatlogs-runtime-drain.json
 ```
