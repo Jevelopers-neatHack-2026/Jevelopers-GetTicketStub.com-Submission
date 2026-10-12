@@ -134,6 +134,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
 
   const landing = pinnedId ? (stubs.find((x) => x.id === pinnedId) ?? null) : null;
   const landingId = landing?.id;
+  const landingDate = landing?.event.dateISO ? formatDate(landing.event.dateISO) : "";
 
   // The landing: the pin presses in as the stub settles. Then the address drops its ?pinned so a reload is at rest.
   useEffect(() => {
@@ -435,9 +436,9 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
               type="button"
               className={s.landingBtn}
               data-lifted={lift?.id === landing.id ? "true" : undefined}
-              aria-label={`Lift ${landing.event.title}${landing.event.dateISO ? `, ${formatDate(landing.event.dateISO)}` : ""}`}
+              aria-label={`Lift ${landing.event.title}${landingDate ? `, ${landingDate}` : ""}`}
               aria-expanded={lift?.id === landing.id}
-              onClick={(e) => openLift(landing.id, e.detail === 0 ? "keyboard" : "pointer")}
+              onClick={(e) => landingId && openLift(landingId, e.detail === 0 ? "keyboard" : "pointer")}
             >
               <span aria-hidden="true" style={{ display: "contents" }}>
                 <StubView stub={landing} size="md" />
