@@ -21,6 +21,10 @@ class Docker:
     deadline: float
 
     @property
+    def environment(self) -> dict[str, str] | None:
+        return None
+
+    @property
     def executable(self) -> str:
         executable = shutil.which("docker")
         assert executable is not None
@@ -34,6 +38,7 @@ class Docker:
             check=True,
             capture_output=True,
             timeout=remaining,
+            env=self.environment,
         ).stdout
 
     def inspect(self, identity: str) -> Inspection:

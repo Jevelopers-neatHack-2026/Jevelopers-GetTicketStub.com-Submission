@@ -33,7 +33,7 @@ jobs:
       - run: uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
       - run: uv run integration-evals validate
       - name: Verify print source preparation and default-off runtime gates
-        run: uv run pytest component_tests/test_print_setup.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py component_tests/test_guarded_defaults.py --junitxml=reports/runs/verification/print-defaults-junit.xml
+        run: uv run pytest component_tests/test_print_setup.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py component_tests/test_guarded_defaults.py component_tests/test_guarded_compose_probe.py --junitxml=reports/runs/verification/print-defaults-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
@@ -178,7 +178,7 @@ jobs:
   print-guarded-protocol-development:
     if: github.event_name == 'workflow_dispatch' && inputs.guarded_print_protocol
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       UV_PYTHON_PREFERENCE: only-managed
       IE_PRINT_CONTAINER_PROTOTYPE: guarded-development
@@ -218,6 +218,9 @@ jobs:
           path: .guarded-contracts
           persist-credentials: false
       - run: mv .guarded-contracts "$IE_CONTRACT_SOURCE"
+      - name: Prepare the exact approved image with bounded setup-only retries
+        timeout-minutes: 10
+        run: bash component_tests/prepare-print-image.sh
       - name: Run all lifetime cases and the original owner protocol through the explicit test backend
         run: bash component_tests/guarded-print-ci.sh
       - name: Archive private staging without disposing unknown containers

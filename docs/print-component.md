@@ -188,9 +188,11 @@ Additional readonly mounts expose only fresh clean tracked evaluator/configurati
 and pinned print projections at their original paths, plus the verified Node
 archive directory. The original producer checkout and its Git metadata are not
 mounted into this backend. Only the single owned HOME/artifact root and canary diagnostic
-staging are writable host binds. Git configuration checks inspect key names only
-and reject credential header/helper keys. Guarded workflow preparation uses a
-fresh local clone instead of mounting the Actions checkout's Git metadata.
+staging are writable host binds. Each mounted checkout uses an owned shallow
+one-commit Git projection: exact canonical config, detached HEAD, fresh index and
+only the pinned commit/tree object closure. No remotes, headers, hooks, reflogs or
+original checkout metadata are copied. The backend rejects added metadata,
+credential-bearing config, side-directory symlinks, hardlinks and extra objects.
 Ownership changes are limited to the owned print clone and isolated HOME;
 escaping symlinks, hardlinks, alias roots and overlapping mounts are rejected first.
 The print clone's root ownership is restored only after proved namespace teardown.
@@ -198,15 +200,32 @@ The print clone's root ownership is restored only after proved namespace teardow
 Every invocation runs hostile guard/init signal, ptrace, FD and control-socket
 probes, a host-only read probe and a real denied network connection. A detached
 closed-stdio sibling occupies the same namespace as the original Node command.
-Additional SIGKILL tests pause the creator at Docker exec launch, attach and the
-real original owner awaiting its request. They inspect kernel pidfds for both
-live Docker clients, require their death and namespace termination within five
-seconds, and require an unrelated live sentinel to survive. These checkpoints
-explicitly do **not** claim death midway through producer compose after request
-delivery. Cancellation, original deadline and unreachable teardown tests preserve
+Additional SIGKILL tests pause the creator at Docker exec launch, attach, the
+real original owner awaiting its request, and an unfinished actual compose.
+The latter authenticates the original Node PID, stops it through its kernel pidfd,
+and uses a readonly observer as the same nonroot container user. An explicit SQLite
+read transaction must observe the original request-bound compose operation,
+pending attempt and its `execution_started` event; actual opened DB/WAL/SHM
+descriptors must match held nofollow source descriptors. DB/WAL size limits,
+query limits and the original absolute deadline bound this observation. Mapping
+existence or request delivery alone is insufficient. Tests inspect kernel pidfds
+for both Docker clients and the active original Node, require their death and
+namespace termination within five seconds, and require an unrelated sentinel to
+survive. This additional active-compose proof is required but has not yet run on
+hosted Linux. Cancellation, original deadline and unreachable teardown tests preserve
 errors. If termination/removal cannot be verified, the original HOME is renamed
 into root-owned quarantine without copying or publishing its response, and all
 unknown-container records remain intact for independent recovery.
+
+Owner-writable control receipts use bounded nonblocking nofollow regular-file
+reads. Stdin and stdout share one nonblocking selector and absolute deadline;
+a stalled Docker input consumer cannot postpone it. Guarded host Docker commands
+use a fixed sanitized environment, and Node receives its exact allowlisted
+environment. The development job separately prepares the unchanged image digest
+with three bounded 180-second pulls and records each failed attempt. Its 30-minute
+setup/test job budget leaves all 30-second owner and five-second reap bounds intact.
+The earlier combined run `38238794152` was cancelled during image pull before any
+guarded tests executed; it establishes neither success nor runtime failure.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,
@@ -217,3 +236,12 @@ checks do not establish those effects. The earlier nine-case Linux prototype pas
 at `f0937ad` and the separately failing legacy workflow remain historical facts,
 not proof for the new backend. No revised owner runtime profile, ART-03/ART-04
 acceptance, paid execution authority or product release is claimed.
+
+Promotion proposal: after independent whole-candidate security approval and a
+fresh Linux dispatch passes every original lifecycle/protocol assertion plus all
+new process, deadline, active-compose and custody assertions, select this explicit
+test backend in the normal `print-component` job. Keep the legacy nested
+Bubblewrap path as an explicit manual characterization with its historical red
+results. A subsequent ordinary PR check must pass the promoted combined component
+job before merge. Producer/domain profile approval and ART-03/ART-04/IE-05D owner
+acceptance remain separate holds; this candidate does not grant them.

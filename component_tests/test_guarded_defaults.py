@@ -1,6 +1,7 @@
 """Portable denial tests for the guarded invocation's pre-dispatch boundaries."""
 
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -8,18 +9,20 @@ from time import monotonic
 
 import pytest
 
+from component_tests.guarded_git import CONFIG, git_command, minimal_git, verify_git_projection
 from component_tests.guarded_print import (
     LIMIT,
     GuardedPrint,
     bounded_response,
+    owner_record,
     real_directory,
-    verify_git_keys,
     verify_tree,
 )
-from component_tests.test_retrieval import git
+from component_tests.test_retrieval import commit, git
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.execution import Settings
 from integration_evals.processes import ProcessSettings
+from integration_evals.validation import git_value
 
 
 def test_guarded_backend_is_explicit_and_refuses_unsupported_host(tmp_path: Path) -> None:
@@ -36,16 +39,80 @@ def test_guarded_backend_is_explicit_and_refuses_unsupported_host(tmp_path: Path
     assert not backend.evidence.exists()
 
 
-def test_credential_git_key_names_are_rejected_without_reading_values(tmp_path: Path) -> None:
-    git(tmp_path, ("init",))
-    verify_git_keys(tmp_path)
+def test_minimal_git_omits_credential_metadata_and_preserves_identity(tmp_path: Path) -> None:
+    _ = (tmp_path / "tracked").write_text("unrelated-history")
+    commit(tmp_path)
+    historical = git_value(tmp_path, "rev-parse", "HEAD")
+    _ = (tmp_path / "tracked").write_text("authorized-source")
+    commit(tmp_path)
+    revision = git_value(tmp_path, "rev-parse", "HEAD")
+    tree = git_value(tmp_path, "rev-parse", "HEAD^{tree}")
+    git(
+        tmp_path,
+        (
+            "config",
+            "--local",
+            "remote.origin.url",
+            "https://fictional:credential@example.invalid/repo",
+        ),
+    )
     git(
         tmp_path,
         ("config", "--local", "http.https://example.invalid/.extraheader", "SYNTHETIC_AUTH_MARKER"),
     )
-    with pytest.raises(AssertionError, match="Unexpected local Git key names") as rejected:
-        verify_git_keys(tmp_path)
-    assert "SYNTHETIC_AUTH_MARKER" not in str(rejected.value)
+    minimal_git(tmp_path)
+    assert git_value(tmp_path, "rev-parse", "HEAD") == revision
+    assert git_value(tmp_path, "rev-parse", "HEAD^{tree}") == tree
+    assert git_value(tmp_path, "status", "--porcelain") == ""
+    assert git_value(tmp_path, "ls-files") == "tracked"
+    assert (
+        historical.encode()
+        not in git_command(
+            tmp_path, ("cat-file", "--batch-all-objects", "--batch-check=%(objectname)")
+        ).splitlines()
+    )
+    assert (tmp_path / ".git/config").read_bytes() == CONFIG
+    assert not {"logs", "hooks", "FETCH_HEAD", "ORIG_HEAD"}.intersection(
+        path.name for path in (tmp_path / ".git").iterdir()
+    )
+    # A fake credential URL in the actual mounted projection is refused, not merely renamed.
+    git(
+        tmp_path,
+        (
+            "config",
+            "--local",
+            "remote.origin.url",
+            "https://fictional:credential@example.invalid/repo",
+        ),
+    )
+    with pytest.raises(InvalidArtifactError, match="unexpected_git_configuration") as rejected:
+        verify_git_projection(tmp_path, monotonic() + 1)
+    assert "fictional" not in str(rejected.value)
+    assert "credential" not in str(rejected.value)
+
+
+@pytest.mark.parametrize("replacement", ["symlink-directory", "hardlink", "metadata", "object"])
+def test_git_projection_rejects_metadata_and_object_expansion(
+    tmp_path: Path, replacement: str
+) -> None:
+    _ = (tmp_path / "tracked").write_text("source")
+    commit(tmp_path)
+    minimal_git(tmp_path)
+    metadata = tmp_path / ".git"
+    if replacement == "symlink-directory":
+        refs = metadata / "refs"
+        refs.rmdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        refs.symlink_to(outside, target_is_directory=True)
+    elif replacement == "hardlink":
+        os.link(metadata / "HEAD", tmp_path / "alias")
+    elif replacement == "metadata":
+        _ = (metadata / "FETCH_HEAD").write_bytes(b"unapproved")
+    else:
+        _ = git_command(tmp_path, ("hash-object", "-w", "--stdin"), payload=b"unapproved-object")
+    with pytest.raises(AssertionError):
+        verify_git_projection(tmp_path, monotonic() + 1)
 
 
 def test_symlink_ancestor_and_escape_refused(tmp_path: Path) -> None:
@@ -87,3 +154,57 @@ def test_stdout_capture_has_actual_byte_bound() -> None:
             if client.poll() is None:
                 client.kill()
             _ = client.wait(timeout=5)
+
+
+@pytest.mark.parametrize(
+    "name", ["owner-start.json", "detached-owner.json", "request-binding.json"]
+)
+@pytest.mark.parametrize("replacement", ["fifo", "oversized", "symlink"])
+def test_owner_receipt_replacements_fail_before_binding(
+    tmp_path: Path, name: str, replacement: str
+) -> None:
+    (tmp_path / "owner").mkdir()
+    path = tmp_path / "owner" / name
+    if replacement == "fifo":
+        os.mkfifo(path)
+    elif replacement == "oversized":
+        _ = path.write_bytes(b"x" * 65537)
+    else:
+        outside = tmp_path / "private-marker"
+        _ = outside.write_text("PRIVATE_TEST_MARKER")
+        path.symlink_to(outside)
+    started = monotonic()
+    with pytest.raises(InvalidArtifactError):
+        _ = owner_record(tmp_path, name, started + 1)
+    assert monotonic() - started < 1
+
+
+def test_owner_receipt_expired_deadline_refuses_regular_input(tmp_path: Path) -> None:
+    (tmp_path / "owner").mkdir()
+    _ = (tmp_path / "owner/request-binding.json").write_bytes(b"{}")
+    with pytest.raises(TimeoutError, match="Artifact read deadline expired"):
+        _ = owner_record(tmp_path, "request-binding.json", monotonic() - 1)
+
+
+def test_stalled_stdin_obeys_same_absolute_deadline() -> None:
+    parent, child = socket.socketpair()
+    with parent, child:
+        parent.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+        with subprocess.Popen(
+            (sys.executable, "-c", "import time; time.sleep(5)"),
+            stdin=child.fileno(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        ) as client:
+            writer = parent.makefile("wb")
+            client.stdin = writer
+            started = monotonic()
+            try:
+                with pytest.raises(subprocess.TimeoutExpired):
+                    _ = bounded_response(client, b"x" * 65536, started + 0.05)
+                assert monotonic() - started < 0.5
+            finally:
+                client.kill()
+                _ = client.wait(timeout=5)
+                writer.close()
+                client.stdin = None

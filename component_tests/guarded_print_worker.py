@@ -17,6 +17,7 @@ class WorkerConfiguration(Record):
     producer: Path
     evidence: Path
     daemon_failure: bool = False
+    compose_checkpoint: bool = False
 
 
 def main(configuration: WorkerConfiguration) -> int:
@@ -25,6 +26,7 @@ def main(configuration: WorkerConfiguration) -> int:
         configuration.evidence,
         checkpoints=True,
         daemon_failure=configuration.daemon_failure,
+        compose_checkpoint=configuration.compose_checkpoint,
     )
     invocation = Invocation(configuration.workspace, configuration.home, "replay", backend)
     with (configuration.home / "stdout").open("w+b") as output:

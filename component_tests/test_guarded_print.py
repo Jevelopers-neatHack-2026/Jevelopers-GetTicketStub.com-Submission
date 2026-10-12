@@ -6,17 +6,19 @@ import select
 import signal
 import subprocess
 import sys
+from collections.abc import Sequence
 from contextlib import ExitStack
 from pathlib import Path
 from time import monotonic
+from typing import IO
 
 import pytest
-from pydantic import TypeAdapter
+from pydantic import JsonValue, TypeAdapter
 
 from component_tests.container_driver import Checkpoint, driver
 from component_tests.container_pidfd import open_pidfd
 from component_tests.container_reap import recover
-from component_tests.container_records import Configuration
+from component_tests.container_records import Configuration, Observation
 from component_tests.guarded_print import GuardedPrint, PrintDocker, own_tree
 from component_tests.guarded_print_worker import WorkerConfiguration
 from component_tests.print_workspace import workspace_at
@@ -26,6 +28,7 @@ from component_tests.test_print import (
 from component_tests.test_print import (
     verified_print_workspace as original_workspace_fixture,
 )
+from integration_evals.artifacts import read_bytes
 
 verified_print_workspace = original_workspace_fixture
 test_print_protocol = original_protocol_test
@@ -59,8 +62,62 @@ def advance(process: subprocess.Popen[bytes], stage: str) -> None:
         process.stdin.flush()
 
 
+def new_home(root: Path) -> Path:
+    home = (root / "home").resolve()
+    home.mkdir(mode=0o700)
+    (home / "artifacts").mkdir()
+    return home
+
+
+def assert_active_compose(directory: Path) -> int:
+    active = TypeAdapter(dict[str, JsonValue]).validate_json(
+        read_bytes(directory / "active-compose.json")
+    )
+    assert active["request_delivered"] is True
+    attempt = TypeAdapter(dict[str, JsonValue]).validate_python(active["attempt"])
+    assert attempt["pending"] is True
+    assert attempt["outcome"] is None
+    assert attempt["execution_started_events"] == 1
+    assert attempt["operation_name"] == "composeArtifact"
+    assert attempt["snapshot"] == "stopped-owner-read-transaction-bound-db-wal-shm"
+    owner = Observation.model_validate(active["host_owner"])
+    assert owner.status["State"].split()[0] == "T"
+    return owner.pid
+
+
+def death_descriptors(directory: Path, stage: str, handles: ExitStack) -> Sequence[IO[bytes]]:
+    observed = TypeAdapter(dict[str, list[int] | str]).validate_json(
+        read_bytes(directory / "live-clients.json", max_bytes=65536)
+    )
+    pids = TypeAdapter(list[int]).validate_python(observed["pids"])
+    assert len(pids) == 2
+    if stage == "compose-active":
+        pids.append(assert_active_compose(directory))
+    descriptors = [
+        handles.enter_context(os.fdopen(open_pidfd(pid), "rb", buffering=0)) for pid in pids
+    ]
+    assert all(not os.get_inheritable(fd.fileno()) for fd in descriptors)
+    assert not select.select(descriptors, [], [], 0)[0]
+    _ = (directory / "exec-pidfds.json").write_text(
+        json.dumps(
+            [
+                {
+                    "pid": pid,
+                    "target": str(Path(f"/proc/self/fd/{fd.fileno()}").readlink()),
+                    "fdinfo": read_bytes(
+                        Path(f"/proc/self/fdinfo/{fd.fileno()}"), max_bytes=65536
+                    ).decode(),
+                    "inheritable": os.get_inheritable(fd.fileno()),
+                }
+                for pid, fd in zip(pids, descriptors, strict=True)
+            ]
+        )
+    )
+    return descriptors
+
+
 @pytest.mark.parametrize(
-    "stage", ["exec-client-launched", "exec-attached", "owner-awaiting-request"]
+    "stage", ["exec-client-launched", "exec-attached", "owner-awaiting-request", "compose-active"]
 )
 def test_actual_owner_creator_death(
     verified_print_workspace: Path, tmp_path: Path, stage: str
@@ -68,15 +125,14 @@ def test_actual_owner_creator_death(
     # Given an independent sentinel and a fresh clone containing the original owner command.
     assert verified_print_workspace.is_dir()
     workspace = workspace_at((tmp_path / "workspace").resolve(), browser_in_container=True)
-    home = (tmp_path / "home").resolve()
-    home.mkdir()
-    (home / "artifacts").mkdir()
+    home = new_home(tmp_path)
     evidence = Path(os.environ["IE_PRINT_EVIDENCE"]) / "exec-deaths" / stage
     config = WorkerConfiguration(
         workspace=workspace,
         home=home,
         producer=Path(os.environ["IE_PRINT_SOURCE"]),
         evidence=evidence,
+        compose_checkpoint=stage == "compose-active",
     )
     configuration = tmp_path / "worker.json"
     _ = configuration.write_text(config.model_dump_json())
@@ -93,36 +149,14 @@ def test_actual_owner_creator_death(
                 directories = tuple(evidence.glob("ie-lifetime-*"))
                 assert len(directories) == 1
                 directory = directories[0]
-                observed = TypeAdapter(dict[str, list[int] | str]).validate_json(
-                    (directory / "live-clients.json").read_bytes()
-                )
-                pids = TypeAdapter(list[int]).validate_python(observed["pids"])
-                assert len(pids) == 2
-                descriptors = [
-                    handles.enter_context(os.fdopen(open_pidfd(pid), "rb", buffering=0))
-                    for pid in pids
-                ]
-                _ = (directory / "exec-pidfds.json").write_text(
-                    json.dumps(
-                        [
-                            {
-                                "pid": pid,
-                                "target": str(Path(f"/proc/self/fd/{fd.fileno()}").readlink()),
-                                "fdinfo": Path(f"/proc/self/fdinfo/{fd.fileno()}").read_text(),
-                                "inheritable": os.get_inheritable(fd.fileno()),
-                            }
-                            for pid, fd in zip(pids, descriptors, strict=True)
-                        ]
-                    )
-                )
-                assert all(not os.get_inheritable(fd.fileno()) for fd in descriptors)
+                descriptors = death_descriptors(directory, stage, handles)
                 before = monotonic()
                 # When SIGKILL closes this creator's sole kernel lease endpoint.
                 process.kill()
                 assert process.wait(timeout=5) == -signal.SIGKILL
                 for descriptor in descriptors:
                     readable, _, _ = select.select([descriptor], [], [], 5)
-                    assert readable, "Docker exec/attach client survived creator death"
+                    assert readable, "Authenticated owner or Docker client survived creator death"
                 lifetime = Configuration.model_validate_json(
                     (directory / "configuration.json").read_bytes()
                 )
@@ -151,7 +185,7 @@ def test_actual_owner_creator_death(
                             "full_id": final.Id,
                             "sentinel_id": live.Id,
                             "elapsed_seconds": monotonic() - before,
-                            "owner_request_delivered": False,
+                            "owner_request_delivered": stage == "compose-active",
                             "artifact_custody": "retained-original-home-after-proved-stop",
                         }
                     )
@@ -172,9 +206,7 @@ def test_actual_owner_interruption_preserves_custody(
 ) -> None:
     assert verified_print_workspace.is_dir()
     workspace = workspace_at((tmp_path / "workspace").resolve(), browser_in_container=True)
-    home = (tmp_path / "home").resolve()
-    home.mkdir()
-    (home / "artifacts").mkdir()
+    home = new_home(tmp_path)
     evidence = Path(os.environ["IE_PRINT_EVIDENCE"]) / "exec-interruptions" / operation
     config = WorkerConfiguration(
         workspace=workspace,

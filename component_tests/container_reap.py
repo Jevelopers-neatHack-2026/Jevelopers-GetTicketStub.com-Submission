@@ -50,6 +50,7 @@ def finish(docker: Docker, identity: str | None, *, completed: bool = False) -> 
                 check=True,
                 capture_output=True,
                 timeout=1,
+                env=docker.environment,
             )
         _ = recover(docker, identity, completed=completed)
     except (AssertionError, OSError, subprocess.SubprocessError, ValueError) as error:

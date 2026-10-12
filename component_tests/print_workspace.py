@@ -4,6 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
+from component_tests.guarded_git import minimal_git
 from component_tests.test_retrieval import commit, git
 from integration_evals.artifacts import load_record
 from integration_evals.contract_records import ContractRuntime
@@ -60,6 +61,8 @@ def workspace_at(root: Path, *, browser_in_container: bool = False) -> Path:
         if name == "print-production":
             for generated in ("dist", "node_modules"):
                 _ = shutil.copytree(source / generated, destination / generated, symlinks=True)
+            if browser_in_container:
+                minimal_git(destination)
     runtime = load_record(Path(os.environ["IE_PRINT_RUNTIME"]), ContractRuntime)
     config = (
         PrintConfiguration(
@@ -74,5 +77,7 @@ def workspace_at(root: Path, *, browser_in_container: bool = False) -> Path:
         config.model_dump_json(indent=2), encoding="utf-8"
     )
     commit(evaluator)
+    if browser_in_container:
+        minimal_git(evaluator)
     prepare(root, runtime, root / "assembly.json")
     return root

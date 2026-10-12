@@ -58,28 +58,41 @@ class PrintConfiguration(Record):
     renderer_image: str
 
 
-def verify_source(repository: Path, producer: Path) -> PrintProfile:
+def verify_source(
+    repository: Path, producer: Path, *, deadline: float | None = None
+) -> PrintProfile:
     """Check exact source, all declared bytes, original payload and metadata joins."""
-    profile = load_record(repository / PROFILE_PATH, PrintProfile)
+    profile = PrintProfile.model_validate_json(
+        read_bytes(repository / PROFILE_PATH, deadline=deadline)
+    )
     if (
-        git_value(producer, "rev-parse", "HEAD"),
-        git_value(producer, "rev-parse", "HEAD^{tree}"),
+        git_value(producer, "rev-parse", "HEAD", deadline=deadline),
+        git_value(producer, "rev-parse", "HEAD^{tree}", deadline=deadline),
     ) != (profile.revision, profile.tree):
         fail("print_source_pin_mismatch", "print-production")
     for name, expected in profile.source_files.items():
-        if digest(read_bytes(confined_path(producer, name))) != expected:
+        if digest(read_bytes(confined_path(producer, name), deadline=deadline)) != expected:
             fail("print_source_digest_mismatch", name)
     fixtures = producer / "tests/fixtures/integration-evals/v1"
-    suite = load_record(repository / "scenarios/suite.json", Suite)
+    suite = Suite.model_validate_json(
+        read_bytes(repository / "scenarios/suite.json", deadline=deadline)
+    )
     case = next(case for case in suite.cases if case.id == "print-invalid")
-    if load_record(fixtures / "case.json", Case) != case:
+    if Case.model_validate_json(read_bytes(fixtures / "case.json", deadline=deadline)) != case:
         fail("print_case_projection_mismatch", case.id)
-    catalog = load_record(repository / "fixtures/catalog.json", Catalog)
+    catalog = Catalog.model_validate_json(
+        read_bytes(repository / "fixtures/catalog.json", deadline=deadline)
+    )
     original = next(item for item in catalog.fixtures if item.id == "asset-negative")
-    if load_record(fixtures / "original-metadata.json", Fixture) != original:
+    if (
+        Fixture.model_validate_json(
+            read_bytes(fixtures / "original-metadata.json", deadline=deadline)
+        )
+        != original
+    ):
         fail("print_fixture_metadata_mismatch", original.id)
-    if read_bytes(repository / "fixtures" / original.path) != read_bytes(
-        fixtures / "asset-negative.txt"
+    if read_bytes(repository / "fixtures" / original.path, deadline=deadline) != read_bytes(
+        fixtures / "asset-negative.txt", deadline=deadline
     ):
         fail("print_original_payload_mismatch", original.id)
     return profile

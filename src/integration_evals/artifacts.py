@@ -7,6 +7,7 @@ import os
 import re
 import stat
 from pathlib import Path
+from time import monotonic
 from typing import Final
 from urllib.parse import parse_qsl, urlsplit
 
@@ -49,8 +50,18 @@ def confined_path(root: Path, relative: str) -> Path:
     return candidate
 
 
-def read_bytes(path: Path) -> bytes:
+def _read_deadline(deadline: float | None) -> None:
+    """Reject an expired caller-owned read budget without exposing the input path."""
+    if deadline is not None and monotonic() >= deadline:
+        raise TimeoutError(errno.ETIMEDOUT, "Artifact read deadline expired")
+
+
+def read_bytes(path: Path, *, max_bytes: int | None = None, deadline: float | None = None) -> bytes:
     """Open without blocking or following links, then bound the bytes actually read."""
+    limit = MAX_ARTIFACT_BYTES if max_bytes is None else max_bytes
+    if limit <= 0:
+        fail("invalid_artifact_byte_limit", path.name)
+    _read_deadline(deadline)
     flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(path, flags)
@@ -62,8 +73,9 @@ def read_bytes(path: Path) -> bytes:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             fail("non_regular_artifact", path.name)
         chunks: list[bytes] = []
-        remaining = MAX_ARTIFACT_BYTES + 1
+        remaining = limit + 1
         while remaining > 0:
+            _read_deadline(deadline)
             chunk = os.read(descriptor, min(remaining, 1024 * 1024))
             if not chunk:
                 break
@@ -73,6 +85,7 @@ def read_bytes(path: Path) -> bytes:
         os.close(descriptor)
     if remaining <= 0:
         fail("oversized_artifact", path.name)
+    _read_deadline(deadline)
     return b"".join(chunks)
 
 

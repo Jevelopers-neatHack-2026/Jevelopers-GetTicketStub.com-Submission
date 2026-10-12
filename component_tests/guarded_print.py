@@ -7,6 +7,7 @@ import shutil
 import socket
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic, sleep
@@ -28,9 +29,11 @@ from component_tests.container_records import (
     Record,
     require_role,
 )
-from integration_evals.artifacts import digest
+from component_tests.guarded_active import stop_active
+from component_tests.guarded_git import verify_git_projection
+from integration_evals.artifacts import digest, read_bytes
 from integration_evals.contracts import runtime_digest
-from integration_evals.errors import fail
+from integration_evals.errors import InvalidArtifactError, fail
 from integration_evals.print_setup import PrintProfile, verify_source
 from integration_evals.processes import ProcessSettings
 
@@ -56,31 +59,6 @@ def real_directory(path: Path) -> Path:
     assert path.resolve(strict=True) == path
     assert path.is_dir()
     return path
-
-
-def verify_git_keys(path: Path) -> None:
-    """Inspect only local Git key names; credential-bearing keys prohibit mounting."""
-    executable = shutil.which("git")
-    assert executable is not None
-    result = subprocess.run(  # noqa: S603 - fixed key-name-only Git query
-        (executable, "-C", str(path), "config", "--local", "--name-only", "--list"),
-        check=True,
-        capture_output=True,
-        timeout=5,
-    )
-    allowed = {
-        "core.repositoryformatversion",
-        "core.filemode",
-        "core.bare",
-        "core.logallrefupdates",
-        "core.ignorecase",
-        "core.precomposeunicode",
-        "remote.origin.url",
-        "remote.origin.fetch",
-        "branch.main.remote",
-        "branch.main.merge",
-    }
-    assert set(result.stdout.decode().splitlines()) <= allowed, "Unexpected local Git key names"
 
 
 def verify_tree(path: Path) -> None:
@@ -109,6 +87,11 @@ class PrintDocker(Docker):
     repository: Path
     home: Path
 
+    @property
+    @override
+    def environment(self) -> dict[str, str]:
+        return {"PATH": "/usr/bin:/bin", "HOME": str(self.configuration.directory)}
+
     @override
     def mounts(self) -> tuple[tuple[Path, str, bool], ...]:
         base = tuple(mount for mount in Docker.mounts(self) if mount[1] != "/producer")
@@ -122,6 +105,12 @@ class PrintDocker(Docker):
             (self.repository, str(self.repository), False),
             (self.home, str(self.home), True),
         )
+
+
+def owner_record(directory: Path, name: str, deadline: float) -> bytes:
+    """Bound every owner-writable control receipt before parsing or host binding."""
+    assert name in {"owner-start.json", "detached-owner.json", "request-binding.json"}
+    return read_bytes(directory / "owner" / name, max_bytes=65536, deadline=deadline)
 
 
 class PrintOwnerReceipt(Record):
@@ -142,7 +131,7 @@ def bind_print_owner(
     expected_environment: dict[str, str],
 ) -> None:
     raw = PrintOwnerReceipt.model_validate_json(
-        (docker.configuration.directory / "owner/owner-start.json").read_bytes()
+        owner_record(docker.configuration.directory, "owner-start.json", docker.deadline)
     )
     receipt = raw.owner
     top = docker.run(("top", identity, "-eo", "pid"))
@@ -156,18 +145,30 @@ def bind_print_owner(
     require_role(owner, docker.configuration.owner)
     require_role(receipt, docker.configuration.owner)
     guard = GuardBinding.model_validate_json(
-        (docker.configuration.directory / "guard-binding.json").read_bytes()
+        read_bytes(
+            docker.configuration.directory / "guard-binding.json",
+            max_bytes=65536,
+            deadline=docker.deadline,
+        )
     )
     assert owner.namespaces == receipt.namespaces == guard.host_guard.namespaces
     assert owner.cgroup == guard.host_guard.cgroup
     process = Path(f"/proc/{owner.pid}")
-    argv = tuple(part.decode() for part in (process / "cmdline").read_bytes().split(b"\0") if part)
+    argv = tuple(
+        part.decode()
+        for part in read_bytes(
+            process / "cmdline", max_bytes=65536, deadline=docker.deadline
+        ).split(b"\0")
+        if part
+    )
     assert argv == command
     executable = str((process / "exe").readlink())
     assert executable == command[0]
     environment = dict(
         part.decode().split("=", 1)
-        for part in (process / "environ").read_bytes().split(b"\0")
+        for part in read_bytes(
+            process / "environ", max_bytes=65536, deadline=docker.deadline
+        ).split(b"\0")
         if part
     )
     assert environment == expected_environment
@@ -190,30 +191,73 @@ def bind_print_owner(
     )
 
 
-def bounded_response(client: subprocess.Popen[bytes], payload: bytes, deadline: float) -> bytes:
+@dataclass(slots=True)
+class Transfer:
+    client: subprocess.Popen[bytes]
+    payload: bytes
+    selector: selectors.BaseSelector
+    written: int = 0
+    output: bytearray = field(default_factory=bytearray)
+    after_input: Callable[[], None] | None = None
+
+    def ready(self, descriptor: int) -> None:
+        assert self.client.stdout is not None
+        if descriptor == self.client.stdout.fileno():
+            part = os.read(descriptor, 65536)
+            if not part:
+                _ = self.selector.unregister(descriptor)
+            else:
+                assert len(self.output) + len(part) <= LIMIT, "Owner stdout exceeded capture limit"
+                self.output.extend(part)
+            return
+        assert self.client.stdin is not None
+        self.written += os.write(descriptor, self.payload[self.written :])
+        if self.written == len(self.payload):
+            _ = self.selector.unregister(descriptor)
+            self.client.stdin.close()
+            self.client.stdin = None
+            if self.after_input is not None:
+                self.after_input()
+
+
+def bounded_response(
+    client: subprocess.Popen[bytes],
+    payload: bytes,
+    deadline: float,
+    *,
+    after_input: Callable[[], None] | None = None,
+) -> bytes:
+    """Forward request and bounded response concurrently under one absolute deadline."""
     assert client.stdin is not None
     assert client.stdout is not None
     assert len(payload) <= 65536
-    _ = client.stdin.write(payload)
-    client.stdin.close()
-    client.stdin = None
-    output = bytearray()
+    os.set_blocking(client.stdin.fileno(), False)
+    os.set_blocking(client.stdout.fileno(), False)
     with selectors.DefaultSelector() as selector:
+        transfer = Transfer(client, payload, selector, after_input=after_input)
         _ = selector.register(client.stdout, selectors.EVENT_READ)
-        while True:
+        if payload:
+            _ = selector.register(client.stdin, selectors.EVENT_WRITE)
+        else:
+            client.stdin.close()
+            client.stdin = None
+        while selector.get_map():
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(client.args, 30)
             ready = selector.select(remaining)
             if not ready:
                 raise subprocess.TimeoutExpired(client.args, 30)
-            part = os.read(client.stdout.fileno(), 65536)
-            if not part:
-                break
-            assert len(output) + len(part) <= LIMIT, "Owner stdout exceeded capture limit"
-            output.extend(part)
-    _ = client.wait(timeout=max(0.001, deadline - monotonic()))
-    return bytes(output)
+            for key, _ in ready:
+                try:
+                    transfer.ready(key.fd)
+                except BlockingIOError:
+                    continue
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(client.args, 30)
+    _ = client.wait(timeout=remaining)
+    return bytes(transfer.output)
 
 
 def wait_owner(client: subprocess.Popen[bytes], directory: Path, deadline: float) -> None:
@@ -238,6 +282,7 @@ class GuardedPrint:
     evidence: Path
     checkpoints: bool = False
     daemon_failure: bool = False
+    compose_checkpoint: bool = False
 
     def prepare(
         self, command: tuple[str, ...], settings: ProcessSettings, deadline: float
@@ -258,8 +303,8 @@ class GuardedPrint:
             for i, a in enumerate(roots)
             for b in roots[i + 1 :]
         )
-        profile = verify_source(repository, producer)
-        assert verify_source(repository, checkout) == profile
+        profile = verify_source(repository, producer, deadline=deadline)
+        assert verify_source(repository, checkout, deadline=deadline) == profile
         node = producer / "out/toolchain/node-v24.21.0-linux-x64/bin/node"
         allowed = (
             (str(node), "dist/scripts/integration-evals/cli.js", "run"),
@@ -281,8 +326,7 @@ class GuardedPrint:
         configuration = Path(config_path)
         assert configuration.resolve(strict=True) == configuration
         assert configuration.is_relative_to(repository) or configuration.is_relative_to(home)
-        assert configuration.is_file()
-        assert configuration.stat().st_size <= LIMIT
+        configuration_bytes = read_bytes(configuration, max_bytes=LIMIT, deadline=deadline)
         self.evidence.mkdir(parents=True, exist_ok=True)
         evidence = real_directory(self.evidence)
         name = "ie-lifetime-" + uuid4().hex
@@ -296,8 +340,8 @@ class GuardedPrint:
         assert not any(
             evidence.is_relative_to(root) or root.is_relative_to(evidence) for root in roots
         )
-        for source in (producer, checkout, repository):
-            verify_git_keys(source)
+        for source in (checkout, repository):
+            verify_git_projection(source, deadline)
         verify_tree(checkout)
         verify_tree(home)
         prepare(config)
@@ -305,14 +349,26 @@ class GuardedPrint:
             json.dumps(
                 {
                     "request_sha256": digest(settings.payload),
-                    "configuration_sha256": digest(configuration.read_bytes()),
-                    "owner_script_sha256": digest((checkout / command[1]).read_bytes()),
+                    "configuration_sha256": digest(configuration_bytes),
+                    "owner_script_sha256": digest(
+                        read_bytes(checkout / command[1], max_bytes=LIMIT, deadline=deadline)
+                    ),
                     "source_files": profile.source_files,
                     "backend_sources": {
-                        name: digest((Path(__file__).resolve().parents[1] / name).read_bytes())
+                        name: digest(
+                            read_bytes(
+                                Path(__file__).resolve().parents[1] / name,
+                                max_bytes=LIMIT,
+                                deadline=deadline,
+                            )
+                        )
                         for name in (
                             "component_tests/guarded_print.py",
                             "component_tests/guarded_owner.py",
+                            "component_tests/guarded_git.py",
+                            "src/integration_evals/artifacts.py",
+                            "src/integration_evals/validation.py",
+                            "src/integration_evals/print_setup.py",
                             "src/integration_evals/processes.py",
                             "src/integration_evals/owner.py",
                             "src/integration_evals/execution.py",
@@ -324,13 +380,12 @@ class GuardedPrint:
         )
         own_tree(checkout, config.owner.uid, config.owner.gid)
         own_tree(home, config.owner.uid, config.owner.gid)
-        _ = shutil.copyfile(
-            Path(__file__).with_name("guarded_owner.py"), config.directory / "code/guarded_owner.py"
-        )
+        for name in ("guarded_owner.py", "guarded_compose_probe.py"):
+            _ = shutil.copyfile(Path(__file__).with_name(name), config.directory / "code" / name)
         _ = (config.directory / "code-hashes.json").write_text(
             json.dumps(
                 {
-                    path.name: digest(path.read_bytes())
+                    path.name: digest(read_bytes(path, max_bytes=LIMIT, deadline=deadline))
                     for path in (config.directory / "code").iterdir()
                 }
             )
@@ -375,6 +430,7 @@ class GuardedPrint:
                 (docker.executable, *docker.create_arguments()),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
+                env=docker.environment,
             )
             state.clients.append(creation)
             created, _ = creation.communicate(timeout=max(0.001, deadline - monotonic()))
@@ -386,6 +442,7 @@ class GuardedPrint:
                 (docker.executable, "start", "--attach", state.identity),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=docker.environment,
             )
             state.clients.append(started)
             with armed_lease(docker, server, state.identity) as (lease, receipt):
@@ -418,6 +475,7 @@ class GuardedPrint:
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
+                    env=docker.environment,
                 )
                 state.clients.append(client)
                 self.event("exec-client-launched", docker, state, client.pid)
@@ -428,14 +486,25 @@ class GuardedPrint:
                     docker,
                     state.identity,
                     OwnerReceipt.model_validate_json(
-                        (config.directory / "owner/detached-owner.json").read_bytes()
+                        owner_record(config.directory, "detached-owner.json", deadline)
                     ),
                 )
                 self.event("owner-awaiting-request", docker, state, client.pid)
-                state.output = bounded_response(client, settings.payload, deadline)
+                callback = (
+                    (
+                        lambda: self.compose_active(
+                            docker, state, client.pid, environment["IE_NAMESPACE"]
+                        )
+                    )
+                    if self.compose_checkpoint
+                    else None
+                )
+                state.output = bounded_response(
+                    client, settings.payload, deadline, after_input=callback
+                )
                 state.exit_code = client.returncode
                 binding = TypeAdapter(dict[str, JsonValue]).validate_json(
-                    (config.directory / "owner/request-binding.json").read_bytes()
+                    owner_record(config.directory, "request-binding.json", deadline)
                 )
                 assert binding == {
                     "sha256": digest(settings.payload),
@@ -443,6 +512,14 @@ class GuardedPrint:
                 }
                 lease.shutdown(socket.SHUT_RDWR)
             assert started.wait(timeout=max(0.001, deadline - monotonic())) == 0
+
+    def compose_active(
+        self, docker: PrintDocker, state: InvocationState, client_pid: int, namespace: str
+    ) -> None:
+
+        assert state.identity is not None
+        stop_active(docker, state.identity, namespace, docker.home)
+        self.event("compose-active", docker, state, client_pid)
 
     def __call__(self, command: tuple[str, ...], settings: ProcessSettings) -> int:
         docker, environment, profile = self.prepare(
@@ -459,6 +536,7 @@ class GuardedPrint:
             OSError,
             subprocess.SubprocessError,
             ValueError,
+            InvalidArtifactError,
             KeyboardInterrupt,
         ) as error:
             failure = error
@@ -473,7 +551,11 @@ class GuardedPrint:
                 "command": command,
                 "request_sha256": digest(settings.payload),
                 "pre_dispatch_sha256": digest(
-                    (config.directory / "pre-dispatch.json").read_bytes()
+                    read_bytes(
+                        config.directory / "pre-dispatch.json",
+                        max_bytes=65536,
+                        deadline=reaper.deadline,
+                    )
                 ),
                 "source_revision": profile.revision,
                 "source_tree": profile.tree,
