@@ -15,14 +15,24 @@ const [directory, mode, failAtText, receiptPath] = process.argv.slice(2);
 let batchWrites = 0;
 let posts = 0;
 const originalRename = fs.renameSync;
-if (mode === 'fail-write') {
+const originalFsync = fs.fsyncSync;
+if (mode === 'fail-write' || mode === 'exit-before-post') {
   fs.renameSync = (source, destination) => {
-    if (/\/batch-\d+-\d+\.json$/.test(String(destination)) && ++batchWrites === Number(failAtText)) {
+    if (/\/batch-\d+-\d+\.json$/.test(String(destination)) && ++batchWrites === Number(failAtText)
+        && mode === 'fail-write') {
       const error = new Error('synthetic durable rename failure');
       error.code = 'EIO';
       throw error;
     }
     return originalRename(source, destination);
+  };
+  if (mode === 'exit-before-post') fs.fsyncSync = fd => {
+    originalFsync(fd);
+    if (batchWrites === Number(failAtText) && fs.fstatSync(fd).isDirectory()) {
+      const batch = JSON.parse(fs.readFileSync(listNeatlogsOutbox(directory)[0], 'utf8'));
+      fs.writeFileSync(receiptPath, JSON.stringify({ batch, posts, batchWrites, realNetworkAttempts }), { mode: 0o600 });
+      process.exit(71);
+    }
   };
   syncBuiltinESMExports();
 }

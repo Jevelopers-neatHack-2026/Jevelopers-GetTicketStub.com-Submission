@@ -421,6 +421,18 @@ function hasPossibleDelivery(intent) {
     || ['receiver_accepted', 'partially_rejected', 'outcome_unknown'].includes(call.result?.status));
 }
 
+function canResumeUnpostedRecovery(batch) {
+  const intent = batch.dispatches.at(-1);
+  // Older v2 readback could replace pending_send using an earlier generation's
+  // delivery. Restore only its observed readback states and a known-unsent
+  // recovery. Keep real POSTs, completed remote refusals and deliberate holds.
+  return intent?.purpose === 'recovery' && !Object.hasOwn(batch, 'deliveryHold')
+    && ['pending', 'missing', 'readback_failed', 'readback_unavailable'].includes(batch.state)
+    && batch.readback?.status === batch.state
+    && intent.calls.every(call => call.postsStarted === 0
+      && (call.result === null || ['not_configured', 'aborted'].includes(call.result.status)));
+}
+
 function retryAfterPending(batch) {
   const now = Date.now();
   if (!Number.isSafeInteger(now)) throw new NeatlogsOutboxError('INVALID_RETRY_CLOCK');
@@ -543,6 +555,12 @@ export async function drainNeatlogsOutbox({
       persistBatch(path, batch);
     };
     const legacy = batch.schema === LEGACY_OUTBOX_SCHEMA;
+    if (!legacy && (send || readback) && canResumeUnpostedRecovery(batch)) {
+      // Keep the old observation and every call verbatim. Only repair routing;
+      // the next send still validates the target and durably records its start.
+      batch.state = 'pending_send';
+      persist();
+    }
     if (legacy && send && !TERMINAL_READBACK.has(batch.state)) {
       // v1 wrote its result only after I/O. Even plan:null/send:null can be a
       // process exit after a POST, so it cannot be migrated as known-unsent.
@@ -612,7 +630,7 @@ export async function drainNeatlogsOutbox({
     }
     const mayReadback = legacy
       ? batch.plan && ['receiver_accepted', 'outcome_unknown', 'partially_rejected'].includes(batch.send?.status)
-      : batch.dispatches.some(hasPossibleDelivery);
+      : batch.dispatches.length > 0 && hasPossibleDelivery(batch.dispatches.at(-1));
     if (readback && mayReadback && batch.state !== 'blocked' && !TERMINAL_READBACK.has(batch.state)) {
       if (!legacy) assertIntentTarget(batch.dispatches.at(-1), config);
       const plan = readbackPlanFromRecords(batch.records, batch.plan?.tags ?? validatedTags, storedGenerations(batch));

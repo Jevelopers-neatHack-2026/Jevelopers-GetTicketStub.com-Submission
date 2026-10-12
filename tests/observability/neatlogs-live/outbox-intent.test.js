@@ -108,8 +108,13 @@ function child(directory, mode, failAt = 0) {
   });
   assert.equal(result.error, undefined);
   assert.equal(result.signal, null);
-  assert.equal(result.status, mode === 'crash' ? 71 : 0, result.stderr);
-  if (mode === 'crash') return JSON.parse(readFileSync(receiptPath, 'utf8'));
+  const exited = mode === 'crash' || mode === 'exit-before-post';
+  assert.equal(result.status, exited ? 71 : 0, result.stderr);
+  if (exited) {
+    const summary = JSON.parse(readFileSync(receiptPath, 'utf8'));
+    assert.equal(summary.realNetworkAttempts, 0);
+    return summary;
+  }
   const summary = JSON.parse(result.stdout);
   assert.equal(summary.realNetworkAttempts, 0);
   return summary;
@@ -448,7 +453,8 @@ test('no-call and interrupted-before-POST intents have no invented send or prior
     assert.equal(readFileSync(pathFor(directory), 'utf8'), retained);
     const [readback] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
     assert.equal(fake.posts.length, 0);
-    if (!recovery) assert.equal(fake.reads.length, 0, 'an unposted initial intent has no possible delivery to read back');
+    assert.equal(fake.reads.length, 0, 'the current unposted intent has no possible delivery to read back');
+    assert.equal(readback.state, 'pending_send');
     for (const batch of [snapshot.batch, inspected.batch, readback.batch]) {
       assert.equal(batch.send, null, 'no send result or possible POST exists for this intent');
       if (recovery) assert.equal(batch.recovery.send, null, 'generation zero acceptance cannot summarize generation one');
@@ -479,6 +485,235 @@ test('an incomplete zero-POST call preserves the known previous result for its c
   }
   assert.equal(fake.posts.length, 0);
   assert.equal(fake.reads.length, 0);
+});
+
+for (const [mode, boundary, calls] of [['fail-write', 2, 0], ['fail-write', 3, 1],
+  ['exit-before-post', 1, 0], ['exit-before-post', 2, 1]]) {
+  for (const priorVisible of [false, true]) {
+    test(`unposted recovery survives readback and ordinary draining: ${mode}/${boundary}/prior=${priorVisible}`, async t => {
+      const directory = batchDirectory(`unposted-readback-${mode}-${boundary}-${priorVisible}`, 2);
+      const visible = sequence => sequence === 1 ? [0] : [];
+      await drainNeatlogsOutbox(options(directory, service(directory, { visible }), { readback: true }));
+      const stopped = child(directory, mode, boundary);
+      assert.equal(stopped.posts, 0);
+      if (mode === 'fail-write') assert.equal(stopped.code, 'EIO');
+      const intended = disk(directory);
+      const current = intended.dispatches.at(-1);
+      assert.equal(current.calls.length, calls);
+      assert.ok(current.calls.every(call => call.postsStarted === 0 && call.result === null));
+      assert.deepEqual(current.traces.map(trace => trace.sequence), [2]);
+      const before = readFileSync(pathFor(directory), 'utf8');
+      const fake = service(directory, { visible: sequence => sequence === 1 || priorVisible ? [0] : [] });
+      const [observed] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+      const afterReadback = readFileSync(pathFor(directory), 'utf8');
+      let delivered = false;
+      const resumed = service(directory, {
+        onPost: () => { delivered = true; },
+        visible: sequence => sequence === 1 ? [0]
+          : delivered ? (priorVisible ? [0, 1] : [1]) : priorVisible ? [0] : []
+      });
+      const [result] = await drainNeatlogsOutbox(options(directory, resumed, { readback: true, captureTimeoutMs: 1 }));
+      t.diagnostic(JSON.stringify({ mode: 'synthetic', boundary: `${mode}/${boundary}`, priorVisible,
+        readbackState: observed.state, readbackRequests: fake.reads.length,
+        ordinaryPosts: resumed.posts.length, finalState: result.state }));
+      assert.equal(observed.state, 'pending_send');
+      assert.equal(observed.batch.send, null);
+      assert.equal(observed.batch.recovery.send, null);
+      assert.equal(observed.batch.readback, null);
+      assert.equal(fake.posts.length, 0);
+      assert.equal(fake.reads.length, 0);
+      assert.equal(afterReadback, before);
+      assert.equal(resumed.posts.length, 1);
+      assert.equal(resumed.posts[0].toString('base64'), current.bodyBase64);
+      assert.equal(result.state, 'verified');
+      assert.equal(result.batch.dispatches.length, 2);
+      assert.deepEqual(result.batch.plan.traces.map(trace => trace.generation), [0, 1]);
+      assert.deepEqual(result.batch.dispatches[0], intended.dispatches[0]);
+      assert.deepEqual(result.batch.dispatches[1].calls.slice(0, calls), current.calls);
+      assert.equal(result.batch.send.status, 'receiver_accepted');
+      assert.equal(result.batch.send.deliveryConfirmed, false);
+      assert.equal(result.batch.readback.duplicateEventDeliveries, priorVisible ? 1 : 0);
+    });
+  }
+}
+
+const retainedRecoveryFixtures = JSON.parse(readFileSync(new URL(
+  './fixtures/unposted-recovery-readback.json', import.meta.url), 'utf8'));
+for (const fixture of retainedRecoveryFixtures.cases) {
+  test(`ordinary recovery resumes actual retained b757 ${fixture.name} bytes`, async t => {
+    const directory = batchDirectory(`retained-readback-${fixture.name}`);
+    assert.equal(retainedRecoveryFixtures.sourceCommit, 'b757573aaa326e47ea7154a37ded6aa71a73a1b8');
+    assert.equal(createHash('sha256').update(fixture.batchJson).digest('hex'), fixture.sha256);
+    writeFileSync(pathFor(directory), fixture.batchJson, { mode: 0o600 });
+    const before = disk(directory);
+    const current = before.dispatches.at(-1);
+    const [snapshot] = [...iterateNeatlogsOutboxSnapshot(directory)];
+    assert.equal(snapshot.state, fixture.state);
+    const fake = service(directory);
+    await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: false }));
+    assert.equal(readFileSync(pathFor(directory), 'utf8'), fixture.batchJson, 'read-only inspection cannot repair state on disk');
+    const [resumable] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+    const [result] = await drainNeatlogsOutbox(options(directory, fake, { recover: true, captureTimeoutMs: 1 }));
+    t.diagnostic(JSON.stringify({ mode: 'synthetic', retainedState: fixture.state,
+      restoredState: resumable.state, posts: fake.posts.length, finalState: result.state }));
+    assert.equal(resumable.state, 'pending_send');
+    assert.deepEqual(resumable.batch.send, before.send);
+    assert.deepEqual(resumable.batch.recovery.send, before.recovery.send);
+    assert.equal(resumable.batch.send?.status ?? null, fixture.expectedSendStatus);
+    assert.deepEqual(resumable.batch.dispatches, before.dispatches);
+    assert.deepEqual(resumable.batch.readback, before.readback);
+    assert.equal(fake.reads.length, 0);
+    assert.equal(fake.posts.length, 1);
+    assert.equal(fake.posts[0].toString('base64'), current.bodyBase64);
+    assert.equal(result.state, 'receiver_accepted');
+    assert.equal(result.batch.dispatches.length, 2, 'resume the existing intent instead of selecting generation two');
+    assert.equal(result.batch.plan.traces[0].generation, 1);
+    assert.deepEqual(result.batch.dispatches[0], before.dispatches[0]);
+    assert.deepEqual(result.batch.dispatches[1].calls.slice(0, current.calls.length), current.calls);
+    assert.deepEqual(result.batch.recoveryHistory, before.recoveryHistory);
+    assert.deepEqual(result.batch.readback, before.readback, 'retain the actual previous observation');
+  });
+}
+
+test('an ordinary send directly restores a retained unsent recovery before entering recovery selection', async () => {
+  const fixture = retainedRecoveryFixtures.cases.find(item => item.state === 'missing');
+  const directory = batchDirectory('retained-direct-send');
+  writeFileSync(pathFor(directory), fixture.batchJson, { mode: 0o600 });
+  const intended = disk(directory).dispatches[1];
+  const fake = service(directory);
+  const [result] = await drainNeatlogsOutbox(options(directory, fake, { recover: true, captureTimeoutMs: 1 }));
+  assert.equal(fake.posts.length, 1);
+  assert.equal(fake.posts[0].toString('base64'), intended.bodyBase64);
+  assert.equal(result.batch.dispatches.length, 2);
+  assert.equal(result.batch.plan.traces[0].generation, 1);
+});
+
+for (const failAt of [1, 2, 3]) {
+  test(`restored routing and pre-POST writes remain durable at failure boundary ${failAt}`, async () => {
+    const fixture = retainedRecoveryFixtures.cases.find(item => item.state === 'missing');
+    const directory = batchDirectory(`retained-routing-write-${failAt}`);
+    writeFileSync(pathFor(directory), fixture.batchJson, { mode: 0o600 });
+    const before = disk(directory);
+    const intended = before.dispatches[1];
+    const stopped = child(directory, 'fail-write', failAt);
+    assert.equal(stopped.code, 'EIO');
+    assert.equal(stopped.posts, 0);
+    if (failAt === 1) assert.equal(readFileSync(pathFor(directory), 'utf8'), fixture.batchJson);
+    assert.deepEqual(disk(directory).readback, before.readback);
+    let boundary;
+    const fake = service(directory, { onPost: observation => { boundary = observation; } });
+    const [result] = await drainNeatlogsOutbox(options(directory, fake, { recover: true, captureTimeoutMs: 1 }));
+    assert.equal(fake.posts.length, 1);
+    assert.equal(fake.posts[0].toString('base64'), intended.bodyBase64);
+    assert.equal(boundary.batch.send.status, 'outcome_unknown');
+    assert.equal(boundary.batch.send.deliveryConfirmed, false);
+    assert.equal(boundary.batch.dispatches[1].calls.at(-1).postsStarted, 1);
+    assert.equal(boundary.batch.dispatches[1].calls.at(-1).result, null);
+    assert.deepEqual(boundary.batch.readback, before.readback);
+    assert.equal(result.batch.dispatches.length, 2);
+    assert.equal(result.batch.plan.traces[0].generation, 1);
+    assert.deepEqual(result.batch.dispatches[1].calls.slice(0, intended.calls.length), intended.calls);
+    assert.deepEqual(result.batch.recoveryHistory, before.recoveryHistory);
+  });
+}
+
+for (const status of [200, 503]) {
+  test(`current-intent earlier ${status} delivery remains readable after a zero-POST call`, async () => {
+    const directory = batchDirectory(`current-prior-result-${status}`);
+    await drainNeatlogsOutbox(options(directory, service(directory), { readback: true }));
+    await drainNeatlogsOutbox(options(directory, service(directory, { status }), { recover: true }));
+    const batch = disk(directory);
+    // Synthetic history control: the incomplete call contributes no effect,
+    // but an earlier possible delivery in this same intent still matters.
+    batch.dispatches[1].calls.push({ ordinal: 2, startedAt: new Date().toISOString(),
+      postsStarted: 0, completedAt: null, result: null });
+    replace(directory, batch);
+    const fake = service(directory, { visible: () => [0, 1] });
+    const [result] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+    assert.equal(result.state, 'verified');
+    assert.equal(fake.posts.length, 0);
+    assert.ok(fake.reads.length > 0);
+    assert.equal(result.batch.send.status, status === 200 ? 'receiver_accepted' : 'outcome_unknown');
+    assert.equal(result.batch.send.deliveryConfirmed, false);
+    assert.deepEqual(result.batch.dispatches, batch.dispatches);
+    assert.equal(result.batch.readback.duplicateEventDeliveries, 1);
+  });
+}
+
+test('restoration does not reset terminals, explicit holds or an unmatched retained observation', async () => {
+  const fixture = retainedRecoveryFixtures.cases.find(item => item.state === 'pending');
+  for (const state of ['verified', 'mismatch', 'held', 'blocked', 'rejected', 'pending', 'missing']) {
+    const directory = batchDirectory(`retained-negative-${state}`);
+    const batch = JSON.parse(fixture.batchJson);
+    batch.state = state;
+    if (state === 'held' || state === 'pending') batch.deliveryHold = { reasonCode: 'DISPATCH_ATTEMPT_LIMIT_REACHED', outcomeResolved: false };
+    // The missing variant deliberately disagrees with its pending observation.
+    replace(directory, batch);
+    const before = readFileSync(pathFor(directory), 'utf8');
+    const fake = service(directory);
+    const [result] = await drainNeatlogsOutbox(options(directory, fake));
+    assert.equal(result.state, state);
+    assert.equal(fake.posts.length, 0);
+    assert.equal(fake.reads.length, 0);
+    assert.equal(readFileSync(pathFor(directory), 'utf8'), before);
+  }
+});
+
+for (const localStop of ['not_configured', 'aborted']) {
+  test(`a completed local ${localStop} with zero POSTs keeps its recovery eligible for ordinary sending`, async () => {
+    const directory = batchDirectory(`zero-post-local-${localStop}`);
+    await drainNeatlogsOutbox(options(directory, service(directory), { readback: true }));
+    const absentIngest = loadNeatlogsConfig({ env: { NEATLOGS_READ_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID } });
+    const fake = service(directory, { visible: () => [0] });
+    const [stopped] = await drainNeatlogsOutbox(options(directory, fake, { recover: true, readback: true,
+      config: localStop === 'not_configured' ? absentIngest : CONFIG,
+      sendOptions: { maxAttempts: 1, ...(localStop === 'aborted' ? { signal: AbortSignal.abort() } : {}) }
+    }));
+    const intended = structuredClone(stopped.batch.dispatches[1]);
+    const initialPosts = fake.posts.length;
+    const initialReads = fake.reads.length;
+    const [observed] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+    const [resumed] = await drainNeatlogsOutbox(options(directory, fake, { captureTimeoutMs: 1 }));
+    assert.equal(stopped.state, 'pending_send');
+    assert.equal(stopped.batch.send.status, localStop);
+    assert.equal(initialPosts, 0);
+    assert.equal(initialReads, 0);
+    assert.equal(observed.state, 'pending_send');
+    assert.equal(fake.reads.length, 0);
+    assert.equal(fake.posts.length, 1);
+    assert.equal(fake.posts[0].toString('base64'), intended.bodyBase64);
+    assert.equal(resumed.batch.dispatches.length, 2);
+    assert.deepEqual(resumed.batch.dispatches[1].calls[0], intended.calls[0]);
+    assert.equal(intended.calls[0].postsStarted, 0);
+    assert.equal(intended.calls[0].result.status, localStop);
+    assert.equal(resumed.batch.send.status, 'receiver_accepted');
+    assert.equal(resumed.batch.send.priorOutcomeUnknown, false);
+  });
+}
+
+test('retained readback states do not reset a completed refusal or possible current delivery', async () => {
+  const observation = JSON.parse(retainedRecoveryFixtures.cases.find(item => item.state === 'missing').batchJson).readback;
+  for (const status of [200, 403, 429, 503]) {
+    const directory = batchDirectory(`known-delivery-hold-${status}`);
+    await drainNeatlogsOutbox(options(directory, service(directory), { readback: true }));
+    await drainNeatlogsOutbox(options(directory, service(directory, { status }), { recover: true }));
+    const batch = disk(directory);
+    assert.equal(batch.dispatches[1].calls[0].postsStarted, 1);
+    // Synthetic compatibility control uses a real bounded-window observation
+    // for these same deterministic generation-one IDs; it keeps the actual
+    // sender result and is not a fresh provider observation of this fixture.
+    batch.state = 'missing';
+    batch.readback = structuredClone(observation);
+    replace(directory, batch);
+    const before = readFileSync(pathFor(directory), 'utf8');
+    const fake = service(directory);
+    const [result] = await drainNeatlogsOutbox(options(directory, fake));
+    assert.equal(result.state, 'missing');
+    assert.equal(fake.posts.length, 0);
+    assert.equal(fake.reads.length, 0);
+    assert.deepEqual(result.batch.dispatches, batch.dispatches);
+    assert.equal(readFileSync(pathFor(directory), 'utf8'), before);
+  }
 });
 
 test('send plus readback after interrupted recovery retains uncertainty and the selected generation', async () => {
