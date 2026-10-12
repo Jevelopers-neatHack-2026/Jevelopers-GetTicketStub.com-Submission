@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, mkdtemp, mkdir, cp } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import run, { inspectUX, markup, text } from '../scripts/suites/ux.mjs';
 import { buildSite, root } from '../scripts/build.mjs';
@@ -47,9 +48,12 @@ test('local group and non-submitting button remain compatible with a deferred ex
   assert.equal(inspectUX(local).status, 'PASS_DRAFT');
 });
 test('real built artifact cannot claim UX release from local source checks alone', async () => {
-  const output = resolve(root, 'dist/ux-test-artifact');
+  const repository = await mkdtemp(resolve(tmpdir(), 'lp-ux-test-'));
   try {
-    await buildSite({ output });
-    await assert.rejects(run({ root, artifactDir: output, mode: 'release' }), /actual viewport.*performance evidence unavailable/);
-  } finally { await rm(output, { recursive: true, force: true }); }
+    await cp(resolve(root, 'site'), resolve(repository, 'site'), { recursive: true });
+    await mkdir(resolve(repository, 'tests'));
+    await cp(resolve(root, 'tests/scroll.test.mjs'), resolve(repository, 'tests/scroll.test.mjs'));
+    const { output } = await buildSite({ repository });
+    await assert.rejects(run({ root: repository, artifactDir: output, mode: 'release' }), /actual viewport.*performance evidence unavailable/);
+  } finally { await rm(repository, { recursive: true, force: true }); }
 });

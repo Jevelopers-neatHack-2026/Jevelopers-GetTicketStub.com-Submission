@@ -1,12 +1,12 @@
 {
   "schema": "ticketstub.ux-local-source-observation/1",
-  "observedAt": "2026-10-12T10:10:13.857Z",
+  "observedAt": "2026-10-12T10:12:57.116Z",
   "sourceRevision": "b6ae55cd48971c9ef292293252f1931744a91095",
   "nodeVersion": "v24.15.0",
   "evidenceClass": "local-source-and-VM-only",
   "deploymentIdentity": "UNKNOWN",
   "validatorSha256": "399ea37a4171147e18176af9e314aeeb07a510787ddae8387762ce2f910e2d62",
-  "testsSha256": "c418bd77c2b4b0b31c6bd4b1ab641a23fe50786905fb0b571f5d823d876282a9",
+  "testsSha256": "8021536d29c01e900c0bfffd462dee9c23f2c324bee4916e09706b3fd9440596",
   "artifactFiles": {
     "assets/ballet-clean.webp": {
       "bytes": 53684,
@@ -96,6 +96,12 @@
     {
       "command": "git diff --check",
       "status": "PASS"
+    },
+    {
+      "command": "three concurrent node --test --test-reporter=dot tests/ux.test.mjs invocations",
+      "status": "PASS",
+      "testsPerInvocation": 17,
+      "reason": "Unique OS-temporary test repositories avoid cross-run artifact deletion"
     }
   ],
   "actualBrowserEvidence": "PENDING",
