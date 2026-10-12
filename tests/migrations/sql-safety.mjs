@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 
-// A whole-file fingerprint binds the paired temporary CREATE/cleanup statements
-// and their transactional DO block. Drift never inherits this narrow exception.
+// A whole-file fingerprint binds the paired temporary CREATE/cleanup statements,
+// their transactional DO block, and any exact read-only catalog expressions.
+// Drift never inherits these narrow exceptions; the generic scanner is unchanged.
 const REVIEWED_TEMPORARY_POLICY_CLEANUPS = Object.freeze({
   '0015_stored_lineage_reader.sql': Object.freeze({
-    sha256: '3aec00a2e267b6ad1c55c577bcef97a874a0bcf9ee31ffeaee52b5787d80aea4',
+    sha256: 'e812fbedf7bf4edb0b0fc83efdd687949a7e36f8d2098ac8c0a9c8ff98145b29',
     statements: Object.freeze([
       "EXECUTE 'DROP POLICY ci10_lineage_expected_inbox ON cost_intelligence.usage_intake_inbox';",
       "EXECUTE 'DROP POLICY ci10_lineage_expected_attempts ON cost_intelligence.usage_intake_attempts';",
@@ -13,10 +14,13 @@ const REVIEWED_TEMPORARY_POLICY_CLEANUPS = Object.freeze({
     ]),
   }),
   '0014_evidence_reader_indexes.sql': Object.freeze({
-    sha256: '0bf0ec1c0508a7fd782d43331fb557b0aae035b596ccfdf288adf9b488ce9377',
+    sha256: '0f6892b0704bd6e99cf3c9d976e9d906649c13a0c03e1201425461d37a1cdcf8',
     statements: Object.freeze([
       "EXECUTE 'DROP POLICY ci10_expected_ledger_policy ON cost_intelligence.financial_ledger_events';",
       "EXECUTE 'DROP POLICY ci10_expected_privacy_policy ON cost_intelligence.financial_privacy_quarantine';",
+    ]),
+    catalogReads: Object.freeze([
+      Object.freeze({ expression: "has_table_privilege('ci_finance_runtime',c.oid,'TRUNCATE')", occurrences: 2 }),
     ]),
   }),
 });
@@ -25,8 +29,10 @@ export function hasUnapprovedDestructiveMigrationStatement(name, sql, allowedCon
   const reviewed = REVIEWED_TEMPORARY_POLICY_CLEANUPS[name];
   let scanned = sql;
   if (reviewed && createHash('sha256').update(sql).digest('hex') === reviewed.sha256
-    && reviewed.statements.every(statement => sql.split(statement).length === 2)) {
+    && reviewed.statements.every(statement => sql.split(statement).length === 2)
+    && (reviewed.catalogReads ?? []).every(({ expression, occurrences }) => sql.split(expression).length === occurrences + 1)) {
     for (const statement of reviewed.statements) scanned = scanned.replace(statement, '-- reviewed temporary policy cleanup');
+    for (const { expression } of reviewed.catalogReads ?? []) scanned = scanned.replaceAll(expression, 'reviewed_catalog_privilege_probe');
   }
   return hasDestructiveMigrationStatement(scanned, allowedConstraintReplacements);
 }

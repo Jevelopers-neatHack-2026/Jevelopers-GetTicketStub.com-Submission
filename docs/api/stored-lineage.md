@@ -133,6 +133,14 @@ commitment. A different current actor in the same database partition is
 unavailable in this version. This preserves the original creator identity
 without rewriting or claiming a more general host delegation rule.
 
+Posting selectors and returned posting references retain the existing ledger's
+opaque identifier alphabet, including IDs such as `event/1` and
+`source:record/1`. URLs, query strings, fragments and user-information characters
+remain invalid. This applies to posting IDs in the stored snapshot list as well
+as the selected posting; an unrelated valid slash ID must not invalidate the
+lookup. The older `EvidenceReference` contract and canonical intake identifier
+rules are unchanged.
+
 The stored ledger list is bounded at 50,000 entries. Every entry must contain
 exactly a valid event ID and stored SHA-256 event hash, with no duplicate IDs.
 Malformed metadata and unknown encodings return no value. The selected
@@ -230,6 +238,24 @@ trigger bindings including unrestricted update events, and the exact
 validated intake foreign keys. Its capability detects subsequent catalog
 drift. Temporary comparison policies are removed in the same migration
 transaction.
+
+The supported bootstrap prerequisite is that the installer of 0003 and 0006
+is the database owner. Among the five functions bound by this reader, those
+migrations leave
+`reject_ledger_projection_mutation()` and
+`finance_scope_matches(text,text,text,text)` owned by that installer; 0009
+explicitly assigns its three intake guard functions to `ci_finance_owner`.
+Migration 0015 verifies those named ownership boundaries and the reviewed
+function bodies, language, result type, volatility, parallel mode and invoker
+configuration. Its readiness fingerprint includes the database owner, each
+function owner and definition, and function ACLs, so later changes fail
+readiness. It does not transfer ownership or grant additional execution.
+The fresh, previous-version and restricted-migrator fixtures use this
+database-owner bootstrap topology. A host with a different bootstrap owner
+needs an explicitly reviewed migration contract; an arbitrary existing owner
+is not accepted. The existing [0006 handoff](./usage-intake.md#existing-0006-migration-role-handoff-to-0009)
+preserves the two installer owners when the dedicated migration login assumes
+the Finance owner role.
 
 The conservative migration scanner allows only this file's reviewed complete
 SHA-256 fingerprint and its four literal temporary cleanup statements.

@@ -75,3 +75,33 @@ test('the five pinned predecessor function bodies match immutable checked-in def
     assert.ok(sql.includes("('" + identity + "','" + digest + "')"), functionName);
   }
 });
+
+test('stored lineage preserves the two installer-owned predecessors with a named database-owner boundary', async () => {
+  const sources = await Promise.all(EXPECTED_MIGRATIONS.filter(file => file < name)
+    .map(file => readFile(new URL('../../migrations/' + file, import.meta.url), 'utf8')));
+  const predecessors = sources.join('\n');
+  for (const fn of ['reject_ledger_projection_mutation', 'finance_scope_matches']) {
+    assert.doesNotMatch(predecessors, new RegExp('ALTER FUNCTION cost_intelligence\\.' + fn + '\\([^;]*OWNER TO'));
+  }
+  for (const fn of ['reject_usage_intake_audit_mutation', 'guard_usage_intake_attempt_update', 'guard_usage_intake_outbox_update']) {
+    assert.ok(predecessors.includes(`ALTER FUNCTION cost_intelligence.${fn}() OWNER TO ci_finance_owner;`));
+  }
+  assert.match(sql, /'database_owner',\s*\(SELECT pg_get_userbyid\(datdba\) FROM pg_database WHERE datname=current_database\(\)\)/);
+  assert.match(sql, /CASE WHEN item->>0 IN \('reject_ledger_projection_mutation\(\)','finance_scope_matches\(text,text,text,text\)'\)\s+THEN installed->>'database_owner' ELSE 'ci_finance_owner' END/);
+  assert.match(sql, /pg_get_functiondef\(p\.oid\),owner\.rolname,p\.proacl/);
+});
+
+test('lineage predecessor owner correction retains function security and whole-file mutation refusal', () => {
+  for (const required of ['p.prosecdef', 'p.proconfig IS NOT NULL', 'p.provolatile', 'p.proparallel', 'p.prolang', 'p.prorettype']) {
+    assert.ok(sql.includes(required), required);
+  }
+  for (const mutate of [
+    source => source.replace("THEN installed->>'database_owner' ELSE 'ci_finance_owner' END", "THEN item->>2 ELSE item->>2 END"),
+    source => source.replace('p.prosecdef OR', 'false OR'),
+    source => source.replace('owner.rolname,p.proacl', 'owner.rolname,NULL'),
+  ]) {
+    const changed = mutate(sql);
+    assert.notEqual(changed, sql);
+    assert.equal(hasUnapprovedDestructiveMigrationStatement(name, changed), true);
+  }
+});

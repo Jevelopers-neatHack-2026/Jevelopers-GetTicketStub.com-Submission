@@ -4,11 +4,57 @@ import test from 'node:test';
 import { Value } from '@sinclair/typebox/value';
 import {
   createPostgresStoredLineageReader, IntakeLineageRequestSchema, IntakeLineageResultSchema,
-  SnapshotInputLineageRequestSchema, SnapshotInputLineageResultSchema,
+  SnapshotInputLineageRequestSchema, SnapshotInputLineageResultSchema, validateLedgerAppendRequestBoundary,
 } from '../../dist/index.js';
-import { checked, refused } from './postgres-fixtures.mjs';
-import { model, scope, decision, now, hash, intakeRequest, snapshotRequest, intakeRow, noPosting, snapshotRow, inputRow } from './stored-lineage-fixtures.mjs';
+import { checked, refused, ledgerRequest } from './postgres-fixtures.mjs';
+import { model, scope, decision, now, hash, intakeRequest, snapshotRequest, intakeRow, noPosting, snapshotRow, inputRow, postingRow } from './stored-lineage-fixtures.mjs';
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+for (const eventId of ['event/1', 'source:record/1']) {
+  test(`stored snapshot lineage preserves producer-valid posting ID ${eventId}`, async () => {
+    assert.equal(validateLedgerAppendRequestBoundary(ledgerRequest(scope(), { eventId })).ok, true);
+    const request = snapshotRequest(scope(), hash('snapshot-1'), eventId);
+    const h = model({ postingRows: [postingRow(scope(), { event_id: eventId })] });
+    const result = await checked(h.reader.readSnapshotInputLineage(request));
+    assert.equal(result.status, 'recorded_input');
+    assert.deepEqual(result.posting, { eventId, eventHash: hash('ledger-1') });
+    assert.deepEqual(result.matchedInput, result.posting);
+    assert.equal(Value.Check(SnapshotInputLineageRequestSchema, request), true);
+    assert.equal(Value.Check(SnapshotInputLineageResultSchema, result), true);
+    assert.equal(h.state.connections, 1);
+    assert.equal(h.state.queries.at(-1).sql, 'COMMIT');
+  });
+
+  test(`stored intake posting references preserve producer-valid posting ID ${eventId}`, async () => {
+    const h = model({ intakeRows: [intakeRow(scope(), {
+      outbox_pointer: eventId, outbox_event_id: eventId, current_pointer: eventId, current_event_id: eventId,
+    })] });
+    const request = intakeRequest(scope(), { kind: 'posting_event', eventId });
+    const result = await checked(h.reader.readIntakeLineage(request));
+    assert.equal(result.status, 'found');
+    assert.deepEqual(result.observations[0].outbox.posting, { eventId, eventHash: hash('ledger-1') });
+    assert.deepEqual(result.observations[0].currentAttempt.posting, result.observations[0].outbox.posting);
+    assert.equal(Value.Check(IntakeLineageRequestSchema, request), true);
+    assert.equal(Value.Check(IntakeLineageResultSchema, result), true);
+    assert.equal(h.state.queries.at(-1).sql, 'COMMIT');
+  });
+}
+
+test('posting ID compatibility does not admit URLs, query strings, fragments or user information', async () => {
+  for (const eventId of ['https://example.invalid/event', 'event/1?query', 'event/1#fragment', 'user@example.invalid']) {
+    assert.equal(validateLedgerAppendRequestBoundary(ledgerRequest(scope(), { eventId })).ok, false);
+    for (const method of ['readIntakeLineage', 'readSnapshotInputLineage']) {
+      const h = model();
+      const request = method === 'readIntakeLineage'
+        ? intakeRequest(scope(), { kind: 'posting_event', eventId })
+        : snapshotRequest(scope(), hash('snapshot-1'), eventId);
+      const result = await refused(h.reader[method](request), 'VALIDATION_ERROR');
+      assert.equal(result.error.code, 'VALIDATION_ERROR');
+      assert.equal(h.state.connections, 0);
+      assert.equal(h.state.dataReads, 0);
+    }
+  }
+});
 
 test('stored lineage is an explicit public metadata contract with only two guarded reads', async () => {
   const root = await import('../../dist/index.js');

@@ -250,6 +250,26 @@ await test('CI-10 stored intake and snapshot input lineage on actual PostgreSQL'
       assert.equal(h.state.statements.some(sql => /^SELECT snapshot_content(?:\s|,)/.test(sql)), false);
       assert.deepEqual(await counts(reportScope), before);
     });
+    await run('ledger-valid slash posting IDs remain readable among other stored snapshot inputs', async () => {
+      const scope = { ...s(), billingMode: 'live' };
+      const eventIds = [randomUUID(), 'event/' + randomUUID(), 'source:record/' + randomUUID()];
+      for (const eventId of eventIds) {
+        await checked(appendLedgerEvent(ledgerRequest(scope, { eventId, occurredAt: '2026-10-11T00:00:00.000Z' }), ports(scope)));
+      }
+      const page = await checked(querySummary({ ...query, requestId: randomUUID(), idempotencyKey: randomUUID(), scope }, ports(scope)));
+      const before = await counts(scope);
+      for (const eventId of eventIds) {
+        const value = await checked(reader(scope).reader.readSnapshotInputLineage(snapshotRequest(scope, page.snapshotId, eventId)));
+        assert.equal(value.status, 'recorded_input');
+        assert.equal(value.snapshot.ledgerInputCount, 3);
+        assert.equal(value.posting.eventId, eventId);
+        assert.deepEqual(value.matchedInput, value.posting);
+        assert.equal(value.billingAuthority, false);
+        const intake = await checked(reader(scope).reader.readIntakeLineage(intakeRequest(scope, { kind: 'posting_event', eventId })));
+        assert.equal(intake.status, 'not_found', 'a direct posting has no invented intake observation');
+      }
+      assert.deepEqual(await counts(scope), before);
+    });
     await run('published legacy v1 snapshots retain their original recognized encoding', async () => {
       const legacy = { ...query, schemaVersion: '1.0.0' }; delete legacy.policyVersion; delete legacy.groupings;
       const page = await checked(querySummary(legacy, ports(reportScope)));
@@ -271,6 +291,10 @@ await test('CI-10 stored intake and snapshot input lineage on actual PostgreSQL'
       ['different normalized query scope', c => { c.normalizedQuery.scope.projectId = randomUUID(); }],
       ['changed stored query commitment', c => { c.queryContentHash = hash('different-query'); }],
       ['missing event hash', c => { delete c.inputEvidence.ledger[0].eventHash; }],
+      ['URL input identifier', c => { c.inputEvidence.ledger[0].eventId = 'https://example.invalid/event'; }],
+      ['query input identifier', c => { c.inputEvidence.ledger[0].eventId = 'event/1?query'; }],
+      ['fragment input identifier', c => { c.inputEvidence.ledger[0].eventId = 'event/1#fragment'; }],
+      ['user information input identifier', c => { c.inputEvidence.ledger[0].eventId = 'user@example.invalid'; }],
       ['extra input field', c => { c.inputEvidence.ledger[0].unexpected = 'not-supported'; }],
       ['non-object input', c => { c.inputEvidence.ledger = [null]; }],
       ['duplicate input identity', c => { c.inputEvidence.ledger.push(structuredClone(c.inputEvidence.ledger[0])); }],

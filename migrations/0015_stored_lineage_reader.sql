@@ -97,6 +97,12 @@ BEGIN
     ) expected(identity,body_hash)
     LEFT JOIN pg_proc p ON p.oid=to_regprocedure('cost_intelligence.' || expected.identity)
     WHERE p.oid IS NULL OR encode(sha256(convert_to(p.prosrc,'UTF8')),'hex') IS DISTINCT FROM expected.body_hash
+      OR p.prosecdef OR p.proleakproof OR p.proisstrict OR p.proconfig IS NOT NULL OR p.prokind::text IS DISTINCT FROM 'f'
+      OR p.provolatile::text IS DISTINCT FROM CASE WHEN expected.identity='finance_scope_matches(text,text,text,text)' THEN 's' ELSE 'v' END
+      OR p.proparallel::text IS DISTINCT FROM CASE WHEN expected.identity='finance_scope_matches(text,text,text,text)' THEN 's' ELSE 'u' END
+      OR p.prorettype IS DISTINCT FROM CASE WHEN expected.identity='finance_scope_matches(text,text,text,text)' THEN 'boolean'::regtype::oid ELSE 'trigger'::regtype::oid END
+      OR p.prolang IS DISTINCT FROM (SELECT oid FROM pg_language WHERE lanname=
+        CASE WHEN expected.identity='finance_scope_matches(text,text,text,text)' THEN 'sql' ELSE 'plpgsql' END)
   ) THEN RAISE EXCEPTION 'Stored lineage requires the reviewed source guard implementations'; END IF;
 END $lineage_policies$;
 
@@ -106,6 +112,9 @@ CREATE INDEX usage_intake_outbox_ledger_lineage_idx ON cost_intelligence.usage_i
 CREATE FUNCTION cost_intelligence.stored_lineage_reader_capabilities() RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog AS $capabilities$
   SELECT jsonb_build_object(
+    -- The reviewed bootstrap functions were installed by the database owner;
+    -- 0009 explicitly transfers only its three intake guards to Finance.
+    'database_owner',(SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()),
     'indexes', (
       SELECT jsonb_agg(jsonb_build_object('name',expected.name,'definition',pg_get_indexdef(c.oid),
         'valid',i.indisvalid,'ready',i.indisready,'table',table_obj.relname,
@@ -139,7 +148,7 @@ LANGUAGE sql STABLE SET search_path=pg_catalog AS $capabilities$
       LEFT JOIN pg_roles owner ON owner.oid=c.relowner
     ),
     'functions',(
-      SELECT jsonb_agg(jsonb_build_array(expected.identity,pg_get_functiondef(p.oid),owner.rolname) ORDER BY expected.identity)
+      SELECT jsonb_agg(jsonb_build_array(expected.identity,pg_get_functiondef(p.oid),owner.rolname,p.proacl) ORDER BY expected.identity)
       FROM (VALUES ('reject_ledger_projection_mutation()'),('finance_scope_matches(text,text,text,text)'),
         ('reject_usage_intake_audit_mutation()'),('guard_usage_intake_attempt_update()'),('guard_usage_intake_outbox_update()')) expected(identity)
       LEFT JOIN pg_proc p ON p.oid=to_regprocedure('cost_intelligence.' || expected.identity)
@@ -168,7 +177,9 @@ BEGIN
         OR EXISTS (SELECT 1 FROM jsonb_array_elements(item->'guards') guard WHERE guard->>2 NOT IN ('O','A'))
         OR (item->>'name' IN ('usage_intake_attempts','usage_intake_outbox')
           AND jsonb_array_length(item->'foreign_keys') IS DISTINCT FROM 3))
-    OR EXISTS (SELECT 1 FROM jsonb_array_elements(installed->'functions') item WHERE item->>2 IS DISTINCT FROM 'ci_finance_owner')
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(installed->'functions') item WHERE item->>2 IS DISTINCT FROM
+      CASE WHEN item->>0 IN ('reject_ledger_projection_mutation()','finance_scope_matches(text,text,text,text)')
+        THEN installed->>'database_owner' ELSE 'ci_finance_owner' END)
     THEN RAISE EXCEPTION 'Stored lineage requires the reviewed immutable source capability'; END IF;
   EXECUTE format('CREATE VIEW cost_intelligence.stored_lineage_reader_health AS
     SELECT EXISTS (SELECT 1 FROM cost_intelligence.schema_migrations WHERE version=''0015_stored_lineage_reader'')

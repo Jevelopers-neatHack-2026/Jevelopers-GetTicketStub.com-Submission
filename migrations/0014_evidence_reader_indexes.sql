@@ -40,6 +40,25 @@ BEGIN
   ) THEN RAISE EXCEPTION 'CI evidence reader requires the reviewed ledger and quarantine scope policies'; END IF;
   EXECUTE 'DROP POLICY ci10_expected_ledger_policy ON cost_intelligence.financial_ledger_events';
   EXECUTE 'DROP POLICY ci10_expected_privacy_policy ON cost_intelligence.financial_privacy_quarantine';
+  -- 0003 supplies the ledger UPDATE/DELETE guard. 0006 supplies both quarantine
+  -- guards and denies runtime TRUNCATE. Bind those actual predecessor controls;
+  -- do not invent or alter a core ledger trigger to satisfy this reader.
+  IF EXISTS (SELECT 1 FROM (VALUES
+      ('financial_ledger_events','financial_ledger_events_append_only',27,'reject_ledger_audit_mutation()'),
+      ('financial_privacy_quarantine','financial_privacy_quarantine_append_only',27,'reject_financial_privacy_quarantine_mutation()'),
+      ('financial_privacy_quarantine','financial_privacy_quarantine_no_truncate',34,'reject_financial_privacy_quarantine_mutation()')
+    ) expected(table_name,trigger_name,trigger_type,function_identity)
+    LEFT JOIN pg_trigger t ON t.tgrelid=to_regclass('cost_intelligence.' || expected.table_name) AND t.tgname=expected.trigger_name
+    WHERE t.oid IS NULL OR t.tgisinternal OR t.tgtype IS DISTINCT FROM expected.trigger_type
+      OR t.tgfoid IS DISTINCT FROM to_regprocedure('cost_intelligence.' || expected.function_identity)
+      OR t.tgenabled NOT IN ('O','A') OR t.tgnargs<>0 OR octet_length(t.tgargs)<>0 OR t.tgattr<>''::int2vector
+      OR t.tgqual IS NOT NULL OR t.tgconstraint<>0 OR t.tgoldtable IS NOT NULL OR t.tgnewtable IS NOT NULL
+  ) THEN RAISE EXCEPTION 'CI evidence reader requires exact predecessor trigger bindings'; END IF;
+  IF EXISTS (SELECT 1 FROM (VALUES ('financial_ledger_events'),('financial_privacy_quarantine')) expected(name)
+    LEFT JOIN pg_namespace n ON n.nspname='cost_intelligence'
+    LEFT JOIN pg_class c ON c.relnamespace=n.oid AND c.relname=expected.name
+    WHERE has_table_privilege('ci_finance_runtime',c.oid,'TRUNCATE') IS DISTINCT FROM false
+  ) THEN RAISE EXCEPTION 'CI evidence reader requires restricted runtime table privileges'; END IF;
 END $core_policies$;
 
 CREATE INDEX financial_evidence_operation_idx ON cost_intelligence.financial_ledger_events
@@ -85,6 +104,7 @@ LANGUAGE sql STABLE SET search_path=pg_catalog AS $capabilities$
     'tables', (
       SELECT jsonb_agg(jsonb_build_object('name',expected.name,'kind',c.relkind,
         'owner',owner.rolname,'row_security',c.relrowsecurity,'force_row_security',c.relforcerowsecurity,
+        'runtime_truncate',has_table_privilege('ci_finance_runtime',c.oid,'TRUNCATE'),
         'policies', (SELECT jsonb_agg(jsonb_build_array(p.polname,p.polcmd,p.polpermissive,
           (SELECT jsonb_agg(CASE WHEN principal.oid=0 THEN 'PUBLIC' ELSE r.rolname END ORDER BY principal.oid)
             FROM unnest(p.polroles) principal(oid) LEFT JOIN pg_roles r ON r.oid=principal.oid),
@@ -117,7 +137,9 @@ BEGIN
       WHERE item->>'owner' IS DISTINCT FROM 'ci_finance_owner' OR item->>'kind' IS DISTINCT FROM 'r'
         OR item->>'row_security' IS DISTINCT FROM 'true' OR item->>'force_row_security' IS DISTINCT FROM 'true'
         OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(item->'policies') policy WHERE policy->>0=item->>'name' || '_scope_policy')
-        OR jsonb_array_length(item->'guards') IS DISTINCT FROM 2
+        OR item->>'runtime_truncate' IS DISTINCT FROM 'false'
+        OR jsonb_array_length(item->'guards') IS DISTINCT FROM
+          CASE WHEN item->>'name' = 'financial_ledger_events' THEN 1 ELSE 2 END
         OR EXISTS (SELECT 1 FROM jsonb_array_elements(item->'guards') guard WHERE guard->>2 NOT IN ('O','A'))) THEN
     RAISE EXCEPTION 'CI evidence reader requires the reviewed ledger privacy capability';
   END IF;

@@ -17,6 +17,7 @@ export type LineageReadSession = {
 const MAX_OBSERVATIONS = 50;
 const hash = (value: unknown): value is string => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value);
 const id = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:=+-]{0,255}$/.test(value);
+const postingId = (value: unknown): value is string => typeof value === 'string' && /^(?!.*:\/\/)[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(value);
 function samePartition(row: LineageRow, scope: TrustedScope): boolean {
   return row.tenant_id === scope.tenantId && row.project_id === scope.projectId
     && row.environment === scope.environment && row.billing_mode === scope.billingMode;
@@ -31,7 +32,7 @@ function postingReference(row: LineageRow, prefix: string): { eventId: string; e
   }
   // Existing FK binds global event_id only. A pointer whose scoped join fails
   // is inconsistent lineage, not an ordinary unposted observation.
-  if (!id(pointer) || eventId !== pointer || !hash(eventHash)) throw new Error();
+  if (!postingId(pointer) || eventId !== pointer || !hash(eventHash)) throw new Error();
   return { eventId: pointer, eventHash };
 }
 
@@ -147,7 +148,8 @@ const SNAPSHOT_INPUTS = `SELECT count(*)::integer AS input_count,
   count(DISTINCT r.item->>'eventId')::integer AS distinct_ids,
   COALESCE(bool_and(COALESCE(jsonb_typeof(r.item)='object'
     AND (SELECT count(*) FROM jsonb_object_keys(CASE WHEN jsonb_typeof(r.item)='object' THEN r.item ELSE '{}'::jsonb END))=2
-    AND jsonb_typeof(r.item->'eventId')='string' AND (r.item->>'eventId') ~ '^[A-Za-z0-9][A-Za-z0-9._:=+-]{0,255}$'
+    AND jsonb_typeof(r.item->'eventId')='string' AND (r.item->>'eventId') ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$'
+    AND (r.item->>'eventId') !~ '://'
     AND jsonb_typeof(r.item->'eventHash')='string' AND (r.item->>'eventHash') ~ '^sha256:[a-f0-9]{64}$',false)),true) AS inputs_valid,
   count(*) FILTER (WHERE r.item->>'eventId'=$6)::integer AS selected_count,
   max(r.item->>'eventHash') FILTER (WHERE r.item->>'eventId'=$6) AS selected_hash

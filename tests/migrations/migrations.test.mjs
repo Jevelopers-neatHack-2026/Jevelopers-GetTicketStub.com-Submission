@@ -32,6 +32,17 @@ async function assertStoredLineageCapability(client) {
   assert.deepEqual(health.rows, [{ migrations_ready: true }], 'stored lineage retains an independent exact feature capability');
   const probes = await client.query("SELECT polname FROM pg_policy WHERE polname LIKE 'ci10_lineage_expected_%'");
   assert.deepEqual(probes.rows, [], 'the four transient lineage policy probes must be removed atomically');
+  const owners = await client.query(`SELECT pg_get_userbyid(d.datdba) AS database_owner,
+      p.proname::text AS name, pg_get_userbyid(p.proowner) AS owner
+    FROM pg_database d CROSS JOIN pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE d.datname=current_database() AND n.nspname='cost_intelligence'
+      AND p.proname IN ('reject_ledger_projection_mutation','finance_scope_matches',
+        'reject_usage_intake_audit_mutation','guard_usage_intake_attempt_update','guard_usage_intake_outbox_update')
+    ORDER BY p.proname`);
+  assert.equal(owners.rows.length, 5);
+  for (const row of owners.rows) assert.equal(row.owner,
+    ['reject_ledger_projection_mutation', 'finance_scope_matches'].includes(row.name) ? row.database_owner : 'ci_finance_owner',
+    'only the two reviewed bootstrap functions retain the database installer owner');
 }
 async function assertCoverageCapability(client) {
   const health = await client.query('SELECT migrations_ready FROM cost_intelligence.reconciliation_coverage_health');
@@ -416,6 +427,146 @@ async function assert0006RejectedBeforeRecord(client, migrationName, label, expe
 function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
 }
+
+async function readerMigrationBlock(filename, tag) {
+  const source = await readFile(join(root, 'migrations', filename), 'utf8');
+  const start = source.indexOf(`DO $${tag}$`);
+  const end = source.indexOf(`END $${tag}$;`, start);
+  assert.ok(start >= 0 && end > start, 'the catalog control must execute the actual migration block');
+  return source.slice(start, end + `END $${tag}$;`.length);
+}
+
+async function withReaderCatalogMutation(client, { ddl, health, preflight, refusal, inspect }) {
+  assert.deepEqual((await client.query(health)).rows, [{ migrations_ready: true }]);
+  await client.query('BEGIN');
+  try {
+    await client.query(ddl);
+    await inspect?.();
+    assert.deepEqual((await client.query(health)).rows, [{ migrations_ready: false }],
+      'an altered predecessor catalog must invalidate the captured feature capability');
+    if (preflight) await assert.rejects(client.query(preflight), error => error.code === 'P0001' && error.message === refusal,
+      'a new installation must reject the exact altered predecessor before recording a healthy baseline');
+  } finally {
+    await client.query('ROLLBACK');
+  }
+  assert.deepEqual((await client.query(health)).rows, [{ migrations_ready: true }],
+    'transaction rollback restores the original reviewed catalog without financial row mutations');
+}
+
+async function readerCatalogClient() {
+  assert.ok(process.env.CI_TEST_DB_HOST, 'reader catalog controls require the disposable PostgreSQL harness');
+  const client = new Client({ ...databaseConfigFromEnvironment(), query_timeout: 10000 });
+  await client.connect();
+  try {
+    assertDisposableMarker((await client.query('SELECT marker FROM ci_test.disposable_database_marker')).rows);
+    await client.query("SET statement_timeout='5s'");
+    return client;
+  } catch (error) {
+    await client.end();
+    throw error;
+  }
+}
+
+test('evidence migration rejects missing, disabled, wrong-event and wrong-function predecessor guards', async t => {
+  const client = await readerCatalogClient();
+  try {
+    const guards = [
+      ['financial_ledger_events', 'financial_ledger_events_append_only', 27, 'reject_ledger_audit_mutation'],
+      ['financial_privacy_quarantine', 'financial_privacy_quarantine_append_only', 27, 'reject_financial_privacy_quarantine_mutation'],
+      ['financial_privacy_quarantine', 'financial_privacy_quarantine_no_truncate', 34, 'reject_financial_privacy_quarantine_mutation'],
+    ];
+    const actual = await client.query(`SELECT c.relname::text AS table_name, t.tgname::text AS name,
+        t.tgtype::int AS type, p.proname::text AS function_name, t.tgenabled::text AS enabled
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_proc p ON p.oid=t.tgfoid
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='cost_intelligence' AND t.tgname=ANY($1::text[]) ORDER BY t.tgname`, [guards.map(row => row[1])]);
+    assert.deepEqual(actual.rows, guards.map(([table_name, name, type, function_name]) => ({ table_name, name, type, function_name, enabled: 'O' })));
+    const preflight = await readerMigrationBlock('0014_evidence_reader_indexes.sql', 'core_policies');
+    for (const [table, trigger, type, fn] of guards) {
+      const relation = `cost_intelligence.${table}`;
+      const event = type === 27 ? 'BEFORE UPDATE OR DELETE' : 'BEFORE TRUNCATE';
+      const level = type === 27 ? 'ROW' : 'STATEMENT';
+      for (const [label, ddl] of [
+        ['missing', `DROP TRIGGER ${trigger} ON ${relation}`],
+        ['disabled', `ALTER TABLE ${relation} DISABLE TRIGGER ${trigger}`],
+        ['wrong event', `CREATE OR REPLACE TRIGGER ${trigger} ${type === 27 ? 'BEFORE UPDATE' : 'AFTER TRUNCATE'} ON ${relation} FOR EACH ${level} EXECUTE FUNCTION cost_intelligence.${fn}()`],
+        ['wrong function', `CREATE OR REPLACE TRIGGER ${trigger} ${event} ON ${relation} FOR EACH ${level} EXECUTE FUNCTION cost_intelligence.reject_ledger_projection_mutation()`],
+      ]) await t.test(`${trigger}: ${label}`, () => withReaderCatalogMutation(client, {
+        ddl, health: 'SELECT migrations_ready FROM cost_intelligence.evidence_reader_health', preflight,
+        refusal: 'CI evidence reader requires exact predecessor trigger bindings',
+      }));
+    }
+    await assertEvidenceCapability(client);
+  } finally {
+    await client.end();
+  }
+});
+
+test('evidence migration rejects effective runtime table-clearing privileges from direct, public and inherited grants', async t => {
+  const client = await readerCatalogClient();
+  try {
+    const runtimeLogin = runtimeDatabaseConfigFromEnvironment().user;
+    const preflight = await readerMigrationBlock('0014_evidence_reader_indexes.sql', 'core_policies');
+    for (const table of ['financial_ledger_events', 'financial_privacy_quarantine']) {
+      const relation = `cost_intelligence.${table}`;
+      const privileges = () => client.query(`SELECT has_table_privilege('ci_finance_runtime',$1,'TRUNCATE') AS group_grant,
+        has_table_privilege($2,$1,'TRUNCATE') AS login_grant`, [relation, runtimeLogin]);
+      assert.deepEqual((await privileges()).rows, [{ group_grant: false, login_grant: false }],
+        'the reviewed runtime group and actual restricted login have no effective table-clearing privilege');
+      const inheritedRole = quoteIdentifier(`ci_reader_acl_${randomUUID().replaceAll('-', '')}`);
+      for (const [label, ddl] of [
+        ['direct', `GRANT TRUNCATE ON ${relation} TO ci_finance_runtime`],
+        ['public', `GRANT TRUNCATE ON ${relation} TO PUBLIC`],
+        ['inherited', `CREATE ROLE ${inheritedRole} NOLOGIN; GRANT TRUNCATE ON ${relation} TO ${inheritedRole}; GRANT ${inheritedRole} TO ci_finance_runtime`],
+      ]) await t.test(`${table}: ${label} grant`, () => withReaderCatalogMutation(client, {
+        ddl, health: 'SELECT migrations_ready FROM cost_intelligence.evidence_reader_health', preflight,
+        refusal: 'CI evidence reader requires restricted runtime table privileges',
+        inspect: async () => assert.deepEqual((await privileges()).rows, [{ group_grant: true, login_grant: true }]),
+      }));
+      assert.deepEqual((await privileges()).rows, [{ group_grant: false, login_grant: false }]);
+    }
+    await assertEvidenceCapability(client);
+  } finally {
+    await client.end();
+  }
+});
+
+test('stored lineage binds the two database-installer owners and rejects owner, function-security and ACL drift', async t => {
+  const client = await readerCatalogClient();
+  try {
+    await assertStoredLineageCapability(client);
+    const owner = (await client.query('SELECT pg_get_userbyid(datdba) AS name FROM pg_database WHERE datname=current_database()')).rows[0].name;
+    assert.notEqual(owner, 'ci_finance_owner', 'the reviewed bootstrap installer is separate from the non-login Finance owner');
+    const health = 'SELECT migrations_ready FROM cost_intelligence.stored_lineage_reader_health';
+    const ownerPreflight = await readerMigrationBlock('0015_stored_lineage_reader.sql', 'lineage_health');
+    for (const [identity, bootstrap] of [
+      ['reject_ledger_projection_mutation()', true], ['finance_scope_matches(text,text,text,text)', true],
+      ['reject_usage_intake_audit_mutation()', false], ['guard_usage_intake_attempt_update()', false],
+      ['guard_usage_intake_outbox_update()', false],
+    ]) await t.test(`${identity}: owner drift`, () => withReaderCatalogMutation(client, {
+      ddl: `ALTER FUNCTION cost_intelligence.${identity} OWNER TO ${quoteIdentifier(bootstrap ? 'ci_finance_owner' : owner)}`,
+      health, preflight: ownerPreflight, refusal: 'Stored lineage requires the reviewed immutable source capability',
+    }));
+    const functionPreflight = await readerMigrationBlock('0015_stored_lineage_reader.sql', 'lineage_policies');
+    for (const change of ['SECURITY DEFINER', 'IMMUTABLE', 'SET search_path=pg_catalog']) {
+      await t.test(`scope function: ${change}`, () => withReaderCatalogMutation(client, {
+        ddl: `ALTER FUNCTION cost_intelligence.finance_scope_matches(text,text,text,text) ${change}`,
+        health, preflight: functionPreflight, refusal: 'Stored lineage requires the reviewed source guard implementations',
+      }));
+    }
+    const publicExecute = await client.query(`SELECT EXISTS(SELECT 1 FROM pg_proc p,
+        LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      WHERE p.oid='cost_intelligence.reject_ledger_projection_mutation()'::regprocedure
+        AND acl.grantee=0 AND acl.privilege_type='EXECUTE') AS allowed`);
+    assert.deepEqual(publicExecute.rows, [{ allowed: false }], 'the frozen bootstrap PUBLIC execute revocation remains effective');
+    await t.test('bootstrap function: public execute drift', () => withReaderCatalogMutation(client, {
+      ddl: 'GRANT EXECUTE ON FUNCTION cost_intelligence.reject_ledger_projection_mutation() TO PUBLIC', health,
+    }));
+    await assertStoredLineageCapability(client);
+  } finally {
+    await client.end();
+  }
+});
 
 async function captureLegacyFinancialRows(client) {
   const tables = [

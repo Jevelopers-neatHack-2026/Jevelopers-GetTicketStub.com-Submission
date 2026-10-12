@@ -5,6 +5,9 @@ import type { PostgresEvidenceReaderPorts } from './postgres-reader.js';
 /** Finance-local metadata contract. This adds no canonical vocabulary or grant. */
 export const STORED_LINEAGE_SCHEMA_VERSION = '1.0.0' as const;
 const Id = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9._:=+-]{0,255}$', maxLength: 256 });
+// Posting identifiers follow the existing ledger alphabet. They are opaque
+// identifiers, never URL locators or the older EvidenceReference ID contract.
+const PostingId = Type.String({ pattern: '^(?!.*://)[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$', maxLength: 256 });
 const Hash = Type.String({ pattern: '^sha256:[a-f0-9]{64}$', maxLength: 71 });
 const RequestId = Type.String({ minLength: 1, maxLength: 128 });
 const object = <T extends Parameters<typeof Type.Object>[0]>(properties: T) => Type.Object(properties, { additionalProperties: false });
@@ -12,9 +15,9 @@ const nullable = <T extends Parameters<typeof Type.Union>[0][number]>(schema: T)
 const literals = <T extends string>(values: readonly T[]) => Type.Union(values.map(value => Type.Literal(value)));
 const completeness = literals(['unknown', 'incomplete', 'complete'] as const);
 const valuation = literals(['unknown', 'estimated', 'provider_confirmed'] as const);
-const posting = object({ eventId: Id, eventHash: Hash });
+const posting = object({ eventId: PostingId, eventHash: Hash });
 const selector = Type.Union([
-  object({ kind: Type.Literal('posting_event'), eventId: Id }),
+  object({ kind: Type.Literal('posting_event'), eventId: PostingId }),
   object({ kind: Type.Literal('source_observation'), sourceObservationId: Id }),
 ]);
 
@@ -64,13 +67,13 @@ export type IntakeLineageResult = Static<typeof IntakeLineageResultSchema>;
 
 export const SnapshotInputLineageRequestSchema = object({
   schemaVersion: Type.Literal(STORED_LINEAGE_SCHEMA_VERSION), requestId: RequestId,
-  scope: TrustedScopeSchema, snapshotId: Hash, postingEventId: Id,
+  scope: TrustedScopeSchema, snapshotId: Hash, postingEventId: PostingId,
 });
 export type SnapshotInputLineageRequest = Static<typeof SnapshotInputLineageRequestSchema>;
 
 export const SnapshotInputLineageResultSchema = object({
   schemaVersion: Type.Literal(STORED_LINEAGE_SCHEMA_VERSION), requestId: RequestId,
-  scope: TrustedScopeSchema, snapshotId: Hash, postingEventId: Id,
+  scope: TrustedScopeSchema, snapshotId: Hash, postingEventId: PostingId,
   status: literals(['recorded_input', 'not_recorded_input', 'snapshot_not_found', 'posting_not_found'] as const),
   snapshot: nullable(object({
     snapshotId: Hash, encoding: literals(['1.0.0', '2.0.0'] as const),
