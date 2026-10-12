@@ -95,7 +95,8 @@ This is how a trace of a real harness workflow reaches Neatlogs. It is off by de
    - The worker itself is unchanged and still makes no network calls.
    - Records are the existing `agent-harness.telemetry.v1` projection with its fixed event allowlist. Policy drops are unchanged; for example, `private_local_step_*` events are dropped.
    - Tokens use a random HMAC key for each process. A run's events share one session (the workflow token). Tokens cannot be linked across runs.
-3. **Outbox sink.** `createNeatlogsOutboxSink({ directory })` is the exporter's sink. It validates the batch with the mapper, then writes it atomically to `batch-<first>-<last>.json` (mode 0600, fsync, rename). The sink does no network I/O, so it fits the bounded sink contract. The cursor advances only after the batch is on disk.
+3. **Outbox sink.** `createNeatlogsOutboxSink({ directory })` is the exporter's sink. It validates the batch with the mapper, then writes it atomically to `batch-<first>-<last>.json` (mode 0600, file and directory fsync, rename). It does no network I/O. The cursor advances only after the batch is durable on disk.
+   - File enumeration, reads and durability calls are synchronous; an exporter timeout cannot preempt a blocked filesystem call. Slow or unavailable storage can block the event loop or refuse the sink write.
    - If a retry after a timeout carries a page that grew in the meantime, only the new suffix is written.
    - A stored record that differs from the retried one is refused.
 4. **Drain.** `drainNeatlogsOutbox({ directory, config, tags, forbidden, readback })` processes each `pending_send` batch in five steps:

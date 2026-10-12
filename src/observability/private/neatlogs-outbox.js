@@ -1,8 +1,9 @@
 import {
-  closeSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, statSync, writeSync
+  closeSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync,
+  statSync, unlinkSync, writeSync
 } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { DurableWorkflowStore } from '../../internal/durable-store.js';
 import { createHmacTokenizer, createTelemetryExporter } from '../../internal/telemetry.js';
 import { loadNeatlogsConfig, scrubNeatlogsEnvironment } from './neatlogs-config.js';
@@ -20,21 +21,26 @@ import { readbackNeatlogsPlan, sendNeatlogsPlan } from './neatlogs-live.js';
 import { validateNeatlogsSourceRecords } from './neatlogs-sdk-mapper.js';
 
 // Durable local outbox between the harness TelemetryExporter and the Neatlogs
-// OTLP sender. The exporter's sink contract is local and short (<= 500 ms,
-// retried on timeout), so the sink only appends a validated batch of
-// already-projected records to this outbox. Network delivery happens later in
-// `drainNeatlogsOutbox`, which records each batch's send and readback state.
+// OTLP sender. The sink only appends a validated batch of already-projected
+// records to this outbox and performs no network I/O. Its filesystem calls are
+// synchronous and cannot be preempted by an exporter timeout. Network delivery
+// happens later in `drainNeatlogsOutbox`, which records each batch's send and
+// readback state.
 //
-// Batch state: pending_send -> receiver_accepted -> verified | pending | missing
-// | mismatch | readback_failed. Retryable send outcomes (outcome_unknown,
-// not_accepted, aborted) stay pending_send and resend identical IDs.
+// Persisted batch states are restricted to this sender/readback state machine.
+// Retryable send outcomes (outcome_unknown, not_accepted, aborted) stay
+// pending_send and resend the same deterministic IDs.
 
 export const NEATLOGS_OUTBOX_SCHEMA = 'agent-harness.neatlogs.outbox-batch.v1';
-const BATCH_FILE = /^batch-(\d{12})-(\d{12})\.json$/;
+const BATCH_FILE = /^batch-(\d{12,16})-(\d{12,16})\.json$/;
 const MAX_BATCH_FILE_BYTES = 128 * 1024;
 const MAX_BATCHES_PER_DRAIN = 32;
 const RETRYABLE_SEND = new Set(['outcome_unknown', 'not_accepted', 'aborted', 'not_configured']);
 const TERMINAL_READBACK = new Set(['verified', 'mismatch']);
+const BATCH_STATES = new Set([
+  'pending_send', 'receiver_accepted', 'partially_rejected', 'rejected', 'verified',
+  'pending', 'missing', 'mismatch', 'readback_failed', 'readback_unavailable', 'blocked'
+]);
 const REVISION = /^[0-9a-f]{40}$/;
 const MODE = /^[a-z][a-z0-9-]{0,31}$/;
 
@@ -47,27 +53,48 @@ export class NeatlogsOutboxError extends Error {
 }
 
 function pad(sequence) {
-  return String(sequence).padStart(12, '0');
+  return String(sequence).padStart(16, '0');
+}
+
+function batchRange(path) {
+  const match = BATCH_FILE.exec(path.slice(resolve(path, '..').length + 1));
+  if (!match) throw new NeatlogsOutboxError('BATCH_INVALID');
+  const first = BigInt(match[1]);
+  const last = BigInt(match[2]);
+  if (first < 1n || last < first || last > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new NeatlogsOutboxError('BATCH_INVALID');
+  }
+  return { first: Number(first), last: Number(last) };
+}
+
+function syncDirectory(path) {
+  const fd = openSync(path, 'r');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function writeDurably(path, text) {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   const fd = openSync(temporary, 'wx', 0o600);
   try {
-    writeSync(fd, text);
+    const bytes = Buffer.from(text, 'utf8');
+    let offset = 0;
+    while (offset < bytes.length) {
+      const written = writeSync(fd, bytes, offset, bytes.length - offset, null);
+      if (!Number.isSafeInteger(written) || written <= 0) throw new NeatlogsOutboxError('DURABLE_WRITE_FAILED');
+      offset += written;
+    }
     fsyncSync(fd);
-  } finally {
     closeSync(fd);
-  }
-  renameSync(temporary, path);
-  let dirFd;
-  try {
-    dirFd = openSync(resolve(path, '..'), 'r');
-    fsyncSync(dirFd);
-  } catch {
-    // Directory fsync is best effort on platforms that refuse it.
-  } finally {
-    if (dirFd !== undefined) closeSync(dirFd);
+    renameSync(temporary, path);
+    syncDirectory(dirname(path));
+  } catch (error) {
+    try { closeSync(fd); } catch { /* already closed or close failed */ }
+    try { unlinkSync(temporary); } catch { /* rename may already have published it */ }
+    throw error;
   }
 }
 
@@ -75,10 +102,16 @@ function readBatch(path) {
   const stats = statSync(path);
   if (!stats.isFile() || stats.size > MAX_BATCH_FILE_BYTES) throw new NeatlogsOutboxError('BATCH_INVALID');
   const batch = parseNeatlogsJson(readFileSync(path, 'utf8'));
-  if (batch?.schema !== NEATLOGS_OUTBOX_SCHEMA || typeof batch.state !== 'string') {
+  if (batch?.schema !== NEATLOGS_OUTBOX_SCHEMA || !BATCH_STATES.has(batch.state)) {
     throw new NeatlogsOutboxError('BATCH_INVALID');
   }
   batch.records = validateNeatlogsSourceRecords(batch.records);
+  const range = batchRange(path);
+  if (batch.firstSequence !== range.first || batch.lastSequence !== range.last
+      || batch.firstSequence !== batch.records[0].sequence
+      || batch.lastSequence !== batch.records.at(-1).sequence) {
+    throw new NeatlogsOutboxError('BATCH_INVALID');
+  }
   return batch;
 }
 
@@ -104,9 +137,10 @@ export function runtimeNeatlogsTags({ revision, harnessMode }) {
 
 /**
  * Returns a TelemetryExporter sink that durably appends each accepted batch to
- * `directory`. It performs no network I/O, so it fits the exporter's bounded
- * sink contract. Records already stored are accepted again without
- * rewriting; a record that differs from the stored copy is refused.
+ * `directory`. It performs no network I/O. Its filesystem operations are
+ * synchronous and cannot be preempted by the exporter's timeout. Records
+ * already stored are accepted again without rewriting; a record that differs
+ * from the stored copy is refused.
  */
 export function createNeatlogsOutboxSink({ directory }) {
   if (typeof directory !== 'string' || directory.length === 0) throw new NeatlogsOutboxError('INVALID_DIRECTORY');
@@ -120,8 +154,8 @@ export function createNeatlogsOutboxSink({ directory }) {
     // the uncovered suffix is written, so no event is stored twice.
     const stored = new Map();
     for (const existingPath of listNeatlogsOutbox(root)) {
-      const [, firstText, lastText] = BATCH_FILE.exec(existingPath.slice(root.length + 1));
-      if (Number(lastText) < validated[0].sequence || Number(firstText) > validated.at(-1).sequence) continue;
+      const { first, last } = batchRange(existingPath);
+      if (last < validated[0].sequence || first > validated.at(-1).sequence) continue;
       for (const record of readBatch(existingPath).records) stored.set(record.sequence, record);
     }
     const fresh = [];
@@ -131,7 +165,10 @@ export function createNeatlogsOutboxSink({ directory }) {
       else if (recordsJson([existing]) !== recordsJson([record])) throw new NeatlogsOutboxError('BATCH_CONFLICT');
       else if (fresh.length > 0) throw new NeatlogsOutboxError('BATCH_CONFLICT');
     }
-    if (fresh.length === 0) return { accepted: true, acceptedCount: validated.length };
+    if (fresh.length === 0) {
+      syncDirectory(root);
+      return { accepted: true, acceptedCount: validated.length };
+    }
     const first = fresh[0].sequence;
     const last = fresh.at(-1).sequence;
     const path = join(root, `batch-${pad(first)}-${pad(last)}.json`);
@@ -153,7 +190,14 @@ export function listNeatlogsOutbox(directory) {
   const root = resolve(directory);
   return readdirSync(root)
     .filter(name => BATCH_FILE.test(name))
-    .sort()
+    .sort((left, right) => {
+      const leftMatch = BATCH_FILE.exec(left);
+      const rightMatch = BATCH_FILE.exec(right);
+      const first = BigInt(leftMatch[1]) - BigInt(rightMatch[1]);
+      if (first !== 0n) return first < 0n ? -1 : 1;
+      const last = BigInt(leftMatch[2]) - BigInt(rightMatch[2]);
+      return last < 0n ? -1 : last > 0n ? 1 : 0;
+    })
     .map(name => join(root, name));
 }
 
