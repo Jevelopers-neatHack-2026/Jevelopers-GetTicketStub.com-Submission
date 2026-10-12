@@ -80,3 +80,19 @@ test('table errors report the record and column', () => {
   assert.throws(() => encodeCsv(['ok', '\u0000'], []), error => error.code === 'INVALID_TEXT' && error.record === 0 && error.column === 1);
   assert.equal(encodeCsv(['=total'], []), "'=total\r\n");
 });
+
+test('review hardening: Unicode whitespace, BOM, C1/bidi controls, separator directives and malformed cells', () => {
+  for (const payload of [' =1', ' +1', ' -1', ' @1', ' =1', '​=1']) {
+    const encoded = encodeTextCell(payload);
+    const unquoted = encoded.startsWith('"') ? encoded.slice(1, -1).replaceAll('""', '"') : encoded;
+    assert.equal(unquoted, `'${payload}`, JSON.stringify(payload));
+  }
+  assert.equal(encodeTextCell(' hello'), ' hello');
+  for (const bad of ['﻿=1+1', 'a﻿b', '\u0085=1', '\u009B', '‮=1', '⁦x', '‏1']) rejects(() => encodeTextCell(bad), 'INVALID_TEXT');
+  assert.throws(() => encodeCsv(['﻿=total'], []), error => error instanceof CsvEncodingError && error.code === 'INVALID_TEXT' && error.record === 0 && error.column === 0);
+  for (const directive of ['sep=;', 'SEP=,', ' sep=\t']) rejects(() => encodeCsv([directive], [[{ kind: 'text', value: 'safe;=1+1' }]]), 'INVALID_HEADER');
+  assert.equal(encodeCsv(['metric', 'sep=;'], []), 'metric,sep=;\r\n');
+  rejects(() => encodeCsv(['a'], [[null]]), 'INVALID_CELL');
+  rejects(() => encodeCsv(['a'], [[{ kind: 'formula', value: '=1' }]]), 'INVALID_CELL');
+  rejects(() => encodeMoneyCell('-0.5', 0), 'INVALID_MONEY');
+});

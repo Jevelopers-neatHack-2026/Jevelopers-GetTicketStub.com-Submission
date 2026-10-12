@@ -15,7 +15,15 @@ export type CsvCell =
   /** Unknown or absent values. Encoded as an empty cell, never as zero. */
   | { readonly kind: 'empty' };
 
-export type CsvEncodingErrorCode = 'INVALID_TEXT' | 'INVALID_MONEY' | 'INVALID_CURRENCY' | 'INVALID_INTEGER' | 'ROW_WIDTH_MISMATCH' | 'EMPTY_HEADER';
+export type CsvEncodingErrorCode =
+  | 'INVALID_TEXT'
+  | 'INVALID_MONEY'
+  | 'INVALID_CURRENCY'
+  | 'INVALID_INTEGER'
+  | 'INVALID_CELL'
+  | 'INVALID_HEADER'
+  | 'ROW_WIDTH_MISMATCH'
+  | 'EMPTY_HEADER';
 
 export class CsvEncodingError extends Error {
   readonly code: CsvEncodingErrorCode;
@@ -35,12 +43,17 @@ export const CSV_RECORD_SEPARATOR = '\r\n';
 export const CSV_MAX_SCALE = 18;
 
 // Characters that make spreadsheet applications evaluate a cell, including the full-width forms some
-// applications normalize. Checked after leading whitespace, which some applications skip.
+// applications normalize. Checked after any leading Unicode whitespace or zero-width space, which some
+// applications skip.
 const FORMULA_TRIGGERS = new Set(['=', '+', '-', '@', '\t', '\r', '\n', '＝', '＋', '－', '＠']);
-const LEADING_WHITESPACE = /^[ \t\r\n 　]*/;
+const LEADING_WHITESPACE = /^[\s\u200B]*/u;
 const NEEDS_QUOTING = /[",\r\n]/;
-// C0 controls other than tab, CR and LF have no place in a consumer file.
-const DISALLOWED_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+// C0 controls other than tab, CR and LF, C1 controls, bidirectional controls (which can visually reorder
+// digits) and the byte-order mark (which readers strip, exposing what follows) have no place in a
+// consumer file.
+const DISALLOWED_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/;
+// A first line such as `sep=;` makes some readers switch delimiter, which would split guarded text.
+const SEPARATOR_DIRECTIVE = /^[\s\u200B]*sep=/iu;
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const DECIMAL = /^(-?)(0|[1-9][0-9]*)(?:\.([0-9]+))?$/;
 const CURRENCY = /^[A-Z]{3}$/;
@@ -92,19 +105,23 @@ export function encodeIntegerCell(value: number): string {
 }
 
 export function encodeCell(cell: CsvCell): string {
+  if (typeof cell !== 'object' || cell === null) throw new CsvEncodingError('INVALID_CELL', 'Cells must be typed cell objects.');
   switch (cell.kind) {
     case 'text': return encodeTextCell(cell.value);
     case 'money': return encodeMoneyCell(cell.amount, cell.scale);
     case 'currency': return encodeCurrencyCell(cell.code);
     case 'integer': return encodeIntegerCell(cell.value);
     case 'empty': return '';
-    default: throw new CsvEncodingError('INVALID_TEXT', 'Unknown cell kind.');
+    default: throw new CsvEncodingError('INVALID_CELL', 'Unknown cell kind.');
   }
 }
 
 /** Encode a header and typed rows as one CSV document. Every record, including the last, ends in CRLF. */
 export function encodeCsv(header: readonly string[], rows: readonly (readonly CsvCell[])[]): string {
   if (header.length === 0) throw new CsvEncodingError('EMPTY_HEADER', 'A CSV table needs at least one column.');
+  if (typeof header[0] === 'string' && SEPARATOR_DIRECTIVE.test(header[0])) {
+    throw new CsvEncodingError('INVALID_HEADER', 'The first header cell must not be a separator directive.', 0, 0);
+  }
   const records: string[] = [];
   const encodeRecord = (cells: readonly string[]) => cells.join(',') + CSV_RECORD_SEPARATOR;
   records.push(encodeRecord(header.map((name, column) => withPosition(() => encodeTextCell(name), 0, column))));
