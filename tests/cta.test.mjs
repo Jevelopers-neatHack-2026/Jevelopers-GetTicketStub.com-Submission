@@ -32,9 +32,15 @@ test('no-JS escape is explicit, query-free and uses the same approved native des
   assert.equal(validateCtaSource(html, config).destination, 'https://getticketstub.com/make');
 });
 test('a mismatched or hidden duplicate static fallback link cannot escape the approved config', () => {
-  for (const replacement of ['id="nojsStudio" href="https://other.example.org/make"', 'id="nojsStudio" href=\'https://other.example.org/make\'', 'id="nojsStudio" href=https://other.example.org/make', 'id="nojsStudio" hidden href="https://getticketstub.com/make?private=LP_SYNTHETIC_ONLY"']) {
+  for (const replacement of ['id="nojsStudio" href="https://other.example.org/make"', 'id="nojsStudio" href=\'https://other.example.org/make\'', 'id="nojsStudio" href=https://other.example.org/make', 'id="nojsStudio" HREF="https://other.example.org/make"', 'id="nojsStudio" HREF = \'https://other.example.org/make\'', 'id="nojsStudio" data-href="https://getticketstub.com/make" href="https://other.example.org/make"', 'id="nojsStudio" hidden href="https://getticketstub.com/make?private=LP_SYNTHETIC_ONLY"']) {
     const bad = html.replace('id="nojsStudio" href="https://getticketstub.com/make"', replacement);
     assert.throws(() => validateCtaSource(bad, config), /Static native link differs/);
+  }
+});
+test('duplicate mixed-case href attributes are rejected instead of choosing one', () => {
+  for (const replacement of ['id="nojsStudio" href="https://getticketstub.com/make" HREF="https://other.example.org/make"', 'id="nojsStudio" href="https://other.example.org/make" href="https://getticketstub.com/make"']) {
+    const bad = html.replace('id="nojsStudio" href="https://getticketstub.com/make"', replacement);
+    assert.throws(() => validateCtaSource(bad, config), /Duplicate href/);
   }
 });
 test('withdrawn config requires static no-JS navigation to be withdrawn too', () => {
