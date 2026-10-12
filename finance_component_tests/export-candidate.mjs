@@ -201,7 +201,8 @@ export async function runExportCandidate(outputArg) {
   try {
     const loaded=await loadExportFixtures();assert.equal(process.version,`v${loaded.pin.node}`);await recordEvaluator(here,output);
     const git=spawnSync('git',['-C',here,'show','-s','--format=%H%n%T','HEAD'],{encoding:'utf8',timeout:30000});assert.equal(git.status,0);const [revision,tree]=git.stdout.trim().split('\n');
-    receipt.consumer={revision,tree};receipt.provenance=loaded.pin;receipt.observation=evaluateExportCandidate(loaded);
+    const {originalPacketRoot,...portablePin}=loaded.pin;
+    receipt.consumer={revision,tree};receipt.provenance={...portablePin,originalPacketOrigin:{label:'captured-export0c4',rootSha256:sha256(originalPacketRoot)}};receipt.observation=evaluateExportCandidate(loaded);
     const {loadDenialSupplement,evaluateDenialSupplement}=await import('./export-denial-supplement.mjs');
     const supplement=await loadDenialSupplement();receipt.denialSupplement={provenance:supplement.pin,observation:evaluateDenialSupplement(supplement,loaded)};
     receipt.consumerAcknowledgement='SCOPED_SYNTHETIC_EXPORT_CAPTURE_PROJECTION_ONLY';
