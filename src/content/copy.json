@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "scope": "Safe provisional copy draft; not approved public release",
-  "pageSha256": "8620069a6f83c47518555ce126e11392423524bb6507f0dd59d4c698af938454",
-  "visibleTextSha256": "b0371c01df24f0f3eb8aae24fbeab01c90d04594337f3c4631c643922964b9a0",
+  "pageSha256": "9c3b80588cfa0e4c226e04102f0b14e6bb820fb0d88c61b2965bdd8f01038159",
+  "visibleTextSha256": "fa8589d48462ce281ccf259f9f5267f3d5a9050e6d75164af43be242e02ef705",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
     "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
@@ -1145,12 +1145,12 @@
     {
       "id": "LP-CTA-02",
       "location": "site/index.html local maker/demo boundary",
-      "exactCopy": "Demo studio destination awaiting confirmation. Keep editing the preview here; nothing is sent.",
+      "exactCopy": "Studio link unavailable. Keep editing the preview here; nothing is sent.",
       "evidenceClass": "pending",
       "source": {
         "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
-        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+        "revision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/01d9b08d59bf65ea44fc19ede06701dc67363c63/site/index.html"
       },
       "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
       "upstreamOwner": "Product and frontend; marketing-material wording owner",
@@ -1160,17 +1160,17 @@
       "reviewDate": "2026-10-12",
       "recheckBy": "2026-11-12",
       "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
-      "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+      "sourceNote": "Base CTA behavior plus actual Product-thread navigation decision documented separately; product/marketing/full-release approval remains pending."
     },
     {
       "id": "LP-CTA-03",
       "location": "site/index.html local maker/demo boundary",
-      "exactCopy": "Open demo studio →",
+      "exactCopy": "Open studio",
       "evidenceClass": "pending",
       "source": {
         "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-        "revision": "b6ae55cd48971c9ef292293252f1931744a91095",
-        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b6ae55cd48971c9ef292293252f1931744a91095/site/index.html"
+        "revision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/01d9b08d59bf65ea44fc19ede06701dc67363c63/site/index.html"
       },
       "productEvidence": "NONE_PRODUCTION; local control or unavailable/approved-fixture wording only",
       "upstreamOwner": "Product and frontend; marketing-material wording owner",
@@ -1180,7 +1180,14 @@
       "reviewDate": "2026-10-12",
       "recheckBy": "2026-11-12",
       "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
-      "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+      "sourceNote": "Base CTA behavior plus actual Product-thread navigation decision documented separately; product/marketing/full-release approval remains pending.",
+      "navigationOwnerApproval": {
+        "status": "APPROVED",
+        "scope": "public-navigation-label-only",
+        "decisionSource": "review/cta-navigation-decision.json",
+        "marketingApproval": "PENDING",
+        "publicationApproval": "PENDING"
+      }
     },
     {
       "id": "LP-CTA-04",

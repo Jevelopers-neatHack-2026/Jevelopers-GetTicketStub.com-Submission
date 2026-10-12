@@ -20,11 +20,11 @@ function journey(value, options) { return exerciseJourney(fixtureSource(html, va
 test('actual source config, no-JS markup and local editor boundary are explicit', () => {
   assert.deepEqual(sourceConfig(html), config);
   const result = validateCtaSource(html, config);
-  assert.equal(result.destination, null); assert.equal(result.externalHandoff, 'disabled');
+  assert.equal(result.destination, 'https://getticketstub.com/make'); assert.equal(result.externalHandoff, 'link-only-local-check');
   assert.match(result.localNote, /Nothing was sent/);
   assert.ok(!/<form\b|\bname="link"|type="submit"/.test(html));
   const link = html.match(/<a\b[^>]*id="demoLink"[^>]*>/)[0];
-  assert.ok(!/\bhref\s*=/.test(link)); assert.match(link, /\bhidden\b/);
+  assert.match(link, /href="https:\/\/getticketstub.com\/make"/); assert.ok(!/\bhidden\b/.test(link));
 });
 test('missing/invalid config cannot expose any external navigation', () => {
   for (const value of [null, {}, { ...clone(config), environment: 'unknown' }, { ...clone(config), capture: 'enabled' }]) assert.equal(journey(value).destination, null);
@@ -35,7 +35,7 @@ test('approved-shaped link fixtures carry only exact owner-allowlisted URL in ea
   for (const environment of ['preview','demo','staging','production']) {
     const fixture = approved(environment), result = journey(fixture);
     assert.equal(result.destination, 'https://public.example.org/demo');
-    assert.equal(result.externalHandoff, 'link-only-fixture');
+    assert.equal(result.externalHandoff, 'link-only-local-check');
     assert.equal(new URL(result.destination).search, '');
     assert.ok(!result.destination.includes(result.inputValue));
     assert.match(result.demoStatus, /text is not included/);
@@ -68,7 +68,7 @@ test('real pointer/Enter/preview/example/navigation handlers keep synthetic inpu
   for (const reduced of [true,false]) for (const failure of ['blocked','failed']) {
     const result = exerciseJourney(html, { reduced, failure });
     assert.ok(result.anchors >= 10); assert.ok(result.previews >= 4);
-    assert.equal(result.destination, null); assert.deepEqual(result.attempts, []);
+    assert.equal(result.destination, 'https://getticketstub.com/make'); assert.deepEqual(result.attempts, []);
     assert.match(result.inputValue, /LP_PRIVACY_SYNTHETIC_ONLY/);
   }
 });
@@ -76,4 +76,34 @@ test('tampered source config, named input and sending confirmation are rejected'
   assert.throws(() => validateCtaSource(fixtureSource(html, approved()), config), /config\/source drift/);
   assert.throws(() => validateCtaSource(html.replace('id="ev" type=', 'id="ev" name="link" type='), config), /submit name/);
   assert.throws(() => validateCtaSource(html.replace('Nothing was sent', 'Sent to the studio'), config), /false send confirmation/);
+});
+
+test('limited thread receipt rejects malformed observation/approval scope and cannot migrate to another environment', () => {
+  for (const observations of [{}, [null], ['invalid']]) {
+    const bad = clone(config); bad.destinations.preview.receipt.observations = observations;
+    assert.equal(journey(bad).destination, null);
+  }
+  for (const change of [r => { r.scope = 'release'; }, r => { r.mode = 'sandbox'; }, r => { r.label = 'Try demo'; }, r => { r.source.threadId = 'other'; }]) {
+    const bad = clone(config); change(bad.destinations.preview.receipt); assert.equal(journey(bad).destination, null);
+  }
+  for (const environment of ['demo','staging','production']) {
+    const bad = clone(config); bad.environment = environment; bad.destinations[environment] = clone(bad.destinations.preview); bad.destinations[environment].receipt.environment = environment;
+    assert.equal(journey(bad).destination, null);
+  }
+});
+test('actual live navigation target stays byte-identical after editing, chips, button clicks and Enter', () => {
+  const result = exerciseJourney(html);
+  assert.equal(result.destination, 'https://getticketstub.com/make');
+  const url = new URL(result.destination); assert.equal(url.search, ''); assert.equal(url.hash, '');
+  assert.match(result.inputValue, /LP_PRIVACY_SYNTHETIC_ONLY/); assert.ok(!result.destination.includes(result.inputValue));
+});
+
+test('invalid config must remove the real pre-existing native href; deletion mutant fails the safety assertion', () => {
+  const invalid = clone(config); invalid.destinations.preview.status = 'PENDING';
+  const changed = fixtureSource(html, invalid);
+  assert.match(changed, /id="demoLink" href="https:\/\/getticketstub.com\/make"/);
+  assert.equal(exerciseJourney(changed).destination, null);
+  const mutant = changed.replace("demoLink.removeAttribute('href');", '');
+  assert.notEqual(mutant, changed);
+  assert.throws(() => assert.equal(exerciseJourney(mutant).destination, null), assert.AssertionError);
 });

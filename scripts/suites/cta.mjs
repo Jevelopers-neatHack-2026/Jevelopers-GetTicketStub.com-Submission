@@ -31,10 +31,18 @@ export function validateCtaSource(html, config) {
   const result = exerciseJourney(html);
   const entry = config.destinations[config.environment];
   if (entry?.status !== 'APPROVED' || entry.availability !== 'verified') assert.equal(result.destination, null, 'Pending/unavailable destination must remain disabled');
+  const link = html.match(/<a\b[^>]*id="demoLink"[^>]*>/)?.[0];
+  assert.ok(link, 'Studio placement missing');
+  const href = link.match(/\bhref="([^"]*)"/)?.[1] || null;
+  assert.equal(href, result.destination, 'Native studio href differs from approved runtime destination');
+  assert.match(html, /id="demoLink"[^>]*>Open studio<\/a>/);
   return result;
 }
 export default async function run({ root, artifactDir, mode = 'release' }) {
   const config = JSON.parse(await readFile(resolve(root, 'src/content/cta.json'), 'utf8'));
+  const decision = JSON.parse(await readFile(resolve(root, 'review/cta-navigation-decision.json'), 'utf8'));
+  assert.deepEqual(config.destinations.preview.receipt, decision, 'Owner navigation receipt/config drift');
+  assert.equal(decision.scope, 'public-navigation-only');
   const copy = JSON.parse(await readFile(resolve(root, 'src/content/copy.json'), 'utf8'));
   const privacy = JSON.parse(await readFile(resolve(root, 'review/privacy-inventory.json'), 'utf8'));
   const html = await readFile(resolve(root, 'site/index.html'), 'utf8');
@@ -46,9 +54,9 @@ export default async function run({ root, artifactDir, mode = 'release' }) {
   if (tests.error || tests.status !== 0) throw new Error(tests.error?.message || `CTA tests exited ${tests.status}`);
   if (mode === 'release') {
     assert.ok(result.destination, 'CTA destination approval/reachability pending: current link is disabled');
-    throw new Error('Release CTA owner attestation, exact-host reachability and browser evidence pending; synthetic fixture cannot pass release');
+    throw new Error('Release CTA deployed revision/artifact identity, broader owner acceptance and browser evidence pending; navigation-only approval cannot pass release');
   }
   assert.equal(mode, 'draft');
-  console.log('cta: local input stays local; no form/query handoff; external demo destination and owner/browser evidence PENDING');
+  console.log('cta: local input stays local; no form/query handoff; owner-approved Open studio navigation only; deployment/release/browser evidence PENDING');
   return { status: 'PASS_DRAFT' };
 }
