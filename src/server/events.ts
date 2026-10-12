@@ -1,5 +1,6 @@
 // The TicketStub event taxonomy (ticketstub.event/1): what happened, never who or what was said.
 // Pure (node:crypto only, no app imports) so scripts/smoke-server.mjs runs this exact sanitizer under plain Node.
+// The one exception is exportToHarness, which loads ./harness-export only when the hand-off is switched on.
 //
 // An event carries only safe fields: ids as hashes ("refs"), codes, counts, flags, timestamps and a few fixed
 // words. It never carries a URL or query string, a prompt, an email, a name, a note, a photo or a token. The
@@ -176,15 +177,21 @@ export function pushRing(ev: TicketstubEvent, tenantRef?: string): void {
 export const ringEvents = (): StoredEvent[] => [...(g.__ticketstubEventRing ?? [])];
 
 // ---------------------------------------------------------------------------------------------
-// Harness hand-off (stub)
+// Harness hand-off
 // ---------------------------------------------------------------------------------------------
 
 /**
- * HAND-OFF STUB. The agent-harness repo owns Neatlogs and durable workflow tracing; the studio routes its
- * events there later. This is the single place that hand-off plugs in (see docs/architecture/events.md).
- * TODO(harness): send `events` (already sanitized, schema ticketstub.event/1) to the harness trace
- * endpoint once its contract exists. Today it is a no-op: nothing leaves the process, and Neatlogs is not called.
+ * Gives already-sanitized events to the agent-harness, which owns Neatlogs and durable workflow tracing (see
+ * docs/architecture/events.md). Off unless TICKETSTUB_HARNESS_EXPORT=neatlogs; then the harness module is loaded on
+ * first use and stores the events in its durable outbox, and a background drain delivers them. Never throws and
+ * never waits for the network, so recording an event costs a request nothing more than one local write.
  */
 export async function exportToHarness(events: readonly TicketstubEvent[]): Promise<void> {
-  void events;
+  if (events.length === 0 || process.env.TICKETSTUB_HARNESS_EXPORT?.trim().replace(/^(["'])(.*)\1$/, "$2").trim().toLowerCase() !== "neatlogs") return;
+  try {
+    const { handOff } = await import("./harness-export");
+    handOff(events);
+  } catch {
+    console.warn("[harness] hand-off module could not load");
+  }
 }

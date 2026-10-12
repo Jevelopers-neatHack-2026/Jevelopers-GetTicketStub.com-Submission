@@ -1,0 +1,259 @@
+{
+  "suite": "mail-off",
+  "mode": "fixture",
+  "command": "npm run verify:product -- --suite mail-off --mode fixture --evidence-dir <scratch>",
+  "exitCode": 0,
+  "counts": {
+    "passed": 60,
+    "failed": 0,
+    "skipped": 0
+  },
+  "startedAt": "2026-10-12T00:47:36.830Z",
+  "finishedAt": "2026-10-12T00:47:40.344Z",
+  "gitSha": "5b5c8f29f186542cb4b8aceaa020761b30603f0a",
+  "gitDirty": false,
+  "node": "v22.23.3",
+  "blockedNetwork": [],
+  "steps": [
+    {
+      "name": "fixture mode refuses outbound network",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] health is ok with storage writable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] sign-in link answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the link stored is a SHA-256 hash only, live for exactly 15 minutes",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] a seeded session is signed in",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] email change answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the email-change response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the dev email preview is a 404",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the server log holds no sign-in or email-change link",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the server log names no full address",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL unset] the server log says mail was not sent, masked",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] health is ok with storage writable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] sign-in link answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the link stored is a SHA-256 hash only, live for exactly 15 minutes",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] a seeded session is signed in",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] email change answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the email-change response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the dev email preview is a 404",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the server log holds no sign-in or email-change link",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the server log names no full address",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL 0] the server log says mail was not sent, masked",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] health is ok with storage writable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] sign-in link answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the link stored is a SHA-256 hash only, live for exactly 15 minutes",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] a seeded session is signed in",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] email change answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the email-change response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the dev email preview is a 404",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the server log holds no sign-in or email-change link",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the server log names no full address",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL true] the server log says mail was not sent, masked",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] health is ok with storage writable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] sign-in link answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the link stored is a SHA-256 hash only, live for exactly 15 minutes",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] a seeded session is signed in",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] email change answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the email-change response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the dev email preview is a 404",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the server log holds no sign-in or email-change link",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the server log names no full address",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL empty] the server log says mail was not sent, masked",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] health is ok with storage writable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] sign-in link answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the link stored is a SHA-256 hash only, live for exactly 15 minutes",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] a seeded session is signed in",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] email change answers 503 mail_unavailable",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the email-change response carries no devLink and no token URL",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the dev email preview is a 404",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the server log holds no sign-in or email-change link",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the server log names no full address",
+      "ok": true
+    },
+    {
+      "name": "[TICKETSTUB_SANDBOX_MAIL ' 1'] the server log says mail was not sent, masked",
+      "ok": true
+    },
+    {
+      "name": "[control TICKETSTUB_SANDBOX_MAIL=1] sign-in returns a devLink and logs it",
+      "ok": true
+    },
+    {
+      "name": "[control] the session cookie is HttpOnly, SameSite=Lax, Secure, Path=/ and lasts 90 days",
+      "ok": true
+    },
+    {
+      "name": "[control] the link works once",
+      "ok": true
+    },
+    {
+      "name": "no outbound network attempted",
+      "ok": true
+    }
+  ]
+}

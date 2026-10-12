@@ -332,7 +332,7 @@ export function parseRequest(raw: unknown): Parsed<AgentRequest> {
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** The stub as the agent may see it. Excludes guest name, friends, photos, seat, notes and links; strings are clipped to the limits. */
+/** The stub as the agent may see it. Excludes guest name, friends, photos, seat, notes and links (the Apply chip reads the local note itself); strings are clipped to the limits. */
 export function summarize(stub: Stub): StateSummary {
   const ev = stub.event;
   const v = currentVersion(stub);
@@ -374,7 +374,7 @@ export function shortDay(iso: string): string {
 export const editionLabel = (e: Edition): string => cap(e);
 
 /** What an action does, as a short imperative phrase: the chip's label and the agent's proposal. */
-export function describeAction(a: Action, state?: StateSummary): string {
+export function describeAction(a: Action, state?: StateSummary, currentNote?: string): string {
   switch (a.type) {
     case "set_fact": {
       if (a.field === "date") return `Set the date to ${shortDay(a.value)}`;
@@ -389,7 +389,10 @@ export function describeAction(a: Action, state?: StateSummary): string {
     case "set_finish":
       return `Use a ${a.finish} finish`;
     case "set_text":
-      return a.field === "note" ? "Set your note" : `Set the ${a.field} to ${a.value}`;
+      if (a.field !== "note") return `Set the ${a.field} to ${a.value}`;
+      // The note stays out of the state sent to the model, so the owner sees what Apply would overwrite here, on this
+      // device only: `currentNote` comes from the local stub and goes nowhere else.
+      return currentNote ? `Set your note to “${clip(a.value, 40)}”, replacing “${clip(currentNote, 40)}”` : `Set your note to “${clip(a.value, 40)}”`;
     case "remix_art":
       return a.procedural ? "Use procedural art" : a.vibe ? `Remix the art: ${a.vibe}` : "Remix the art";
     case "show_back":

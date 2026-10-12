@@ -432,6 +432,30 @@ test("art: a simulated failure answers as a failed provider in demo mode only", 
   assert.notEqual(res.status, 502, "a live runtime ignores the flag");
 });
 
+test("the note chip shows the text it would replace, from the local note only", () => {
+  const a = { type: "set_text", field: "note", value: "Best night ever" };
+  assert.equal(P.describeAction(a, state()), "Set your note to “Best night ever”");
+  assert.equal(P.describeAction(a, state(), "old words"), "Set your note to “Best night ever”, replacing “old words”");
+  assert.ok(!JSON.stringify(state()).includes("note"), "the summary sent to the model still has no note");
+});
+
+test("art: a simulated failure is metered like a real request, so it can't be looped past the allowance", async () => {
+  demo();
+  const { getStorage } = await import("../src/server/index.ts");
+  const { hashToken } = await import("../src/server/crypto.ts");
+  const ip = "203.0.113.77";
+  const event = { type: "concert", title: "Offline Test", facts: [] };
+  const mk = () => new Request("http://localhost/api/art", { method: "POST", headers: { "content-type": "application/json", "x-real-ip": ip }, body: JSON.stringify({ event, simulate: "failure" }) });
+  let res = await art.POST(mk());
+  assert.equal(res.status, 502, "inside the allowance the forced failure still answers as a failed provider");
+  const before = sink.events.length;
+  for (let i = 0; i < 30; i++) await getStorage().useArtQuota([{ key: `ip:${hashToken(ip)}`, max: 30 }], Date.now(), true);
+  res = await art.POST(mk());
+  assert.equal(res.status, 429, "over the allowance the quota answers first");
+  assert.equal((await res.json()).error.code, "art_limit");
+  assert.ok(!JSON.stringify(sink.events.slice(before)).includes("provider_unavailable"), "no failure is recorded for a limited request");
+});
+
 test("every step is traced: plan, result, failure, recovery and follow-up, with no message text or values", async () => {
   demo();
   await agent.POST(post(request({ message: `Fix the date to 11 Oct 2024 ${SECRET}` })));

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateImage, providerFailure } from "@/server/ai/providers";
 import { buildArtPrompt } from "@/customer/studio/research/artPrompt";
-import type { ArtLayer, Edition, EventData } from "@/customer/studio/types";
+import type { ArtLayer, Edition, EventData, EventType, Fact } from "@/customer/studio/types";
 import { ensureDevice, getRequestContext, requireCapability } from "@/server/context";
 import { requestIdOf } from "@/server/events";
 import { hashToken } from "@/server/crypto";
@@ -33,6 +33,24 @@ interface ArtRequest {
   simulate?: "failure";
 }
 
+const EVENT_TYPES = new Set<EventType>(["concert", "game", "show", "generic"]);
+const str = (v: unknown, max = 300): string | undefined => (typeof v === "string" && v.trim() ? v.slice(0, max) : undefined);
+
+/** The validated subset of a request event that buildArtPrompt reads; anything malformed is dropped, not thrown on. */
+function promptEvent(raw: EventData): EventData {
+  const facts = Array.isArray(raw.facts)
+    ? raw.facts.filter((f): f is Fact => !!f && typeof f === "object" && typeof f.id === "string" && typeof f.label === "string" && typeof f.value === "string").slice(0, 200)
+    : [];
+  return {
+    type: EVENT_TYPES.has(raw.type) ? raw.type : "generic",
+    title: raw.title.slice(0, 300),
+    venue: str(raw.venue),
+    city: str(raw.city),
+    dateISO: str(raw.dateISO, 32),
+    facts,
+  };
+}
+
 function freshSeed(): number {
   return Math.floor(Math.random() * 2_147_483_647);
 }
@@ -58,11 +76,14 @@ export const POST = observeRoute("art", async (req: Request) => {
     annotate({ code: "bad_request" });
     return errorJson(400, "bad_request", "Send the event to remix.");
   }
-  if (!body.event || typeof body.event.title !== "string") {
+  if (!body || typeof body !== "object" || !body.event || typeof body.event !== "object" || typeof body.event.title !== "string") {
     annotate({ code: "bad_request" });
     return errorJson(400, "bad_request", "Send the event to remix.");
   }
 
+  // Only the fields the art prompt reads, each checked, so a malformed request field can't break the prompt build
+  // (and spend the art allowance) before the image call.
+  const event = promptEvent(body.event);
   const vibe = typeof body.vibe === "string" && body.vibe.trim() ? body.vibe.trim().slice(0, 120) : undefined;
   const seed = typeof body.seed === "number" && Number.isFinite(body.seed) ? Math.floor(body.seed) : freshSeed();
 
@@ -70,12 +91,6 @@ export const POST = observeRoute("art", async (req: Request) => {
   const headers: Record<string, string> = device.cookie ? { "set-cookie": device.cookie } : {};
   const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { ...headers, "x-request-id": requestIdOf(req.headers) } });
   await recordEvent(req, "art_requested", { first: !!body.first }, { ctx: rc });
-
-  if (body.simulate === "failure" && process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
-    annotate({ code: "provider_unavailable", dependency: "provider" });
-    await recordEvent(req, "art_failed", { code: "provider_unavailable" }, { ctx: rc });
-    return reply({ error: { code: "provider_unavailable", message: "The selected AI service could not complete this request." } }, 502);
-  }
 
   const quotas: ArtQuota[] = [
     { key: `dev:${hashToken(device.id)}`, max: PER_DEVICE },
@@ -101,9 +116,16 @@ export const POST = observeRoute("art", async (req: Request) => {
     );
   }
 
+  // After the quota check, so a forced failure is metered like a real request and can't be looped unmetered.
+  if (body.simulate === "failure" && process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
+    annotate({ code: "provider_unavailable", dependency: "provider" });
+    await recordEvent(req, "art_failed", { code: "provider_unavailable" }, { ctx: rc });
+    return reply({ error: { code: "provider_unavailable", message: "The selected AI service could not complete this request." } }, 502);
+  }
+
   if (saving) {
     try {
-      const result = await generateImage(buildArtPrompt(body.event, vibe), req.signal, providerObserver());
+      const result = await generateImage(buildArtPrompt(event, vibe), req.signal, providerObserver());
       if (result) {
         annotate({ dependency: "provider" });
         const art: ArtLayer = { kind: "image", src: result.value, seed, vibe, provenance: "live", providerMetadata: result.metadata };

@@ -361,13 +361,13 @@ export function AgentChat(props: {
                     const st = items[it.key];
                     return (
                       <li key={it.key} className={styles.action} data-status={st?.status}>
-                        <span className={styles.actionText}>{describeAction(it.action, state)}</span>
+                        <span className={styles.actionText}>{describeAction(it.action, state, stub.personal.note)}</span>
                         {st && st.status !== "applying" ? (
                           <span className={styles.actionState}>{st.status === "applied" ? "Applied" : st.status === "failed" ? "Failed" : "Not applied"}</span>
                         ) : (
                           <PaperButton className={styles.apply} disabled={!!busy || !!st} onClick={() => void apply([it])}>
                             {st ? "Applying…" : "Apply"}
-                            <span className="visually-hidden"> {describeAction(it.action, state)}</span>
+                            <span className="visually-hidden"> {describeAction(it.action, state, stub.personal.note)}</span>
                           </PaperButton>
                         )}
                       </li>
