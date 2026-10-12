@@ -142,7 +142,9 @@ export function configuredOrigin(): string | null {
 function trustedOrigin(req: Request): string | null {
   if (process.env.APP_URL?.trim()) return configuredOrigin();
   try {
-    const u = new URL(req.url);
+    // NextRequest.url normalizes loopback hosts. Recover the native constructor-held URL,
+    // bypassing framework/instance overrides without consulting authority headers.
+    const u = new URL(Reflect.get(Request.prototype, "url", req));
     const local = u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
     return local && !u.username && !u.password && (u.protocol === "http:" || u.protocol === "https:") ? u.origin : null;
   } catch {
