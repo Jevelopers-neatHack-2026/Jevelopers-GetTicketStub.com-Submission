@@ -1,0 +1,37 @@
+{
+  "mode": "mock/offline TEST_BUILT reports; CSS measurement real local calculation",
+  "checks": [
+    {
+      "name": "omitted required pair",
+      "expectedExit": 1,
+      "actualExit": 0,
+      "outcome": "fail",
+      "stdout": "{\n  \"commands\": {\n    \"commands\": 11\n  },\n  \"vitest\": {\n    \"suites\": 1,\n    \"tests\": 1\n  },\n  \"contrast\": {\n    \"pairs\": 8\n  },\n  \"e2e\": {\n    \"specs\": 1,\n    \"tests\": 1\n  },\n  \"integration\": {\n    \"specs\": 1,\n    \"tests\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "duplicate replacing a required pair",
+      "expectedExit": 1,
+      "actualExit": 0,
+      "outcome": "fail",
+      "stdout": "{\n  \"commands\": {\n    \"commands\": 11\n  },\n  \"vitest\": {\n    \"suites\": 1,\n    \"tests\": 1\n  },\n  \"contrast\": {\n    \"pairs\": 9\n  },\n  \"e2e\": {\n    \"specs\": 1,\n    \"tests\": 1\n  },\n  \"integration\": {\n    \"specs\": 1,\n    \"tests\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "weakened threshold",
+      "expectedExit": 1,
+      "actualExit": 0,
+      "outcome": "fail",
+      "stdout": "{\n  \"commands\": {\n    \"commands\": 11\n  },\n  \"vitest\": {\n    \"suites\": 1,\n    \"tests\": 1\n  },\n  \"contrast\": {\n    \"pairs\": 9\n  },\n  \"e2e\": {\n    \"specs\": 1,\n    \"tests\": 1\n  },\n  \"integration\": {\n    \"specs\": 1,\n    \"tests\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "waived production expectation",
+      "expectedExit": 1,
+      "actualExit": 0,
+      "outcome": "fail",
+      "stdout": "{\n  \"commands\": {\n    \"commands\": 11\n  },\n  \"vitest\": {\n    \"suites\": 1,\n    \"tests\": 1\n  },\n  \"contrast\": {\n    \"pairs\": 9\n  },\n  \"e2e\": {\n    \"specs\": 1,\n    \"tests\": 1\n  },\n  \"integration\": {\n    \"specs\": 1,\n    \"tests\": 1\n  }\n}\n",
+      "stderr": ""
+    }
+  ]
+}

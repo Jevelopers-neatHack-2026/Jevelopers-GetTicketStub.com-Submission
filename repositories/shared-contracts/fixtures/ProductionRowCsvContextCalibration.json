@@ -1,0 +1,963 @@
+{
+  "provenance": {
+    "source_revision": "aea63666e133d2917fd5410fe8f6c3b984eb0b71",
+    "reviewer_session": "01a12d14-9678-7840-ab94-197c90231480",
+    "findings": [
+      "SC-CHK-022",
+      "SC-CHK-023"
+    ],
+    "synthetic": true,
+    "accepted": false,
+    "authority": false,
+    "note": "Pinned independent-review calibration inputs only. No renderer, registry, issuer, consumer adoption, actual publication or launch acceptance."
+  },
+  "partial": {
+    "input": {
+      "value": {
+        "contract": "BatchResult",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+        "project_id": "123e4567-e89b-42d3-a456-000000000002",
+        "job": {
+          "contract": "JobRef",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000050",
+            "revision": 1,
+            "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+          },
+          "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+        },
+        "acceptance_policy": "allow_partial",
+        "status": "partially_succeeded",
+        "counts": {
+          "submitted": 2,
+          "succeeded": 1,
+          "failed": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "pending": 0
+        },
+        "published_count": 1,
+        "rows": [
+          {
+            "contract": "RowResult",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+            "project_id": "123e4567-e89b-42d3-a456-000000000002",
+            "job": {
+              "contract": "JobRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "job_ref": {
+                "contract": "JobStatus",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000050",
+                "revision": 1,
+                "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+              },
+              "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+            },
+            "row_id": "row_1",
+            "ordinal": 0,
+            "input_hash": "sha256:e6ed3657a8392d15d37a5198ba656f35da91a2ccd006633a5ecec774204e8346",
+            "status": "succeeded",
+            "skip_reason": null,
+            "artifact_ref": {
+              "contract": "ArtifactRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "artifact_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003c",
+                "revision": 1,
+                "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              },
+              "composition_ref": {
+                "contract": "Composition",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003d",
+                "revision": 1,
+                "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+              },
+              "private_revision_hash": "sha256:3e685833185dabdc71b3224d3d324d2f855ec72024de6e7c046401d0f39300b3",
+              "source_artwork_hashes": [
+                "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              ],
+              "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "preview_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003c",
+                "revision": 1,
+                "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              }
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundleRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "bundle_ref": {
+                "contract": "ProductionBundle",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000201",
+                "revision": 1,
+                "content_hash": "sha256:63abbd8b66ad933321648bd81dfb0a550cb4e78ddd9f7a16a3ada55f0234122d"
+              },
+              "file_set": [
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005a",
+                  "filename": "output.svg",
+                  "role": "print_output",
+                  "byte_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+                  "byte_size": 18248,
+                  "media_type": "image/svg+xml",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005b",
+                  "filename": "output.png",
+                  "role": "print_output",
+                  "byte_hash": "sha256:f4e9808789923fc07f59c6b939f83ed671053b1ec747605f240ffe78c51434d2",
+                  "byte_size": 8589,
+                  "media_type": "image/png",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005c",
+                  "filename": "output.pdf",
+                  "role": "print_output",
+                  "byte_hash": "sha256:03fb642b6a5ff69ebcce0fe14ccf254259edf14ba3bfbcbebd103f478806aa48",
+                  "byte_size": 6274,
+                  "media_type": "application/pdf",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005d",
+                  "filename": "report.json",
+                  "role": "preflight_report",
+                  "byte_hash": "sha256:e9a717e1aaca93fa953efa2a1181c08abce1885c9a501215c93b658b304ca147",
+                  "byte_size": 1905,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": "sha256:b3765c063c43a46c0c84caa49879a6bb54b6779ba11328ea3396f26bdbeae57d"
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005e",
+                  "filename": "profile.json",
+                  "role": "profile",
+                  "byte_hash": "sha256:f53c5cdf1527e60c978d429b1dccab13edf39ad683cab4182fc42e67da46f0dd",
+                  "byte_size": 77,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005f",
+                  "filename": "lineage.json",
+                  "role": "lineage",
+                  "byte_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308",
+                  "byte_size": 401,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-000000000061",
+                  "filename": "manifest.json",
+                  "role": "manifest",
+                  "byte_hash": "sha256:9f6995a4e213afdf55c21d4c2ede12dde83fe549a34cdddce93ff699ea12a952",
+                  "byte_size": 7103,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-000000000062",
+                  "filename": "archive.zip",
+                  "role": "archive",
+                  "byte_hash": "sha256:ee75f554b848e61d046fb44c835b17ee2f37ac8a938c9f8f92114805ae0be514",
+                  "byte_size": 43307,
+                  "media_type": "application/zip",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-000000000063",
+                  "filename": "detached.json",
+                  "role": "detached",
+                  "byte_hash": "sha256:b460afe6c51518bc32dc35e1c495cc300a6c9d6ec7a6c9fdd1987a4fc060985d",
+                  "byte_size": 1285,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                }
+              ],
+              "detached_ref": {
+                "contract": "ProductionBundleDetached",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000064",
+                "revision": 1,
+                "content_hash": "sha256:b460afe6c51518bc32dc35e1c495cc300a6c9d6ec7a6c9fdd1987a4fc060985d"
+              },
+              "row_scope": {
+                "job_ref": {
+                  "contract": "JobRef",
+                  "schema_version": "1.0.0",
+                  "policy_version": "1.0.0",
+                  "job_ref": {
+                    "contract": "JobStatus",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-000000000050",
+                    "revision": 1,
+                    "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+                  },
+                  "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+                },
+                "row_id": "row_1",
+                "ordinal": 0,
+                "input_hash": "sha256:e6ed3657a8392d15d37a5198ba656f35da91a2ccd006633a5ecec774204e8346"
+              },
+              "composition_ref": {
+                "contract": "Composition",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003d",
+                "revision": 1,
+                "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+              },
+              "eligibility": {
+                "state": "blocked",
+                "reason_codes": [
+                  "CALIBRATION_ONLY",
+                  "OWNER_ACCEPTANCE_PENDING"
+                ],
+                "checked_at": "2026-10-11T08:10:00.000Z",
+                "evidence_mode": "offline",
+                "handoff_eligible": false
+              }
+            },
+            "errors": [],
+            "source_position": null,
+            "eligibility": {
+              "state": "eligible",
+              "reason_codes": [],
+              "checked_at": "2026-10-11T08:10:00.000Z",
+              "evidence_mode": "simulated",
+              "handoff_eligible": false
+            }
+          },
+          {
+            "contract": "RowResult",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+            "project_id": "123e4567-e89b-42d3-a456-000000000002",
+            "job": {
+              "contract": "JobRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "job_ref": {
+                "contract": "JobStatus",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000050",
+                "revision": 1,
+                "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+              },
+              "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+            },
+            "row_id": "row_2",
+            "ordinal": 1,
+            "input_hash": "sha256:56e0812cc93749852db6d4c54f0799d277f88cfb1ea684a8bb75abae491179d3",
+            "status": "failed",
+            "skip_reason": null,
+            "artifact_ref": null,
+            "bundle_ref": null,
+            "errors": [
+              {
+                "contract": "ProductionError",
+                "schema_version": "1.0.0",
+                "policy_version": "1.0.0",
+                "module": "print-production",
+                "operation": "personalizeArtifactBatch",
+                "code": "ROW_SCHEMA",
+                "safe_message": "The row fields do not match the policy.",
+                "retryable": false,
+                "diagnostic_ref": {
+                  "state": "unavailable",
+                  "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+                  "project_id": "123e4567-e89b-42d3-a456-000000000002",
+                  "correlation_id": "123e4567-e89b-42d3-a456-000000000047",
+                  "reason_code": "STORAGE_UNAVAILABLE"
+                },
+                "blocking_condition": "input",
+                "side_effects": "none",
+                "usage_state": "unknown",
+                "row_id": "row_2"
+              }
+            ],
+            "source_position": null,
+            "eligibility": {
+              "state": "blocked",
+              "reason_codes": [
+                "CALIBRATION_ONLY",
+                "OWNER_ACCEPTANCE_PENDING"
+              ],
+              "checked_at": "2026-10-11T08:10:00.000Z",
+              "evidence_mode": "offline",
+              "handoff_eligible": false
+            }
+          }
+        ],
+        "page_start": 0,
+        "next_cursor": null,
+        "batch_manifest_ref": null,
+        "cancel_requested": false,
+        "eligibility": {
+          "state": "blocked",
+          "reason_codes": [
+            "CALIBRATION_ONLY",
+            "OWNER_ACCEPTANCE_PENDING"
+          ],
+          "checked_at": "2026-10-11T08:10:00.000Z",
+          "evidence_mode": "offline",
+          "handoff_eligible": false
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002"
+        },
+        "job": {
+          "contract": "JobRef",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000050",
+            "revision": 1,
+            "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+          },
+          "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+        },
+        "original_rows": [
+          {
+            "row_id": "row_1",
+            "fields": {
+              "name": "0001",
+              "detail": "Áda"
+            }
+          },
+          {
+            "row_id": "row_2",
+            "fields": {
+              "name": "0001",
+              "detail": "Áda"
+            }
+          }
+        ],
+        "verified_rows": {
+          "row_1": {
+            "artifact_ref": {
+              "contract": "ArtifactRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "artifact_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003c",
+                "revision": 1,
+                "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              },
+              "composition_ref": {
+                "contract": "Composition",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003d",
+                "revision": 1,
+                "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+              },
+              "private_revision_hash": "sha256:3e685833185dabdc71b3224d3d324d2f855ec72024de6e7c046401d0f39300b3",
+              "source_artwork_hashes": [
+                "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              ],
+              "render_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+              "preview_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003c",
+                "revision": 1,
+                "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              }
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundleRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "bundle_ref": {
+                "contract": "ProductionBundle",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000201",
+                "revision": 1,
+                "content_hash": "sha256:63abbd8b66ad933321648bd81dfb0a550cb4e78ddd9f7a16a3ada55f0234122d"
+              },
+              "file_set": [
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005a",
+                  "filename": "output.svg",
+                  "role": "print_output",
+                  "byte_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+                  "byte_size": 18248,
+                  "media_type": "image/svg+xml",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005b",
+                  "filename": "output.png",
+                  "role": "print_output",
+                  "byte_hash": "sha256:f4e9808789923fc07f59c6b939f83ed671053b1ec747605f240ffe78c51434d2",
+                  "byte_size": 8589,
+                  "media_type": "image/png",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005c",
+                  "filename": "output.pdf",
+                  "role": "print_output",
+                  "byte_hash": "sha256:03fb642b6a5ff69ebcce0fe14ccf254259edf14ba3bfbcbebd103f478806aa48",
+                  "byte_size": 6274,
+                  "media_type": "application/pdf",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005d",
+                  "filename": "report.json",
+                  "role": "preflight_report",
+                  "byte_hash": "sha256:e9a717e1aaca93fa953efa2a1181c08abce1885c9a501215c93b658b304ca147",
+                  "byte_size": 1905,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": "sha256:b3765c063c43a46c0c84caa49879a6bb54b6779ba11328ea3396f26bdbeae57d"
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005e",
+                  "filename": "profile.json",
+                  "role": "profile",
+                  "byte_hash": "sha256:f53c5cdf1527e60c978d429b1dccab13edf39ad683cab4182fc42e67da46f0dd",
+                  "byte_size": 77,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-00000000005f",
+                  "filename": "lineage.json",
+                  "role": "lineage",
+                  "byte_hash": "sha256:2bb71eb3c2b2bd02ea0f722f2c57c6782aa81f0aee7e0cba768872de322ed308",
+                  "byte_size": 401,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-000000000061",
+                  "filename": "manifest.json",
+                  "role": "manifest",
+                  "byte_hash": "sha256:9f6995a4e213afdf55c21d4c2ede12dde83fe549a34cdddce93ff699ea12a952",
+                  "byte_size": 7103,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-000000000062",
+                  "filename": "archive.zip",
+                  "role": "archive",
+                  "byte_hash": "sha256:ee75f554b848e61d046fb44c835b17ee2f37ac8a938c9f8f92114805ae0be514",
+                  "byte_size": 43307,
+                  "media_type": "application/zip",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                },
+                {
+                  "contract": "ArtifactFile",
+                  "schema_version": "2.0.0",
+                  "policy_version": "1.0.0",
+                  "artifact_id": "123e4567-e89b-42d3-a456-000000000063",
+                  "filename": "detached.json",
+                  "role": "detached",
+                  "byte_hash": "sha256:b460afe6c51518bc32dc35e1c495cc300a6c9d6ec7a6c9fdd1987a4fc060985d",
+                  "byte_size": 1285,
+                  "media_type": "application/json",
+                  "geometry": null,
+                  "profile_ref": null,
+                  "characteristics": null,
+                  "semantic_hash": null
+                }
+              ],
+              "detached_ref": {
+                "contract": "ProductionBundleDetached",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000064",
+                "revision": 1,
+                "content_hash": "sha256:b460afe6c51518bc32dc35e1c495cc300a6c9d6ec7a6c9fdd1987a4fc060985d"
+              },
+              "row_scope": {
+                "job_ref": {
+                  "contract": "JobRef",
+                  "schema_version": "1.0.0",
+                  "policy_version": "1.0.0",
+                  "job_ref": {
+                    "contract": "JobStatus",
+                    "schema_version": "1.0.0",
+                    "id": "123e4567-e89b-42d3-a456-000000000050",
+                    "revision": 1,
+                    "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+                  },
+                  "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+                },
+                "row_id": "row_1",
+                "ordinal": 0,
+                "input_hash": "sha256:e6ed3657a8392d15d37a5198ba656f35da91a2ccd006633a5ecec774204e8346"
+              },
+              "composition_ref": {
+                "contract": "Composition",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003d",
+                "revision": 1,
+                "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+              },
+              "eligibility": {
+                "state": "blocked",
+                "reason_codes": [
+                  "CALIBRATION_ONLY",
+                  "OWNER_ACCEPTANCE_PENDING"
+                ],
+                "checked_at": "2026-10-11T08:10:00.000Z",
+                "evidence_mode": "offline",
+                "handoff_eligible": false
+              }
+            },
+            "preflight_status": "passed",
+            "input_hash": "sha256:e6ed3657a8392d15d37a5198ba656f35da91a2ccd006633a5ecec774204e8346",
+            "ordinal": 0,
+            "job": {
+              "contract": "JobRef",
+              "schema_version": "1.0.0",
+              "policy_version": "1.0.0",
+              "job_ref": {
+                "contract": "JobStatus",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000050",
+                "revision": 1,
+                "content_hash": "sha256:a008c47e03ee867c226b362c5873ece6d2c59e78413af06c4a69f985d9ca314b"
+              },
+              "batch_input_hash": "sha256:84c2f971a599a74bc93d3bd4225a962f3f918d942892aa1a8332eec5b610be84"
+            }
+          }
+        }
+      }
+    },
+    "hash": "sha256:015e73a2629d44a59df7820cd5768ad22fa252e3f878f618e26825e177f6cb8b"
+  },
+  "checkpoint": {
+    "input": {
+      "value": {
+        "contract": "PersonalizeBatchRequest",
+        "schema_version": "1.0.0",
+        "policy_version": "1.0.0",
+        "request_id": "123e4567-e89b-42d3-a456-000000000046",
+        "correlation_id": "123e4567-e89b-42d3-a456-000000000047",
+        "binding": {
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+          },
+          "handoff_ref": {
+            "contract": "ArtifactHandoffManifest",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000110",
+            "revision": 1,
+            "content_hash": "sha256:c4ce4ba2b17f5699f64c1f078dd4e04dc69fa14805442cc955eb5d98ea76a584"
+          },
+          "facts_ref": {
+            "contract": "EventIntelligencePackage",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000001",
+            "revision": 1,
+            "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+          },
+          "asset_refs": [
+            {
+              "asset_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003c",
+                "revision": 1,
+                "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+              },
+              "permission_ref": {
+                "contract": "ApprovalReceipt",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000100",
+                "revision": 1,
+                "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+              },
+              "purpose": "artwork",
+              "normalization_policy_ref": null
+            },
+            {
+              "asset_ref": {
+                "contract": "ArtifactFile",
+                "schema_version": "2.0.0",
+                "id": "123e4567-e89b-42d3-a456-00000000003e",
+                "revision": 1,
+                "content_hash": "sha256:c743719b4eb5405f9c2f6d76e23786a95cccca047497182444061988f9028dd1"
+              },
+              "permission_ref": {
+                "contract": "ApprovalReceipt",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000100",
+                "revision": 1,
+                "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+              },
+              "purpose": "overlay",
+              "normalization_policy_ref": null
+            }
+          ],
+          "approval_ref": {
+            "contract": "ApprovalReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000100",
+            "revision": 1,
+            "content_hash": "sha256:eaceab5a58dddd945072b608eec4f7e7c14632932fa4b7a9c7a55dbcae85f2d1"
+          },
+          "template_ref": {
+            "contract": "TemplateSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000033",
+            "revision": 1,
+            "content_hash": "sha256:930e79ba3901a4b5eaf5074696f4c160fd9205b270fa66a4226f53fb2c752f61"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000028",
+            "revision": 1,
+            "content_hash": "sha256:70fb24408b4d536ea6130d77f181af8bdc254f53cf36be44b009c20d1750542f"
+          },
+          "capability_ref": {
+            "contract": "FulfillmentCapabilitySnapshot",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000029",
+            "revision": 1,
+            "content_hash": "sha256:bfcc7571199aa593ae36419bf2998eafc0e0b8b9c46ebd20e3161c925d6104d9"
+          },
+          "composition_ref": {
+            "contract": "Composition",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003d",
+            "revision": 1,
+            "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+          },
+          "formatting_policy_ref": {
+            "contract": "ProductionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:b2dca40bca0afeab7c81fc43b9764a6ed13a93c1c743bafe576435f224d20523"
+          },
+          "repair_policy_ref": null,
+          "values": {
+            "name": {
+              "kind": "display",
+              "value": "0001"
+            },
+            "detail": {
+              "kind": "display",
+              "value": "Áda"
+            }
+          }
+        },
+        "input": {
+          "kind": "csv",
+          "file_ref": {
+            "contract": "ArtifactFile",
+            "schema_version": "2.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003c",
+            "revision": 1,
+            "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+          },
+          "dialect_ref": {
+            "contract": "CsvDialect",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000006f",
+            "revision": 1,
+            "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+          },
+          "mapping_ref": {
+            "contract": "CsvMapping",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:f5715e724d71c0d9314d51a6a6ac8b6a822683148992ccc0ef44492f5bf67b38"
+          },
+          "checkpoint_ref": {
+            "contract": "CsvCheckpoint",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000701",
+            "revision": 1,
+            "content_hash": "sha256:e768e5b3fb27f7faa078b49ba425138aff8151668b3ea8cda1213f9d209cf4ca"
+          }
+        },
+        "idempotency_key": "batch_1"
+      },
+      "context": {
+        "enabled": true,
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002"
+        },
+        "enabling_ref": {
+          "contract": "CsvDialect",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000006f",
+          "revision": 1,
+          "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+        },
+        "expected_enabling_ref": {
+          "contract": "CsvDialect",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-00000000006f",
+          "revision": 1,
+          "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+        },
+        "dialect": {
+          "contract": "CsvDialect",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "id": "123e4567-e89b-42d3-a456-00000000006f",
+          "revision": 1,
+          "encoding": "utf-8",
+          "bom": "optional",
+          "delimiter": ",",
+          "quote": "\"",
+          "newline": "lf",
+          "header": "required",
+          "maximum_record_bytes": 131072,
+          "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+        },
+        "mapping": {
+          "contract": "CsvMapping",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "id": "123e4567-e89b-42d3-a456-000000000070",
+          "revision": 1,
+          "row_schema_ref": {
+            "contract": "PersonalizationSchema",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000032",
+            "revision": 1,
+            "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+          },
+          "headers": [
+            "id",
+            "name",
+            "detail"
+          ],
+          "field_mapping": {
+            "name": "name",
+            "detail": "detail"
+          },
+          "row_id_header": "id",
+          "content_hash": "sha256:f5715e724d71c0d9314d51a6a6ac8b6a822683148992ccc0ef44492f5bf67b38"
+        },
+        "row_policy": {
+          "contract": "PersonalizationSchema",
+          "schema_version": "1.0.0",
+          "schema_id": "123e4567-e89b-42d3-a456-000000000032",
+          "revision": 1,
+          "fields": [
+            {
+              "field_id": "name",
+              "slot_id": "name-slot",
+              "required": true,
+              "maximum_utf16_units": 200,
+              "source_policy": "row_display"
+            },
+            {
+              "field_id": "detail",
+              "slot_id": "detail-slot",
+              "required": true,
+              "maximum_utf16_units": 200,
+              "source_policy": "row_display"
+            },
+            {
+              "field_id": "title",
+              "slot_id": "title-slot",
+              "required": true,
+              "maximum_utf16_units": 200,
+              "source_policy": "approved_fact_readonly"
+            }
+          ],
+          "limits": {
+            "maximum_rows": 100,
+            "maximum_canonical_bytes": 100000,
+            "maximum_fields": 3
+          },
+          "policy_version": "1.0.0",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+        },
+        "checkpoint": {
+          "contract": "CsvCheckpoint",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "tenant_id": "123e4567-e89b-42d3-a456-000000000001",
+          "project_id": "123e4567-e89b-42d3-a456-000000000002",
+          "file_ref": {
+            "contract": "ArtifactFile",
+            "schema_version": "2.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000003c",
+            "revision": 1,
+            "content_hash": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57"
+          },
+          "dialect_ref": {
+            "contract": "CsvDialect",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-00000000006f",
+            "revision": 1,
+            "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+          },
+          "mapping_ref": {
+            "contract": "CsvMapping",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000070",
+            "revision": 1,
+            "content_hash": "sha256:f5715e724d71c0d9314d51a6a6ac8b6a822683148992ccc0ef44492f5bf67b38"
+          },
+          "byte_offset": 0,
+          "logical_record": 1,
+          "physical_line": 1,
+          "complete_record": true
+        },
+        "checkpoint_ref": {
+          "contract": "CsvCheckpoint",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000701",
+          "revision": 1,
+          "content_hash": "sha256:e768e5b3fb27f7faa078b49ba425138aff8151668b3ea8cda1213f9d209cf4ca"
+        },
+        "complete_record_byte_offset": 0,
+        "logical_record": 1,
+        "physical_line": 1
+      }
+    },
+    "hash": "sha256:712ac0e5bd3be652ebb7c6e740c402c674828f16eea990ce74996f040577c9dc"
+  }
+}

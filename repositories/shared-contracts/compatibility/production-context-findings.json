@@ -1,0 +1,12 @@
+{
+  "reviewed_checkpoint": "d129ea0a83be926882b194cb88a6cf30c3831685",
+  "reviewer_session": "01a12c98-ab55-7f71-8c67-fa90c4d55667",
+  "historical_verdict": "REQUEST_CHANGES",
+  "candidate_package_version": "0.9.4",
+  "fresh_review": "pending_exact_candidate",
+  "findings": [
+    { "id": "SC-CHK-018", "status": "locally_repaired_review_pending", "repair": "Validate strict UtcTime before Date.parse; retain existing facts diagnostic precedence." },
+    { "id": "SC-CHK-021", "status": "locally_repaired_review_pending", "repair": "Canonical-check supplied reference maps and approval binding before comparison; known ContractError cases become typed context failures through shared callers." }
+  ],
+  "acceptance": "No human/domain approval, accepted dependencies, real consumer adoption or release; unsupported preview binding and external gates remain open."
+}

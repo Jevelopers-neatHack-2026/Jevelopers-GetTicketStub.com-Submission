@@ -1,0 +1,1548 @@
+{
+  "status": "locally_implemented_candidates",
+  "previous_accepted_major": null,
+  "limitations": [
+    "No previous accepted major exists; no historical consumer acceptance is invented.",
+    "Domain leaves and exact consumer integrations remain blocked."
+  ],
+  "cases": [
+    {
+      "contract": "CommonEnvelope",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CommonEnvelope",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CommonEnvelope",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvidenceProjection",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "EvidenceProjection",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvidenceProjection",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "Cancellation",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "Cancellation",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "Cancellation",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DecisionPortRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "DecisionPortRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DecisionPortRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DecisionPortResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "DecisionPortResult",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DecisionPortResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DecisionReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "DecisionReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DecisionReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ErrorEnvelope",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ErrorEnvelope",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ErrorEnvelope",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FinancialSummary",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FinancialSummary",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FinancialSummary",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobCommandAcknowledgement",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "JobCommandAcknowledgement",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobCommandAcknowledgement",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobProgress",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "JobProgress",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobProgress",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobStatus",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "JobStatus",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobStatus",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PartialFailure",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "PartialFailure",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PartialFailure",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "UsageEvent",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "UsageEvent",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "UsageEvent",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "UsageEvent",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true
+    },
+    {
+      "contract": "UsageEvent",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true
+    },
+    {
+      "contract": "UsageEvent",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProviderReportedCostEvidence",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProviderReportedCostEvidence",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProviderReportedCostEvidence",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CreativeBrief",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CreativeBrief",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CreativeBrief",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DesignControlSchema",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "DesignControlSchema",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DesignControlSchema",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DesignVersion",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "DesignVersion",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "DesignVersion",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EventIntelligencePackage",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "EventIntelligencePackage",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EventIntelligencePackage",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProjectRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProjectRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProjectRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchAnswerReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchAnswerReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchAnswerReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchBatchReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchBatchReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchBatchReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchCorrectionReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchCorrectionReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchCorrectionReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchCorrectionRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchCorrectionRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchCorrectionRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchInvalidation",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchInvalidation",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchInvalidation",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchRequestReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ResearchRequestReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ResearchRequestReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReference",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalReference",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReference",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "OrderAuthorization",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "OrderAuthorization",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "OrderAuthorization",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "BudgetReservation",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReserveResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "SettleResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "ReleaseResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryRequest",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "QueryResult",
+      "producer_version": "99.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false,
+      "consumer_supported_versions": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    {
+      "contract": "PrintSpec",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "PrintSpec",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PrintSpec",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionReference",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionReference",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionPolicy",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionPolicy",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionRuntime",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionRuntime",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionResource",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionResource",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactRef",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactRef",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "JobRef",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "JobRef",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ComposeArtifactRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ComposeArtifactRequest",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PersonalizeBatchRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "PersonalizeBatchRequest",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "InspectArtifactRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "InspectArtifactRequest",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ExportBundleRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ExportBundleRequest",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CompareTemplateRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CompareTemplateRequest",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactStatusRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactStatusRequest",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionError",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionError",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionDiagnostic",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionDiagnostic",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "TemplateSpec",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "TemplateSpec",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PersonalizationSchema",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "PersonalizationSchema",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "Composition",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "Composition",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CompatibilityReport",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CompatibilityReport",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PreflightReport",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "PreflightReport",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactFile",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactFile",
+      "producer_version": "9.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "2.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "9.0.0",
+      "consumer_version": "2.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "1.0.0",
+      "consumer_version": "2.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionBundleDetached",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionBundleDetached",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundleRef",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionBundleRef",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "RowResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "RowResult",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "BatchResult",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "BatchResult",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactManifestStatus",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactManifestStatus",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CsvDialect",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CsvDialect",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CsvMapping",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CsvMapping",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CsvCheckpoint",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CsvCheckpoint",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionExecutionPins",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionExecutionPins",
+      "producer_version": "9.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    }
+  ],
+  "profile_compatibility": {
+    "current_profiles": [
+      "structured-index-v1",
+      "ei-string-v1"
+    ],
+    "adapter": "adaptScoreProfile",
+    "lossless_for": "explicit canonical JSON-encoded strings/structured descriptions with complete source preservation",
+    "opaque_legacy_strings": "rejected as unrepresentable",
+    "owner_agreement": null
+  },
+  "research_profiles": {
+    "profiles": [
+      "canonical-alias-1.0.0",
+      "creative-local-1.0",
+      "creative-local-1.1"
+    ],
+    "adapter": "adaptResearchPackage",
+    "accepted_migration": false,
+    "owner_agreement": null
+  }
+}

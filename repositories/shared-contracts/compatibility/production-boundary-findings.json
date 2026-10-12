@@ -1,0 +1,13 @@
+{
+  "reviewed_checkpoint": "34568c90eff7dcfc432d661b1918e584ef2bab81",
+  "reviewer_session": "01a12d2d-93d5-72d0-aeb0-9141103cf535",
+  "historical_verdict": "REQUEST_CHANGES",
+  "candidate_package_version": "0.9.7",
+  "fresh_review": "pending_exact_candidate",
+  "findings": [
+    { "id": "SC-CHK-024", "status": "locally_repaired_review_pending", "repair": "Guard outer contexts/scope before error creation, v1 adaptation and geometry translation. Adjacent producer audit guards malformed supplied templates and non-string/inherited error registry codes." },
+    { "id": "SC-CHK-025", "status": "locally_repaired_review_pending", "repair": "Check every observed record and expected ZIP descriptor before property access, including sparse arrays; preserve finite limits and exact byte controls." },
+    { "id": "SC-CHK-026", "status": "locally_repaired_review_pending", "repair": "Require canonical complete scoped operation/key/digest tuples before identity comparison; retain typed namespace/conflict outcomes and no replay authority." }
+  ],
+  "acceptance": "No owner/Finance receipt, consumer adoption, issuer/registry authority, actual publication/CSV launch or complete release approval is implied. Supported development slices and unsupported owner interfaces remain distinct."
+}

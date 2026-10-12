@@ -1,0 +1,845 @@
+{
+  "packet_root": "sha256:4d748f251360e9ddbfeec62d80699702c479c3c6ad67a9321581c546e86280ec",
+  "source_sha": "adb3e1b5b5a76bc8a530fd67633d700905f67c8e",
+  "transformation_version": "canonical-production-corrections/1",
+  "evidence_mode": "genuine_synthetic_test_doubles_and_original_calibration_bytes",
+  "accepted": false,
+  "live_integration": false,
+  "originals": [
+    {
+      "path": "all-file-positive.json",
+      "source_byte_size": 25597,
+      "source_byte_hash": "sha256:a988d1e7b46d8a23af56af219a089bd9abaa506138e137623e758822214a2624",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "api-compareTemplateCompatibility.json",
+      "source_byte_size": 3492,
+      "source_byte_hash": "sha256:897d60a9336dc392c6fd3dd693a469a4977f28ea53d103fa2247428d304d3641",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "api-composeArtifact.json",
+      "source_byte_size": 5862,
+      "source_byte_hash": "sha256:837352a9ddb8d18174ec610db8d210b01e58e559245cf187b686ea18598df34f",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "api-exportArtifactBundle.json",
+      "source_byte_size": 4038,
+      "source_byte_hash": "sha256:3e731b3c0744b5b35050db4316dfa25bbb7b3f5b05249c907f6c66a12d3b533b",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "api-getArtifactManifestStatus.json",
+      "source_byte_size": 2579,
+      "source_byte_hash": "sha256:8341770a2f2b30843f05cb0eb9f2ca93b4e1af5476a74d57ef0ba762333b32ee",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "api-inspectArtifact.json",
+      "source_byte_size": 5812,
+      "source_byte_hash": "sha256:13d220c620f43ace55c9e39db13d1c29d3d5db1cfd02cfaf0d2392ac79b88bdf",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "api-personalizeArtifactBatch.json",
+      "source_byte_size": 5679,
+      "source_byte_hash": "sha256:21867bfd51757389e1ca146633cfa12a565f4d459854c7fea59ac3825d63dda9",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "bytes.json",
+      "source_byte_size": 113955,
+      "source_byte_hash": "sha256:4ed881cbe2e42584b6cc74c1fe9d41bece0acba9d45b296e8be609cc759137c6",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-approval-expired.json",
+      "source_byte_size": 5523,
+      "source_byte_hash": "sha256:c2836b0fddeb366f4441e0f7ec0d81fb6361f85f097ee13846b216af954f2675",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-approval-revoked.json",
+      "source_byte_size": 5523,
+      "source_byte_hash": "sha256:1d9b7edd01acfce8635306f9c8a4a16551c484ed9f4f435235c4937070ca7955",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-approval-unavailable.json",
+      "source_byte_size": 5538,
+      "source_byte_hash": "sha256:ea75280b4b9f68fdeeb5774bf7ca7c30e03391d345d00fc19884c77f63d4fcf3",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-assets-extra.json",
+      "source_byte_size": 5718,
+      "source_byte_hash": "sha256:446ee18db9c11bd40b3b2b7a821d18760384050d2b9cda81a78a1d0b1f1a6329",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-assets-missing.json",
+      "source_byte_size": 5341,
+      "source_byte_hash": "sha256:82e7f5635ff5cbb3d821a804decb55e4e9a560003f6fbb58216106c48a34a963",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-assets-tampered.json",
+      "source_byte_size": 6062,
+      "source_byte_hash": "sha256:d60741f5fe2dfc3486d5a59c1aa9f22bdf56ed547c311e3edd4c904c21a91b43",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-csv-disabled.json",
+      "source_byte_size": 5938,
+      "source_byte_hash": "sha256:42e1670820c66778cfd5ebcf0411e51f05b5df6befaeecf82a07a01da1779d8f",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-duplicate-row-id.json",
+      "source_byte_size": 5749,
+      "source_byte_hash": "sha256:831fcf0292b8019d14663a5708689101925594ac3422a1a868564706a8a96e7b",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-files-extra.json",
+      "source_byte_size": 6883,
+      "source_byte_hash": "sha256:fecfecc744d5b2418731ef46c87c31ea2fbacaab23ff5491121fd8bacf5ee2ea",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-files-missing.json",
+      "source_byte_size": 5827,
+      "source_byte_hash": "sha256:decf0e87f82b0b885449e9cab048813a846741848e2fca747a96333aa1881a1c",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-files-tampered.json",
+      "source_byte_size": 18201,
+      "source_byte_hash": "sha256:bc44e703f0a50767d38bd2dfbe5e8990a92b92c170d61ede6e2d2f8a3a61ec4a",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-foreign-retrieval.json",
+      "source_byte_size": 2891,
+      "source_byte_hash": "sha256:3cb42ac52bfcf325267a84b364a5488b483c10229a660ff0dea5a7f79917cbf2",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-idempotency-changed.json",
+      "source_byte_size": 6112,
+      "source_byte_hash": "sha256:11af185161cc6dc4e5c9d1e4c608ec7806776a936adfacf2aedb315e48db88fb",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-recursion-archive.json",
+      "source_byte_size": 12934,
+      "source_byte_hash": "sha256:ec65af901fbd6dd19d6c1e8e62bfcc962b6926ea4bb1439d9313e81526075b19",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-recursion-detached.json",
+      "source_byte_size": 12941,
+      "source_byte_hash": "sha256:cf7a3e428c84671a7dcf6cf3273d61b37013d725ffd83cf27b0276a009e12b38",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-recursion-manifest.json",
+      "source_byte_size": 12941,
+      "source_byte_hash": "sha256:fdd95cf72a16a5d5b19c04263eb572bfbe91a1dfe79df65e0f52aa095057b4c9",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-scope.json",
+      "source_byte_size": 5060,
+      "source_byte_hash": "sha256:4b0aa081482af572c3dc34c4324faec59872b01a6b4d69d645b9b4afe647e4bf",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-unknown-geometry.json",
+      "source_byte_size": 4265,
+      "source_byte_hash": "sha256:7053032541342c4fec763bbde3bc2dc9996e32f13b8a6505409ab0b3327242e6",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-unsupported-format.json",
+      "source_byte_size": 3956,
+      "source_byte_hash": "sha256:c3821314479089f324cd054261f7c2fb19f151ccda3285fc8105405244d6b544",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-unsupported-profile.json",
+      "source_byte_size": 3949,
+      "source_byte_hash": "sha256:1d019a1610e775a79efe3bd9cd6d55f9225d86add64528e5b3f45327854bb031",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "negative-version.json",
+      "source_byte_size": 4986,
+      "source_byte_hash": "sha256:c7f0c6154b568f24f8b293681dbd2eb6beb5b1d440120d5092b5fa0cab4355ed",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "personalization-schema.json",
+      "source_byte_size": 1327,
+      "source_byte_hash": "sha256:61b2851fb7e6d1ac4f3a4ea64f567b8e3bbfbb29147b502e3f4d661cb4f01bb8",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "positive-distinct-rows-same-content.json",
+      "source_byte_size": 5665,
+      "source_byte_hash": "sha256:87634f91f7e51fd7a9c310f898953af4d55b29bad76a4be5ce5e289cb77b7ae9",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "positive-idempotent-duplicate.json",
+      "source_byte_size": 6467,
+      "source_byte_hash": "sha256:74cbdcaad2336eda97edba3708a343a96d8bc64428f207c07d37dfc2cd8a5d90",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "rows-allow_partial.json",
+      "source_byte_size": 17891,
+      "source_byte_hash": "sha256:26a8190611a6aa174f07fa1a06b2b66dc2e18deef3087bcb22bac168db9cbe0c",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "rows-atomic.json",
+      "source_byte_size": 8888,
+      "source_byte_hash": "sha256:1dcaafb2134d30b44611d36d97912614c60dc539dfd8b17f22e2688bbcc05c67",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    },
+    {
+      "path": "template-spec.json",
+      "source_byte_size": 7519,
+      "source_byte_hash": "sha256:1ee1878ab9a84d056e03d1b28133d0fa441ed44fd3cda0ca3327aa006fe81139",
+      "mapping": "C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged"
+    }
+  ],
+  "derived": [
+    {
+      "contract": "ProductionResource",
+      "path": "fixtures/ProductionResource.json",
+      "byte_hash": "sha256:14cd2834fe02744c3fd0389b64e8402a93e276035573f1d93aeb376611b40d73",
+      "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+    },
+    {
+      "contract": "ProductionPolicy",
+      "path": "fixtures/ProductionPolicy.json",
+      "byte_hash": "sha256:8422f7094d857da069421ff021fa86d09e3e06439472791596c6b7ee1591b64c",
+      "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+    },
+    {
+      "contract": "ProductionRuntime",
+      "path": "fixtures/ProductionRuntime.json",
+      "byte_hash": "sha256:2e21cc4e53436952e3f0d50722f8760fd1a65d5f95ac982165607424465ef10e",
+      "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+    },
+    {
+      "contract": "PersonalizationSchema",
+      "path": "fixtures/PersonalizationSchema.json",
+      "byte_hash": "sha256:46ad615515d450ef24882b1293ae457cf9b9eab9e3920e70090f4b1422a3ea52",
+      "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+    },
+    {
+      "contract": "TemplateSpec",
+      "path": "fixtures/TemplateSpec.json",
+      "byte_hash": "sha256:bf202ffcb3c06d4ff8de157bdb5cd69894846e06015a6cf042e4f037b041aaac",
+      "content_hash": "sha256:930e79ba3901a4b5eaf5074696f4c160fd9205b270fa66a4226f53fb2c752f61"
+    },
+    {
+      "contract": "Composition",
+      "path": "fixtures/Composition.json",
+      "byte_hash": "sha256:b9b7d5431b7dd79e70ce56bcf9181eda350794e75099b5893e12f366b18df594",
+      "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+    },
+    {
+      "contract": "ArtifactRef",
+      "path": "fixtures/ArtifactRef.json",
+      "byte_hash": "sha256:6662fb867ff4176e5aea8d1f3d7ba61574cf8cbe8a4ebc3d9b2b86b95b296c0d",
+      "content_hash": null
+    },
+    {
+      "contract": "ComposeArtifactRequest",
+      "path": "fixtures/ComposeArtifactRequest.json",
+      "byte_hash": "sha256:064221171e2710418a9311938c13cb81df4d918e6b2e6b36463372fa025b9ada",
+      "content_hash": null
+    },
+    {
+      "contract": "PersonalizeBatchRequest",
+      "path": "fixtures/PersonalizeBatchRequest.json",
+      "byte_hash": "sha256:7ee14c6123ad033b16190046d160a563c0873c60b5d2ba56aa1f3a51b425a058",
+      "content_hash": null
+    },
+    {
+      "contract": "InspectArtifactRequest",
+      "path": "fixtures/InspectArtifactRequest.json",
+      "byte_hash": "sha256:9ee3954725900d62c921e081e3adf02d7e52ec33f0fe54a9bf36796839661cf4",
+      "content_hash": null
+    },
+    {
+      "contract": "ExportBundleRequest",
+      "path": "fixtures/ExportBundleRequest.json",
+      "byte_hash": "sha256:f32cda8b95d1e7c4610b2039b2dd7062878b23e841f2f83e5b135b79e14446e2",
+      "content_hash": null
+    },
+    {
+      "contract": "CompareTemplateRequest",
+      "path": "fixtures/CompareTemplateRequest.json",
+      "byte_hash": "sha256:4f6931543e60915004d8c05c6663bd012b128bfffd9fe823e11667eb373d5b8f",
+      "content_hash": null
+    },
+    {
+      "contract": "CompatibilityReport",
+      "path": "fixtures/CompatibilityReport.json",
+      "byte_hash": "sha256:05b672db313fb6f90aad65aa8ad50e5d236bdba7c7dee00be2d68e3356b46274",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionExecutionPins",
+      "path": "fixtures/ProductionExecutionPins.json",
+      "byte_hash": "sha256:0d764438542d9efe974e9d01168e1aede33fe52c634ff29d18437c7c1f723422",
+      "content_hash": null
+    },
+    {
+      "contract": "JobRef",
+      "path": "fixtures/JobRef.json",
+      "byte_hash": "sha256:8c685ae721aad1d2efbaacf40d2e377dc56a0fc8960e1b1b36462f8d0152b49e",
+      "content_hash": null
+    },
+    {
+      "contract": "ArtifactStatusRequest",
+      "path": "fixtures/ArtifactStatusRequest.json",
+      "byte_hash": "sha256:d4228ca56f69088a5e4b96ab870b49f00e7388a083211314490db71ffc39ae99",
+      "content_hash": null
+    },
+    {
+      "contract": "PreflightReport",
+      "path": "fixtures/PreflightReport.json",
+      "byte_hash": "sha256:2e369f0fa6c0f02cb66e78f54d8948b31faafa52f7b70d4009a05de565da38f0",
+      "content_hash": null
+    },
+    {
+      "contract": "ArtifactFile",
+      "path": "fixtures/ArtifactFile.2_0_0.json",
+      "byte_hash": "sha256:d21b121fa23f430833aee2569e3b48eb95190b101162ab86658c722002ec3ae7",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionBundle",
+      "path": "fixtures/ProductionBundle.2_0_0.json",
+      "byte_hash": "sha256:b2849e23a91fff3423ab8d4ae13ea890b775752bfba91c5bb6342c18217d09f8",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionBundleDetached",
+      "path": "fixtures/ProductionBundleDetached.json",
+      "byte_hash": "sha256:8296be9cfb5d63dbda6ac35eac268ff468ef29d4bcd8e2838401d36bbc6823ec",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionBundleRef",
+      "path": "fixtures/ProductionBundleRef.json",
+      "byte_hash": "sha256:dce7765bbb6743dccea6095bd7fc2be078d7b7e314448275ba317cb104a1da7b",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionError",
+      "path": "fixtures/ProductionError.json",
+      "byte_hash": "sha256:b9eb5229686bdf6390f82babf0c47a1da0ee39bcb88f1bf7c98314e44e8dddea",
+      "content_hash": null
+    },
+    {
+      "contract": "RowResult",
+      "path": "fixtures/RowResult.json",
+      "byte_hash": "sha256:bc82dac4ecbd82fe300be71e0c5427c2255bd67a55d9ee5bd33987675d922c3b",
+      "content_hash": null
+    },
+    {
+      "contract": "BatchResult",
+      "path": "fixtures/BatchResult.json",
+      "byte_hash": "sha256:3d97dff67ffa5dc7248037d7b8ee15d43db756eb1be2d87b8ea029bbbe48fb13",
+      "content_hash": null
+    },
+    {
+      "contract": "ArtifactManifestStatus",
+      "path": "fixtures/ArtifactManifestStatus.json",
+      "byte_hash": "sha256:a56bceea8aa885288e7fa451999b65dba4e2038191031c307e2724aa21156e25",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionReference",
+      "path": "fixtures/ProductionReference.json",
+      "byte_hash": "sha256:d9e14a56a0b80154b390b89f57103d201a1e193e7f0562c3eab68b1ccad1e00c",
+      "content_hash": null
+    },
+    {
+      "contract": "ProductionDiagnostic",
+      "path": "fixtures/ProductionDiagnostic.json",
+      "byte_hash": "sha256:3735a55e973d530eee5bb0370549fbb243a7e972daef648a09feebb7f4e546f9",
+      "content_hash": "sha256:7585e654de25c4134bf22dc86efaec9adc45aa4381e00e2d5b165dea3868d760"
+    },
+    {
+      "contract": "CsvDialect",
+      "path": "fixtures/CsvDialect.json",
+      "byte_hash": "sha256:f6405e9d353db51553e13d2bfaa81dfcbd58df8894f644ff3bb3688813b0a6dc",
+      "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+    },
+    {
+      "contract": "CsvMapping",
+      "path": "fixtures/CsvMapping.json",
+      "byte_hash": "sha256:3194d2e9aabe1a1ab3053617b384f929479bdf1a22836c18d064a4e8b6dd4401",
+      "content_hash": "sha256:f5715e724d71c0d9314d51a6a6ac8b6a822683148992ccc0ef44492f5bf67b38"
+    },
+    {
+      "contract": "CsvCheckpoint",
+      "path": "fixtures/CsvCheckpoint.json",
+      "byte_hash": "sha256:b4c2446a190bbb5d3807571e84f90fefafeddaecdb82f61ce464e036a8e6327f",
+      "content_hash": null
+    }
+  ],
+  "domains": {
+    "composition": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811",
+    "render": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+    "batch": "sha256:b7fff1de91b13f93dba050dcbd36c53bc8f30a4f48754c30978fe236c95e40df",
+    "bundle": "sha256:1b0260309bb9a631768a261b01c704eb4a57d0d5e24faf2178227f2dee5aca80",
+    "manifest": "sha256:9f6995a4e213afdf55c21d4c2ede12dde83fe549a34cdddce93ff699ea12a952",
+    "archive": "sha256:ee75f554b848e61d046fb44c835b17ee2f37ac8a938c9f8f92114805ae0be514",
+    "detached": "sha256:b460afe6c51518bc32dc35e1c495cc300a6c9d6ec7a6c9fdd1987a4fc060985d",
+    "payload_set": "sha256:ba37a9cd4b090645972265d5dc770e4e7ae7a9d64e4b00c1ba64b124b81665f3"
+  },
+  "limitations": [
+    "Calibration is not personalized production output.",
+    "Synthetic references and policy documents have no real registry or issuer authority.",
+    "Unconfirmed domain facts, fonts, geometry, approval and consumer pins remain pending."
+  ],
+  "integrity_repair": {
+    "transformation_version": "canonical-production-integrity/1",
+    "source_commit": "b47defaaf630c9d64dcc315c6c4d49fadd194587",
+    "before": {
+      "domains": {
+        "composition": "sha256:18a9d838a012917f6b83aee9e8c6a265c0e4e03f25db2555fceb2ffaf630ae21",
+        "render": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+        "batch": "sha256:a614d205cf7354ee913327a4d7d3610d09d24974c97bffb43c7d1645074fe0c8",
+        "bundle": "sha256:4d30b075b69d9b5c2d5e1aa51b8af5267704219183076255c3e026efb12b8a1d",
+        "manifest": "sha256:f05bc449c75c23fcb3ecfb1895b0139216bd8bafffbd0e805aa1cd3697a168ab",
+        "archive": "sha256:fb011e615415696c591045c2bf91325441b7120bda0759fff8fbb3e088fc7efa",
+        "detached": "sha256:0f4e8ad6fd9e53acd10f58cfb84303c75ad6d2fa18b15439de8c841d08c91340",
+        "payload_set": "sha256:427675223de249b61924c3aea6475e2a7ca8d7201f5c9612386dfc236b17ff40"
+      },
+      "derived": [
+        {
+          "contract": "ProductionResource",
+          "path": "fixtures/ProductionResource.json",
+          "byte_hash": "sha256:2476f3debd92e1288c6c5b20d692d25c822663892f7a1f5bea23042c8ac82bb8",
+          "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+        },
+        {
+          "contract": "ProductionPolicy",
+          "path": "fixtures/ProductionPolicy.json",
+          "byte_hash": "sha256:c58f48fe6b9b6fb7367d8b649eefb056b90559da4b107e2ef1110a9d732df08b",
+          "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+        },
+        {
+          "contract": "ProductionRuntime",
+          "path": "fixtures/ProductionRuntime.json",
+          "byte_hash": "sha256:6a2e28e77b0e50bde717a812ae05a9b2c91b7ee9aa6b526e3841819849ce24f6",
+          "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+        },
+        {
+          "contract": "PersonalizationSchema",
+          "path": "fixtures/PersonalizationSchema.json",
+          "byte_hash": "sha256:5e8635c81b63ff2bdf60cface4d57e672a088ffe40513eb112ce2d82fa768b6b",
+          "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+        },
+        {
+          "contract": "TemplateSpec",
+          "path": "fixtures/TemplateSpec.json",
+          "byte_hash": "sha256:6d189113bbd077b0728b67e61c86391364bd0ac6b3a4830a87a0bac3785a598c",
+          "content_hash": "sha256:930e79ba3901a4b5eaf5074696f4c160fd9205b270fa66a4226f53fb2c752f61"
+        },
+        {
+          "contract": "Composition",
+          "path": "fixtures/Composition.json",
+          "byte_hash": "sha256:411c61b4cc285a9a4425f22f09dc8f87b809685d363b1f0f22a8fb36edf97922",
+          "content_hash": "sha256:18a9d838a012917f6b83aee9e8c6a265c0e4e03f25db2555fceb2ffaf630ae21"
+        },
+        {
+          "contract": "ArtifactRef",
+          "path": "fixtures/ArtifactRef.json",
+          "byte_hash": "sha256:af3dc9faf31c1a094e6e24dd0cc8380905e18d770b62c9a2e8809d19b6a83ca3",
+          "content_hash": null
+        },
+        {
+          "contract": "ComposeArtifactRequest",
+          "path": "fixtures/ComposeArtifactRequest.json",
+          "byte_hash": "sha256:2ba05fcfb46ca4302b07f2300326863d5d738c11cab795aa8f6b6faacb5aed31",
+          "content_hash": null
+        },
+        {
+          "contract": "PersonalizeBatchRequest",
+          "path": "fixtures/PersonalizeBatchRequest.json",
+          "byte_hash": "sha256:4a7c259c4a7a7b64f09c70a66bc16c1b6aaec1cf479da61b51528c95a1ad6ddf",
+          "content_hash": null
+        },
+        {
+          "contract": "InspectArtifactRequest",
+          "path": "fixtures/InspectArtifactRequest.json",
+          "byte_hash": "sha256:490afbf154f6b586d6b1931432ea6f8cb2816cddeb14561d143b4aab2c200632",
+          "content_hash": null
+        },
+        {
+          "contract": "ExportBundleRequest",
+          "path": "fixtures/ExportBundleRequest.json",
+          "byte_hash": "sha256:c2aad98184856793c18d63e94b62b9477e47471660ee2dc9bd2f74ad10b69cb8",
+          "content_hash": null
+        },
+        {
+          "contract": "CompareTemplateRequest",
+          "path": "fixtures/CompareTemplateRequest.json",
+          "byte_hash": "sha256:7f260328934c424913e02f06b91ad3c46c146248e1dd29d1d1f8683fb5560d13",
+          "content_hash": null
+        },
+        {
+          "contract": "CompatibilityReport",
+          "path": "fixtures/CompatibilityReport.json",
+          "byte_hash": "sha256:3b7f426f069d3af98d762a73076049f1daca0727108264b19265f7f19435ecb2",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionExecutionPins",
+          "path": "fixtures/ProductionExecutionPins.json",
+          "byte_hash": "sha256:d2f4727c26661fe6b9834187814720b447d6e83c04f63f5c552feb34bb81063d",
+          "content_hash": null
+        },
+        {
+          "contract": "JobRef",
+          "path": "fixtures/JobRef.json",
+          "byte_hash": "sha256:78cfb68db35f9592eb6dd5d6aa8e8ed80b4d3074518c3f7d67557136c76a28e2",
+          "content_hash": null
+        },
+        {
+          "contract": "ArtifactStatusRequest",
+          "path": "fixtures/ArtifactStatusRequest.json",
+          "byte_hash": "sha256:8a9bb09d1edbdb5776d7518266ef29a6c6b7830e7b3d2d0b5e218c88e8a86044",
+          "content_hash": null
+        },
+        {
+          "contract": "PreflightReport",
+          "path": "fixtures/PreflightReport.json",
+          "byte_hash": "sha256:f50c7368c5f222ea737cb85ceb9a3c9cb1db74c73a9772ecaf68e1ff4a70b253",
+          "content_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "path": "fixtures/ArtifactFile.2_0_0.json",
+          "byte_hash": "sha256:0c06132595d91116504b2d7998b81a17521fe09eaf36836ef37e5104065f6c02",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionBundle",
+          "path": "fixtures/ProductionBundle.2_0_0.json",
+          "byte_hash": "sha256:869f79387538a5539c4303c99ef4373511d24190ea67ceec1558adcd4c1ed91d",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionBundleDetached",
+          "path": "fixtures/ProductionBundleDetached.json",
+          "byte_hash": "sha256:2c145885e5975093d27fd3efc5009a4acde191eea06cee7c4fce56c2bd85726b",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionBundleRef",
+          "path": "fixtures/ProductionBundleRef.json",
+          "byte_hash": "sha256:36f1b0ab04e9b94d2cf3a7952ea86f7b54b28fb8668c977649f3dc5c6e292746",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionError",
+          "path": "fixtures/ProductionError.json",
+          "byte_hash": "sha256:fb3ce3e7feff036dd8db0fccefce1b4b3ad1c72a17fa3fcec7352585b206846c",
+          "content_hash": null
+        },
+        {
+          "contract": "RowResult",
+          "path": "fixtures/RowResult.json",
+          "byte_hash": "sha256:050e67fe81ca4d960c21ad21fc920d56aab0d1eee8ed3d972bb76df03f6cbc06",
+          "content_hash": null
+        },
+        {
+          "contract": "BatchResult",
+          "path": "fixtures/BatchResult.json",
+          "byte_hash": "sha256:5172c07883a8fa53477a7a4a2478cbc0c811da5de3f0bedd7e8229acedd7266d",
+          "content_hash": null
+        },
+        {
+          "contract": "ArtifactManifestStatus",
+          "path": "fixtures/ArtifactManifestStatus.json",
+          "byte_hash": "sha256:e97497716ff45e8b9dadc35f1e898bd1c8a3360f1db1da09438bd95188efa9c1",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionReference",
+          "path": "fixtures/ProductionReference.json",
+          "byte_hash": "sha256:bafa935e6b9c462e9ac847776df9de031a95ed6952cb4e45ad5b95470cc46139",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionDiagnostic",
+          "path": "fixtures/ProductionDiagnostic.json",
+          "byte_hash": "sha256:8b7ee4c88cb9f46ab5b44035453a559f031e16e630df770ba87fac264e264a58",
+          "content_hash": "sha256:7585e654de25c4134bf22dc86efaec9adc45aa4381e00e2d5b165dea3868d760"
+        },
+        {
+          "contract": "CsvDialect",
+          "path": "fixtures/CsvDialect.json",
+          "byte_hash": "sha256:3327a0e38c832721645c14c359fd6b9c75d82383e6a77a58a8c11d6d12586fb6",
+          "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+        },
+        {
+          "contract": "CsvMapping",
+          "path": "fixtures/CsvMapping.json",
+          "byte_hash": "sha256:cd6711a9428991ceb4d49b675b6f33afd5304484a97ad6bacefef1b8b7757d81",
+          "content_hash": "sha256:f5715e724d71c0d9314d51a6a6ac8b6a822683148992ccc0ef44492f5bf67b38"
+        },
+        {
+          "contract": "CsvCheckpoint",
+          "path": "fixtures/CsvCheckpoint.json",
+          "byte_hash": "sha256:2b50134d5f6c06712180e2f0471a020eebee0e9158750bd2eb96c53e7df4d60d",
+          "content_hash": null
+        }
+      ],
+      "facts": {
+        "contract": "EventIntelligencePackage",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000001",
+        "revision": 1,
+        "content_hash": "sha256:abe71af87febe93fe0e516e03b511857313a189b6ec071fa973f49af05a3a5bc"
+      },
+      "design": {
+        "contract": "DesignVersion",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000090",
+        "revision": 1,
+        "content_hash": "sha256:6876cb65d1c720f774345374c6639db0bb11552f17ec04b04a9981b6272959ee"
+      }
+    },
+    "after": {
+      "domains": {
+        "composition": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811",
+        "render": "sha256:d9b07d0b2856782f02f328c852998f0bb0f9f7d104424bcd72d86f31edf08f57",
+        "batch": "sha256:b7fff1de91b13f93dba050dcbd36c53bc8f30a4f48754c30978fe236c95e40df",
+        "bundle": "sha256:1b0260309bb9a631768a261b01c704eb4a57d0d5e24faf2178227f2dee5aca80",
+        "manifest": "sha256:9f6995a4e213afdf55c21d4c2ede12dde83fe549a34cdddce93ff699ea12a952",
+        "archive": "sha256:ee75f554b848e61d046fb44c835b17ee2f37ac8a938c9f8f92114805ae0be514",
+        "detached": "sha256:b460afe6c51518bc32dc35e1c495cc300a6c9d6ec7a6c9fdd1987a4fc060985d",
+        "payload_set": "sha256:ba37a9cd4b090645972265d5dc770e4e7ae7a9d64e4b00c1ba64b124b81665f3"
+      },
+      "derived": [
+        {
+          "contract": "ProductionResource",
+          "path": "fixtures/ProductionResource.json",
+          "byte_hash": "sha256:14cd2834fe02744c3fd0389b64e8402a93e276035573f1d93aeb376611b40d73",
+          "content_hash": "sha256:77915ee574aaf774d6a3eda2d998c86ccc3c46bebb89a53b571292fab87b9028"
+        },
+        {
+          "contract": "ProductionPolicy",
+          "path": "fixtures/ProductionPolicy.json",
+          "byte_hash": "sha256:8422f7094d857da069421ff021fa86d09e3e06439472791596c6b7ee1591b64c",
+          "content_hash": "sha256:8c5ab768349e9b2e626c7430bfb788e16f6867d932d1f402aaa1d5bf6ca0596c"
+        },
+        {
+          "contract": "ProductionRuntime",
+          "path": "fixtures/ProductionRuntime.json",
+          "byte_hash": "sha256:2e21cc4e53436952e3f0d50722f8760fd1a65d5f95ac982165607424465ef10e",
+          "content_hash": "sha256:a5a7ec0e853eb070db84b3ad39ab25ca4ce671cf00219623a5d875b94f5c7b71"
+        },
+        {
+          "contract": "PersonalizationSchema",
+          "path": "fixtures/PersonalizationSchema.json",
+          "byte_hash": "sha256:46ad615515d450ef24882b1293ae457cf9b9eab9e3920e70090f4b1422a3ea52",
+          "content_hash": "sha256:b23095c9ecb2429345e8cb2e0fa94bd6c106fa5a9f939132d8b8a85ba3239e5e"
+        },
+        {
+          "contract": "TemplateSpec",
+          "path": "fixtures/TemplateSpec.json",
+          "byte_hash": "sha256:bf202ffcb3c06d4ff8de157bdb5cd69894846e06015a6cf042e4f037b041aaac",
+          "content_hash": "sha256:930e79ba3901a4b5eaf5074696f4c160fd9205b270fa66a4226f53fb2c752f61"
+        },
+        {
+          "contract": "Composition",
+          "path": "fixtures/Composition.json",
+          "byte_hash": "sha256:b9b7d5431b7dd79e70ce56bcf9181eda350794e75099b5893e12f366b18df594",
+          "content_hash": "sha256:a54b6b0544ce53580f4c3d4f5ade920c2ba65a3e288bec103af6f5fd9e2e4811"
+        },
+        {
+          "contract": "ArtifactRef",
+          "path": "fixtures/ArtifactRef.json",
+          "byte_hash": "sha256:6662fb867ff4176e5aea8d1f3d7ba61574cf8cbe8a4ebc3d9b2b86b95b296c0d",
+          "content_hash": null
+        },
+        {
+          "contract": "ComposeArtifactRequest",
+          "path": "fixtures/ComposeArtifactRequest.json",
+          "byte_hash": "sha256:064221171e2710418a9311938c13cb81df4d918e6b2e6b36463372fa025b9ada",
+          "content_hash": null
+        },
+        {
+          "contract": "PersonalizeBatchRequest",
+          "path": "fixtures/PersonalizeBatchRequest.json",
+          "byte_hash": "sha256:7ee14c6123ad033b16190046d160a563c0873c60b5d2ba56aa1f3a51b425a058",
+          "content_hash": null
+        },
+        {
+          "contract": "InspectArtifactRequest",
+          "path": "fixtures/InspectArtifactRequest.json",
+          "byte_hash": "sha256:9ee3954725900d62c921e081e3adf02d7e52ec33f0fe54a9bf36796839661cf4",
+          "content_hash": null
+        },
+        {
+          "contract": "ExportBundleRequest",
+          "path": "fixtures/ExportBundleRequest.json",
+          "byte_hash": "sha256:f32cda8b95d1e7c4610b2039b2dd7062878b23e841f2f83e5b135b79e14446e2",
+          "content_hash": null
+        },
+        {
+          "contract": "CompareTemplateRequest",
+          "path": "fixtures/CompareTemplateRequest.json",
+          "byte_hash": "sha256:4f6931543e60915004d8c05c6663bd012b128bfffd9fe823e11667eb373d5b8f",
+          "content_hash": null
+        },
+        {
+          "contract": "CompatibilityReport",
+          "path": "fixtures/CompatibilityReport.json",
+          "byte_hash": "sha256:05b672db313fb6f90aad65aa8ad50e5d236bdba7c7dee00be2d68e3356b46274",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionExecutionPins",
+          "path": "fixtures/ProductionExecutionPins.json",
+          "byte_hash": "sha256:0d764438542d9efe974e9d01168e1aede33fe52c634ff29d18437c7c1f723422",
+          "content_hash": null
+        },
+        {
+          "contract": "JobRef",
+          "path": "fixtures/JobRef.json",
+          "byte_hash": "sha256:8c685ae721aad1d2efbaacf40d2e377dc56a0fc8960e1b1b36462f8d0152b49e",
+          "content_hash": null
+        },
+        {
+          "contract": "ArtifactStatusRequest",
+          "path": "fixtures/ArtifactStatusRequest.json",
+          "byte_hash": "sha256:d4228ca56f69088a5e4b96ab870b49f00e7388a083211314490db71ffc39ae99",
+          "content_hash": null
+        },
+        {
+          "contract": "PreflightReport",
+          "path": "fixtures/PreflightReport.json",
+          "byte_hash": "sha256:2e369f0fa6c0f02cb66e78f54d8948b31faafa52f7b70d4009a05de565da38f0",
+          "content_hash": null
+        },
+        {
+          "contract": "ArtifactFile",
+          "path": "fixtures/ArtifactFile.2_0_0.json",
+          "byte_hash": "sha256:d21b121fa23f430833aee2569e3b48eb95190b101162ab86658c722002ec3ae7",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionBundle",
+          "path": "fixtures/ProductionBundle.2_0_0.json",
+          "byte_hash": "sha256:b2849e23a91fff3423ab8d4ae13ea890b775752bfba91c5bb6342c18217d09f8",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionBundleDetached",
+          "path": "fixtures/ProductionBundleDetached.json",
+          "byte_hash": "sha256:8296be9cfb5d63dbda6ac35eac268ff468ef29d4bcd8e2838401d36bbc6823ec",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionBundleRef",
+          "path": "fixtures/ProductionBundleRef.json",
+          "byte_hash": "sha256:dce7765bbb6743dccea6095bd7fc2be078d7b7e314448275ba317cb104a1da7b",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionError",
+          "path": "fixtures/ProductionError.json",
+          "byte_hash": "sha256:b9eb5229686bdf6390f82babf0c47a1da0ee39bcb88f1bf7c98314e44e8dddea",
+          "content_hash": null
+        },
+        {
+          "contract": "RowResult",
+          "path": "fixtures/RowResult.json",
+          "byte_hash": "sha256:bc82dac4ecbd82fe300be71e0c5427c2255bd67a55d9ee5bd33987675d922c3b",
+          "content_hash": null
+        },
+        {
+          "contract": "BatchResult",
+          "path": "fixtures/BatchResult.json",
+          "byte_hash": "sha256:3d97dff67ffa5dc7248037d7b8ee15d43db756eb1be2d87b8ea029bbbe48fb13",
+          "content_hash": null
+        },
+        {
+          "contract": "ArtifactManifestStatus",
+          "path": "fixtures/ArtifactManifestStatus.json",
+          "byte_hash": "sha256:a56bceea8aa885288e7fa451999b65dba4e2038191031c307e2724aa21156e25",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionReference",
+          "path": "fixtures/ProductionReference.json",
+          "byte_hash": "sha256:d9e14a56a0b80154b390b89f57103d201a1e193e7f0562c3eab68b1ccad1e00c",
+          "content_hash": null
+        },
+        {
+          "contract": "ProductionDiagnostic",
+          "path": "fixtures/ProductionDiagnostic.json",
+          "byte_hash": "sha256:3735a55e973d530eee5bb0370549fbb243a7e972daef648a09feebb7f4e546f9",
+          "content_hash": "sha256:7585e654de25c4134bf22dc86efaec9adc45aa4381e00e2d5b165dea3868d760"
+        },
+        {
+          "contract": "CsvDialect",
+          "path": "fixtures/CsvDialect.json",
+          "byte_hash": "sha256:f6405e9d353db51553e13d2bfaa81dfcbd58df8894f644ff3bb3688813b0a6dc",
+          "content_hash": "sha256:78bbf2be08ecd03af7410e2d0588762706317ab9ce90892e556e5a29feae2434"
+        },
+        {
+          "contract": "CsvMapping",
+          "path": "fixtures/CsvMapping.json",
+          "byte_hash": "sha256:3194d2e9aabe1a1ab3053617b384f929479bdf1a22836c18d064a4e8b6dd4401",
+          "content_hash": "sha256:f5715e724d71c0d9314d51a6a6ac8b6a822683148992ccc0ef44492f5bf67b38"
+        },
+        {
+          "contract": "CsvCheckpoint",
+          "path": "fixtures/CsvCheckpoint.json",
+          "byte_hash": "sha256:b4c2446a190bbb5d3807571e84f90fefafeddaecdb82f61ce464e036a8e6327f",
+          "content_hash": null
+        }
+      ],
+      "facts": {
+        "contract": "EventIntelligencePackage",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000001",
+        "revision": 1,
+        "content_hash": "sha256:bd00e3ae87ea3d39ff666ccef7fa56fbc8259782a183466b6e8db4d7368bbf8f"
+      },
+      "design": {
+        "contract": "DesignVersion",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000090",
+        "revision": 1,
+        "content_hash": "sha256:d34ae97f0f737987247fdd21192e877ffd251b10287046e125164394048eddb9"
+      }
+    },
+    "mappings": [
+      "EventIntelligencePackage.package_hash uses existing researchContentHash(package, package_hash), excluding delivery fields.",
+      "DesignVersion reference uses existing researchContentHash(design, design_hash).",
+      "Recompute composition/input, request/plan, report, lineage, payload, bundle, manifest, archive and detached commitments from the corrected dependencies."
+    ],
+    "raw_packet_unchanged": true,
+    "original_expectations_unchanged": true,
+    "accepted": false
+  }
+}

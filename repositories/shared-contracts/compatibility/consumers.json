@@ -1,0 +1,1413 @@
+{
+  "mode": "discovery_only_local_all_domain_candidates",
+  "shared_source_revision": null,
+  "package_version": "0.4.0",
+  "repositories": [
+    {
+      "repository": "agent-harness",
+      "source_sha": "f02f38a6edc8b7ee6ade626ac019e302e5b94633",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "JobStatus",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "JobProgress",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "Cancellation",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "JobCommandAcknowledgement",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "BudgetReservation",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionReceipt",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ProjectRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchRequest",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "EventIntelligencePackage",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchInvalidation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "CreativeBrief",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "DesignVersion",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReference",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactHandoffManifest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ProductionBundle",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentQuote",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "OrderAuthorization",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "event-intelligence",
+      "source_sha": "62dc0e4c1b45cfb78d06a1bd9d2110e23c134650",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "JobStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobProgress",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "Cancellation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobCommandAcknowledgement",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "BudgetReservation",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionReceipt",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EventIntelligencePackage",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchCorrectionRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionReceipt",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchInvalidation",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReference",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "creative-engine",
+      "source_sha": "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "JobStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobProgress",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "Cancellation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobCommandAcknowledgement",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "BudgetReservation",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionReceipt",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "EventIntelligencePackage",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchInvalidation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "CreativeBrief",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "DesignControlSchema",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "DesignVersion",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ApprovalReference",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactHandoffManifest",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": true,
+          "consumer": false
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "print-production",
+      "source_sha": "24fb18a1fc54d34ce71e99a2162d62ebca3a52cd",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "DesignVersion",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReference",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactHandoffManifest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ProductionBundle",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "fulfillment-connectors",
+      "source_sha": "4c78849754ed542ca77d3b5e1831f8773f9b54b4",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ProductionBundle",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentQuote",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "OrderAuthorization",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentStatus",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": true,
+          "consumer": false
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "cost-intelligence",
+      "source_sha": "a7b7484d60058708a5c32f8b3637d21f8b94a210",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "BudgetReservation",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReserveResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "SettleResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "ReleaseResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryRequest",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "QueryResult",
+          "producer": true,
+          "consumer": true
+        },
+        {
+          "contract": "FinancialSummary",
+          "producer": true,
+          "consumer": false
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "team-dashboard",
+      "source_sha": "d5f23ae9072e1eb0998d90a0fb45e032e14f7618",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EvidenceProjection",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobProgress",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "Cancellation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobCommandAcknowledgement",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FinancialSummary",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EvaluationEvidence",
+          "producer": false,
+          "consumer": true
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "integration-evals",
+      "source_sha": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EvidenceProjection",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobProgress",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "Cancellation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobCommandAcknowledgement",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "UsageEvent",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FinancialSummary",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionPortResult",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "DecisionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EventIntelligencePackage",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchInvalidation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "DesignVersion",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReference",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactHandoffManifest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ProductionBundle",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EvaluationEvidence",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    },
+    {
+      "repository": "getticketstub.com",
+      "source_sha": "5a2986454297dd6df97088a8fbde69adc771f7a0",
+      "tree_truncated": false,
+      "codegraph_present": false,
+      "accepted_shared_schema_pin": null,
+      "consumer_tests_run": false,
+      "acknowledgement": null,
+      "local_path": null,
+      "command": null,
+      "shared_source_revision": null,
+      "package_integrity": null,
+      "schema_pins": [],
+      "fixture_digest": null,
+      "result": "blocked_missing_integration",
+      "roles": [
+        {
+          "contract": "CommonEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EvidenceProjection",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ErrorEnvelope",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PartialFailure",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobProgress",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "Cancellation",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "JobCommandAcknowledgement",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FinancialSummary",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ProjectRequest",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "EventIntelligencePackage",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchCorrectionRequest",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchCorrectionReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchInvalidation",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "DesignControlSchema",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "DesignVersion",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalReference",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ApprovalReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ArtifactHandoffManifest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ProductionBundle",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentQuote",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "OrderAuthorization",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "FulfillmentStatus",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "EvaluationEvidence",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
+        }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "issue": 14,
+      "decision": "JEV Score criteria and legend shape",
+      "producer": "event-intelligence",
+      "producer_requirement": "Existing EI v1 keeps string-only criteria and legend until official discrepancy decision is pinned.",
+      "consumer": "creative-engine",
+      "consumer_proposal": "Local DecisionPort uses ordered label arrays and index legend, structured probabilities.",
+      "status": "pending_owner_agreement"
+    },
+    {
+      "issue": 17,
+      "decision": "EventIntelligencePackage/ResearchPackage mapping and version adapter",
+      "status": "pending_owner_agreement"
+    },
+    {
+      "issue": 22,
+      "decision": "Authenticated current approval verification",
+      "authority": "getticketstub.com",
+      "status": "external_authority_dependency"
+    },
+    {
+      "issues": [
+        11,
+        12,
+        13
+      ],
+      "decision": "Metering/reservation/ledger semantics",
+      "authority": "cost-intelligence",
+      "status": "external_authority_dependency"
+    }
+  ],
+  "source_definitions": [
+    {
+      "repository": "creative-engine",
+      "source_sha": "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe",
+      "path": "src/contracts/creative/v1.d.mts",
+      "observed": "CommonEnvelope producer is string and source_refs are string[]; EIP 1.0/1.1 ResearchPackage aliases and additive fields are local proposals",
+      "migration_owner": "creative-engine/event-intelligence/shared-contracts",
+      "acceptance": null
+    },
+    {
+      "repository": "creative-engine",
+      "source_sha": "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe",
+      "path": "src/contracts/decision-port/v1.d.mts",
+      "observed": "Score criteria string[] and legend Record<string,string>; numeric fractions; local 1.0 versions",
+      "migration_owner": "agent-harness/event-intelligence/creative-engine",
+      "acceptance": null
+    },
+    {
+      "repository": "event-intelligence",
+      "source_sha": "62dc0e4c1b45cfb78d06a1bd9d2110e23c134650",
+      "path": "docs/contracts/research-contract-handoff.md",
+      "observed": "Separate request/package/receipt exports required; string-only Score criteria/legend retained until pinned owner decision",
+      "migration_owner": "event-intelligence/shared-contracts/agent-harness",
+      "acceptance": null
+    },
+    {
+      "repository": "agent-harness",
+      "source_sha": "f02f38a6edc8b7ee6ade626ac019e302e5b94633",
+      "path": "package.json",
+      "observed": "Node >=22.23.3 <23, TypeScript 5.9.3, Node ESM runtime with declarations",
+      "migration_owner": "agent-harness/shared-contracts",
+      "acceptance": null
+    }
+  ],
+  "implementation_note": "Candidate 0.5.0 contains package-owned representative fixture adapters; real adoption and accepted owner/consumer pins remain blocked. Discovery SHAs are immutable historical snapshots; see downstream-observations.json for later sources and owner-findings.json for producer correctness blockers."
+}

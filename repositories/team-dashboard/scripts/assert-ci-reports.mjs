@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { CONTRAST_SOURCE, CONTRAST_METHOD, REQUIRED_CONTRAST_PAIRS } from './contrast-policy.mjs';
 
 export const REQUIRED_COMMANDS = [
   'runtime', 'npm-ci', 'playwright-install', 'lint', 'typecheck', 'vitest',
@@ -127,6 +128,34 @@ export function validateContrastReport(report) {
   return { pairs: report.pairs.length };
 }
 
+// Dashboard-specific completeness policy is separate from generic arithmetic
+// validation so PR #36's general comparison and all its tests remain intact.
+export function validateDashboardContrastReport(report) {
+  const summary = validateContrastReport(report);
+  if (report.source !== CONTRAST_SOURCE || report.method !== CONTRAST_METHOD) {
+    fail('Contrast report must identify the pinned source and calculation method.');
+  }
+  if (report.pairs.length !== REQUIRED_CONTRAST_PAIRS.length) {
+    fail('Contrast report must contain every required checked pair exactly once.');
+  }
+  const policy = new Map(REQUIRED_CONTRAST_PAIRS.map(pair => [pair.name, pair]));
+  const seen = new Set();
+  for (const pair of report.pairs) {
+    if (!policy.has(pair.name) || seen.has(pair.name)) {
+      fail('Contrast report contains an unknown or duplicate pair.');
+    }
+    seen.add(pair.name);
+    const required = policy.get(pair.name);
+    if (pair.threshold !== required.threshold || pair.expected !== required.expected) {
+      fail('Contrast report changes a pinned threshold or expected outcome.');
+    }
+    if (pair.ratio < 1 || pair.ratio > 21) {
+      fail('Contrast report contains a ratio outside the physical range [1, 21].');
+    }
+  }
+  return summary;
+}
+
 async function readReport(label, path) {
   let input;
   try { input = await readFile(path, 'utf8'); }
@@ -155,7 +184,7 @@ async function main(args) {
   const summary = {
     commands: validateCommandLog(commandText),
     vitest: validateVitestReport(vitest),
-    contrast: validateContrastReport(contrast),
+    contrast: validateDashboardContrastReport(contrast),
     e2e: validatePlaywrightReport(e2e, 'E2E'),
     integration: validatePlaywrightReport(integration, 'Integration'),
   };

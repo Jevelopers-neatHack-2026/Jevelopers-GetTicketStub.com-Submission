@@ -1,0 +1,122 @@
+# Production contract development candidate 0.9.0
+
+Issues 34-37 add 24 separate local criteria. The original 126 criteria, global27 and CAP7 keep their identities and acceptance status. This private, unreleased package supplies canonical data, readonly types and pure checks. Genuine authority, renderer/storage implementations and consumer acceptance remain separate owner handoffs.
+
+## Host interfaces and errors
+
+Import `ProductionOperations` and the new host `ProductionContext` from `@jevelopers/shared-contracts/production-operations`. The root and commerce-evidence retain the existing commerce ProductionContext, which describes supplied evidence validation. Host scope, fresh clock, policy, environment/billing/evidence modes and reference/authorization/assets/templates/runtime/storage/metering ports are independent of requests. Shared-contracts never calls those ports.
+
+```ts
+import type { ProductionOperations, ProductionContext } from
+  '@jevelopers/shared-contracts/production-operations';
+import type { ProductionContext as CommerceProductionContext } from
+  '@jevelopers/shared-contracts/commerce-evidence';
+```
+
+| Exact service name | Request | Promise constituent |
+| --- | --- | --- |
+| composeArtifact | ComposeArtifactRequest | ProductionResult<ArtifactRef> |
+| personalizeArtifactBatch | PersonalizeBatchRequest | ProductionResult<JobRef or BatchResult> |
+| inspectArtifact | InspectArtifactRequest | ProductionResult<PreflightReport> |
+| exportArtifactBundle | ExportBundleRequest | ProductionResult<ProductionBundleRef> |
+| compareTemplateCompatibility | CompareTemplateRequest | ProductionResult<CompatibilityReport> |
+| getArtifactManifestStatus | ArtifactStatusRequest | ProductionResult<ArtifactManifestStatus> |
+
+Each method takes `(ctx: ProductionContext, request: Request)`. These are service binding interfaces without callable compositor stubs. ProductionResult is exactly `{ok:true,value:T}|{ok:false,error:ProductionError}`. Pure checks use the existing value/errors style; the two boundaries are not aliases. `validateProductionResult` selects actual concrete constituents and verifies their intrinsic commitments. A successful inspection report may contain unknown or failed checks and cannot imply eligible publication.
+
+`ProductionContext.authority` is required and readonly. Its exact fields are `actor_id: ApprovalReceipt['actor_id']` and `audience: ApprovalReceipt['audience']`. The host authenticates this expectation independently and binds it with `ctx.scope` before entering any of the six operations. Neither the request nor a receipt being checked supplies these trusted fields. This closes the missing host expectation while retaining the existing canonical actor syntax and audience vocabulary. Commerce's separate context is unchanged.
+
+The host first calls `checkProductionHostRequest(operation, request, ctx, independentlyResolvedReferences)` before invoking a port. Invalid authority or malformed requests return typed failures without reference lookup or callbacks. After `ctx.authorization.verify(reference, ctx.scope)` returns a current observation, the host must bind its independently resolved receipt and expected subject binding using `checkProductionHostApproval({receipt, status, checked_at}, ctx, expectedBinding, now)`. `now` comes from the host clock. The verifier port's reference/scope signature remains valid: the pure approval check compares the returned evidence against `ctx.authority`, scope, exact binding and time. These helpers authenticate nothing and issue no authority; copying receipt identities into `ctx.authority` violates the interface's trust requirement.
+
+Requests carry exact discriminator/schema/policy, request/correlation IDs and operation fields only. Forged tenant/project, time, environment, billing or authority fields reject before reference access. Missing/foreign expected refs return indistinguishable NOT_FOUND. Hosts authenticate scope, freshness and all reads; opaque IDs grant no access.
+
+ProductionReference is a closed supported-contract/version union with canonical UUID, safe positive revision and prefixed SHA256. Old VersionedReference retains its version and revision-zero behavior. ArtifactFile/2 and ProductionBundle/2 are explicit new versions; standalone new values are 1.0.0. String/digest revision adaptation returns LEGACY_UNREPRESENTABLE until an actual registry mapping exists.
+
+All 21 ProductionError codes have fixed safe messages and fixed retry hints. Only classified transient approval-unavailable/storage/render failures are retryable; no retry/spending/replay authority follows. Side effects and usage remain explicit and default unknown when observation is absent. Diagnostics distinguish a scoped persisted ProductionDiagnostic ref from unavailable scoped correlation; no persisted hash is fabricated. Field paths, row IDs, correlations and details remain restricted.
+
+Diagnostic precedence: unsupported schema version; otherwise malformed shape/cardinality/duplicates/unknown fields; then recognized unsupported format only when remaining issues are exclusively format enum mismatches. Single JPEG is OUTPUT_UNSUPPORTED; excessive/duplicate supported formats are INVALID_INPUT. Approval checks retain revoked/unavailable/invalid distinctions, reject expiry equality/future observations and require an exact current supplied observation rather than cached validity.
+
+V1 error conversion validates an actual ErrorEnvelope constituent, carries original code and declared losses, and preserves side effects/usage. Unsupported transient vocabulary returns LEGACY_UNREPRESENTABLE. Conversion does not manufacture diagnostic persistence.
+
+## Desired layout, composition and identity
+
+TemplateSpec contains bounded declarative slots, desired nm canvas/trim/bleed/safe geometry, orientation, fonts, effective DPI, formats and immutable policy/spec/capability pins. PrintSpec and FulfillmentCapabilitySnapshot are reused unchanged. Desired layout never confirms supplier geometry.
+
+PersonalizationSchema is independent of TemplateSpec and has no hashed back-reference. TemplateSpec references it in one direction. Composition binds scope, design/handoff/facts/template/spec/capability, ordered assets, exact values, readonly fact bindings, formatting/layout/output/repair, fonts/runtime and an independently compared resolved-layout commitment. Barcode input is explicitly absent or bound to its own input commitment; a facts digest is never renamed as barcode identity.
+
+New sealed production values exclude only their own content_hash. Existing research records retain their existing domains: EventIntelligencePackage uses `researchContentHash(package, 'package_hash')`, excluding its own hash and research delivery fields; each inner fact uses `researchContentHash(fact, 'fact_hash')`. DesignVersion uses `researchContentHash(design, 'design_hash')`. ApprovalReceipt and ArtifactHandoffManifest retain `commerceContentHash`, including the manifest access-locator exclusions. PrintSpec and capability captures retain the existing capability identity helpers. Generic whole-record hashing is not interchangeable with these domains.
+
+`checkProductionFacts` verifies shape, scope, package and every fact hash, intrinsic supported reference kinds, unique identities and source/provenance relationships. Composition then verifies exact independently supplied package identity and readonly bindings. Historical package versions and expired records can pass intrinsic integrity without a transitive prior record or current issuer approval; current eligibility separately checks freshness and approval. `checkProductionValueIntegrity` supplies the corresponding intrinsic checks for directly resolved supported records and embedded production result constituents. Hashes with no locally supplied preimage (raw resource/source hashes, render bytes, producer-private revisions, job plans) remain separately bound commitments, not invented recomputations. Descriptor revisions absent from their records remain independently supplied.
+
+The email's candidate SC-CHK-015 lineage observation preserves the tested historical null-parent allowance, including version 2 with parent_ref: null. A supplied parent must have the same package ID and revision exactly package_version minus one; version 1 requires a null parent. These intrinsic relationships need no prior lookup. Contradictions return FACTS_UNSUPPORTED at /parent_ref through facts, integrity and composition, and block eligibility. Missing or malformed composition context returns INVALID_TRUST_CONTEXT. Historical acceptance supplies no lineage authenticity or current approval.
+
+The lineage observation's email candidate ID overlaps an earlier whole-PR finding, so its record is now EMAIL-SC-CHK-015-LINEAGE. Established SC-CHK-015 concerns bundle-facts eligibility, SC-CHK-016 concerns foreign composition scope, and SC-CHK-017 concerns missing composition expectations. Eligibility compares the complete facts reference with the independently checked Composition, and the full composition contract/version/ID/revision/hash with its actual record. The outer tenant/project scope applies to both the Composition and its nested validation scope. Required policy/font/runtime expectations are validated before comparison; nullable repair policy remains supported. The separate ProductionEligibilityCalibration is an explicitly synthetic consistency control and supplies no real geometry, issuer or accepted consumer evidence.
+
+The 0.9 development parity repair maps every EventIntelligencePackage reference slot to the established research rules. Parent, request, request receipt, answer receipts and batch receipt require EventIntelligencePackage, ResearchRequest, ResearchRequestReceipt, ResearchAnswerReceipt and ResearchBatchReceipt respectively. Each approved asset requires an `Artifact` descriptor and an `ApprovalReference` descriptor. Artifact is the existing external v1 semantic reference kind; it does not require a standalone catalog schema and is not an alias for ArtifactRef. All descriptors use the unchanged v1 VersionedReference shape/version validator, including nested provenance evidence, source retention/access, policy, decision and usage descriptors. Those latter descriptors have no established intrinsic kind restriction; their actual targets and authority require independent lookups. Envelope source_refs are bounded delivery locators, not VersionedReference tuples. Fact value/candidate content remains inert.
+
+Source and asset discovery URLs retain the research parser's intrinsic HTTP(S), hostname, credential and fragment checks. Domain allowlists, freshness, approval issuer/actor/audience/subject/use/status/expiry, resolved prior records, retention/access execution and persistence are external context obligations. Production does not synthesize them to call the broader research authority checker. The pure boundary reuses `validateContract`, `validateVersionedReference` and `researchContentHash`; it maps the private research intrinsic rules locally. Schema-slot coverage and a research-versus-production matrix exercise optional parents, both array positions, nested provenance, generic descriptors, all fact states/confidence branches, null/transformed assets, correct outer rebinding and stale inner hashes through facts, integrity, composition and eligibility routes. Synthetic test lookups grant no authority or domain acceptance.
+
+A PreflightReport hashes its immutable body without the wrapper report ref or current eligibility. ArtifactRef contains immutable identity; status/eligibility live in observations. Existing jevelopers-json-v1 governs UTF-16 key order, exact well-formed Unicode, safe/finite ECMAScript numbers and no normalization. Raw bytes have a distinct digest domain.
+
+The semantic request digest includes operation/schema/policy, exact effective inputs, ordered original rows, atomic default, conditional CSV refs and all supplied runtime/font/output/template/spec/capability/approval pins. Transport IDs and the idempotency key are excluded. The key belongs to the tenant/project/operation namespace. Fresh clock, status and delivery attempts are not input fields. No persistence, replay, retention or paid execution is implemented.
+
+| Private concept | Canonical field mapping | Boundary |
+| --- | --- | --- |
+| mm coordinates | Integer nm desired geometry | BigInt conversion to exact six-decimal mm; independent private maximum required |
+| String/digest revision | UUID/positive ProductionReference | No coercion; real registry issuance pending |
+| Scene nodes/transforms/crops/blends/visibility/style | Resolved-layout commitment and expected commitment | Producer attests completeness; opaque SHA alone cannot |
+| Font buffers/system fonts | ProductionResource font/license commitments | Buffers stay private; real font/license pins pending |
+| Private approved facts | Existing EventIntelligencePackage with independently supplied package/readonly bindings | Unsupported or unconfirmed facts block; no SyntheticFacts catalog export |
+| Product dimensions | Existing PrintSpec physical dimensions | Never inferred as trim/printable/inset basis |
+| Source/display assets | Exact source refs/bytes and normalization policy | Missing/extra/substituted inventory rejects |
+| Composed preview | Actual preview ref or null | Render hash is not customer preview authority |
+| Unknown telemetry | Existing finance/intake contracts | Unknown stays unknown; no zero/provider/build/ledger guesses |
+
+Nm conversion bounds are +/-2,000,000,000 nm and an independently supplied lower private limit. No rounding occurs. Geometry translation requires known trim, printable, inset basis, bleed, safe and surfaces; unknown/unsupported input fails explicitly. Material template changes require relayout and domain reapproval.
+
+## Rows and conditional CSV
+
+Stable unique row IDs and zero-based source order are retained. Input hashes precede explicit optional display defaults. Identical values under distinct IDs remain distinct. Duplicate IDs, readonly/extra fields, missing/empty required fields and exact UTF-16 bounds reject the whole plan. Limits are 10,000 rows, 32 fields, 4,096 UTF-16 units per cell and 4,000,000 canonical plan bytes; supplied policy may be lower.
+
+Atomic is the effective default. Execution counts globally partition submitted into succeeded/failed/cancelled/skipped/pending; published count is separate. Atomic failed/cancelled and nonterminal operations expose zero publication refs. Partial publishes only complete successes matching independent row metadata and keeps all failed/cancelled/skipped diagnostics. Published bundles bind job/row/ordinal/original-input hash/composition. Skipped requires a reason; cancellation request is distinct from terminal cancellation.
+
+Pages contain at most 100 rows. Complete contiguous source-ordered pages are needed to recompute global counts/publication. Cursor authentication, durable lifecycle, concurrency, fencing and publication remain host-owned; queue/lease objects stay private.
+
+Atomic projects to PartialFailure all_or_nothing; partial projects to partial using committed visibility. Unpublished execution-success rows remain explicitly unprocessed. Terminal partial JobStatus narrowly projects to failed/failed plus PARTIAL_FAILURE and BatchResult reference. Each projection declares loss/non-equivalence and needs consumer agreement; there is no succeeded/partial cast. Unrepresentable projections fail explicitly.
+
+CSV is disabled before fetch/scheduling. Conditional CsvDialect/CsvMapping/CsvCheckpoint values declare UTF-8/BOM/delimiter/quote/newline/exact headers and complete-record positions bound to file/dialect/mapping refs. Supplied enabling/checkpoint evidence is checked without implementing a parser or enabling launch. Streaming, quoted multiline records, malformed encoding, inert formulas and download escaping remain producer/parser work.
+
+## File protocol and finite bounds
+
+ArtifactFile/2 carries exact raw byte hash/length, safe flat ASCII names, closed roles and explicit nullable geometry/profile/characteristics. Nonvisual JSON/ZIP/ICC cannot invent visual dimensions. Profile JSON is a description, not ICC bytes. Hybrid SVG/PDF is not automatically all-vector.
+
+The standalone ZIP check accepts readonly byte descriptors containing filename, byte_size and byte_hash. Full ArtifactFile/2 metadata validation occurs in the bundle and manifest checks.
+
+1. Hash all final shipped payloads, including reports/profile/lineage and applicable source/preview/output.
+2. ProductionBundle/2 files contains payloads only: at most 97; no manifest, archive, detached or nested ZIP.
+3. Bundle content hashes canonical manifest excluding only bundle_hash. Insert it and serialize exact canonical UTF-8 without BOM/newline; raw manifest has its own byte hash.
+4. ZIP contains exactly payloads plus manifest.json, at most 98 entries, sorted flat stored regular files with fixed 2000-01-01 timestamp and no extras/comments. Hash raw ZIP bytes.
+5. Detached metadata contains bundle-content ref, raw manifest/archive descriptors, raw lineage hash and canonical sorted payload-set hash without its own descriptor.
+6. A separately trusted outer commitment contains all payloads plus manifest/archive/detached, at most 100 descriptors, including detached byte hash. Untrusted co-tampering cannot authenticate itself.
+
+Artifact bounds: 8 MiB per ZIP entry, 32 MiB aggregate payload, 40 MiB ZIP, 4 MiB manifest and 1 MiB detached. Count/length/aggregate checks precede body allocation/hashing. Verification is pure in-memory without extraction/inflation. Missing/extra/duplicate/casefold/unsafe names, recursion, prefix/trailing junk, encryption, links/directories, unsupported compression and central/local inconsistencies reject.
+
+Canonical manifest/detached ingestion first scans bounded decoded text iteratively: at most 64 container levels and 100,000 lexical tokens, ignoring brackets and escaped quotes within strings. Over-budget input returns RESOURCE_LIMIT before recursive duplicate-member, Unicode and canonical checks. Existing byte/count ceilings remain unchanged; shallow malformed JSON still returns INTEGRITY_FAILURE.
+
+Integrity may pass with eligibility blocked. Independent eligibility checks require supported facts/composition, exact capability/spec and confirmed geometry, actual composed preview, complete mandatory final-file preflight, current scoped composition approval, exact row scope and accepted domain/consumer pins. They issue no authority. Calibration remains blocked; real product/per-row/consumer acceptance evidence remains pending.
+
+The 0.9.3 boundary also validates required outer eligibility/preflight records and preserves explicit null row scope. Approval must authorize production, and its preview descriptor must have the supported legacy kind and exact ID/revision/hash. ArtifactRef requires an ArtifactFile/2 preview, while the available ApprovalReceipt/1 names Preview/1. There is no reviewed cross-version identity binding in the supplied interfaces; matching UUIDs and byte hashes alone cannot create it. Current v2 production eligibility therefore returns LEGACY_UNREPRESENTABLE at /approval_ref/preview_ref after the other checks, pending an owner-defined binding or directly compatible approval protocol. Generic approval verification remains usable for its other purposes. Composition, preflight and byte-integrity checks retain independent positive controls; the former synthetic eligible control remains immutable evidence of the previous unsupported acceptance, not a newly granted approval.
+
+The 0.9.4 typed boundary also checks the clock before coercion and rejects noncanonical expected-reference maps and approval bindings. Cyclic or hidden-property expectations return INVALID_TRUST_CONTEXT through composition, generic approval, host approval and eligibility. Missing or foreign lookup entries retain NOT_FOUND behavior; valid generic approval purposes and nullable repair policy remain supported.
+
+V1 schemas and fixture bytes remain unchanged. Root ProductionBundle is a version union; commerce helpers explicitly decode v1 and retain v1 contexts/returns. V2-to-v1 protocol translation returns LEGACY_UNREPRESENTABLE. Exact version dispatch may read retained v1 without claiming semantic equivalence.
+
+## Generation, classification and handoff
+
+Standalone validation is split into baseline and production modules, each below the unchanged 16 MiB npm member cap. Selective declaration generation avoids bounded tuple expansion while retaining runtime bounds. Npm safeguards remain 32 MiB compressed/64 MiB expanded, independently of artifact ZIP limits.
+
+Every new field has x-classification. Exact values, low-entropy row hashes, scope, diagnostic paths/IDs and unknown private fields stay restricted. Existing EvidenceProjection remains the public allowlist; no scenegraph, font buffers, signed locators or customer content are added. ProductionCalibration contains synthetic calibration bytes, not a public wire payload.
+
+[Derived provenance](../fixtures/ProductionDerivedProvenance.json) pins all 35 raw vector hashes, correction version and new domains. [Calibration](../fixtures/ProductionCalibration.json) is synthetic/unaccepted and separates byte integrity from semantic or production conformance. Independent row metadata tests have no genuine personalized bytes claim.
+
+The six old installed examples remain. Installed checks compile six service bindings and both contexts, exercise schemas/fixtures and reject invalid readonly/type mutations. [Impact](../compatibility/production-impact.json) keeps accepted pins/acknowledgements null. D3/D6/D7/D8/D9/D10, L5-L8, per-row authority and actual consumer integration remain pending.

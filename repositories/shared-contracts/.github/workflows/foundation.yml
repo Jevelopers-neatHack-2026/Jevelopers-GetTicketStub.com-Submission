@@ -1,0 +1,52 @@
+name: Full local contract candidates
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - name: Provision locked dependency cache
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify offline implemented candidates
+        env:
+          npm_config_offline: 'true'
+          npm_config_audit: 'false'
+          npm_config_fund: 'false'
+          SC_AJV_ROOT: ${{ github.workspace }}/node_modules
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          npm test
+          npm run contracts:check
+          npm run contracts:fixtures
+          npm run contracts:compat
+          npm run contracts:inventory -- --require-consumer --require-leaf --require-version-policy --require-field-classification --require-fixtures --require-docs
+          npm run contracts:inventory -- --require-field-classification --policy-only
+          npm run docs:check
+          npm run contracts:coverage -- --human
+          npm run generate -- --check
+          git diff --exit-code -- schemas generated fixtures
+          npm run test:installed
+          npm pack --dry-run
+  node24-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.21.0'
+          cache: npm
+      - name: Provision locked compiler and package-test tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify actual installed ESM, types and all supported fixture versions
+        env:
+          npm_config_offline: 'true'
+          npm_config_audit: 'false'
+          npm_config_fund: 'false'
+        run: npm run test:installed

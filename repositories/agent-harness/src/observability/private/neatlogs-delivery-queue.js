@@ -73,6 +73,12 @@ function positiveInteger(value, fallback, maximum) {
   return value;
 }
 
+function boundedPageLimit(value, fallback, maximum) {
+  // SQLite treats a negative LIMIT as unbounded. Refuse invalid inputs before
+  // opening the database or renewing a lease; retain positive-limit clamping.
+  return Math.min(positiveInteger(value, fallback, Number.MAX_SAFE_INTEGER), maximum);
+}
+
 function validAttributeValue(value) {
   if (typeof value === 'string') return value.length <= MAX_ATTRIBUTE_STRING;
   if (typeof value === 'boolean') return true;
@@ -480,12 +486,14 @@ export class NeatlogsDeliveryQueue {
   }
 
   dueForSend(limit = MAX_BATCH) {
+    const pageLimit = boundedPageLimit(limit, MAX_BATCH, MAX_BATCH);
     return this.#open().prepare(`SELECT * FROM neatlogs_delivery_queue
       WHERE state = 'queued' AND legacy_hold = 0 AND next_attempt_at_ms <= ?
-      ORDER BY position LIMIT ?`).all(this.now(), Math.min(limit, MAX_BATCH));
+      ORDER BY position LIMIT ?`).all(this.now(), pageLimit);
   }
 
   dueForReadback(limit = MAX_BATCH, lease) {
+    const pageLimit = boundedPageLimit(limit, MAX_BATCH, MAX_BATCH);
     const now = this.now();
     return this.#transaction(db => {
       if (!this.#renewLease(db, lease, now)) return [];
@@ -493,7 +501,7 @@ export class NeatlogsDeliveryQueue {
       const rows = db.prepare(`SELECT * FROM neatlogs_delivery_queue
         WHERE state = 'sent' AND legacy_hold = 0 AND next_readback_at_ms <= ?
         ORDER BY CASE WHEN position > ? THEN 0 ELSE 1 END, position LIMIT ?`)
-        .all(now, cursor, Math.min(limit, MAX_BATCH));
+        .all(now, cursor, pageLimit);
       return rows;
     });
   }
@@ -789,6 +797,7 @@ export class NeatlogsDeliveryQueue {
 
   /** Counts by state plus the most recent trace IDs per state. Holds no content. */
   diagnostics({ recent = 5 } = {}) {
+    const pageLimit = boundedPageLimit(recent, 5, 50);
     const db = this.#open();
     const counts = { queued: 0, sent: 0, verified: 0, failed: 0, legacyHeld: 0, unresolvedHeld: 0 };
     for (const row of db.prepare('SELECT state, COUNT(*) AS n FROM neatlogs_delivery_queue GROUP BY state').all()) {
@@ -800,7 +809,7 @@ export class NeatlogsDeliveryQueue {
       WHERE state = 'sent' AND last_status = 'readback_resolution_held'`).get().n);
     const latest = db.prepare(`SELECT trace_id, workflow_name, event_type, state, generation, last_status, last_reason,
       duplicate_trace_ids, legacy_hold, send_attempts FROM neatlogs_delivery_queue ORDER BY position DESC LIMIT ?`)
-      .all(Math.min(recent, 50));
+      .all(pageLimit);
     return Object.freeze({
       counts: Object.freeze(counts),
       latest: Object.freeze(latest.map(row => Object.freeze({

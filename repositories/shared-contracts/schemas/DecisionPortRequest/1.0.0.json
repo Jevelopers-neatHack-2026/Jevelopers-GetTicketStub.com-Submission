@@ -1,0 +1,618 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0",
+  "title": "DecisionPortRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "DecisionPortRequest",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "event_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId",
+      "x-classification": "internal"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "workflow_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/WorkflowId",
+      "x-classification": "internal"
+    },
+    "run_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/RunId",
+      "x-classification": "internal"
+    },
+    "job_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/JobId",
+      "x-classification": "internal"
+    },
+    "artifact_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ArtifactId",
+      "x-classification": "restricted"
+    },
+    "design_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignId",
+      "x-classification": "restricted"
+    },
+    "design_version_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignVersionId",
+      "x-classification": "restricted"
+    },
+    "order_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/OrderId",
+      "x-classification": "restricted"
+    },
+    "trace_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TraceId",
+      "x-classification": "internal"
+    },
+    "correlation_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId",
+      "x-classification": "internal"
+    },
+    "evidence_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EvidenceId",
+      "x-classification": "internal"
+    },
+    "usage_event_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UsageEventId",
+      "x-classification": "internal"
+    },
+    "logical_operation_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/LogicalOperationId",
+      "x-classification": "restricted"
+    },
+    "provider_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderAttemptId",
+      "x-classification": "internal"
+    },
+    "billable_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/BillableAttemptId",
+      "x-classification": "restricted"
+    },
+    "transport_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TransportAttemptId",
+      "x-classification": "internal"
+    },
+    "provider_request_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderRequestId",
+      "x-classification": "restricted"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "source_revision",
+        "build_revision"
+      ],
+      "x-classification": "internal",
+      "properties": {
+        "module": {
+          "type": "string",
+          "enum": [
+            "getticketstub.com",
+            "agent-harness",
+            "event-intelligence",
+            "creative-engine",
+            "print-production",
+            "fulfillment-connectors",
+            "cost-intelligence",
+            "team-dashboard",
+            "integration-evals",
+            "shared-contracts"
+          ],
+          "x-classification": "public"
+        },
+        "source_revision": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision",
+          "x-classification": "public",
+          "type": "string",
+          "minLength": 40,
+          "maxLength": 40
+        },
+        "build_revision": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,128}(?![\\s\\S])",
+          "x-classification": "internal"
+        }
+      }
+    },
+    "occurred_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal",
+      "type": "string",
+      "pattern": "Z(?![\\s\\S])"
+    },
+    "observed_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal",
+      "type": "string",
+      "pattern": "Z(?![\\s\\S])"
+    },
+    "ingested_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal",
+      "type": "string",
+      "pattern": "Z(?![\\s\\S])"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "development",
+        "test",
+        "production"
+      ],
+      "x-classification": "public"
+    },
+    "billing_mode": {
+      "type": "string",
+      "enum": [
+        "live",
+        "sandbox",
+        "simulated"
+      ],
+      "x-classification": "public"
+    },
+    "source_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "x-classification": "restricted",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artifact",
+              "evidence",
+              "source_observation",
+              "provider_request",
+              "manifest"
+            ],
+            "x-classification": "internal"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])",
+            "x-classification": "restricted"
+          },
+          "content_hash": {
+            "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+            "x-classification": "restricted",
+            "type": "string",
+            "minLength": 71,
+            "maxLength": 71
+          }
+        }
+      }
+    },
+    "request_id": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/RequestId",
+      "x-classification": "restricted"
+    },
+    "batch_id": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/BatchId",
+      "x-classification": "restricted"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "x-classification": "restricted"
+    },
+    "attempt_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "x-classification": "restricted"
+    },
+    "deadline_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "restricted",
+      "type": "string",
+      "pattern": "Z(?![\\s\\S])"
+    },
+    "cancellation_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "model_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "policy_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "budget_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "state_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "execution_mode": {
+      "const": "independent_batch",
+      "x-classification": "restricted"
+    },
+    "acceptance_policy": {
+      "type": "string",
+      "enum": [
+        "partial",
+        "all_or_nothing"
+      ],
+      "x-classification": "restricted"
+    },
+    "prior_answers": {
+      "type": "object",
+      "minProperties": 0,
+      "maxProperties": 24,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_-]{1,64}(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+        "x-classification": "restricted"
+      },
+      "x-classification": "restricted"
+    },
+    "questions": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 24,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_-]{1,64}(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "choice",
+                "x-classification": "restricted"
+              },
+              "instructions": {
+                "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                "x-classification": "restricted"
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                },
+                "maxItems": 24,
+                "uniqueItems": true,
+                "x-classification": "restricted"
+              },
+              "criteria": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 255,
+                "propertyNames": {
+                  "pattern": "^[A-Za-z0-9_-]{1,64}(?![\\s\\S])"
+                },
+                "additionalProperties": {
+                  "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                  "x-classification": "restricted"
+                },
+                "x-classification": "restricted"
+              },
+              "eligible_candidate_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                },
+                "maxItems": 255,
+                "minItems": 1,
+                "uniqueItems": true,
+                "x-classification": "restricted"
+              },
+              "minimum_confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "type",
+              "instructions",
+              "depends_on",
+              "criteria",
+              "eligible_candidate_ids",
+              "minimum_confidence"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "score",
+                "x-classification": "restricted"
+              },
+              "profile": {
+                "const": "structured-index-v1",
+                "x-classification": "restricted"
+              },
+              "instructions": {
+                "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                "x-classification": "restricted"
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                },
+                "maxItems": 24,
+                "uniqueItems": true,
+                "x-classification": "restricted"
+              },
+              "criteria": {
+                "type": "array",
+                "items": {
+                  "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue"
+                },
+                "maxItems": 10,
+                "minItems": 2,
+                "x-classification": "restricted"
+              },
+              "minimum_confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "type",
+              "profile",
+              "instructions",
+              "depends_on",
+              "criteria",
+              "minimum_confidence"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "score",
+                "x-classification": "restricted"
+              },
+              "profile": {
+                "const": "ei-string-v1",
+                "x-classification": "restricted"
+              },
+              "instructions": {
+                "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                "x-classification": "restricted"
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                },
+                "maxItems": 24,
+                "uniqueItems": true,
+                "x-classification": "restricted"
+              },
+              "criteria": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "x-classification": "restricted"
+              },
+              "index_labels": {
+                "type": "array",
+                "items": {
+                  "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue"
+                },
+                "maxItems": 10,
+                "minItems": 2,
+                "x-classification": "restricted"
+              },
+              "legacy_legend": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "x-classification": "restricted"
+              },
+              "minimum_confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "type",
+              "profile",
+              "instructions",
+              "depends_on",
+              "criteria",
+              "index_labels",
+              "legacy_legend",
+              "minimum_confidence"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "noul",
+                "x-classification": "restricted"
+              },
+              "instructions": {
+                "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                "x-classification": "restricted"
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                },
+                "maxItems": 24,
+                "uniqueItems": true,
+                "x-classification": "restricted"
+              },
+              "criteria": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "true": {
+                    "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                    "x-classification": "restricted"
+                  },
+                  "false": {
+                    "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+                    "x-classification": "restricted"
+                  }
+                },
+                "required": [
+                  "true",
+                  "false"
+                ],
+                "x-classification": "restricted"
+              },
+              "uncertain_band": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "lower": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "x-classification": "restricted"
+                  },
+                  "upper": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "x-classification": "restricted"
+                  }
+                },
+                "required": [
+                  "lower",
+                  "upper"
+                ],
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "type",
+              "instructions",
+              "depends_on",
+              "criteria",
+              "uncertain_band"
+            ]
+          }
+        ],
+        "x-classification": "restricted"
+      },
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "event_id",
+    "tenant_id",
+    "project_id",
+    "correlation_id",
+    "producer",
+    "occurred_at",
+    "observed_at",
+    "ingested_at",
+    "environment",
+    "billing_mode",
+    "source_refs",
+    "request_id",
+    "batch_id",
+    "logical_operation_id",
+    "billable_attempt_id",
+    "attempt_number",
+    "attempt_limit",
+    "deadline_at",
+    "cancellation_ref",
+    "model_ref",
+    "policy_ref",
+    "budget_ref",
+    "state_ref",
+    "execution_mode",
+    "acceptance_policy",
+    "prior_answers",
+    "questions"
+  ],
+  "$defs": {
+    "InertValue": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 8192
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+            "x-classification": "restricted"
+          }
+        },
+        {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9_-]{1,64}(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "$ref": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/$defs/InertValue",
+            "x-classification": "restricted"
+          }
+        }
+      ],
+      "title": "InertValue"
+    }
+  }
+}

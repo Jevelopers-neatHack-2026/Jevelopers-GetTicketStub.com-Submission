@@ -75,6 +75,6 @@ These modules are repository fixtures, deliberately absent from the production n
 
 ## Review and acceptance
 
-Verify with `node --test tests/models/creative-api-fixture-consumer.test.mjs`, the full `make check TARGET=image-adapter MODE=mock`, `make build`, and the affected installed Concepts package gate. Producer-side consumer tests validate packet bytes, parent links, correlation, usage/hold behavior and safe output handling. They do not substitute for an independently executed integration-evals validator.
+Verify with `node --test tests/models/creative-api-fixture-consumer.test.mjs`, the full `make check TARGET=image-adapter MODE=mock`, `make build`, and `make check TARGET=concepts MODE=mock` for the installed Concepts package consumer. Producer-side consumer tests validate packet bytes, parent links, correlation, usage/hold behavior and safe output handling. They do not substitute for an independently executed integration-evals validator.
 
 Refs [creative-engine #12](https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/12), [#11](https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/11), and [integration-evals #17](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/17). Creative review/adoption of the exact source and integration-evals ingestion/ACK remain distinct decisions. Real provider/rights/Finance authority, recorded live-origin evidence and exact externally approved handoff remain with their accountable owners; this fixture does not close those gates.

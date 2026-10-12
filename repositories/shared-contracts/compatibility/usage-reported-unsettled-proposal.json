@@ -1,0 +1,103 @@
+{
+  "proposal_id": "CI05-COMP-004",
+  "status": "candidate_unaccepted",
+  "contracts": [
+    "UsageEvent/2.0.0",
+    "ProviderReportedCostEvidence/1.0.0"
+  ],
+  "source": "Human-supplied Finance request in shared-contracts#12 comment 6116255057; supplied to this worker by the supervisor.",
+  "owner_acceptance": null,
+  "consumer_adoption": null,
+  "design_agreement": {
+    "status": "bounded_candidate_direction_only",
+    "source": "Finance captain design agreement in shared-contracts#12 comment 6116691140, supplied by the supervisor.",
+    "covers": [
+      "UsageEvent/2.0.0 and ProviderReportedCostEvidence/1.0.0 direction",
+      "exact USD direct reporting with a null rate_card_ref",
+      "null reconciliation_ref and retained nullable provider_request_id",
+      "unknown amount distinct from a reported zero"
+    ],
+    "does_not_accept": [
+      "unseen fields or archive",
+      "public namespace or consumer migration",
+      "provider/source authentication or receipt intake",
+      "settlement, ledger, or reconciliation behavior",
+      "full CI05-B scope",
+      "release or adoption"
+    ]
+  },
+  "intended_roles": {
+    "status": "intended_role_only",
+    "producer": ["cost-intelligence"],
+    "consumers": ["cost-intelligence", "integration-evals"],
+    "producer_scope": "owner-controlled normalized evidence and attempt association",
+    "evidence": [
+      "Finance captain design agreement in shared-contracts#12 comment 6116691140",
+      "IE ready-to-consume reviewed pure-interface message supplied by the supervisor"
+    ],
+    "version_assignments": {
+      "ProviderReportedCostEvidence/1.0.0": {"producers": [], "consumers": []},
+      "UsageEvent/2.0.0": {"producers": [], "consumers": []}
+    },
+    "owner": null,
+    "named_reviewer": null,
+    "owner_acknowledgement": null,
+    "actual_source_adoption": null,
+    "archive_acceptance": null,
+    "namespace_adoption": null
+  },
+  "implementation_review_dispositions": [
+    {
+      "finding": "SC-URV-ASTRA-001",
+      "status": "fixed_locally_pending_fresh_review",
+      "change": "Directly mutually superseding observation pairs return IDENTITY_COLLISION before either comparison direction can succeed; helper prior checks share that refusal.",
+      "limits": "The pure pairwise helper does not prove or persist longer ancestry, ordering, or settlement idempotency."
+    },
+    {
+      "finding": "SC-URV-ASTRA-002",
+      "status": "fixed_locally_pending_fresh_review",
+      "change": "ProductionMeteringPort.observe is declared with UsageEvent_1_0_0; the generic ContractMap UsageEvent union and explicit v2 opt-in remain available."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "URC-001",
+      "statement": "UsageEvent/2.0.0 represents an exact provider-reported unsettled USD amount with rate_card_ref:null, required provider_evidence_ref, reconciliation_ref:null, and existing provider_request_id may remain null."
+    },
+    {
+      "id": "URC-002",
+      "statement": "ProviderReportedCostEvidence/1.0.0 commits to immutable source bytes separately from a domain-separated canonical record hash and distinguishes known versus explicitly unknown cost."
+    },
+    {
+      "id": "URC-003",
+      "statement": "Evidence records distinguish per-billable-attempt association from per-key aggregates; aggregate evidence is never apportioned or treated as per-attempt."
+    },
+    {
+      "id": "URC-004",
+      "statement": "The opt-in helper requires out-of-band owner-controlled lookup context and checks scope, reference, record hash, amount, provider/source, attempt binding and source clock; missing, mismatched, revoked or unverified lookup rejects."
+    },
+    {
+      "id": "URC-005",
+      "statement": "Exact reported cost remains independent of usage completeness, outcome, execution finality, exposure and settlement; unknown money remains null and is never fabricated as zero."
+    },
+    {
+      "id": "URC-006",
+      "statement": "Same-observation redelivery is pairwise classifiable despite a different transport attempt; changed economics or evidence under one observation ID conflicts; a correction uses a new observation ID and exact supersedes link."
+    },
+    {
+      "id": "URC-007",
+      "statement": "Existing UsageEvent/1.0.0 schema/fixture bytes, checkUsageEvent, compareUsageIdentity, checkOperation dispatch and Finance surfaces retain v1 behavior."
+    },
+    {
+      "id": "URC-008",
+      "statement": "Synthetic fixture associations are explicitly labeled and do not claim genuine provider receipts, authenticated resolver operation, Finance reconciliation or consumer adoption."
+    }
+  ],
+  "explicit_non_goals": [
+    "provider, host or Finance authentication service",
+    "persistent delivery deduplication, settlement idempotency, ledger posting, reservation mutation or execution finality",
+    "provider receipt retrieval or live provider/Finance adoption",
+    "local execution, pre-ingestion, delivery or receipt identity proposal",
+    "consumer precision migration, GAP001, GAP002, CSV, draft, repair or authority service implementation"
+  ]
+}

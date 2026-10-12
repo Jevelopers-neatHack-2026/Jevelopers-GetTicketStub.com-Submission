@@ -1,0 +1,79 @@
+{
+  "role": "synthetic_external_current_record",
+  "receipt": {
+    "contract": "ApprovalReceipt",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000008000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "approval_id": "123e4567-e89b-42d3-a456-000000000130",
+    "receipt_hash": "sha256:87eb329bf59e2dab23e2140a0d0e673a9b13a4749fde53477c7455e7ba12df54",
+    "issuer": "getticketstub.com",
+    "audience": "print-production",
+    "actor_id": "actor_1",
+    "binding": {
+      "subject_type": "composition",
+      "subject_ref": {
+        "contract": "Composition",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000131",
+        "revision": 1,
+        "content_hash": "sha256:3ea4ba25df5a94179eb8b944f5c4a4707d5970578437a23e5b0d9d3f672d12cd"
+      },
+      "intended_use": "production",
+      "preview_ref": {
+        "contract": "ComposedPreview",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000122",
+        "revision": 1,
+        "content_hash": "sha256:9909ec831e2cf6d0c73fb5480f31945a80987a13faee005704166cb53a26ceca"
+      },
+      "facts_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644",
+      "composition_hash": "sha256:3ea4ba25df5a94179eb8b944f5c4a4707d5970578437a23e5b0d9d3f672d12cd",
+      "asset_hashes": [],
+      "facts_ref": {
+        "contract": "FactSet",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000111",
+        "revision": 1,
+        "content_hash": "sha256:8404cdb3d54636ce8c41ee89d5a7abac30a65ad1d445a54fd5fd5225b1789644"
+      },
+      "composition_ref": {
+        "contract": "Composition",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000131",
+        "revision": 1,
+        "content_hash": "sha256:3ea4ba25df5a94179eb8b944f5c4a4707d5970578437a23e5b0d9d3f672d12cd"
+      }
+    },
+    "issued_at": "2026-10-10T11:00:00Z",
+    "expires_at": "2026-10-10T13:00:00Z",
+    "status_ref": {
+      "contract": "ApprovalStatus",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000101",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policy_ref": {
+      "contract": "policy",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000014",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+}

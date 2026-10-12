@@ -1,8 +1,8 @@
-# `print-production`
+# print-production ownership and implementation boundary
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
+**Repository status:** Public on GitHub; verified October 12, 2026.
 **Proposed owner:** Creative and fulfillment.
-**Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
+**Implementation state:** A private Node.js 24.21.0 / npm 11.19.0 package implements composition, personalization, preflight, export, bundle and local verification surfaces. Local implementation does not establish consumer adoption, supplier approval or production acceptance.
 
 ## Responsibility
 
@@ -10,22 +10,19 @@ Convert an approved artwork version and verified event details into deterministi
 
 Bind each production bundle to its design, template revision, and supplier specification. Define reproducibility through preserved inputs, renderer version, and expected output properties. Byte-identical exports require controlled metadata and rendering dependencies.
 
-## Planned internal modules
+## Current implementation surface
 
-- `src/composition/`: Artwork, exact text, and approved logo layers.
-- `src/templates/`: Ticket layouts and supported product specifications.
-- `src/personalization/`: Validated attendee fields; CSV batch import is a P1 extension.
-- `src/preflight/`: Dimensions, bleed, resolution, and content integrity.
-- `src/exporters/`: SVG, PNG, PDF, and bundle packaging.
-- `src/manifests/`: Input versions, output hashes, and validation results.
+The package exports a root API, candidate adapter subpath and pp-verify command. Source includes composition primitives, canonical/private renderers, template and font assets, personalization and CSV batch validation, SVG/PNG/PDF exporters, preflight inspection, artifact manifests, local storage, durable batch jobs, and offline verification suites.
 
-## Dependencies and handoff
+The bundled shared-contracts 0.9.7 archive is a pinned candidate dependency, not an accepted cross-repository contract. Check owner evidence before treating a bundle as consumer-conformance proof. Current app main does not import this package at runtime.
 
-Consume immutable versions from `creative-engine`, event facts from `event-intelligence`, and interfaces from `shared-contracts`. Obtain the selected product's requirements through `fulfillment-connectors`. Deliver verified downloads to `getticketstub.com` and supplier-compatible references to fulfillment. Supplier-specific upload or order behavior stays with the connector.
+## Integration targets and handoff
 
-## P0 demo slice
+Inputs are intended to include immutable design versions and event facts. Product requirements must come from an owner-approved fulfillment interface. Customer downloads and supplier-compatible references belong at their respective app and connector boundaries. Builds/tests are local and do not submit supplier orders. See [runtime CI workload](../runtime/CI-WORKLOAD.md) and [integration-evals handoff](../integrations/integration-evals.md) for verification procedures and limits.
 
-Support one chosen ticket layout and one confirmed supplier specification. Produce a customer preview and a usable production bundle with exact event text. Demonstrate that a deliberately invalid input fails preflight before submission.
+## P0 target slice
+
+Design intent: support one chosen ticket layout and confirmed supplier specification; produce a customer preview and usable production bundle with exact event text; and show invalid input failing preflight before submission. This is not a completion claim.
 
 ## Acceptance boundary
 
@@ -36,8 +33,8 @@ Support one chosen ticket layout and one confirmed supplier specification. Produ
 - [ ] A failed preflight prevents the dependent fulfillment submission.
 - [ ] Approved artifacts remain tied to their immutable design version.
 
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+The canonical current-state architecture describes implementation across repositories. The historical v1.0 architecture kit remains design intent: [current organization architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture/CURRENT-STATE.md) · [v1.0 design intent](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md).
 
-## Acceptance and contributor handoff
+Use the [repository acceptance view](ACCEPTANCE.md) for criterion allocation only. Current criteria and evidence live in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) and [JSON tracker](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.json). See the [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md), [contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md) and [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
 
-Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
+For a guide-by-topic list, see the [documentation index](../INDEX.md).

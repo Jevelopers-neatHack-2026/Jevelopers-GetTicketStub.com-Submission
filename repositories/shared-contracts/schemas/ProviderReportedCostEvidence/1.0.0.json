@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/ProviderReportedCostEvidence/1.0.0",
+  "title": "ProviderReportedCostEvidence",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "ProviderReportedCostEvidence",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "evidence_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EvidenceId",
+      "x-classification": "restricted"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-classification": "restricted"
+    },
+    "content_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "test", "production"],
+      "x-classification": "public"
+    },
+    "billing_mode": {
+      "type": "string",
+      "enum": ["live", "sandbox", "simulated"],
+      "x-classification": "public"
+    },
+    "source_observation_id": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/SourceObservationId",
+      "x-classification": "restricted"
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])",
+      "x-classification": "restricted"
+    },
+    "model": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])",
+      "x-classification": "restricted"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "provider_response",
+        "provider_usage_api",
+        "trace",
+        "billing_export",
+        "other"
+      ],
+      "x-classification": "restricted"
+    },
+    "source_observed_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "restricted"
+    },
+    "source_bytes_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted"
+    },
+    "source_scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "per_billable_attempt",
+              "x-classification": "internal"
+            },
+            "logical_operation_id": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/LogicalOperationId",
+              "x-classification": "restricted"
+            },
+            "provider_attempt_id": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderAttemptId",
+              "x-classification": "restricted"
+            },
+            "billable_attempt_id": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/BillableAttemptId",
+              "x-classification": "restricted"
+            },
+            "provider_request_id": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderRequestId",
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "kind",
+            "logical_operation_id",
+            "provider_attempt_id",
+            "billable_attempt_id",
+            "provider_request_id"
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "per_key_aggregate",
+              "x-classification": "internal"
+            },
+            "aggregate_key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])",
+              "x-classification": "restricted"
+            },
+            "period_start": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+              "x-classification": "restricted"
+            },
+            "period_end": {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "kind",
+            "aggregate_key",
+            "period_start",
+            "period_end"
+          ],
+          "x-classification": "restricted"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "reported_cost": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "known",
+              "x-classification": "internal"
+            },
+            "money": {
+              "allOf": [
+                {
+                  "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/Money",
+                  "x-classification": "restricted"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "const": "USD",
+                      "x-classification": "restricted"
+                    }
+                  },
+                  "required": [
+                    "currency"
+                  ]
+                }
+              ],
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "state",
+            "money"
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "unknown",
+              "x-classification": "internal"
+            },
+            "money": {
+              "type": "null",
+              "x-classification": "restricted"
+            }
+          },
+          "required": [
+            "state",
+            "money"
+          ],
+          "x-classification": "restricted"
+        }
+      ],
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "evidence_id",
+    "revision",
+    "content_hash",
+    "tenant_id",
+    "project_id",
+    "environment",
+    "billing_mode",
+    "source_observation_id",
+    "provider",
+    "model",
+    "source",
+    "source_observed_at",
+    "source_bytes_hash",
+    "source_scope",
+    "reported_cost"
+  ]
+}

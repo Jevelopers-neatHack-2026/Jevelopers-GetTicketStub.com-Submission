@@ -1,0 +1,41 @@
+name: Full catalog release readiness
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  release-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify local candidate behavior
+        env:
+          npm_config_offline: 'true'
+          SC_AJV_ROOT: ${{ github.workspace }}/node_modules
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          npm test
+          npm run contracts:check
+          npm run contracts:fixtures
+          npm run contracts:compat
+          npm run docs:check
+          npm run contracts:coverage -- --human
+          npm run generate -- --check
+          git diff --exit-code -- schemas generated fixtures
+          npm run test:installed
+          npm pack --dry-run
+      - name: Fail closed on owner and immutable pin obligations
+        if: always()
+        env:
+          npm_config_offline: 'true'
+        run: npm run contracts:inventory -- --require-owner --require-consumer --require-leaf --require-fixtures --require-docs --require-consumer-pins --require-field-classification --require-version-policy
+      - name: Fail closed on genuine consumer integration
+        if: always()
+        env:
+          npm_config_offline: 'true'
+        run: npm run contracts:consumers

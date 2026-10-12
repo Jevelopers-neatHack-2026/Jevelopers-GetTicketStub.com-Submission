@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/BatchResult/1.0.0",
+  "title": "BatchResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "BatchResult",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "job": {
+      "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0",
+      "x-classification": "restricted"
+    },
+    "acceptance_policy": {
+      "type": "string",
+      "enum": [
+        "atomic",
+        "allow_partial"
+      ],
+      "x-classification": "restricted"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "partially_succeeded"
+      ],
+      "x-classification": "restricted"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "submitted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "x-classification": "restricted"
+        },
+        "succeeded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "x-classification": "restricted"
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "x-classification": "restricted"
+        },
+        "cancelled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "x-classification": "restricted"
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "x-classification": "restricted"
+        },
+        "pending": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "x-classification": "restricted"
+        }
+      },
+      "required": [
+        "submitted",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "skipped",
+        "pending"
+      ],
+      "x-classification": "restricted"
+    },
+    "published_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "x-classification": "restricted"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.jevelopers.org/RowResult/1.0.0",
+        "x-classification": "restricted"
+      },
+      "minItems": 0,
+      "maxItems": 100,
+      "x-classification": "restricted"
+    },
+    "page_start": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "x-classification": "restricted"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "batch_manifest_ref": {
+      "anyOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference",
+              "x-classification": "restricted"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "contract": {
+                  "const": "BatchResult",
+                  "x-classification": "public"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "x-classification": "public"
+                }
+              },
+              "required": [
+                "contract",
+                "schema_version"
+              ]
+            }
+          ],
+          "x-classification": "restricted"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-classification": "restricted"
+    },
+    "cancel_requested": {
+      "type": "boolean",
+      "x-classification": "restricted"
+    },
+    "eligibility": {
+      "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility",
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "tenant_id",
+    "project_id",
+    "job",
+    "acceptance_policy",
+    "status",
+    "counts",
+    "published_count",
+    "rows",
+    "page_start",
+    "next_cursor",
+    "batch_manifest_ref",
+    "cancel_requested",
+    "eligibility"
+  ],
+  "x-classification": "restricted"
+}

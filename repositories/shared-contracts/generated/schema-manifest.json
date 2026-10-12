@@ -1,0 +1,630 @@
+{
+  "package_version": "0.10.2",
+  "source_revision": null,
+  "status": "unreleased_candidates",
+  "toolchain": {
+    "ajv": "8.17.1",
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3",
+    "json_schema_to_typescript": "15.0.4",
+    "node": "22.23.3"
+  },
+  "schemas": [
+    {
+      "contract": "ApprovalReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalReceipt/1.0.0",
+      "path": "schemas/ApprovalReceipt/1.0.0.json",
+      "sha256": "e931682224c8239bf65f5aa74d3e8e66564870cf84b95695de0557af36d6a63b"
+    },
+    {
+      "contract": "ApprovalReference",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalReference/1.0.0",
+      "path": "schemas/ApprovalReference/1.0.0.json",
+      "sha256": "6d84c310e0a866c9fff4e8990a6e1c0bf508cb069e92769c54861769c8b5ef30"
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalVerificationOutcome/1.0.0",
+      "path": "schemas/ApprovalVerificationOutcome/1.0.0.json",
+      "sha256": "2ec93908f85321d836f926ecefb968276673f1f779b7237abbba4a6307bbee19"
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalVerificationRequest/1.0.0",
+      "path": "schemas/ApprovalVerificationRequest/1.0.0.json",
+      "sha256": "35767f5d3271d36415b978c89320a8029a110665a6cad79ba07dc2e11d4c4989"
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactConsumptionReceipt/1.0.0",
+      "path": "schemas/ArtifactConsumptionReceipt/1.0.0.json",
+      "sha256": "208a95fde5392b7e94ef5fa993a39d7399b9c7b6520146fe3c5df7c4a2816f64"
+    },
+    {
+      "contract": "ArtifactFile",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactFile/2.0.0",
+      "path": "schemas/ArtifactFile/2.0.0.json",
+      "sha256": "039ab23a46193d9c57b927c7b9ef04c0b73353d5f527635534ed43eda2e67835"
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactHandoffManifest/1.0.0",
+      "path": "schemas/ArtifactHandoffManifest/1.0.0.json",
+      "sha256": "696f0399c6962d2f3ac40a372164e093fd588cf2547ece0eb760f8993631a463"
+    },
+    {
+      "contract": "ArtifactManifestStatus",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactManifestStatus/1.0.0",
+      "path": "schemas/ArtifactManifestStatus/1.0.0.json",
+      "sha256": "d7db2e25b9a671cd11612926d68e0c6a2f57d20b3a86c75373f4b4de53d3cae4"
+    },
+    {
+      "contract": "ArtifactRef",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactRef/1.0.0",
+      "path": "schemas/ArtifactRef/1.0.0.json",
+      "sha256": "84bf617e1e7403894cc1aefeed2b9095cda48ad4ef44f63d4b3f963928867486"
+    },
+    {
+      "contract": "ArtifactStatusRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactStatusRequest/1.0.0",
+      "path": "schemas/ArtifactStatusRequest/1.0.0.json",
+      "sha256": "dfdfa93d4f875faa071b18988e2a5e8049405e274cf13fcc759d9d08450a2445"
+    },
+    {
+      "contract": "BatchResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/BatchResult/1.0.0",
+      "path": "schemas/BatchResult/1.0.0.json",
+      "sha256": "29f26ae3e4494ece2f0e1fd2eb1fd29307be06e4a2b1f4951674ff3d4e4becc1"
+    },
+    {
+      "contract": "BudgetReservation",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/BudgetReservation/1.0.0",
+      "path": "schemas/BudgetReservation/1.0.0.json",
+      "sha256": "f06c6910d1a537a1d357e6555400e39d4cc590e6cfcb0aa26ee19a7b80361238"
+    },
+    {
+      "contract": "BudgetReservation",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/BudgetReservation/2.0.0",
+      "path": "schemas/BudgetReservation/2.0.0.json",
+      "sha256": "e1099e84c7a94d1fbee6c73d1725265b1fd46b2ba4ae6a1a11ab0970ced89a07"
+    },
+    {
+      "contract": "Cancellation",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/Cancellation/1.0.0",
+      "path": "schemas/Cancellation/1.0.0.json",
+      "sha256": "800e9a71645b78dc967e0b96423ba0d7ffa60aba9b551b862c69afd02ed575b2"
+    },
+    {
+      "contract": "CommonEnvelope",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0",
+      "path": "schemas/CommonEnvelope/1.0.0.json",
+      "sha256": "8b805d89efd8104bb2b88f6ba441f0ce42cc5b4df1ffcb1c8bd7f5126d102bb2"
+    },
+    {
+      "contract": "CompareTemplateRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CompareTemplateRequest/1.0.0",
+      "path": "schemas/CompareTemplateRequest/1.0.0.json",
+      "sha256": "cf1ed451ff4ee3d643fb5fbb5d61f0b1bdba7bc7cfe81d981c788dc694e7a615"
+    },
+    {
+      "contract": "CompatibilityReport",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CompatibilityReport/1.0.0",
+      "path": "schemas/CompatibilityReport/1.0.0.json",
+      "sha256": "0f656fbc0143bd1bc642bb91be65fe388c4f4ff1c7cd5ad6a8dcd9e6b5b4b6db"
+    },
+    {
+      "contract": "ComposeArtifactRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ComposeArtifactRequest/1.0.0",
+      "path": "schemas/ComposeArtifactRequest/1.0.0.json",
+      "sha256": "0bcd5a6159f3e744b7cf67a0f023d130c4d33e05a7d50dfef07ff378f7a012e2"
+    },
+    {
+      "contract": "Composition",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/Composition/1.0.0",
+      "path": "schemas/Composition/1.0.0.json",
+      "sha256": "cbabeb51ce55ddc3355d54d6b4db81218eec0af6c25c17e02783f90c0d46df9d"
+    },
+    {
+      "contract": "CreativeBrief",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CreativeBrief/1.0.0",
+      "path": "schemas/CreativeBrief/1.0.0.json",
+      "sha256": "497b5b8453205e2056d1d2a8b8ef21708f8a7db7a435bda1b30e5e661b17baa3"
+    },
+    {
+      "contract": "CsvCheckpoint",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CsvCheckpoint/1.0.0",
+      "path": "schemas/CsvCheckpoint/1.0.0.json",
+      "sha256": "6ce5e8f5a73f33351ed0599e61d66f5cce3c55e5e5df9570c70d15f258cad4d8"
+    },
+    {
+      "contract": "CsvDialect",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CsvDialect/1.0.0",
+      "path": "schemas/CsvDialect/1.0.0.json",
+      "sha256": "ca272c3f07c931dc2d71d4e2c804745bad666c63b9508c5d94f1fb80f3b8b491"
+    },
+    {
+      "contract": "CsvMapping",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CsvMapping/1.0.0",
+      "path": "schemas/CsvMapping/1.0.0.json",
+      "sha256": "c39201dd3f8ee2b92ea438f8774511468bc25eb447220daf6f8a30f1282fbac7"
+    },
+    {
+      "contract": "DecisionPortRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0",
+      "path": "schemas/DecisionPortRequest/1.0.0.json",
+      "sha256": "a0c6d9008d9bfd941da9e724a2be9b7fa9e4b1e0d7d0ba2b8b081cc3055761f3"
+    },
+    {
+      "contract": "DecisionPortResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DecisionPortResult/1.0.0",
+      "path": "schemas/DecisionPortResult/1.0.0.json",
+      "sha256": "4e7c8e22d45004c3010bffadc50f45ae6c6c8a6c3f22f8e1073631f8213f09c0"
+    },
+    {
+      "contract": "DecisionReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DecisionReceipt/1.0.0",
+      "path": "schemas/DecisionReceipt/1.0.0.json",
+      "sha256": "9d4a5e08259a57045fc84e0a775ba8b6945add0762c171aed93f3baa4ec294f5"
+    },
+    {
+      "contract": "DesignControlSchema",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DesignControlSchema/1.0.0",
+      "path": "schemas/DesignControlSchema/1.0.0.json",
+      "sha256": "0808caa5f31d7d2d7a42ee3c75274065f7a6580a3aef50d39265301584d9d6d4"
+    },
+    {
+      "contract": "DesignVersion",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DesignVersion/1.0.0",
+      "path": "schemas/DesignVersion/1.0.0.json",
+      "sha256": "f8c49765ab608419a23503affb4f7549db03581ff5a39fb642c03fa106aa7c80"
+    },
+    {
+      "contract": "ErrorEnvelope",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0",
+      "path": "schemas/ErrorEnvelope/1.0.0.json",
+      "sha256": "9a27a2b9a8f1a1ec9f8c56d67b9e5b9d74e0dc9b7e87dea1be1fd87729f8f93c"
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EvaluationEvidence/1.0.0",
+      "path": "schemas/EvaluationEvidence/1.0.0.json",
+      "sha256": "2febfa8c6dea15ebf2fe36c41547af197c3bd170b1cf8b2be6b3d467911013da"
+    },
+    {
+      "contract": "EventIntelligencePackage",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EventIntelligencePackage/1.0.0",
+      "path": "schemas/EventIntelligencePackage/1.0.0.json",
+      "sha256": "80352284ea5560ef7be8e0282edbbf723e7f5393308356d5916f5434f5bfc450"
+    },
+    {
+      "contract": "EvidenceProjection",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EvidenceProjection/1.0.0",
+      "path": "schemas/EvidenceProjection/1.0.0.json",
+      "sha256": "d1b9b0b5cea8a167996c5d0a37964d61c79580b3c8624c35c0fb589100d852cc"
+    },
+    {
+      "contract": "ExportBundleRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ExportBundleRequest/1.0.0",
+      "path": "schemas/ExportBundleRequest/1.0.0.json",
+      "sha256": "3d583c3624cd968213002443edd88f5406b54bed69d222a7dfdd35c7fc59b385"
+    },
+    {
+      "contract": "FinancialSummary",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FinancialSummary/1.0.0",
+      "path": "schemas/FinancialSummary/1.0.0.json",
+      "sha256": "8d73d97e86d0684ccbb84fc1838de9d7802438966be60bd1f2da3347833067d9"
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentCapabilitySnapshot/1.0.0",
+      "path": "schemas/FulfillmentCapabilitySnapshot/1.0.0.json",
+      "sha256": "8e3c53eee9f6dfa31237e601993c3501f2c4dc4002df194f2cd82adbd6ec5091"
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentQuote/1.0.0",
+      "path": "schemas/FulfillmentQuote/1.0.0.json",
+      "sha256": "67dbe2b536123794619183ec25b9c85e492b2b15c1d2e4cc707e4fc0378d862b"
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentStatus/1.0.0",
+      "path": "schemas/FulfillmentStatus/1.0.0.json",
+      "sha256": "54b35183983aedde2ff6ecef4d93eaa91c45016d89c478207571e88e413df811"
+    },
+    {
+      "contract": "InspectArtifactRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/InspectArtifactRequest/1.0.0",
+      "path": "schemas/InspectArtifactRequest/1.0.0.json",
+      "sha256": "ac12ea17ee3e8cf5b41570ceafec24bfdb7caf1e2361645eeedc3c35cbb86e9a"
+    },
+    {
+      "contract": "JobCommandAcknowledgement",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/JobCommandAcknowledgement/1.0.0",
+      "path": "schemas/JobCommandAcknowledgement/1.0.0.json",
+      "sha256": "444bcf8c5df0f75183a9c728f22159f0edee6b7460f23482815b019ef320d892"
+    },
+    {
+      "contract": "JobProgress",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/JobProgress/1.0.0",
+      "path": "schemas/JobProgress/1.0.0.json",
+      "sha256": "328ab77f33cc6802d54c739a98c5c8f38035604c49456aa8f421bce74e4e3170"
+    },
+    {
+      "contract": "JobRef",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/JobRef/1.0.0",
+      "path": "schemas/JobRef/1.0.0.json",
+      "sha256": "425fc408a05fef9ff19ae57f77ca01bc8575cfa84b695eeeb3141eded87185af"
+    },
+    {
+      "contract": "JobStatus",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/JobStatus/1.0.0",
+      "path": "schemas/JobStatus/1.0.0.json",
+      "sha256": "c2edfd6f17ea87989b3ea6f10f4efd977e8df128dcd282970fab879623c24c70"
+    },
+    {
+      "contract": "OrderAuthorization",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/OrderAuthorization/1.0.0",
+      "path": "schemas/OrderAuthorization/1.0.0.json",
+      "sha256": "035e2a84ba8157c04e04be9d1312471942d3baaeee16fb2d08376506db66bb77"
+    },
+    {
+      "contract": "PartialFailure",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PartialFailure/1.0.0",
+      "path": "schemas/PartialFailure/1.0.0.json",
+      "sha256": "ffbc017416dec37983be87bcfab5e4275d3f72cd80b6edbeb67d88c0257ad6c2"
+    },
+    {
+      "contract": "PersonalizationSchema",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PersonalizationSchema/1.0.0",
+      "path": "schemas/PersonalizationSchema/1.0.0.json",
+      "sha256": "4c2bd7c21b07d89fbb76daf9611523ab8458f50ed2da68daf0c21fe34c5d45b2"
+    },
+    {
+      "contract": "PersonalizeBatchRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PersonalizeBatchRequest/1.0.0",
+      "path": "schemas/PersonalizeBatchRequest/1.0.0.json",
+      "sha256": "6677f74e0345c14adfda73ff999cb727dcd36d5a91addd92d585192a308cdbbf"
+    },
+    {
+      "contract": "PreflightReport",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PreflightReport/1.0.0",
+      "path": "schemas/PreflightReport/1.0.0.json",
+      "sha256": "bdfc46a91fa4702291ab4e594283b3514a79434c5dec31797c60577c1e42f56a"
+    },
+    {
+      "contract": "PrintSpec",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PrintSpec/1.0.0",
+      "path": "schemas/PrintSpec/1.0.0.json",
+      "sha256": "451d483739535071ffc4e030fc413cf6a5de247371c3c3ff8c93febd78329d67"
+    },
+    {
+      "contract": "ProductionBundle",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundle/1.0.0",
+      "path": "schemas/ProductionBundle/1.0.0.json",
+      "sha256": "9cf5bd738b0d528d647219eafa11309e1e126e21de4e4f7d06da8fa8e46b91b9"
+    },
+    {
+      "contract": "ProductionBundle",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundle/2.0.0",
+      "path": "schemas/ProductionBundle/2.0.0.json",
+      "sha256": "e5693456714bcbfe9fba4b72970e638ec854b2a3f64513af9beab5fbdaf0f390"
+    },
+    {
+      "contract": "ProductionBundleDetached",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundleDetached/1.0.0",
+      "path": "schemas/ProductionBundleDetached/1.0.0.json",
+      "sha256": "20292f043e8981cf72c64bd85d5d5cb51d8df2d9c724eb25aea07da7b786da67"
+    },
+    {
+      "contract": "ProductionBundleRef",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0",
+      "path": "schemas/ProductionBundleRef/1.0.0.json",
+      "sha256": "117d3166df06dd3606781f577b9cde2f4aa94fb648dc00732a8a2d6e0b396462"
+    },
+    {
+      "contract": "ProductionDiagnostic",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionDiagnostic/1.0.0",
+      "path": "schemas/ProductionDiagnostic/1.0.0.json",
+      "sha256": "d070725981c5c28b43dfe8bd80f2fa5bfa9dcb500316acfe9a78ab35bc77d652"
+    },
+    {
+      "contract": "ProductionError",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionError/1.0.0",
+      "path": "schemas/ProductionError/1.0.0.json",
+      "sha256": "09ee344e9bea0fc57e1d8ab0d43956e0e4c17980fae04711bf5e1f5929edb576"
+    },
+    {
+      "contract": "ProductionExecutionPins",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionExecutionPins/1.0.0",
+      "path": "schemas/ProductionExecutionPins/1.0.0.json",
+      "sha256": "4d1d8b18150f3b25171b524f24c8d51288b2b987a88948106529f8976ad40079"
+    },
+    {
+      "contract": "ProductionPolicy",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionPolicy/1.0.0",
+      "path": "schemas/ProductionPolicy/1.0.0.json",
+      "sha256": "8810a3082361048cf78db9db3ce741dbdd0a216d3196c85141a8515bc4cd7957"
+    },
+    {
+      "contract": "ProductionReference",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionReference/1.0.0",
+      "path": "schemas/ProductionReference/1.0.0.json",
+      "sha256": "31809938753b54160867928bc770f09ddcaf77ac4b536dc5354b268e1620bbd4"
+    },
+    {
+      "contract": "ProductionResource",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionResource/1.0.0",
+      "path": "schemas/ProductionResource/1.0.0.json",
+      "sha256": "7461bc460a6b07afebd6f41a803d8c5eeb6aafb9183583f4c75f2ee21eb07488"
+    },
+    {
+      "contract": "ProductionRuntime",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionRuntime/1.0.0",
+      "path": "schemas/ProductionRuntime/1.0.0.json",
+      "sha256": "747a5fa887bd543c5ef71807ef6962e2fa9c533608dd5329c6c959223cd5e717"
+    },
+    {
+      "contract": "ProjectRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProjectRequest/1.0.0",
+      "path": "schemas/ProjectRequest/1.0.0.json",
+      "sha256": "be6b676371c85b93ab417f371ab44ac5f160ed2f253d1e9a50ab7e0d9d35b1f9"
+    },
+    {
+      "contract": "ProviderReportedCostEvidence",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProviderReportedCostEvidence/1.0.0",
+      "path": "schemas/ProviderReportedCostEvidence/1.0.0.json",
+      "sha256": "acba47b010db148695aa6443e35c1551ed4362a670b8fb6c46a0d4228998ceb4"
+    },
+    {
+      "contract": "QueryRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/QueryRequest/1.0.0",
+      "path": "schemas/QueryRequest/1.0.0.json",
+      "sha256": "29d8171847ea11fb101cfe0b63c64aba65e9f6370a754ec32bd09d6b5e6bc2d6"
+    },
+    {
+      "contract": "QueryRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/QueryRequest/2.0.0",
+      "path": "schemas/QueryRequest/2.0.0.json",
+      "sha256": "4f1deca1ab3a0f05a8723331bc9ea9d5b353f7397aaced1744ed1b02a16ce250"
+    },
+    {
+      "contract": "QueryResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/QueryResult/1.0.0",
+      "path": "schemas/QueryResult/1.0.0.json",
+      "sha256": "2df0266c6bc581b3cdf41d4cdb6de34ab6f6e4a2334dc4fe7d8025209eb4d52e"
+    },
+    {
+      "contract": "QueryResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/QueryResult/2.0.0",
+      "path": "schemas/QueryResult/2.0.0.json",
+      "sha256": "f8cdf831b26c5dede5440dd24fd1f7a68b60e761d1c0e04542f5d9f77c2ad6ce"
+    },
+    {
+      "contract": "ReleaseRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReleaseRequest/1.0.0",
+      "path": "schemas/ReleaseRequest/1.0.0.json",
+      "sha256": "f07a2ba3dada865a96890effe4913c4dabe7b8f0c566b7e1e07d7ff6eb43d403"
+    },
+    {
+      "contract": "ReleaseRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReleaseRequest/2.0.0",
+      "path": "schemas/ReleaseRequest/2.0.0.json",
+      "sha256": "18738a17de2b4173c520cf27c4b53a975decee54e2b569976f21202db3d6cde2"
+    },
+    {
+      "contract": "ReleaseResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReleaseResult/1.0.0",
+      "path": "schemas/ReleaseResult/1.0.0.json",
+      "sha256": "de7b769c95dbac04b4fefc96bf9fad3c2dd9eb54864cf5e6ad4de3cc1025cbd2"
+    },
+    {
+      "contract": "ReleaseResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReleaseResult/2.0.0",
+      "path": "schemas/ReleaseResult/2.0.0.json",
+      "sha256": "ca4495cd1b53d11229334bc0f6e7f43cc640c336c19cd9b031698e9f9a2d31ff"
+    },
+    {
+      "contract": "ResearchAnswerReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchAnswerReceipt/1.0.0",
+      "path": "schemas/ResearchAnswerReceipt/1.0.0.json",
+      "sha256": "3eb351ad99babffb35e7568ea82562ba37998e83506b09f6eb70d4bb215a0411"
+    },
+    {
+      "contract": "ResearchBatchReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchBatchReceipt/1.0.0",
+      "path": "schemas/ResearchBatchReceipt/1.0.0.json",
+      "sha256": "2d6f0b6d3a1e1553c034f05e236f450c8d0749d344a8607d0a29dbd811479d4f"
+    },
+    {
+      "contract": "ResearchCorrectionReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchCorrectionReceipt/1.0.0",
+      "path": "schemas/ResearchCorrectionReceipt/1.0.0.json",
+      "sha256": "a39ebd090b97577fcdc2bd84ae3f6fed76f42f4137d678dfbd51e3ee7cf00ef3"
+    },
+    {
+      "contract": "ResearchCorrectionRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchCorrectionRequest/1.0.0",
+      "path": "schemas/ResearchCorrectionRequest/1.0.0.json",
+      "sha256": "396b1647cc864494aab73df33d2515d7bc2c3f3bc0c7a36b3a5afbe75f5744a8"
+    },
+    {
+      "contract": "ResearchInvalidation",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchInvalidation/1.0.0",
+      "path": "schemas/ResearchInvalidation/1.0.0.json",
+      "sha256": "a984d2ac803210c88af0f77d09b7f1612eaf90fa93f9e35bfea094c2bd6c4093"
+    },
+    {
+      "contract": "ResearchRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchRequest/1.0.0",
+      "path": "schemas/ResearchRequest/1.0.0.json",
+      "sha256": "cbe6377c2a743f585bc622bf726be8a8bb8cc17aceff167304af7b38c03f0fc0"
+    },
+    {
+      "contract": "ResearchRequestReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchRequestReceipt/1.0.0",
+      "path": "schemas/ResearchRequestReceipt/1.0.0.json",
+      "sha256": "9aa3d546de7045a00753436b30937191379c81d69dd76cf036a792a403eb4f48"
+    },
+    {
+      "contract": "ReserveRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReserveRequest/1.0.0",
+      "path": "schemas/ReserveRequest/1.0.0.json",
+      "sha256": "ac8f553c537e01515fca14907220c35d19a69a8739a5869efeeaedf74058aa5b"
+    },
+    {
+      "contract": "ReserveRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReserveRequest/2.0.0",
+      "path": "schemas/ReserveRequest/2.0.0.json",
+      "sha256": "78f949c337d94e979aec56954580bae903376e8614fd4e5ebd6caf55fea046bc"
+    },
+    {
+      "contract": "ReserveResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReserveResult/1.0.0",
+      "path": "schemas/ReserveResult/1.0.0.json",
+      "sha256": "63bd5436a66a61bdb2d692f61a1a73672a5acd0c29f023a2bf8e95a953c28334"
+    },
+    {
+      "contract": "ReserveResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ReserveResult/2.0.0",
+      "path": "schemas/ReserveResult/2.0.0.json",
+      "sha256": "080861f0651815feff022192bed4c3ae2d73eaaf5eed285f33c8e89df08d491c"
+    },
+    {
+      "contract": "RowResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/RowResult/1.0.0",
+      "path": "schemas/RowResult/1.0.0.json",
+      "sha256": "6c5fe78914d83716b9563927523dd1b3a690c3fcc3f7f031973e36295989cb06"
+    },
+    {
+      "contract": "SettleRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/SettleRequest/1.0.0",
+      "path": "schemas/SettleRequest/1.0.0.json",
+      "sha256": "8ad86ebaed5e0d64807d1b4045ab0d95fea81d30ac96c706ec43bda3738191e0"
+    },
+    {
+      "contract": "SettleRequest",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/SettleRequest/2.0.0",
+      "path": "schemas/SettleRequest/2.0.0.json",
+      "sha256": "ce26b313b5615a05a503c848ba9c6a3c9da42fc2429b3cb0ce10cce61f642f94"
+    },
+    {
+      "contract": "SettleResult",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/SettleResult/1.0.0",
+      "path": "schemas/SettleResult/1.0.0.json",
+      "sha256": "2fc34154bd7459d5025ec2ff1d3be6322cfc06feb5ff4712459444ee39a3c046"
+    },
+    {
+      "contract": "SettleResult",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/SettleResult/2.0.0",
+      "path": "schemas/SettleResult/2.0.0.json",
+      "sha256": "31dc4ce503110a9765a242f2aee400ce274efe9e60c55b3323e2504d065221ed"
+    },
+    {
+      "contract": "TemplateSpec",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/TemplateSpec/1.0.0",
+      "path": "schemas/TemplateSpec/1.0.0.json",
+      "sha256": "13b82aa8791bef4f540700a296314e17c739a6238221fcfb7f07d22ca06a407f"
+    },
+    {
+      "contract": "UsageEvent",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/UsageEvent/1.0.0",
+      "path": "schemas/UsageEvent/1.0.0.json",
+      "sha256": "8556135f33fc81f85b51d11268c8b6e7d6fd464f73ef6f6b82df8a2207f6dbf6"
+    },
+    {
+      "contract": "UsageEvent",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/UsageEvent/2.0.0",
+      "path": "schemas/UsageEvent/2.0.0.json",
+      "sha256": "6fb3a168208376a943bda31ee85f766f192416aa281eacc483325e52c4e93ec3"
+    }
+  ]
+}

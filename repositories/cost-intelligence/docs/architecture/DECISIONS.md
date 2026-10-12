@@ -4,7 +4,7 @@ These decisions describe implemented local boundaries, deferred operations, and 
 
 ## Typed boundary policy
 
-- **API schema:** finance-owned requests use exact `1.0.0`, reject unknown fields and enums, and return bounded safe errors with opaque diagnostic references.
+- **API schema:** finance-owned requests require the exact schema version supported by the operation: legacy v1 boundaries use `1.0.0`, while separate v2 operations use `2.0.0`. Follow each operation's request schema and API guide for required fields, allowed enums and bounded safe errors with opaque diagnostic references.
 - **Economics:** decimal strings support up to 18 fractional digits. `billingMode` means economic execution (`live`, `sandbox`, `simulated`); funding state is modeled separately.
 - **Unknown usage:** unknown completeness uses explicit `null` measurements and missing-field evidence. Unknown is not numeric zero.
 - **Authorization:** partial grants require explicit caller consent and a caller replan before dispatch. Uncertain outcomes retain the hold until fenced non-dispatch proof or final usage evidence resolves it.
@@ -20,4 +20,4 @@ The reporting reader, scoped query filters, immutable snapshot writer and prepar
 
 ## Delivery gates
 
-Pricing v2, usage intake, PostgreSQL ledger append/projection, CI05A budget authority, scoped reporting snapshots and prepared-export functions have local source/tests (see the [API map](../api/INDEX.md)). Legacy pricing 1.0.0 estimate, ledger financial ingest, settlement/release, expense adjustment and reconciliation remain typed unavailable. Nested budget scopes are deferred as P1 issue #17 outside the default v1 gate by issue #18. Integration and release runners currently fail closed because the required adapters and reconciliation leaf test files are absent. No local result closes a financial acceptance criterion.
+Pricing v2, usage intake, PostgreSQL ledger append/projection, CI05A budget authority, scoped reporting snapshots, prepared-export functions, evidence readers, stored-lineage metadata reads and coverage-only reconciliation have local source/tests (see the [API map](../api/INDEX.md)). Legacy pricing 1.0.0 estimate, ledger financial ingest, settlement/release, expense adjustment and full financial reconciliation remain unavailable. The separate v2 `startCoverageDryRun`/`getCoverageDryRun` operations persist only source-coverage metadata and return `needs_review`, with financial effects and billing authority false; they do not match transactions or calculate/apply financial corrections. Nested budget scopes are deferred as P1 issue #17 outside the default v1 gate by issue #18. Integration and release still fail closed because `tests/adapters/adapters.test.mjs` and the full `tests/reconciliation/reconciliation.test.mjs` leaf are absent, even though scoped coverage, evidence and migration-policy selectors exist. No local result closes a financial acceptance criterion.
