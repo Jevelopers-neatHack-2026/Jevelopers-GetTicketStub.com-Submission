@@ -8,7 +8,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
+from typing import IO, Protocol
 
 from integration_evals.errors import fail
 from integration_evals.process_network import OfflineNetwork, require_network_boundary
@@ -19,6 +19,14 @@ from integration_evals.process_reads import (
     sandbox_reads,
 )
 from integration_evals.process_seccomp import network_filter
+
+
+class TestInvocation(Protocol):
+    """Explicit development-test dependency; no CLI or ambient backend selection."""
+
+    def __call__(self, command: tuple[str, ...], settings: "ProcessSettings") -> int:
+        """Invoke one command with the test's independently verified containment."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +41,7 @@ class ProcessSettings:
     offline: bool = False
     writable_directory: Path | None = None
     network: OfflineNetwork = OfflineNetwork.DENY
+    test_invocation: TestInvocation | None = None
 
 
 def terminate_group(process: subprocess.Popen[bytes]) -> None:
@@ -92,6 +101,8 @@ def contained_command(
 
 def invoke(command: tuple[str, ...], settings: ProcessSettings) -> int:
     """Own a session and reap its leader on success, timeout and cancellation."""
+    if settings.test_invocation is not None:
+        return settings.test_invocation(command, settings)
     with (
         network_filter(offline=settings.offline, policy=settings.network) as descriptor,
         subprocess.Popen(  # noqa: S603 - reviewed command in a new task-owned session
