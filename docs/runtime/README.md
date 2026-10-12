@@ -7,7 +7,8 @@ composition/output mechanics. The public ESM exports are
 Production contracts and supplier specifications await PP-01B and the external
 owners. No supplier, approval, purchase, identity or ledger authority exists.
 The separate `./candidate` package surface now provides six real local adapters
-against the immutable, unaccepted shared-contracts 0.9.4 candidate. Canonical
+against the reviewed immutable, unaccepted shared-contracts 0.9.7 candidate,
+permitted for private development. Canonical
 bundle byte integrity can pass while supplier eligibility and canonical visible
 batch publication remain blocked. See [candidate adapters](../contracts/candidate-adapter.md).
 

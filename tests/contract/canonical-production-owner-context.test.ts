@@ -5,6 +5,8 @@ import {
 	checkProductionApproval,
 	checkProductionValueIntegrity,
 	productionReferences,
+	translateProductionGeometry,
+	createProductionError,
 } from "@jevelopers/shared-contracts/production-operations";
 import { ownerFixture } from "../fixtures/canonical-production/owner.js";
 
@@ -40,6 +42,30 @@ test("returns a typed context failure when an expected composition reference is 
 		asset_bytes: {},
 	};
 	const when = checkComposition(composition, context);
+	assert.deepEqual(when, {
+		ok: false,
+		errors: [{ code: "INVALID_TRUST_CONTEXT", path: "" }],
+	});
+});
+
+test("returns a typed context failure when geometry translation lacks owner scope", async () => {
+	const given = await ownerFixture("PrintSpec");
+	const when: unknown = Reflect.apply(translateProductionGeometry, undefined, [
+		given,
+		undefined,
+	]);
+	assert.deepEqual(when, {
+		ok: false,
+		errors: [{ code: "INVALID_TRUST_CONTEXT", path: "" }],
+	});
+});
+
+test("returns a typed context failure when error creation lacks owner scope", () => {
+	const given = "INVALID_INPUT";
+	const when: unknown = Reflect.apply(createProductionError, undefined, [
+		given,
+		undefined,
+	]);
 	assert.deepEqual(when, {
 		ok: false,
 		errors: [{ code: "INVALID_TRUST_CONTEXT", path: "" }],
