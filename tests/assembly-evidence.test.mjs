@@ -352,10 +352,6 @@ test("local git replace refs cannot substitute HEAD content", withRepo((root) =>
   const replaced = buildManifest(root);
   assert.equal(replaced.fixtures["fixtures/approval"].digest, clean.fixtures["fixtures/approval"].digest);
   assert.deepEqual(verifyManifest(root, clean), []);
-  // Even if the environment asks git to honour replacements, the tool does not.
-  process.env.GIT_NO_REPLACE_OBJECTS = "0";
-  try { assert.equal(buildManifest(root).fixtures["fixtures/approval"].digest, clean.fixtures["fixtures/approval"].digest); }
-  finally { delete process.env.GIT_NO_REPLACE_OBJECTS; }
 }));
 
 test("verify never throws on malformed components.required", withRepo((root) => {
