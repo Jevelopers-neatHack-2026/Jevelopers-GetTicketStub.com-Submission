@@ -21,6 +21,7 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run integration-evals validate
+      - run: uv run pytest component_tests/test_print_setup.py --junitxml=reports/print-setup-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
@@ -66,7 +67,7 @@ jobs:
           persist-credentials: false
       - name: Verify source retrieval boundary in an isolated Linux component workspace
         run: |
-          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/retrieval-component" .venv/bin/python -m pytest component_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/component-junit.xml
+          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/retrieval-component" .venv/bin/python -m pytest component_tests/test_retrieval.py -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/component-junit.xml
       - name: Verify missing assembly is reported as blocked
         shell: bash
         run: |
@@ -81,4 +82,51 @@ jobs:
         with:
           name: verification-tooling-${{ github.sha }}
           path: reports/
+          retention-days: 30
+
+  print-component:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/print-python
+      UV_PYTHON_PREFERENCE: only-managed
+      IE_PRINT_SOURCE: ${{ runner.temp }}/print-production
+      IE_CONTRACT_SOURCE: ${{ runner.temp }}/print-contracts
+      IE_PRINT_EVIDENCE: ${{ runner.temp }}/print-evidence
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/print-production
+          ref: 0ef7398bb94caacf6b48068747142883470fbdaf
+          path: .print-producer
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .contract-producer
+          persist-credentials: false
+      - name: Stage isolated sources and verify the approved owner pins
+        run: |
+          mv .print-producer "$IE_PRINT_SOURCE"
+          mv .contract-producer "$IE_CONTRACT_SOURCE"
+          mkdir -p "$IE_PRINT_EVIDENCE"
+          uv run python -c 'import os; from pathlib import Path; from integration_evals.print_setup import verify_source; print(verify_source(Path.cwd(), Path(os.environ["IE_PRINT_SOURCE"])).model_dump_json(indent=2))' > "$IE_PRINT_EVIDENCE/source-pins.json"
+      - name: Run real print-invalid under both unchanged security boundaries
+        run: bash component_tests/print-ci.sh
+      - name: Preserve actual print diagnostics, including blocked execution
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-component-${{ github.sha }}
+          path: ${{ runner.temp }}/print-evidence/
+          if-no-files-found: error
           retention-days: 30

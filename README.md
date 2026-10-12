@@ -96,6 +96,9 @@ caps, permitted operations and cleanup. `--authorize-paid` is an execution confi
 within existing owner authority, not a budget grant. No paid calls occur by default.
 Provider modes and source origins are recorded separately.
 
+[Print-invalid component verification](docs/print-component.md) documents the pinned
+negative-only consumer and its required Linux runtime evidence.
+
 [Execution protocol and owner handoff](docs/execution-protocol.md) describes the manifest,
 runner observations, isolation, evidence, benchmarks, reruns, and remaining obligations.
 
