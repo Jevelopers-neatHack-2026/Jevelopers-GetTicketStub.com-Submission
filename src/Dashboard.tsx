@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { normalizeBasePath, resolveRoute, routeHref, routes, type ResolvedRoute } from '../integration/routes';
 import { isAuthorized, type HostAccess } from './access/host';
 import { isRouteState, type RouteProvider, type RouteState } from './data/boundary';
@@ -23,6 +23,7 @@ function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
   const key = routeKey(route, access);
   const [result, setResult] = useState<ReadResult<T>>();
   const [attempt, setAttempt] = useState(0);
+  const focusHandoff = useRef<HTMLElement | null>(null);
   const tenantId = access.scope.tenantId;
   const projectId = access.scope.projectId;
   useEffect(() => {
@@ -41,7 +42,13 @@ function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
     return () => { current = false; clearTimeout(timeout); controller.abort(); };
   }, [key, provider, tenantId, projectId, route, attempt]);
   const state: RouteState<T> = !provider ? { status: 'unavailable' } : result?.key === key && result.provider === provider && result.attempt === attempt ? result.state : { status: 'loading' };
-  return <RouteView state={state} route={route} scope={access.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} />;
+  // Recovery: if the boundary still held focus when the read succeeded, move it to the route content; if the user moved focus elsewhere, leave it.
+  useLayoutEffect(() => {
+    const target = focusHandoff.current;
+    focusHandoff.current = null;
+    if (state.status === 'ready' && target?.isConnected && (!document.activeElement || document.activeElement === document.body)) target.focus();
+  }, [state.status]);
+  return <RouteView state={state} route={route} scope={access.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} focusHandoff={focusHandoff} />;
 }
 export function Dashboard<T>({ basePath, pathname, navigate, access, provider, renderRoute }: DashboardProps<T>) {
   const base = normalizeBasePath(basePath);

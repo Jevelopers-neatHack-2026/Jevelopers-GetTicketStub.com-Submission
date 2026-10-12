@@ -114,12 +114,57 @@ describe('TD-09.D recovery actions and focus', () => {
     await act(async () => finish({ status: 'empty' }));
     expect(await screen.findByText('No records')).toBeVisible();
   });
-  it('announces errors assertively and other states politely as fresh live regions', async () => {
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce({ status: 'error', retryable: true }).mockResolvedValueOnce({ status: 'empty' }) };
+  it('announces errors assertively and other states politely in regions that stay mounted', async () => {
+    let finish!: (state: RouteState<string>) => void;
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce({ status: 'error', retryable: true }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })) };
     render(<Dashboard {...ai} provider={p} />);
-    const alert = await screen.findByRole('alert'); expect(alert).toHaveAttribute('aria-live', 'assertive');
+    const status = screen.getByRole('status'); const alert = screen.getByRole('alert');
+    expect(status).toHaveAttribute('aria-live', 'polite'); expect(alert).toHaveAttribute('aria-live', 'assertive');
+    await waitFor(() => expect(alert).toHaveTextContent('Could not load this route'));
+    expect(status).toBeEmptyDOMElement();
     fireEvent.click(screen.getByRole('button', { name: 'Retry read' }));
-    const status = await screen.findByText('No records'); expect(status.closest('[aria-live]')).toHaveAttribute('role', 'status');
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(status).toHaveTextContent('Loading'); expect(alert).toBeEmptyDOMElement();
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => finish({ status: 'empty' }));
+    expect(status).toHaveTextContent('No records');
+    expect(screen.getByRole('status')).toBe(status); expect(screen.getByRole('alert')).toBe(alert);
+  });
+  it('keeps one polite region from loading to empty', async () => {
+    let finish!: (state: RouteState<string>) => void;
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: () => new Promise<RouteState<string>>((resolve) => { finish = resolve; }) };
+    render(<Dashboard {...ai} provider={p} />);
+    const status = screen.getByRole('status');
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => finish({ status: 'empty' }));
+    expect(screen.getByRole('status')).toBe(status); expect(status).toHaveTextContent('No records');
+  });
+  const retried = async () => {
+    let finish!: (state: RouteState<string>) => void;
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce({ status: 'error', retryable: true }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })) };
+    render(<Dashboard {...ai} provider={p} renderRoute={({ data }) => <section><h2>Read succeeded</h2><button type="button">{data}</button></section>} />);
+    const retry = await screen.findByRole('button', { name: 'Retry read' }); retry.focus(); fireEvent.click(retry);
+    expect(screen.getByRole('region', { name: 'Loading' })).toHaveFocus();
+    await act(async () => { await Promise.resolve(); });
+    return finish;
+  };
+  it('moves focus to the route content when a delayed retry succeeds', async () => {
+    const finish = await retried();
+    await act(async () => finish({ status: 'ready', data: 'Open details' }));
+    expect(screen.getByText('Read succeeded')).toBeVisible();
+    expect(document.getElementById('td-route-content')).toHaveFocus();
+  });
+  it('does not steal focus when the user moved elsewhere before the retry succeeds', async () => {
+    const finish = await retried();
+    const nav = screen.getByRole('link', { name: 'Overview' }); nav.focus();
+    await act(async () => finish({ status: 'ready', data: 'Open details' }));
+    expect(screen.getByText('Read succeeded')).toBeVisible();
+    expect(nav).toHaveFocus();
+  });
+  it('does not pull focus into the page when the user released focus before the retry succeeds', async () => {
+    const finish = await retried();
+    (document.activeElement as HTMLElement).blur();
+    await act(async () => finish({ status: 'ready', data: 'Open details' }));
+    expect(screen.getByText('Read succeeded')).toBeVisible();
+    expect(document.body).toHaveFocus();
   });
 });
