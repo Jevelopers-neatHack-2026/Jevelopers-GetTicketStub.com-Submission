@@ -4,7 +4,7 @@
 
 Related: [README](../README.md) · [contract catalog](contract-catalog.md) · [ownership](architecture/OWNERSHIP.md) · [acceptance view](architecture/ACCEPTANCE.md)
 
-## Bottom line
+## Readiness
 
 **The MVP is not ready.** The private 0.9.7 producer candidate is approved for private development use only. The release gate, consumer acceptance and named-owner acknowledgements are all still open.
 
@@ -16,7 +16,7 @@ Related: [README](../README.md) · [contract catalog](contract-catalog.md) · [o
 
 | Item | Established | Not established | Receipt (UTC timestamp) |
 | --- | --- | --- | --- |
-| Producer review of 0.9.7 | Model-independent **APPROVE** of the exact head: no unresolved local blockers, 5,182 tests passing, installed Node 22/24 archives passing. | Human or GitHub approval, merge permission, domain acceptance, release. | [PR #31 comment](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6115337714), 2026-10-11 23:57 |
+| Producer review of 0.9.7 | Independent model-review **APPROVE** (gpt-6-astra, high) of the exact head: no unresolved local blockers, 5,182 tests passing, installed Node 22/24 archives passing. | Human or GitHub approval, merge permission, domain acceptance, release. | [PR #31 comment](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6115337714), 2026-10-11 23:57 |
 | Finance owner | **APPROVE_COMPATIBILITY** for the exact archive's private pure-interface slice. | Adoption, ledger or intake conformance, human or GitHub review, merge, release. GAP-001 and GAP-002 are expressly outside it. | [issue #12 comment](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12#issuecomment-6116216472), 2026-10-12 01:37 |
 | Scoped consumers | **2 of 9** have exact-current private-development consumption receipts: integration-evals and print-production. | Blanket domain acceptance. Both keep synthetic authority and holds. | [issue #30 comment](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/30#issuecomment-6115867205), 2026-10-12 00:58 |
 | Release and merge | Nothing. PR #31 is draft and the merge guard is HOLD. | — | [issue #30 checkpoint](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/30#issuecomment-6116391932), 2026-10-12 01:58 |
