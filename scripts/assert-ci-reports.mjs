@@ -119,6 +119,10 @@ export function validateContrastReport(report) {
     if (!isRecord(pair) || typeof pair.name !== 'string' || typeof pair.passes !== 'boolean' || typeof pair.expected !== 'boolean' || !Number.isFinite(pair.ratio) || !Number.isFinite(pair.threshold) || pair.passes !== pair.expected) {
       fail('Contrast report contains an empty, malformed, or unexpected result.');
     }
+    // Matching flags alone are not evidence; use the producer's unrounded comparison.
+    if (pair.passes !== (pair.ratio >= pair.threshold)) {
+      fail('Contrast report contains a result inconsistent with its ratio and threshold.');
+    }
   }
   return { pairs: report.pairs.length };
 }
