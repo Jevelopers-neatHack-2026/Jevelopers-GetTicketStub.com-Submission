@@ -71,15 +71,41 @@ export function isBlockedIp(address: string): boolean {
   if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && (g5 === 0xffff || g5 === 0)) return ipv4Blocked(embedded[0], embedded[1], embedded[2]);
   if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return ipv4Blocked(embedded[0], embedded[1], embedded[2]); // well-known NAT64
   if (g0 === 0x2002) return ipv4Blocked(g1 >> 8, g1 & 255, g2 >> 8); // 6to4 embeds an IPv4 too
-  // Everything else must be global unicast, 2000::/3. That alone rejects fc00::/7, fe80::/10, ff00::/8, 64:ff9b:1::/48
-  // (local-use NAT64), 4000::/3 and the rest of the unallocated space.
-  if ((g0 & 0xe000) !== 0x2000) return true;
-  // Reserved inside 2000::/3. No IANA "globally reachable" exceptions (AS112, AMT, ORCHID) are allowed: a user's event page is never there.
-  if (g0 === 0x2001 && g1 < 0x0200) return true; // 2001::/23 IETF protocol assignments: Teredo, benchmarking 2001:2::/48, ORCHID, documentation-adjacent
-  if (g0 === 0x2001 && g1 === 0x0db8) return true; // documentation
-  if (g0 === 0x3fff && g1 < 0x1000) return true; // 3fff::/20 documentation
-  return false;
+  // Everything else must sit inside a prefix IANA lists as ALLOCATED and not inside a special-purpose denial. Space IANA
+  // lists as RESERVED (3ffe::/16 old 6bone, 3fff::/20, 2d00::/8 ...) or does not list at all (2000::/16, 4000::/3 ...)
+  // is refused: it can be handed out later, and a name must not reach it just because that has not happened yet.
+  const value = groups.reduce((acc, g) => (acc << BigInt(16)) | BigInt(g), BigInt(0));
+  if (IPV6_DENIED.some((p) => inPrefix(value, p))) return true;
+  return !IPV6_ALLOCATED.some((p) => inPrefix(value, p));
 }
+
+type Prefix = readonly [base: bigint, length: number];
+function prefix(text: string): Prefix {
+  const [addr, len] = text.split("/");
+  const groups = expandIpv6(addr);
+  if (!groups) throw new Error(`bad prefix ${text}`);
+  return [groups.reduce((acc, g) => (acc << BigInt(16)) | BigInt(g), BigInt(0)), Number(len)];
+}
+function inPrefix(value: bigint, [base, length]: Prefix): boolean {
+  const shift = BigInt(128 - length);
+  return value >> shift === base >> shift;
+}
+
+/**
+ * IPv6 unicast space that IANA lists as ALLOCATED, from
+ * https://www.iana.org/assignments/ipv6-unicast-address-assignments (checked 2026-10-12). Excluded on purpose: the
+ * 2001::/23 IANA row (special-purpose), 2002::/16 (6to4, judged by its embedded IPv4 above), and every RESERVED row.
+ */
+const IPV6_ALLOCATED: Prefix[] = [
+  "2001:200::/23", "2001:400::/23", "2001:600::/23", "2001:800::/22", "2001:c00::/23", "2001:e00::/23", "2001:1200::/23",
+  "2001:1400::/22", "2001:1800::/23", "2001:1a00::/23", "2001:1c00::/22", "2001:2000::/19", "2001:4000::/23", "2001:4200::/23",
+  "2001:4400::/23", "2001:4600::/23", "2001:4800::/23", "2001:4a00::/23", "2001:4c00::/23", "2001:5000::/20", "2001:8000::/19",
+  "2001:a000::/20", "2001:b000::/20", "2003::/18", "2400::/12", "2410::/12", "2600::/12", "2610::/23", "2620::/23", "2630::/12",
+  "2800::/12", "2a00::/12", "2a10::/12", "2c00::/12",
+].map(prefix);
+
+/** IANA special-purpose blocks that sit inside the allocated space above (documentation, AS112 direct delegation) and are never an event host. */
+const IPV6_DENIED: Prefix[] = ["2001:db8::/32", "2620:4f:8000::/48"].map(prefix);
 
 function expandIpv6(ip: string): number[] | undefined {
   let text = ip;

@@ -298,14 +298,26 @@ test("every provided field is validated before a branch: a long query is refused
   assert.deepEqual(fetched, []);
 });
 
-test("reserved and unallocated IPv6 fail closed; global unicast stays reachable", () => {
-  for (const ip of ["2001:2::1", "2001:2:0:ffff::1", "64:ff9b:1::a00:1", "4000::1", "8000::1", "2001::1", "2001:1::1", "2001:20::1", "2001:1ff:ffff::1", "2001:db8::1", "3fff::1", "3fff:fff::1", "5f00::1", "fec0::1", "ff02::1", "::2", "100::1", "2002:a00:1::1", "2002:7f00:1::"]) assert.equal(intake.isBlockedIp(ip), true, ip);
-  for (const ip of ["2001:200::1", "2001:4860:4860::8888", "2606:2800:220:1:248:1893:25c8:1946", "2a00:1450:4009::200e", "3fff:1000::1", "2000::1", "3ffe::1", "64:ff9b::5db8:d822", "::ffff:93.184.216.34"]) {
-    // 3ffe::/16 and 2000::/16 are still inside 2000::/3 and not reserved above, so they classify as public.
-    assert.equal(intake.isBlockedIp(ip), false, ip);
-  }
-  // The hostname path agrees, through brackets and through URL normalization.
-  for (const h of ["[2001:2::1]", "[64:ff9b:1::a00:1]", "[4000::1]"]) assert.equal(intake.parseIntakeUrl(`http://${h}/`).reason, "blocked_destination", h);
+test("IPv6 is accepted only inside IANA-allocated prefixes; reserved, unlisted and special-purpose space fails closed", () => {
+  // IANA lists 3ffe::/16 (former 6bone) and 3fff::/20 as RESERVED, and the rest of 2000::/3 outside its allocations as unassigned.
+  for (const ip of [
+    "3ffe::1", "3ffe:831f::1", "3fff::1", "3fff:fff::1", "3fff:1000::1", "3000::1", "3800::1", "3ffc::1", "2d00::1", "2e00::1", "2000::1", "2000:ffff::1", "2004::1",
+    "2001::1", "2001:1ff:ffff::1", "2001:2::1", "2001:1::1", "2001:20::1", "2001:db8::1", "2001:db8:ffff::1", "2001:1000::1", "2001:1100::1", "2003:4000::1", "2420::1", "2810::1", "2a20::1", "2c10::1",
+    "2610:200::1", "2620:4f:8000::1", "2620:4f:8000:ffff::1",
+    "4000::1", "8000::1", "5f00::1", "64:ff9b:1::a00:1", "fc00::1", "fe80::1", "fec0::1", "ff02::1", "100::1", "::2",
+    "2002:a00:1::1", "2002:7f00:1::", "2002:c0a8:1::1", // 6to4 judged by its embedded IPv4
+  ]) assert.equal(intake.isBlockedIp(ip), true, ip);
+  // Inside allocated rows, including both edges of each boundary the rows above probe.
+  for (const ip of [
+    "2001:200::1", "2001:3ff:ffff:ffff:ffff:ffff:ffff:ffff", "2001:400::1", "2001:4860:4860::8888", "2001:c00::1", "2001:dba::1", "2001:db9::1", "2001:fff::1", "2001:1200::1", "2001:1c00::1", "2001:1fff::1",
+    "2001:2000::1", "2001:3fff::1", "2001:5000::1", "2001:5fff::1", "2001:8000::1", "2001:bfff::1",
+    "2003::1", "2003:3fff::1", "2400::1", "240f:ffff::1", "2410::1", "241f::1", "2600::1", "2606:2800:220:1:248:1893:25c8:1946", "260f:ffff::1", "2610:1ff::1", "2620:0:1ff::1", "2620:4f:7fff::1", "2620:4f:8001::1", "2630::1", "263f::1",
+    "2800::1", "280f::1", "2a00:1450:4009::200e", "2a1f::1", "2c00::1", "2c0f::1",
+    "64:ff9b::5db8:d822", "::ffff:93.184.216.34", "2002:5db8:d822::1",
+  ]) assert.equal(intake.isBlockedIp(ip), false, ip);
+  // The hostname path agrees, through brackets and URL normalization.
+  for (const h of ["[2001:2::1]", "[64:ff9b:1::a00:1]", "[4000::1]", "[3ffe::1]", "[2000::1]", "[3fff:1000::1]"]) assert.equal(intake.parseIntakeUrl(`http://${h}/`).reason, "blocked_destination", h);
+  assert.equal(intake.parseIntakeUrl("https://[2606:2800:220:1:248:1893:25c8:1946]/").ok, true);
 });
 
 async function rawServer(respond) {
