@@ -13,10 +13,10 @@ Dashboard ── route read ──▶  attaches its own server-held credential �
 ```
 
 - **Only the injected `HostSessionVerifier` turns a credential into identity, membership and grants.** The host implements it and must re-check the live session, project membership and membership revision on every call.
-- The credential is an opaque string that the **host server** holds. A `HostAccess` value, any object, a non-string, an empty or padded string, or a string with whitespace/control characters is rejected before the verifier is called.
+- The credential is an opaque string that the **host server** holds. The local precheck requires 1–8192 UTF-16 code units and a value unchanged by `String.trim()`. It rejects non-strings (including a `HostAccess` projection), U+0000–U+0020, and U+007F before calling the verifier. It does not reject every Unicode whitespace or control character; other embedded characters can reach the host verifier.
 - `HostAccess` stays a display projection. `toHostAccessProjection` produces it from a server decision; nothing in the server entry accepts it as input. The guarded read input has no scope or access field, and extra fields are ignored.
 - Every read is re-authorized. Scope passed to the host read function always comes from the verified context.
-- **Forgery resistance for string credentials rests on the host verifier.** This package rejects every non-string and every non-opaque string before the verifier runs. A JSON, base64 or unsigned-token string that *looks* like a credential is passed to the verifier, and only the verifier's signature, session and membership checks reject it. The tests prove that rejection against the HMAC fixture, not against a production verifier.
+- **Forgery resistance for string credentials rests on the host verifier.** This package rejects values that fail the lexical precheck above before the verifier runs. A JSON, base64 or unsigned-token string that *looks* like a credential is passed to the verifier, and only the verifier's signature, session and membership checks reject it. The tests prove that rejection against the HMAC fixture, not against a production verifier.
 
 ## Verifier answers are untrusted shape
 
@@ -83,7 +83,7 @@ Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`
 | Verifier throws, times out (default 5 s, aborts its signal), says `unavailable`, or returns a malformed answer (including a non-strict `expiresAt`, a getter, or a missing `environment`/`billingMode`) | `unavailable` | `unavailable` |
 | Reader throws / returns a malformed or `loading` state / exceeds `readTimeoutMs` (default 9 s, aborts its signal) / request aborted | — | `error` (retryable) / `error` (not retryable) / `unavailable` / `unavailable` |
 
-Identifiers must match `^[\w.:-]{1,128}$` (the host's kind-prefixed ids, e.g. `account:…`, `event:…`). Capabilities must be lowercase dotted strings.
+Identifiers must match `^[\w.:-]{1,128}$` (the host's kind-prefixed ids, e.g. `account:…`, `event:…`). Capability entries must match `^[a-z][\w.:-]{0,127}$` with the `u` flag: a lowercase ASCII initial followed by up to 127 ASCII word characters, dots, colons or hyphens. Later letters may be uppercase and a dot is not required. This shape check grants no access; the permission matrix requires the exact `finance.read` and `finance.export` strings.
 
 ## Permission matrix (`team-dashboard.permissions/1`, proposed)
 
