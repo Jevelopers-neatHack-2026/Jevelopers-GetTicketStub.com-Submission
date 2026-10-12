@@ -10,7 +10,36 @@ const { execFileSync } = require('node:child_process');
 const root = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const output = path.resolve(process.argv[3] || path.join(root, 'out/brand/consumer-browser', new Date().toISOString().replace(/[:.]/g, '-')));
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-fs.mkdirSync(output, { recursive: true });
+const outputPaths = [];
+let outputPart = path.parse(output).root;
+for (const part of output.slice(outputPart.length).split(path.sep).filter(Boolean)) {
+  outputPart = path.join(outputPart, part);
+  outputPaths.push(outputPart);
+}
+function reserveOutput() {
+  if (!outputPaths.length) throw new Error('Evidence output must be a new directory');
+  const missing = [];
+  // Inspect the entire existing path before creating anything. lstat catches
+  // dangling links too; a prior report directory must never become this run's.
+  for (const directory of outputPaths) {
+    let entry;
+    try { entry = fs.lstatSync(directory); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (!entry) missing.push(directory);
+    else if (entry.isSymbolicLink() || !entry.isDirectory()) throw new Error('Evidence output path contains a symlink or non-directory');
+    else if (directory === output) throw new Error('Evidence output already exists; choose a new directory');
+  }
+  for (const directory of missing) fs.mkdirSync(directory, { mode: 0o700 });
+  return fs.lstatSync(output, { bigint: true });
+}
+function assertReservedOutput(identity) {
+  for (const directory of outputPaths) {
+    const entry = fs.lstatSync(directory);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) throw new Error('Reserved evidence output path changed');
+  }
+  const current = fs.lstatSync(output, { bigint: true });
+  if (current.dev !== identity.dev || current.ino !== identity.ino) throw new Error('Reserved evidence output directory changed');
+}
 const report = { schema: 'ticketstub-local-consumer-browser@1', mode: 'synthetic local review archive',
   outcome: 'error', started_at: new Date().toISOString(), cases: [], blocked_external_requests: 0,
   release_approved: false, consumer_adoption: false, font_provider_checks: 'not_run',
@@ -65,8 +94,9 @@ function contrast(a, b) {
 }
 
 (async () => {
-  let browser, server;
+  let browser, server, outputIdentity;
   try {
+    outputIdentity = reserveOutput();
     report.checker_sha256 = sha(fs.readFileSync(__filename));
     report.package = JSON.parse(execFileSync(process.env.PYTHON || 'python3', ['-I', '-c', prepare, root, output], { encoding: 'utf8', timeout: 180000 }));
     const playwrightPath = path.join(root, 'tools/browser-dev/node_modules/playwright');
@@ -141,12 +171,36 @@ function contrast(a, b) {
           await page.keyboard.press('Tab');
           const item = await page.evaluate(() => {
             const el = document.activeElement, c = getComputedStyle(el), r = el.getBoundingClientRect();
+            const extent = parseFloat(c.outlineWidth) + parseFloat(c.outlineOffset);
+            const scaleX = el.offsetWidth ? r.width / el.offsetWidth : 1;
+            const scaleY = el.offsetHeight ? r.height / el.offsetHeight : 1;
+            const ring = { left: r.left - extent * scaleX, right: r.right + extent * scaleX,
+              top: r.top - extent * scaleY, bottom: r.bottom + extent * scaleY };
+            const clips = value => ['hidden', 'clip', 'scroll', 'auto'].includes(value);
+            let ringUnclipped = r.width > 0 && r.height > 0 && Number.isFinite(extent);
+            for (let node = el; node; node = node.parentElement) {
+              const style = getComputedStyle(node);
+              // Use the same full outline geometry as the accessibility fixture:
+              // an on-screen control can still have its offset ring clipped away.
+              if (style.clipPath !== 'none' || style.maskImage !== 'none' || style.clip !== 'auto' ||
+                  /(?:^|\s)(?:paint|strict|content)(?:\s|$)/.test(style.contain)) ringUnclipped = false;
+              if (node !== el && (clips(style.overflowX) || clips(style.overflowY))) {
+                const box = node.getBoundingClientRect();
+                const x = node.offsetWidth ? box.width / node.offsetWidth : 1;
+                const y = node.offsetHeight ? box.height / node.offsetHeight : 1;
+                const left = box.left + node.clientLeft * x, top = box.top + node.clientTop * y;
+                const right = left + node.clientWidth * x, bottom = top + node.clientHeight * y;
+                if ((clips(style.overflowX) && (ring.left < left - 1 || ring.right > right + 1)) ||
+                    (clips(style.overflowY) && (ring.top < top - 1 || ring.bottom > bottom + 1))) ringUnclipped = false;
+              }
+            }
             return { button: el.tagName === 'BUTTON', visible: el.matches(':focus-visible'), color: c.outlineColor,
               width: parseFloat(c.outlineWidth), style: c.outlineStyle, offset: parseFloat(c.outlineOffset),
-              inViewport: r.left - 7 >= 0 && r.right + 7 <= innerWidth && r.top - 7 >= 0 && r.bottom + 7 <= innerHeight };
+              ringUnclipped, inViewport: ring.left >= 0 && ring.right <= innerWidth && ring.top >= 0 && ring.bottom <= innerHeight };
           });
           const surrounding = measurements.buttons[index].surrounding;
           item.contrast = surrounding === null ? null : contrast(item.color, surrounding);
+          if (!item.ringUnclipped) failures.push('keyboard focus outline is clipped or its clipping effect is unsupported');
           if (!item.button || !item.visible || item.width < 3 || item.offset < 4 || item.style === 'none' || !item.inViewport || item.contrast < 3 || item.contrast === null) failures.push('keyboard focus lacks a visible separated contrasting outline');
           focus.push(item);
         }
@@ -173,8 +227,20 @@ function contrast(a, b) {
     if (browser) await browser.close();
     if (server) await new Promise(resolve => server.close(resolve));
     report.finished_at = new Date().toISOString();
-    fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-    console.log(JSON.stringify({ outcome: report.outcome, cases: report.cases.length, report: path.join(output, 'report.json'), release_approved: false }));
+    let reportPath = null;
+    if (outputIdentity) {
+      try {
+        assertReservedOutput(outputIdentity);
+        const target = path.join(output, 'report.json');
+        fs.writeFileSync(target, JSON.stringify(report, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+        reportPath = target;
+      } catch (error) {
+        report.outcome = 'error';
+        report.error = 'Could not exclusively record evidence; prior output was preserved';
+      }
+    }
+    console.log(JSON.stringify({ outcome: report.outcome, cases: report.cases.length, report: reportPath,
+      ...(reportPath ? {} : { error: report.error }), release_approved: false }));
     process.exitCode = report.outcome === 'pass' ? 0 : 1;
   }
 })();

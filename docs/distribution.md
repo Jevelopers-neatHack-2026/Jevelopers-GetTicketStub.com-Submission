@@ -32,6 +32,26 @@ notice, to be recorded and explicitly allowlisted through BK-06. Existing font
 notices remain source-only unless an eligible non-font output genuinely requires
 them and receives its own reviewed allowlist entry.
 
+### Packaged guides retain source context
+
+The four packaged guides are byte-for-byte source snapshots at the full
+`source_sha` recorded in `brand-kit/MANIFEST.json`. Their relative links retain
+the repository layout. Links to included files resolve within the extracted
+archive; links to excluded material such as `SPEC.md`, governance records and
+`tools/` require a separate trusted, clean checkout of that exact `source_sha`. Run
+the producer setup and build commands from that source checkout as well. For browser
+reading, open the corresponding file through an immutable GitHub `blob` URL using
+the same full SHA and repository-relative path. Keep source-only material outside
+the consumer artifact.
+
+Package checks validate the declared file set, bytes and eligibility. Consumer
+checks validate the actual CSS/Tailwind imports and local links in the rendered
+HTML fixtures, including the compiled CSS. They do not assert that every relative
+Markdown guide link resolves inside the archive or that the archive contains the
+producer's development environment. The manifest's source pin supplies the context
+for those separate source references. Archive hashes and source links do not
+establish rights, approval or current release eligibility.
+
 ## Commands
 
 Python 3.9+ standard library is sufficient for package mechanics. The actual Python

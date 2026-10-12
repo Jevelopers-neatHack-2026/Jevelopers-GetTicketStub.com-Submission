@@ -6,6 +6,14 @@ marketing owner has acknowledged this exact candidate. BK-09
 the approved artifact and named early contract reviews exist. Consumer releases are
 not prerequisites for these early reviews.
 
+**Reading this guide from a review ZIP:** its relative links retain the source
+repository layout. Follow [packaged guide context](distribution.md#packaged-guides-retain-source-context)
+for links to excluded governance, accessibility or development files and for the
+producer setup commands. Read those files in a separate trusted, clean checkout of the full
+`source_sha` in `brand-kit/MANIFEST.json`, or through immutable GitHub source URLs
+at that SHA. The verified CSS, Tailwind and logo imports below use the extracted
+artifact; source-only references remain outside that artifact.
+
 ## Consumer handoff matrix
 
 | Consumer | Owning role | Observed source evidence | Required brand contract |
