@@ -2,6 +2,7 @@
 
 import errno
 import hashlib
+import json
 import os
 import re
 import stat
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import parse_qsl, urlsplit
 
-from pydantic import BaseModel, JsonValue, TypeAdapter
+from pydantic import BaseModel, JsonValue
 
 from integration_evals.errors import fail
 
@@ -30,7 +31,6 @@ SENSITIVE_JSON_KEYS: Final = frozenset(
 )
 MAX_JSON_DEPTH: Final = 32
 MIN_SECRET: Final = 8
-JSON: Final = TypeAdapter(JsonValue)
 SIGNED_KEYS: Final = frozenset(
     {"token", "signature", "sig", "access_token", "x-amz-signature", "x-goog-signature"}
 )
@@ -81,6 +81,23 @@ def load_record[Model: BaseModel](path: Path, model: type[Model]) -> Model:
     return model.model_validate_json(read_bytes(path))
 
 
+class _AmbiguousJsonError(Exception):
+    """Decoded JSON repeats an object key, so a later value could hide an earlier one."""
+
+
+def _unique_pairs(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
+    """Fail closed on duplicate decoded keys, including differently escaped spellings."""
+    decoded = dict(pairs)
+    if len(decoded) != len(pairs):
+        raise _AmbiguousJsonError
+    return decoded
+
+
+def _decode(raw: bytes | str) -> JsonValue:
+    result: JsonValue = json.loads(raw, object_pairs_hook=_unique_pairs)  # pyright: ignore[reportAny]
+    return result
+
+
 def _text_leak(value: str, depth: int) -> bool:
     """Scan decoded text, descending into JSON documents embedded in strings."""
     if any(pattern.search(value.encode(errors="replace")) for pattern in SECRET_PATTERNS):
@@ -88,7 +105,7 @@ def _text_leak(value: str, depth: int) -> bool:
     if value.lstrip()[:1] not in {"{", "["}:
         return False
     try:
-        nested = JSON.validate_json(value)
+        nested = _decode(value)
     except ValueError:
         return False
     return _json_leak(nested, depth + 1)
@@ -113,15 +130,21 @@ def _json_leak(value: JsonValue, depth: int = 0) -> bool:
     return isinstance(value, str) and _text_leak(value, depth)
 
 
+def _document_leaks(data: bytes) -> bool:
+    """Scan JSON documents; ambiguous or pathological structure is treated as a leak."""
+    try:
+        return _json_leak(_decode(data))
+    except ValueError:
+        return False  # Not a JSON document; the byte patterns already applied.
+    except (_AmbiguousJsonError, RecursionError):
+        return True
+
+
 def reject_leaks(data: bytes, reference: str) -> None:
     """Reject sensitive exports without including the matched value in errors."""
     if any(pattern.search(data) for pattern in SECRET_PATTERNS):
         fail("sensitive_content", reference)
-    try:
-        decoded = JSON.validate_json(data)
-    except ValueError:
-        decoded = None
-    if decoded is not None and _json_leak(decoded):
+    if _document_leaks(data):
         fail("sensitive_content", reference)
     for match in re.finditer(rb"https?://[^\s\"<>]+", data):
         raw = match.group()

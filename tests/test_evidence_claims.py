@@ -126,6 +126,8 @@ LEAKY_JSON = (
     b'{"body": "{\\"api_key\\": \\"fictional-key-value-1234\\"}"}',
     b'{"\\u0061pi_key": "fictional-key-value-1234"}',
     b"Authorization: Bearer fictionaltoken1234",
+    b'{"\\u0061pi_key":"fictional-long-credential-123","api_key":""}',
+    b'{"body": "{\\"\\\\u0061pi_key\\":\\"fictional-long-credential-123\\",\\"api_key\\":\\"\\"}"}',
 )
 
 

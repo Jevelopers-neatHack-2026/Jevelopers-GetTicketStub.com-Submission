@@ -48,6 +48,10 @@ def test_rejects_path_when_symlink_escapes(tmp_path: Path) -> None:
         b'{"outer": [{"client_secret": "fictional-secret-1234"}]}',
         b'{"body": "{\\"password\\": \\"fictional-password-1234\\"}"}',
         b'{"\\u0070assword": "fictional-password-1234"}',
+        b'{"\\u0061pi_key":"fictional-long-credential-123","api_key":""}',
+        b'{"api_key":"","\\u0061pi_key":"fictional-long-credential-123"}',
+        b'{"a":1,"a":2}',
+        b'{"body": "{\\"\\\\u0061pi_key\\":\\"fictional-long-credential-123\\",\\"api_key\\":\\"\\"}"}',  # noqa: E501
     ],
 )
 def test_rejects_export_when_sensitive_value_present(payload: bytes) -> None:
