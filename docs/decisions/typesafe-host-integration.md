@@ -113,7 +113,7 @@ account eligibility. Application tests must also traverse the actual CE API,
 durable storage, Finance adapter, and recovery path with its tested component pins.
 
 The focused harness assembly pins creative-engine
-`6831f02fa86a670b592cb7fbaa391d1b8d542cee` through its exact source archive and
+`a63c9d174ceeb8cceb9eef7d03b8dbde1bf02cf8` through its exact source archive and
 lockfile SHA-512 integrity. A fresh npm cache installation verified that archive
 and matched the owner helper, declarations, API/runtime and C03 source hashes.
 The actual `decisionExecutionTargetHash` is used in every public-port test;
@@ -121,8 +121,11 @@ there is no substitute target-hash callback. The complete returned port is
 structurally assigned to `CreativeRuntimePorts["decisionPort"]` in strict
 TypeScript, including the admitted target and synchronous owner fence.
 
-At this component pin, the focused suite passes 27 tests and the full owned
-runtime regression passes 443 tests, both with zero skips. `make check` passes.
+The focused suite passes 27 tests at this final pin. The full owned runtime
+regression passes 443 tests at the execution-identical CE source commit
+`6831f02fa86a670b592cb7fbaa391d1b8d542cee`; the final CE commit adds documentation
+only. Both suites have zero skips. `make check` and the final strict port
+assignability and SDK lock-inventory checks pass.
 The admission tests cover an unreserved owned target, the later complete
 reservation envelope, material post-admission mutation rejection and the final
 reservation binding. These are intercepted component checks, not administrator
