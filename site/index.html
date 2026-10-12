@@ -583,6 +583,13 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
 }
 @media (prefers-reduced-motion:reduce){.marquee .track,.disc svg,.search .caret{animation:none}.finale,.finale h2,.fin-card .ts-stub{transition:none}}
 </style>
+<noscript><style>
+#loader,#gl,#boardUI,.disc,.marquee,.floaters,.loopzone,.hero-clone,.loop-stubs{display:none!important}
+.hero{min-height:auto}.hero h1 .l>span{transform:none;transition:none}
+.board{height:auto;padding:32px var(--gutter);background:var(--stock);color:var(--ink)}.board .stage{display:none}
+#make{position:static!important;bottom:auto!important;display:block;scroll-margin-top:114px}
+.nojs-studio{max-width:44rem}.nojs-studio p{font-size:18px;line-height:1.5}
+</style></noscript>
 </head><body>
 
 <a class="skip" href="#make">Skip to make your stub</a>
@@ -722,6 +729,10 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
   <section class="board" id="wall" data-nav="#f4ecdd">
     <div class="stage"><div class="fallback-wall" id="fallback" aria-hidden="true"></div></div>
     <span id="make" style="position:absolute;bottom:100vh"></span>
+    <noscript><div class="nojs-studio">
+      <p>The interactive preview requires JavaScript. You can open the studio separately; this page sends no preview text.</p>
+      <a class="btn solid" id="nojsStudio" href="https://getticketstub.com/make" target="_blank" rel="noopener noreferrer">Open studio</a>
+    </div></noscript>
   </section>
 </main>
 

@@ -26,6 +26,22 @@ test('actual source config, no-JS markup and local editor boundary are explicit'
   const link = html.match(/<a\b[^>]*id="demoLink"[^>]*>/)[0];
   assert.match(link, /href="https:\/\/getticketstub.com\/make"/); assert.ok(!/\bhidden\b/.test(link));
 });
+test('no-JS escape is explicit, query-free and uses the same approved native destination', () => {
+  assert.match(html, /<noscript>[\s\S]*?The interactive preview requires JavaScript\./);
+  assert.match(html, /id="nojsStudio" href="https:\/\/getticketstub\.com\/make" target="_blank" rel="noopener noreferrer"/);
+  assert.equal(validateCtaSource(html, config).destination, 'https://getticketstub.com/make');
+});
+test('a mismatched or hidden duplicate static fallback link cannot escape the approved config', () => {
+  for (const replacement of ['id="nojsStudio" href="https://other.example.org/make"', 'id="nojsStudio" hidden href="https://getticketstub.com/make?private=LP_SYNTHETIC_ONLY"']) {
+    const bad = html.replace('id="nojsStudio" href="https://getticketstub.com/make"', replacement);
+    assert.throws(() => validateCtaSource(bad, config), /Static native link differs/);
+  }
+});
+test('withdrawn config requires static no-JS navigation to be withdrawn too', () => {
+  const pending = clone(config); pending.destinations.preview.status = 'PENDING';
+  const bad = fixtureSource(html, pending).replace(/(<a\b[^>]*id="demoLink") href="[^"]+"/, '$1');
+  assert.throws(() => validateCtaSource(bad, pending), /Static native link differs/);
+});
 test('missing/invalid config cannot expose any external navigation', () => {
   for (const value of [null, {}, { ...clone(config), environment: 'unknown' }, { ...clone(config), capture: 'enabled' }]) assert.equal(journey(value).destination, null);
   const missing = clone(config); delete missing.destinations.preview;
