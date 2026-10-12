@@ -34,9 +34,11 @@ export async function checkVisiblePointerControls(browser, check) {
       const receipt = await clickVisibleButton(client, { text: 'Apply all' });
       const clicks = await page.eval('globalThis.controlClicks');
       const positive = kind === 'visible';
-      const ok = receipt.clicked === positive && (positive
-        ? clicks.length === 1 && clicks[0].trusted && clicks[0].original
-        : !clicks.some(c => c.original && c.trusted));
+      const exercised = positive ? clicks.length === 1 && clicks[0].trusted && clicks[0].original
+        : kind === 'replaced' ? clicks.length === 1 && clicks[0].trusted && !clicks[0].original
+        : kind === 'programmatic' ? clicks.length === 1 && !clicks[0].trusted && clicks[0].original
+        : clicks.length === 0;
+      const ok = receipt.clicked === positive && exercised;
       check(`synthetic native-pointer control: ${kind} agrees with an actual trusted click on the selected node`, ok, JSON.stringify({ receipt, clicks }));
       results.push({ kind, receipt, clicks, passed: ok });
     } finally {
