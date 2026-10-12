@@ -52,7 +52,7 @@ Product funnel counts (visits, studio starts, paid orders) are **not** finance m
 3. Make the edits in the CFO.ai canvas or its assistant, never in the reviewer workbook alone, then re-export the native workbook.
 4. Retain a new dated evidence folder in integration-evals with the manifest hash, the new workbook, recalculation results and the changed inputs. Do not overwrite earlier snapshots.
 
-CSV consumers must treat any text cell beginning with `=`, `+`, `-`, `@`, a tab or a carriage return as data. CI-08X.3 will prefix such cells with `'` before export.
+CSV consumers must treat any text cell beginning with `=`, `+`, `-`, `@`, a tab or a carriage return as data. The internal encoder in `src/integrations/csv.ts` (CI-08X.3) prefixes such cells with `'`, writes RFC 4180 CSV with CRLF records and no byte-order mark, keeps money as exact decimals at a fixed scale without rounding, and writes unknown values as empty cells rather than `0`. It is not yet wired into `exportSummary`.
 
 ## Compatibility
 
