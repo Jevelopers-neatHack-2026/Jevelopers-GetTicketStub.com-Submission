@@ -30,6 +30,10 @@ npm test
 npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/local-macos
 ```
 
+Local macOS runs pass only on the exact pinned macOS profile; Linux CI is the
+authoritative evidence. See
+[Authoritative evidence and the local macOS profile](#authoritative-evidence-and-the-local-macos-profile).
+
 Installation requires registry/CDN access; rendering and checks use installed
 local resources. The runtime guard rejects mismatched Node/npm/ICU/OS/tools,
 missing pins, browser revision/version/executable hash changes and font/license
@@ -119,6 +123,50 @@ proof; no cross-OS byte identity is claimed.
 This is an sRGB calibration profile, not CMYK/ICC, PDF/X, spot-color, trim/bleed,
 supplier tolerance or printer certification. Renderer/font/profile changes need
 new fingerprints and evidence; old hashes cannot silently certify new output.
+
+## Authoritative evidence and the local macOS profile
+
+Decision for [issue #32](https://github.com/Jevelopers-neatHack-2026/print-production/issues/32),
+adopted in [#34](https://github.com/Jevelopers-neatHack-2026/print-production/pull/34)
+by owner merge: the pinned Linux CI `runtime` workflow (Ubuntu 24.04 amd64, the
+image given by `image.reference` in [pins.json](pins.json)) is the
+**authoritative** runtime/calibration evidence. Local macOS evidence is a
+secondary, profile-specific check and is never required for acceptance.
+
+`pins.json` `local` (macOS 26.6.2 / Darwin 25.6.0 / arm64) identifies the one
+macOS host on which local renders were observed. On any other macOS release,
+`assertEnvironment()` fails closed with `ENVIRONMENT_PIN_MISMATCH`. The message
+names the pinned and observed profiles. Every test and verify suite that renders
+through the runtime guard then fails, along with tests that consume their
+receipts. This is expected and is not a defect in those suites.
+
+Do **not** edit `local.osVersion`/`local.osRelease` to match a newer host. The
+repository has no recorded macOS reference-render hashes to regenerate or compare.
+Receipts are produced per run, and the README states that no cross-OS byte
+identity is claimed. That means a string bump would let a new OS certify itself
+without review. A supported re-record would need a separately reviewed procedure that:
+
+1. applies the candidate `local` pin for the new OS first, inside the proposed
+   change and never pushed to `main` on its own. The gate refuses any run on an
+   unpinned OS, so the evidence cannot be produced without it. The change then
+   runs `npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/local-macos-<version>`
+   on the new OS. Use the toolchain in [Run](#run) and `pins.json`: official Node
+   24.21.0 with bundled npm 11.19.0, `TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8`.
+2. publishes the resulting decoded PNG RGBA, normalized PDF and PDF semantic
+   hashes and the render PNGs for human visual review against the Linux CI
+   receipts for the same commit. No macOS receipts are recorded today, so the
+   first reviewed re-record becomes the macOS baseline that later re-records are
+   compared against.
+3. keeps each superseded macOS profile's reviewed evidence for history, from
+   that first baseline onward; and
+4. changes the pin only in the same reviewed change as that evidence, which is
+   the merge condition for step 1's candidate pin.
+
+Until such a procedure exists and is accepted, contributors on other macOS
+releases should rely on the `runtime` workflow for their branch. Locally, they
+can still run `npm run build`, `npm run typecheck` and `npm run format:check`.
+The non-rendering part of `npm test` also still passes; only suites that go
+through the runtime guard fail.
 
 ## Evidence and remaining acceptance
 
