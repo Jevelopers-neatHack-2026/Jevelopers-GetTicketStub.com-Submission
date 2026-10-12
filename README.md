@@ -19,7 +19,9 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 
 ## Status
 
-**Docs and evidence baseline.** `main` contains planning documents and dated evidence records, the manual [`entire-graph` workflow](.github/workflows/entire-graph.yml), and the Python scripts that accompany the CFO.ai evidence (model, export verification, Excel recalculation check). It has no cross-repository evaluator, scenario runner or fixtures, and no package to install.
+**Docs and evidence baseline.** `main` contains planning documents and dated evidence records, the [`entire-graph` workflow](.github/workflows/entire-graph.yml), and the Python scripts that accompany the CFO.ai evidence (model, export verification, Excel recalculation check). It has no cross-repository evaluator, scenario runner or fixtures, and no package to install.
+
+The graph workflow runs only on pushes to `main` and its scheduled `main` run. It has read-only repository access and uploads artifacts; pull request and manually selected-ref runs are disabled. It no longer pushes generated instruction branches. To publish instruction changes, prepare them through a separate reviewed pull request.
 
 - The [JSON tracker](planning/acceptance-checklist.json) on `main` has 47 criteria: **3 `verified`** (the sponsor criteria SPN-01, SPN-02 and SPN-03, each owner-accepted on 2026-10-11 by CompleteDotTech via chat instruction relayed by an agent; canonical owner roles are Finance and reliability for SPN-01 and SPN-03, and Agent and research for SPN-02) and **44 `planned`**. No other criterion has implementation evidence, and this does not verify the product.
 - Each acceptance carries qualifications that are kept in the tracker notes and the [evidence index](evidence/README.md): Neatlogs traces are owner-reported and curated, with raw backend receipts absent (SPN-01); Entire has one Claude checkpoint plus graph snapshots, with local capture removed and the graph plugin version unpinned (SPN-02); CFO.ai figures are hypothetical forecasts with no actual revenue, and the Finance summary export and submission remain open (SPN-03).
