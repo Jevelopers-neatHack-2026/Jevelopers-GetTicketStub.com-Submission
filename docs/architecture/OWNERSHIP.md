@@ -40,7 +40,7 @@ Deliver one coherent identity set, a compact token specification, and the essent
 
 ## Existing compatible decisions
 
-The existing TicketStub identity, `SPEC.md`, logos, fonts and token sources remain authoritative. Proposed module paths describe future organization and do not relocate existing assets. The edition-system link to `ticket-studio` in the existing README is outside this fourteen-repository plan and requires separate owner confirmation.
+The existing TicketStub identity, `SPEC.md`, logos, fonts and token sources remain authoritative. Proposed module paths describe future organization and do not relocate existing assets. The original `ticket-studio` reference was outside this fourteen-repository plan and required owner confirmation; PR #2 preserved that ownership boundary. PR #22 subsequently merged source links to getticketstub.com at `43bb721f00de1c616e8e8d27efbb87c6bf75bcbf`. This resolves documentation navigation, while creative-engine retains artwork-version ownership and print-production retains printable-composition ownership. No edition contract, product capability or brand direction is reassigned by those links. See the [PR #3 reconciliation](../identity-decision-packet.md#pr-3-reconciliation).
 
 ## Acceptance and contributor handoff
 

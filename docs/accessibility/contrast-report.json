@@ -1,0 +1,1352 @@
+{
+  "schema": "ticketstub-local-contrast-report@1",
+  "status": "computed source evidence; identity and accessibility approval pending",
+  "mode": "offline computation; no browser, provider or consumer acceptance",
+  "method": "WCAG 2.2 sRGB, breakpoint 0.04045; source-over alpha in encoded sRGB; no rounding before comparison",
+  "thresholds": {
+    "normal-text": 4.5,
+    "large-text": 3.0,
+    "ui": 3.0
+  },
+  "large_text_definition": "At least 24 CSS px (18pt), or 14pt bold (56/3 CSS px). Delivered size, not user zoom; 600 weight is not automatically treated as bold.",
+  "inputs_sha256": {
+    "tokens/tokens.json": "f441264f2e56f8fc8be5129a5a5b3f50403582ee5eb43821c7afb3ed1129b551",
+    "tokens/profile.json": "18ce404d9e9f667bcab5a6cc0a87ca7be9e9866c5b7e69bff0c529e21742fef3",
+    "tokens/mapping.json": "7db9104591711ff10a86f2fa26f2ec64fc995f3fb5eec9b7040be6ae363ffb45"
+  },
+  "generator_sha256": "bb2f07e525fa33940c878d8f848e38dc4d6c7529616f39c743095b7a84c2267d",
+  "references": {
+    "text": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+    "ui": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
+    "resize": "https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html",
+    "motion": "https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html"
+  },
+  "palette": [
+    {
+      "foreground": "color.orange",
+      "background": "color.orange",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 1.0,
+      "display_ratio": "1.00:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.orange",
+      "background": "color.copper",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "ratio": 1.1333125723195223,
+      "display_ratio": "1.13:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.orange",
+      "background": "color.moss",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 3.7055900644510618,
+      "display_ratio": "3.71:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.orange",
+      "background": "color.cyan",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "ratio": 1.9056793377624432,
+      "display_ratio": "1.91:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.orange",
+      "background": "color.cream",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 3.137562423252889,
+      "display_ratio": "3.14:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.orange",
+      "background": "color.ink",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 4.986501348885256,
+      "display_ratio": "4.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.copper",
+      "background": "color.orange",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 1.1333125723195223,
+      "display_ratio": "1.13:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.copper",
+      "background": "color.copper",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "background_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "ratio": 1.0,
+      "display_ratio": "1.00:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.copper",
+      "background": "color.moss",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 3.2696981882649765,
+      "display_ratio": "3.27:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.copper",
+      "background": "color.cyan",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "background_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "ratio": 2.159730352295718,
+      "display_ratio": "2.16:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.copper",
+      "background": "color.cream",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 3.555838940709805,
+      "display_ratio": "3.56:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.copper",
+      "background": "color.ink",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 4.3999347317567565,
+      "display_ratio": "4.40:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.moss",
+      "background": "color.orange",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 3.7055900644510618,
+      "display_ratio": "3.71:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.moss",
+      "background": "color.copper",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "ratio": 3.2696981882649765,
+      "display_ratio": "3.27:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.moss",
+      "background": "color.moss",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 1.0,
+      "display_ratio": "1.00:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.moss",
+      "background": "color.cyan",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "ratio": 7.061666420042188,
+      "display_ratio": "7.06:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.moss",
+      "background": "color.cream",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 11.626520142200903,
+      "display_ratio": "11.63:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.moss",
+      "background": "color.ink",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 1.3456699910555125,
+      "display_ratio": "1.35:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cyan",
+      "background": "color.orange",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 1.9056793377624432,
+      "display_ratio": "1.91:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cyan",
+      "background": "color.copper",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "ratio": 2.159730352295718,
+      "display_ratio": "2.16:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cyan",
+      "background": "color.moss",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 7.061666420042188,
+      "display_ratio": "7.06:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.cyan",
+      "background": "color.cyan",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "ratio": 1.0,
+      "display_ratio": "1.00:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cyan",
+      "background": "color.cream",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 1.6464272666863586,
+      "display_ratio": "1.65:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cyan",
+      "background": "color.ink",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 9.502672588295185,
+      "display_ratio": "9.50:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.cream",
+      "background": "color.orange",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 3.137562423252889,
+      "display_ratio": "3.14:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.cream",
+      "background": "color.copper",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "ratio": 3.555838940709805,
+      "display_ratio": "3.56:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.cream",
+      "background": "color.moss",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 11.626520142200903,
+      "display_ratio": "11.63:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.cream",
+      "background": "color.cyan",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "ratio": 1.6464272666863586,
+      "display_ratio": "1.65:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cream",
+      "background": "color.cream",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 1.0,
+      "display_ratio": "1.00:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.cream",
+      "background": "color.ink",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.ink",
+      "background": "color.orange",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 4.986501348885256,
+      "display_ratio": "4.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.ink",
+      "background": "color.copper",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        180.0,
+        105.0,
+        62.0
+      ],
+      "ratio": 4.3999347317567565,
+      "display_ratio": "4.40:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.ink",
+      "background": "color.moss",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 1.3456699910555125,
+      "display_ratio": "1.35:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    },
+    {
+      "foreground": "color.ink",
+      "background": "color.cyan",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "ratio": 9.502672588295185,
+      "display_ratio": "9.50:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.ink",
+      "background": "color.cream",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true
+    },
+    {
+      "foreground": "color.ink",
+      "background": "color.ink",
+      "canvas": null,
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 1.0,
+      "display_ratio": "1.00:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false
+    }
+  ],
+  "semantic": [
+    {
+      "foreground": "semantic.day.text",
+      "background": "semantic.day.bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.body.bg",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.text-muted",
+      "background": "semantic.day.bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        98.14,
+        93.44,
+        85.03999999999999
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 5.532482564153452,
+      "display_ratio": "5.53:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.muted.bg",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.focus",
+      "background": "semantic.day.bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.focus.bg",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.text",
+      "background": "semantic.day.bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.control-border.bg",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.cta-bg",
+      "background": "semantic.day.bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 3.137562423252889,
+      "display_ratio": "3.14:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.cta-fill.bg",
+      "required_use": null,
+      "restriction": "Use the text-color border when the fill alone is below 3:1."
+    },
+    {
+      "foreground": "semantic.day.text",
+      "background": "semantic.day.surface",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        232.95000000000002,
+        225.20000000000002,
+        210.70000000000002
+      ],
+      "ratio": 14.161717661383834,
+      "display_ratio": "14.16:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.body.surface",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.text-muted",
+      "background": "semantic.day.surface",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        94.383,
+        89.76799999999999,
+        81.538
+      ],
+      "background_srgb_0_to_255": [
+        232.95000000000002,
+        225.20000000000002,
+        210.70000000000002
+      ],
+      "ratio": 5.300147374790786,
+      "display_ratio": "5.30:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.muted.surface",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.focus",
+      "background": "semantic.day.surface",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        232.95000000000002,
+        225.20000000000002,
+        210.70000000000002
+      ],
+      "ratio": 14.161717661383834,
+      "display_ratio": "14.16:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.focus.surface",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.text",
+      "background": "semantic.day.surface",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        232.95000000000002,
+        225.20000000000002,
+        210.70000000000002
+      ],
+      "ratio": 14.161717661383834,
+      "display_ratio": "14.16:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.control-border.surface",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.cta-bg",
+      "background": "semantic.day.surface",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        232.95000000000002,
+        225.20000000000002,
+        210.70000000000002
+      ],
+      "ratio": 2.840010795254215,
+      "display_ratio": "2.84:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false,
+      "id": "day.cta-fill.surface",
+      "required_use": null,
+      "restriction": "Use the text-color border when the fill alone is below 3:1."
+    },
+    {
+      "foreground": "semantic.day.cta-label",
+      "background": "semantic.day.cta-bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 4.986501348885256,
+      "display_ratio": "4.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.cta-label",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.day.focus",
+      "background": "semantic.day.cta-bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 4.986501348885256,
+      "display_ratio": "4.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "day.focus.direct-cta",
+      "required_use": null,
+      "restriction": "The fixture separates the focus outline from the CTA with a background-colored gap; direct cyan/orange adjacency is prohibited."
+    },
+    {
+      "foreground": "semantic.day.surface",
+      "background": "semantic.day.bg",
+      "canvas": "semantic.day.bg",
+      "foreground_srgb_0_to_255": [
+        232.95000000000002,
+        225.20000000000002,
+        210.70000000000002
+      ],
+      "background_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "ratio": 1.1047713017485343,
+      "display_ratio": "1.10:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false,
+      "id": "day.surface-boundary",
+      "required_use": null,
+      "restriction": "Tint/moss alone is not a meaningful control boundary. Use text-color borders or another measured cue."
+    },
+    {
+      "foreground": "semantic.night.text",
+      "background": "semantic.night.bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.body.bg",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.text-muted",
+      "background": "semantic.night.bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        168.85999999999999,
+        162.56,
+        150.96
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 7.292513639886035,
+      "display_ratio": "7.29:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.muted.bg",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.focus",
+      "background": "semantic.night.bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 9.502672588295185,
+      "display_ratio": "9.50:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.focus.bg",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.text",
+      "background": "semantic.night.bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 15.645459255762226,
+      "display_ratio": "15.65:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.control-border.bg",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.cta-bg",
+      "background": "semantic.night.bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 4.986501348885256,
+      "display_ratio": "4.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.cta-fill.bg",
+      "required_use": null,
+      "restriction": "Use the text-color border when the fill alone is below 3:1."
+    },
+    {
+      "foreground": "semantic.night.text",
+      "background": "semantic.night.surface",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 11.626520142200903,
+      "display_ratio": "11.63:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.body.surface",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.text-muted",
+      "background": "semantic.night.surface",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        173.96,
+        172.08,
+        160.14000000000004
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 5.988783312864371,
+      "display_ratio": "5.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.muted.surface",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.focus",
+      "background": "semantic.night.surface",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 7.061666420042188,
+      "display_ratio": "7.06:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.focus.surface",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.text",
+      "background": "semantic.night.surface",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        244.0,
+        236.0,
+        221.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 11.626520142200903,
+      "display_ratio": "11.63:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.control-border.surface",
+      "required_use": "ui",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.cta-bg",
+      "background": "semantic.night.surface",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "background_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "ratio": 3.7055900644510618,
+      "display_ratio": "3.71:1",
+      "normal_text": false,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.cta-fill.surface",
+      "required_use": null,
+      "restriction": "Use the text-color border when the fill alone is below 3:1."
+    },
+    {
+      "foreground": "semantic.night.cta-label",
+      "background": "semantic.night.cta-bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 4.986501348885256,
+      "display_ratio": "4.99:1",
+      "normal_text": true,
+      "large_text": true,
+      "ui_contrast": true,
+      "id": "night.cta-label",
+      "required_use": "normal-text",
+      "restriction": ""
+    },
+    {
+      "foreground": "semantic.night.focus",
+      "background": "semantic.night.cta-bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        124.0,
+        198.0,
+        210.0
+      ],
+      "background_srgb_0_to_255": [
+        228.0,
+        87.0,
+        46.0
+      ],
+      "ratio": 1.9056793377624432,
+      "display_ratio": "1.91:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false,
+      "id": "night.focus.direct-cta",
+      "required_use": null,
+      "restriction": "The fixture separates the focus outline from the CTA with a background-colored gap; direct cyan/orange adjacency is prohibited."
+    },
+    {
+      "foreground": "semantic.night.surface",
+      "background": "semantic.night.bg",
+      "canvas": "semantic.night.bg",
+      "foreground_srgb_0_to_255": [
+        38.0,
+        48.0,
+        42.0
+      ],
+      "background_srgb_0_to_255": [
+        23.0,
+        20.0,
+        15.0
+      ],
+      "ratio": 1.3456699910555125,
+      "display_ratio": "1.35:1",
+      "normal_text": false,
+      "large_text": false,
+      "ui_contrast": false,
+      "id": "night.surface-boundary",
+      "required_use": null,
+      "restriction": "Tint/moss alone is not a meaningful control boundary. Use text-color borders or another measured cue."
+    }
+  ],
+  "limits": [
+    "No whole-product WCAG certification or owner approval.",
+    "Gradients and images need worst-location evaluation or an opaque measured plate.",
+    "Logotypes and decoration have narrow exceptions; functional labels and focus indicators do not inherit those exceptions.",
+    "The browser fixture, external-font availability and named accessibility review remain separate evidence."
+  ]
+}

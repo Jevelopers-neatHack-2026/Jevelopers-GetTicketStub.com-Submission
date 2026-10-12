@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source_sha": null,
+  "brand_version": null,
+  "distribution": null,
+  "font_delivery": null,
+  "consumer_acknowledgments": {
+    "getticketstub.com": null,
+    "landing-page-repo": null,
+    "marketing-material": null
+  },
+  "release_review": null,
+  "leaf_evidence": {
+    "BK-01": null,
+    "BK-02": null,
+    "BK-03A": null,
+    "BK-03B": null,
+    "BK-04": null,
+    "BK-05": null,
+    "BK-06": null,
+    "BK-07": null,
+    "BK-08": null,
+    "BK-09": null
+  },
+  "manual_evidence": {
+    "identity_ratification": null,
+    "rights_review": null,
+    "visual_assets": null,
+    "browser_accessibility": null,
+    "external_font_available_and_unavailable": null,
+    "claims_review": null,
+    "sanitization_and_history": null,
+    "upgrade_and_approved_rollback": null
+  }
+}

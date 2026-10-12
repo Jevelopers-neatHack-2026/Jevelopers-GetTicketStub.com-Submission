@@ -2,7 +2,7 @@
   "schema_version": 1,
   "synthetic": false,
   "repository": "Jevelopers-neatHack-2026/brand-kit",
-  "source_revision": "28e64dd",
+  "source_revision": "Candidate based on 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; per-file hashes identify exact bytes, reviewed commit is recorded in PR evidence",
   "hash_algorithm": "sha256",
   "scope_prefixes": [
     "logo/",
@@ -1135,18 +1135,19 @@
     },
     {
       "path": "tokens/tailwind.preset.js",
-      "sha256": "af3b702e62cb43965bef1d38385f880a9f90bc966b47e21979811240780b4fc1",
+      "sha256": "44a48264838822b41954f946765264740196621b4504947258e54734b20c79ae",
       "size_bytes": 2939,
       "introduced_in": "42625c0",
       "creator_rights_holder": "UNKNOWN",
-      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "source_version": "Candidate based on main 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; exact candidate commit recorded in PR evidence",
       "tooling": "tools/build_tokens.py",
       "rights_status": "UNKNOWN",
       "permitted_uses": "UNKNOWN",
       "restrictions": "UNKNOWN",
       "reviewer": "UNKNOWN",
       "notes": [
-        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over."
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over.",
+        "BK-08 numerical-description correction and BK-01 studio-reference clarification; token values unchanged. Generated headers refreshed from actual inputs. Rights, reviewer and approval remain UNKNOWN."
       ],
       "classification": "first-party-derived",
       "core": true,
@@ -1181,18 +1182,19 @@
     },
     {
       "path": "tokens/tokens.css",
-      "sha256": "a536e16aa1d25e45449a02e6ed46eeed376dfdbb71fa7c8a33cbc3a070f359b0",
+      "sha256": "e34223aecf3b5459f046506f5bb97b415b0feeef1d237021d672c5cc59ef3f98",
       "size_bytes": 3946,
       "introduced_in": "42625c0",
       "creator_rights_holder": "UNKNOWN",
-      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "source_version": "Candidate based on main 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; exact candidate commit recorded in PR evidence",
       "tooling": "tools/build_tokens.py",
       "rights_status": "UNKNOWN",
       "permitted_uses": "UNKNOWN",
       "restrictions": "UNKNOWN",
       "reviewer": "UNKNOWN",
       "notes": [
-        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over."
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over.",
+        "BK-08 numerical-description correction and BK-01 studio-reference clarification; token values unchanged. Generated headers refreshed from actual inputs. Rights, reviewer and approval remain UNKNOWN."
       ],
       "classification": "first-party-derived",
       "core": true,
@@ -1227,18 +1229,19 @@
     },
     {
       "path": "tokens/tokens.json",
-      "sha256": "649e570dc1397ef78bc00b28127ce166d640a4187eb2889fb2f57cc54054f228",
-      "size_bytes": 8345,
+      "sha256": "f441264f2e56f8fc8be5129a5a5b3f50403582ee5eb43821c7afb3ed1129b551",
+      "size_bytes": 8439,
       "introduced_in": "42625c0",
       "creator_rights_holder": "UNKNOWN",
-      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "source_version": "Candidate based on main 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; exact candidate commit recorded in PR evidence",
       "tooling": "UNKNOWN",
       "rights_status": "UNKNOWN",
       "permitted_uses": "UNKNOWN",
       "restrictions": "UNKNOWN",
       "reviewer": "UNKNOWN",
       "notes": [
-        "Revised in PR #20 (BK-03A). The prior hash for source revision 91157ac is superseded; no approval existed for it. Rights holder is UNKNOWN."
+        "Revised in PR #20 (BK-03A). The prior hash for source revision 91157ac is superseded; no approval existed for it. Rights holder is UNKNOWN.",
+        "BK-08 numerical-description correction and BK-01 studio-reference clarification; token values unchanged. Generated headers refreshed from actual inputs. Rights, reviewer and approval remain UNKNOWN."
       ],
       "classification": "first-party-canonical",
       "core": true,
@@ -1266,18 +1269,19 @@
     },
     {
       "path": "tokens/token-matrix.md",
-      "sha256": "c9fc0a1d799880c9625490582d472913d67d8585da4b97b37bf0277c98a1846c",
+      "sha256": "45808874e91f2821e179b66726ed8d21b835c7565d46fe4e19ffccce8f8def82",
       "size_bytes": 15459,
       "introduced_in": "28e64dd",
       "creator_rights_holder": "UNKNOWN",
-      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "source_version": "Candidate based on main 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; exact candidate commit recorded in PR evidence",
       "tooling": "tools/build_tokens.py",
       "rights_status": "UNKNOWN",
       "permitted_uses": "UNKNOWN",
       "restrictions": "UNKNOWN",
       "reviewer": "UNKNOWN",
       "notes": [
-        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over."
+        "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over.",
+        "BK-08 numerical-description correction and BK-01 studio-reference clarification; token values unchanged. Generated headers refreshed from actual inputs. Rights, reviewer and approval remain UNKNOWN."
       ],
       "classification": "first-party-derived",
       "core": true,
@@ -1312,11 +1316,11 @@
     },
     {
       "path": "tokens/external-fonts-google.css",
-      "sha256": "e197c96f9db0463aee326cb5db657cd9b9952d47a08e60420de6c6db117ba458",
+      "sha256": "1ef1548293ec7bc35b11c58a802fb283a4abf795d5344949c5ee0c62b4108595",
       "size_bytes": 1394,
       "introduced_in": "28e64dd",
       "creator_rights_holder": "UNKNOWN",
-      "source_version": "main 28e64ddbd11c0c5a23143fdfe7118494fdbd54fd (PR #20 merge)",
+      "source_version": "Candidate based on main 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; exact candidate commit recorded in PR evidence",
       "tooling": "tools/build_tokens.py",
       "rights_status": "UNKNOWN",
       "permitted_uses": "UNKNOWN",
@@ -1324,7 +1328,8 @@
       "reviewer": "UNKNOWN",
       "notes": [
         "Hash recorded at the exact source snapshot main 28e64dd (PR #20 merge); generator and inputs are known from the file header, rights holder, approval evidence and reviewer are UNKNOWN. Any approval of the old hash does not carry over.",
-        "External font hosting only: loading it makes the visitor's browser contact fonts.googleapis.com and fonts.gstatic.com. No font provider or delivery strategy has been approved; the Google font licences and terms were not reviewed here. Distinct from the source-only font binaries in fonts/."
+        "External font hosting only: loading it makes the visitor's browser contact fonts.googleapis.com and fonts.gstatic.com. No font provider or delivery strategy has been approved; the Google font licences and terms were not reviewed here. Distinct from the source-only font binaries in fonts/.",
+        "BK-08 numerical-description correction and BK-01 studio-reference clarification; token values unchanged. Generated headers refreshed from actual inputs. Rights, reviewer and approval remain UNKNOWN."
       ],
       "classification": "first-party-derived",
       "core": true,

@@ -1,6 +1,6 @@
 # Token profile and build (BK-03A)
 
-[`tokens/tokens.json`](../tokens/tokens.json) is the canonical value source. This page documents the profile it follows, the two rule files beside it, the generator, the compatibility promises and the migration notes. Nothing here records an approval: the identity is not ratified, the A + B direction (paper by day, foil by night) stays the baseline pending owner ratification, and [PR #3](https://github.com/Jevelopers-neatHack-2026/brand-kit/pull/3)'s "always on paper" proposal is **not** adopted. Issue [BK-03A #10](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/10) cannot close until BK-02 records an exact identity approval and the affected consumers have reviewed the changes below.
+[`tokens/tokens.json`](../tokens/tokens.json) is the canonical value source. This page documents the profile it follows, the two rule files beside it, the generator, the compatibility promises and the migration notes. Nothing here records an approval: the identity is not ratified, the A + B direction (paper by day, foil by night) stays the baseline pending owner ratification, and [PR #3](https://github.com/Jevelopers-neatHack-2026/brand-kit/pull/3)'s "always on paper" proposal is **not** adopted. Issue [BK-03A #10](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/10) is closed on GitHub as observed on 2026-10-12. Its implemented build/profile slice does not supply BK-02 identity approval or the affected consumer reviews; those missing acceptance inputs remain explicit for distribution and the release gate.
 
 ## Profile, not DTCG
 
@@ -85,13 +85,13 @@ Every duration token must appear in that list or `make check-tokens` fails, so a
 
 ## External fonts
 
-This repository **does not self-host, bundle, convert or declare `@font-face` for fonts**, and this work makes no font provider or identity decision. The tokens only name families (`--ts-font-display`, `--ts-font-ui`) with fallback stacks.
+Consumer outputs **do not self-host, bundle, convert or declare `@font-face` for fonts**, and this work makes no font provider or identity decision. The tokens only name families (`--ts-font-display`, `--ts-font-ui`) with fallback stacks. Existing TTF files remain source-only inputs for outlined logo generation; they are not web-font distribution outputs.
 
 Before BK-03A, `tokens.css` began with a Google Fonts `@import`, so importing the tokens silently made the visitor's browser contact `fonts.googleapis.com` and `fonts.gstatic.com`. `tokens.css` now loads nothing. The same `@import`, byte for byte in its URL, moved to [`tokens/external-fonts-google.css`](../tokens/external-fonts-google.css), generated from `profile.json` (`external_fonts.legacy_google`), whose header discloses the requests. It is an explicit opt-in and a legacy adapter, not an approved provider.
 
 ## Migration notes (consumers)
 
-1. **Web fonts are no longer implicit.** Consumers that relied on `tokens.css` to pull Fraunces and Inter Tight must add `@import "brand-kit/tokens/external-fonts-google.css";` before other rules (identical URL, so the fonts render as before), or arrange hosting themselves. Without it the fallback stacks apply. This is a visible change and needs affected-consumer review (getticketstub.com, landing-page-repo, marketing-material; none of them was inspected or modified here).
+1. **Web fonts are no longer implicit.** Consumers that relied on `tokens.css` to pull Fraunces and Inter Tight may propose adding `@import "brand-kit/tokens/external-fonts-google.css";` before other rules (the legacy URL is unchanged), or propose another reviewed external provider. The adapter is not provider approval; **do not self-host fonts**. Without an external font request the fallback stacks apply. This is a visible change and needs affected-consumer review. The original BK-03A run did not inspect or modify consumers; later read-only consumer evidence is separately recorded under BK-09.
 2. **`tokens.json` shape.** Bare scalars (weights, line heights, tracking, space, radius, smoothing, spring, tilt) are now `{ "$value": ... }` records with `$type`s. The values and key names are unchanged (verified against a recorded copy of the old file). Any consumer that reads those fields as bare scalars must unwrap `$value`. `smoothing.*Ms`, `spring.stepHz` and `tilt.maxDeg` keep numeric values and declare their unit in `$extensions`. The root `$description` no longer says "DTCG format".
 3. **Print-sweep under reduced motion** is now `0ms` (see above).
 4. **Tailwind** gains `rounded-pill`, `duration-shutter`, `duration-print-sweep`; durations are `var()` references. Resolved values are identical to the old literals.

@@ -6,15 +6,19 @@
     "baseline_date": "2026-10-12",
     "method": "git ls-files compared with entries by tools/check_inventory.py",
     "issue": "https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/6",
-    "integrated_main": "00e4129ddce2d8d646b9d6d5a118d254a30b637f",
-    "integrated_note": "Governance PR #17 merged into this branch; its four new files are catalogued."
+    "integrated_main": "3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4",
+    "integrated_note": "Baseline includes merged PRs #17\u2013#22. This integration indexes remaining local tooling and review proposals; exact candidate SHA and checks are recorded in its PR. No approval is inferred.",
+    "integrated_history": {
+      "revision": "00e4129ddce2d8d646b9d6d5a118d254a30b637f",
+      "note": "Governance PR #17 merged into this branch; its four new files are catalogued."
+    }
   },
   "notes": [
     "approval_status 'unknown' means no approval record exists in the repository. README states the identity is not ratified. Nothing here records an approval.",
     "provenance_status values: unknown | derivation-recorded (generator/source known, rights unknown) | licence-text-present (third-party licence bundled).",
     "release_class values: candidate-unapproved | reference-only | internal. No entry is approved for release; BK-06 decides.",
     "classification 'derived-manual': derived from the JSON authority by hand; no generator is tracked, so drift is not machine-checked. A future generator would change it to 'generated'.",
-    "classification 'licence-provenance': required third-party licence/provenance document. Export candidate that must ship with the asset it covers (e.g. font OFL texts with any font release). Distinct from 'reference-only' artwork, which is excluded from export."
+    "classification licence-provenance retains required third-party notices with their source. Existing TTFs are source-only under the no-self-hosted-font constraint; neither notices nor inventory grant runtime distribution."
   ],
   "enums": {
     "classification": [
@@ -95,22 +99,32 @@
         "docs/voice.md",
         "docs/imagery.md",
         "docs/motion-sound-haptics.md",
-        "docs/material-foil.md"
+        "docs/material-foil.md",
+        "docs/usage.md",
+        "docs/claims-register.md"
       ]
     },
     {
       "topic": "provenance",
       "paths": [
+        "provenance/register.json",
+        "provenance/allowlist.json",
+        "docs/provenance.md",
         "fonts/Fraunces-OFL.txt",
-        "fonts/InterTight-OFL.txt",
-        "inventory/brand-inventory.json"
+        "fonts/InterTight-OFL.txt"
       ],
-      "note": "Font OFL texts are required licence/provenance documents (export candidates that ship with the fonts). All other provenance/approval is unknown and routed to BK-06."
+      "note": "Implemented exact-hash register and empty production allowlist. Missing rights/approval stay unknown; source font binaries remain excluded from distribution."
     },
     {
       "topic": "releases",
-      "paths": [],
-      "note": "No releases, versions or packages exist. Pending BK-03B."
+      "paths": [
+        "distribution/proposal.json",
+        "distribution/acceptance.json",
+        "docs/distribution.md",
+        "docs/consumers.md",
+        "tools/build_distribution.py"
+      ],
+      "note": "Local deterministic review tooling only. Version, distribution/font decisions, approved allowlist and named ACKs remain pending; no public release exists."
     },
     {
       "topic": "governance",
@@ -121,6 +135,31 @@
         "tools/check_governance.py"
       ],
       "note": "Process scaffolding only (PR #17). Records no approval; the walkthrough is fictional."
+    },
+    {
+      "topic": "raster-review",
+      "paths": [
+        "tools/assets/export-matrix.json",
+        "tools/assets/toolchain.json",
+        "tools/build_assets.py"
+      ],
+      "note": "Local review source; no accountable approval is recorded."
+    },
+    {
+      "topic": "identity-decision",
+      "paths": [
+        "docs/identity-decision-packet.md"
+      ],
+      "note": "Local review source; no accountable approval is recorded."
+    },
+    {
+      "topic": "accessibility-evidence",
+      "paths": [
+        "tools/check_accessibility.py",
+        "tools/check_accessibility_browser.cjs",
+        "docs/accessibility.md"
+      ],
+      "note": "Local review source; no accountable approval is recorded."
     }
   ],
   "path_map": [
@@ -179,12 +218,12 @@
     {
       "proposed": "licenses-and-provenance/",
       "actual": [
+        "provenance/",
         "fonts/Fraunces-OFL.txt",
-        "fonts/InterTight-OFL.txt",
-        "inventory/brand-inventory.json"
+        "fonts/InterTight-OFL.txt"
       ],
       "decision": "keep-current-paths",
-      "rationale": "OFL texts must stay beside the fonts; BK-06 may add a provenance ledger here.",
+      "rationale": "Keep the implemented ledger and notices beside existing source fonts; no font distribution grant.",
       "alias": "n/a",
       "affected": [
         "BK-06"
@@ -192,9 +231,11 @@
     },
     {
       "proposed": "releases/",
-      "actual": [],
-      "decision": "no-assets-exist",
-      "rationale": "No versions or release notes exist yet (BK-03B).",
+      "actual": [
+        "distribution/"
+      ],
+      "decision": "keep-current-paths",
+      "rationale": "Proposal/acceptance inputs and local build tooling now exist; no approved version, release or registry package exists.",
       "alias": "n/a",
       "affected": []
     }
@@ -222,18 +263,20 @@
     },
     {
       "id": "pr3-pending",
-      "finding": "PR #3 (open, not merged) repoints ticket-studio links to getticketstub.com/docs/studio/ and proposes 'always on paper'. As of 2026-10-12 getticketstub.com main (388005240aa62374d49f709afc300adb5e98cd98) contains docs/studio/stub-system.md and docs/studio/research/holo-foil-technique.md (PR #3 targets), plus docs/studio/ docs, src/app/parts and src/customer/studio/feedback.ts; getticketstub.com #20 merged 2026-10-11T14:56:06Z and #4 merged 2026-10-12T03:51:44Z. Supersedes the 2026-10-10 finding that targets existed only on branches. Link-target evidence only; does not show the studio identity is approved, ratified or deployed. brand-kit main still references the nonexistent ticket-studio in SPEC.md, README.md, tokens/tokens.json, docs/material-foil.md.",
-      "handoff": "PR #3 targets now resolve on getticketstub.com main; merging PR #3 still needs owner review, and the direction change needs a BK-02 decision record."
+      "finding": "PR #22 merged at 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4 with immutable studio/foil links. This integration updates the remaining token description without changing values/profile. PR #3 head 289b22659f0699649abd65ba7a3b7e710839f4d3 remains open/conflicting with unique unapproved A-only app, foil and sound proposals; not fully superseded.",
+      "handoff": "See docs/identity-decision-packet.md. Preserve @lmvdz branch; await BK-02 decision and affected technical/provenance/consumer review before integrating direction changes.",
+      "history": "PR #3 (open, not merged) repoints ticket-studio links to getticketstub.com/docs/studio/ and proposes 'always on paper'. As of 2026-10-12 getticketstub.com main (388005240aa62374d49f709afc300adb5e98cd98) contains docs/studio/stub-system.md and docs/studio/research/holo-foil-technique.md (PR #3 targets), plus docs/studio/ docs, src/app/parts and src/customer/studio/feedback.ts; getticketstub.com #20 merged 2026-10-11T14:56:06Z and #4 merged 2026-10-12T03:51:44Z. Supersedes the 2026-10-10 finding that targets existed only on branches. Link-target evidence only; does not show the studio identity is approved, ratified or deployed. brand-kit main still references the nonexistent ticket-studio in SPEC.md, README.md, tokens/tokens.json, docs/material-foil.md."
     },
     {
       "id": "pr2-edition-handoff",
-      "finding": "PR #2 merged: OWNERSHIP says the edition-system link to ticket-studio requires separate owner confirmation. Preserved as is.",
+      "finding": "PR #2 edition ownership/owner-confirmation boundary remains. PR #22 resolves navigation to pinned product source; creative-engine owns artwork versions and print-production owns printable composition. No contract or identity decision is reassigned.",
       "handoff": "owner confirmation"
     },
     {
       "id": "consumer-copies",
-      "finding": "README claims getticketstub.com ships byte-identical copies of all 14 logos. Not verified in BK-01 (no consumer repo access).",
-      "handoff": "BK-03B/BK-10"
+      "finding": "Read-only Git blob comparison on 2026-10-12: all 14 product public/brand/*.svg at 783a9fa03e3d64b752cd8c5ad913c223db29118d match logo/*.svg at 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4. This is source byte parity only; no rights, deployment or ACK inferred.",
+      "handoff": "BK-03B/BK-09 still need approved immutable subset, contract and named Product/Landing/Marketing ACKs; dashboard migration is consumer-owned.",
+      "history": "README claims getticketstub.com ships byte-identical copies of all 14 logos. Not verified in BK-01 (no consumer repo access)."
     }
   ],
   "entries": [
@@ -294,7 +337,138 @@
         "logo",
         "usage"
       ],
-      "provenance_note": "Contains stale ticket-studio reference (PR #3 pending) and the unmerged 'always on paper' direction question."
+      "provenance_note": "PR #22 supplies the pinned product studio reference. The A-only application proposal in PR #3 remains unapproved; this guide still describes the existing unratified A+B source baseline."
+    },
+    {
+      "id": "distribution/acceptance.json",
+      "path": "distribution/acceptance.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Empty exact-artifact decision, leaf/manual evidence and named consumer/release receipt slots; no approvals recorded.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "distribution/acceptance.json"
+    },
+    {
+      "id": "distribution/fixtures/plain.css",
+      "path": "distribution/fixtures/plain.css",
+      "type": "css",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Local synthetic import/accessibility fixture. Existing brand values, no customer input or external font request; no acceptance claim.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "distribution/fixtures/plain.css"
+    },
+    {
+      "id": "distribution/fixtures/plain.html.in",
+      "path": "distribution/fixtures/plain.html.in",
+      "type": "html-template",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Committed extraction template, materialized as HTML in an empty consumer project; actual links are checked after package extraction and Tailwind compilation.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "distribution/fixtures/plain.html.in"
+    },
+    {
+      "id": "distribution/fixtures/tailwind.css",
+      "path": "distribution/fixtures/tailwind.css",
+      "type": "css",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Local synthetic import/accessibility fixture. Existing brand values, no customer input or external font request; no acceptance claim.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "distribution/fixtures/tailwind.css"
+    },
+    {
+      "id": "distribution/fixtures/tailwind.html.in",
+      "path": "distribution/fixtures/tailwind.html.in",
+      "type": "html-template",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Committed extraction template, materialized as HTML in an empty consumer project; actual links are checked after package extraction and Tailwind compilation.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "distribution/fixtures/tailwind.html.in"
+    },
+    {
+      "id": "distribution/proposal.json",
+      "path": "distribution/proposal.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Unapproved local archive/import/version/font proposal. This is not a published package or rights decision.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "distribution/proposal.json"
+    },
+    {
+      "id": "docs/accessibility.md",
+      "path": "docs/accessibility.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Contrast methodology, token/theme/type/focus/motion constraints, local checks and explicit required review limitations.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/accessibility.md"
+    },
+    {
+      "id": "docs/accessibility/contrast-report.json",
+      "path": "docs/accessibility/contrast-report.json",
+      "type": "json",
+      "category": "documentation",
+      "classification": "generated",
+      "description": "Deterministic full palette/semantic contrast measurements from actual token values; not owner acceptance.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "derivation-recorded",
+      "release_class": "internal",
+      "canonical_authority": "tokens/tokens.json",
+      "generated_by": "tools/check_accessibility.py",
+      "generated_from": [
+        "tokens/tokens.json",
+        "tokens/profile.json",
+        "tokens/mapping.json",
+        "tools/check_accessibility.py"
+      ]
+    },
+    {
+      "id": "docs/accessibility/contrast-report.md",
+      "path": "docs/accessibility/contrast-report.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "generated",
+      "description": "Human-readable generated contrast measurements and unsupported pair restrictions.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "derivation-recorded",
+      "release_class": "internal",
+      "canonical_authority": "tokens/tokens.json",
+      "generated_by": "tools/check_accessibility.py",
+      "generated_from": [
+        "tokens/tokens.json",
+        "tokens/profile.json",
+        "tokens/mapping.json",
+        "tools/check_accessibility.py"
+      ]
     },
     {
       "id": "docs/architecture/ACCEPTANCE.md",
@@ -321,6 +495,19 @@
       "provenance_status": "unknown",
       "release_class": "internal",
       "canonical_authority": "docs/architecture/OWNERSHIP.md"
+    },
+    {
+      "id": "docs/asset-exports.md",
+      "path": "docs/asset-exports.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Pinned source-only vector/raster review setup, output matrix, negative results and remaining visual/rights acceptance.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/asset-exports.md"
     },
     {
       "id": "docs/assets/readme/banner-day.svg",
@@ -364,6 +551,45 @@
       "canonical_authority": "docs/brand-governance.md"
     },
     {
+      "id": "docs/claims-register.md",
+      "path": "docs/claims-register.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Public claim/source inventory, illustrative or removed dispositions, image observations and unfilled accountable review.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/claims-register.md"
+    },
+    {
+      "id": "docs/consumers.md",
+      "path": "docs/consumers.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Read-only source observations and Product/Landing/Dashboard/Marketing responsibility, import, migration and ACK handoffs.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/consumers.md"
+    },
+    {
+      "id": "docs/distribution.md",
+      "path": "docs/distribution.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Local deterministic archive guide, proposed version/import/font contract, exclusions and pending release decisions.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/distribution.md"
+    },
+    {
       "id": "docs/governance/decision-template.md",
       "path": "docs/governance/decision-template.md",
       "type": "markdown",
@@ -389,6 +615,32 @@
       "release_class": "internal",
       "canonical_authority": "docs/governance/simulated-walkthrough.md",
       "provenance_note": "Fictional by design; do not cite as evidence of approval."
+    },
+    {
+      "id": "docs/guidelines-source-snapshot.json",
+      "path": "docs/guidelines-source-snapshot.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Deliberately reviewed source hashes for the four public surfaces; claim approval remains pending and release eligibility false.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/guidelines-source-snapshot.json"
+    },
+    {
+      "id": "docs/identity-decision-packet.md",
+      "path": "docs/identity-decision-packet.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Immutable existing-identity baseline, exact hashes, PR #3 hunk disposition and concrete pending owner decisions.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/identity-decision-packet.md"
     },
     {
       "id": "docs/imagery.md",
@@ -435,7 +687,7 @@
       "type": "markdown",
       "category": "guideline",
       "classification": "guideline",
-      "description": "Foil and holo material guidance (references an external ticket-studio doc; PR #3 pending)",
+      "description": "Foil/holo material guidance linked to pinned getticketstub.com studio source by PR #22. Unique PR #3 policy changes remain pending owner review.",
       "owner_role": "Product and frontend (brand-system maintainer)",
       "approval_status": "unknown",
       "provenance_status": "unknown",
@@ -493,6 +745,32 @@
       "provenance_status": "unknown",
       "release_class": "internal",
       "canonical_authority": "docs/token-profile.md"
+    },
+    {
+      "id": "docs/usage-examples.html",
+      "path": "docs/usage-examples.html",
+      "type": "html",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Local illustrative valid/invalid usage pairs; no identity approval or consumer deployment evidence.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/usage-examples.html"
+    },
+    {
+      "id": "docs/usage.md",
+      "path": "docs/usage.md",
+      "type": "markdown",
+      "category": "documentation",
+      "classification": "guideline",
+      "description": "Proposed channel/use matrix and guidance tied to existing canonical marks with approval and consumer work explicit.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "docs/usage.md"
     },
     {
       "id": "docs/voice.md",
@@ -628,12 +906,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -651,12 +930,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -674,12 +954,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -697,12 +978,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -720,12 +1002,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -743,12 +1026,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -766,12 +1050,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -789,12 +1074,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -812,12 +1098,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -835,12 +1122,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -858,12 +1146,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -881,12 +1170,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -904,12 +1194,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -927,12 +1218,13 @@
       "generated_by": "tools/build_logos.py",
       "generated_from": [
         "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
-        "tools/build_logos.py"
+        "tools/build_logos.py",
+        "tokens/tokens.json"
       ],
       "usage_guidance": "docs/logo.md",
       "provenance_note": "Outlined from the bundled Fraunces font by tools/build_logos.py (README: reproduced byte for byte 2026-10-11). Design approval and rights to the mark itself are not recorded.",
       "consumers": [
-        "getticketstub.com public/brand (copy, claimed byte-identical in README; not verified here)"
+        "getticketstub.com public/brand: exact Git blob parity verified at product 783a9fa03e3d64b752cd8c5ad913c223db29118d versus brand-kit 3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4; source observation only, no rights/deployment/ACK."
       ]
     },
     {
@@ -1207,7 +1499,155 @@
         "typography",
         "spacing-layout"
       ],
-      "provenance_note": "Derived from SPEC.md values; no approval record. Contains a stale ticket-studio reference (PR #3 pending). Bare scalars normalised to $value records in BK-03A; values unchanged."
+      "provenance_note": "Canonical values preserved from the merged token profile; no approval record. This integration fixes only the product studio path and measured muted-text description; no palette, semantic value or public name changes."
+    },
+    {
+      "id": "tools/accessibility-fixture/fixture.css",
+      "path": "tools/accessibility-fixture/fixture.css",
+      "type": "css",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Local synthetic import/accessibility fixture. Existing brand values, no customer input or external font request; no acceptance claim.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/accessibility-fixture/fixture.css"
+    },
+    {
+      "id": "tools/accessibility-fixture/fixture.js",
+      "path": "tools/accessibility-fixture/fixture.js",
+      "type": "javascript",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Local synthetic import/accessibility fixture. Existing brand values, no customer input or external font request; no acceptance claim.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/accessibility-fixture/fixture.js"
+    },
+    {
+      "id": "tools/accessibility-fixture/index.html",
+      "path": "tools/accessibility-fixture/index.html",
+      "type": "html",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Local synthetic import/accessibility fixture. Existing brand values, no customer input or external font request; no acceptance claim.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/accessibility-fixture/index.html"
+    },
+    {
+      "id": "tools/asset_lib.py",
+      "path": "tools/asset_lib.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Strict bounded SVG/PNG structural validation and pinned local vector rasterization for unapproved review outputs.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/asset_lib.py"
+    },
+    {
+      "id": "tools/assets/export-matrix.json",
+      "path": "tools/assets/export-matrix.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Unapproved exact SVG/output matrix and supported synthetic review contexts; no release eligibility.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/assets/export-matrix.json"
+    },
+    {
+      "id": "tools/assets/requirements.txt",
+      "path": "tools/assets/requirements.txt",
+      "type": "text",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Hash-locked Python 3.12 Linux x86_64 build wheels; fonttools, uharfbuzz and Pillow remain local tooling.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/assets/requirements.txt"
+    },
+    {
+      "id": "tools/assets/toolchain.json",
+      "path": "tools/assets/toolchain.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Exact tested Python/platform/package/renderer profile and existing source-font checksum for review builds.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/assets/toolchain.json"
+    },
+    {
+      "id": "tools/browser-dev/package-lock.json",
+      "path": "tools/browser-dev/package-lock.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "generated",
+      "description": "Pinned integrity lock for Playwright browser-check development dependencies.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "derivation-recorded",
+      "release_class": "internal",
+      "canonical_authority": "tools/browser-dev/package.json",
+      "generated_by": "npm install (tools/browser-dev/package.json)",
+      "generated_from": [
+        "tools/browser-dev/package.json"
+      ],
+      "provenance_note": "Playwright/playwright-core 1.56.1 Apache-2.0; optional fsevents 2.3.2 MIT. Dev-only; no package binaries shipped."
+    },
+    {
+      "id": "tools/browser-dev/package.json",
+      "path": "tools/browser-dev/package.json",
+      "type": "json",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Private dev manifest pinning Playwright 1.56.1 for local synthetic browser checks; no font/provider adapter.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/browser-dev/package.json"
+    },
+    {
+      "id": "tools/build_assets.py",
+      "path": "tools/build_assets.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Reproduces canonical SVG bytes, derives local raster candidates and synthetic review sheets, and compares two builds.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/build_assets.py"
+    },
+    {
+      "id": "tools/build_distribution.py",
+      "path": "tools/build_distribution.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Clean-source, allowlisted, hash-pinned local review/approved-subset packaging and strict archive/source verification.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/build_distribution.py"
     },
     {
       "id": "tools/build_logos.py",
@@ -1246,6 +1686,84 @@
       ]
     },
     {
+      "id": "tools/check_accessibility.py",
+      "path": "tools/check_accessibility.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Computes alpha-aware unrounded WCAG contrast and validates required token pairs, generated reports and fixture variables.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_accessibility.py"
+    },
+    {
+      "id": "tools/check_accessibility_browser.cjs",
+      "path": "tools/check_accessibility_browser.cjs",
+      "type": "javascript",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Pinned local Chromium fixture checks for OS/explicit themes, focus, reduced motion and labelled layout/zoom evidence.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_accessibility_browser.cjs"
+    },
+    {
+      "id": "tools/check_asset.py",
+      "path": "tools/check_asset.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Standalone strict SVG/PNG validator; invalid sources, dimensions, metadata or alpha return nonzero.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_asset.py"
+    },
+    {
+      "id": "tools/check_brand_release.py",
+      "path": "tools/check_brand_release.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Non-publishing aggregate that records every required leaf result and blocks missing rights/decisions/evidence.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_brand_release.py"
+    },
+    {
+      "id": "tools/check_consumer_browser.cjs",
+      "path": "tools/check_consumer_browser.cjs",
+      "type": "javascript",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Offline pinned-browser checks for extracted plain-CSS and Tailwind review fixtures across themes, narrow layout, fallback fonts and reduced motion; freezes source and records exact archive/input hashes. No provider or consumer acceptance.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_consumer_browser.cjs"
+    },
+    {
+      "id": "tools/check_consumers.py",
+      "path": "tools/check_consumers.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Extracted local CSS/Tailwind import and recovery checks; normal contract mode requires actual approval/consumer evidence.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_consumers.py"
+    },
+    {
       "id": "tools/check_governance.py",
       "path": "tools/check_governance.py",
       "type": "python",
@@ -1257,6 +1775,19 @@
       "provenance_status": "unknown",
       "release_class": "internal",
       "canonical_authority": "tools/check_governance.py"
+    },
+    {
+      "id": "tools/check_guidelines.py",
+      "path": "tools/check_guidelines.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Checks exact public-source hashes, visible review markers, claim rows, usage pairs and current canonical variant coverage; not semantic or accountable approval.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/check_guidelines.py"
     },
     {
       "id": "tools/check_inventory.py",
@@ -1379,6 +1910,45 @@
       "canonical_authority": "tools/tests/fixtures/consumer.css"
     },
     {
+      "id": "tools/tests/test_accessibility.py",
+      "path": "tools/tests/test_accessibility.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Synthetic contrast, token mutation, fixture variable, report drift and CLI negative cases.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/tests/test_accessibility.py"
+    },
+    {
+      "id": "tools/tests/test_accessibility_browser.cjs",
+      "path": "tools/tests/test_accessibility_browser.cjs",
+      "type": "javascript",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Actual pinned Chromium baseline and synthetic invisible-focus/ancestor-clipping regressions; missing browser remains a failed prerequisite.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/tests/test_accessibility_browser.cjs"
+    },
+    {
+      "id": "tools/tests/test_assets.py",
+      "path": "tools/tests/test_assets.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Synthetic malformed/active SVG, raster metadata/alpha/clipping and canonical reproducibility regressions.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/tests/test_assets.py"
+    },
+    {
       "id": "tools/tests/test_checks.py",
       "path": "tools/tests/test_checks.py",
       "type": "python",
@@ -1390,6 +1960,32 @@
       "provenance_status": "unknown",
       "release_class": "internal",
       "canonical_authority": "tools/tests/test_checks.py"
+    },
+    {
+      "id": "tools/tests/test_distribution.py",
+      "path": "tools/tests/test_distribution.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Synthetic committed archive integrity, unsafe member, approval, consumer and aggregate failure regressions.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/tests/test_distribution.py"
+    },
+    {
+      "id": "tools/tests/test_guidelines.py",
+      "path": "tools/tests/test_guidelines.py",
+      "type": "python",
+      "category": "tooling",
+      "classification": "canonical-source",
+      "description": "Synthetic unsupported claim, changed source, hidden marker, missing record/variant and invalid usage fixture regressions.",
+      "owner_role": "Product and frontend (brand-system maintainer)",
+      "approval_status": "unknown",
+      "provenance_status": "unknown",
+      "release_class": "internal",
+      "canonical_authority": "tools/tests/test_guidelines.py"
     },
     {
       "id": "tools/tests/test_provenance.py",

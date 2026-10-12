@@ -1,6 +1,9 @@
 PYTHON ?= python3
+BRAND_OUTPUT ?= out/brand/brand-kit.zip
+ASSET_OUTPUT ?= build/asset-review
 
-.PHONY: check-governance check-inventory check-links check-links-external check-provenance-register check-provenance test check build-tokens check-tokens check-tokens-tailwind
+.PHONY: check-governance check-inventory check-links check-links-external check-provenance-register check-provenance test check build-tokens check-tokens check-tokens-tailwind build-accessibility check-accessibility check-accessibility-browser
+.PHONY: build-assets check-assets check-package package-brand package-brand-review check-consumers-local check-consumers check-consumers-browser check-brand-release check-guidelines check-accessibility-browser-regressions
 
 check-inventory:
 	$(PYTHON) tools/check_inventory.py
@@ -42,4 +45,53 @@ check-tokens-tailwind: check-tokens
 	cd tools/tokens-dev && npm ci --ignore-scripts --no-audit --no-fund
 	$(PYTHON) -I tools/check_tokens_tailwind.py
 
-check: check-inventory check-links check-governance check-provenance-register check-tokens test
+build-accessibility:
+	$(PYTHON) -I tools/check_accessibility.py build
+
+# Computed contrast and local negative cases, not a browser or accountable approval.
+check-accessibility: check-tokens
+	$(PYTHON) -I tools/check_accessibility.py check
+	$(PYTHON) -m unittest tools.tests.test_accessibility
+
+# Requires the pinned local dev dependency/browser; never fetches a font/provider.
+check-accessibility-browser: check-accessibility check-accessibility-browser-regressions
+	node tools/check_accessibility_browser.cjs
+
+check-accessibility-browser-regressions:
+	node tools/tests/test_accessibility_browser.cjs
+
+build-assets:
+	$(PYTHON) -I tools/build_assets.py build --output-dir "$(ASSET_OUTPUT)"
+
+check-assets:
+	$(PYTHON) -I tools/build_assets.py check
+	$(PYTHON) -m unittest tools.tests.test_assets -v
+
+# Archive checks require a clean committed candidate; review mode never grants rights.
+check-package:
+	$(PYTHON) -I tools/build_distribution.py check
+
+package-brand:
+	$(PYTHON) -I tools/build_distribution.py build --out "$(BRAND_OUTPUT)"
+
+package-brand-review:
+	$(PYTHON) -I tools/build_distribution.py build --mode review --out "$(BRAND_OUTPUT)"
+
+check-consumers-local:
+	$(PYTHON) -I tools/check_consumers.py --local
+
+check-consumers:
+	$(PYTHON) -I tools/check_consumers.py
+
+# Actual browser inspection of the extracted local review fixtures; no provider calls or consumer ACK.
+check-consumers-browser:
+	PYTHON="$(PYTHON)" node tools/check_consumer_browser.cjs
+
+check-brand-release:
+	$(PYTHON) -I tools/check_brand_release.py
+
+check-guidelines:
+	$(PYTHON) -I tools/check_guidelines.py
+	$(PYTHON) -m unittest tools.tests.test_guidelines
+
+check: check-inventory check-links check-governance check-provenance-register check-tokens check-accessibility check-guidelines test
