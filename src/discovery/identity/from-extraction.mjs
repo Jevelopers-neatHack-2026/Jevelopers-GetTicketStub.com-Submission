@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { EvidenceStoreError } from "../../evidence/store.mjs";
 import { extractDeterministically, EXTRACTION_LIMITS } from "../../extraction/index.mjs";
+import { decodedJsonLdScalarValue } from "../../extraction/jsonld.mjs";
 import { normalizeCandidateValue } from "../../extraction/source.mjs";
 import { compareEntityIdentity } from "../entities/identity.mjs";
 import { compareOccurrenceIdentity } from "../occurrences/identity.mjs";
@@ -60,16 +61,16 @@ const IDENTITY_LIMITS = Object.freeze({
 });
 
 const FACT_METHODS = new Map([
-  ["name", { target: "title" }],
-  ["series", { target: "series" }],
-  ["seriesName", { target: "series" }],
-  ["edition", { target: "edition" }],
-  ["eventEdition", { target: "edition" }],
-  ["location.address.addressLocality", { target: "city" }],
-  ["location.name", { target: "venue" }],
-  ["startDate", { target: "start", temporal: true }],
-  ["endDate", { target: "end", temporal: true }],
-  ["eventStatus", { target: "status", status: true }],
+  ["name", { pointer: "/name", target: "title" }],
+  ["series", { pointer: "/series", target: "series" }],
+  ["seriesName", { pointer: "/seriesName", target: "series" }],
+  ["edition", { pointer: "/edition", target: "edition" }],
+  ["eventEdition", { pointer: "/eventEdition", target: "edition" }],
+  ["location.address.addressLocality", { pointer: "/location/address/addressLocality", target: "city" }],
+  ["location.name", { pointer: "/location/name", target: "venue" }],
+  ["startDate", { pointer: "/startDate", target: "start", temporal: true }],
+  ["endDate", { pointer: "/endDate", target: "end", temporal: true }],
+  ["eventStatus", { pointer: "/eventStatus", target: "status", status: true }],
 ]);
 
 const ERROR_MESSAGES = Object.freeze({
@@ -435,17 +436,18 @@ function draftSourceCandidates(extraction, document) {
         if (candidate.suggestionOnly === true) continue;
         const field = FACT_METHODS.get(candidate.field);
         if (observationKind === "organization" && candidate.field !== "name") continue;
-        if (!field && observationKind === "event") continue;
+        // Display fields flatten object keys with dots; only the exact pointer
+        // relative to this entity establishes a supported structured property.
+        if (!field || candidate.source?.jsonPointer !== entity.jsonPointer + field.pointer) continue;
         const bound = bindCandidateToSource(candidate, document.bytes);
         if (typeof bound.input.normalizedValue !== "string") {
           bound.rawBytes.fill(0);
           continue;
         }
-        let parsed;
-        try { parsed = JSON.parse(bound.input.rawValue); } catch {
-          bound.rawBytes.fill(0);
-          fail("SOURCE_BINDING_FAILED");
-        }
+        // XML references and CDATA boundaries belong to the original source
+        // slice, not the logical JSON token. Use the parser-owned scalar for
+        // this exact candidate while retaining the byte binding above.
+        const parsed = decodedJsonLdScalarValue(candidate);
         if (typeof parsed !== "string" || normalizeCandidateValue(parsed) !== bound.input.normalizedValue) {
           bound.rawBytes.fill(0);
           fail("SOURCE_BINDING_FAILED");
