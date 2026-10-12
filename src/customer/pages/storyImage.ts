@@ -47,12 +47,12 @@ export async function renderStoryPng(stub: Stub): Promise<Blob | null> {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  // Night stage background with a soft orange glow.
-  ctx.fillStyle = "#17140F";
+  // Cream paper desk with the window light falling from the top left, like every screen.
+  ctx.fillStyle = "#F4ECDD";
   ctx.fillRect(0, 0, W, H);
-  const glow = ctx.createRadialGradient(W / 2, H * 0.42, 40, W / 2, H * 0.42, W);
-  glow.addColorStop(0, "rgba(228,87,46,0.35)");
-  glow.addColorStop(1, "rgba(23,20,15,0)");
+  const glow = ctx.createRadialGradient(W * 0.18, -H * 0.05, 40, W * 0.18, -H * 0.05, W * 1.2);
+  glow.addColorStop(0, "rgba(255,248,232,0.85)");
+  glow.addColorStop(1, "rgba(255,248,232,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
@@ -65,13 +65,16 @@ export async function renderStoryPng(stub: Stub): Promise<Blob | null> {
   ctx.translate(W / 2, cy + ch / 2);
   ctx.rotate((-2 * Math.PI) / 180);
   ctx.translate(-W / 2, -(cy + ch / 2));
-  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowColor = "rgba(23,20,15,0.32)";
   ctx.shadowBlur = 60;
   ctx.shadowOffsetY = 30;
   roundRect(ctx, cx, cy, cw, ch, 10);
-  ctx.fillStyle = "#F4ECDD";
+  ctx.fillStyle = "#FBF6EC";
   ctx.fill();
   ctx.shadowColor = "transparent";
+  ctx.strokeStyle = "rgba(23,20,15,0.16)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
   const art = currentVersion(stub)?.art;
   const img = art?.kind === "image" && art.src ? await loadImage(art.src) : null;
@@ -121,19 +124,19 @@ export async function renderStoryPng(stub: Stub): Promise<Blob | null> {
   ctx.restore();
 
   // Wordmark and link line.
-  const mark = await loadImage("/brand/wordmark-cream.svg");
+  const mark = await loadImage("/brand/wordmark.svg");
   if (mark) {
     const mw = 360;
     const mh = (mark.height / mark.width) * mw || 80;
     ctx.drawImage(mark, (W - mw) / 2, H - 300, mw, mh);
   } else {
-    ctx.fillStyle = "#F4ECDD";
+    ctx.fillStyle = "#17140F";
     ctx.font = "600 64px Fraunces, Georgia, serif";
     ctx.textAlign = "center";
     ctx.fillText("TicketStub", W / 2, H - 240);
   }
   ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(244,236,221,0.75)";
+  ctx.fillStyle = "rgba(23,20,15,0.66)";
   ctx.font = "500 32px 'Inter Tight', system-ui, sans-serif";
   ctx.fillText("Made with TicketStub · getticketstub.com", W / 2, H - 150);
 

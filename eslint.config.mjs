@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored byte-for-byte from agent-harness (MANIFEST.json); its own repo lints it.
+    "src/server/vendor/**",
   ]),
 ]);
 

@@ -1,10 +1,13 @@
 "use client";
-import { useId, useRef, useState } from "react";
-import type { Stub } from "../types";
-import { remixArt } from "@/customer/studio/research/client";
+import { useRef, useState } from "react";
+import type { DesignVersion, Stub } from "../types";
+import { currentVersion } from "../types";
+import { remixArtNoted } from "@/customer/studio/research/client";
 import { play, haptic } from "@/customer/studio/feedback";
+import { PaperButton, PaperSheet, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { addArtVersion, readImageFile } from "./ops";
-import { Sheet } from "./Sheet";
+import { listVersions, restoreVersion, sameArt, versionHash } from "../versions/versions";
+import { artOutcome, clock, errorCode, flow, since, vibeOf } from "@/customer/flows/events";
 import styles from "./overlays.module.css";
 
 export const VIBES = ["Neon", "Risograph", "70s", "Minimal"] as const;
@@ -15,20 +18,43 @@ interface PanelProps {
   /** Opens the agent for a free-text description. */
   onDescribe: () => void;
   onDone?: () => void;
-  compact?: boolean;
 }
 
-/** Vibe chips, a photo option and one CTA. Free text lives behind "Describe it instead". */
-export function RemixPanel({ stub, onChange, onDescribe, onDone, compact }: PanelProps) {
+/** Earlier looks to go back to: one version per distinct art, the current look left out, the same style preferred. Going back selects that version. */
+function earlierVersions(stub: Stub): DesignVersion[] {
+  const cur = currentVersion(stub);
+  const byArt: DesignVersion[] = [];
+  for (const v of listVersions(stub)) {
+    if (sameArt(v.art, cur.art)) continue;
+    const i = byArt.findIndex((x) => sameArt(x.art, v.art));
+    if (i < 0) byArt.push(v);
+    else if (v.edition === cur.edition && byArt[i].edition !== cur.edition) byArt[i] = v;
+  }
+  return byArt;
+}
+
+/** One name per chip, told apart when two remixes used the same vibe ("Neon", "Neon 2"). */
+function chipNames(versions: DesignVersion[]): string[] {
+  const seen: Record<string, number> = {};
+  return versions.map((v) => {
+    const base = v.art.vibe === "photo" ? "Your photo" : v.art.vibe ? v.art.vibe : v.parentId ? "Remix" : "First art";
+    seen[base] = (seen[base] ?? 0) + 1;
+    return seen[base] > 1 ? `${base} ${seen[base]}` : base;
+  });
+}
+
+/** Vibe tags, a photo option and one action. Free text lives behind "Describe it instead". */
+export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
   const [vibe, setVibe] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const idBase = useId();
+  const earlier = earlierVersions(stub);
+  const names = chipNames(earlier);
 
   const finish = (s: Stub) => {
     onChange(s);
-    play("done");
+    play("success");
     haptic([18, 40, 28]);
     onDone?.();
   };
@@ -36,11 +62,23 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone, compact }: Pane
   const run = async () => {
     setBusy(true);
     setError(null);
-    play("print");
+    play("remix");
+    flow("remix_request", { via: "sheet", vibe: vibeOf(vibe) });
+    const asked = clock();
     try {
-      const art = await remixArt(stub, vibe ?? undefined);
-      finish(addArtVersion(stub, art));
+      const { art, limitNote } = await remixArtNoted(stub, vibe ?? undefined);
+      // the daily cap answers with procedural art: a limited result, never reported as generated
+      flow("remix_result", { via: "sheet", result: limitNote ? "limited" : "success", ...artOutcome(art), duration_ms: since(asked) });
+      if (limitNote) {
+        // Procedural art is applied, and the sheet stays open so the note is read.
+        onChange(addArtVersion(stub, art));
+        play("success", { emphasis: "subtle" });
+        setError(limitNote);
+      } else {
+        finish(addArtVersion(stub, art));
+      }
     } catch (e) {
+      flow("remix_result", { via: "sheet", result: "error", duration_ms: since(asked), error_code: errorCode(e) });
       setError(e instanceof Error ? e.message : "We couldn't remix the art. Try again.");
     } finally {
       setBusy(false);
@@ -53,8 +91,11 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone, compact }: Pane
     setError(null);
     try {
       const src = await readImageFile(file);
+      // the person's own photo as the art: uploaded, kept on this device (never the photo or its name)
+      flow("remix_result", { via: "sheet", result: "success", art: "uploaded", capability: "local" });
       finish(addArtVersion(stub, { kind: "image", src, seed: Date.now() % 100000, vibe: "photo", provenance: "live" }));
     } catch (e) {
+      flow("remix_result", { via: "sheet", result: "error", art: "uploaded", capability: "local", error_code: "bad_image" });
       setError(e instanceof Error ? e.message : "We couldn't read that photo. Try another one.");
     } finally {
       setBusy(false);
@@ -64,50 +105,69 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone, compact }: Pane
 
   return (
     <div className={styles.stack} aria-busy={busy}>
-      {compact && <p className="label">Remix the art</p>}
-      <div className={styles.chipRow} role="group" aria-label="Vibe">
+      <span className="desk-label">Pick a look</span>
+      <Tags label="Vibe">
         {VIBES.map((v) => (
-          <button key={v} type="button" className="chip" aria-pressed={vibe === v} onClick={() => setVibe(vibe === v ? null : v)} disabled={busy}>
+          <Tag key={v} pressed={vibe === v} disabled={busy} onClick={() => setVibe(vibe === v ? null : v)}>
             {v}
-          </button>
+          </Tag>
         ))}
-        <button type="button" className="chip" disabled={busy} onClick={() => fileRef.current?.click()}>
+        <Tag disabled={busy} onClick={() => fileRef.current?.click()}>
           From my photo
-        </button>
-        <input
-          ref={fileRef}
-          id={`${idBase}-photo`}
-          className="visually-hidden"
-          tabIndex={-1}
-          aria-label="Choose a photo for the art"
-          type="file"
-          accept="image/*"
-          disabled={busy}
-          onChange={(e) => onPhoto(e.target.files?.[0])}
-        />
-      </div>
-      <button type="button" className={styles.textLinkBtn} onClick={onDescribe}>
-        Describe it instead ›
-      </button>
-      <button type="button" className={`btn btn-primary ${compact ? "" : "btn-block"}`} onClick={run} disabled={busy}>
+        </Tag>
+      </Tags>
+      <input
+        ref={fileRef}
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-label="Choose a photo for the art"
+        type="file"
+        accept="image/*"
+        disabled={busy}
+        onChange={(e) => onPhoto(e.target.files?.[0])}
+      />
+      <TearLink onClick={onDescribe}>Describe it instead</TearLink>
+      <PaperButton block onClick={run} disabled={busy}>
         {busy ? "Remixing…" : "Remix the art"}
-      </button>
-      <p className={styles.muted} role="status" aria-live="polite">
-        {busy ? "Remixing… keeps your text and edits" : error ?? "Keeps your text and edits. Each remix is saved as a new style."}
+      </PaperButton>
+      <p className={styles.muted} data-announce="change">
+        {busy ? "Remixing. Your text and edits stay." : (error ?? "Your text and edits stay. Each remix is kept, so you can go back.")}
       </p>
+      {earlier.length > 0 && (
+        <>
+          <span className="desk-label">Go back to</span>
+          <Tags label="Earlier art">
+            {earlier.map((v, i) => (
+              <Tag
+                key={v.id}
+                disabled={busy}
+                aria-label={`Go back to ${names[i]}, version ${versionHash(v)}`}
+                onClick={() => {
+                  // Selects the version that already exists. Nothing is made again, and the next edit branches from it.
+                  onChange(restoreVersion(stub, v.id));
+                  play("stamp", { emphasis: "subtle" });
+                  onDone?.();
+                }}
+              >
+                {names[i]}
+              </Tag>
+            ))}
+          </Tags>
+        </>
+      )}
     </div>
   );
 }
 
-interface SheetProps extends Omit<PanelProps, "onDone" | "compact"> {
+interface SheetProps extends Omit<PanelProps, "onDone"> {
   open: boolean;
   onClose: () => void;
 }
 
 export function RemixSheet({ open, onClose, ...rest }: SheetProps) {
   return (
-    <Sheet title="Remix the art" open={open} onClose={onClose}>
+    <PaperSheet title="Remix the art" open={open} onClose={onClose}>
       <RemixPanel {...rest} onDone={onClose} />
-    </Sheet>
+    </PaperSheet>
   );
 }

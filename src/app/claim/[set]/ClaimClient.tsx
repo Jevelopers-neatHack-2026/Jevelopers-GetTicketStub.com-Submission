@@ -1,21 +1,23 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Field, MarkLegend, PaperButton, SourceMark, Stamp } from "@/customer/desk/Desk";
+import { openSignIn } from "@/customer/account/signin";
+import { useAccount } from "@/customer/account/useAccount";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { FitBox } from "@/customer/pages/FitBox";
-import { play, haptic } from "@/customer/studio/feedback";
+import { haptic } from "@/customer/studio/feedback";
 import { NEATHACK, newStub } from "@/customer/studio/fixtures";
-import { decodeStub, encodeStub, loadWall, upsertStub } from "@/customer/studio/store";
+import { decodeStub, encodeStub, upsertStub } from "@/customer/studio/store";
 import type { Stub } from "@/customer/studio/types";
-import { PageShell, FriendlyError, QrPlaceholder, ui } from "@/customer/pages/ui";
+import { LeavesMark, PageShell, FriendlyError, OnDesk, QrPlaceholder, ui } from "@/customer/pages/ui";
 import { formatDate, isStub } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
+import { flow } from "@/customer/flows/events";
 import s from "./claim.module.css";
 
 export default function ClaimClient({ set, from }: { set: string; from?: string }) {
   const router = useRouter();
   const mounted = useMounted();
-  const nameId = useId();
   const source = useMemo(() => {
     if (!mounted || !from) return undefined;
     const d = decodeStub(from);
@@ -23,19 +25,16 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
   }, [mounted, from]);
   const event = set === "neathack" ? NEATHACK : source?.event;
 
-  const [signIn, setSignIn] = useState<"google" | "apple" | "skip" | null>(null);
+  const { status: acct, account, savingOff } = useAccount();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [claiming, setClaiming] = useState(false);
   const here = mounted ? window.location.href : "";
-  const alreadyInSet = useMemo(() => (mounted ? loadWall().filter((x) => x.setId === set).length : 0), [mounted, set]);
 
-  // Seat numbers: the sender's list of friends defines the set size when we have it.
+  // Seat: only what the sender's list actually says. With no list there is no seat to print.
   const friends = source?.personal.friends ?? [];
-  const total = friends.length ? friends.length + 1 : null;
   const openIdx = friends.findIndex((f) => !f.claimed);
-  const seatNo = total ? (openIdx >= 0 ? openIdx + 2 : total) : alreadyInSet + 1;
-  const seatLabel = `Seat ${seatNo} of ${total ?? "[N]"}`;
+  const seatLabel = openIdx >= 0 ? (friends[openIdx].seat ?? `Seat ${openIdx + 2}`) : undefined;
 
   const preview = useMemo<Stub | null>(() => {
     if (!event) return null;
@@ -51,6 +50,14 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
     return st;
   }, [event, source, set, name, seatLabel]);
 
+  // Whether the set link opened, once the page has read it (never the sender's stub or names).
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (!mounted || viewed.current) return;
+    viewed.current = true;
+    flow("claim_view", { flow: "set", result: event ? "valid" : "invalid" });
+  }, [mounted, event]);
+
   if (!mounted) return <PageShell>{null}</PageShell>;
   if (!event || !preview) {
     return (
@@ -60,15 +67,10 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
     );
   }
 
-  function choose(p: "google" | "apple" | "skip") {
-    setSignIn(p);
-    if (p !== "skip" && !name) setName("Judge");
-    play("tick");
-  }
-
   function claim() {
     const n = name.trim();
     if (!n) {
+      flow("claim_invalid", { flow: "set", reason: "name_missing" });
       setError("Add your name so it prints on your stub.");
       return;
     }
@@ -83,91 +85,96 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
     st.personal = { ...st.personal, friends: [{ name: n, seat: seatLabel, claimed: true }, ...others] };
     st.setId = set;
     st.torn = true;
-    upsertStub(st);
-    play("stamp");
+    // a local claim: the stub is on this device's wall (signed in, the sync takes it to the account)
+    flow("claim_complete", { flow: "set", result: "claimed", storage: upsertStub(st) ? "ok" : "failed" });
     haptic([20]);
     router.push(`/s/${encodeStub(st)}`);
   }
 
-  const setTitle = set === "neathack" ? "neatHack 2026 · matching set" : `${event.title} · matching set`;
+  const setTitle = set === "neathack" ? "neatHack 2026 · judges" : `${event.title} · matching set`;
   const meta = [formatDate(event.dateISO), event.venue, event.city].filter(Boolean).join(" · ");
 
   return (
-    <PageShell>
+    <PageShell right={<span className="desk-label">{set === "neathack" ? "Judges' claim" : "Claim"}</span>}>
       <div className={s.layout}>
-        <aside className={s.qrCol} aria-label="Claim on your phone">
-          <QrPlaceholder value={here || set} caption="Scan to claim on your phone" />
-          <p className={ui.muted}>Placeholder code for the demo. Open this link on your phone instead.</p>
-        </aside>
+        <div className={s.desk}>
+          <OnDesk>
+            <StubView stub={preview} size="md" tilt />
+          </OnDesk>
+          {seatLabel ? <p className={s.seat}>{seatLabel}</p> : null}
+        </div>
 
         <section className={s.panel} aria-labelledby="claim-h">
-          <p className="label">{setTitle}</p>
-          <h1 id="claim-h" className={ui.h1}>
-            Claim your stub from {event.title}.
-          </h1>
-          {meta ? <p className={ui.muted}>{meta}</p> : null}
-          <span className="chip num">{seatLabel}</span>
+          <header className={s.head}>
+            <p className="desk-label">{setTitle}</p>
+            <h1 id="claim-h" className={s.title}>
+              Claim your stub.
+            </h1>
+            <p className={s.lede}>{event.title}</p>
+            {meta ? <p className={s.meta}>{meta}</p> : null}
+          </header>
 
-          <div className={s.preview}>
-            <FitBox>
-              <StubView stub={preview} size="md" tilt />
-            </FitBox>
-          </div>
-
-          {!signIn ? (
-            <div className={ui.stack}>
-              <button type="button" className="btn btn-primary btn-block" onClick={() => choose("apple")}>
-                Continue with Apple
-              </button>
-              <button type="button" className="btn btn-block" onClick={() => choose("google")}>
-                Continue with Google
-              </button>
-              <button type="button" className={`btn btn-quiet btn-block`} onClick={() => choose("skip")}>
-                Just add my name
-              </button>
-              <p className={ui.muted}>Sign-in is simulated in this demo.</p>
-            </div>
-          ) : (
-            <form
-              className={ui.stack}
-              onSubmit={(ev) => {
-                ev.preventDefault();
-                claim();
+          <form
+            className={s.form}
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              claim();
+            }}
+          >
+            <Field
+              id="claim-name"
+              label="Name on your stub"
+              value={name}
+              maxLength={32}
+              autoComplete="name"
+              placeholder="Your name"
+              onChange={(e) => {
+                setName(e.target.value);
+                setError("");
               }}
-            >
-              {signIn !== "skip" ? (
-                <p className={s.signedIn} role="status">
-                  Signed in with {signIn === "apple" ? "Apple" : "Google"}. Sign-in is simulated in this demo.
-                </p>
-              ) : null}
-              <div className={ui.field}>
-                <label htmlFor={nameId} className={ui.fieldLabel}>
-                  Name on your stub
-                </label>
-                <input
-                  id={nameId}
-                  className={ui.input}
-                  value={name}
-                  maxLength={32}
-                  autoComplete="name"
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setError("");
-                  }}
-                  aria-invalid={!!error}
-                  aria-describedby={error ? `${nameId}-err` : undefined}
-                />
-                {error ? (
-                  <p id={`${nameId}-err`} className={s.err}>
-                    {error}
+              aria-invalid={!!error}
+              hint={error || undefined}
+            />
+
+            <div className={s.signIn}>
+              {acct === "loading" || savingOff ? null : account ? (
+                <>
+                  <p className="desk-label">Your wall</p>
+                  <p className={s.signed} data-announce>
+                    <span>
+                      Signed in as {account.email}. This stub is saved to your wall.
+                    </span>
                   </p>
-                ) : null}
-              </div>
-              <button type="submit" className="btn btn-primary btn-block" disabled={claiming}>
-                Claim my stub
-              </button>
-            </form>
-          )}
+                </>
+              ) : (
+                <>
+                  <p className="desk-label">Save it to your wall</p>
+                  <p className={s.signed}>
+                    <span>We&apos;ll email you a link, so this stub follows you to any phone or laptop.</span>
+                  </p>
+                  <div className={s.signRow}>
+                    <PaperButton type="button" onClick={() => openSignIn({ reason: "claim", returnTo: `${window.location.pathname}${window.location.search}` })}>
+                      Email me a link
+                    </PaperButton>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <Stamp type="submit" block disabled={claiming}>
+              Claim my stub
+              <LeavesMark />
+            </Stamp>
+            <MarkLegend marks={["simulated"]} />
+          </form>
+
+          <aside className={s.qr} aria-label="Claim on your phone">
+            <QrPlaceholder value={here || set} size={25} />
+            <p className={ui.muted}>
+              Open this link on your phone to claim there.
+              <SourceMark p="simulated" />
+            </p>
+          </aside>
         </section>
       </div>
     </PageShell>

@@ -1,0 +1,15 @@
+{
+  "fixture": "staff",
+  "description": "A signed-in account on the ADMIN_EMAILS list. admin.view only, no project access.",
+  "verifyAt": "2026-10-10T12:00:00.000Z",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InRpY2tldHN0dWIuY29udGV4dCJ9.eyJjdHgiOnsic2NoZW1hIjoidGlja2V0c3R1Yi5jb250ZXh0LzEiLCJhY3RvciI6eyJraW5kIjoiYWNjb3VudCIsImlkIjoiYWNjX0ZJWFRVUkVfc3RhZmYxIn0sInRlbmFudCI6eyJpZCI6ImFjY19GSVhUVVJFX3N0YWZmMSJ9LCJyb2xlIjoic3RhZmYiLCJjYXBhYmlsaXRpZXMiOlsiYWNjb3VudC5kZWxldGUiLCJhY2NvdW50LmVtYWlsLmNoYW5nZSIsImFjY291bnQucmVhZCIsImFkbWluLnZpZXciLCJhZ2VudC51c2UiLCJhcnQuZ2VuZXJhdGUiLCJjbGFpbS5yZWRlZW0iLCJjbGFpbS52aWV3IiwiZXZlbnQuY3JlYXRlIiwiZmlsZS5yZWFkIiwib3JkZXIuY3JlYXRlIiwib3JkZXIucmVhZCIsInNlc3Npb24ucmV2b2tlIiwic2hhcmUuY3JlYXRlIiwic2hhcmUudmlldyIsInN0dWIuZHJhZnQiLCJ3YWxsLnB1YmxpYy52aWV3Iiwid2FsbC5wdWJsaXNoIiwid2FsbC5zeW5jIl0sIm1lbWJlcnNoaXBSZXZpc2lvbiI6MSwicmV2b2tlZCI6ZmFsc2UsImVudmlyb25tZW50IjoiZGV2ZWxvcG1lbnQiLCJtb2RlIjoiZml4dHVyZSIsImlzc3VlZEF0IjoiMjAyNi0xMC0xMFQxMjowMDowMC4wMDBaIiwiZXhwaXJlc0F0IjoiMjAyNi0xMC0xMFQxMjowNTowMC4wMDBaIn0sInNpZCI6ImZ4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMyJ9.eQAkfLiqCdkvPj9le_Peyjl5w0GDcPIUzpiEfL2ZM98",
+  "state": {
+    "membershipRevision": 1,
+    "sessionLive": true
+  },
+  "expect": {
+    "ok": true,
+    "role": "staff",
+    "tenant": "acc_FIXTURE_staff1"
+  }
+}

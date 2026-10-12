@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function NewPage() {
   return (
-    <Suspense fallback={<div className="ts-night" style={{ minHeight: "100dvh", background: "var(--ts-bg)" }} />}>
+    <Suspense fallback={<div className="desk-surface" style={{ minHeight: "100dvh" }} />}>
       <NewStub />
     </Suspense>
   );

@@ -8,23 +8,41 @@ permissions:
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Select pinned npm
+        run: npm install --global npm@11.16.0
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - name: Verify analytics consent and page-view ordering in Chrome (offline, synthetic ID)
+        run: node scripts/check-analytics-order.mjs
+      - name: Verify analytics customer journeys in Chrome (offline, synthetic ID, phone and desktop)
+        run: node scripts/check-analytics-journeys.mjs
+      - name: Verify authentication and storage fixtures
+        run: |
+          for suite in foundation access degraded mail-off backup-drill; do
+            npm run verify:product -- --suite "$suite" --mode fixture --evidence-dir /tmp/ticketstub-product-evidence
+          done
       - name: Verify production server on platform port
         env:
           PORT: '43121'
           SMOKE_BASE_URL: http://127.0.0.1:43121
           OPENAI_API_KEY: unused-preview-sentinel
           ANTHROPIC_API_KEY: unused-preview-sentinel
+          TICKETSTUB_RESEARCH_OPENROUTER_API_KEY: unused-preview-sentinel
+          TICKETSTUB_AGENT_OPENROUTER_API_KEY: unused-preview-sentinel
+          TICKETSTUB_ART_OPENROUTER_API_KEY: unused-preview-sentinel
+          TICKETSTUB_RESEARCH_PROVIDER: openrouter
+          TICKETSTUB_AGENT_PROVIDER: openrouter
+          TICKETSTUB_ART_PROVIDER: openrouter
         run: |
           npm start > /tmp/ticketstub-server.log 2>&1 &
           server_pid=$!
@@ -34,3 +52,10 @@ jobs:
             sleep 1
           done
           npm run smoke:production
+      - name: Retain product verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node22-product-evidence
+          path: /tmp/ticketstub-product-evidence
+          if-no-files-found: warn

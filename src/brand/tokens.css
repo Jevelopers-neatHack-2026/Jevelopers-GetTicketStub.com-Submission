@@ -1,6 +1,6 @@
 /* TicketStub master-brand tokens. Source of truth: tokens.json.
-   Day theme (paper) is the default; night (stage) is used for printing, reveal,
-   finishes and the tear moment, or follows the OS dark setting. */
+   The studio is always the day theme (paper): the root pins data-theme="light", so the
+   night block below (kept in sync with the brand kit) is never applied in the app. */
 
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..800,0..100,0..1&family=Inter+Tight:wght@400..600&display=swap");
 

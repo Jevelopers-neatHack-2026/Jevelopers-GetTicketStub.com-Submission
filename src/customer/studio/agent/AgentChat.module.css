@@ -1,36 +1,10 @@
+/* The full chat: paper slips on the desk. Colour only from the desk tokens. */
 .root {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--ts-bg);
-  color: var(--ts-text);
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ts-text) 15%, transparent);
-}
-
-.headerTitle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.close {
-  min-height: 44px;
-  min-width: 44px;
-  border: 0;
-  background: transparent;
-  font-size: 20px;
-  line-height: 1;
-  border-radius: var(--ts-radius-control);
+  color: var(--desk-ink);
 }
 
 .list {
@@ -38,34 +12,41 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 16px;
+  padding: 4px 2px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  user-select: text;
 }
 
 .msg {
-  max-width: 92%;
+  max-width: 94%;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-size: 15px;
-  line-height: 1.4;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font: var(--type-body);
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+.msg p {
+  margin: 0;
 }
 
 .agent {
   align-self: flex-start;
-  background: var(--ts-surface);
-  border-bottom-left-radius: 4px;
+  background: var(--desk-paper);
+  box-shadow:
+    inset 3px 0 0 var(--desk-mark),
+    inset 0 0 0 1px var(--desk-rule),
+    0 1px 0 var(--desk-ledge);
 }
 
 .user {
   align-self: flex-end;
-  background: var(--ts-text);
-  color: var(--ts-bg);
-  border-bottom-right-radius: 4px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge);
 }
 
 .meta {
@@ -73,8 +54,12 @@
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  font-size: 12px;
-  color: var(--ts-text-muted);
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.meta a {
+  color: inherit;
+  text-underline-offset: 3px;
 }
 
 .facts {
@@ -90,15 +75,14 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px;
-  border-radius: 10px;
-  background: var(--ts-bg);
-  border: 1px solid color-mix(in srgb, var(--ts-text) 14%, transparent);
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule);
 }
-
-.factUnsure {
-  border-style: dashed;
-  border-color: var(--ts-orange);
+.fact[data-unsure] {
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+  background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--desk-mark) 9%, transparent) 7px 8px);
 }
 
 .factRow {
@@ -110,56 +94,55 @@
 
 .factLabel {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .ask {
-  font-size: 13px;
+  font: var(--type-label);
   font-weight: 600;
 }
 
-.alts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.suggest {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 8px 16px 0;
-  scrollbar-width: none;
-}
-
-.suggest > * {
-  flex: none;
+.foot {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--desk-rule-strong);
 }
 
 .composer {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 16px max(12px, env(safe-area-inset-bottom));
 }
 
 .composerRow {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .input {
   flex: 1;
   min-width: 0;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 12px;
-  border-radius: var(--ts-radius-control);
-  border: 1.5px solid color-mix(in srgb, var(--ts-text) 30%, transparent);
-  background: var(--ts-bg);
-  color: var(--ts-text);
-  font: inherit;
+  border: 0;
+  border-radius: 6px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  color: var(--desk-ink);
+  font: var(--type-body);
+  user-select: text;
+}
+.input::placeholder {
+  color: var(--desk-ink-soft);
+}
+.input:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
 }
 
 .typing {
-  color: var(--ts-text-muted);
+  color: var(--desk-ink-soft);
   font-style: italic;
 }

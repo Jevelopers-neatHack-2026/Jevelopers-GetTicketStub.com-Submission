@@ -1,0 +1,198 @@
+/* Wall chrome shared by /wall and /u/[token]: the paper desk, the header, the corkboard and its pins.
+   Paper and ink come from the desk tokens. Cork is a material, so its browns are defined here once. */
+
+.page {
+  --cork-base: #c9a272;
+  --cork-dark: #8a6238;
+  --cork-light: #e3c897;
+  --frame: #3a2a1c;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: clip; /* the landing stub flies in from off-screen */
+}
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 16px;
+  padding-top: max(6px, env(safe-area-inset-top));
+}
+.home {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+/* The sidebar (or the phone rail) carries the mark, so the page header never repeats it. */
+@media all {
+  :global([data-nav="on"]) .home {
+    display: none;
+  }
+  :global([data-nav="on"]) .logoOnly {
+    display: none;
+  }
+  /* with the header gone, the headline gets the header's room back */
+  :global([data-nav="on"]) .logoOnly + .main {
+    padding-top: 40px;
+  }
+}
+.home img {
+  height: 22px;
+  width: auto;
+  display: block;
+}
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.main {
+  flex: 1;
+  width: 100%;
+  padding: 8px 16px 56px;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+/* ---------- headline lockup ---------- */
+.head {
+  display: grid;
+  gap: 6px;
+}
+.title {
+  margin: 0;
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 39;
+  letter-spacing: -0.02em;
+}
+.caption {
+  margin: 0;
+  font: var(--type-lede);
+  font-variation-settings: "SOFT" 30, "opsz" 20;
+  font-family: var(--font-display), var(--ts-font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--desk-ink-soft);
+}
+
+/* ---------- the corkboard ---------- */
+.cork {
+  position: relative;
+  border-radius: 6px;
+  padding: 36px 20px 40px;
+  min-height: 320px;
+  background-color: var(--cork-base);
+  background-image:
+    /* chips of lighter cork */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='c' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.06 .08' numOctaves='3' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .88 0 0 0 0 .74 0 0 0 0 .5 0 0 0 4.5 -2.9'/></filter><rect width='100%' height='100%' filter='url(%23c)'/></svg>"),
+    /* dark pores */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='p' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='2' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32 0 0 0 0 .2 0 0 0 0 .1 0 0 0 7 -3.6'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>"),
+    /* fine grain */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .25 0 0 0 0 .15 0 0 0 0 .08 0 0 0 1.6 -.5'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"),
+    /* broad light and shade */
+    radial-gradient(120% 90% at 20% 0%, rgb(255 236 200 / 0.28), transparent 60%),
+    radial-gradient(100% 80% at 90% 110%, rgb(60 36 14 / 0.3), transparent 60%);
+  box-shadow:
+    inset 0 0 0 9px var(--frame),
+    inset 0 0 0 10px rgb(255 255 255 / 0.14),
+    inset 0 10px 26px 9px rgb(40 24 8 / 0.45),
+    0 1px 0 var(--desk-ledge),
+    0 22px 40px -22px rgb(23 20 15 / 0.65);
+  isolation: isolate;
+}
+.cork.corkFlat {
+  /* a strip of cork that holds a paper note or a tray of tools */
+  min-height: 0;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+/* ---------- pins ---------- */
+.pin {
+  --tilt: 0deg;
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  transform: rotate(var(--tilt));
+  pointer-events: none;
+}
+.pin::before {
+  /* the shadow the pin throws on the cork, away from the light */
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 12px;
+  width: 15px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgb(40 24 8 / 0.5);
+  filter: blur(2px);
+  transform: rotate(18deg);
+}
+.pinHead {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgb(255 255 255 / 0.85) 0 1.6px, transparent 2.6px),
+    radial-gradient(circle at 40% 36%, var(--desk-stamp) 0 38%, var(--desk-stamp-ledge) 100%);
+  box-shadow:
+    inset 0 -2px 3px rgb(0 0 0 / 0.3),
+    0 2px 0 var(--desk-stamp-ledge);
+}
+.pinPress {
+  animation: pinPress 260ms var(--desk-spring) both;
+  animation-delay: var(--pin-delay, 0ms);
+}
+@keyframes pinPress {
+  from {
+    opacity: 0;
+    transform: rotate(var(--tilt)) translateY(-18px) scale(1.7);
+  }
+  55% {
+    opacity: 1;
+  }
+}
+
+/* ---------- stubs on the board ---------- */
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 34px 20px;
+}
+
+@media (min-width: 960px) {
+  .top {
+    padding: 8px 32px;
+  }
+  .main {
+    padding: 12px 32px 72px;
+    gap: 24px;
+  }
+  .cork {
+    padding: 52px 40px 56px;
+    min-height: 520px;
+  }
+  .grid {
+    gap: 48px 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinPress {
+    animation: none;
+  }
+}

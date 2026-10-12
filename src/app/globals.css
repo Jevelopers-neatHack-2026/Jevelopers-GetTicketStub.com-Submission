@@ -1,10 +1,16 @@
 @import "../brand/tokens.css";
+@import "../customer/desk/desk.css";
 
-/* TicketStub studio base. Paper by day (default), stage by night (.ts-night, prefers-color-scheme: dark). */
+/* TicketStub studio base. Always cream paper: the app has no dark stage. */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* the left edge the nav takes: set by NavFrame (0 on the landing page and the parts board) */
+:root {
+  --nav-w: 0px;
 }
 
 html,
@@ -21,6 +27,13 @@ body {
   line-height: var(--ts-lh-body);
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
+  /* a long link, address or error never pushes the page sideways: it breaks where it has to (GT-11.4) */
+  overflow-wrap: break-word;
+}
+a,
+strong,
+code {
+  overflow-wrap: anywhere;
 }
 
 h1,
@@ -50,8 +63,12 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--ts-focus);
+  outline: 2px solid var(--desk-focus);
   outline-offset: 3px;
+}
+/* A scroll target we move focus to (skip link, route change) never draws a ring: it is not a control. */
+[tabindex="-1"]:focus {
+  outline: none;
 }
 
 .num {
@@ -148,19 +165,18 @@ button {
   white-space: nowrap;
 }
 
+/* Reduced motion (GT-11.3): nothing loops, nothing travels. Every animation is one instant step to its end state, so
+   no shimmer, pulse or drift keeps going and nothing can flash. Script-driven motion asks the same question itself
+   (matchMedia in the printing feed, the tilt, the tear, both cameras and the cart flight). */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
   }
-}
-.preview-notice {
-  padding: 8px 16px;
-  text-align: center;
-  font-size: 13px;
-  background: #f4ecdd;
-  color: #17140f;
-  border-bottom: 1px solid #c8bcaa;
 }

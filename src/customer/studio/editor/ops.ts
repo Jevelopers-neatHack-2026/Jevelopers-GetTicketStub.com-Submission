@@ -1,6 +1,8 @@
 // Pure stub edits used by the studio editor. Every function returns a new Stub; callers persist with upsertStub.
 import { EDITIONS, currentVersion } from "../types";
 import type { ArtLayer, DesignVersion, Edition, Finish, Material, Stub } from "../types";
+import { applyCorrection } from "../facts/corrections";
+import { contextOf, sameArt } from "../versions/versions";
 
 export type Selectable = "title" | "subtitle" | "facts" | "art";
 
@@ -22,10 +24,6 @@ export function previewEdition(stub: Stub, edition: Edition): Stub {
   return { ...stub, versions: [...stub.versions, v], currentVersionId: v.id };
 }
 
-function sameArt(a: ArtLayer, b: ArtLayer): boolean {
-  return a.kind === b.kind && a.src === b.src && a.seed === b.seed && a.vibe === b.vibe;
-}
-
 function findVersion(stub: Stub, edition: Edition, art: ArtLayer): DesignVersion | undefined {
   return stub.versions.find((v) => v.edition === edition && sameArt(v.art, art));
 }
@@ -36,7 +34,7 @@ export function setEdition(stub: Stub, edition: Edition): Stub {
   if (cur.edition === edition) return stub;
   const existing = findVersion(stub, edition, cur.art);
   if (existing) return atVersion(stub, existing.id);
-  const v: DesignVersion = { id: uid(), parentId: cur.id, edition, art: cur.art, createdAt: new Date().toISOString() };
+  const v: DesignVersion = { id: uid(), parentId: cur.id, edition, art: cur.art, createdAt: new Date().toISOString(), context: contextOf(stub) };
   return { ...stub, versions: [...stub.versions, v], currentVersionId: v.id };
 }
 
@@ -49,7 +47,7 @@ export function stepEdition(stub: Stub, dir: 1 | -1): Stub {
 /** An art change is always a new design version. */
 export function addArtVersion(stub: Stub, art: ArtLayer): Stub {
   const cur = currentVersion(stub);
-  const v: DesignVersion = { id: uid(), parentId: cur.id, edition: cur.edition, art, createdAt: new Date().toISOString() };
+  const v: DesignVersion = { id: uid(), parentId: cur.id, edition: cur.edition, art, createdAt: new Date().toISOString(), context: contextOf(stub) };
   return { ...stub, versions: [...stub.versions, v], currentVersionId: v.id };
 }
 
@@ -69,17 +67,9 @@ export function altLabel(value: string): string {
   return looksLikeIsoDate(value) ? formatDate(value) : value;
 }
 
-/** Confirm a fact: set its value, mark it certain, and keep the printed label in step. */
-export function setFactValue(stub: Stub, factId: string, value: string): Stub {
-  let dateISO = stub.event.dateISO;
-  const facts = stub.event.facts.map((f) => {
-    if (f.id !== factId) return f;
-    const isDate = looksLikeIsoDate(value);
-    if (isDate) dateISO = value;
-    const label = isDate ? formatDate(value, { day: "numeric", month: "short" }) : value;
-    return { ...f, value, label, confidence: 1, kept: true };
-  });
-  return { ...stub, event: { ...stub.event, facts, dateISO } };
+/** Answer a fact: a new value is recorded as your correction and a repeat as your confirmation, with the research result kept in the stub's history. */
+export function setFactValue(stub: Stub, factId: string, value: string, reason?: string): Stub {
+  return applyCorrection(stub, { factId, value, reason });
 }
 
 export function toggleKept(stub: Stub, factId: string): Stub {
@@ -92,9 +82,12 @@ export function setHidden(stub: Stub, field: string, hidden: boolean): Stub {
   return { ...stub, personal: { ...stub.personal, hiddenFields: hidden ? [...rest, field] : rest } };
 }
 
-export function cycleFont(stub: Stub): Stub {
-  const next = ((stub.personal.titleFont + 1) % 4) as 0 | 1 | 2 | 3;
-  return { ...stub, personal: { ...stub.personal, titleFont: next } };
+export function setFont(stub: Stub, index: 0 | 1 | 2 | 3): Stub {
+  return { ...stub, personal: { ...stub.personal, titleFont: index } };
+}
+
+export function setTitleColour(stub: Stub, value: string): Stub {
+  return { ...stub, personal: { ...stub.personal, titleColor: value } };
 }
 
 /** "" means the edition picks the colour from the art. */
@@ -105,12 +98,6 @@ export const TITLE_SWATCHES: { value: string; label: string }[] = [
   { value: "#F4ECDD", label: "Cream" },
 ];
 
-export function cycleColour(stub: Stub): Stub {
-  const i = TITLE_SWATCHES.findIndex((s) => s.value === stub.personal.titleColor);
-  const next = TITLE_SWATCHES[(i + 1) % TITLE_SWATCHES.length].value;
-  return { ...stub, personal: { ...stub.personal, titleColor: next } };
-}
-
 export function swatchLabel(value: string): string {
   return TITLE_SWATCHES.find((s) => s.value === value)?.label ?? "Custom";
 }
@@ -119,8 +106,10 @@ export function toggleFoil(stub: Stub): Stub {
   return { ...stub, personal: { ...stub.personal, foilTitle: !stub.personal.foilTitle } };
 }
 
+/** Holo is a screen effect on every stock now (see capabilities.ts); it is never printed, so no stock rules it out. */
 export function holoAllowed(m: Material): boolean {
-  return m === "print" || m === "framed";
+  void m;
+  return true;
 }
 
 export function setMaterial(stub: Stub, material: Material): Stub {
@@ -183,4 +172,37 @@ export function hideSelection(stub: Stub, sel: Selectable): Stub {
 }
 export function hiddenLabel(stub: Stub, key: string): string {
   return stub.event.facts.find((f) => f.id === key)?.label ?? key;
+}
+
+/** A committed studio change, in the analytics catalog's words. */
+export type EditChange = "edition" | "version_select" | "material" | "finish" | "font" | "title_color" | "foil" | "visibility" | "fact_kept" | "fact_correct" | "fact_confirm" | "fact_undo";
+
+/**
+ * What one committed edit changed, compared field by field (never the values). Art versions, photos, the note,
+ * friends and the tear are left out on purpose: their own outcome events report them (remix_result, photo_add,
+ * note_edit, friends_update, tear_complete), so the editor's save does not count them a second time.
+ */
+export function editChanges(prev: Stub, next: Stub): EditChange[] {
+  const out: EditChange[] = [];
+  const a = currentVersion(prev);
+  const b = currentVersion(next);
+  if (prev.currentVersionId !== next.currentVersionId) {
+    // a different edition is a style (restoring one from the history included); an existing version is a pick from the history;
+    // a brand-new version in the same edition is new art, which its remix result reports
+    if (a.edition !== b.edition) out.push("edition");
+    else if (prev.versions.some((v) => v.id === next.currentVersionId)) out.push("version_select");
+  }
+  if (prev.material !== next.material) out.push("material");
+  if (prev.finish !== next.finish) out.push("finish");
+  if (prev.personal.titleFont !== next.personal.titleFont) out.push("font");
+  if (prev.personal.titleColor !== next.personal.titleColor) out.push("title_color");
+  if (prev.personal.foilTitle !== next.personal.foilTitle) out.push("foil");
+  if (prev.personal.hiddenFields.join("|") !== next.personal.hiddenFields.join("|")) out.push("visibility");
+  const added = (next.corrections ?? []).slice((prev.corrections ?? []).length);
+  for (const c of added) out.push(c.kind === "undo" ? "fact_undo" : c.kind === "confirm" ? "fact_confirm" : "fact_correct");
+  if (!added.length) {
+    const keptBefore = new Map(prev.event.facts.map((f) => [f.id, !!f.kept]));
+    if (next.event.facts.some((f) => keptBefore.has(f.id) && keptBefore.get(f.id) !== !!f.kept)) out.push("fact_kept");
+  }
+  return out;
 }

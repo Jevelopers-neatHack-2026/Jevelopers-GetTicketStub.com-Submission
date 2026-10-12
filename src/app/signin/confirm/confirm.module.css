@@ -1,0 +1,48 @@
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px 0 48px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 40;
+  letter-spacing: -0.02em;
+  color: var(--desk-ink);
+  margin: 0;
+}
+
+.lede {
+  font: var(--type-lede);
+  color: var(--desk-ink-soft);
+  margin: 0;
+}
+
+.address {
+  color: var(--desk-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.stub {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  margin: 8px 0;
+  background: var(--desk-raised);
+  box-shadow: 0 1px 0 var(--desk-rule), 0 14px 28px -16px rgba(23, 20, 15, 0.45);
+  transform: rotate(-1deg);
+}
+
+.form {
+  margin-top: 8px;
+}
+
+@media (min-width: 960px) {
+  .sheet {
+    padding-top: 64px;
+  }
+}

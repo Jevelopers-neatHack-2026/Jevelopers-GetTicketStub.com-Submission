@@ -1,0 +1,22 @@
+{
+  "schema": "ticketstub.context/1",
+  "key": "fixture-key.json",
+  "verifier": "verify.mjs",
+  "fixtures": [
+    "owner.json",
+    "captain.json",
+    "staff.json",
+    "guest.json",
+    "unknown.json",
+    "malformed.json",
+    "forged.json",
+    "stale.json",
+    "revoked.json",
+    "expired.json",
+    "unsupported-version.json",
+    "cross-project-a.json",
+    "cross-project-b.json",
+    "tenant-a-owner.json",
+    "tenant-b-owner.json"
+  ]
+}
