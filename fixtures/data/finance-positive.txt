@@ -1,0 +1,1 @@
+{"estimate":"1.00","confirmed":"1.10","adjustment":"0.10","currency":"USD","synthetic_sales":"0.00"}

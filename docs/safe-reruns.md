@@ -55,7 +55,7 @@ A quarantine object is optional and is a record, not an exemption. The input car
 
 ```
 python3 tools/rerun_report.py /tmp/history.json
-python3 -B -m unittest discover -s tests
+python3 -B -m unittest -v tests.test_rerun_report
 ```
 
 The first command reports on a local history file you supply; the second runs the unit tests.

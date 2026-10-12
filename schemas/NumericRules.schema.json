@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "description": "Owner values are required inputs; no numeric target is invented by the harness.",
+  "properties": {
+    "owner_decision_ref": {
+      "title": "Owner Decision Ref",
+      "type": "string"
+    },
+    "ratified": {
+      "default": false,
+      "title": "Ratified",
+      "type": "boolean"
+    },
+    "uncertainty_method": {
+      "const": "paired-family-accuracy",
+      "title": "Uncertainty Method",
+      "type": "string"
+    },
+    "minimum_held_out": {
+      "minimum": 1,
+      "title": "Minimum Held Out",
+      "type": "integer"
+    },
+    "minimum_families": {
+      "minimum": 2,
+      "title": "Minimum Families",
+      "type": "integer"
+    },
+    "bootstrap_repeats": {
+      "minimum": 100,
+      "title": "Bootstrap Repeats",
+      "type": "integer"
+    },
+    "maximum_interval_width": {
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Maximum Interval Width",
+      "type": "number"
+    },
+    "minimum_lower_difference": {
+      "maximum": 1,
+      "minimum": -1,
+      "title": "Minimum Lower Difference",
+      "type": "number"
+    },
+    "safety_row_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Safety Row Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "owner_decision_ref",
+    "uncertainty_method",
+    "minimum_held_out",
+    "minimum_families",
+    "bootstrap_repeats",
+    "maximum_interval_width",
+    "minimum_lower_difference",
+    "safety_row_ids"
+  ],
+  "title": "NumericRules",
+  "type": "object"
+}

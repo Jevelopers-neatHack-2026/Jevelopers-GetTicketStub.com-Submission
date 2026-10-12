@@ -30,6 +30,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Unit tests
-        run: python -m unittest discover -s tests -v
+        run: python -m unittest -v tests.test_rerun_report
       - name: Compile rerun report tool
         run: python -m py_compile tools/rerun_report.py

@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "PackagePin": {
+      "additionalProperties": false,
+      "description": "Exact privately authorized archive, independent of source conformance.",
+      "properties": {
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "archive_sri": {
+          "pattern": "^sha512-[A-Za-z0-9+/=]+$",
+          "title": "Archive Sri",
+          "type": "string"
+        },
+        "content_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Digest",
+          "type": "string"
+        },
+        "npm_version": {
+          "title": "Npm Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "archive_sha256",
+        "archive_sri",
+        "content_digest",
+        "npm_version"
+      ],
+      "title": "PackagePin",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Reviewed source and manifest bytes required before loading producer code.",
+  "properties": {
+    "package": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PackagePin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Revision",
+      "type": "string"
+    },
+    "tree": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Tree",
+      "type": "string"
+    },
+    "lockfile_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Lockfile Digest",
+      "type": "string"
+    },
+    "schema_manifest_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Schema Manifest Digest",
+      "type": "string"
+    },
+    "fixture_manifest_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Fixture Manifest Digest",
+      "type": "string"
+    },
+    "catalog_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Catalog Digest",
+      "type": "string"
+    },
+    "node_version": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "title": "Node Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision",
+    "tree",
+    "lockfile_digest",
+    "schema_manifest_digest",
+    "fixture_manifest_digest",
+    "catalog_digest",
+    "node_version"
+  ],
+  "title": "ContractPin",
+  "type": "object"
+}

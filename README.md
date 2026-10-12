@@ -11,7 +11,7 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
-  <a href="#status"><img alt="Status: documentation and evidence baseline, no cross-repository evaluator on main" src="https://img.shields.io/badge/status-docs%20%2B%20evidence-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: verification tooling; integrated acceptance pending" src="https://img.shields.io/badge/status-tooling%20candidate-B4693E?style=flat-square&labelColor=17140F"></a>
   <a href="planning/acceptance-checklist.md"><img alt="Acceptance checklist: 47 criteria, 3 sponsor criteria owner-accepted, 44 planned" src="https://img.shields.io/badge/criteria-3%20accepted%20%C2%B7%2044%20planned-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
@@ -19,16 +19,119 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 
 ## Status
 
-**Docs and evidence baseline.** `main` contains planning documents and dated evidence records, the [`entire-graph` workflow](.github/workflows/entire-graph.yml), and the Python scripts that accompany the CFO.ai evidence (model, export verification, Excel recalculation check). It has no cross-repository evaluator, scenario runner or fixtures, and no package to install.
+This is incremental runner/SDK verification tooling: a typed CLI, inert fixtures, scenario
+oracles (42 cases, 142 obligations), benchmark statistics, immutable reports and offline CI.
+Its scope is the tooling only. Passing CI and review are not product proof. Integrated product
+acceptance still needs owner runners, exact composed release pins, ratified datasets and
+policy, and authorized real evidence. The producer release, adoption and product holds are
+retained, and nothing here claims producer acceptance.
 
-The graph workflow runs only on pushes to `main` and its scheduled `main` run. It has read-only repository access and uploads artifacts; pull request and manually selected-ref runs are disabled. It no longer pushes generated instruction branches. To publish instruction changes, prepare them through a separate reviewed pull request.
+The `entire-graph` workflow runs on pushes to `main` and its intended weekly schedule. It has read-only repository permissions and uploads artifacts. Pull-request and manually selected-ref triggers are disabled, so it does not automatically publish generated instruction branches. Prepare instruction updates through a separate reviewed pull request.
 
-- The [JSON tracker](planning/acceptance-checklist.json) on `main` has 47 criteria: **3 `verified`** (the sponsor criteria SPN-01, SPN-02 and SPN-03, each owner-accepted on 2026-10-11 by CompleteDotTech via chat instruction relayed by an agent; canonical owner roles are Finance and reliability for SPN-01 and SPN-03, and Agent and research for SPN-02) and **44 `planned`**. No other criterion has implementation evidence, and this does not verify the product.
-- Each acceptance carries qualifications that are kept in the tracker notes and the [evidence index](evidence/README.md): Neatlogs traces are owner-reported and curated, with raw backend receipts absent (SPN-01); Entire has one Claude checkpoint plus graph snapshots, with local capture removed and the graph plugin version unpinned (SPN-02); CFO.ai figures are hypothetical forecasts with no actual revenue, and the Finance summary export and submission remain open (SPN-03).
-- **CFO.ai revision 2 generic export:** the owner's sponsor acceptance of SPN-03 is not approval of the generic editable forecast export. Finance's latest `REQUEST_CHANGES` on [issue #20](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20) leaves CFO-R2-001 (a blank cash issue in that export) unresolved, so treat the generic export as not approved until it is closed.
-- Evidence artifacts on `main`: [Neatlogs trace record](evidence/neatlogs/2026-10-11/README.md), [Entire checkpoint and entire-graph snapshots](evidence/entire/2026-10-11/README.md) (the `entire graph` workflow is described there; snapshots come from per-repository GitHub Actions at exact `main` commits), and the CFO.ai plan ([revision 2](evidence/cfo-ai/2026-10-11-r2/README.md), [original](evidence/cfo-ai/2026-10-11/README.md)).
-- Not merged: [draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23) would add pinned integration verification tooling, including a cross-repository evaluator. It is a draft, and nothing from it is acceptance evidence for `main`.
-- Planned work is tracked in [IE-EPIC #1](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1) and its linked IE issues, ending with the [IE-12 release gate](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22).
+Complete benchmark work in [issue #15](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15)
+and [issue #16](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16) is
+deferred until after deployment by explicit user instruction, as an initial-deployment
+exception. Benchmark promotion stays blocked pending ratified evidence, and the 142
+obligations, master checklist states and policy are unchanged.
+
+Print-invalid component verification is **blocked** and out of this change. The experimental
+print slice (nested Docker plus Bubblewrap execution) did not run in CI and is kept as work
+in progress in draft [PR #40](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/40).
+Nothing here claims print containment or print execution evidence.
+
+- SPN-01 (Neatlogs), SPN-02 (Entire) and SPN-03 (CFO.ai) are owner-accepted as recorded in the
+  [master checklist](planning/acceptance-checklist.md) and [evidence index](evidence/README.md).
+  The remaining 44 criteria are planned. These owner acceptances were relayed from chat;
+  their chronology and artifact limitations remain in the dated records.
+- Neatlogs evidence includes four screenshots and a curated owner/agent summary of
+  reported research, agent and art runs. Exact trace/deployment bindings, malformed-art
+  recovery, delivery cause and billing remain unverified. The later art screenshot shows
+  model steps, tokens and timings; it does not close the complete IE-07 workflow or
+  establish EVAL-02 comparable improvement. See the [qualified record](evidence/neatlogs/2026-10-11/README.md).
+- Entire evidence covers one Claude checkpoint and repository graph snapshots. After the
+  initial no-mirror record, the owner reported on 2026-10-11 that hosted mirrors for all
+  10 code repos and `entire-checkpoints` were Synced, but the hosted Sessions view showed
+  no transcript. Git-based retrieval remains the verified path. No Codex checkpoint is
+  recorded, and the graph plugin version remains unpinned. See the chronological
+  [checkpoint record](evidence/entire/2026-10-11/checkpoint.md).
+- CFO.ai revision 2 is accepted with hypothetical forecasts; the authoritative Finance
+  summary export, actual cash, demo coverage and submission remain open.
+- **CFO.ai revision 2 generic export:** the owner's sponsor acceptance of SPN-03 is not approval of the
+  generic editable forecast export. Finance's latest `REQUEST_CHANGES` on
+  [issue #20](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20) leaves CFO-R2-001
+  (a blank cash issue in that export) unresolved, so treat the generic export as not approved until it is closed.
+- The shared owner confirmed (shared-contracts SC31, comment 6115337714) that the same immutable
+  0.9.7 archive `d432ad5` (`771a9f5`) may be used for private offline development. That is not
+  a release or adoption approval. The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
+  and 1,641 frozen fixture cases, with separate source and installed SDK receipts.
+  [Private consumption instructions](docs/execution-protocol.md#canonical-candidate-conformance)
+  describe exact package pins, readonly callers and the remaining owner boundaries.
+- Local tooling and canonical contract checks do not establish complete integrated
+  product acceptance. Missing assembly is reported as blocked.
+- Accepting the owner decision memos does not grant any finance, payment or provider authority;
+  see the Decisions section.
+- [PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23) carries this
+  incremental runner/SDK tooling under the user's merge-when-ready request. That request does
+  not approve or accept any producer release, adoption or product claim.
+- Planned work is tracked in [IE-EPIC #1](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1)
+  and its linked IE issues, ending with the [IE-12 release gate](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22).
+
+## Run the tooling
+
+Install Python 3.13 and uv, then:
+
+```sh
+uv sync --frozen
+uv run integration-evals validate
+uv run pytest
+uv run basedpyright
+uv run ruff check
+uv run ruff format --check
+uv run integration-evals run
+```
+
+The standalone stdlib evidence-audit and rerun tools (`tools/`, `tests/test_audit_evidence.py`,
+`tests/test_rerun_report.py`) are excluded from the strict package scope above and have their
+own checks, which also run in CI. The stdlib ruff command names `tools` and the two test files
+explicitly; do not run it with a bare `--config` over the whole tree, which would scan the
+Python 3.13 package sources with the wrong rules:
+
+```sh
+uv run basedpyright -p pyrightconfig.stdlib.json
+uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
+```
+
+Ruff checks project Python source and tests. Its five exact exclusions in `pyproject.toml`
+are the dated CFO.ai capture scripts under `evidence/cfo-ai/2026-10-11/` and
+`evidence/cfo-ai/2026-10-11-r2/`. These accepted evidence inputs remain byte-for-byte
+unchanged and are covered by their `SHA256SUMS` manifests and recorded artifact/model
+verification; formatting them would invalidate the accepted capture. No project source
+or test file is excluded by this evidence exception.
+
+The final command writes JSON, JUnit, coverage, Markdown, and a per-criterion release
+audit under `reports/runs/<run-id>/`. Exit 2 means required product boundaries are
+blocked; it is not a passing integration run. Offline tooling tests have their own
+pass/fail result. The current fixture catalog contains 20 original synthetic inputs,
+and the scenario registry contains 42 cases. The 12 benchmark rows are methodology
+smoke data and cannot satisfy held-out sample requirements.
+
+To execute actual composed boundaries, provide an app-owned manifest and clean pinned
+component checkouts:
+
+```sh
+uv run integration-evals run --manifest /approved/release.json --workspace /approved/workspace
+uv run integration-evals run --mode recorded --manifest /approved/release.json --workspace /approved/workspace
+uv run integration-evals inspect reports/runs/<run-id>/run.json
+uv run integration-evals benchmark benchmarks/corpus.json /approved/raw-samples.json
+```
+
+Sandbox/live modes require explicit current authority, credential presence, eligibility,
+caps, permitted operations and cleanup. `--authorize-paid` is an execution confirmation
+within existing owner authority, not a budget grant. No paid calls occur by default.
+Provider modes and source origins are recorded separately.
+
+[Execution protocol and owner handoff](docs/execution-protocol.md) describes the manifest,
+runner observations, isolation, evidence, benchmarks, reruns, and remaining obligations.
 
 ### Decisions
 
@@ -40,10 +143,11 @@ The graph workflow runs only on pushes to `main` and its scheduled `main` run. I
 
 ```sh
 python3 tools/audit_evidence.py
-python3 -m unittest discover -s tests
+python3 -m unittest -v tests.test_audit_evidence
+python3 -m unittest -v tests.test_rerun_report
 ```
 
-The audit ships in the same change as this documentation. These checks cover evidence **integrity only** (for example, files and checksums). They do not promote any criterion to accepted or verified and are not acceptance evidence.
+These stdlib-only checks (Python 3.11+, no package install) run separately from the Python 3.13 package suite above (`uv run pytest`). They cover evidence **integrity only** (for example, files and checksums). They do not promote any criterion to accepted or verified and are not acceptance evidence.
 
 ## What's here
 

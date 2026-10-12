@@ -1,0 +1,59 @@
+[project]
+name = "integration-evals"
+version = "0.1.0"
+description = "Pinned cross-component verification and honest evidence gates"
+requires-python = ">=3.13"
+dependencies = ["pydantic>=2.12,<3", "typer>=0.20,<1"]
+
+[project.scripts]
+integration-evals = "integration_evals.cli:app"
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.14",
+    "basedpyright>=1.31",
+    "hatchling>=1.32.4",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.13"
+include = ["src", "tests", "integration_tests", "component_tests"]
+# Standalone stdlib tools/tests use pyrightconfig.stdlib.json instead.
+exclude = ["tools", "tests/test_audit_evidence.py", "tests/test_rerun_report.py"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = [
+    "tools",
+    "tests/test_audit_evidence.py",
+    "tests/test_rerun_report.py",
+    "evidence/cfo-ai/2026-10-11/model.py",
+    "evidence/cfo-ai/2026-10-11/verify-native-export.py",
+    "evidence/cfo-ai/2026-10-11-r2/excel-recalc-check.py",
+    "evidence/cfo-ai/2026-10-11-r2/model.py",
+    "evidence/cfo-ai/2026-10-11-r2/verify-native-export.py",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["COM812", "ISC001", "D203", "D213", "CPY001", "FBT001", "FBT002"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "ARG", "PLR2004", "SLF001", "D"]
+"integration_tests/**/*.py" = ["S101", "ARG", "PLR2004", "SLF001", "D"]
+"component_tests/**/*.py" = ["S101", "ARG", "PLR2004", "SLF001", "D"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["integration_evals.models.Record"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+filterwarnings = ["error"]

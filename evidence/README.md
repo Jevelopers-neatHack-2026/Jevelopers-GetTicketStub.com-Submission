@@ -10,6 +10,6 @@ This index distinguishes planned evidence from dated records of actually verifie
 | Integrated journey | Research, edit, approval, printable artifacts, sandbox fulfillment, financial attribution | planned |
 | Implementation history | Inspectable repository commits within permitted coding window | planned |
 
-Integrity checks (`python3 tools/audit_evidence.py`; `python3 -m unittest discover -s tests`; see [evidence audit](../docs/evidence-audit.md)) cover artifact integrity only and do not promote any criterion or replace owner acceptance.
+Integrity checks (`python3 tools/audit_evidence.py`; `python3 -m unittest -v tests.test_audit_evidence`; see [evidence audit](../docs/evidence-audit.md)) cover artifact integrity only and do not promote any criterion or replace owner acceptance.
 
 Maintain original cutoff and provenance. Never fabricate component pins or financial outcomes. See the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) and [official rules](https://neatlogs.com/hackathon).

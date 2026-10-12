@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "Leaf": {
+      "additionalProperties": false,
+      "description": "Exact acceptance ID and source URL from the launch inventory.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "issue": {
+          "title": "Issue",
+          "type": "string"
+        },
+        "criterion": {
+          "title": "Criterion",
+          "type": "string"
+        },
+        "status": {
+          "const": "planned",
+          "default": "planned",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "issue",
+        "criterion"
+      ],
+      "title": "Leaf",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Frozen acceptance source with independently reportable unresolved rows.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_digest": {
+      "title": "Source Digest",
+      "type": "string"
+    },
+    "leaves": {
+      "items": {
+        "$ref": "#/$defs/Leaf"
+      },
+      "title": "Leaves",
+      "type": "array"
+    }
+  },
+  "required": [
+    "source_digest",
+    "leaves"
+  ],
+  "title": "Requirements",
+  "type": "object"
+}

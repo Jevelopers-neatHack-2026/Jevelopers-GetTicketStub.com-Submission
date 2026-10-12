@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "Independent mandatory registry prevents deleting cases to manufacture success.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "mandatory_case_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Mandatory Case Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "mandatory_case_ids"
+  ],
+  "title": "Selection",
+  "type": "object"
+}

@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "Outcome": {
+      "description": "Execution result; a blocked criterion has a skipped execution.",
+      "enum": [
+        "passed",
+        "failed",
+        "skipped",
+        "error"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "Quarantine": {
+      "additionalProperties": false,
+      "description": "Local triage metadata; expiry never automatically releases a case.",
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "owner": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Owner",
+          "type": "string"
+        },
+        "remediation_issue": {
+          "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/issues/[1-9][0-9]*$",
+          "title": "Remediation Issue",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "reproduction": {
+          "const": "integration-evals history-report",
+          "default": "integration-evals history-report",
+          "title": "Reproduction",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "owner",
+        "remediation_issue",
+        "reason",
+        "expires_at"
+      ],
+      "title": "Quarantine",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Machine-readable register; denominators are derived from retained samples.",
+  "properties": {
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Requirements",
+      "type": "array"
+    },
+    "classification": {
+      "enum": [
+        "passed",
+        "flaky",
+        "consistently_failed",
+        "blocked"
+      ],
+      "title": "Classification",
+      "type": "string"
+    },
+    "outcomes": {
+      "items": {
+        "$ref": "#/$defs/Outcome"
+      },
+      "title": "Outcomes",
+      "type": "array"
+    },
+    "run_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Run Ids",
+      "type": "array"
+    },
+    "failures": {
+      "title": "Failures",
+      "type": "integer"
+    },
+    "denominator": {
+      "title": "Denominator",
+      "type": "integer"
+    },
+    "last_good_revision": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Last Good Revision"
+    },
+    "last_bad_revision": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Last Bad Revision"
+    },
+    "failure_signature": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Failure Signature"
+    },
+    "owner": {
+      "title": "Owner",
+      "type": "string"
+    },
+    "remediation_issue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Remediation Issue"
+    },
+    "reproduction_command": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reproduction Command",
+      "type": "array"
+    },
+    "triage_complete": {
+      "title": "Triage Complete",
+      "type": "boolean"
+    },
+    "quarantine": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quarantine"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quarantine_expired": {
+      "title": "Quarantine Expired",
+      "type": "boolean"
+    },
+    "release_blocked": {
+      "title": "Release Blocked",
+      "type": "boolean"
+    },
+    "source": {
+      "const": "preserved-evaluation-receipts",
+      "default": "preserved-evaluation-receipts",
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "requirements",
+    "classification",
+    "outcomes",
+    "run_ids",
+    "failures",
+    "denominator",
+    "last_good_revision",
+    "last_bad_revision",
+    "failure_signature",
+    "owner",
+    "remediation_issue",
+    "reproduction_command",
+    "triage_complete",
+    "quarantine",
+    "quarantine_expired",
+    "release_blocked"
+  ],
+  "title": "CaseHistory",
+  "type": "object"
+}
