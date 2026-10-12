@@ -64,6 +64,15 @@ async function runLeaf(
 	suite: Exclude<SuiteName, "release">,
 	evidenceDir: string,
 ) {
+	if (suite === "artifact-storage") {
+		const result = await runPrivateSuite(suite, evidenceDir);
+		if (!result)
+			throw new VerificationFailure(
+				"RUNTIME_FAILURE",
+				"Complete local storage conformance evidence is required.",
+			);
+		return result;
+	}
 	if (suiteRegistry[suite].state === "external-blocked") {
 		await runPrivateSuite(suite, evidenceDir);
 		throw new VerificationFailure(
@@ -142,6 +151,7 @@ export async function dispatchVerification(
 			mode: args.mode,
 			status: "failed",
 			externalState:
+				args.suite === "artifact-storage" ||
 				suiteRegistry[args.suite].state === "external-blocked"
 					? "external-blocked"
 					: null,
