@@ -1507,7 +1507,7 @@ const ev = document.getElementById('ev');
 function focusMaker(){   // wait until the finale is actually showing, then put the cursor in the field
   const t0 = performance.now(); let stopped = false; const stop = () => { stopped = true; };
   addEventListener('wheel', stop, { once: true, passive: true }); addEventListener('touchstart', stop, { once: true, passive: true });
-  const tryFocus = () => { if (stopped) return; if (!finale.inert){ ev.focus({ preventScroll: true }); return; } if (performance.now() - t0 < 2500) requestAnimationFrame(tryFocus); };
+  const tryFocus = () => { if (stopped) return; if (!finale.inert){ ev.focus(); return; } if (performance.now() - t0 < 2500) requestAnimationFrame(tryFocus); };
   requestAnimationFrame(tryFocus);
 }
 document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
