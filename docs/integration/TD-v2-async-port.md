@@ -28,7 +28,7 @@ read(request: {
 - **Authorization seam**: `authorization = { revision, token(signal) }`. The token is requested fresh for every read, handed to the port, and never rendered, logged or placed in a URL. A `null` token means no read is attempted and the state is `unauthorized`.
 - **Host gate**: `availability = { status: 'available' } | { status: 'refused', reason }` is explicit and required. `refused` never calls the port. The dashboard does not compute it from a grant, and **the current host Finance grant map is UNSUPPORTED**: nothing here maps, aliases or approves a Finance grant, and no owner approval is implied.
 - **Identity**: the response must match the requested scope (all five fields), snapshot id, query hash and summary hash by string equality (`checkFinanceV2Page`). The browser does not compute or verify hashes, is not an authoritative artifact and does no money math.
-- **Pagination is unsupported.** The frozen handoff states that the snapshot reader returns the authoritative first page only, and that a continuation page is not byte-identical and is rejected. v2 continuation is unaccepted, so the request carries no cursor (`FINANCE_V2_PAGINATION = 'unsupported'`) and `hasMore` / `nextCursor` are shown as delivered with "no further page is fetched". No query is invented.
+- **Pagination is a typed, snapshot-bound continuation** (`FINANCE_V2_PAGINATION = 'snapshot-bound-cursor'`); see [Transaction paging](#transaction-paging). A static `FinanceV2View` without a connected read still fetches nothing and shows "no further page is fetched".
 
 ## Lifecycle and state accuracy
 
@@ -50,6 +50,20 @@ read(request: {
 | 5xx | error `server` | yes |
 | timeout (`code: 'TIMEOUT'`, `TimeoutError` or hook timeout) | error `timeout` | yes |
 | anything else | error `failed` | no |
+
+## Transaction paging
+
+Fields follow `FinancialSummaryQueryV2` (`source/schema-v2.ts`, byte-pinned, never executed or edited): `cursor` (opaque, 1..2048), `pageSize` (1..500) and the snapshot id. The request is the first-page request plus `cursor?` / `pageSize?`; the host-stated snapshot id, query hash and summary hash, scope, token and revision are repeated on **every** page and each answer is checked against them again (`SNAPSHOT_MISMATCH`, `QUERY_HASH_MISMATCH`, `SUMMARY_HASH_MISMATCH`, `SCOPE_MISMATCH`).
+
+- **Opaque cursor.** `nextCursor` is carried back verbatim as the next request's `cursor`. It is never decoded, parsed, displayed or stored by the dashboard; only its length (1..2048) and its presence are checked. `hasMore` without a usable `nextCursor`, or `nextCursor` without `hasMore`, is refused (`INVALID_SHAPE`, `/nextCursor`).
+- **One page at a time.** Pages are replaced, not accumulated, and no page total is computed or invented: the summary is the one delivered for the snapshot. The history is a list of cursors plus the detail ids of the pages left behind.
+- **Replay guard.** A page that repeats a detail id of an earlier page of the trail (or within itself), or whose `nextCursor` points back into the trail, is refused as `PAGE_REPLAY` without amounts.
+- **Next / Previous.** Real buttons in a labelled `nav`. Both show loading (no earlier amount) and move focus to the view heading, only while focus is on `<body>` or inside the view. Previous re-reads the earlier page with a fresh authorization; nothing is cached. A second click before the render is ignored. Non-ready states (error, refused, missing, restricted, unauthorized, loading) on a continuation offer **Return to first page**.
+- **Resets.** A change of scope, actor, authorization revision, host availability, snapshot or hash, port, `pageSize` or the transaction filters aborts the page in flight, drops its ignored-abort late answer and returns to the first page with an empty history (also on an A -> B -> A cycle).
+- **Reload / deep link.** The host keeps the cursor in its own context and passes it once as `initialCursor` (`onCursorChange` tells it what is requested). It is cursor metadata, not a credential, and **a URL cursor alone is never authority**: the port decides, and the answer must still match the host's scope, snapshot and hashes. A malformed one (empty, over 2048 characters) is refused before any read. A deep-linked page is labelled "Linked page (position from the first page unknown)" and Previous returns to the first page. A different deep link means the host remounts the view.
+- **INTEGRATED** accepts no port and no cursor reaches anything; real grant mapping is still pending.
+
+Limits: the only multi-page data is `integration/fixture-host/finance-v2-paged.ts`, **hand-authored synthetic** pages (not Finance output, not producer-produced). Producer continuation pages 2/3 of the SAME snapshot/query/hashes were requested from Finance (comment 6124005792) and are still pending, so produced multi-page browser conformance and the scoped ACK for it are NOT done. The nine pinned producer files are unchanged. No CFO export integration.
 
 ## Integrated mode
 

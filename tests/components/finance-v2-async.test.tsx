@@ -58,19 +58,19 @@ describe('port resolution: integrated mode can never reach a port or a fixture',
     expect(screen.getByRole('status')).toHaveTextContent('No Finance v2 read port was provided');
     expect(amountsShown()).toBe(false);
   });
-  it('keeps fixtures, hashing, downloads and cursors out of the port and connected sources', () => {
-    for (const file of ['async-port.ts', 'FinanceV2ConnectedView.tsx']) {
+  it('keeps fixtures, hashing, downloads, cursor decoding and URL or storage access out of the port, check and view sources', () => {
+    for (const file of ['async-port.ts', 'FinanceV2ConnectedView.tsx', 'check.ts', 'FinanceV2Views.tsx']) {
       // Comments may name what the code does not do; only executable text is checked.
       const source = readFileSync(`${process.cwd()}/src/views/finance-v2/${file}`, 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
-      expect(source).not.toMatch(/fixtures|crypto|subtle|createObjectURL|\bBlob\b|download|cursor|nextCursor|localStorage|sessionStorage|location\.(search|href)/iu);
+      expect(source).not.toMatch(/fixtures|crypto|subtle|createObjectURL|\bBlob\b|download|atob|btoa|Buffer|JSON\.parse|decodeURI|TextDecoder|localStorage|sessionStorage|location\.(search|href)|history\./iu);
       expect(source).not.toMatch(/\b(?:parseFloat|parseInt|Number|BigInt|Decimal)\(/u);
     }
   });
-  it('states that pagination is unsupported', () => { expect(FINANCE_V2_PAGINATION).toBe('unsupported'); });
+  it('states that pagination is a snapshot-bound opaque cursor', () => { expect(FINANCE_V2_PAGINATION).toBe('snapshot-bound-cursor'); });
 });
 
 describe('request contract', () => {
-  it('asks for exactly the host-stated identity with the current token, revision and an abort signal, and no cursor', async () => {
+  it('asks for exactly the host-stated identity with the current token, revision and an abort signal, and no cursor or page size unless the host states one', async () => {
     const { port, pending } = manualPort();
     render(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('7', 'opaque-token-7') })} />);
     expect(screen.getByRole('status')).toHaveTextContent('Loading the report');

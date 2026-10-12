@@ -14,6 +14,9 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const text = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const nullableText = (value: unknown): boolean => value === null || text(value);
+/** `FinancialSummaryQueryV2.cursor` is `minLength: 1, maxLength: 2048`. A cursor is an opaque string: it is measured, never parsed. */
+export const FINANCE_V2_CURSOR_MAX_LENGTH = 2048;
+export const validCursor = (value: unknown): value is string => typeof value === 'string' && value.length >= 1 && value.length <= FINANCE_V2_CURSOR_MAX_LENGTH;
 const refuse = (code: FinanceV2RefusalCode, path: string): FinanceV2Check => ({ ok: false, code, path });
 
 function amountPath(value: unknown, path: string): string | undefined {
@@ -184,9 +187,28 @@ export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductSco
   for (const [index, detail] of raw.details.entries()) { const worse = detailPath(detail, index, currencies); if (worse) return refuse(worse.code, worse.path); }
   if (!count(raw.detailCount)) return refuse('INVALID_SHAPE', '/detailCount');
   if (typeof raw.hasMore !== 'boolean') return refuse('INVALID_SHAPE', '/hasMore');
-  if (raw.nextCursor !== null && typeof raw.nextCursor !== 'string') return refuse('INVALID_SHAPE', '/nextCursor');
+  // The cursor is opaque and is never decoded: only its presence is tied to `hasMore`, and its length to the pinned query schema.
+  if (raw.hasMore ? !validCursor(raw.nextCursor) : raw.nextCursor !== null) return refuse('INVALID_SHAPE', '/nextCursor');
   if (!Array.isArray(raw.canonicalSummaries)) return refuse('INVALID_SHAPE', '/canonicalSummaries');
   if (raw.canonicalMappingStatus !== 'proposal_only_owner_ack_pending' && raw.canonicalMappingStatus !== 'unsupported_opaque_scope') return refuse('INVALID_SHAPE', '/canonicalMappingStatus');
   if (expected.references !== undefined) { const mismatch = referencePath(raw.canonicalSummaries, expected.references); if (mismatch) return refuse('REFERENCE_MISMATCH', mismatch); }
   return { ok: true, page: raw as unknown as FinanceV2Page };
+}
+
+/** One step of the page history: the opaque cursor that fetched a page, and the detail ids of the page it was taken from. */
+export type FinanceV2TrailEntry = Readonly<{ cursor: string; fromDetailIds: readonly string[]; linked: boolean }>;
+export type FinanceV2PageTrail = readonly FinanceV2TrailEntry[];
+
+/**
+ * Replay guard for a page shown after other pages of the same snapshot: a detail id already delivered (on this page or on an earlier page of
+ * the trail), or a `nextCursor` that points back into the trail, is refused. Only strings are compared; nothing is recomputed or summed.
+ */
+export function checkFinanceV2Continuation(page: FinanceV2Page, trail: FinanceV2PageTrail): FinanceV2Check {
+  const seen = new Set<string>(trail.flatMap((entry) => entry.fromDetailIds));
+  for (const [index, detail] of page.details.entries()) {
+    if (seen.has(detail.detailId)) return refuse('PAGE_REPLAY', `/details/${index}/detailId`);
+    seen.add(detail.detailId);
+  }
+  if (page.nextCursor !== null && trail.some((entry) => entry.cursor === page.nextCursor)) return refuse('PAGE_REPLAY', '/nextCursor');
+  return { ok: true, page };
 }

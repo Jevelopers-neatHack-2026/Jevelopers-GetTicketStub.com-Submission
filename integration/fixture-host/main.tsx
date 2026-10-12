@@ -5,6 +5,7 @@ import { routeHref } from '@jevelopers/team-dashboard/integration';
 import '@jevelopers/team-dashboard/style.css';
 import { ComponentExamples } from './component-examples';
 import { fixtureFinanceV2Port, portBehaviors, type FixturePortLog, type PortBehavior } from './finance-v2-port';
+import { syntheticPagedMisbehaviors, syntheticPagedPort, type SyntheticPagedLog, type SyntheticPagedScript } from './finance-v2-paged';
 import { authorizedFixture, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FixtureState, type SummaryFixtureName } from './host';
 import { hostFixture, hostFixtureNames, type HostFixtureName } from './conformance';
 const params = new URLSearchParams(window.location.search);
@@ -21,6 +22,24 @@ const v2Integrated = params.get('v2mode') === 'integrated';
 const v2Timeout = Number(params.get('v2timeout')) > 0 ? Number(params.get('v2timeout')) : undefined;
 const v2Log: FixturePortLog = { calls: [] };
 (window as unknown as { __financeV2PortLog: FixturePortLog }).__financeV2PortLog = v2Log;
+/**
+ * `v2port=paged` serves the HAND-AUTHORED synthetic three-page transaction chain (not Finance output, not producer pages). `v2p1`..`v2p3` script one deviation for page 1..3:
+ * a misbehavior name, `slow` (a late answer that ignores the abort signal) or `fault<status>`.
+ */
+const v2Cursor = params.get('cursor') ?? undefined;
+const pagedLog: SyntheticPagedLog = { requests: [] };
+(window as unknown as { __financeV2PagedLog: SyntheticPagedLog }).__financeV2PagedLog = pagedLog;
+function pagedScript(): SyntheticPagedScript {
+  const script: SyntheticPagedScript = {};
+  ([0, 1, 2] as const).forEach((index) => {
+    const value = params.get(`v2p${index + 1}`) ?? '';
+    const fault = /^fault(\d{3})$/u.exec(value);
+    if (fault) script[index] = { fault: Number(fault[1]) };
+    else if (value === 'slow') script[index] = 'slow';
+    else { const known = syntheticPagedMisbehaviors.find((name) => name === value); if (known) script[index] = known; }
+  });
+  return script;
+}
 const v2Views: Readonly<Record<string, FinanceV2ViewName>> = { budgets: 'budget', 'ai-costs': 'breakdown', transactions: 'transactions', 'transaction-detail': 'transaction-detail' };
 const configuredBase = params.get('base') ?? '/admin/finance';
 const examples = params.get('examples') === 'components';
@@ -53,7 +72,15 @@ function FixtureHost() {
   const [v2Available, setV2Available] = useState(true);
   // The token seam is stable until the token or its revision changes, and the host bumps the revision whenever the token changes.
   const v2Authorization = useMemo(() => ({ revision: String(v2Revision), token: async () => (v2Token ? `fixture-token-${v2Revision}` : null) }), [v2Revision, v2Token]);
-  const v2Port = useMemo(() => v2Name && !noV2Port ? fixtureFinanceV2Port(v2Name, v2Behavior, v2Log) : undefined, []);
+  const v2Port = useMemo(() => v2Name && !noV2Port ? (requestedBehavior === 'paged' ? syntheticPagedPort(pagedScript(), pagedLog) : fixtureFinanceV2Port(v2Name, v2Behavior, v2Log)) : undefined, []);
+  // The cursor lives in the host's own URL as request metadata only. It is read once on load; the dashboard still binds every answer to the host's scope, snapshot and hashes, and a
+  // URL cursor alone is never authority. replaceState keeps Back from walking through pages: leaving the page is the host's Back, Previous page is the dashboard's.
+  const keepCursor = (cursor: string | null) => {
+    const next = new URLSearchParams(window.location.search);
+    if (cursor === null) next.delete('cursor'); else next.set('cursor', cursor);
+    window.history.replaceState(null, '', window.location.pathname + (next.toString() ? `?${next.toString()}` : ''));
+    setQuery(window.location.search);
+  };
   const [connected, setConnected] = useState(params.get('provider') !== 'missing');
   const provider = useMemo(() => fixtureProvider(state), [state]);
   useEffect(() => { const update = () => { setPathname(window.location.pathname); setQuery(window.location.search); setRestoreFocus(false); }; window.addEventListener('popstate', update); return () => window.removeEventListener('popstate', update); }, []);
@@ -87,6 +114,7 @@ function FixtureHost() {
           expectedSnapshotId: fixture.expectedSnapshotId, expectedQueryContentHash: fixture.expectedQueryContentHash, expectedSummaryContentHash: fixture.expectedSummaryContentHash,
           ...(fixture.expectedReferences ? { expectedReferences: fixture.expectedReferences } : {}),
           ...(v2Timeout ? { timeoutMs: v2Timeout } : {}),
+          ...(requestedBehavior === 'paged' ? { onCursorChange: keepCursor, ...(v2Cursor ? { initialCursor: v2Cursor } : {}), ...(params.get('v2size') ? { pageSize: Number(params.get('v2size')) } : {}) } : {}),
           ...(route.params.id ? { detailId: route.params.id } : {}), detailHref: (id: string) => routeHref(configuredBase, 'transaction-detail', { id }) + context, listHref: routeHref(configuredBase, 'transactions') + context,
           onNavigate: navigate, filters, onFiltersChange: changeFilters };
         return v2Integrated ? <FinanceV2ConnectedView mode="INTEGRATED" {...shared} /> : <FinanceV2ConnectedView mode="SYNTHETIC_PROPOSAL" {...shared} {...(v2Port ? { port: v2Port } : {})} />;

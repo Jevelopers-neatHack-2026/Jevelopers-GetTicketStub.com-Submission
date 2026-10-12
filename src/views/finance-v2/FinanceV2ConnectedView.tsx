@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { FinanceV2View, type FinanceV2ViewName, type FinanceV2ViewProps } from './FinanceV2Views';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { FinanceV2View, type FinanceV2TransactionFilters, type FinanceV2ViewName, type FinanceV2ViewProps } from './FinanceV2Views';
 import { FINANCE_V2_FAULT_COPY, useFinanceV2Read, type FinanceV2Authorization, type FinanceV2HostAvailability, type FinanceV2SyntheticReadPort } from './async-port';
 import type { FinanceV2TrustedReferences } from './check';
 import type { OpaqueProductScope } from './types';
@@ -17,6 +17,15 @@ type Shared = Readonly<{
   expectedReferences?: FinanceV2TrustedReferences;
   authorization: FinanceV2Authorization;
   timeoutMs?: number;
+  /** `FinancialSummaryQueryV2.pageSize` (1..500), host-stated. */
+  pageSize?: number;
+  /**
+   * Opaque cursor kept in the host's own durable context (for example a deep link or reload). Cursor metadata only, never a credential and never an authority: the page that
+   * answers it must still match the host's scope, snapshot and hashes. Read once; to apply a different one the host remounts this view.
+   */
+  initialCursor?: string;
+  /** Told the cursor of the page now requested (`null` for the first page), so the host can keep it in its own context. */
+  onCursorChange?: (cursor: string | null) => void;
 }> & Pick<FinanceV2ViewProps, 'detailId' | 'detailHref' | 'listHref' | 'onNavigate' | 'filters' | 'onFiltersChange'>;
 
 /**
@@ -47,14 +56,23 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
  */
 export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
   const headingId = useId();
-  const { state, retry } = useFinanceV2Read({
+  // The transaction filters are owned here unless the host owns them, so a change of either always reaches the read and returns the list to the first page.
+  const [localFilters, setLocalFilters] = useState<FinanceV2TransactionFilters>({ valuation: 'all', currency: 'all' });
+  const hostFilters = props.filters !== undefined && props.onFiltersChange !== undefined;
+  const filters = hostFilters ? props.filters! : localFilters;
+  const onFiltersChange = hostFilters ? props.onFiltersChange! : setLocalFilters;
+  const { state, retry, paging } = useFinanceV2Read({
     mode: props.mode, port: props.port, availability: props.availability, scope: props.scope, expectedSnapshotId: props.expectedSnapshotId,
     expectedQueryContentHash: props.expectedQueryContentHash, expectedSummaryContentHash: props.expectedSummaryContentHash, authorization: props.authorization,
+    resetKey: JSON.stringify([filters.valuation, filters.currency]),
     ...(props.expectedReferences ? { expectedReferences: props.expectedReferences } : {}),
     ...(props.timeoutMs !== undefined ? { timeoutMs: props.timeoutMs } : {}),
+    ...(props.pageSize !== undefined ? { pageSize: props.pageSize } : {}),
+    ...(props.initialCursor !== undefined ? { initialCursor: props.initialCursor } : {}),
+    ...(props.onCursorChange ? { onCursorChange: props.onCursorChange } : {}),
   });
-  // Retry focus: the Retry button unmounts when loading starts, which would drop focus to <body>. After a retry, focus moves to the heading of the
-  // view that follows the hidden anchor (loading, error or result), but only while focus is on <body> or still inside that view, so a place the
+  // Retry and page focus: the Retry, Next page and Previous page buttons unmount when loading starts, which would drop focus to <body>. After one of them, focus moves
+  // to the heading of the view that follows the hidden anchor (loading, error or result), but only while focus is on <body> or still inside that view, so a place the
   // user moved to is never taken. The anchor is hidden, so it adds nothing to layout or the accessibility tree.
   const anchor = useRef<HTMLSpanElement>(null);
   const retryFocus = useRef(false);
@@ -68,6 +86,12 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
     if (heading) { heading.tabIndex = -1; heading.focus(); }
   }, [state.phase]);
   const onRetry = () => { retryFocus.current = true; retry(); };
+  const pageLabel = paging.pageNumber === null ? 'Linked page (position from the first page unknown)' : `Page ${paging.pageNumber}`;
+  const onPage = (direction: 'previous' | 'next') => { retryFocus.current = true; if (direction === 'next') paging.next(); else paging.previous(); };
+  const onRestart = () => { retryFocus.current = true; paging.restart(); };
+  // Whatever the continuation did not deliver, the way out is the first page; no earlier amount is kept or shown meanwhile.
+  const escape = paging.canPrevious && state.phase !== 'ready' && state.phase !== 'unavailable' && state.phase !== 'gated'
+    ? <p><button type="button" onClick={onRestart}>Return to first page</button></p> : null;
   const shell = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[props.view] ?? 'Finance v2'}</h2>{body}</section>;
   const notice = (title: string, text: string, role: 'status' | 'alert', extra?: ReactNode) => shell(<section className="td-example-section" role={role}><h3>{title}</h3><p>{text}</p>{extra}</section>);
   const view = (): ReactNode => {
@@ -83,10 +107,11 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
       return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={props.view} input={{ status: 'ready', page: state.page }} expectedScope={props.scope} expectedSnapshotId={props.expectedSnapshotId}
         expectedQueryContentHash={props.expectedQueryContentHash} expectedSummaryContentHash={props.expectedSummaryContentHash} {...(props.expectedReferences ? { expectedReferences: props.expectedReferences } : {})}
         {...(props.detailId !== undefined ? { detailId: props.detailId } : {})} {...(props.detailHref ? { detailHref: props.detailHref } : {})} {...(props.listHref ? { listHref: props.listHref } : {})}
-        {...(props.onNavigate ? { onNavigate: props.onNavigate } : {})} {...(props.filters ? { filters: props.filters } : {})} {...(props.onFiltersChange ? { onFiltersChange: props.onFiltersChange } : {})} />;
+        {...(props.onNavigate ? { onNavigate: props.onNavigate } : {})} filters={filters} onFiltersChange={onFiltersChange}
+        paging={{ pageLabel, hasPrevious: paging.canPrevious, hasNext: paging.canNext, onNavigate: onPage }} />;
     default:
       return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={props.view} input={{ status: state.phase }} expectedScope={props.scope} />;
     }
   };
-  return <><span hidden ref={anchor} />{view()}</>;
+  return <><span hidden ref={anchor} />{view()}{escape}</>;
 }
