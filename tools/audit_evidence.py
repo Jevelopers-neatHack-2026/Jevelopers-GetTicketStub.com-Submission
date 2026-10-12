@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 
 PROVIDER_MODE = "N/A"
@@ -77,9 +78,39 @@ def _safe_member(rel):
     return None
 
 
+class NotRegular(Exception):
+    pass
+
+
+def _open_regular(path):
+    """Open a regular file (symlinks resolved) without ever blocking on a FIFO or device."""
+    if not stat.S_ISREG(os.stat(path).st_mode):
+        raise NotRegular()
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):  # swapped after the check
+            raise NotRegular()
+    except BaseException:
+        os.close(fd)
+        raise
+    return os.fdopen(fd, "rb")
+
+
+def _read_regular(report, path, rel, code):
+    """Return file bytes, or None after recording an error."""
+    try:
+        with _open_regular(path) as fh:
+            return fh.read()
+    except NotRegular:
+        report.err("not-regular-input", rel, "input is not a regular file")
+    except OSError:
+        report.err(code, rel, "cannot read input")
+    return None
+
+
 def _hash(path):
     h = hashlib.sha256()
-    with open(path, "rb") as fh:
+    with _open_regular(path) as fh:
         for block in iter(lambda: fh.read(CHUNK), b""):
             h.update(block)
     return h.hexdigest()
@@ -93,11 +124,12 @@ def audit_manifest(report, root, sums_path):
     if os.path.islink(sums_path) or not _inside(real_root, os.path.realpath(sums_path)):
         report.err("symlink-escape", rel_sums, "manifest is a symlink")
         return
+    raw = _read_regular(report, sums_path, rel_sums, "manifest-unreadable")
+    if raw is None:
+        return
     try:
-        with open(sums_path, "rb") as fh:
-            raw = fh.read()
         lines = raw.decode("utf-8").split("\n")
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:
         report.err("manifest-unreadable", rel_sums, "cannot read manifest as UTF-8")
         return
     if lines and lines[-1] == "":
@@ -134,6 +166,9 @@ def audit_manifest(report, root, sums_path):
             continue
         try:
             actual = _hash(target)
+        except NotRegular:
+            report.err("not-regular-file", rel_sums, "%s names a non-regular file" % where)
+            continue
         except OSError:
             report.err("file-unreadable", rel_sums, "%s names an unreadable file" % where)
             continue
@@ -148,7 +183,11 @@ def find_manifests(report, root, evidence):
         report.err("symlink-dir", evidence, "evidence root is a symlink")
         return []
     found = []
-    for dirpath, dirnames, filenames in os.walk(evidence_dir, followlinks=False):
+    def unreadable(exc):
+        name = getattr(exc, "filename", None) or evidence_dir
+        report.err("dir-unreadable", os.path.relpath(name, root), "cannot list evidence directory")
+
+    for dirpath, dirnames, filenames in os.walk(evidence_dir, followlinks=False, onerror=unreadable):
         dirnames.sort()
         for name in dirnames:
             full = os.path.join(dirpath, name)
@@ -177,9 +216,11 @@ def _no_duplicates(pairs):
 
 
 def audit_json(report, path, rel):
+    raw = _read_regular(report, path, rel, "json-unreadable")
+    if raw is None:
+        return {}
     try:
-        with open(path, "rb") as fh:
-            data = json.loads(fh.read().decode("utf-8"), object_pairs_hook=_no_duplicates)
+        data = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates)
     except _DuplicateKey:
         report.err("duplicate-key", rel, "JSON object repeats a key")
         return {}
@@ -223,10 +264,12 @@ def audit_json(report, path, rel):
 
 
 def audit_markdown(report, path, rel):
+    raw = _read_regular(report, path, rel, "markdown-unreadable")
+    if raw is None:
+        return {}
     try:
-        with open(path, "rb") as fh:
-            lines = fh.read().decode("utf-8").splitlines()
-    except (OSError, UnicodeDecodeError):
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
         report.err("markdown-unreadable", rel, "cannot read checklist Markdown")
         return {}
     result = {}
@@ -285,6 +328,8 @@ def run(root, evidence="evidence", checklist_json="planning/acceptance-checklist
             report.err("no-manifests", evidence, "no SHA256SUMS manifests found")
         for sums in manifests:
             audit_manifest(report, root, sums)
+    elif os.path.lexists(evidence_dir):
+        report.err("evidence-not-dir", evidence, "evidence root is not a directory")
     else:
         report.err("no-manifests", evidence, "evidence directory not found")
     js = audit_json(report, os.path.join(root, checklist_json), checklist_json)

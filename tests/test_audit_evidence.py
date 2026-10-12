@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -317,6 +318,94 @@ class Hardening(Fixture):
         for refs in ("url", {"a": "b"}, [1], [None], [[]]):
             self.checklist([crit("AAA-01", "verified", refs, ["rev"])])
             self.assertIn("verified-missing-evidence", self.codes(), refs)
+
+
+@unittest.skipUnless(hasattr(os, "mkfifo"), "needs mkfifo")
+class NonRegular(Fixture):
+    """FIFOs would block a naive open(); run in a subprocess with a watchdog."""
+
+    TOOL = os.path.join(REPO, "tools", "audit_evidence.py")
+
+    def cli(self):
+        try:
+            proc = subprocess.run([sys.executable, "-I", self.TOOL, "--root", self.root],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  stdin=subprocess.DEVNULL, timeout=15)
+        except subprocess.TimeoutExpired:
+            self.fail("audit hung on a non-regular input")
+        self.assertEqual(proc.stderr, b"")
+        return proc.returncode, json.loads(proc.stdout.decode())
+
+    def replace_with_fifo(self, rel):
+        path = os.path.join(self.root, rel)
+        os.remove(path)
+        os.mkfifo(path)
+
+    def assertCode(self, code):
+        rc, out = self.cli()
+        self.assertEqual(rc, 1)
+        self.assertIn(code, out["error_counts"])
+        return out
+
+    def test_fifo_manifest(self):
+        self.replace_with_fifo("evidence/a/SHA256SUMS")
+        self.assertCode("not-regular-input")
+
+    def test_fifo_json_checklist(self):
+        self.replace_with_fifo("planning/acceptance-checklist.json")
+        self.assertCode("not-regular-input")
+
+    def test_fifo_markdown_checklist(self):
+        self.replace_with_fifo("planning/acceptance-checklist.md")
+        self.assertCode("not-regular-input")
+
+    def test_fifo_listed_file(self):
+        self.replace_with_fifo("evidence/a/note.txt")
+        self.assertCode("not-regular-file")
+
+    def test_symlink_to_fifo_inside_root(self):
+        os.mkfifo(os.path.join(self.root, "pipe"))
+        os.remove(os.path.join(self.root, "evidence/a/SHA256SUMS"))
+        os.symlink(os.path.join(self.root, "pipe"), os.path.join(self.root, "evidence/a/SHA256SUMS"))
+        self.assertCode("symlink-escape")
+
+    def test_symlinked_checklist_to_fifo(self):
+        os.mkfifo(os.path.join(self.root, "pipe"))
+        p = os.path.join(self.root, "planning/acceptance-checklist.json")
+        os.remove(p)
+        os.symlink(os.path.join(self.root, "pipe"), p)
+        self.assertCode("not-regular-input")
+
+    def test_device_checklist_is_rejected(self):
+        p = os.path.join(self.root, "planning/acceptance-checklist.md")
+        os.remove(p)
+        os.symlink("/dev/zero", p)
+        self.assertCode("not-regular-input")
+
+    def test_evidence_root_not_a_directory(self):
+        import shutil
+        shutil.rmtree(os.path.join(self.root, "evidence"))
+        self.write("evidence", "file")
+        self.assertCode("evidence-not-dir")
+
+    def test_evidence_root_fifo(self):
+        import shutil
+        shutil.rmtree(os.path.join(self.root, "evidence"))
+        os.mkfifo(os.path.join(self.root, "evidence"))
+        self.assertCode("evidence-not-dir")
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores modes")
+    def test_unreadable_directory_is_error(self):
+        locked = os.path.join(self.root, "evidence", "locked")
+        os.makedirs(os.path.join(locked, "sub"))
+        os.chmod(locked, 0)
+        self.addCleanup(os.chmod, locked, 0o700)
+        out = self.assertCode("dir-unreadable")
+        self.assertFalse(out["ok"])
+
+    def test_valid_tree_still_passes_via_cli(self):
+        rc, out = self.cli()
+        self.assertEqual((rc, out["ok"]), (0, True))
 
 
 class NoPromotion(Fixture):

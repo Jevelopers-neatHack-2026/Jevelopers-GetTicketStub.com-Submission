@@ -24,6 +24,8 @@ Output always carries `"provider_mode": "N/A"` and `"scope": "integrity-only"`. 
 | `duplicate-entry` | Same path listed twice in one manifest |
 | `path-traversal`, `unsafe-path` | `..`, absolute, backslash, empty or `.` segments, NUL |
 | `symlink-dir` | The evidence root or any directory under it is a symlink; it is reported, never silently skipped |
+| `not-regular-input` | A manifest or checklist input is not a regular file (FIFO, device, socket, directory, or a symlink to one); it is rejected before reading, so the audit cannot block |
+| `dir-unreadable`, `evidence-not-dir` | An evidence directory cannot be listed, or the evidence root exists but is not a directory |
 | `symlink-escape` | Manifest or listed path resolves outside the manifest directory (or outside the repo for the manifest itself) |
 | `missing-file`, `not-regular-file`, `file-unreadable` | Listed file absent, not a regular file, or unreadable |
 | `hash-mismatch` | SHA-256 differs from the manifest |
