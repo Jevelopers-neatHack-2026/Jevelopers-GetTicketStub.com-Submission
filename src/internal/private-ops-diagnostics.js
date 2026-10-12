@@ -78,7 +78,7 @@ const CHILD_FIELDS = Object.freeze({
   runner_phase: ['phase'],
   admission_committed: ['ordinal', 'checkpointSequence'],
   completion_committed: ['ordinal', 'checkpointSequence'],
-  storage_origin: ['operation', 'errorKind', 'code', 'primaryCode'],
+  storage_origin: ['operation', 'errorKind', 'code', 'primaryCode', 'localClockGuard'],
   controller_error: ['phase', 'checkpointSequence', 'errorKind', 'code', 'primaryCode'],
   controller_result: ['status', 'reason', 'checkpointSequence'],
   runner_error: ['phase', 'errorKind', 'code', 'primaryCode'],
@@ -233,6 +233,9 @@ function normalizeChildFields(stage, input) {
     if (key === 'phase') {
       if (typeof value !== 'string' || !PHASES.has(value)) return null;
       result.phase = value;
+    } else if (key === 'localClockGuard') {
+      if (!['deadline_reached', 'snapshot_age_exceeded', 'deadline_and_age', 'clock_rollback', 'other'].includes(value)) return null;
+      result.localClockGuard = value;
     } else if (key === 'operation') {
       result.operation = typeof value === 'string' && OPERATIONS.has(value) ? value : 'OTHER';
     } else if (key === 'errorKind') {
@@ -540,7 +543,7 @@ export function recordOperationsDiagnostic(stage, input = Object.create(null)) {
 export function recordOperationsDiagnosticError(stage, error, metadata = Object.create(null)) {
   if (!runnerWriter || runnerWriter.closed) return false;
   try {
-    const allowed = stage === 'storage_origin' ? ['operation']
+    const allowed = stage === 'storage_origin' ? ['operation', 'localClockGuard']
       : stage === 'controller_error' ? ['phase', 'checkpointSequence']
         : stage === 'runner_error' ? ['phase'] : null;
     if (!allowed) { runnerWriter.malformed = true; return false; }
