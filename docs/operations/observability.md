@@ -41,7 +41,7 @@ TICKETSTUB_OPS_ENVIRONMENT=
 - Unset, empty, `off` or any unrecognised value (including a URL) means **off**: no ids are made, nothing is built
   or written, and route responses are byte-for-byte what they were before this module existed.
 - `log` writes each event as one JSON line to stdout; it needs no credential. `neatlogs` is the only network exporter
-  and needs `NEATLOGS_API_KEY` (see [Neatlogs traces](#neatlogs-traces)).
+  and needs `NEATLOGS_INGEST_KEY` (see [Neatlogs traces](#neatlogs-traces)).
 - Settings are read per request, so toggling needs only a restart of the process with the new environment.
 - `TICKETSTUB_OPS_ENVIRONMENT` should be `production` only on the production deployment; anything not in the list is
   recorded as `unspecified`. Events also carry `mode` (`demo`/`live`) from `TICKETSTUB_RUNTIME_MODE`; `live` means
@@ -53,7 +53,7 @@ it) and restart. No data migration is involved either way.
 
 ## Neatlogs traces
 
-`TICKETSTUB_OPS_TELEMETRY=neatlogs` (or `log,neatlogs`) plus `NEATLOGS_API_KEY` turns each measured AI route request
+`TICKETSTUB_OPS_TELEMETRY=neatlogs` (or `log,neatlogs`) plus `NEATLOGS_INGEST_KEY` turns each measured AI route request
 into one Neatlogs trace. Without the key the setting is ignored (and `log,neatlogs` keeps only `log`). The code is
 `src/server/observability/neatlogs.ts`.
 

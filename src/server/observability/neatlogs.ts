@@ -1,5 +1,5 @@
 // Neatlogs trace export for operational events (ticketstub.ops/1). Off unless TICKETSTUB_OPS_TELEMETRY includes
-// "neatlogs" AND NEATLOGS_API_KEY is set.
+// "neatlogs" AND NEATLOGS_INGEST_KEY (formerly NEATLOGS_API_KEY, still read as a fallback) is set.
 //
 // One measured operation (one /api/research, /api/art or /api/agent request) becomes one Neatlogs trace:
 //   WORKFLOW span  ticketstub.<route>        from api_request (status, outcome, fallback, dependency, attempts)
@@ -34,11 +34,15 @@ export interface NeatlogsStats { traces: number; accepted: number; rejectedSpans
 /** Host settings are often pasted with surrounding quotes; strip one matching pair, nothing else. */
 const unquote = (v: string | undefined) => v?.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
 
+/** NEATLOGS_INGEST_KEY, or the pre-rename NEATLOGS_API_KEY while hosts rename their setting. */
+export const ingestKeyOf = (env: NodeJS.ProcessEnv): string | undefined =>
+  unquote(env.NEATLOGS_INGEST_KEY) || unquote(env.NEATLOGS_API_KEY) || undefined;
+
 /** Why the Neatlogs settings cannot be used, in words safe to log (never a value), or undefined when they can. */
 export function neatlogsConfigProblem(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const apiKey = unquote(env.NEATLOGS_API_KEY);
-  if (!apiKey) return "NEATLOGS_API_KEY is not set";
-  if (/\s/.test(apiKey)) return "NEATLOGS_API_KEY contains whitespace";
+  const apiKey = ingestKeyOf(env);
+  if (!apiKey) return "NEATLOGS_INGEST_KEY is not set";
+  if (/\s/.test(apiKey)) return "NEATLOGS_INGEST_KEY contains whitespace";
   const endpoint = (unquote(env.NEATLOGS_ENDPOINT) || DEFAULT_ENDPOINT).replace(/\/+$/, "");
   if (!ENDPOINT.test(endpoint)) return "NEATLOGS_ENDPOINT must be empty, https://ingest.neatlogs.com or https://eu.ingest.neatlogs.com";
   return undefined;
@@ -47,7 +51,7 @@ export function neatlogsConfigProblem(env: NodeJS.ProcessEnv = process.env): str
 /** Reads the Neatlogs settings, or undefined when export cannot run. The key is never logged or returned elsewhere. */
 export function neatlogsConfig(env: NodeJS.ProcessEnv = process.env): NeatlogsConfig | undefined {
   if (neatlogsConfigProblem(env)) return undefined;
-  const apiKey = unquote(env.NEATLOGS_API_KEY)!;
+  const apiKey = ingestKeyOf(env)!;
   const endpoint = (unquote(env.NEATLOGS_ENDPOINT) || DEFAULT_ENDPOINT).replace(/\/+$/, "");
   const commit = env.TICKETSTUB_COMMIT_SHA?.trim();
   const tags = ["ticketstub", ...(commit && /^[0-9a-f]{7,40}$/.test(commit) ? [`ticketstub@${commit}`] : [])];
@@ -273,7 +277,7 @@ export function neatlogsSink({ config, fetchImpl, onSent }: NeatlogsSinkOptions)
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (!res.ok) {
         stats.failed++;
-        noteOnce(`http_${res.status}`, `export failed: HTTP ${res.status}${res.status === 401 || res.status === 403 ? " (check NEATLOGS_API_KEY is the project key for this region)" : ""}`);
+        noteOnce(`http_${res.status}`, `export failed: HTTP ${res.status}${res.status === 401 || res.status === 403 ? " (check NEATLOGS_INGEST_KEY is the project key for this region)" : ""}`);
         onSent?.({ traceId: built.traceId, status: res.status, rejectedSpans: -1 });
         return;
       }
