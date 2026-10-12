@@ -51,7 +51,9 @@ export function summaryFixture(name: SummaryFixtureName, evaluate: (manifest: un
     case 'missing-references': return gated(packetManifest());
   }
 }
-export const fixtureStates = ['unavailable', 'loading', 'empty', 'error', 'restricted', 'ready'] as const;
+/** SYNTHETIC_PROPOSAL Finance v2 fixtures (data only, typed against the frozen unaccepted proposal). The views come from the packed package. */
+export { financeV2Fixture, financeV2FixtureNames, FROZEN_PROPOSAL_PROVENANCE, type FinanceV2FixtureName } from '../../src/views/finance-v2/fixtures';
+export const fixtureStates =['unavailable', 'loading', 'empty', 'error', 'restricted', 'ready'] as const;
 export type FixtureState = (typeof fixtureStates)[number];
 export const authorizedFixture: HostAccess = { status: 'authorized', scope: { tenantId: 'fixture-tenant', projectId: 'fixture-project' }, revision: 'td01-fixture-v1' };
 export function fixtureProvider(state: FixtureState): RouteProvider<{ text: string }> {

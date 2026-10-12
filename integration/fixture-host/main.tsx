@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Dashboard, FinancialSummaryView, evaluateFinancePacket, type TableSort } from '@jevelopers/team-dashboard';
+import { Dashboard, FinancialSummaryView, FinanceV2View, evaluateFinancePacket, type FinanceV2ViewName, type TableSort } from '@jevelopers/team-dashboard';
+import { routeHref } from '@jevelopers/team-dashboard/integration';
 import '@jevelopers/team-dashboard/style.css';
 import { ComponentExamples } from './component-examples';
-import { authorizedFixture, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FixtureState, type SummaryFixtureName } from './host';
+import { authorizedFixture, financeV2Fixture, financeV2FixtureNames, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FinanceV2FixtureName, type FixtureState, type SummaryFixtureName } from './host';
 const params = new URLSearchParams(window.location.search);
 const requestedSummary = params.get('summary');
 const summaryName = summaryFixtureNames.find((name) => name === requestedSummary) as SummaryFixtureName | undefined;
+/** Explicit SYNTHETIC_PROPOSAL fixture mode for the Finance v2 views: `?v2=<fixture>` on the budgets, ai-costs, transactions and transaction detail routes only. */
+const requestedV2 = params.get('v2');
+const v2Name = financeV2FixtureNames.find((name) => name === requestedV2) as FinanceV2FixtureName | undefined;
+const v2Views: Readonly<Record<string, FinanceV2ViewName>> = { budgets: 'budget', 'ai-costs': 'breakdown', transactions: 'transactions', 'transaction-detail': 'transaction-detail' };
 const configuredBase = params.get('base') ?? '/admin/finance';
 const examples = params.get('examples') === 'components';
 const initialState = params.get('state') ?? (examples ? 'ready' : null);
@@ -44,7 +49,20 @@ function FixtureHost() {
     </aside>
     <main><Dashboard basePath={configuredBase} pathname={pathname} navigate={navigate}
       access={authenticated ? authorizedFixture : { status: 'restricted' }} provider={connected ? provider : undefined}
-      renderRoute={({ data, route }) => summaryName && route.id === 'overview' && !examples ? <>
+      renderRoute={({ data, route }) => v2Name && !examples && Object.hasOwn(v2Views, route.id) ? (() => {
+        const fixture = financeV2Fixture(v2Name);
+        // The URL query is the durable context: fixture, boundary state and transaction filters. Detail and return hrefs carry all of it, so reload, deep link and Back keep the same snapshot and filters.
+        const context = search.toString() ? `?${search.toString()}` : '';
+        const filters = { valuation: search.get('valuation') ?? 'all', currency: search.get('currency') ?? 'all' };
+        const changeFilters = (next: { valuation: string; currency: string }) => {
+          const params = new URLSearchParams(window.location.search);
+          for (const [key, value] of Object.entries(next)) { if (value === 'all') params.delete(key); else params.set(key, value); }
+          navigate(window.location.pathname + (params.toString() ? `?${params.toString()}` : ''));
+        };
+        return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={v2Views[route.id]!} input={fixture.input} expectedScope={fixture.expectedScope} expectedSnapshotId={fixture.expectedSnapshotId}
+          {...(route.params.id ? { detailId: route.params.id } : {})} detailHref={(id) => routeHref(configuredBase, 'transaction-detail', { id }) + context} listHref={routeHref(configuredBase, 'transactions') + context}
+          onNavigate={navigate} filters={filters} onFiltersChange={changeFilters} />;
+      })() : summaryName && route.id === 'overview' && !examples ? <>
         <p role="note"><strong>SYNTHETIC FIXTURE</strong>: offline development data shaped like adapter output. Not real Finance data; the actual Finance summary route is unavailable until the accepted handoff.</p>
         <FinancialSummaryView {...summaryFixture(summaryName, evaluateFinancePacket)} projectLabel={syntheticProjectLabel} />
       </> : examples ?<ComponentExamples route={route} navigate={navigate} sample={search.get('sample') ?? 'all'} onSampleChange={(value) => changeSample('sample', value)} page={search.get('page') === '2' ? '2' : '1'} onPageChange={(direction) => changeSample('page', direction === 'next' ? '2' : '1')} sort={sort} onSort={setSort} returnToResults={(href) => navigate(href, true)} restoreFocus={restoreFocus} returnFocusId={returnFocusId} /> : <section><h2>Connected read-only extension</h2><p>{data.text}</p></section>} /></main>
