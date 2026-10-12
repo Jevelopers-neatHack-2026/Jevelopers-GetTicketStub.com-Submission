@@ -32,7 +32,8 @@ export function validateCtaSource(html, config) {
   // Runtime withdrawal cannot modify noscript markup. Every shipped native link
   // must match the current approved config, including the no-JS escape route.
   for (const tag of html.matchAll(/<a\b[^>]*>/gi)) {
-    const href = tag[0].match(/\bhref="([^"]+)"/)?.[1];
+    const attribute = tag[0].match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+    const href = attribute?.[1] ?? attribute?.[2] ?? attribute?.[3];
     if (href && !href.startsWith('#')) assert.equal(href, result.destination, 'Static native link differs from approved destination or remains after withdrawal');
   }
   const entry = config.destinations[config.environment];
