@@ -6508,9 +6508,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/architecture/ACCEPTANCE.md",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "192e92209298226daf6768929d7e5d858cfa2060",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/docs/architecture/ACCEPTANCE.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/192e92209298226daf6768929d7e5d858cfa2060/docs/architecture/ACCEPTANCE.md",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -6560,13 +6560,14 @@
         "derivedFrom": [],
         "derivatives": [],
         "transformations": [
-          "Exact candidate file recorded for internal review; no public/release approval inferred."
+          "Exact candidate file recorded for internal review; no public/release approval inferred.",
+          "Exact documentation bytes refreshed in the PR #31 candidate at 192e92209298226daf6768929d7e5d858cfa2060; this records source identity only and grants no publication permission or approval."
         ]
       },
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "b4d60d9ce1b4d32fde62461c297b51853a89da7c5a60c690d29fd6fa9f042dc0",
+        "value": "192ae0766498ba97938f4ee9b8942f7a9640db75f6222b1b0c08af97ecabeb20",
         "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6584,9 +6585,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/architecture/OWNERSHIP.md",
-        "revision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
+        "revision": "192e92209298226daf6768929d7e5d858cfa2060",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6/docs/architecture/OWNERSHIP.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/192e92209298226daf6768929d7e5d858cfa2060/docs/architecture/OWNERSHIP.md",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
@@ -6636,13 +6637,14 @@
         "derivedFrom": [],
         "derivatives": [],
         "transformations": [
-          "Exact candidate file recorded for internal review; no public/release approval inferred."
+          "Exact candidate file recorded for internal review; no public/release approval inferred.",
+          "Exact documentation bytes refreshed in the PR #31 candidate at 192e92209298226daf6768929d7e5d858cfa2060; this records source identity only and grants no publication permission or approval."
         ]
       },
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "721ca07fd6e3dba5892802259de1c92772814d450fafde5e1e4903253429a07e",
+        "value": "8def0ab5c37df025f4ac6a5018c5cddd27e746e8938f32af24a2ba6eaaed4158",
         "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -6736,7 +6738,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:6038cd7e2f0ff391f509baca74f6d74ab64d4698657af494e642cc98e8e1609d",
+        "revision": "sha256:baff06479d4a4ea061331d4f98d6c0fe8b91ed6183dc1068cc4e911a6faa8299",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6788,13 +6790,14 @@
         "derivedFrom": [],
         "derivatives": [],
         "transformations": [
-          "Exact candidate file recorded for internal review; no public/release approval inferred."
+          "Exact candidate file recorded for internal review; no public/release approval inferred.",
+          "Exact inventory content digest refreshed after the PR #31 documentation source pins; no publication permission or approval is granted."
         ]
       },
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6038cd7e2f0ff391f509baca74f6d74ab64d4698657af494e642cc98e8e1609d",
+        "value": "baff06479d4a4ea061331d4f98d6c0fe8b91ed6183dc1068cc4e911a6faa8299",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
