@@ -9,8 +9,15 @@ const snapshot = realpathSync(config.snapshot);
 const packageJson = JSON.parse(readFileSync(join(snapshot, 'package.json'), 'utf8'));
 const inside = path => { const name = relative(snapshot, path); return name !== '..' && !name.startsWith('../') && !isAbsolute(name); };
 const hash = bytes => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
-const denied = new Set(['http', 'https', 'http2', 'net', 'tls', 'dgram', 'child_process', 'worker_threads']);
-globalThis.fetch = () => { throw new Error('Offline consumer driver'); };
+const denied = new Set(['http', 'https', 'http2', 'net', 'tls', 'dgram', 'child_process', 'worker_threads', 'inspector', 'inspector/promises']);
+const offline = () => { throw new Error('Offline consumer driver'); };
+globalThis.fetch = offline;
+globalThis.WebSocket = class { constructor() { offline(); } };
+const getBuiltinModule = process.getBuiltinModule.bind(process);
+process.getBuiltinModule = specifier => {
+  if (typeof specifier === 'string' && denied.has(specifier.replace(/^node:/, ''))) offline();
+  return getBuiltinModule(specifier);
+};
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (denied.has(specifier.replace(/^node:/, ''))) throw new Error('Offline consumer driver');

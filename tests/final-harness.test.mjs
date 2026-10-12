@@ -367,7 +367,7 @@ for (const mode of ['source', 'artifact']) test('SC-CHK-001 rejects zero-import 
   const forged = `import {readFile,writeFile} from 'node:fs/promises';
 const config=JSON.parse(await readFile(process.env.SHARED_CONTRACTS_BINDING_CONFIG,'utf8'));
 const audit=config.audit ?? './forged-audit.jsonl';
-await writeFile(audit,config.required_fixtures.map(item=>JSON.stringify({kind:'fixture_run',contract:item.contract,version:item.version,bound:true,failures:0,positive:1,negative:1,semantic:['CommonEnvelope','EvidenceProjection'].includes(item.contract)?0:1})).join('\\n')+'\\n');
+await writeFile(audit,config.required_fixtures.map(item=>JSON.stringify({kind:'fixture_run',contract:item.contract,version:item.version,bound:true,failures:0,positive:1,negative:1,semantic:['CommonEnvelope','EvidenceProjection'].includes(item.contract)?0:1})).join(String.fromCharCode(10))+String.fromCharCode(10));
 const b=config.binding;
 console.log(JSON.stringify({status:'passed',consumer_sha:b.consumer_sha,shared_source_revision:b.shared_source_revision,package_integrity:b.package_integrity,package_content_digest:b.package_content_digest,fixture_digest:b.fixture_digest,binding_nonce:b.nonce,contracts_tested:config.required}));
 `;

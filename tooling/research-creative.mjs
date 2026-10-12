@@ -196,7 +196,12 @@ export function checkResearchBatchReceipt(input, context) {
   const v = parsed.value, ids = [...v.successful_request_ids, ...v.failed_request_ids, ...v.pending_request_ids];
   if (!sameSet(v.request_ids, context.request_ids) || !sameSet(ids, v.request_ids)) return fail('INVALID_BATCH', '/request_ids');
   if (!Array.isArray(context.request_receipts)) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
-  for (const receipt of context.request_receipts) if (!validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  for (const receipt of context.request_receipts) {
+    let valid;
+    try { valid = validateContract('ResearchRequestReceipt', receipt).ok; }
+    catch { return fail('INVALID_TRUST_CONTEXT', '/request_receipts'); }
+    if (!valid || !checkTrustedContext(receipt, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  }
   if (!sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || new Set(context.request_receipts.map(receipt => receipt.receipt_id)).size !== context.request_receipts.length || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
   for (const [index, receipt] of context.request_receipts.entries()) {
     const fields = requestReceiptFields(receipt, '/request_receipts/' + index); if (!fields.ok) return fields;

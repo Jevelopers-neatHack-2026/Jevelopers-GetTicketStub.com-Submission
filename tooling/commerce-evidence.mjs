@@ -272,7 +272,12 @@ export function projectEvaluationEvidence(input, context) {
   const parsed = checkEvaluationEvidence(input, context); if (!parsed.ok) return parsed;
   const v = parsed.value, component = v.components.find(component => component.name === 'integration-evals');
   if (!component) return fail('INVALID_PAYLOAD', '/components');
-  if (!validatePrimitive('EvidenceId', context.public_evidence_id).ok || context.public_evidence_id === v.evidence_id) return fail('INVALID_TRUST_CONTEXT', '/public_evidence_id');
+  function reusesSourceValue(value) {
+    if (typeof value === 'string') return value === context.public_evidence_id;
+    if (value === null || typeof value !== 'object') return false;
+    return Object.values(value).some(reusesSourceValue);
+  }
+  if (!validatePrimitive('EvidenceId', context.public_evidence_id).ok || reusesSourceValue(v)) return fail('INVALID_TRUST_CONTEXT', '/public_evidence_id');
   return projectEvidence({ evidence_id: context.public_evidence_id, environment: v.environment, billing_mode: v.billing_mode, outcome: ['passed', 'failed', 'blocked'].includes(v.status) ? v.status : 'unknown', component: { name: component.name, source_revision: component.source_revision } });
 }
 

@@ -15,6 +15,7 @@ jobs:
       - name: Verify local candidate behavior
         env:
           npm_config_offline: 'true'
+          SC_AJV_ROOT: ${{ github.workspace }}/node_modules
         run: |
           npm ci --ignore-scripts
           npm run build

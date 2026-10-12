@@ -6,6 +6,10 @@ export function dependencyNumbers(source) {
 }
 export function dependencyErrors(requirements, authority) {
   const failures = [];
+  const requiredIssues = requirements.issues.map(row => row.issue).sort((a, b) => a - b);
+  const authorityIssues = authority.issues.map(row => row.issue).sort((a, b) => a - b);
+  if (new Set(requiredIssues).size !== requiredIssues.length || new Set(authorityIssues).size !== authorityIssues.length ||
+      JSON.stringify(requiredIssues) !== JSON.stringify(authorityIssues)) failures.push({ code: 'AUTHORITY_ISSUE_SET_MISMATCH' });
   for (const source of authority.issues) {
     const row = requirements.issues.find(row => row.issue === source.issue);
     const expected = dependencyNumbers(source.blocked_by_source);

@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.10.2 (unreleased private candidate)
+
+Integrates current-main receipt metadata, reporting proposal and graph policy changes without promoting their domain acceptance. Public evaluation projection rejects identifiers already present anywhere in the source record. Dependency validation requires equal, unique authority and requirement issue sets. Consumer hooks deny alternate builtin, WebSocket and inspector entry points while retaining the documented non-sandbox boundary. Research batch receipt validation returns a typed trust-context failure for throwing Proxy inputs. The writable-audit forgery regression emits actual JSONL separators. Package manifests and documentation are regenerated for these new bytes; historical archive receipts retain their original scope.
+
 ## 0.10.1 (unreleased private candidate)
 
 Addresses the fresh independent review of the unaccepted UsageEvent/2.0.0 candidate: pairwise comparison refuses directly mutually superseding observations in either direction, including when either event is checked against the other as prior; ordinary one-way correction and late-observation handling remain. The existing ProductionMeteringPort.observe callback is pinned to UsageEvent/1.0.0 while the generic root version union and the opt-in v2 helper remain available. The earlier 0.10.0 candidate archive is rejected and its approval does not transfer; this private 0.10.1 candidate still requires fresh review and owner/consumer acceptance.

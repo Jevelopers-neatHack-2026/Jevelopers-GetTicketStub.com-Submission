@@ -101,3 +101,32 @@ test('SC-CHK-008 complete issue/body-hash authority agrees with dependency data 
   assert.ok(dependencyErrors(aggregate, authority).some(row => row.issue === 3));
   for (const source of authority.issues) assert.deepEqual(dependencyNumbers(source.blocked_by_source), requirements.issues.find(row => row.issue === source.issue).dependencies);
 });
+
+for (const field of ['run_id', 'event_id', 'correlation_id']) test('public evaluation projection rejects source identifier ' + field, async () => {
+  const { value, context } = await positive('EvaluationEvidence');
+  assert.equal(typeof value[field], 'string');
+  context.public_evidence_id = value[field];
+  assertFixture(projectEvaluationEvidence(value, context), { ok: false, code: 'INVALID_TRUST_CONTEXT', path: '/public_evidence_id' });
+});
+
+test('dependency authority cannot omit an issue even when its requirement edges are removed', async () => {
+  const requirements = await readJson('docs/requirements.json'), authority = await readJson('docs/authority-dependencies.json');
+  authority.issues = authority.issues.filter(row => row.issue !== 9);
+  Object.assign(requirements.issues.find(row => row.issue === 9), { dependencies: [], artifact_dependencies: [], closure_dependencies: [] });
+  assert.ok(dependencyErrors(requirements, authority).some(row => row.code === 'AUTHORITY_ISSUE_SET_MISMATCH'));
+});
+
+test('dependency authority rejects extra and duplicate issue entries', async () => {
+  const requirements = await readJson('docs/requirements.json'), authority = await readJson('docs/authority-dependencies.json');
+  for (const issue of [9, 999]) {
+    const modified = structuredClone(authority);
+    modified.issues.push({ ...modified.issues[0], issue });
+    assert.ok(dependencyErrors(requirements, modified).some(row => row.code === 'AUTHORITY_ISSUE_SET_MISMATCH'));
+  }
+});
+
+test('research batch returns typed failure for a throwing receipt Proxy', async () => {
+  const { value, context } = await positive('ResearchBatchReceipt');
+  context.request_receipts = [new Proxy({}, { ownKeys() { throw new Error('untrusted object trap'); } })];
+  assertFixture(checkResearchCreative(value.contract, value, context), { ok: false, code: 'INVALID_TRUST_CONTEXT', path: '/request_receipts' });
+});

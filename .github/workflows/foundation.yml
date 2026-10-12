@@ -18,6 +18,7 @@ jobs:
           npm_config_offline: 'true'
           npm_config_audit: 'false'
           npm_config_fund: 'false'
+          SC_AJV_ROOT: ${{ github.workspace }}/node_modules
         run: |
           npm ci --ignore-scripts
           npm run build
