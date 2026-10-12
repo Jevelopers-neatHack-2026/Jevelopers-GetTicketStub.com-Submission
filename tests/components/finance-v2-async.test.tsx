@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { useMemo, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Dashboard } from '../../src';
 import {
   FinanceV2ConnectedView, classifyFinanceV2Fault, resolveFinanceV2Port, FINANCE_V2_PAGINATION,
@@ -374,5 +374,211 @@ describe('through the real Dashboard route', () => {
     render(<Host mode="INTEGRATED" port={port} />);
     expect(await screen.findByText(/no accepted read port exists/u)).toBeVisible();
     expect(pending).toHaveLength(0);
+  });
+});
+
+describe('read generations: a settled answer never outlives the lifecycle it was produced in', () => {
+  const OLD = 'OLD-ANSWER';
+  const settledView = async () => {
+    const m = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(m.port)} />);
+    await settle();
+    await act(async () => m.pending[0]!.resolve({ status: 'ready', page: pageFor(request(m.pending, 0), OLD) }));
+    expect(document.body.textContent).toContain(OLD);
+    return { ...m, view };
+  };
+  const refused = { status: 'refused', reason: 'restricted' } as const;
+
+  it('does not resurface the old answer when availability is withdrawn and restored with the same identity', async () => {
+    const { port, pending, view } = await settledView();
+    view.rerender(<FinanceV2ConnectedView {...connected(port, { availability: refused })} />);
+    expect(document.body.textContent).not.toContain(OLD);
+    view.rerender(<FinanceV2ConnectedView {...connected(port)} />);
+    expect(document.body.textContent).not.toContain(OLD);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the report');
+    await settle();
+    expect(pending).toHaveLength(2);
+    expect(document.body.textContent).not.toContain(OLD);
+    expect(amountsShown()).toBe(false);
+    await act(async () => pending[1]!.resolve({ status: 'ready', page: pageFor(request(pending, 1), 'NEW-ANSWER') }));
+    expect(document.body.textContent).toContain('NEW-ANSWER');
+  });
+  it('does not resurface the old answer when the port is removed and the same port is reinserted', async () => {
+    const { port, pending, view } = await settledView();
+    view.rerender(<FinanceV2ConnectedView {...connected(undefined)} />);
+    expect(document.body.textContent).not.toContain(OLD);
+    view.rerender(<FinanceV2ConnectedView {...connected(port)} />);
+    expect(document.body.textContent).not.toContain(OLD);
+    await settle();
+    expect(pending).toHaveLength(2);
+    expect(document.body.textContent).not.toContain(OLD);
+  });
+  it.each([['revision', { authorization: authorization('2') }], ['actor', { scope: { ...syntheticOpaqueScope, actorId: 'account:another-actor' } }]] as const)('does not resurface the old answer after an A -> B -> A %s cycle, with deferred reads', async (_kind, idB) => {
+    const { port, pending, view } = await settledView();
+    view.rerender(<FinanceV2ConnectedView {...connected(port, idB)} />);
+    await settle();
+    expect(pending).toHaveLength(2);
+    view.rerender(<FinanceV2ConnectedView {...connected(port)} />);
+    expect(document.body.textContent).not.toContain(OLD);
+    await settle();
+    expect(pending).toHaveLength(3);
+    // The abandoned B read answers late; neither it nor the original A answer may render. Only the third read may.
+    await act(async () => pending[1]!.resolve({ status: 'ready', page: pageFor(request(pending, 1), 'LATE-B') }));
+    expect(document.body.textContent).not.toContain('LATE-B');
+    expect(document.body.textContent).not.toContain(OLD);
+    expect(amountsShown()).toBe(false);
+    await act(async () => pending[2]!.resolve({ status: 'ready', page: pageFor(request(pending, 2), 'FRESH-A') }));
+    expect(document.body.textContent).toContain('FRESH-A');
+    expect(document.body.textContent).not.toContain('LATE-B');
+  });
+});
+
+describe('token revocation is revision-controlled and immediate', () => {
+  it('withdraws a settled answer at once, with no amount, when the revision changes and the token goes away', async () => {
+    const { port, pending } = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(port)} />);
+    await settle();
+    await act(async () => pending[0]!.resolve({ status: 'ready', page: pageFor(request(pending, 0), 'SETTLED') }));
+    view.rerender(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('2', null) })} />);
+    expect(document.body.textContent).not.toContain('SETTLED');
+    expect(amountsShown()).toBe(false);
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('not authorized');
+    expect(pending).toHaveLength(1);
+  });
+  it('aborts a pending read at once when the revision changes and the token goes away, then reads again on regrant', async () => {
+    const { port, pending } = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(port)} />);
+    await settle();
+    const inFlight = request(pending, 0);
+    view.rerender(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('2', null) })} />);
+    expect(inFlight.signal.aborted).toBe(true);
+    await settle();
+    await act(async () => pending[0]!.resolve({ status: 'ready', page: pageFor(inFlight, 'AFTER-REVOKE') }));
+    expect(document.body.textContent).not.toContain('AFTER-REVOKE');
+    expect(amountsShown()).toBe(false);
+    view.rerender(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('3', 'opaque-token-3') })} />);
+    await settle();
+    expect(pending).toHaveLength(2);
+    expect(request(pending, 1).authorization).toEqual({ token: 'opaque-token-3', revision: '3' });
+  });
+  it('does not read again, and keeps the settled answer, when a host passes a fresh token callback every render under the same revision', async () => {
+    const { port, pending } = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('1') })} />);
+    await settle();
+    await act(async () => pending[0]!.resolve({ status: 'ready', page: pageFor(request(pending, 0), 'STABLE') }));
+    for (let i = 0; i < 3; i += 1) view.rerender(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('1') })} />);
+    await settle();
+    expect(pending).toHaveLength(1);
+    expect(request(pending, 0).signal.aborted).toBe(false);
+    expect(document.body.textContent).toContain('STABLE');
+  });
+  it('never logs or renders the token', async () => {
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((name) => vi.spyOn(console, name).mockImplementation(() => undefined));
+    try {
+      const { port, pending } = manualPort();
+      render(<FinanceV2ConnectedView {...connected(port, { authorization: authorization('1', 'SECRET-TOKEN-XYZ') })} />);
+      await settle();
+      await act(async () => pending[0]!.reject({ status: 503 }));
+      expect(document.body.innerHTML).not.toContain('SECRET-TOKEN-XYZ');
+      for (const spy of spies) expect(JSON.stringify(spy.mock.calls)).not.toContain('SECRET-TOKEN-XYZ');
+    } finally { spies.forEach((spy) => spy.mockRestore()); }
+  });
+});
+
+describe('replacing the injected port starts a new read lifecycle', () => {
+  it('aborts the old pending read, reads the new port once, and drops the old late answer', async () => {
+    const m = manualPort();
+    const n = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(m.port)} />);
+    await settle();
+    const old = request(m.pending, 0);
+    view.rerender(<FinanceV2ConnectedView {...connected(n.port)} />);
+    expect(old.signal.aborted).toBe(true);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the report');
+    await settle();
+    expect(n.pending).toHaveLength(1);
+    expect(m.pending).toHaveLength(1);
+    await act(async () => m.pending[0]!.resolve({ status: 'ready', page: pageFor(old, 'OLD-PORT') }));
+    expect(document.body.textContent).not.toContain('OLD-PORT');
+    await act(async () => n.pending[0]!.resolve({ status: 'ready', page: pageFor(request(n.pending, 0), 'NEW-PORT') }));
+    expect(document.body.textContent).toContain('NEW-PORT');
+    expect(document.body.textContent).not.toContain('OLD-PORT');
+  });
+  it('suppresses an already settled answer at once when the port is replaced, and reads the replacement', async () => {
+    const m = manualPort();
+    const n = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(m.port)} />);
+    await settle();
+    await act(async () => m.pending[0]!.resolve({ status: 'ready', page: pageFor(request(m.pending, 0), 'OLD-PORT') }));
+    expect(document.body.textContent).toContain('OLD-PORT');
+    view.rerender(<FinanceV2ConnectedView {...connected(n.port)} />);
+    expect(document.body.textContent).not.toContain('OLD-PORT');
+    expect(amountsShown()).toBe(false);
+    await settle();
+    expect(n.pending).toHaveLength(1);
+    await act(async () => n.pending[0]!.resolve({ status: 'ready', page: pageFor(request(n.pending, 0), 'NEW-PORT') }));
+    expect(document.body.textContent).toContain('NEW-PORT');
+  });
+  it('does not read again when the same port object is re-rendered', async () => {
+    const m = manualPort();
+    const view = render(<FinanceV2ConnectedView {...connected(m.port)} />);
+    await settle();
+    view.rerender(<FinanceV2ConnectedView {...connected(m.port)} />);
+    await settle();
+    expect(m.pending).toHaveLength(1);
+    expect(request(m.pending, 0).signal.aborted).toBe(false);
+  });
+});
+
+describe('Retry keeps keyboard focus on a meaningful target', () => {
+  const failed = async () => {
+    const m = manualPort();
+    const view = render(<><button type="button">elsewhere</button><FinanceV2ConnectedView {...connected(m.port)} /></>);
+    await settle();
+    await act(async () => m.pending[0]!.reject({ status: 503 }));
+    return { ...m, view };
+  };
+  const heading = () => screen.getByRole('heading', { level: 2, name: 'Budget advisory' });
+  it('moves focus from the removed Retry button to the view heading while loading, and keeps it there on success', async () => {
+    const { pending } = await failed();
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the report');
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(heading());
+    await settle();
+    await act(async () => pending[1]!.resolve({ status: 'ready', page: pageFor(request(pending, 1), 'RETRY-OK') }));
+    expect(document.body.textContent).toContain('RETRY-OK');
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(heading());
+  });
+  it('keeps focus on the heading when the retry fails again, so Retry can be reached again', async () => {
+    const { pending } = await failed();
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    retry.focus();
+    fireEvent.click(retry);
+    await settle();
+    await act(async () => pending[1]!.reject({ status: 503 }));
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+    expect(document.activeElement).toBe(heading());
+  });
+  it('does not take focus the user moved elsewhere while the retry was loading', async () => {
+    const { pending } = await failed();
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    retry.focus();
+    fireEvent.click(retry);
+    const elsewhere = screen.getByRole('button', { name: 'elsewhere' });
+    elsewhere.focus();
+    await settle();
+    await act(async () => pending[1]!.resolve({ status: 'ready', page: pageFor(request(pending, 1), 'RETRY-OK') }));
+    expect(document.body.textContent).toContain('RETRY-OK');
+    expect(document.activeElement).toBe(elsewhere);
+  });
+  it('adds no layout or accessibility wrapper: only one hidden anchor, no display: contents element', async () => {
+    const { view } = await failed();
+    expect(view.container.querySelectorAll('[style*="contents"]')).toHaveLength(0);
+    expect(view.container.querySelectorAll('span[hidden]')).toHaveLength(1);
   });
 });

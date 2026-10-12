@@ -102,10 +102,23 @@ export type FinanceV2ReadState =
 export type FinanceV2ReadResult = Readonly<{ state: FinanceV2ReadState; retry: () => void }>;
 
 type Settled = Readonly<{ key: string; attempt: number; state: FinanceV2ReadState }>;
-/** Every independent input whose change makes an in-flight or settled answer stale. Compared as a whole, so a change in any one invalidates it. */
+/** Stable numeric identity for an injected object, so a replaced port changes the key without any value being read or logged. */
+const identities = new WeakMap<object, number>();
+let nextIdentity = 1;
+function identityOf(value: unknown): number {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return 0;
+  let id = identities.get(value);
+  if (id === undefined) { id = nextIdentity++; identities.set(value, id); }
+  return id;
+}
+/**
+ * Every independent input whose change makes an in-flight or settled answer stale. Compared as a whole, so a change in any one invalidates it.
+ * The port is compared by identity, never by value, so a host keeps it stable while nothing changed. The token callback is deliberately NOT part of
+ * the key: its identity may change on every render without a new read, and a change of what it resolves is signalled by `authorization.revision`.
+ */
 function identityKey(o: FinanceV2ReadOptions): string {
   const { scope } = o;
-  return JSON.stringify([o.mode, o.availability.status, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, scope.actorId, o.expectedSnapshotId, o.expectedQueryContentHash, o.expectedSummaryContentHash, o.authorization.revision]);
+  return JSON.stringify([o.mode, o.availability.status, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, scope.actorId, o.expectedSnapshotId, o.expectedQueryContentHash, o.expectedSummaryContentHash, o.authorization.revision, identityOf(o.port)]);
 }
 
 function interpret(result: FinanceV2Input | null | undefined, o: FinanceV2ReadOptions): FinanceV2ReadState {
@@ -160,7 +173,9 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
         finish(fromFault(classifyFinanceV2Fault(error)));
       }
     })();
-    return () => { live = false; clearTimeout(timer); controller.abort(); };
+    // Leaving a generation (gate, port, identity, revision or retry change, or unmount) aborts its read and permanently discards its answer, so a
+    // reconnect or an A -> B -> A identity change can never resurface it: every new generation reads again.
+    return () => { live = false; clearTimeout(timer); controller.abort(); setSettled(null); };
   }, [active, key, attempt]);
 
   const retry = () => setRetries((previous) => ({ key, count: (previous.key === key ? previous.count : 0) + 1 }));

@@ -50,6 +50,8 @@ function FixtureHost() {
   const [v2Actor, setV2Actor] = useState<'a' | 'b'>('a');
   const [v2Token, setV2Token] = useState(true);
   const [v2Available, setV2Available] = useState(true);
+  // The token seam is stable until the token or its revision changes, and the host bumps the revision whenever the token changes.
+  const v2Authorization = useMemo(() => ({ revision: String(v2Revision), token: async () => (v2Token ? `fixture-token-${v2Revision}` : null) }), [v2Revision, v2Token]);
   const v2Port = useMemo(() => v2Name && !noV2Port ? fixtureFinanceV2Port(v2Name, v2Behavior, v2Log) : undefined, []);
   const [connected, setConnected] = useState(params.get('provider') !== 'missing');
   const provider = useMemo(() => fixtureProvider(state), [state]);
@@ -63,7 +65,7 @@ function FixtureHost() {
       {v2Name && !examples && <>
         <button type="button" onClick={() => setV2Revision((value) => value + 1)}>Bump Finance v2 authorization revision ({v2Revision})</button>
         <label>Finance v2 actor <select value={v2Actor} onChange={(event) => setV2Actor(event.target.value as 'a' | 'b')}><option value="a">actor a</option><option value="b">actor b</option></select></label>
-        <label><input type="checkbox" checked={v2Token} onChange={(event) => setV2Token(event.target.checked)} /> Finance v2 host token</label>
+        <label><input type="checkbox" checked={v2Token} onChange={(event) => { setV2Token(event.target.checked); setV2Revision((value) => value + 1); }} /> Finance v2 host token</label>
         <label><input type="checkbox" checked={v2Available} onChange={(event) => setV2Available(event.target.checked)} /> Finance v2 host available</label>
       </>}
     </aside>
@@ -80,8 +82,7 @@ function FixtureHost() {
           navigate(window.location.pathname + (params.toString() ? `?${params.toString()}` : ''));
         };
         const scope = v2Actor === 'a' ? fixture.expectedScope : { ...fixture.expectedScope, actorId: 'account:synthetic-actor-b' };
-        const authorization = { revision: String(v2Revision), token: async () => (v2Token ? `fixture-token-${v2Revision}` : null) };
-        const shared = { view: v2Views[route.id]!, availability: v2Available ? { status: 'available' } as const : { status: 'refused', reason: 'restricted' } as const, scope, authorization,
+        const shared = { view: v2Views[route.id]!, availability: v2Available ? { status: 'available' } as const : { status: 'refused', reason: 'restricted' } as const, scope, authorization: v2Authorization,
           expectedSnapshotId: fixture.expectedSnapshotId, expectedQueryContentHash: syntheticQueryContentHash, expectedSummaryContentHash: syntheticSummaryContentHash,
           ...(v2Timeout ? { timeoutMs: v2Timeout } : {}),
           ...(route.params.id ? { detailId: route.params.id } : {}), detailHref: (id: string) => routeHref(configuredBase, 'transaction-detail', { id }) + context, listHref: routeHref(configuredBase, 'transactions') + context,

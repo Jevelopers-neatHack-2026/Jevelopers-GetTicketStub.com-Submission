@@ -117,8 +117,43 @@ test('retry after a transient 5xx recovers using the keyboard only', async ({ pa
   await expect(retry).toBeVisible();
   await tabTo(page, retry);
   await page.keyboard.press('Enter');
+  // The Retry button unmounts at once; keyboard focus must land on the view heading, never on <body>, through loading and into the result.
+  await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('H2');
   await expect(page.getByRole('region', { name: 'Snapshot and scope' })).toBeVisible();
   await expect(retry).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('H2');
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('Budget advisory');
+});
+
+test('a token revoked while a read is in flight cancels it, and a regrant reads again without the old answer', async ({ page }) => {
+  await recordTags(page);
+  await open(page, 'budgets', 'v2port=slow');
+  await expect(page.getByRole('status').filter({ hasText: 'Loading the report' })).toBeVisible();
+  await page.getByLabel('Finance v2 host token').uncheck();
+  await expect(page.getByRole('alert')).toContainText('not authorized');
+  await noAmounts(page);
+  // The abandoned slow read answers late (it ignores the abort signal); it must stay out.
+  await page.waitForTimeout(500);
+  await noAmounts(page);
+  expect(await seenTags(page)).not.toContain('rev-1');
+  await page.getByLabel('Finance v2 host token').check();
+  await expect(page.getByText('synthetic-request-1:account:synthetic-actor:rev-3')).toBeVisible({ timeout: 6000 });
+  expect(await seenTags(page)).not.toContain('rev-1');
+  expect(await seenTags(page)).not.toContain('rev-2');
+});
+
+test('restoring host availability reads again and never reveals the earlier answer first', async ({ page }) => {
+  await open(page, 'budgets', 'v2port=slow');
+  await expect(page.getByRole('region', { name: 'Snapshot and scope' })).toBeVisible({ timeout: 5000 });
+  await page.getByLabel('Finance v2 host available').uncheck();
+  await expect(page.getByRole('status').filter({ hasText: 'restricted for your access' })).toBeVisible();
+  await noAmounts(page);
+  await page.getByLabel('Finance v2 host available').check();
+  // The port takes 1.5 s, so the settled answer from before the withdrawal would be visible here if it were retained.
+  await expect(page.getByRole('status').filter({ hasText: 'Loading the report' })).toBeVisible();
+  await noAmounts(page);
+  await expect(page.getByRole('region', { name: 'Snapshot and scope' })).toBeVisible({ timeout: 5000 });
+  expect(await page.evaluate(() => (window as unknown as { __financeV2PortLog: { calls: unknown[] } }).__financeV2PortLog.calls.length)).toBe(2);
 });
 
 test('a port that never answers times out, offers retry, and shows no amount', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { FinanceV2View, type FinanceV2ViewName, type FinanceV2ViewProps } from './FinanceV2Views';
 import { FINANCE_V2_FAULT_COPY, useFinanceV2Read, type FinanceV2Authorization, type FinanceV2HostAvailability, type FinanceV2SyntheticReadPort } from './async-port';
 import type { OpaqueProductScope } from './types';
@@ -49,13 +49,29 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
     expectedQueryContentHash: props.expectedQueryContentHash, expectedSummaryContentHash: props.expectedSummaryContentHash, authorization: props.authorization,
     ...(props.timeoutMs !== undefined ? { timeoutMs: props.timeoutMs } : {}),
   });
+  // Retry focus: the Retry button unmounts when loading starts, which would drop focus to <body>. After a retry, focus moves to the heading of the
+  // view that follows the hidden anchor (loading, error or result), but only while focus is on <body> or still inside that view, so a place the
+  // user moved to is never taken. The anchor is hidden, so it adds nothing to layout or the accessibility tree.
+  const anchor = useRef<HTMLSpanElement>(null);
+  const retryFocus = useRef(false);
+  useEffect(() => {
+    if (!retryFocus.current) return;
+    if (state.phase !== 'loading') retryFocus.current = false;
+    const view = anchor.current?.nextElementSibling;
+    const active = document.activeElement;
+    if (!view || (active !== null && active !== document.body && !view.contains(active))) { retryFocus.current = false; return; }
+    const heading = view.querySelector('h2');
+    if (heading) { heading.tabIndex = -1; heading.focus(); }
+  }, [state.phase]);
+  const onRetry = () => { retryFocus.current = true; retry(); };
   const shell = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[props.view] ?? 'Finance v2'}</h2>{body}</section>;
   const notice = (title: string, text: string, role: 'status' | 'alert', extra?: ReactNode) => shell(<section className="td-example-section" role={role}><h3>{title}</h3><p>{text}</p>{extra}</section>);
-  switch (state.phase) {
+  const view = (): ReactNode => {
+    switch (state.phase) {
     case 'unavailable': return notice('Finance v2 unavailable', UNAVAILABLE_COPY[state.reason], 'status');
     case 'gated': return notice('Finance v2 not available to you', GATED_COPY[state.reason], state.reason === 'unauthorized' ? 'alert' : 'status');
     case 'loading': return shell(<p role="status" aria-busy="true">Loading the report. No amounts are shown until it is verified.</p>);
-    case 'error': return notice('Report could not be loaded', FINANCE_V2_FAULT_COPY[state.kind], 'alert', state.retryable ? <button type="button" onClick={retry}>Retry</button> : null);
+    case 'error': return notice('Report could not be loaded', FINANCE_V2_FAULT_COPY[state.kind], 'alert', state.retryable ? <button type="button" onClick={onRetry}>Retry</button> : null);
     case 'refused': return shell(<section className="td-example-section" role="alert"><h3>Report refused</h3>
       <p>This report failed the presentation check, so it is not displayed. No amounts are shown.</p>
       <dl><div><dt>Refusal code</dt><dd>{state.code}</dd></div><div><dt>Refusal path</dt><dd>{state.path}</dd></div></dl></section>);
@@ -66,5 +82,7 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
         {...(props.onNavigate ? { onNavigate: props.onNavigate } : {})} {...(props.filters ? { filters: props.filters } : {})} {...(props.onFiltersChange ? { onFiltersChange: props.onFiltersChange } : {})} />;
     default:
       return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={props.view} input={{ status: state.phase }} expectedScope={props.scope} />;
-  }
+    }
+  };
+  return <><span hidden ref={anchor} />{view()}</>;
 }
