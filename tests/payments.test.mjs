@@ -309,24 +309,69 @@ test("caps the webhook body while it streams, before anything is parsed", async 
 
 const eventsOf2 = async (type) => (await getStorage().listEvents({ limit: 500 })).filter((e) => e.type === type);
 
-test("failed, cancelled and needs_review are final: later deliveries never move them", async () => {
-  await placePending("ord_t1", 6100, "stripe");
-  remote.cs_test_ord_t1 = { id: "cs_test_ord_t1", status: "complete", payment_status: "unpaid", amount_total: 6100, currency: "usd", metadata: { order_id: "ord_t1" }, payment_intent: { id: "pi_t1", status: "requires_payment_method" } };
-  assert.equal((await deliverStripe("checkout.session.async_payment_failed", "cs_test_ord_t1")).json.status, "failed");
-  // the same session redelivered as "completed" is still failed, and an out-of-order success is ignored too
-  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.handled, false);
-  remote.cs_test_ord_t1 = { ...remote.cs_test_ord_t1, payment_status: "paid" };
-  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.handled, false);
-  assert.equal(await statusOf("ord_t1"), "failed");
-  // ... but a charge that lands after a failure is flagged for staff
+// Receipts are counted by the mail API call; a key makes sendMail call it (the fetch mock answers).
+async function withMail(fn) {
+  process.env.RESEND_API_KEY = "re_test";
+  const before = calls.filter((c) => c.url.includes("api.resend.com")).length;
+  try {
+    await fn();
+  } finally {
+    delete process.env.RESEND_API_KEY;
+  }
+  return calls.filter((c) => c.url.includes("api.resend.com")).length - before;
+}
+
+test("a failed payment can still be paid: Dodo's decline then retry ends paid with exactly one receipt", async () => {
+  await placePending("ord_f1");
+  const sent = await withMail(async () => {
+    remote.pay_f1 = { payment_id: "pay_f1", status: "failed", total_amount: 900, currency: "USD", checkout_session_id: "cks_ord_f1", metadata: { order_id: "ord_f1" } };
+    assert.equal((await deliver("payment.failed", "pay_f1")).json.status, "failed");
+    // the buyer retries the card in the same checkout and it works
+    remote.pay_f1b = { payment_id: "pay_f1b", status: "succeeded", total_amount: 900, currency: "USD", checkout_session_id: "cks_ord_f1", metadata: { order_id: "ord_f1" } };
+    assert.equal((await deliver("payment.succeeded", "pay_f1b")).json.status, "paid");
+    assert.equal((await deliver("payment.succeeded", "pay_f1b")).json.handled, false, "a repeat changes nothing");
+    // and a stale failure afterwards can't undo it
+    remote.pay_f1b = { ...remote.pay_f1b, status: "failed" };
+    assert.equal((await deliver("payment.failed", "pay_f1b")).json.handled, false);
+  });
+  assert.equal(sent, 1);
+  assert.equal(await statusOf("ord_f1"), "paid");
+});
+
+test("a failed payment retried for the wrong amount is held for review, once", async () => {
   const { refOf } = await import("../src/server/events.ts");
-  assert.ok((await eventsOf2("payment_needs_review")).some((e) => e.fields.order === refOf("ord_t1") && e.fields.reason === "late"));
+  await placePending("ord_f2");
+  remote.pay_f2 = { payment_id: "pay_f2", status: "failed", total_amount: 900, currency: "USD", checkout_session_id: "cks_ord_f2", metadata: { order_id: "ord_f2" } };
+  await deliver("payment.failed", "pay_f2");
+  remote.pay_f2b = { ...remote.pay_f2, payment_id: "pay_f2b", status: "succeeded", total_amount: 100 };
+  assert.equal((await deliver("payment.succeeded", "pay_f2b")).json.status, "needs_review");
+  assert.equal((await deliver("payment.succeeded", "pay_f2b")).json.handled, false);
+  assert.equal((await eventsOf2("payment_needs_review")).filter((e) => e.fields.order === refOf("ord_f2")).length, 1);
+});
+
+test("Stripe: a failed session that is later paid ends paid with one receipt; paid, cancelled and needs_review are final", async () => {
+  const { refOf } = await import("../src/server/events.ts");
+  await placePending("ord_t1", 6100, "stripe");
+  const sent = await withMail(async () => {
+    remote.cs_test_ord_t1 = { id: "cs_test_ord_t1", status: "complete", payment_status: "unpaid", amount_total: 6100, currency: "usd", metadata: { order_id: "ord_t1" }, payment_intent: { id: "pi_t1", status: "requires_payment_method" } };
+    assert.equal((await deliverStripe("checkout.session.async_payment_failed", "cs_test_ord_t1")).json.status, "failed");
+    // redelivered while still unpaid: still failed
+    assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.handled, false);
+    remote.cs_test_ord_t1 = { ...remote.cs_test_ord_t1, payment_status: "paid", payment_intent: { id: "pi_t1", status: "succeeded" } };
+    assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.status, "paid");
+    assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.handled, false);
+  });
+  assert.equal(sent, 1);
+  assert.equal(await statusOf("ord_t1"), "paid");
   await placePending("ord_t2", 6100, "stripe");
   remote.cs_test_ord_t2 = { id: "cs_test_ord_t2", status: "expired", payment_status: "unpaid", amount_total: 6100, currency: "usd", metadata: { order_id: "ord_t2" } };
   assert.equal((await deliverStripe("checkout.session.expired", "cs_test_ord_t2")).json.status, "cancelled");
-  remote.cs_test_ord_t2 = { ...remote.cs_test_ord_t2, status: "open" };
-  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t2")).json.handled, false);
+  // a charge after cancellation leaves it cancelled and is flagged late, once
+  remote.cs_test_ord_t2 = { ...remote.cs_test_ord_t2, status: "complete", payment_status: "paid", payment_intent: "pi_t2" };
+  await deliverStripe("checkout.session.completed", "cs_test_ord_t2");
+  await deliverStripe("checkout.session.completed", "cs_test_ord_t2");
   assert.equal(await statusOf("ord_t2"), "cancelled");
+  assert.equal((await eventsOf2("payment_needs_review")).filter((e) => e.fields.order === refOf("ord_t2") && e.fields.reason === "late").length, 1);
 });
 
 test("holds a Stripe charge of the wrong amount for review, with an event, and keeps it there", async () => {
@@ -458,4 +503,32 @@ test("opens a Stripe Checkout with a form-encoded payload the webhook can match,
     success_url: "https://getticketstub.test/payment/return?order=ord_form&status=succeeded",
     cancel_url: "https://getticketstub.test/payment/return?order=ord_form&status=cancelled",
   });
+});
+
+test("accepts APP_URL only as an absolute https URL, or http on localhost", async () => {
+  const { configuredOrigin } = await import("../src/server/http.ts");
+  const was = process.env.APP_URL;
+  try {
+    for (const [v, want] of [["https://getticketstub.com/x", "https://getticketstub.com"], ["http://localhost:3000", "http://localhost:3000"], ["http://getticketstub.com", null], ["getticketstub.com", null], ["javascript:alert(1)", null], ["", null]]) {
+      process.env.APP_URL = v;
+      assert.equal(configuredOrigin(), want, v);
+    }
+  } finally {
+    process.env.APP_URL = was;
+  }
+});
+
+test("replaying an attempt whose checkout has closed answers 409 checkout_closed", async () => {
+  const r = await postOrder(orderBody("digital", "attempt-closed-0001"));
+  assert.equal(r.status, 200);
+  const id = r.json.order.id;
+  const sessionId = r.json.order.payment.checkoutSessionId;
+  for (const [status, url] of [["failed", "x"], ["cancelled", "x"], ["needs_review", "x"]]) {
+    await getStorage().updateOrderPayment(id, (o) => ({ ...o.payment, status, updatedAt: url }));
+    const again = await postOrder(orderBody("digital", "attempt-closed-0001"));
+    assert.deepEqual([again.status, again.json.error.code], [409, "checkout_closed"], status);
+  }
+  // a paid one is a success, not an error
+  await getStorage().updateOrderPayment(id, (o) => ({ ...o.payment, status: "paid", checkoutSessionId: sessionId }));
+  assert.equal((await postOrder(orderBody("digital", "attempt-closed-0001"))).status, 200);
 });

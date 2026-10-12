@@ -26,8 +26,9 @@ export type Settled = { handled: false } | { handled: true; status: OrderPayment
 
 /**
  * Applies a provider payment to its order. Deliveries repeat and arrive out of order, so a payment only moves forward:
- * `pending` becomes `paid`, `failed`, `cancelled` or `needs_review`, and those four are final, so a late or repeated
- * delivery never overwrites them. A real charge that isn't the amount or currency the server asked for is held as
+ * `pending` becomes `paid`, `failed`, `cancelled` or `needs_review`. `paid`, `cancelled` and `needs_review` are final.
+ * `failed` can still become `paid` (or `needs_review`), because a declined card is retried in the same checkout and
+ * the provider then reports the success. A real charge that isn't the amount or currency the server asked for is held as
  * `needs_review` (never marked paid, never left pending) and recorded for staff. The receipt is sent once, on the
  * transition to paid, which happens inside one storage transaction.
  */
@@ -37,11 +38,14 @@ export async function settlePayment(p: ProviderPayment, req: Request): Promise<S
     const cur = order.payment;
     if (!cur || cur.provider !== p.provider || p.status === "pending") return null;
     if (p.sessionId && p.sessionId !== cur.checkoutSessionId) return null;
-    if (cur.status !== "pending") {
-      // The state stays as it is, but a real charge arriving after a failure (a card retried in the same checkout) is for staff.
-      if (p.status === "paid" && (cur.status === "failed" || cur.status === "cancelled")) held = "late";
-      return null;
+    if (cur.status === "cancelled") {
+      // The state stays cancelled, but a real charge after cancellation is for staff. Recording its payment id makes
+      // that one transition, so a redelivery isn't flagged again.
+      if (p.status !== "paid" || !p.paymentId || p.paymentId === cur.paymentId) return null;
+      held = "late";
+      return { ...cur, paymentId: p.paymentId, chargedMinor: p.charged.amountsMinor[0], updatedAt: new Date().toISOString() };
     }
+    if (cur.status === "paid" || cur.status === "needs_review" || (cur.status === "failed" && p.status !== "paid")) return null;
     const currencyOk = p.charged.currency.toUpperCase() === cur.currency;
     const next = { ...cur, ...(p.paymentId ? { paymentId: p.paymentId } : {}), updatedAt: new Date().toISOString() };
     if (p.status !== "paid") return { ...next, status: p.status };
@@ -54,10 +58,7 @@ export async function settlePayment(p: ProviderPayment, req: Request): Promise<S
   });
   const orderRef = refOf(p.orderId);
   // Unknown order, or nothing to change (a repeat, an older event, a payment still pending).
-  if (!result || result.after === result.before) {
-    if (held) await flagForReview(p, orderRef, held, req);
-    return { handled: false };
-  }
+  if (!result || result.after === result.before) return { handled: false };
   if (held) {
     await flagForReview(p, orderRef, held, req);
   } else if (result.after.payment?.status === "paid") {

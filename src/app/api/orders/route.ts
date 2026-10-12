@@ -3,7 +3,7 @@ import type { Order } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { recordEvent } from "@/server/event-log";
-import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
+import { HttpError, appOrigin, checkOrigin, configuredOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage, requireStorage } from "@/server/index";
 import { refOf } from "@/server/events";
 import { sendReceipt } from "@/server/receipt";
@@ -62,7 +62,7 @@ function parseOrder(v: unknown): Omit<Order, "id" | "mode" | "createdAt"> {
 
 /** Where the provider sends the buyer back. A live charge is only ever sent to APP_URL, never to a host the request names. */
 function returnOrigin(req: Request, environment: "test_mode" | "live_mode"): string {
-  if (environment === "live_mode" && !process.env.APP_URL?.trim()) {
+  if (environment === "live_mode" && !configuredOrigin()) {
     console.error("[payments] live payments need APP_URL; checkout refused");
     throw unavailable();
   }
@@ -112,7 +112,10 @@ export const POST = route(async (req: Request) => {
   const replay = async () => {
     const found = attemptId ? await getStorage().getOrder(id) : null;
     if (!found || found.accountId !== (account?.id ?? null)) return null;
-    const open = found.order.payment?.status === "pending" ? found.order.payment.checkoutUrl : undefined;
+    const status = found.order.payment?.status;
+    // A checkout that failed, was cancelled or is held for review can't be paid any more: the client starts a new attempt.
+    if (status === "failed" || status === "cancelled" || status === "needs_review") throw new HttpError(409, "checkout_closed", "That checkout has closed. Nothing more was charged. Start again.");
+    const open = status === "pending" ? found.order.payment?.checkoutUrl : undefined;
     return json(open ? { order: found.order, checkoutUrl: open } : { order: found.order });
   };
   const again = await replay();

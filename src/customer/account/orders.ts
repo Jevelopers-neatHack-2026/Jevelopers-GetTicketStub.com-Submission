@@ -2,6 +2,7 @@
 // Placing a sandbox order: the local record always lands first (it is the offline copy), then the server
 // is told so it can keep the order and email the receipt. A failed request never undoes the order.
 import { OrderBlocked, addOrderStored, dropOrder, type Order } from "@/customer/pages/commerce";
+import { variantFor } from "@/customer/pages/capabilities";
 import { codeOf } from "@/customer/feedback-messages/messages";
 import { count, errorCode, flow, major } from "@/customer/flows/events";
 import { api } from "./api";
@@ -44,6 +45,11 @@ export function reportOrder(draft: Draft, receipt: "server" | "local", stored: b
   });
 }
 
+/** A draft the server may charge for: a card or wallet method and every line orderable. Anything else stays a sandbox order. */
+export function isPayable(draft: Pick<Draft, "method" | "lines">): boolean {
+  return (draft.method === "card" || draft.method === "apple-pay" || draft.method === "google-pay") && draft.lines.every((l) => variantFor(l.material, l.size, l.finish)?.status === "orderable");
+}
+
 /** True when the order was handed to the provider's hosted checkout, so the browser is leaving for it. */
 export function goToCheckout(p: Placed): boolean {
   if (!p.checkoutUrl || !/^https:\/\//.test(p.checkoutUrl)) return false;
@@ -81,8 +87,8 @@ export async function placeOrder(draft: Draft, attemptId = newAttemptId()): Prom
     return { order, receipt: !!draft.email, attemptId };
   } catch (e) {
     const code = codeOf(e);
-    // A payment that couldn't start is no order: nothing was charged, so this device keeps no record of it.
-    const unpaid = code === "payment_unavailable";
+    // An order that could be paid for, and wasn't taken, is no order: nothing was charged, so this device keeps no record of it.
+    const unpaid = isPayable(draft);
     if (unpaid) dropOrder(local.id);
     reportOrder(draft, "local", made.stored && !unpaid, e);
     return { order: local, receipt: false, code, attemptId };
