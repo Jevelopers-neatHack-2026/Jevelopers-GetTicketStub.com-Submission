@@ -1,16 +1,16 @@
-import { test, expect } from './capture-test.mjs';
+import { test, expect, resetFixture } from './capture-test.mjs';
 import { createHash } from 'node:crypto';
 import { canonical } from '../../../src/controls/schema.mjs';
 import AxeBuilder from '@axe-core/playwright';
 const rehash = body => { body.draft_hash = createHash('sha256').update(canonical(body.draft)).digest('hex'); };
 const counters = async request => (await request.get('/api/counters')).json();
 test.beforeEach(async ({ page, request }) => {
-  await request.post('/__fixture/reset', { data: {} }); await page.goto('/');
+  await resetFixture(request, {}); await page.goto('/');
   await expect(page.getByLabel('Artwork style')).toBeVisible();
 });
 
 for (const format of ['png', 'jpeg', 'webp']) test(`keyboard draft/followup/locks/axe then explicit native ${format} Apply reaches actual durable API artifact`, async ({ page, request }, testInfo) => {
-  await request.post('/__fixture/reset', { data: { native_format: format } }); await page.goto('/');
+  await resetFixture(request, { native_format: format }); await page.goto('/');
   await expect(page.getByLabel('Artwork style')).toBeVisible();
   const original = (await (await request.get('/api/history')).json()).selection;
   const pageErrors = []; page.on('pageerror', error => pageErrors.push(error.message));
@@ -482,7 +482,7 @@ test('Compare current read revocation keeps selection and typed permission guida
 });
 
 for (const format of ['png', 'jpeg', 'webp']) test(`native ${format} browser cancel and unknown-usage error retain saved selection and conservative hold`, async ({ page, request }, testInfo) => {
-  await request.post('/__fixture/reset', { data: { native_format: format } }); await page.goto('/');
+  await resetFixture(request, { native_format: format }); await page.goto('/');
   await expect(page.getByLabel('Artwork style')).toBeVisible();
   const pageErrors = []; page.on('pageerror', error => pageErrors.push(error.message));
   const captured = await captureHandlerExceptions(page);
@@ -500,7 +500,7 @@ for (const format of ['png', 'jpeg', 'webp']) test(`native ${format} browser can
   expect(cancelledCounts).toMatchObject({ image_calls: 0, reservations: 1, holds: 1, releases: 0 });
   expect((await (await request.get('/api/history')).json()).selection).toEqual(original);
   await expect(page.locator('#artwork-preview')).toBeHidden();
-  await request.post('/__fixture/reset', { data: { native_format: format } }); await page.goto('/');
+  await resetFixture(request, { native_format: format }); await page.goto('/');
   await expect(page.getByLabel('Artwork style')).toBeVisible();
   const selected = (await (await request.get('/api/history')).json()).selection;
   await request.post('/__fixture/state', { data: { map_native_usage: false } });

@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       CONTROLS_PACKAGE_EVIDENCE: build/controls-package-evidence
+      CONTROLS_BROWSER_EVIDENCE_DIR: test-results/browser-stores
+      # Playwright clears test-results before launch; retain HTTP custody outside it.
+      CONTROLS_LIFECYCLE_EVIDENCE_DIR: ${{ github.workspace }}/build/controls-package-evidence/lifecycle-stores
     strategy:
       fail-fast: false
       matrix:
@@ -37,12 +40,17 @@ jobs:
       - name: Browser runtime
         working-directory: examples/frontend-action-roundtrip
         run: npx playwright install --with-deps chromium
+      - name: Lifecycle store evidence destination
+        run: mkdir -p "$CONTROLS_LIFECYCLE_EVIDENCE_DIR"
       - name: Full build and types
         run: make build
       - name: Aggregate offline mock checks
         run: make check TARGET=all MODE=mock
       - name: Validate server, public types and browser roundtrip (mock boundaries)
         run: node fixtures/controls/check.mjs --browser --out examples/frontend-action-roundtrip/test-results/controls-evidence.json
+      - name: Preserve complete capture directory custody
+        if: always()
+        run: node fixtures/controls/package-capture-custody.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 tag verified 2026-10-10
         if: always()
         with:
