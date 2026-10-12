@@ -128,7 +128,7 @@ specified sample basetemp when regenerating it; choose another temporary directo
 if earlier sample outputs need preserving.
 
 ```sh
-uv run pytest tests/test_evidence_index.py tests/test_reporting.py tests/test_history_archive.py tests/test_release.py -q
+uv run pytest tests/test_evidence_index.py tests/test_evidence_index_execution.py tests/test_reporting.py tests/test_history_archive.py tests/test_release.py -q
 uv run pytest -q
 uv run basedpyright
 uv run ruff check
@@ -141,3 +141,12 @@ media/usage/receipt/parent errors, release blockers and changed ancestors before
 export. Actual contained synthetic execution plus pure comparison replay proves
 source joins without inventing an infrastructure flake. These tests verify
 evaluator rules only; integrated acceptance requires authentic owner evidence.
+
+`tests/test_evidence_index_execution.py` executes the real contained synthetic
+owner and comparison replay. Linux CI always runs this module in the existing
+privileged Bubblewrap job and keeps its JUnit receipt, alongside the other real
+owner/isolation tests. The ordinary unprivileged job runs the metadata/integrity
+unit tests; it excludes this module because namespace privileges are required.
+No test is skipped or converted to a fabricated owner receipt. The original
+unprivileged PR51 CI failure remains preserved; fresh Linux execution is required
+to validate this routing change. Local macOS tests cannot replace that Linux result.

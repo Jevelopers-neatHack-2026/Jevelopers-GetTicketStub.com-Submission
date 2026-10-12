@@ -11,7 +11,6 @@ from typer.testing import CliRunner
 from integration_evals import evidence_index as evidence_index_module
 from integration_evals.artifacts import digest, load_record, read_bytes
 from integration_evals.cli import app
-from integration_evals.diagnostics import replay_comparisons
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.evidence_index import (
     EvidenceIndex,
@@ -30,7 +29,6 @@ from integration_evals.replay import link_rerun
 from integration_evals.reporting import Tracker
 from integration_evals.schema_exports import schemas
 from integration_evals.specifications import Requirements
-from tests.test_diagnostic_execution import controlled_execution
 from tests.test_replay_history import later
 from tests.test_replay_history import synthetic_failure as failure_fixture
 
@@ -300,20 +298,6 @@ def test_release_consumes_required_image_review_blockers(
             suite,
             evidence_index=built.model_copy(update={"requirements": ()}),
         )
-
-
-def test_real_offline_execution_and_comparison_replay_join_same_original(tmp_path: Path) -> None:
-    original, captures, suite, settings = controlled_execution(tmp_path)
-    diagnostic = replay_comparisons(History(runs=(original,)), captures, suite)
-    history = History(runs=(original, diagnostic))
-    output = index(history, suite, settings.artifacts)
-    row = next(r for r in output.requirements if r.requirement == "IE-01.AC5")
-    assert row.samples[1].execution_kind == "recorded-evaluation-replay"
-    assert row.samples[1].source_run_id == original.id
-    assert output.case_history[0].classification == "consistently_failed"
-    assert output.case_history[0].denominator == 2
-    assert len(output.artifacts) == len(original.evidence)
-    assert all(a.bytes_checked for a in output.artifacts)
 
 
 def test_master_release_obligation_retains_missing_image_review_reasons(
