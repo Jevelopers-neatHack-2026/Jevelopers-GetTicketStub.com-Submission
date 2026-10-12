@@ -14,10 +14,10 @@ test('correct immutable privacy audit resolves actual current source with approv
   assert.equal(inventory.reviewStatus, 'PENDING');
   assert.notEqual(inventory.auditedSourceRevision, inventory.historicalSourceReferences[0].revision);
 });
-test('preserved PR #29 header audit revision still resolves the same current page bytes', () => {
+test('preserved PR #29 header audit cannot authorize the CSS-edited maker page', () => {
   const priorHeaderAudit = structuredClone(inventory);
   priorHeaderAudit.auditedSourceRevision = inventory.historicalSourceReferences[0].revision;
-  assert.deepEqual(validatePrivacySource(html, priorHeaderAudit, { root }), { scripts: 2, analytics: 'deferred' });
+  assert.throws(() => validatePrivacySource(html, priorHeaderAudit, { root }), /Audited source bytes differ/);
 });
 for (const [name, mutate, error] of [
   ['missing revision', i => { delete i.auditedSourceRevision; }, /immutable audit/],
