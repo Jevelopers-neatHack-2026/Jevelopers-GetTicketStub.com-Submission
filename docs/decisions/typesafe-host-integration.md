@@ -41,6 +41,12 @@ evidence, not proof produced by this package. Missing, denied, mismatched, or
 expired records fail closed. Preview and production must each have their own
 configuration and credential injection; the port rejects environment mixing.
 
+Eligibility expiry and execution deadlines must name real UTC calendar times in
+`YYYY-MM-DDTHH:mm:ssZ` form, optionally with one to three fractional digits before
+`Z`. Impossible dates and invalid clock fields fail closed before transport.
+Eligibility is expired at its exact expiry time; an exact execution deadline
+returns a timeout with unknown usage and no dispatch.
+
 `resolveRoute` returns TypeSafe, `jev-1.13.0`, the fixed
 `https://api.typesafe.ai/v1/systemone` surface, direct-HTTP client identity
 `agent-harness-http` version `0.1.0`, and the single-send retry mapping. No moving
